@@ -474,7 +474,7 @@ CREATE TABLE IF NOT EXISTS producer_output_evidence (
       planning_contract_version TEXT NOT NULL CHECK (planning_contract_version = '0.2'),
       phase_output_contract_id TEXT NOT NULL,
         phase_output_contract_version TEXT NOT NULL CHECK (phase_output_contract_version IN ('0.2', '0.3', '0.4',
-          '0.5', '0.6')),
+          '0.5', '0.6', '0.7')),
       payload_sha256 TEXT NOT NULL, preplan_payload_json TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(normalized_issue_key, repository_identity)
@@ -491,7 +491,7 @@ CREATE TABLE IF NOT EXISTS producer_output_evidence (
       planning_contract_version TEXT NOT NULL CHECK (planning_contract_version =
         '0.2'), phase_output_contract_id TEXT NOT NULL,
       phase_output_contract_version TEXT NOT NULL CHECK (phase_output_contract_version IN ('0.2', '0.3', '0.4', '0.5',
-        '0.6')), payload_sha256 TEXT NOT NULL,
+        '0.6', '0.7')), payload_sha256 TEXT NOT NULL,
       plan_payload_json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY(parent_goal_workflow_id, subtask_id), UNIQUE(parent_goal_workflow_id, governed_sub_spec_path),
       UNIQUE(parent_goal_workflow_id, manifest_order),

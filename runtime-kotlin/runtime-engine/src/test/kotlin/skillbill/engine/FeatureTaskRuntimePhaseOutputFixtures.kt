@@ -1,5 +1,6 @@
 package skillbill.engine
 
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
@@ -8,6 +9,8 @@ import skillbill.review.model.ParallelReviewLaneResult
 import skillbill.review.parallel.ParallelReviewFindingParser
 import skillbill.review.parallel.ParallelReviewMerger
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+
+private const val VERSION: String = FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 
 internal const val REVIEW_FIX_BLOCKER_FINDING_ID = "F-001"
 
@@ -52,7 +55,7 @@ internal fun verifyFindingsOutput(verifiedFindingIds: List<String> = harnessPend
   val dispositionsJson = if (dispositions.isEmpty()) "[]" else "[$dispositions]"
   return """
     {
-      "contract_version": "0.6",
+      "contract_version": "$VERSION",
       "phase_id": "verify_findings",
       "status": "completed",
       "summary": "Phase produced a validated output.",
@@ -65,7 +68,7 @@ internal fun verifyFindingsOutput(verifiedFindingIds: List<String> = harnessPend
 internal val IMPLEMENT_NO_RECONCILE_OUTPUT: String =
   """
   {
-    "contract_version": "0.6",
+    "contract_version": "$VERSION",
     "phase_id": "implement",
     "status": "completed",
     "summary": "Phase produced a validated output.",
@@ -79,7 +82,7 @@ internal val IMPLEMENT_NO_RECONCILE_OUTPUT: String =
 internal fun verdictPlanOutput(verdict: String): String =
   """
   {
-    "contract_version": "0.6",
+    "contract_version": "$VERSION",
     "phase_id": "plan",
     "status": "completed",
     "summary": "Plan produced a validated output.",
@@ -91,7 +94,7 @@ internal fun verdictPlanOutput(verdict: String): String =
 internal val FINALISED_COMMIT_PUSH_OUTPUT: String =
   """
   {
-    "contract_version": "0.6",
+    "contract_version": "$VERSION",
     "phase_id": "commit_push",
     "status": "completed",
     "summary": "Phase produced a validated output.",
@@ -127,7 +130,7 @@ internal fun validJsonOutput(
   if (phaseId == "audit") {
     return """
       {
-        "contract_version": "0.6",
+        "contract_version": "$VERSION",
         "phase_id": "audit",
         "status": "completed",
         "summary": "Phase produced a validated output.",
@@ -138,7 +141,7 @@ internal fun validJsonOutput(
   }
   return """
     {
-      "contract_version": "0.6",
+      "contract_version": "$VERSION",
       "phase_id": "$phaseId",
       "status": "completed",
       "summary": "Phase produced a validated output.",
@@ -181,6 +184,7 @@ internal fun validProducedOutputs(
     "review" -> """{"findings": []}"""
     "audit" -> """{"value": "{\"gaps\":[],\"non_blocking_findings\":[]}"}"""
     "verify_findings" -> """{"finding_dispositions": []}"""
+    "pr" -> """{"value": "Opened the pull request for the branch."}"""
     else -> """{"tasks":["task-1"]}"""
   }
 
@@ -188,7 +192,7 @@ private const val VALIDATE_PRODUCED_OUTPUTS =
   """{"value":"Project checks passed.","validation_passed":true}"""
 
 private const val WRITE_HISTORY_PRODUCED_OUTPUTS =
-  """{"history_result":{"changed_paths":["agent/history.md"],"decisions_recorded":[]}}"""
+  """{"value":"Recorded the boundary history entry."}"""
 
 private fun preplanProducedOutputs(): String =
   """
@@ -255,28 +259,28 @@ internal object Skill187SyntheticAuditResponses {
   private const val AUDIT_VALUE_SATISFIED: String = """{\"gaps\":[],\"non_blocking_findings\":[]}"""
 
   fun nestedVerdictMissingDelimiter(): String =
-    """{"contract_version":"0.6","phase_id":"audit","status":"completed","summary":"$NESTED_VERDICT_SENTINEL",""" +
+    """{"contract_version":"$VERSION","phase_id":"audit","status":"completed","summary":"$NESTED_VERDICT_SENTINEL",""" +
       """"produced_outputs":{"value":"$AUDIT_VALUE_SATISFIED","verdict":"satisfied"}"""
 
   fun nestedVerdictComplete(): String = nestedVerdictMissingDelimiter() + "}"
 
   fun nestedVerdictConservativeYaml(): String =
-    "{contract_version: \"0.6\", phase_id: \"audit\", status: \"completed\", " +
+    "{contract_version: \"$VERSION\", phase_id: \"audit\", status: \"completed\", " +
       "summary: \"$YAML_NESTED_SENTINEL\", produced_outputs: {value: \"$AUDIT_VALUE_SATISFIED\", " +
       "verdict: \"satisfied\"}}"
 
   fun invalidCriterionShape(): String =
-    """{"contract_version":"0.6","phase_id":"audit","status":"completed","summary":"$OBSERVATION_SENTINEL",""" +
+    """{"contract_version":"$VERSION","phase_id":"audit","status":"completed","summary":"$OBSERVATION_SENTINEL",""" +
       """"verdict":"gaps_found","produced_outputs":{"value":"{\"gaps\":[{\"criterion\":\"AC-001\",""" +
       """\"note\":\"the behavior is absent\",\"severity\":\"blocker\"}]}"}}"""
 
   fun correctedSatisfied(): String =
-    """{"contract_version":"0.6","phase_id":"audit","status":"completed","summary":"criteria met",""" +
+    """{"contract_version":"$VERSION","phase_id":"audit","status":"completed","summary":"criteria met",""" +
       """"verdict":"satisfied","produced_outputs":{"value":"$AUDIT_VALUE_SATISFIED"}}"""
 
   fun unsupportedBlockYaml(): String =
     """
-    contract_version: "0.6"
+    contract_version: "$VERSION"
     phase_id: "audit"
     status: "completed"
     summary: "$UNSUPPORTED_YAML_SENTINEL"

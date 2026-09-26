@@ -27,7 +27,9 @@ internal const val HANDOFF_VALIDATOR_VALIDATION_PHASE_PAYLOAD: String =
     """"repository_checkpoint":{"fingerprint":"tree-1"},"gate_run_count":1,"gate_runs":[],""" +
     """"validation_evidence":{"contract_version":"0.1","results":[{"command":"./gradlew check","exit_code":0}]}}}}"""
 internal const val HANDOFF_VALIDATOR_HISTORY_PHASE_PAYLOAD: String =
-  """{"produced_outputs":{"history_result":{"changed_paths":["src/Foo.kt"],"decisions_recorded":[]}}}"""
+  """{"produced_outputs":{"value":"Recorded the boundary history entry.",""" +
+    """"runtime_measured_facts":{"changed_paths":["agent/history.md"],"history_written":true,""" +
+    """"decisions_recorded":false}}}"""
 internal const val HANDOFF_VALIDATOR_COMMIT_PUSH_PHASE_PAYLOAD: String =
   """{"produced_outputs":{"commit_push_result":{"commit_sha":"abc","branch":"feat",""" +
     """"base_branch":"main","pushed":true}}}"""

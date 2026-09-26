@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparation
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
+import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistArgs
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
@@ -177,7 +178,7 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
   }
 
   override fun prepareReviewBriefing(
-    directive: String,
+    prompt: PhaseStepPromptSource,
     input: GoalSubtaskReviewInput,
   ) {
     PhaseLaunchPreparation.prepareLaunchForCapture(
@@ -186,7 +187,7 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
       context.state,
       null,
       null,
-      directive,
+      prompt,
     )
   }
 

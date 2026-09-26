@@ -9,8 +9,6 @@ import skillbill.review.model.ReviewScopeDisposition
 import skillbill.review.parsing.ReviewFindingActionability
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeReviewSeverity
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.feature.FeatureTaskRuntimeAuditRemainingAcInterpretation
-import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeAuditRemainingAcResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewFinding
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewVerdict
@@ -22,6 +20,7 @@ object FeatureTaskRuntimeOutputVerification {
   internal fun verdictFor(
     phaseId: String,
     outputObject: FeatureTaskRuntimeWorkflowArtifactMap?,
+    stepRule: FeatureTaskRuntimeStepVerdictRule? = null,
   ): FeatureTaskRuntimeVerdict {
     val wireVerdict =
       (outputObject?.get(SharedPayloadKeys.VERDICT) as? String)
@@ -31,10 +30,14 @@ object FeatureTaskRuntimeOutputVerification {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> reviewVerdict(outputObject, wireVerdict)
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS ->
         findingVerificationVerdict(wireVerdict)
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT -> auditVerdict(wireVerdict, outputObject)
-      else -> wireVerdict ?: FeatureTaskRuntimeVerdict.ADVANCE
+      else -> stepRule?.verdictFor(wireVerdict, outputObject) ?: wireVerdict ?: FeatureTaskRuntimeVerdict.ADVANCE
     }
   }
+
+  internal fun carriesFindingDispositions(outputObject: FeatureTaskRuntimeWorkflowArtifactMap?): Boolean =
+    outputObject?.get(SharedPayloadKeys.PRODUCED_OUTPUTS)
+      ?.let(JsonCodec::anyToStringAnyMap)
+      ?.containsKey(FeatureTaskRuntimeVerificationSignalKeys.FINDINGS_VERIFICATION_DISPOSITIONS) == true
 
   internal fun dispositionsFrom(
     outputObject: FeatureTaskRuntimeWorkflowArtifactMap?,
@@ -54,13 +57,6 @@ object FeatureTaskRuntimeOutputVerification {
   internal fun unresolvedReviewFindings(
     outputObject: FeatureTaskRuntimeWorkflowArtifactMap?,
   ): List<FeatureTaskRuntimeReviewFinding> = reviewVerdictFrom(outputObject)?.unresolvedFindings.orEmpty()
-
-  internal fun auditProseValue(outputObject: FeatureTaskRuntimeWorkflowArtifactMap?): String? =
-    outputObject?.get(SharedPayloadKeys.PRODUCED_OUTPUTS)
-      ?.let(JsonCodec::anyToStringAnyMap)
-      ?.get(SharedPayloadKeys.VALUE)
-      ?.toString()
-      ?.takeIf(String::isNotBlank)
 }
 
 private fun findingVerificationVerdict(wireVerdict: FeatureTaskRuntimeVerdict?): FeatureTaskRuntimeVerdict =
@@ -90,32 +86,6 @@ private fun reviewVerdict(
 ): FeatureTaskRuntimeVerdict {
   val reviewVerdict = reviewVerdictFrom(outputObject)
   return reviewVerdict?.verdict ?: wireVerdict ?: FeatureTaskRuntimeVerdict.ADVANCE
-}
-
-private fun auditVerdict(
-  wireVerdict: FeatureTaskRuntimeVerdict?,
-  outputObject: FeatureTaskRuntimeWorkflowArtifactMap?,
-): FeatureTaskRuntimeVerdict {
-  val status = (outputObject?.get(SharedPayloadKeys.STATUS) as? String)?.trim()?.lowercase()
-  if (status == "blocked" || status == "failed") {
-    require(wireVerdict == null) {
-      "blocked or failed audit phase output must omit verdict."
-    }
-    return FeatureTaskRuntimeVerdict.ADVANCE
-  }
-  if (wireVerdict == FeatureTaskRuntimeVerdict.SATISFIED) {
-    return FeatureTaskRuntimeVerdict.SATISFIED
-  }
-  if (
-    FeatureTaskRuntimeAuditRemainingAcInterpretation.interpret(
-      FeatureTaskRuntimeOutputVerification.auditProseValue(outputObject),
-    ) is FeatureTaskRuntimeAuditRemainingAcResult.EmptyRemainingList
-  ) {
-    return FeatureTaskRuntimeVerdict.SATISFIED
-  }
-  return requireNotNull(wireVerdict?.takeIf { it in FeatureTaskRuntimeVerdict.AUDIT_VERDICTS }) {
-    "audit phase output is missing verdict or carries a removed audit verdict."
-  }
 }
 
 private fun reviewVerdictFrom(outputObject: FeatureTaskRuntimeWorkflowArtifactMap?): FeatureTaskRuntimeReviewVerdict? {

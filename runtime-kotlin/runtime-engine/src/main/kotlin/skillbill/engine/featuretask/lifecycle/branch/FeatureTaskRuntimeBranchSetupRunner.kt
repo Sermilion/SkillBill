@@ -21,22 +21,35 @@ class FeatureTaskRuntimeBranchSetupRunner(
   internal fun ensureFeatureBranch(
     request: FeatureTaskRuntimeRunRequest,
     observability: FeatureTaskRuntimeRunObservability,
+    guardPhase: String,
   ): FeatureTaskRuntimeBranchSetupOutcome {
     val current = gitOperations.currentBranch(request.repoRoot)
     if (current !is WorkflowGitOperationResult.Ok) {
       return FeatureTaskRuntimeBranchSetupOutcome.blocked(branchSetupBlockedReason(current.error))
     }
+    val resolved = BranchResolvedEvent(observability, guardPhase)
     val persisted = recorder.loadResolvedBranch(request.workflowId)
     return when {
-      persisted != null -> reattachPersisted(request, observability, persisted.branch, current.value)
-      request.goalContinuation != null -> reattachGoalContinuationBranch(request, observability, current.value)
-      else -> resolveAndEstablish(request, observability, current.value)
+      persisted != null -> reattachPersisted(request, resolved, persisted.branch, current.value)
+      request.goalContinuation != null -> reattachGoalContinuationBranch(request, resolved, current.value)
+      else -> resolveAndEstablish(request, resolved, current.value)
     }
+  }
+
+  private class BranchResolvedEvent(
+    private val observability: FeatureTaskRuntimeRunObservability,
+    private val guardPhase: String,
+  ) {
+    fun emit(
+      branch: String,
+      created: Boolean,
+      reused: Boolean,
+    ) = observability.branchResolved(guardPhase, branch, created = created, reused = reused)
   }
 
   private fun reattachGoalContinuationBranch(
     request: FeatureTaskRuntimeRunRequest,
-    observability: FeatureTaskRuntimeRunObservability,
+    resolved: BranchResolvedEvent,
     currentBranch: String,
   ): FeatureTaskRuntimeBranchSetupOutcome {
     val decision =
@@ -49,25 +62,20 @@ class FeatureTaskRuntimeBranchSetupRunner(
       is FeatureTaskRuntimeBranchDecisionResolved -> {
         val blockedReason = reattachBlockedReason(request, decision.branch, currentBranch)
         blockedReason?.let(FeatureTaskRuntimeBranchSetupOutcome::blocked)
-          ?: establishBranch(request, observability, decision.branch, baseBranch = null, created = false)
+          ?: establishBranch(request, resolved, decision.branch, baseBranch = null, created = false)
       }
     }
   }
 
   private fun reattachPersisted(
     request: FeatureTaskRuntimeRunRequest,
-    observability: FeatureTaskRuntimeRunObservability,
+    resolved: BranchResolvedEvent,
     persistedBranch: String,
     currentBranch: String,
   ): FeatureTaskRuntimeBranchSetupOutcome {
     val blockedReason = reattachBlockedReason(request, persistedBranch, currentBranch)
     return blockedReason?.let(FeatureTaskRuntimeBranchSetupOutcome::blocked) ?: run {
-      observability.branchResolved(
-        featureTaskRuntimeBranchSetupGuardPhase,
-        persistedBranch,
-        created = false,
-        reused = true,
-      )
+      resolved.emit(persistedBranch, created = false, reused = true)
       FeatureTaskRuntimeBranchSetupOutcome.established(persistedBranch)
     }
   }
@@ -116,7 +124,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
 
   private fun resolveAndEstablish(
     request: FeatureTaskRuntimeRunRequest,
-    observability: FeatureTaskRuntimeRunObservability,
+    resolved: BranchResolvedEvent,
     currentBranch: String,
   ): FeatureTaskRuntimeBranchSetupOutcome {
     val decision =
@@ -130,16 +138,16 @@ class FeatureTaskRuntimeBranchSetupRunner(
         FeatureTaskRuntimeBranchSetupOutcome.blocked(branchSetupDeriveBlockedReason(decision.reason))
       is FeatureTaskRuntimeBranchDecisionResolved ->
         if (decision.create) {
-          createAndSwitch(request, observability, decision.branch, requireNotNull(decision.baseBranch))
+          createAndSwitch(request, resolved, decision.branch, requireNotNull(decision.baseBranch))
         } else {
-          establishBranch(request, observability, decision.branch, baseBranch = null, created = false)
+          establishBranch(request, resolved, decision.branch, baseBranch = null, created = false)
         }
     }
   }
 
   private fun createAndSwitch(
     request: FeatureTaskRuntimeRunRequest,
-    observability: FeatureTaskRuntimeRunObservability,
+    resolved: BranchResolvedEvent,
     branch: String,
     baseBranch: String,
   ): FeatureTaskRuntimeBranchSetupOutcome {
@@ -150,7 +158,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
       )
     }
     return landedBranchBlockedReason(request, branch)?.let(FeatureTaskRuntimeBranchSetupOutcome::blocked)
-      ?: establishBranch(request, observability, branch, baseBranch, created = true)
+      ?: establishBranch(request, resolved, branch, baseBranch, created = true)
   }
 
   private fun landedBranchBlockedReason(
@@ -175,7 +183,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
 
   private fun establishBranch(
     request: FeatureTaskRuntimeRunRequest,
-    observability: FeatureTaskRuntimeRunObservability,
+    resolved: BranchResolvedEvent,
     branch: String,
     baseBranch: String?,
     created: Boolean,
@@ -216,7 +224,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
     if (!recorded) {
       return FeatureTaskRuntimeBranchSetupOutcome.blocked(branchSetupNotPersistedBlockedReason(branch))
     }
-    observability.branchResolved(featureTaskRuntimeBranchSetupGuardPhase, branch, created = created, reused = !created)
+    resolved.emit(branch, created = created, reused = !created)
     return FeatureTaskRuntimeBranchSetupOutcome.established(branch)
   }
 }

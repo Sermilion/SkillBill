@@ -283,7 +283,6 @@ class FeatureTaskRuntimeRunPreparation(
   }
 }
 
-/** The selection a legacy goal continuation row without one heals to; the run records the adoption. */
 internal val LEGACY_QUALITY_GATE_SELECTION = FeatureTaskRuntimeQualityGateSelection.VALIDATE
 
 private fun hasGoalContinuation(

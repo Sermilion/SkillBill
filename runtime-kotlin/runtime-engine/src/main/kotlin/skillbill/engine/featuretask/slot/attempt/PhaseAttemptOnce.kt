@@ -71,7 +71,6 @@ object PhaseAttemptOnce {
     call: PhaseStepCall,
   ): LaunchResult {
     var rejected: LaunchResult? = null
-    // The runner prepares only after its before-capture, so a failed capture writes no briefing or rejection rows.
     val preparingState =
       object : PhaseRunState by call.state {
         override fun prepareLaunch(input: PhaseStepInput): PhaseStepInput? =
@@ -83,7 +82,7 @@ object PhaseAttemptOnce {
                 state,
                 iteration,
                 priorCorrection,
-                input.directive,
+                call.description.prompt,
               )
           ) {
             is PreparedLaunchReady ->
@@ -102,7 +101,7 @@ object PhaseAttemptOnce {
       call.runner.run(
         PhaseStepInput(
           stepName = run.phaseId,
-          directive = call.description.directive,
+          directive = "",
           priorValues = emptyMap(),
           operatorInstructions = null,
           facts = run.stepFacts(run.request.issueKey, iteration),

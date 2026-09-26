@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefi
 import skillbill.engine.featuretask.phase.core.toMeasurementFailureClassification
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposer
+import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.core.DeclaredLaunchArgs
@@ -49,7 +50,7 @@ object PhaseLaunchPreparation {
     state: FeatureTaskRuntimeRunState,
     iteration: Int?,
     priorCorrection: PriorAttemptCorrection?,
-    taskDirective: String,
+    prompt: PhaseStepPromptSource,
   ): LaunchPreparation {
     with(context) {
       val measurementContext =
@@ -68,7 +69,7 @@ object PhaseLaunchPreparation {
           iteration,
           priorCorrection,
           measurementContext,
-          taskDirective,
+          prompt,
         ),
       )
     }
@@ -197,7 +198,7 @@ object PhaseLaunchPreparation {
             iteration = args.iteration,
             priorCorrection = priorCorrection,
             repositoryCheckpoint = measurementContext.repositoryCheckpoint,
-            taskDirective = args.taskDirective,
+            prompt = args.prompt,
           ),
         )
       } catch (error: InvalidFeatureTaskRuntimeHandoffProjectionError) {
@@ -284,7 +285,7 @@ object PhaseLaunchPreparation {
     iteration: Int?,
     priorCorrection: PriorAttemptCorrection?,
     repositoryCheckpoint: FeatureTaskRuntimeRepositoryCheckpoint?,
-    taskDirective: String,
+    prompt: PhaseStepPromptSource,
   ): PreparedLaunch {
     with(context) {
       val resolvedBranchRecord = recorder.loadResolvedBranch(run.request.workflowId)
@@ -309,6 +310,7 @@ object PhaseLaunchPreparation {
           phaseGates.planningProjectionValidator,
           run.request.agentAddonSelection,
           sharedEvidence?.reference,
+          strategyFor(run.phaseId).briefingInvariantFields(run.phaseId),
         )
       if (!run.policy.singleAgentSession) {
         recorder.recordPhaseBriefing(
@@ -317,17 +319,13 @@ object PhaseLaunchPreparation {
           sharedEvidence?.measurement,
         )
       }
-      val prompt =
-        PhaseLaunchPreparation.composeLaunchPrompt(
-          context,
-          run,
-          PhaseLaunchPreparation
-            .composeLaunchPromptInputs(context, run, handoff, priorCorrection, briefing, taskDirective)
-            .copy(
-              phaseSettlement = iteration?.let { FeatureTaskRuntimePhaseSettlementTarget(run.request.workflowId, it) },
-            ),
-        )
-      return PreparedLaunch(briefing, prompt)
+      val inputs =
+        PhaseLaunchPreparation
+          .composeLaunchPromptInputs(context, run, handoff, priorCorrection, briefing)
+          .copy(
+            phaseSettlement = iteration?.let { FeatureTaskRuntimePhaseSettlementTarget(run.request.workflowId, it) },
+          )
+      return PreparedLaunch(briefing, PhaseLaunchPreparation.composeLaunchPrompt(context, run, inputs, prompt))
     }
   }
 
@@ -362,8 +360,9 @@ object PhaseLaunchPreparation {
     context: FeatureTaskRuntimeRunLoopContext,
     run: PhaseRun,
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
+    prompt: PhaseStepPromptSource,
   ): String =
-    FeatureTaskRuntimePhasePromptComposer.compose(inputs) +
+    FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) +
       context.stepHooks(run).launchPromptSupplement(run, context, context.stepState(run))
 
   private fun composeLaunchPromptInputs(
@@ -372,7 +371,6 @@ object PhaseLaunchPreparation {
     handoff: FeatureTaskRuntimePhaseHandoff,
     priorCorrection: PriorAttemptCorrection?,
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
-    taskDirective: String,
   ): FeatureTaskRuntimePhasePromptComposeInputs {
     with(context) {
       val context = this
@@ -418,7 +416,6 @@ object PhaseLaunchPreparation {
           },
         mutating = run.policy.mutating,
         singleAgentSession = run.policy.singleAgentSession,
-        taskDirective = taskDirective,
       )
     }
   }

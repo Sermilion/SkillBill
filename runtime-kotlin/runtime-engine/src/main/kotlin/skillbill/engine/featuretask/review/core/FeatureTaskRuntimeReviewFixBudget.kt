@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.review.core
 import skillbill.engine.featuretask.lifecycle.continuation.reviewState
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
+import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -29,7 +30,7 @@ private fun isAuditGapRound(entry: FeatureTaskRuntimePhaseLedgerEntry): Boolean 
     FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE ->
       entry.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_GAP_LOOP_ID
     FeatureTaskRuntimePhaseLedgerAction.FIX_LOOP_ITERATION ->
-      entry.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT &&
+      entry.phaseId in PhaseSlot.AUDIT.steps &&
         FeatureTaskRuntimeContinuationKind.fromLedgerDetail(entry.blockedReason) ==
         FeatureTaskRuntimeContinuationKind.AUDIT_AC_RETRY
     else -> false

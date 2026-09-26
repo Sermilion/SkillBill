@@ -2,24 +2,30 @@ package skillbill.workflow.taskruntime.phase
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-import skillbill.workflow.taskruntime.feature.FeatureTaskRuntimeAuditRemainingAcInterpretation
-import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeAuditRemainingAcResult
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.envelope.SettlementEnvelopeRequest
 import skillbill.workflow.taskruntime.model.handoff.envelope.SettlementStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY
 
 object ProsePhaseOutputSynthesizer {
   private val PROSE_PHASE_IDS: Set<String> =
-    setOf(PHASE_PREPLAN, PHASE_PLAN, PHASE_IMPLEMENT, PHASE_SIMPLIFY, PHASE_AUDIT, PHASE_VALIDATE)
-  private val AUDIT_VERDICTS: Set<String> = setOf("satisfied")
-
-  /** Settlements whose blocked value carries a shrink verdict the step's strategy reads. */
-  private val BLOCKED_VERDICT_PHASE_IDS: Set<String> = setOf(PHASE_VALIDATE)
+    setOf(
+      PHASE_PREPLAN,
+      PHASE_PLAN,
+      PHASE_IMPLEMENT,
+      PHASE_SIMPLIFY,
+      PHASE_AUDIT,
+      PHASE_VALIDATE,
+      PHASE_WRITE_HISTORY,
+      PHASE_PR,
+    )
 
   fun isProsePhase(phaseId: String): Boolean = phaseId in PROSE_PHASE_IDS
 
@@ -28,8 +34,15 @@ object ProsePhaseOutputSynthesizer {
     phaseId: String,
   ): Any? {
     if (!isProsePhase(phaseId)) return null
-    val request = synthesisRequest(phaseOutputText, phaseId) ?: return null
-    return stampEnvelope(request)
+    return recoverFinalObject(phaseOutputText, phaseId)
+  }
+
+  fun recoverFinalObject(
+    phaseOutputText: String,
+    stepName: String,
+  ): FeatureTaskRuntimeWorkflowArtifactMap? {
+    val request = recoveryRequest(phaseOutputText, stepName) ?: return null
+    return FeatureTaskRuntimeWorkflowArtifactMap.from(stampEnvelope(request))
   }
 
   fun envelopeFromSettlement(request: SettlementEnvelopeRequest): Any {
@@ -39,54 +52,27 @@ object ProsePhaseOutputSynthesizer {
     return stampEnvelope(request)
   }
 
-  private fun synthesisRequest(
+  private fun recoveryRequest(
     phaseOutputText: String,
-    phaseId: String,
+    stepName: String,
   ): SettlementEnvelopeRequest? {
     val parsed = ProsePhaseOutputParse.bestEffortParse(phaseOutputText)
-    if (parsed == null || !ProsePhaseOutputParse.identityCompatible(parsed, phaseId)) return null
+    if (parsed == null || !ProsePhaseOutputParse.identityCompatible(parsed, stepName)) return null
     val status = ProsePhaseOutputParse.recoverStatus(parsed) ?: return null
-    val valueAndVerdict = recoverableValueAndVerdict(parsed, phaseOutputText, phaseId, status) ?: return null
-    val settledAsFailure = status == SettlementStatus.BLOCKED.wireValue || status == SettlementStatus.FAILED.wireValue
-    val failureDisposition = if (settledAsFailure) ProsePhaseOutputRecover.recoverFailureDisposition(parsed) else null
-    return if (phaseId == PHASE_AUDIT && settledAsFailure && failureDisposition == null) {
-      null
-    } else {
-      SettlementEnvelopeRequest(
-        phaseId = phaseId,
-        status = status,
-        value = valueAndVerdict.first,
-        summary = ProsePhaseOutputRecover.recoverSummary(parsed, valueAndVerdict.first),
-        prompt = ProsePhaseOutputRecover.recoverPrompt(parsed),
-        verdict = valueAndVerdict.second,
-        failureDisposition = failureDisposition,
-      )
-    }
-  }
-
-  private fun recoverableValueAndVerdict(
-    parsed: Map<String, Any?>,
-    phaseOutputText: String,
-    phaseId: String,
-    status: String,
-  ): Pair<String, String?>? {
     val value =
       ProsePhaseOutputRecover.directValue(parsed)
         ?: ProsePhaseOutputRecover.recoverLegacyValue(parsed)
         ?: return null
-    val verdict =
-      when {
-        phaseId == PHASE_AUDIT && status == SettlementStatus.COMPLETED.wireValue ->
-          ProsePhaseOutputRecover.recoverAuditVerdict(parsed, phaseOutputText)
-            ?: when (FeatureTaskRuntimeAuditRemainingAcInterpretation.interpret(value)) {
-              FeatureTaskRuntimeAuditRemainingAcResult.EmptyRemainingList -> "satisfied"
-              else -> return null
-            }
-        phaseId in BLOCKED_VERDICT_PHASE_IDS && status == SettlementStatus.BLOCKED.wireValue ->
-          (parsed[SharedPayloadKeys.VERDICT] as? String)?.takeIf(String::isNotBlank)
-        else -> null
-      }
-    return value to verdict
+    val settledAsFailure = status == SettlementStatus.BLOCKED.wireValue || status == SettlementStatus.FAILED.wireValue
+    return SettlementEnvelopeRequest(
+      phaseId = stepName,
+      status = status,
+      value = value,
+      summary = ProsePhaseOutputRecover.recoverSummary(parsed, value),
+      prompt = ProsePhaseOutputRecover.recoverPrompt(parsed),
+      verdict = ProsePhaseOutputRecover.recoverVerdict(parsed),
+      failureDisposition = if (settledAsFailure) ProsePhaseOutputRecover.recoverFailureDisposition(parsed) else null,
+    )
   }
 
   private fun stampEnvelope(request: SettlementEnvelopeRequest): Map<String, Any?> {
@@ -102,36 +88,11 @@ object ProsePhaseOutputSynthesizer {
         SharedPayloadKeys.SUMMARY to request.summary,
         SharedPayloadKeys.PRODUCED_OUTPUTS to produced,
       )
-    if (request.phaseId == PHASE_AUDIT && request.status == SettlementStatus.COMPLETED) {
-      val resolved =
-        request.verdict?.takeIf { it in AUDIT_VERDICTS }
-          ?: when (FeatureTaskRuntimeAuditRemainingAcInterpretation.interpret(request.value)) {
-            FeatureTaskRuntimeAuditRemainingAcResult.EmptyRemainingList -> "satisfied"
-            else -> null
-          }
-      requireNotNull(resolved) {
-        "completed audit settlement requires verdict in $AUDIT_VERDICTS or an explicit empty remaining-criteria list."
-      }
-      envelope[SharedPayloadKeys.VERDICT] = resolved
-    }
     val settledAsFailure = request.status == SettlementStatus.BLOCKED || request.status == SettlementStatus.FAILED
-    if (
-      settledAsFailure &&
-      request.phaseId == PHASE_AUDIT &&
-      request.failureDisposition.isNullOrBlank()
-    ) {
-      require(false) {
-        "blocked or failed audit settlement requires failure_disposition."
-      }
-    }
     if (settledAsFailure && !request.failureDisposition.isNullOrBlank()) {
       envelope[SharedPayloadKeys.FAILURE_DISPOSITION] = request.failureDisposition
     }
-    if (
-      request.status == SettlementStatus.BLOCKED &&
-      request.phaseId in BLOCKED_VERDICT_PHASE_IDS &&
-      !request.verdict.isNullOrBlank()
-    ) {
+    if (!request.verdict.isNullOrBlank()) {
       envelope[SharedPayloadKeys.VERDICT] = request.verdict
     }
     return envelope

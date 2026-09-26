@@ -1,8 +1,11 @@
 package skillbill.engine.featuretask.slot.codereview
 
+import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.core.attemptPhaseExecution
 import skillbill.engine.featuretask.phase.core.defaultPhaseExecution
+import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
+import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -11,8 +14,9 @@ import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
-import skillbill.engine.featuretask.slot.strategy.directiveOf
-import skillbill.engine.featuretask.slot.strategy.policyOf
+import skillbill.engine.featuretask.slot.attempt.policyOf
+import skillbill.engine.featuretask.slot.attempt.promptSource
+import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.error.featuretask.UnknownPhaseStepError
@@ -20,6 +24,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -29,8 +34,8 @@ class InlineReviewStrategy(
   override val runner: PhaseRunner,
 ) : PhaseStrategyStatusProjection() {
   private val review = InlineReviewStep(runner)
-  private val verifyFindings = VerifyFindingsStep(runner)
-  private val implementFix = ImplementFixStep(runner)
+  private val verifyFindings = VerifyFindingsStep()
+  private val implementFix = ImplementFixStep()
   private val policies: Map<String, PhaseStepPolicy> =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW to review.policy,
@@ -45,7 +50,38 @@ class InlineReviewStrategy(
 
   override fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 
-  override fun directiveFor(stepId: String): String = policies.directiveOf(stepId)
+  override fun directiveFor(stepId: String): String =
+    when (stepId) {
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> InlineReviewPromptSections.REVIEW_DIRECTIVE
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS ->
+        InlineReviewPromptSections.VERIFY_FINDINGS_DIRECTIVE
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX ->
+        InlineReviewPromptSections.IMPLEMENT_FIX_DIRECTIVE
+      else -> throw UnknownPhaseStepError(stepId)
+    }
+
+  override fun promptSections(
+    stepId: String,
+    inputs: FeatureTaskRuntimePhasePromptComposeInputs,
+  ): PhaseStepPromptSections =
+    when (stepId) {
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> InlineReviewPromptSections.review(stepId, inputs)
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS ->
+        InlineReviewPromptSections.verifyFindings(
+          stepId,
+        )
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> InlineReviewPromptSections.implementFix(stepId)
+      else -> throw UnknownPhaseStepError(stepId)
+    }
+
+  override fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField> {
+    policies.policyOf(stepId)
+    return if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) {
+      FeatureTaskRuntimeRunInvariantPromptAllowlist.IDENTITY_CEREMONY_AND_POLICY
+    } else {
+      super.briefingInvariantFields(stepId)
+    }
+  }
 
   override fun runStep(
     run: PhaseRun,
@@ -54,9 +90,15 @@ class InlineReviewStrategy(
   ): PhaseOutcome =
     when (run.phaseId) {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW ->
-        review.run(run, context, state, directiveFor(run.phaseId))
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> verifyFindings.run(run, context, state)
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> implementFix.run(run, context, state)
+        review.run(
+          run,
+          context,
+          state,
+          promptSource(run.phaseId),
+        )
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
+      -> runAgentStep(run, context, state)
       else -> throw UnknownPhaseStepError(run.phaseId)
     }
 

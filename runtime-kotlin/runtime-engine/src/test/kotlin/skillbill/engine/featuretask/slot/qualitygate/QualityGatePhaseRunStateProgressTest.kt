@@ -95,7 +95,6 @@ class QualityGatePhaseRunStateProgressTest {
     )
 }
 
-/** A run state that holds only gate progress and fails on any other member, so a bypass or side write is loud. */
 private class GateOnlyPhaseRunState {
   var progress: FeatureTaskRuntimeValidationGateProgress? = null
   val calls = mutableListOf<String>()

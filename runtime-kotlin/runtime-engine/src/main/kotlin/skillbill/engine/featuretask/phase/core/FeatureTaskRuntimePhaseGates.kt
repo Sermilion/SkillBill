@@ -3,7 +3,8 @@ package skillbill.engine.featuretask.phase.core
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupRunner
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
-import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimePlanningStopper
+import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.prepare.FeatureTaskRuntimeSpecGate
 
 @Inject
@@ -12,7 +13,8 @@ class FeatureTaskRuntimePhaseGates(
   validation: FeatureTaskRuntimePhaseGateValidationBoundaries,
 ) {
   val branchSetupRunner: FeatureTaskRuntimeBranchSetupRunner = branch.branchSetupRunner
-  val planningStopper: FeatureTaskRuntimePlanningStopper = branch.planningStopper
+  val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner = branch.decompositionPlanner
+  val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder = branch.decomposeTerminalRecorder
   val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry = branch.lifecycleTelemetry
   val gitOperations = branch.gitOperations
   val specGate: FeatureTaskRuntimeSpecGate = branch.specGate

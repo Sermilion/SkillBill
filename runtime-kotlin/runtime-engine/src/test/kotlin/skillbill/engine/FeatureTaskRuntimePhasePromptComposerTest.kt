@@ -3,10 +3,11 @@ package skillbill.engine
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
-import skillbill.engine.featuretask.phase.prompt.directives.AUDIT_READONLY_EVIDENCE_SENTENCE
+import skillbill.engine.featuretask.slot.audit.AcceptanceAuditPromptSections
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -48,18 +49,20 @@ class FeatureTaskRuntimePhasePromptComposerTest {
   }
 
   @Test
-  fun `preplan shape example declares value prose`() {
+  fun `preplan value content carries the digest and the final object declares value prose`() {
     val prompt =
       composePhasePrompt(
         PROMPT_COMPOSER_ISSUE_KEY,
         promptComposerBriefingFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN),
       )
 
-    val shapeExample =
-      prompt.substringAfter("Required produced_outputs shape")
+    val valueExample =
+      prompt.substringAfter("## Value content")
         .substringAfter("```json")
         .substringBefore("```")
-    assertContains(shapeExample, "\"value\":", false, "the copyable shape example must name value prose")
+    assertContains(valueExample, "\"projection_kind\": \"preplanning_digest\"", false, "value carries the digest")
+    val finalObject = prompt.substringAfter("## Required final output")
+    assertContains(finalObject, "\"value\":", false, "the final object must name value prose")
   }
 
   @Test
@@ -72,7 +75,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
 
     assertContains(prompt, "\"value\":", false, "the copyable shape example must name value prose")
     assertContains(prompt, "prompt", false, "plan may optionally carry prompt prose")
-    assertContains(prompt, "Inner object to stuff into value", false, "plan teaches stuffed executable_plan JSON")
+    assertContains(prompt, "Carry this JSON object as the value text", false, "plan teaches stuffed plan JSON")
     assertContains(
       prompt,
       "\"projection_kind\": \"executable_plan\"",
@@ -89,7 +92,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
         promptComposerBriefingFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT),
       )
 
-    assertContains(prompt, "Inner object to stuff into value", false, "implement teaches stuffed receipt JSON")
+    assertContains(prompt, "Carry this JSON object as the value text", false, "implement teaches stuffed receipt JSON")
     assertContains(prompt, "completed_task_ids")
     assertContains(prompt, "changed_paths")
     assertContains(prompt, "tests_executed")
@@ -225,7 +228,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     assertContains(prompt, "Validation ownership")
     assertContains(prompt, "Only the validate phase may run the pack validation gate")
     assertContains(prompt, "must not compile, build,")
-    assertContains(prompt, AUDIT_READONLY_EVIDENCE_SENTENCE)
+    assertContains(prompt, AcceptanceAuditPromptSections.AUDIT_READONLY_EVIDENCE_SENTENCE)
     assertFalse(prompt.contains("require mechanical gate proof"))
     assertFalse(prompt.contains("MAY run the commands those criteria name"))
   }
@@ -259,7 +262,8 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     assertContains(prompt, "verdict progress")
     assertContains(prompt, "no_progress")
     assertContains(prompt, "The runtime does not rerun the checks")
-    assertContains(prompt, "Required final output (validated schema gate)")
+    assertContains(prompt, "## Required final output")
+    assertFalse(prompt.contains("validated schema gate"))
     assertFalse(prompt.contains("validation_passed is true"))
     assertFalse(prompt.contains("Do not emit a phase envelope"))
     assertFalse(prompt.contains("runtime independently confirms"))
@@ -328,7 +332,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     assertContains(validatePrompt, "Discover the validation checks required by this project")
     assertFalse(validatePrompt.contains("Invoke `bill-code-check` exactly once"))
     assertFalse(validatePrompt.contains("Invoke bill-kotlin-code-check"))
-    assertContains(validatePrompt, "Required final output (validated schema gate)")
+    assertContains(validatePrompt, "## Required final output")
 
     val nonValidatePhases =
       listOf(
@@ -429,8 +433,11 @@ class FeatureTaskRuntimePhasePromptComposerTest {
       assertContains(prompt, "feature_size: MEDIUM", false, "feature size for $phaseId")
       assertContains(prompt, "Scaling changes scope and verbosity only", false, "gate integrity for $phaseId")
       assertContains(prompt, PROMPT_COMPOSER_SPEC_REFERENCE, false, "spec reference for $phaseId")
-      run {
-        assertContains(prompt, "Required final output", false, "output contract for $phaseId")
+      assertContains(prompt, "## Required final output", false, "output contract for $phaseId")
+      assertContains(prompt, "\"completed\", \"blocked\", \"failed\"", false, "status enum for $phaseId")
+      assertContains(prompt, "failure_disposition", false, "typed failure behavior for $phaseId")
+      if (phaseId in PhaseSlot.CODE_REVIEW.steps) {
+        assertContains(prompt, "Required final output (validated schema gate)", false, "envelope for $phaseId")
         assertContains(prompt, "\"phase_id\": must be \"$phaseId\"", false, "pinned phase id for $phaseId")
         assertContains(
           prompt,
@@ -439,9 +446,13 @@ class FeatureTaskRuntimePhasePromptComposerTest {
           false,
           "contract version for $phaseId",
         )
-        assertContains(prompt, "\"completed\", \"blocked\", \"failed\"", false, "status enum for $phaseId")
-        assertContains(prompt, "failure_disposition", false, "typed failure behavior for $phaseId")
         assertContains(prompt, "produced_outputs", false, "produced_outputs for $phaseId")
+      } else {
+        assertContains(prompt, "\"value\": non-blank prose", false, "minimal value field for $phaseId")
+        assertFalse(prompt.contains("validated schema gate"), "$phaseId must carry only the minimal settlement")
+        assertFalse(prompt.contains("\"phase_id\": must be"), "$phaseId must not pin the phase id")
+        assertFalse(prompt.contains("\"contract_version\": must be"), "$phaseId must not pin the contract version")
+        assertFalse(prompt.contains("\"derived_notes\""), "$phaseId must not offer derived_notes")
       }
       assertContains(
         prompt,

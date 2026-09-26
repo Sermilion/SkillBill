@@ -17,6 +17,8 @@ import java.util.logging.Level
 object FeatureTaskRuntimePhaseOutputWireSchema {
   internal val schema: JsonSchema
     get() = loadFeatureTaskRuntimePhaseOutputSchema()
+  internal val legacyReadSchema: JsonSchema
+    get() = loadFeatureTaskRuntimePhaseOutputLegacyReadSchema()
   internal val mapper: ObjectMapper
     get() = ClasspathContractSchemaLoader.sharedObjectMapper()
   internal val yamlMapper: YAMLMapper =
@@ -28,7 +30,7 @@ object FeatureTaskRuntimePhaseOutputWireSchema {
     sourceLabel: String,
   ) {
     val instance: JsonNode = mapper.valueToTree(phaseOutput)
-    val errors: Set<ValidationMessage> = schema.validate(instance)
+    val errors: Set<ValidationMessage> = schemaFor(instance).validate(instance)
     if (errors.isNotEmpty()) {
       featureTaskRuntimePhaseOutputLog.log(Level.WARNING, buildSchemaDriftLog(sourceLabel, errors))
       val reasons = formatViolationReasons(errors.sortedWith(featureTaskRuntimePhaseOutputViolationOrdering), instance)
@@ -64,7 +66,6 @@ object FeatureTaskRuntimePhaseOutputWireSchema {
   ): NormalizedFeatureTaskRuntimePhaseOutput {
     val node = readPhaseOutputObjectNode(phaseOutputText, sourceLabel)
     val parsed = phaseOutputObjectNodeToMap(node, sourceLabel).toMutableMap()
-    dropSpuriousAuditCompletedVerdict(parsed)
     dropNullProducedOutputsPrompt(parsed, sourceLabel)
     validate(parsed, sourceLabel)
     return NormalizedFeatureTaskRuntimePhaseOutput(
@@ -86,8 +87,8 @@ object FeatureTaskRuntimePhaseOutputWireSchema {
     )
   }
 
-  fun normalizeAuditPhaseOutputLenient(
-    phaseOutputText: String,
-    sourceLabel: String,
-  ): NormalizedFeatureTaskRuntimePhaseOutput = normalizeVerifyingPhaseOutputLenient(phaseOutputText, sourceLabel)
+  internal fun schemaFor(instance: JsonNode): JsonSchema {
+    val contractVersion = instance.path(SharedPayloadKeys.CONTRACT_VERSION).takeIf(JsonNode::isTextual)?.asText()
+    return if (isLegacyReadableContractVersion(contractVersion)) legacyReadSchema else schema
+  }
 }

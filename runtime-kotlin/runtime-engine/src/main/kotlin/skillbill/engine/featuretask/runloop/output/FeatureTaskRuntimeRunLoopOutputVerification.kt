@@ -1,7 +1,6 @@
 package skillbill.engine.featuretask.runloop.output
 
 import skillbill.application.decomposition.baseBranch
-import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.continuation.matches
 import skillbill.engine.featuretask.lifecycle.continuation.reviewState
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
@@ -45,7 +44,6 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionEr
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
-import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
@@ -97,10 +95,6 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
           context = context,
           args = args,
         )?.let { "consumer-projection" to it }
-        ?: FeatureTaskRuntimeRunLoopOutputVerification.outputVerificationGateReason(
-          args.run.phaseId,
-          args.normalizedOutput.envelopeWireMap(),
-        )?.let { "output-verification" to it }
     }
 
   internal fun firstValidatedOutputRejection(
@@ -214,6 +208,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     recorder: FeatureTaskRuntimePhaseRecorder,
     observability: FeatureTaskRuntimeRunObservability,
     args: TerminalOutputAttemptArgs,
+    blockedDisposition: FeatureTaskRuntimeFailureDisposition,
   ): AttemptResult {
     val run = args.run
     val iteration = args.iteration
@@ -223,7 +218,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     val repairEvidence = args.repairEvidence
     val observability = args.observability
     val fileManifest = args.fileManifest
-    val disposition = FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(run.phaseId, outputMap)
+    val disposition = FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(outputMap, blockedDisposition)
     val operatorTerminalQualityGate =
       !disposition.retryOnResume &&
         run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
@@ -268,19 +263,6 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         ),
       )
     }
-  }
-
-  internal fun outputVerificationGateReason(
-    phaseId: String,
-    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ): String? {
-    if (phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT) return null
-    val wire = (outputMap[SharedPayloadKeys.VERDICT] as? String)?.trim()
-    if (wire == FeatureTaskRuntimeVerdict.GAPS_FOUND.wireValue) {
-      return "Feature-task-runtime verdict '${FeatureTaskRuntimeVerdict.GAPS_FOUND.wireValue}' is removed " +
-        "(audit phase output); repair gaps in this session and emit satisfied."
-    }
-    return null
   }
 
   internal fun structuralRepairEvidenceFromSchemaError(

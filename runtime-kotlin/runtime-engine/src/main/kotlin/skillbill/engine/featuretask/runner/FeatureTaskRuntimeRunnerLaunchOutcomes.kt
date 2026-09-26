@@ -37,6 +37,7 @@ import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimit
 internal fun terminalBlockedReasonFrom(
   phaseId: String,
   outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  blockedDisposition: FeatureTaskRuntimeFailureDisposition,
 ): String? {
   val status = outputMap[SharedPayloadKeys.STATUS] as? String
   if (status.workflowStepStatus() != WorkflowStepStatus.BLOCKED &&
@@ -60,7 +61,7 @@ internal fun terminalBlockedReasonFrom(
     (listOf(summary) + blockingReasons)
       .filter(String::isNotBlank)
       .joinToString("; ")
-  val disposition = FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(phaseId, outputMap)
+  val disposition = FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(outputMap, blockedDisposition)
   val operatorTerminalQualityGate =
     disposition == FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION &&
       (
@@ -83,10 +84,11 @@ fun persistGoalContinuationOutcome(
   gitOperations: WorkflowGitOperations,
   request: FeatureTaskRuntimeRunRequest,
   report: FeatureTaskRuntimeRunReport,
+  commitStepId: String,
 ): FeatureTaskRuntimeRunReport {
   val context = request.goalContinuation ?: return report
   val outcome =
-    goalContinuationOutcomeFor(phaseRecorder, gitOperations, request, context, report)?.let { base ->
+    goalContinuationOutcomeFor(phaseRecorder, gitOperations, request, context, report, commitStepId)?.let { base ->
       val attribution = agentAttributionFromPhaseState(phaseRecorder.phaseQuery, request.workflowId)
       base.copy(
         finalizingAgentId = attribution.finalizingAgentId,
@@ -138,10 +140,11 @@ private fun goalContinuationOutcomeFor(
   request: FeatureTaskRuntimeRunRequest,
   context: FeatureTaskRuntimeGoalContinuationContext,
   report: FeatureTaskRuntimeRunReport,
+  commitStepId: String,
 ): FeatureTaskRuntimeSubtaskOutcome? =
   when (report) {
     is FeatureTaskRuntimeRunReport.Completed ->
-      completedGoalContinuationOutcome(recorder, gitOperations, request, context)
+      completedGoalContinuationOutcome(recorder, gitOperations, request, context, commitStepId)
     is FeatureTaskRuntimeRunReport.Blocked ->
       FeatureTaskRuntimeSubtaskOutcome(
         issueKey = context.parentIssueKey,

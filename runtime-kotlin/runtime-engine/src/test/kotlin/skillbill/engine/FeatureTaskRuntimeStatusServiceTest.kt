@@ -518,6 +518,7 @@ class FeatureTaskRuntimeStatusServiceTest {
             ".feature-specs/SKILL-65-runtime/spec_subtask_2_runtime.md",
           ),
       ),
+      "plan",
     )
 
     val projection =

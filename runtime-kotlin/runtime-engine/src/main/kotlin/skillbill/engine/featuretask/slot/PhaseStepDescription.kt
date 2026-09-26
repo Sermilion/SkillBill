@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot
 
+import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
@@ -7,7 +8,7 @@ import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
 
 internal data class PhaseStepDescription(
   val step: String,
-  val directive: String,
+  val prompt: PhaseStepPromptSource,
   val policy: PhaseStepPolicy,
   val decoder: PhaseOutputDecoder,
 )

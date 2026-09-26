@@ -21,6 +21,7 @@ internal fun featureTaskPhaseComplete(
       value = arguments.string(SharedPayloadKeys.VALUE),
       prompt = arguments.optionalString(SharedPayloadKeys.PROMPT),
       summary = arguments.optionalString(SharedPayloadKeys.SUMMARY),
+      verdict = arguments.optionalString(SharedPayloadKeys.VERDICT),
     ),
   ).toWireMap()
 

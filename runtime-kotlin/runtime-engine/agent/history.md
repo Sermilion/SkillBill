@@ -1,3 +1,16 @@
+## [2026-09-27] SKILL-380 subtask 5 — Remaining slots and the no-phase-id guard
+Areas: runtime-kotlin/runtime-engine/skillbill/engine/featuretask/{slot/{audit,pullrequest,writehistory,commitpush,runner,qualitygate,codereview,plan,preplan,implementation},phase,lifecycle,runloop}, runtime-kotlin/runtime-core/{di/featuretask,repoTest/architecture}, runtime-kotlin/runtime-{domain,infra/contracts,infra/sqlite,infra/workflow,mcp,ports}, orchestration/contracts
+- Every slot's behaviour now lives in its strategy package: acceptance-audit owns gaps_found rejection, remaining-criteria retry, the retry prompt and the unchanged-remainder block; the phase/prompt audit-retry directives file is gone.
+- `PullRequestReadinessGate` (slot/pullrequest) replaces the coordinator's `verifyPrEntryIdentity`; PR identity is looked up through the new `PullRequestIdentityLookup` port (gh adapter in runtime-infra/workflow). reusable
+- write_history and pr settle with the uniform output; changed paths, history/decision changes and PR identity are runtime-measured into owned measured-fact keys, and no production code decodes `history_result` or `pr_result`.
+- `DefaultPhaseRunner` prefers the MCP-settled envelope and otherwise reads the minimal final object (status, value, verdict, failure_disposition) from stdout for any step name.
+- Pattern: runtime-owned turns are exempted from settlement by the strategy fact `settles = false`, not a step id (commit_push, build non-repair turns).
+- Guard: the step-identity rule scans an explicit list of step-owned packages with no exempt list, in four forms (constant, literal, `stepIds` element, alias object); phase/ and lifecycle/ are at zero.
+- Phase-output contract bumped to 0.6; one test pins every schema copy to the Kotlin constant.
+- Limitation: the step-identity remainder in runloop, runner, review, validation and persist, plus the PHASE_AUDIT gate in PhaseLaunchPreparation and AuditRetry plumbing, wait for subtask 7 (needs the PhaseRunState port); per-file counts are in `census_subtask_5.md`.
+Feature flag: N/A
+Acceptance criteria: 11/11 implemented
+
 ## [2026-09-26] SKILL-380 subtask 1 — Pre-change behaviour fixtures
 Areas: runtime-kotlin/runtime-engine/src/test/{kotlin/skillbill/engine/{featuretask/slotbaseline,goalrunner/planning/sweep},resources/featuretask/slotbaseline}
 - Added a pre-refactor baseline for the phase-slot-strategy work: committed fixtures for the standalone run, goal-child build and validate runs, goal planning, parallel code review (INLINE and DELEGATED), and MCP lifecycle telemetry. The fixtures cover phase records, handoff projections, ledger entries, run invariants, workflow snapshots, and per-phase prompts.

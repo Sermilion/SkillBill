@@ -15,13 +15,10 @@ import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
-/**
- * The validate step's shrink rule over its uniform output. Blocked output carries the remaining failures as its
- * value and a verdict: `progress` continues the repair session with that value as the previous attempt's failures,
- * and `no_progress`, an absent verdict, or an unknown verdict blocks the step. An absent or unknown verdict is also
- * recorded as a diagnostic.
- */
 internal object AgentValidateStepHooks : PhaseStepHooks {
+  override val blockedOutputDisposition: FeatureTaskRuntimeFailureDisposition
+    get() = FeatureTaskRuntimeFailureDisposition.RETRYABLE
+
   override fun checkValidatedOutput(
     run: PhaseRun,
     context: FeatureTaskRuntimeRunLoopContext,

@@ -52,8 +52,6 @@ internal object SlotBaselineFixtureCompare {
     return lines.joinToString("\n")
   }
 
-  // shortcut: quadratic LCS over the lines left after trimming the shared prefix and suffix,
-  // switch to Myers if fixtures grow large enough for a whole-file rewrite to be slow
   private fun lineEdits(
     old: List<String>,
     new: List<String>,

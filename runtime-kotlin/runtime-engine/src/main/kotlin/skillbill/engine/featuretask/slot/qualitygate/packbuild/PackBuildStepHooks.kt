@@ -4,22 +4,18 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 
 private const val VALIDATION_REPAIR_PLAN_KEY = "validation_repair_plan"
 
-/**
- * The build step's output hooks: a triage or repair session between gate runs settles as a segment before the shared
- * output gate decodes it, because the runtime measures the gate itself.
- */
 internal object PackBuildStepHooks : PhaseStepHooks {
   override fun earlyOutput(
     run: PhaseRun,
@@ -85,7 +81,7 @@ internal object PackBuildStepHooks : PhaseStepHooks {
     outputText: String,
   ): Boolean =
     looseOutputEnvelope(outputText)?.let {
-      !FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(run.phaseId, it).retryOnResume
+      !FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(it).retryOnResume
     } == true
 
   private fun looseOutputEnvelope(outputText: String): FeatureTaskRuntimeWorkflowArtifactMap? {
@@ -99,11 +95,10 @@ internal object PackBuildStepHooks : PhaseStepHooks {
   }
 }
 
-/** Reads the repair plan a triage session captured: its prose value, or a `validation_repair_plan` entry. */
 internal object PackBuildTriagePlan {
   internal fun extract(output: FeatureTaskRuntimePhaseOutput): ValidationGateTriageResult {
     val produced =
-      FeatureTaskRuntimeRunLoopLaunch.outputEnvelopeOf(output)
+      outputEnvelopeOf(output)
         ?.let { JsonCodec.anyToStringAnyMap(it[SharedPayloadKeys.PRODUCED_OUTPUTS]) }
         ?: return ValidationGateTriageResult.Empty
     planFromValue(produced[SharedPayloadKeys.VALUE])?.let { return it }
@@ -114,6 +109,11 @@ internal object PackBuildTriagePlan {
       ValidationGateTriageResult.Empty
     }
   }
+
+  private fun outputEnvelopeOf(output: FeatureTaskRuntimePhaseOutput): Map<String, Any?>? =
+    output.normalizedOutput?.envelopeWireMap()?.takeIf { it.isNotEmpty() }
+      ?: JsonCodec.parseObjectOrNull(output.payload)?.let(JsonCodec::jsonElementToValue)
+        ?.let(JsonCodec::anyToStringAnyMap)
 
   private fun planFromValue(value: Any?): ValidationGateTriageResult? {
     val valueText = (value as? String)?.takeIf(String::isNotBlank) ?: return null

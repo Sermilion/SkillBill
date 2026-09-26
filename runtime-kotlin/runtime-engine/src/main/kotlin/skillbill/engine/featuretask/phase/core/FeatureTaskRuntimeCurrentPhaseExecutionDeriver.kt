@@ -38,10 +38,6 @@ class FeatureTaskRuntimeCurrentPhaseExecutionDeriver(
     }
   }
 
-  /**
-   * The pending steps status never reports as current: those the run's traversal reaches only through a backward
-   * edge, and the definition's loop-only steps the selection leaves out of the traversal.
-   */
   internal fun loopOnlyStepIds(facts: PhaseStrategySelectionFacts): Set<String> {
     val traversal = strategies.traversal(facts)
     val unselectedLoopOnly = facts.definition.declaration().loopOnlyPhaseIds - traversal.forwardPhaseIds.toSet()
@@ -52,8 +48,7 @@ class FeatureTaskRuntimeCurrentPhaseExecutionDeriver(
 internal fun defaultPhaseExecution(
   phaseId: String,
   context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
-): IdeStatusCurrentPhaseExecution? =
-  edgePhaseExecution(phaseId, context) ?: attemptPhaseExecution(phaseId, context)
+): IdeStatusCurrentPhaseExecution? = edgePhaseExecution(phaseId, context) ?: attemptPhaseExecution(phaseId, context)
 
 internal fun attemptPhaseExecution(
   phaseId: String,

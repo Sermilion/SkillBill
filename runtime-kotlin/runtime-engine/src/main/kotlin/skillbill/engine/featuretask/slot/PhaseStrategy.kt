@@ -1,43 +1,42 @@
 package skillbill.engine.featuretask.slot
 
+import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
+import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
+import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
 
-/**
- * One in-process way to run the steps of a [PhaseSlot]. A strategy declares its steps with their policy and task
- * directive, and runs each step through its own [PhaseRunner].
- *
- * An abstract class rather than an interface: [runStep] takes run-loop types that stay internal to this module until
- * subtask 7, and an interface cannot declare an internal member.
- */
 abstract class PhaseStrategy {
-  /** The slot whose steps this strategy runs. */
   abstract val slot: PhaseSlot
 
-  /** The wire id that selects this strategy for its slot. */
   abstract val strategyId: String
 
-  /** The steps this strategy runs, all owned by [slot]. */
   abstract val steps: List<String>
 
-  /** The step this strategy starts from. */
   abstract val entryStep: String
 
-  /** The runner this strategy starts every agent session with. */
   abstract val runner: PhaseRunner
 
-  /** The launch policy of [stepId]. */
   abstract fun policyFor(stepId: String): PhaseStepPolicy
 
-  /** The task directive of [stepId]. */
   abstract fun directiveFor(stepId: String): String
 
-  /** Runs one step of [run] with the per-call [state]. */
+  open fun promptSections(
+    stepId: String,
+    inputs: FeatureTaskRuntimePhasePromptComposeInputs,
+  ): PhaseStepPromptSections = PhaseStepPromptSections(taskDirective = directiveFor(stepId))
+
+  open fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField> =
+    FeatureTaskRuntimeRunInvariantPromptAllowlist.ACCEPTANCE_CONTRACT_PHASES
+
   internal abstract fun runStep(
     run: PhaseRun,
     context: FeatureTaskRuntimeRunLoopContext,
@@ -46,15 +45,29 @@ abstract class PhaseStrategy {
 
   internal open fun stepHooks(stepId: String): PhaseStepHooks = PhaseStepHooks.None
 
+  internal open fun verdictRule(
+    stepId: String,
+    diagnostics: RuntimeDiagnostics,
+  ): FeatureTaskRuntimeStepVerdictRule? = null
+
   internal open val loopRules: PhaseLoopRules?
     get() = null
 }
 
-/** A [PhaseStrategy] that projects the IDE status execution counter of the steps it runs. */
 abstract class PhaseStrategyStatusProjection : PhaseStrategy() {
-  /** The current execution of [stepId] in [context], or null when the step has not executed yet. */
   internal abstract fun currentExecution(
     stepId: String,
     context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
   ): IdeStatusCurrentPhaseExecution?
 }
+
+internal fun jsonValueContent(
+  innerJsonExample: String,
+  notes: String,
+): String =
+  "Carry this JSON object as the value text; the runtime does not validate its shape and the next phase reads\n" +
+    "it as structured prose:\n" +
+    "```json\n" +
+    innerJsonExample +
+    "```\n" +
+    notes

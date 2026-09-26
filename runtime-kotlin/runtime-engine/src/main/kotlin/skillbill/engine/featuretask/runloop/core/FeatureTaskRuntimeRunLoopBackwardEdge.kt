@@ -2,20 +2,13 @@ package skillbill.engine.featuretask.runloop.core
 
 import skillbill.application.decomposition.specSource
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.featuretask.lifecycle.branch.Blocked
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePlanningStopDecision
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
-import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
-import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
-import skillbill.engine.featuretask.runloop.observability.blocked
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runner.STATUS_BLOCKED
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.model.workflowStepStatus
+import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCapExhaustionBehavior
@@ -228,81 +221,14 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
         val completedOutput = requireNotNull(outcome.completedOutput)
         state.recordCompleted(completedOutput)
         session.consumeOperatorBlockRetryCompletion(phaseId)
-        applyPlanningStop(
-          context = context,
-          phaseId = phaseId,
-          planOutput = completedOutput,
-        )
+        afterCompletion(context, completedOutput)
       }
     }
 
-  internal fun applyPlanningStop(
+  internal fun afterCompletion(
     context: FeatureTaskRuntimeRunLoopContext,
-    phaseId: String,
-    planOutput: FeatureTaskRuntimePhaseOutput,
-  ): String? =
-    with(context) {
-      if (phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN) {
-        return null
-      }
-      return when (
-        val decision =
-          resolvePlanningStop(
-            context,
-            planOutput,
-          )
-      ) {
-        is FeatureTaskRuntimePlanningStopDecision.Proceed -> null
-        is FeatureTaskRuntimePlanningStopDecision.Decomposed -> {
-          session.transitionToDecomposed(decision.report)
-          null
-        }
-        is FeatureTaskRuntimePlanningStopDecision.Blocked -> {
-          persistPlanningStopBlock(request, recorder, observability, phaseId, decision.reason)
-          decision.reason
-        }
-      }
-    }
-
-  internal fun resolvePlanningStop(
-    context: FeatureTaskRuntimeRunLoopContext,
-    planOutput: FeatureTaskRuntimePhaseOutput,
-  ): FeatureTaskRuntimePlanningStopDecision =
-    context.phaseGates.planningStopper.resolve(
-      request = context.request,
-      completedOutput = planOutput,
-      completedPhaseIds = context.state.completedPhaseIds(),
-      resolvedBranch = context.session.resolvedBranch,
-      specSource = context.specSource,
-    )
-
-  internal fun persistPlanningStopBlock(
-    request: FeatureTaskRuntimeRunRequest,
-    recorder: FeatureTaskRuntimePhaseRecorder,
-    observability: FeatureTaskRuntimeRunObservability,
-    phaseId: String,
-    reason: String,
-  ) {
-    val resolvedAgentId =
-      FeatureTaskRuntimeAgentResolver.resolve(
-        phaseId = phaseId,
-        assignment = request.agentAssignment,
-        invokedAgentId = request.invokedAgentId,
-      ).resolvedAgentId
-    recorder.recordPhaseState(
-      FeatureTaskRuntimePhaseStateRequest(
-        workflowId = request.workflowId,
-        phaseId = phaseId,
-        status = STATUS_BLOCKED,
-        attemptCount = 1,
-        resolvedAgentId = resolvedAgentId,
-        finished = false,
-        outputArtifact = null,
-        blockedReason = reason,
-      ),
-    )
-    observability.blocked(phaseId, resolvedAgentId, 1, reason)
-  }
+    output: FeatureTaskRuntimePhaseOutput,
+  ): String? = context.strategyFor(output.phaseId).stepHooks(output.phaseId).afterCompletion(context, output)
 
   internal fun establishBranchIfNeeded(
     context: FeatureTaskRuntimeRunLoopContext,
@@ -316,6 +242,11 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
         phaseGates.branchSetupRunner.ensureFeatureBranch(
           request,
           observability,
+          guardPhase =
+            strategies.selectedStrategies(strategySelectionFacts(request))
+              .firstOrNull { strategy -> strategy.slot == PhaseSlot.IMPLEMENTATION }
+              ?.entryStep
+              ?: phaseId,
         )
       return setup.blockedReason?.also { reason ->
         FeatureTaskRuntimeRunLoopPhaseBlocking.persistBranchSetupBlock(

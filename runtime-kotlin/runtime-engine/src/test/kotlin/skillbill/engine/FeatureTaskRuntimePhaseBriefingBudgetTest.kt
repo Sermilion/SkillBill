@@ -3,6 +3,9 @@ package skillbill.engine
 import skillbill.application.realPlanningProjectionValidator
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
+import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
+import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.handoff.task.FEATURE_TASK_RUNTIME_FORBIDDEN_PROJECTION_FIELD_NAMES
@@ -13,6 +16,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeResol
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReviewEvidenceReference
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -154,6 +158,9 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
         mandatesAndOverrides = listOf("mandate-1: the policy text"),
       )
 
+    val strategies = statusProjectionPhaseStrategies()
+    val facts = PhaseStrategySelectionFacts(SkeletonDefinition.STANDALONE, setOf(CodeReviewExecutionMode.INLINE))
+
     fun briefingFor(phaseId: String) =
       FeatureTaskRuntimePhaseBriefingAssembler.assemble(
         FeatureTaskRuntimePhaseHandoff(
@@ -163,6 +170,7 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
           derivedContextKeys = emptyList(),
         ),
         planningProjectionValidator = realPlanningProjectionValidator,
+        invariantFields = strategies.strategyFor(phaseId, facts).briefingInvariantFields(phaseId),
       )
 
     val implementText = briefingFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT).briefingText

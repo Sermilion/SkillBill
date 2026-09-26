@@ -67,6 +67,7 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
     const val BUILD_RECEIPT: String = "feature_task_runtime.build_receipt"
     const val BOUNDARY_CANDIDATES: String = "feature_task_runtime.boundary_candidates"
     const val HISTORY_RECEIPT: String = "feature_task_runtime.history_receipt"
+    const val HISTORY_RECEIPT_VERSION: String = "0.2"
     const val COMMIT_REQUEST: String = "feature_task_runtime.commit_request"
     const val COMMIT_RECEIPT: String = "feature_task_runtime.commit_receipt"
     const val PR_REQUEST: String = "feature_task_runtime.pr_request"

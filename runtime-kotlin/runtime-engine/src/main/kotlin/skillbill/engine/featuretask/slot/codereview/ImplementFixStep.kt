@@ -2,21 +2,16 @@ package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseRunState
-import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
-import skillbill.engine.featuretask.slot.strategy.runStepAttempts
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal class ImplementFixStep(
-  private val runner: PhaseRunner,
-) : PhaseStepHooks {
+internal class ImplementFixStep : PhaseStepHooks {
   val policy =
     PhaseStepPolicy(
       mutating = true,
@@ -28,12 +23,6 @@ internal class ImplementFixStep(
     )
 
   override val fingerprintsCompletedRepository: Boolean = true
-
-  fun run(
-    run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
-  ): PhaseOutcome = runner.runStepAttempts(run, context, state, policy)
 
   override fun handoffFindingVerdicts(state: PhaseRunState): List<ReviewFindingVerdict> {
     val review = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW

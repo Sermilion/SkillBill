@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparation
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
+import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
@@ -89,7 +90,7 @@ interface PhaseRunState {
 
   /** Records the review briefing for [input] and the resolved review tier ahead of the launch. */
   fun prepareReviewBriefing(
-    directive: String,
+    prompt: PhaseStepPromptSource,
     input: GoalSubtaskReviewInput,
   )
 

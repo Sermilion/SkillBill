@@ -44,9 +44,11 @@ fun StringBuilder.appendProjections(envelope: FeatureTaskRuntimeHandoffEnvelope)
 fun escapeBriefingLineBreaks(value: String): String =
   value.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n")
 
-fun StringBuilder.appendAllowlistedRunInvariants(handoff: FeatureTaskRuntimePhaseHandoff) {
+fun StringBuilder.appendAllowlistedRunInvariants(
+  handoff: FeatureTaskRuntimePhaseHandoff,
+  allowlist: Set<FeatureTaskRuntimeRunInvariantPromptField>,
+) {
   val invariants = handoff.runInvariants
-  val allowlist = FeatureTaskRuntimeRunInvariantPromptAllowlist.forPhase(handoff.phaseId)
   appendLine("## Run invariants (layer 1, unconditional)")
   if (FeatureTaskRuntimeRunInvariantPromptField.SPEC_REFERENCE in allowlist) {
     appendLine("spec_reference: ${invariants.specReference}")
@@ -129,13 +131,14 @@ private fun derivedContextInstruction(
 fun renderFeatureTaskRuntimePhaseBriefing(
   handoff: FeatureTaskRuntimePhaseHandoff,
   envelope: FeatureTaskRuntimeHandoffEnvelope,
+  invariantFields: Set<FeatureTaskRuntimeRunInvariantPromptField>,
 ): String =
   buildString {
     appendLine("# Feature-task-runtime phase briefing")
     appendLine("phase: ${handoff.phaseId}")
     handoff.drivingVerdict?.let { verdict -> appendLine("driving_verdict: ${verdict.wireValue}") }
     appendLine()
-    appendAllowlistedRunInvariants(handoff)
+    appendAllowlistedRunInvariants(handoff, invariantFields)
     appendLine()
     appendLine("## Upstream projections (layer 2, declared and validated)")
     appendProjections(envelope)

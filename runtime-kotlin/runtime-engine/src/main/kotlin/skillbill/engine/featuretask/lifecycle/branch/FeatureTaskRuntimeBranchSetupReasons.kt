@@ -1,10 +1,6 @@
 package skillbill.engine.featuretask.lifecycle.branch
 
 import skillbill.application.decomposition.baseBranch
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-
-val featureTaskRuntimeBranchSetupGuardPhase: String =
-  FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
 
 fun branchSetupBlockedReason(error: String): String =
   "Feature-task-runtime could not establish a feature branch: reading the current branch failed" +

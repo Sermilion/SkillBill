@@ -2,6 +2,7 @@ package skillbill.engine
 
 import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.install.model.SupportedAgent
@@ -123,9 +124,9 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
   fun `blocked phase result remains blocked without a runtime check to override it`() {
     val output =
       """
-      {"contract_version":"0.6","phase_id":"validate","status":"blocked",
+      {"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"validate","status":"blocked",
        "failure_disposition":"needs_user_action","summary":"Quality check could not run.",
-       "produced_outputs":{}}
+       "produced_outputs":{"value":"Quality check could not run."}}
       """.trimIndent()
     val harness = validationHarness(output)
 
@@ -217,7 +218,8 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
     verdict: String?,
   ): String {
     val verdictField = verdict?.let { ""","verdict":"$it"""" }.orEmpty()
-    return """{"contract_version":"0.6","phase_id":"validate","status":"blocked",""" +
+    return """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"validate",""" +
+      """"status":"blocked",""" +
       """"failure_disposition":"needs_user_action","summary":"Project checks still fail.",""" +
       """"produced_outputs":{"value":"$remaining"}$verdictField}"""
   }

@@ -20,10 +20,6 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 
 private const val DEFAULT_BASE_BRANCH = "main"
 
-/**
- * One validate cycle of the running validate step: the agent runs the project's checks and repairs through the
- * step's [call] until the checks pass or the failures stop shrinking.
- */
 internal class AgentValidateGateCycle(
   private val context: FeatureTaskRuntimeRunLoopContext,
   private val call: PhaseStepCall,

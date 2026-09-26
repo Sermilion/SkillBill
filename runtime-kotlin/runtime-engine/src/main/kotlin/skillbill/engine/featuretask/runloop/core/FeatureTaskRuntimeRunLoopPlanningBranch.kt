@@ -7,8 +7,8 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPreLaunch
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopSkeletonPhaseRunState
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseRunState
@@ -262,11 +262,3 @@ internal fun remediationCheckpointBlockedReason(
   "Feature-task-runtime could not establish a remediation checkpoint on the feature branch '$branch' " +
     "before re-entering a mutating phase" + (if (error.isBlank()) "." else " ($error).") +
     " Refusing to re-enter a mutating phase on a dirty, non-reconcilable tree."
-
-internal fun auditReviewCheckpointBlockedReason(
-  branch: String,
-  error: String,
-): String =
-  "Feature-task-runtime could not commit the audited implementation on the feature branch '$branch' " +
-    "before review" + (if (error.isBlank()) "." else " ($error).") +
-    " Refusing to review an uncommitted final audit iteration."

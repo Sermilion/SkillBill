@@ -4,7 +4,8 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.spec.SpecIntentProjectionResolver
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupRunner
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
-import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimePlanningStopper
+import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.prepare.FeatureTaskRuntimeSpecGate
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
@@ -20,7 +21,8 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 @Inject
 data class FeatureTaskRuntimePhaseGateBranchBoundaries(
   val branchSetupRunner: FeatureTaskRuntimeBranchSetupRunner,
-  val planningStopper: FeatureTaskRuntimePlanningStopper,
+  val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
+  val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
   val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
   val gitOperations: WorkflowGitOperations,
   val specGate: FeatureTaskRuntimeSpecGate,

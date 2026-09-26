@@ -38,7 +38,6 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeOperatorBlockRetry
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 import java.time.Instant
 
@@ -274,12 +273,13 @@ fun FeatureTaskRuntimePhaseStateRecorder.implementationAttemptPatch(
 fun FeatureTaskRuntimePhaseStateRecorder.findingVerificationCheckpointPatch(
   request: FeatureTaskRuntimePhaseStateRequest,
 ): Map<String, Any?> {
-  if (request.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS) return emptyMap()
-  if (request.finished && request.status.workflowStepStatus() == WorkflowStepStatus.COMPLETED) {
-    val dispositions =
-      request.normalizedOutput?.envelopeWireMap()
-        ?.let(FeatureTaskRuntimeOutputVerification::dispositionsFrom)
-        .orEmpty()
+  val output = request.normalizedOutput?.envelopeWireMap()
+  if (
+    request.finished &&
+    request.status.workflowStepStatus() == WorkflowStepStatus.COMPLETED &&
+    FeatureTaskRuntimeOutputVerification.carriesFindingDispositions(output)
+  ) {
+    val dispositions = FeatureTaskRuntimeOutputVerification.dispositionsFrom(output)
     return buildMap {
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_CHECKPOINT.putInto(this, null)
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_BOUNDARY_SELECTION.putInto(this, null)

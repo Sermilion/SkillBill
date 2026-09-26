@@ -6,8 +6,8 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePersistenceSchemaEr
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.decodeDeliveredProjectionRecordFromArtifact
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
+import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phaseartifacts.decodeStrictKeyedArtifactMap
 import skillbill.workflow.taskruntime.phaseartifacts.schemaError
 
@@ -18,7 +18,7 @@ internal fun phaseBriefingsFrom(
   decodeStrictKeyedArtifactMap(
     artifacts,
     DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_BRIEFINGS.label(),
-    ignoreEntry = { it == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT },
+    ignoreEntry = { it in PhaseSlot.AUDIT.steps },
   ) { _, briefingMap ->
     val briefing = FeatureTaskRuntimePhaseLaunchBriefing.fromBriefingArtifactWire(briefingMap)
     validateEnvelope(handoffEnvelopeWireMap(briefingMap))
@@ -52,8 +52,7 @@ internal fun deliveredProjectionHistoryFrom(
     artifacts,
     DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DELIVERED_PROJECTIONS.label(),
     ignoreEntry = {
-      it == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT ||
-        it.split('|').getOrNull(1) == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+      it in PhaseSlot.AUDIT.steps || it.split('|').getOrNull(1) in PhaseSlot.AUDIT.steps
     },
   ) { key, recordMap ->
     try {

@@ -18,8 +18,7 @@ class PhaseStrategyLookup(
   fun strategyOrNull(
     stepId: String,
     facts: PhaseStrategySelectionFacts,
-  ): PhaseStrategy? =
-    if (selection.binds(PhaseSlot.slotForStep(stepId), facts)) strategyFor(stepId, facts) else null
+  ): PhaseStrategy? = if (selection.binds(PhaseSlot.slotForStep(stepId), facts)) strategyFor(stepId, facts) else null
 
   fun selectedStrategies(facts: PhaseStrategySelectionFacts): List<PhaseStrategy> =
     facts.definition.slots.map { slot -> registry.strategy(slot, selection.strategyIdFor(slot, facts)) }

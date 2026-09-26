@@ -17,6 +17,7 @@ import skillbill.config.model.RepoLocalConfig
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.time.JvmSystemClock
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupRunner
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
@@ -39,7 +40,6 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGateValida
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
-import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimePlanningStopper
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
@@ -52,6 +52,7 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunInvariant
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.slot.ApprovingReviewPhaseRunner
 import skillbill.engine.featuretask.slot.PhaseRunner
+import skillbill.engine.featuretask.slot.UnavailablePullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
@@ -95,6 +96,7 @@ import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
@@ -223,8 +225,9 @@ internal val VALIDATE_REPAIR_WITHOUT_GATE_COUNTS =
 internal const val VALID_REVIEW_OUTPUT = """{"contract_version":"0.3","produced_outputs":{"findings":[]}}"""
 
 internal const val VALID_AUDIT_OUTPUT =
-  """{"contract_version":"0.6","phase_id":"audit","status":"completed","summary":"Audit satisfied.",""" +
-    """"verdict":"satisfied","produced_outputs":{"value":"{\"gaps\":[],\"non_blocking_findings\":[]}"}}"""
+  """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"audit",""" +
+    """"status":"completed","summary":"Audit satisfied.","verdict":"satisfied",""" +
+    """"produced_outputs":{"value":"{\"gaps\":[],\"non_blocking_findings\":[]}"}}"""
 
 internal val VALID_VERIFY_FINDINGS_OUTPUT = verifyFindingsOutput()
 internal val PREPLAN_OUTPUT = seededProjectionEnvelope("preplan", PlanningProjectionFixtures.PREPLAN_DIGEST)
@@ -641,6 +644,7 @@ internal data class RuntimeHarnessConfig(
   val agentAssignment: FeatureTaskRuntimeAgentAssignment? = null,
   val validator: FeatureTaskRuntimePhaseOutputValidator? = null,
   val diagnostics: RuntimeDiagnostics? = null,
+  val pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
 )
 
 private fun runtimeSpecSourceResolver(): SpecSourceResolver =
@@ -648,7 +652,7 @@ private fun runtimeSpecSourceResolver(): SpecSourceResolver =
 
 private data class RuntimePhaseGatesDeps(
   val branchSetupRunner: FeatureTaskRuntimeBranchSetupRunner,
-  val planningStopper: FeatureTaskRuntimePlanningStopper,
+  val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
   val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
   val gitOperations: WorkflowGitOperations = NoopWorkflowGitOperations,
   val specGate: FeatureTaskRuntimeSpecGate = testSpecGate(),
@@ -690,7 +694,8 @@ private fun runtimePhaseGates(deps: RuntimePhaseGatesDeps): FeatureTaskRuntimePh
   return FeatureTaskRuntimePhaseGates(
     FeatureTaskRuntimePhaseGateBranchBoundaries(
       branchSetupRunner = deps.branchSetupRunner,
-      planningStopper = deps.planningStopper,
+      decompositionPlanner = testDecompositionPlanner(),
+      decomposeTerminalRecorder = deps.decomposeTerminalRecorder,
       lifecycleTelemetry = deps.lifecycleTelemetry,
       gitOperations = deps.gitOperations,
       specGate = deps.specGate,
@@ -958,20 +963,14 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
       deps.recorder,
       deps.runtimeConfig.branchSetup.gitOperations,
     )
-  val decompositionPlanner = testDecompositionPlanner()
-  val planningStopper =
-    FeatureTaskRuntimePlanningStopper(
-      deps.validator,
-      decompositionPlanner,
-      deps.decomposeTerminalRecorder,
-      deps.diagnostics,
-    )
   return FeatureTaskRuntimeRunner(
     strategies =
       testPhaseStrategies(
         deps.launcher,
         deps.runtimeConfig.branchSetup.gitOperations,
         harnessReviewRunner(deps.runtimeConfig, deps.launcher),
+        deps.runtimeConfig.pullRequestIdentityLookup,
+        deps.recorder,
       ),
     recorder = deps.recorder,
     goalContinuationRecorder = deps.goalContinuationRecorder,
@@ -981,7 +980,7 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
       runtimePhaseGates(
         RuntimePhaseGatesDeps(
           branchSetupRunner = branchSetupRunner,
-          planningStopper = planningStopper,
+          decomposeTerminalRecorder = deps.decomposeTerminalRecorder,
           lifecycleTelemetry = disabledRuntimeLifecycleTelemetry(deps.database),
           gitOperations = deps.runtimeConfig.branchSetup.gitOperations,
           specGate = testSpecGate(deps.specScratchStore, deps.specStatusWriter),
@@ -1103,20 +1102,14 @@ private fun telemetryHarnessRunner(
       workflow.recorder,
       runtimeConfig.branchSetup.gitOperations,
     )
-  val decompositionPlanner = testDecompositionPlanner()
-  val planningStopper =
-    FeatureTaskRuntimePlanningStopper(
-      validator,
-      decompositionPlanner,
-      workflow.decomposeTerminalRecorder,
-      NoopRuntimeDiagnostics,
-    )
   return FeatureTaskRuntimeRunner(
     strategies =
       testPhaseStrategies(
         launcher,
         runtimeConfig.branchSetup.gitOperations,
         harnessReviewRunner(runtimeConfig, launcher),
+        runtimeConfig.pullRequestIdentityLookup,
+        workflow.recorder,
       ),
     recorder = workflow.recorder,
     goalContinuationRecorder = workflow.goalContinuationRecorder,
@@ -1128,7 +1121,6 @@ private fun telemetryHarnessRunner(
         database,
         workflow,
         branchSetupRunner,
-        planningStopper,
       ),
     crashReconciler = harnessCrashReconciler(database, NoopFeatureTaskRuntimeWorkerSupervisor),
     phaseSettlementService = harnessPhaseSettlement(),
@@ -1151,12 +1143,11 @@ private fun telemetryRunnerPhaseGates(
   database: DatabaseSessionFactory,
   workflow: RunnerHarnessWorkflow,
   branchSetupRunner: FeatureTaskRuntimeBranchSetupRunner,
-  planningStopper: FeatureTaskRuntimePlanningStopper,
 ): FeatureTaskRuntimePhaseGates =
   runtimePhaseGates(
     RuntimePhaseGatesDeps(
       branchSetupRunner = branchSetupRunner,
-      planningStopper = planningStopper,
+      decomposeTerminalRecorder = workflow.decomposeTerminalRecorder,
       lifecycleTelemetry =
         FeatureTaskRuntimeLifecycleTelemetry(
           LifecycleTelemetryService(
@@ -1507,7 +1498,7 @@ internal fun goalContinuationHarness(
           ),
         reviewRunner = reviewRunner,
       ),
-    core =RunnerHarnessCore(launcher = launcher, agentAssignment = phasePerAgentAssignment()),
+    core = RunnerHarnessCore(launcher = launcher, agentAssignment = phasePerAgentAssignment()),
   )
 
 internal val DECOMPOSE_PLAN_OUTPUT: String =

@@ -2,6 +2,7 @@
 package skillbill.engine
 
 import skillbill.application.realPlanningProjectionValidator
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
@@ -40,7 +41,7 @@ internal fun promptComposerProjectionEnvelope(
   phaseId: String,
   producedOutputs: String,
 ): String =
-  """{"contract_version":"0.6","phase_id":"$phaseId","status":"completed",""" +
+  """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"$phaseId","status":"completed",""" +
     """"summary":"Phase produced a validated output.","produced_outputs":$producedOutputs}"""
 
 internal fun composePromptForPhase(phaseId: String) =

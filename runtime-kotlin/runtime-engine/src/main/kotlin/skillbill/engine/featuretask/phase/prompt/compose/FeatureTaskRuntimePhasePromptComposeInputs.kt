@@ -41,5 +41,4 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val phaseSettlement: FeatureTaskRuntimePhaseSettlementTarget? = null,
   val mutating: Boolean = false,
   val singleAgentSession: Boolean = false,
-  val taskDirective: String? = null,
 )

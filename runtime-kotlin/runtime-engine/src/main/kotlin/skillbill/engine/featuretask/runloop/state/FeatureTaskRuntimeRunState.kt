@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.runloop.state
 
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
+import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.ReconstructFixLoopBudgetBasesArgs
 import skillbill.engine.featuretask.runloop.observability.paused
 import skillbill.engine.featuretask.runner.BRANCH_SETUP_AGENT_ID
@@ -28,6 +29,7 @@ class FeatureTaskRuntimeRunState(
   durableInitialLedger: List<FeatureTaskRuntimePhaseLedgerEntry> = emptyList(),
   val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   initialReviewGeneration: Int = 0,
+  private val stepVerdictRule: (String) -> FeatureTaskRuntimeStepVerdictRule? = { null },
 ) {
   private val durableInitialRecords: Map<String, FeatureTaskRuntimePhaseRecord> = initialRecords
 
@@ -61,6 +63,8 @@ class FeatureTaskRuntimeRunState(
   private val gateInvalidatedPhaseIds: MutableSet<String> = mutableSetOf()
 
   private val phaseTokenUsage: MutableMap<String, Pair<Int, Int>> = mutableMapOf()
+
+  private val stepVerdictRules: MutableMap<String, FeatureTaskRuntimeStepVerdictRule?> = mutableMapOf()
 
   private val parsedOutputsByPayloadStorage: MutableMap<String, FeatureTaskRuntimeWorkflowArtifactMap> = mutableMapOf()
 
@@ -455,8 +459,15 @@ class FeatureTaskRuntimeRunState(
     if (passNumber != null) currentReviewPassNumber = passNumber
   }
 
+  private fun stepVerdictRuleFor(phaseId: String): FeatureTaskRuntimeStepVerdictRule? =
+    stepVerdictRules.getOrPut(phaseId) { stepVerdictRule(phaseId) }
+
   fun verdictFor(phaseId: String): FeatureTaskRuntimeVerdict =
-    FeatureTaskRuntimeOutputVerification.verdictFor(phaseId, parsedOutput(outputFor(phaseId)))
+    FeatureTaskRuntimeOutputVerification.verdictFor(
+      phaseId,
+      parsedOutput(outputFor(phaseId)),
+      stepVerdictRuleFor(phaseId),
+    )
 
   val settledVerdictsByPhaseId: Map<String, FeatureTaskRuntimeVerdict>
     get() = completedPhases.associateWith(::verdictFor)
@@ -472,7 +483,7 @@ class FeatureTaskRuntimeRunState(
   fun durableVerdictFor(phaseId: String): FeatureTaskRuntimeVerdict {
     val record = initialRecords[phaseId] ?: return verdictFor(phaseId)
     val output = validatedRecordToOutput(record) ?: return verdictFor(phaseId)
-    return FeatureTaskRuntimeOutputVerification.verdictFor(phaseId, parsedOutput(output))
+    return FeatureTaskRuntimeOutputVerification.verdictFor(phaseId, parsedOutput(output), stepVerdictRuleFor(phaseId))
   }
 }
 

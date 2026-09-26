@@ -1,23 +1,27 @@
 package skillbill.di.featuretask
 
 import me.tatarka.inject.annotations.Provides
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategyBinding
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategyRegistry
 import skillbill.engine.featuretask.slot.PhaseStrategySelection
+import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
+import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
+import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
+import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
+import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
-import skillbill.engine.featuretask.slot.strategy.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.strategy.AgentPlanStrategy
-import skillbill.engine.featuretask.slot.strategy.AgentPreplanStrategy
-import skillbill.engine.featuretask.slot.strategy.BoundaryHistoryStrategy
-import skillbill.engine.featuretask.slot.strategy.ImplementThenSimplifyStrategy
-import skillbill.engine.featuretask.slot.strategy.PrDescriptionStrategy
-import skillbill.engine.featuretask.slot.strategy.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
@@ -32,7 +36,12 @@ internal interface RuntimeFeatureTaskSlotProvides {
   ): PhaseRunner = DefaultPhaseRunner(launcher, gitOperations)
 
   @Provides
-  fun phaseStrategyRegistry(runner: () -> PhaseRunner): PhaseStrategyRegistry =
+  fun phaseStrategyRegistry(
+    runner: () -> PhaseRunner,
+    pullRequestIdentityLookup: PullRequestIdentityLookup,
+    readinessEvidence: FeatureTaskRuntimeReadinessEvidencePort,
+    diagnostics: RuntimeDiagnostics,
+  ): PhaseStrategyRegistry =
     PhaseStrategyRegistry(
       listOf(
         AgentPreplanStrategy(runner()),
@@ -44,7 +53,11 @@ internal interface RuntimeFeatureTaskSlotProvides {
         AgentValidateStrategy(runner()),
         BoundaryHistoryStrategy(runner()),
         RuntimeCommitStrategy(runner()),
-        PrDescriptionStrategy(runner()),
+        PrDescriptionStrategy(
+          runner(),
+          pullRequestIdentityLookup,
+          PullRequestReadinessGate(readinessEvidence, diagnostics),
+        ),
       ),
     )
 

@@ -50,6 +50,7 @@ class DefaultGoalPlanningSweep(
   val fanOutPort = launchBoundaries.fanOutPort
   val burstSchedule = launchBoundaries.burstSchedule
   val refreshLiveness = launchBoundaries.refreshLiveness
+  val phaseStrategies = launchBoundaries.phaseStrategies
 
   override fun prepare(
     state: GoalRunnerManifestState,

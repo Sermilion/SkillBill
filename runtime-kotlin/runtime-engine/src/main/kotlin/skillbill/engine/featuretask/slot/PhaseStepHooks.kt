@@ -1,13 +1,21 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.application.review.service.RuntimeOwnedReviewMode
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeMeasuredFactKeys
+import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.goalreview.ReviewPassResolution
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
 /**
@@ -19,6 +27,10 @@ internal interface PhaseStepHooks {
   /** Whether the output gate fingerprints the repository when this step completes. */
   val fingerprintsCompletedRepository: Boolean
     get() = false
+
+  /** The failure disposition a blocked terminal output of this step gets when it names none. */
+  val blockedOutputDisposition: FeatureTaskRuntimeFailureDisposition
+    get() = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION
 
   /** The prompt sections appended after the composed launch prompt of [run]. */
   fun launchPromptSupplement(
@@ -87,12 +99,54 @@ internal interface PhaseStepHooks {
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck = PhaseStepOutputCheck.Accept
 
+  /** Resets the step state a launch of [run] must not carry over from a prior process. */
+  fun onLaunch(
+    run: PhaseRun,
+    context: FeatureTaskRuntimeRunLoopContext,
+  ) = Unit
+
+  /**
+   * The attempt result completed [outputMap] of [capture] settles to once the step's records are settled: a block or
+   * an in-phase retry, or null when the output goes on to acceptance.
+   */
+  fun settleCompletedRound(
+    context: FeatureTaskRuntimeRunLoopContext,
+    capture: ValidatedOutputCapture,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): AttemptResult? = null
+
+  /**
+   * The form of completed [attested] output of [capture] the output gate accepts, given its validated [outputMap]. A
+   * step stamps the facts the runtime measured around it here.
+   */
+  fun acceptedOutput(
+    context: FeatureTaskRuntimeRunLoopContext,
+    capture: ValidatedOutputCapture,
+    attested: NormalizedFeatureTaskRuntimePhaseOutput,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): NormalizedFeatureTaskRuntimePhaseOutput = attested
+
   /** Records step evidence from accepted [outputMap] of [run] before the completed step is persisted. */
   fun recordAcceptedOutput(
     run: PhaseRun,
     context: FeatureTaskRuntimeRunLoopContext,
     state: PhaseRunState,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ) = Unit
+
+  /**
+   * Settles what completed [output] of this step decides for the rest of the run, once the step is recorded
+   * completed: the blocked reason that stops the run, or null when the run continues.
+   */
+  fun afterCompletion(
+    context: FeatureTaskRuntimeRunLoopContext,
+    output: FeatureTaskRuntimePhaseOutput,
+  ): String? = null
+
+  /** Reconciles the durable state [run] reads before the shared pre-launch checks decide whether it can launch. */
+  fun reconcileBeforeLaunch(
+    run: PhaseRun,
+    context: FeatureTaskRuntimeRunLoopContext,
   ) = Unit
 
   companion object {
@@ -128,4 +182,14 @@ internal sealed interface PhaseStepOutputCheck {
   companion object {
     const val OUTPUT_VERIFICATION_RULE = "output-verification"
   }
+}
+
+internal fun NormalizedFeatureTaskRuntimePhaseOutput.withMeasuredFacts(
+  facts: Map<String, Any>,
+): NormalizedFeatureTaskRuntimePhaseOutput {
+  val envelope = envelopeWireMap().toMutableMap()
+  val produced = JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty().toMutableMap()
+  produced[FeatureTaskRuntimeMeasuredFactKeys.MEASURED_FACTS] = facts
+  envelope[SharedPayloadKeys.PRODUCED_OUTPUTS] = produced
+  return copy(envelope = envelope, canonicalJson = JsonCodec.mapToJsonString(envelope))
 }

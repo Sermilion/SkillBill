@@ -990,14 +990,13 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   settled envelope, typed launch failure). `DefaultPhaseRunner` is the only
   implementation, and it is the only featuretask type that depends on
   `GoalRunnerSubtaskLauncher`.
-- `PhaseRunState` is the port a runner reads and writes during one call:
-  launch preparation (run after the before-capture, so a failed capture
-  records nothing), settlement target, launch observation, token accounting,
-  and the settled envelope. It also carries the review members the
-  `code_review` strategy needs: pass reservation, goal review input and
-  carry-forward, review start and launch records, content identities, the
-  remediation checkpoint amend, review completion, and review blocks.
-  `FeatureTaskRuntimeRunLoopSkeletonPhaseRunState` backs it for full runs.
+- `PhaseRunState` is the per-call port `runStep` receives. It carries the
+  review members the `code_review` strategy needs: pass reservation, goal
+  review input and carry-forward, review start and launch records, content
+  identities, the remediation checkpoint amend, review completion, and review
+  blocks. `FeatureTaskRuntimeRunLoopSkeletonPhaseRunState` backs it for full
+  runs. The other strategies still take `FeatureTaskRuntimeRunLoopContext` and
+  read run state through it; SKILL-380 subtask 7 moves them behind this port.
 - `ReviewTarget` is a per-call fact on `PhaseRun`: `LastCommit` (the full-run
   default), `Uncommitted`, or `Commit(sha)`. It composes the opening lines of
   the review prompt.
@@ -1063,7 +1062,8 @@ Composition:
   omits the unselected steps' outputs, and the handoff rejects a settled output
   from an unselected step. Nothing rewrites transitions, and no shared
   runloop, phase, runner, review, validation, or lifecycle code imports the
-  strategy packages. Gate progress is read and written through `PhaseRunState`.
+  strategy packages. The gate cycles read and write gate progress through the
+  run-loop context until subtask 7.
 - Validate settles with the uniform output. Completed means every check
   passed. Blocked carries the remaining failures as the value and a verdict:
   `progress` continues the repair session, and `no_progress`, an absent
@@ -1078,11 +1078,46 @@ Composition:
 - IDE status goes through the same lookup.
   `FeatureTaskRuntimeCurrentPhaseExecutionDeriver` asks the step's strategy for
   its execution counter through `PhaseStrategyStatusProjection`.
-- The other wrapper strategies still run today's step code (the shared
-  attempt path under `slot.attempt` and commit push) until SKILL-380
-  subtask 5 moves it into them. The shared
-  output-contract section and the `SETTLEMENT_PHASE_IDS` MCP settlement
-  channel are unchanged until subtask 5.
+- Every strategy owns its step code in its slot package:
+
+  | Strategy | Package | Owns |
+  | --- | --- | --- |
+  | `agent-preplan` | `slot.preplan` | Preplan directive, ceremony line, prose settlement |
+  | `agent-plan` | `slot.plan` | Plan directive, goal-continuation constraint, decomposition stop |
+  | `implement-then-simplify` | `slot.implementation` | Implement and simplify directives, continuation segments, simplify scope boundary, receipt checks |
+  | `acceptance-audit` | `slot.audit` | Audit directive, remaining-criteria retry prompt and briefing rewrite, unchanged-remainder block, audit verdict rule (`AcceptanceAuditVerdictRule`) and its `gaps_found` rejection, audit-to-review checkpoint (`AcceptanceAuditLoopRules.forwardCheckpoint`) |
+  | `inline` | `slot.codereview` | Review, verify_findings, and implement_fix prompts, review envelope decoding, finding-disposition gate, review briefing field set |
+  | `pack-build` | `slot.qualitygate.packbuild` | Runtime-owned build gate, triage and repair sessions |
+  | `agent-validate` | `slot.qualitygate.agentvalidate` | Agent validate step, its repair session, retryable blocked disposition |
+  | `boundary-history` | `slot.writehistory` | write_history directive, finalization briefing field set, changed paths and history and decision writes measured by `WriteHistoryMeasurement` under `FeatureTaskRuntimeMeasuredFactKeys`; a fact it cannot measure is recorded as unknown with a diagnostics record |
+  | `runtime-commit` | `slot.commitpush` | Commit push cycle, upstream-head fallback, finalization briefing field set |
+  | `pr-description` | `slot.pullrequest` | PR directive, PR readiness gate (`PullRequestReadinessGate`), PR identity measured before and after the step through `PullRequestIdentityLookup` |
+
+- A strategy reaches shared code through hooks, never the other way round.
+  `PhaseStrategy.stepHooks` returns the step's `PhaseStepHooks` (launch,
+  pre-launch reconcile, completed-round settlement, accepted output, blocked
+  output disposition). `PhaseStrategy.verdictRule` returns a
+  `FeatureTaskRuntimeStepVerdictRule` that `FeatureTaskRuntimeRunState` settles
+  the step's verdict by. `PhaseStrategy.briefingInvariantFields` picks the
+  run-invariant field set the step's briefing renders.
+
+- Each strategy supplies its steps' prompt sections through
+  `PhaseStrategy.promptSections` (`PhaseStepPromptSections`: task directive,
+  ceremony line, gate flags, scope boundary, step context, continuation, retry
+  shape, value guidance, output contract). The composer
+  (`FeatureTaskRuntimePhasePromptComposer`) owns the shared header,
+  discipline, retry, and settlement sections and has no phase-keyed table.
+  Goal planning composes preplan and plan prompts from the registered
+  strategies through `PhaseStrategyLookup`.
+- Every step except the three `code_review` steps settles with the minimal
+  final object: status, summary, prose value, optional verdict, and a failure
+  disposition when not completed. The runtime stamps the contract version and
+  phase id, and the durable settlement directive is added whenever the step
+  has a settlement target. `DefaultPhaseRunner` prefers the MCP-settled
+  envelope and otherwise reads the minimal final object from stdout for any
+  step name, including a step outside the domain graph. A step whose prompt
+  sections set `settles = false` (the runtime-owned build and commit_push
+  turns) does not settle with the uniform output.
 
 Dispatch and policy:
 
@@ -1093,6 +1128,39 @@ Dispatch and policy:
   read-only idle, file mutating, generation scoped) is declared by the
   strategy that owns the step. No phase-id set outside the strategies decides
   launch policy.
+
+Guard rules (`RuntimeEngineBoundaryArchitectureTest`, scanning with
+`FeatureTaskSlotBoundaryScans`; each rule reports the files it read, has no
+baseline or exemption, and has synthetic violations that call its own scan):
+
+- Step identity: no file in a step-owned package decides behaviour by step
+  identity. `STEP_OWNED_PACKAGES` lists the covered packages, `phase` and
+  `lifecycle`; subtask 7 widens it to every package outside `slot`. The scan
+  rejects a `FeatureTaskRuntimePhaseIds` or
+  `FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_*` constant (qualified,
+  aliased, or imported), a string literal equal to a step id, element access
+  on a slot's `steps` or `stepIds`, and any use of a non-private `slot`
+  declaration whose value is a single step id. Shared code asks the selection
+  for the slot or strategy that owns the step, or takes the step id as a
+  parameter, instead.
+- Launch port: only the `PhaseRunner` implementation depends on
+  `GoalRunnerSubtaskLauncher`.
+- Dependency direction: shared feature-task packages import no strategy
+  package; strategy packages import none of the run loop's drive, launch,
+  attempt, or planning-branch objects and do not reference
+  `FeatureTaskRuntimeRunState` by name. Strategies take collaborators by
+  constructor.
+
+Adding a phase strategy:
+
+1. Write the strategy class in its slot package under
+   `skillbill.engine.featuretask.slot`: declare the slot, strategy id, steps,
+   entry step, per-step policy, and prompt sections, and run each step
+   through the strategy's `PhaseRunner`.
+2. Add it to the registry provider in `RuntimeFeatureTaskSlotProvides` with
+   its own `PhaseRunner`.
+3. Name it in `PhaseStrategySelection` for the definitions and selection facts
+   that pick it.
 
 ## Runtime Contract And Schema Seams
 

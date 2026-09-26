@@ -203,8 +203,9 @@ class DefaultPhaseRunner(
           sha256 = it.stdoutSha256,
         )
       } ?: EMPTY_STDOUT
-    val synthesized = runCatching { ProsePhaseOutputSynthesizer.trySynthesize(stdout.text, input.stepName) }
-    val envelope = (settled as? PhaseSettledEnvelopeRead.Found)?.envelope ?: synthesized.getOrNull() as? Map<*, *>
+    val envelope =
+      (settled as? PhaseSettledEnvelopeRead.Found)?.envelope
+        ?: runCatching { ProsePhaseOutputSynthesizer.recoverFinalObject(stdout.text, input.stepName) }.getOrNull()
     val produced = envelope?.get(SharedPayloadKeys.PRODUCED_OUTPUTS) as? Map<*, *>
     return PhaseStepOutput(
       status = envelope?.get(SharedPayloadKeys.STATUS) as? String ?: "",

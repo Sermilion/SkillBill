@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.lifecycle.core
 
-import skillbill.engine.featuretask.phase.prompt.directives.phaseDirectives
+import skillbill.engine.featuretask.slot.audit.AcceptanceAuditPromptSections
+import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -13,7 +14,7 @@ class FeatureTaskRuntimeAuditTestExclusionTest {
       listOf(
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
-      ).map { phaseId -> phaseId to requireNotNull(phaseDirectives[phaseId]) }
+      ).zip(listOf(ImplementationPromptSections.IMPLEMENT_DIRECTIVE, AcceptanceAuditPromptSections.DIRECTIVE))
 
     repairAndAudit.forEach { (phaseId, directive) ->
       BUILD_AND_TEST_COMMANDS.forEach { command ->
@@ -25,10 +26,10 @@ class FeatureTaskRuntimeAuditTestExclusionTest {
     }
 
     assertContains(
-      requireNotNull(phaseDirectives[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT]),
+      ImplementationPromptSections.IMPLEMENT_DIRECTIVE,
       "do not run builds or tests here",
     )
-    val auditDirective = requireNotNull(phaseDirectives[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT])
+    val auditDirective = AcceptanceAuditPromptSections.DIRECTIVE
     assertContains(auditDirective, "read-only repository facts")
     assertContains(auditDirective, "validation owns test execution")
     assertContains(auditDirective, "gaps")

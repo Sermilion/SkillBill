@@ -4,10 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
-import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.model.workflowStepStatus
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.util.logging.Level
 
 internal fun readPhaseOutputObjectNode(
@@ -21,7 +17,9 @@ internal fun readPhaseOutputObjectNode(
     }
   val distinctValidEnvelopes =
     envelopeCandidates
-      .filter { candidate -> FeatureTaskRuntimePhaseOutputWireSchema.schema.validate(candidate).isEmpty() }
+      .filter { candidate ->
+        FeatureTaskRuntimePhaseOutputWireSchema.schemaFor(candidate).validate(candidate).isEmpty()
+      }
       .distinctBy(::canonicalCandidateKey)
   if (distinctValidEnvelopes.size > 1) {
     throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
@@ -154,23 +152,6 @@ internal fun phaseOutputObjectNodeToMap(
       payloadFreeReason = "Phase output root object cannot be converted to a string-keyed map.",
     )
   }
-
-internal fun dropSpuriousAuditCompletedVerdict(parsed: MutableMap<String, Any?>) {
-  val isAuditPhase =
-    parsed[SharedPayloadKeys.PHASE_ID] ==
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
-  val isCompleted =
-    (parsed[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() ==
-      WorkflowStepStatus.COMPLETED
-  val verdict = parsed[SharedPayloadKeys.VERDICT] as? String
-  val isSpurious =
-    verdict != null &&
-      verdict != FeatureTaskRuntimeVerdict.SATISFIED.wireValue &&
-      verdict != FeatureTaskRuntimeVerdict.GAPS_FOUND.wireValue
-  if (isAuditPhase && isCompleted && isSpurious) {
-    parsed.remove(SharedPayloadKeys.VERDICT)
-  }
-}
 
 internal fun dropNullProducedOutputsPrompt(
   parsed: MutableMap<String, Any?>,

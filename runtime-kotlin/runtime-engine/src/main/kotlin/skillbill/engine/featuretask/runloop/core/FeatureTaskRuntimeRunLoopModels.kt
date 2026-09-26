@@ -294,4 +294,3 @@ internal data class PreparedLaunch(
 )
 
 internal data class RecordRejection(val rejectionClass: String, val rejectionDetail: String)
-

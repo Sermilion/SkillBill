@@ -1,23 +1,30 @@
 package skillbill.engine.featuretask.slot
 
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
+import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
+import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
+import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
+import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
+import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
-import skillbill.engine.featuretask.slot.strategy.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.strategy.AgentPlanStrategy
-import skillbill.engine.featuretask.slot.strategy.AgentPreplanStrategy
-import skillbill.engine.featuretask.slot.strategy.BoundaryHistoryStrategy
-import skillbill.engine.featuretask.slot.strategy.ImplementThenSimplifyStrategy
-import skillbill.engine.featuretask.slot.strategy.PrDescriptionStrategy
-import skillbill.engine.featuretask.slot.strategy.RuntimeCommitStrategy
+import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
+import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.core.PhaseSlot
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
 import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
+import java.nio.file.Path
 
 fun statusProjectionPhaseStrategies(): PhaseStrategyLookup =
   testPhaseStrategies(
@@ -30,6 +37,8 @@ fun testPhaseStrategies(
   launcher: GoalRunnerSubtaskLauncher,
   gitOperations: WorkflowGitOperations,
   reviewRunner: PhaseRunner? = null,
+  pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
+  readinessEvidence: FeatureTaskRuntimeReadinessEvidencePort = AbsentReadinessEvidence,
 ): PhaseStrategyLookup {
   val runner = { DefaultPhaseRunner(launcher, gitOperations) }
   val codeReviewRunner = reviewRunner?.let { reviewRoutingPhaseRunner(it, runner()) } ?: runner()
@@ -45,10 +54,30 @@ fun testPhaseStrategies(
         AgentValidateStrategy(runner()),
         BoundaryHistoryStrategy(runner()),
         RuntimeCommitStrategy(runner()),
-        PrDescriptionStrategy(runner()),
+        PrDescriptionStrategy(
+          runner(),
+          pullRequestIdentityLookup,
+          PullRequestReadinessGate(readinessEvidence, NoopRuntimeDiagnostics),
+        ),
       ),
     )
   return PhaseStrategyLookup(registry, PhaseStrategySelection(registry, testPhaseStrategyBindings()))
+}
+
+object AbsentReadinessEvidence : FeatureTaskRuntimeReadinessEvidencePort {
+  override fun loadReadinessEvidence(workflowId: String): FeatureTaskRuntimeReadinessEvidence? = null
+
+  override fun persistReadinessEvidence(
+    workflowId: String,
+    evidence: FeatureTaskRuntimeReadinessEvidence,
+  ) = error("Absent readiness evidence cannot persist evidence.")
+}
+
+object UnavailablePullRequestIdentityLookup : PullRequestIdentityLookup {
+  override fun lookup(
+    repoRoot: Path,
+    branch: String,
+  ): PullRequestIdentity = PullRequestIdentity.Unavailable("test runs do not reach GitHub")
 }
 
 fun testPhaseStrategyBindings(): Map<SkeletonDefinition, Map<PhaseSlot, PhaseStrategyBinding>> {

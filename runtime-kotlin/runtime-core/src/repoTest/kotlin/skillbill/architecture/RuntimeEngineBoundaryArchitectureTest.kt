@@ -1,5 +1,6 @@
 package skillbill.architecture
 
+import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -416,5 +417,417 @@ class RuntimeEnginePublicTopLevelDeclarationArchitectureTest {
           """(?:class|object|interface|typealias|fun|val|var)\s+""" +
           """([A-Za-z_][A-Za-z0-9_]*)\b""",
       )
+  }
+}
+
+class FeatureTaskStepIdentityArchitectureTest {
+  @Test
+  fun `no step-owned feature-task file decides behaviour by step identity`() {
+    val sources = featureTaskEngineSources()
+    val scanned = FeatureTaskStepIdentityScan.scannedSources(sources, STEP_OWNED_PACKAGES)
+    val readPerPackage =
+      STEP_OWNED_PACKAGES.associateWith {
+          pkg ->
+        scanned.keys.count { path -> path.startsWith(pkg) }
+      }
+    assertTrue(readPerPackage.values.all { count -> count > 0 }, "The step-identity rule read $readPerPackage.")
+
+    val violations = FeatureTaskStepIdentityScan.violations(sources, STEP_IDS, STEP_OWNED_PACKAGES)
+
+    assertEquals(emptyList(), violations, "Read $readPerPackage files.\n" + violations.joinToString("\n"))
+  }
+
+  @Test
+  fun `slot declares no non-private property exposing a single step id`() {
+    val sources = featureTaskEngineSources()
+    val read = sources.keys.count(::isFeatureTaskSlotPath)
+    assertTrue(read > 0, "The step-id alias rule read no slot file.")
+
+    val aliases = FeatureTaskStepIdentityScan.stepIdAliases(sources, STEP_IDS)
+
+    assertEquals(emptyList(), aliases, "Read $read slot files.\n" + aliases.joinToString("\n"))
+  }
+
+  @Test
+  fun `step-identity rule catches phase-id constants however they are imported`() {
+    val source =
+      """
+      package skillbill.engine.featuretask.runloop.core
+
+      import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
+      import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds.*
+      import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+      import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
+      import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition as Steps
+
+      internal object Synthetic {
+        fun ids(step: String) = step == FeatureTaskRuntimePhaseIds.REVIEW
+        fun definition(step: String) = step == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+        fun imported(step: String) = step == PHASE_BUILD
+        fun aliased(step: String) = step == Steps.PHASE_PR
+        fun starred(step: String) = step == VERIFY_FINDINGS
+      }
+      """.trimIndent()
+
+    assertEquals(
+      listOf(
+        "runloop/core/Synthetic.kt:4 phase-id constant FeatureTaskRuntimePhaseIds.*",
+        "runloop/core/Synthetic.kt:6 phase-id constant FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD",
+        "runloop/core/Synthetic.kt:10 phase-id constant FeatureTaskRuntimePhaseIds.REVIEW",
+        "runloop/core/Synthetic.kt:11 phase-id constant FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT",
+        "runloop/core/Synthetic.kt:12 phase-id constant PHASE_BUILD",
+        "runloop/core/Synthetic.kt:13 phase-id constant Steps.PHASE_PR",
+        "runloop/core/Synthetic.kt:14 phase-id constant VERIFY_FINDINGS",
+      ),
+      FeatureTaskStepIdentityScan.violations(mapOf("runloop/core/Synthetic.kt" to source), STEP_IDS, SYNTHETIC_SCOPE),
+    )
+  }
+
+  @Test
+  fun `step-identity rule covers only the scanned packages`() {
+    val source =
+      """
+      package skillbill.engine.featuretask.runloop.core
+
+      internal object Synthetic {
+        fun review(step: String) = step == "review"
+      }
+      """.trimIndent()
+    val sources = mapOf("runloop/core/Synthetic.kt" to source, "phase/core/Synthetic.kt" to source)
+
+    assertEquals(
+      listOf("phase/core/Synthetic.kt:4 step-id literal \"review\""),
+      FeatureTaskStepIdentityScan.violations(sources, STEP_IDS, STEP_OWNED_PACKAGES),
+    )
+  }
+
+  @Test
+  fun `step-identity rule catches whole string literals equal to a step id`() {
+    val source =
+      """
+      package skillbill.engine.featuretask.review.core
+
+      internal object Synthetic {
+        fun review(step: String) = step == "review"
+        fun planning(step: String) = step in setOf("plan", "planning")
+        fun fix(step: String) = step == "verify_findings" || step == 'r'.toString()
+        fun escaped() = "say \"audit\" twice"
+        val note = "the build step"
+      }
+      """.trimIndent()
+
+    assertEquals(
+      listOf(
+        "review/core/Synthetic.kt:4 step-id literal \"review\"",
+        "review/core/Synthetic.kt:5 step-id literal \"plan\"",
+        "review/core/Synthetic.kt:6 step-id literal \"verify_findings\"",
+      ),
+      FeatureTaskStepIdentityScan.violations(mapOf("review/core/Synthetic.kt" to source), STEP_IDS, SYNTHETIC_SCOPE),
+    )
+  }
+
+  @Test
+  fun `step-identity rule catches element access on a slot's steps`() {
+    val source =
+      """
+      package skillbill.engine.featuretask.phase.core
+
+      import skillbill.workflow.taskruntime.model.core.PhaseSlot
+
+      internal object Synthetic {
+        fun indexed() = PhaseSlot.CODE_REVIEW.steps[1]
+        fun first() = PhaseSlot.QUALITY_GATE.steps.first()
+        fun last() = PhaseSlot.IMPLEMENTATION.stepIds.lastOrNull()
+        fun single() = PhaseSlot.PLAN.steps.single()
+        fun got() = PhaseSlot.CODE_REVIEW.steps.get(2)
+        fun element() = PhaseSlot.CODE_REVIEW.steps.elementAt(0)
+        fun terminal() = FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds.last()
+        fun owns(step: String) = step in PhaseSlot.CODE_REVIEW.steps
+      }
+      """.trimIndent()
+
+    assertEquals(
+      listOf(
+        "phase/core/Synthetic.kt:6 step element access PhaseSlot.CODE_REVIEW.steps",
+        "phase/core/Synthetic.kt:7 step element access PhaseSlot.QUALITY_GATE.steps.first",
+        "phase/core/Synthetic.kt:8 step element access PhaseSlot.IMPLEMENTATION.stepIds.lastOrNull",
+        "phase/core/Synthetic.kt:9 step element access PhaseSlot.PLAN.steps.single",
+        "phase/core/Synthetic.kt:10 step element access PhaseSlot.CODE_REVIEW.steps.get",
+        "phase/core/Synthetic.kt:11 step element access PhaseSlot.CODE_REVIEW.steps.elementAt",
+        "phase/core/Synthetic.kt:12 step element access " +
+          "FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds.last",
+      ),
+      FeatureTaskStepIdentityScan.violations(mapOf("phase/core/Synthetic.kt" to source), STEP_IDS, SYNTHETIC_SCOPE),
+    )
+  }
+
+  @Test
+  fun `step-identity rule catches a run-loop use of a slot alias object`() {
+    val alias =
+      """
+      package skillbill.engine.featuretask.slot.codereview
+
+      import skillbill.workflow.taskruntime.model.core.PhaseSlot
+
+      internal object ReviewStepNames {
+        const val REVIEW_STEP = "review"
+        val fixStep: String = PhaseSlot.CODE_REVIEW.steps[2]
+      }
+      """.trimIndent()
+    val runLoop =
+      """
+      package skillbill.engine.featuretask.runloop.core
+
+      import skillbill.engine.featuretask.slot.codereview.ReviewStepNames
+
+      internal object Synthetic {
+        fun review(step: String) = step == ReviewStepNames.REVIEW_STEP
+        fun fix(step: String) = step == ReviewStepNames.fixStep
+      }
+      """.trimIndent()
+
+    assertEquals(
+      listOf(
+        "runloop/core/Synthetic.kt:6 step-id alias REVIEW_STEP",
+        "runloop/core/Synthetic.kt:7 step-id alias fixStep",
+      ),
+      FeatureTaskStepIdentityScan.violations(
+        mapOf("slot/codereview/ReviewStepNames.kt" to alias, "runloop/core/Synthetic.kt" to runLoop),
+        STEP_IDS,
+        SYNTHETIC_SCOPE,
+      ),
+    )
+  }
+
+  @Test
+  fun `slot alias census reports exposed single-step properties and skips private, local and strategy ones`() {
+    val source =
+      """
+      package skillbill.engine.featuretask.slot.audit
+
+      import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+
+      internal class SyntheticStrategy(
+        private val label: String = "audit",
+      ) : PhaseStrategy {
+        override val entryStep: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+        internal val auditStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+        private val hidden = "audit"
+
+        fun decide(step: String): Boolean {
+          val local = "audit"
+          return step == local
+        }
+
+        companion object {
+          const val AUDIT =
+            "audit"
+        }
+      }
+
+      val topLevelAudit get() = PhaseSlot.AUDIT.steps.single()
+      """.trimIndent()
+
+    assertEquals(
+      listOf(
+        "slot/audit/SyntheticStrategy.kt:9 step-id alias auditStep",
+        "slot/audit/SyntheticStrategy.kt:18 step-id alias AUDIT",
+        "slot/audit/SyntheticStrategy.kt:23 step-id alias topLevelAudit",
+      ),
+      FeatureTaskStepIdentityScan.stepIdAliases(mapOf("slot/audit/SyntheticStrategy.kt" to source), STEP_IDS),
+    )
+  }
+
+  @Test
+  fun `step-identity rule passes slot-membership decisions and unrelated names`() {
+    val source =
+      """
+      package skillbill.engine.featuretask.runloop.core
+
+      import skillbill.engine.featuretask.phase.prompt.directives.PHASE_PROMPT_TEMPLATE_INDENT
+      import skillbill.workflow.taskruntime.model.core.PhaseSlot
+
+      internal object Synthetic {
+        fun owns(step: String) = PhaseSlot.slotForStep(step) == PhaseSlot.CODE_REVIEW
+        fun member(step: String) = step in PhaseSlot.QUALITY_GATE.steps
+        fun indent() = PHASE_PROMPT_TEMPLATE_INDENT + "reviewer" + "plan_review"
+      }
+      """.trimIndent()
+
+    assertEquals(
+      emptyList(),
+      FeatureTaskStepIdentityScan.violations(mapOf("runloop/core/Synthetic.kt" to source), STEP_IDS, SYNTHETIC_SCOPE),
+    )
+  }
+
+  private companion object {
+    val STEP_IDS: List<String> = PhaseSlot.entries.flatMap { slot -> slot.steps }
+    val SYNTHETIC_SCOPE: List<String> = STEP_OWNED_PACKAGES + listOf("runloop/", "review/")
+  }
+}
+
+class FeatureTaskLaunchPortArchitectureTest {
+  @Test
+  fun `only the PhaseRunner implementation depends on GoalRunnerSubtaskLauncher`() {
+    val sources = featureTaskEngineSources()
+    assertTrue(sources.isNotEmpty(), "The launch-port rule read no feature-task file.")
+
+    val violations = FeatureTaskLaunchPortScan.violations(sources)
+
+    assertEquals(emptyList(), violations, "Read ${sources.size} files.\n" + violations.joinToString("\n"))
+  }
+
+  @Test
+  fun `launch-port rule catches run-loop and strategy launcher references and passes the runner`() {
+    val runLoop =
+      """
+      package skillbill.engine.featuretask.runloop.core
+
+      import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+      import skillbill.ports.goalrunner.runner.*
+
+      internal class Synthetic(private val launcher: GoalRunnerSubtaskLauncher)
+      """.trimIndent()
+    val strategy =
+      """
+      package skillbill.engine.featuretask.slot.audit
+
+      import skillbill.engine.featuretask.slot.PhaseRunner
+
+      internal class SyntheticStrategy(
+        private val runner: PhaseRunner,
+        private val launcher: skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher,
+      )
+      """.trimIndent()
+    val runner =
+      """
+      package skillbill.engine.featuretask.slot.runner
+
+      import skillbill.engine.featuretask.slot.PhaseRunner
+      import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+
+      internal class SyntheticPhaseRunner(
+        private val launcher: GoalRunnerSubtaskLauncher,
+      ) : PhaseRunner
+      """.trimIndent()
+
+    assertEquals(
+      listOf(
+        "runloop/core/Synthetic.kt imports skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
+        "runloop/core/Synthetic.kt imports skillbill.ports.goalrunner.runner.*",
+        "slot/audit/SyntheticStrategy.kt references skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
+      ),
+      FeatureTaskLaunchPortScan.violations(
+        mapOf(
+          "runloop/core/Synthetic.kt" to runLoop,
+          "slot/audit/SyntheticStrategy.kt" to strategy,
+          "slot/runner/SyntheticPhaseRunner.kt" to runner,
+        ),
+      ),
+    )
+  }
+}
+
+class FeatureTaskSlotDependencyDirectionArchitectureTest {
+  @Test
+  fun `shared feature-task code imports no strategy package and strategies stay off the run loop`() {
+    val sources = featureTaskEngineSources()
+    val shared = sources.keys.count { path -> !isFeatureTaskSlotPath(path) }
+    val strategies = sources.keys.count(FeatureTaskDependencyDirectionScan::isStrategyPath)
+    assertTrue(shared > 0 && strategies > 0, "Read $shared shared and $strategies strategy files.")
+
+    val violations = FeatureTaskDependencyDirectionScan.violations(sources)
+
+    assertEquals(
+      emptyList(),
+      violations,
+      "Read $shared shared and $strategies strategy files.\n" + violations.joinToString("\n"),
+    )
+  }
+
+  @Test
+  fun `dependency-direction rule catches strategy imports, run-loop drivers and the run state`() {
+    val shared =
+      """
+      package skillbill.engine.featuretask.runloop.core
+
+      import skillbill.engine.featuretask.slot.PhaseStrategy
+      import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
+      import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
+      import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
+      import skillbill.engine.featuretask.slot.qualitygate.packbuild.*
+
+      internal class SharedSynthetic(
+        private val review: skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy,
+      )
+      """.trimIndent()
+    val strategy =
+      """
+      package skillbill.engine.featuretask.slot.audit
+
+      import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopDrive
+      import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
+      import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopPlanningBranch
+      import skillbill.engine.featuretask.runloop.core.PhaseRun
+      import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState as RunState
+
+      internal class SyntheticStrategy(private val state: RunState)
+      """.trimIndent()
+    val machinery =
+      """
+      package skillbill.engine.featuretask.slot.attempt
+
+      import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
+      """.trimIndent()
+
+    assertEquals(
+      listOf(
+        "runloop/core/SharedSynthetic.kt imports skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy",
+        "runloop/core/SharedSynthetic.kt imports skillbill.engine.featuretask.slot.qualitygate.packbuild.*",
+        "runloop/core/SharedSynthetic.kt references " +
+          "skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy",
+        "slot/audit/SyntheticStrategy.kt imports " +
+          "skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopDrive",
+        "slot/audit/SyntheticStrategy.kt imports " +
+          "skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch",
+        "slot/audit/SyntheticStrategy.kt imports " +
+          "skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopPlanningBranch",
+        "slot/audit/SyntheticStrategy.kt references FeatureTaskRuntimeRunState",
+      ),
+      FeatureTaskDependencyDirectionScan.violations(
+        mapOf(
+          "runloop/core/SharedSynthetic.kt" to shared,
+          "slot/audit/SyntheticStrategy.kt" to strategy,
+          "slot/attempt/SyntheticAttempt.kt" to machinery,
+        ),
+      ),
+    )
+  }
+
+  @Test
+  fun `dependency-direction rule passes shared code on the slot contract and strategies on PhaseRun`() {
+    val shared =
+      """
+      package skillbill.engine.featuretask.runloop.core
+
+      import skillbill.engine.featuretask.slot.PhaseStrategy
+      import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
+      import skillbill.engine.featuretask.slot.*
+      """.trimIndent()
+    val strategy =
+      """
+      package skillbill.engine.featuretask.slot.qualitygate
+
+      import skillbill.engine.featuretask.runloop.core.PhaseRun
+      import skillbill.engine.featuretask.slot.PhaseRunState
+      import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+      """.trimIndent()
+
+    assertEquals(
+      emptyList(),
+      FeatureTaskDependencyDirectionScan.violations(
+        mapOf("runloop/core/SharedSynthetic.kt" to shared, "slot/qualitygate/QualityGateSteps.kt" to strategy),
+      ),
+    )
   }
 }

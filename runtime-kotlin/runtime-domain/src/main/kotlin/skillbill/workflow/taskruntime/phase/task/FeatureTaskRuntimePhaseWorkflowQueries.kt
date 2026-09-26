@@ -52,7 +52,6 @@ object FeatureTaskRuntimePhaseWorkflowQueries {
     return base.copy(derivedContextKeys = listOf(reviewKey))
   }
 
-  /** The declaration of [phaseId] without the upstream projections that [omittedStepIds] would produce. */
   fun phaseDeclarationWithoutSteps(
     phaseId: String,
     featureSize: FeatureTaskRuntimeFeatureSize,

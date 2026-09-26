@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommitIdentity
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
+import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
@@ -229,6 +230,7 @@ internal data class SettleValidatedOutputPauseArgs(
   val repairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
   val observability: FeatureTaskRuntimeRunObservability,
   val repositoryFingerprint: String?,
+  val blockedDisposition: FeatureTaskRuntimeFailureDisposition,
 )
 
 internal data class ReconstructFixLoopBudgetBasesArgs(
@@ -309,7 +311,7 @@ internal data class DeclaredLaunchArgs(
   val iteration: Int?,
   val priorCorrection: PriorAttemptCorrection?,
   val context: LaunchRejectionMeasurementContext,
-  val taskDirective: String,
+  val prompt: PhaseStepPromptSource,
 )
 
 internal data class PauseAndPersistInPhaseArgs(

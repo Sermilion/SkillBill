@@ -393,35 +393,6 @@ class FeatureTaskRuntimeReadinessGateCoordinator(
     return blocked("Readiness evidence is missing after commit.")
   }
 
-  fun verifyPrEntryIdentity(
-    workflowId: String,
-    repoRoot: Path,
-    baseBranch: String,
-    gitOperations: WorkflowGitOperations,
-  ): ReadinessCommitPushSettleResult {
-    val identity =
-      gitOperations.readinessTreeIdentityOrNull(repoRoot, baseBranch, workflowId)
-        ?: run {
-          recordDegradation("readiness-pr-identity", "Readiness identity is unavailable for PR entry.")
-          return blocked("Readiness identity is unavailable for PR entry.")
-        }
-    val persisted =
-      runCatching { readinessEvidence.loadReadinessEvidence(workflowId) }.getOrElse { error ->
-        recordDegradation("readiness-pr-persistence", "Could not load readiness evidence: ${error.message.orEmpty()}")
-        return blocked("Readiness evidence could not be loaded for PR entry.")
-      } ?: run {
-        recordDegradation("readiness-pr-persistence", "Readiness evidence is missing for PR entry.")
-        return blocked("Readiness evidence is missing for PR entry.")
-      }
-    return try {
-      persisted.requireReady("pr", identity.sourceTreeSha, identity.baseRefSha, identity.headSha)
-      ReadinessCommitPushSettleResult.Ready
-    } catch (error: InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError) {
-      recordDegradation("readiness-pr-identity", error.message.orEmpty())
-      blocked(error.message.orEmpty())
-    }
-  }
-
   private fun reuseExistingResult(
     existing: FeatureTaskRuntimeReadinessEvidence,
     check: ReadinessSelectedCheck,

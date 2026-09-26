@@ -1,13 +1,11 @@
 package skillbill.engine.featuretask.runloop.core
 
-import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
-import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -27,11 +25,6 @@ object FeatureTaskRuntimeRunLoopLaunch {
     if (identities !is WorkflowPathContentIdentitiesResult.Resolved) return
     session.recordPhaseContentIdentities(phaseId, identities.identities)
   }
-
-  internal fun outputEnvelopeOf(output: FeatureTaskRuntimePhaseOutput): Map<String, Any?>? =
-    output.normalizedOutput?.envelopeWireMap()?.takeIf { it.isNotEmpty() }
-      ?: JsonCodec.parseObjectOrNull(output.payload)?.let(JsonCodec::jsonElementToValue)
-        ?.let(JsonCodec::anyToStringAnyMap)
 
   internal fun launchedModelDirective(run: PhaseRun): LaunchedModelDirective {
     val model = run.modelDirective?.model

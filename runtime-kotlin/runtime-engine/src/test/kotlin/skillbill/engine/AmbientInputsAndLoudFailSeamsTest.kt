@@ -2,11 +2,13 @@ package skillbill.engine
 
 import skillbill.engine.featuretask.lifecycle.core.AlwaysValidValidator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.slot.audit.AcceptanceAuditVerdictRule
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
 import skillbill.engine.goalrunner.execution.support.GoalRunnerChildProgressRead
 import skillbill.engine.goalrunner.status.completed
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -46,6 +48,10 @@ class AmbientInputsAndLoudFailSeamsTest {
           ),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
+        stepVerdictRule = { stepId ->
+          AcceptanceAuditVerdictRule(SilentDiagnostics)
+            .takeIf { stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT }
+        },
       )
 
     val start = state.explicitResumeStart(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
@@ -163,3 +169,15 @@ private fun completedRecord(
     resolvedAgentId = "codex",
     outputArtifact = output,
   )
+
+private object SilentDiagnostics : RuntimeDiagnostics {
+  override fun warning(
+    message: String,
+    error: Throwable?,
+  ) = Unit
+
+  override fun error(
+    message: String,
+    error: Throwable?,
+  ) = Unit
+}

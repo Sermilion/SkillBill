@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.runloop.core
 
-import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
 import skillbill.engine.featuretask.runloop.observability.loopEdge
@@ -10,7 +9,6 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal fun strategySelectionFacts(request: FeatureTaskRuntimeRunRequest): PhaseStrategySelectionFacts =
   PhaseStrategySelectionFacts(
@@ -114,25 +112,16 @@ object FeatureTaskRuntimeRunLoopTransitions {
     context: FeatureTaskRuntimeRunLoopContext,
     precedingPhaseId: String,
     destinationPhaseId: String,
-  ): Boolean =
-    with(context) {
-      if (
-        precedingPhaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT &&
-        destinationPhaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
-      ) {
-        with(FeatureTaskRuntimeRunLoopCheckpointRemediation) {
-          FeatureTaskRuntimeRunLoopCheckpointRemediation.checkpointEstablished(
-            context,
-            precedingPhaseId = precedingPhaseId,
-            loopId = null,
-            intent = FeatureTaskRuntimeCheckpointMessage.INTENT_AUDITED_IMPLEMENTATION,
-            blockedReason = { branch, error ->
-              auditReviewCheckpointBlockedReason(branch, error)
-            },
-          )
-        }
-      } else {
-        true
-      }
-    }
+  ): Boolean {
+    val checkpoint =
+      context.strategyFor(precedingPhaseId).loopRules?.forwardCheckpoint(precedingPhaseId, destinationPhaseId)
+        ?: return true
+    return FeatureTaskRuntimeRunLoopCheckpointRemediation.checkpointEstablished(
+      context,
+      precedingPhaseId = precedingPhaseId,
+      loopId = null,
+      intent = checkpoint.intent,
+      blockedReason = checkpoint.blockedReason,
+    )
+  }
 }

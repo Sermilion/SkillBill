@@ -25,7 +25,6 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 
-/** The launch policy of every quality_gate step: a file-mutating gate session relaunched on invalid output. */
 internal val QUALITY_GATE_STEP_POLICY: PhaseStepPolicy =
   PhaseStepPolicy(
     mutating = false,
@@ -36,7 +35,6 @@ internal val QUALITY_GATE_STEP_POLICY: PhaseStepPolicy =
     generationScoped = false,
   )
 
-/** The IDE status execution of a gate step: the gate run count once a gate ran, else the attempt count. */
 internal fun gateCurrentExecution(
   stepId: String,
   context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
@@ -49,11 +47,9 @@ internal fun gateCurrentExecution(
     )
   } ?: attemptPhaseExecution(stepId, context)
 
-/** The repository checkpoint fingerprint a gate cycle of [run] judges, or null when it cannot be resolved. */
 internal fun FeatureTaskRuntimeRunLoopContext.gateCheckpoint(run: PhaseRun): String? =
   phaseGates.gitOperations.repositoryFingerprint(run.request.repoRoot).value.takeIf(String::isNotBlank)
 
-/** The paths the gate cycle of [run] scopes its checks to. */
 internal fun FeatureTaskRuntimeRunLoopContext.gateChangedPaths(run: PhaseRun): List<String> =
   FeatureTaskRuntimeRunLoopValidationScope.validationChangedPaths(
     phaseGates,
@@ -63,7 +59,6 @@ internal fun FeatureTaskRuntimeRunLoopContext.gateChangedPaths(run: PhaseRun): L
     run,
   ).orEmpty()
 
-/** The gate progress store that reads and writes through [this] run state. */
 internal fun PhaseRunState.gateProgressStore(): ValidationGateProgressStore =
   object : ValidationGateProgressStore {
     override fun persist(
@@ -74,10 +69,6 @@ internal fun PhaseRunState.gateProgressStore(): ValidationGateProgressStore =
     override fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress? = loadGateProgress()
   }
 
-/**
- * Settles the runtime-owned output a gate cycle produced: validates it, applies the gate's own [acceptance] check,
- * persists the completed step, and runs [afterCompleted].
- */
 internal class RuntimeOwnedGateSettlement(
   private val context: FeatureTaskRuntimeRunLoopContext,
   private val label: String,
@@ -170,7 +161,6 @@ internal class RuntimeOwnedGateSettlement(
     )
 }
 
-/** Blocks the gate step of [run] at [iteration] with [reason] and [disposition]. */
 internal fun FeatureTaskRuntimeRunLoopContext.blockGateStep(
   run: PhaseRun,
   iteration: Int,

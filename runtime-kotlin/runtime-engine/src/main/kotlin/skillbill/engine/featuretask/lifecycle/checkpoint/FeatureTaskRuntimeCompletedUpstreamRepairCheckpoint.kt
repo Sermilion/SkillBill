@@ -25,15 +25,8 @@ import java.time.ZoneOffset
 
 private const val COMPLETED_UPSTREAM_MISSING_OUTPUT_BLOCK_REASON = "completed_upstream_missing_output"
 
-/**
- * The quality_gate step a goal child's stamped selection leaves out, for the goal-runner repair readers that
- * inspect durable records without a strategy lookup.
- */
 internal fun qualityGateOmittedStepIds(selection: FeatureTaskRuntimeQualityGateSelection): Set<String> =
-  when (selection) {
-    FeatureTaskRuntimeQualityGateSelection.BUILD -> setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE)
-    FeatureTaskRuntimeQualityGateSelection.VALIDATE -> setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD)
-  }
+  selection.omittedStepIds
 
 fun phasesToReopenForCompletedUpstreamRepair(
   request: CompletedUpstreamRepairRequest,

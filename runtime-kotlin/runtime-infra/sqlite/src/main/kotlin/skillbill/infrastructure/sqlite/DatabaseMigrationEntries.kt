@@ -18,6 +18,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPl
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion4
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion5
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion6
+import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion7
 import skillbill.infrastructure.sqlite.core.migration.area.rekeyDiagnosticEvidenceByRepairTurn
 import skillbill.infrastructure.sqlite.core.migration.area.requireGoalPlanningPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.dropDelegatedReviewLifecycleTables
@@ -688,5 +689,10 @@ internal val databaseMigrations: List<DatabaseMigration> =
           statement.execute("DROP TABLE IF EXISTS experiment_pairs")
         }
       },
+    ),
+    DatabaseMigration(
+      version = 46,
+      name = "allow-goal-planning-phase-output-0-7",
+      operation = ::rebuildGoalPlanningPlansForPhaseOutputVersion7,
     ),
   )

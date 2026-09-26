@@ -65,7 +65,6 @@ import skillbill.engine.featuretask.runloop.output.payloadFreeSemanticGateConstr
 import skillbill.engine.featuretask.runloop.output.rejectionPath
 import skillbill.engine.featuretask.runloop.output.retryRejectionReason
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.settlement.FeatureTaskRuntimeRunLoopAuditRetry
 import skillbill.engine.featuretask.runloop.state.FEATURE_TASK_RUNTIME_PROCESS_FAILURE_RULE
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeChildOutput
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
@@ -73,7 +72,6 @@ import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
 import skillbill.engine.featuretask.runner.terminalBlockedReasonFrom
 import skillbill.engine.featuretask.slot.PhaseSettledEnvelopeRead
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
-import skillbill.engine.goalrunner.status.completed
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureKind
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
@@ -637,7 +635,8 @@ object PhaseOutputGate {
     val repairEvidence = args.repairEvidence
     val repositoryFingerprint = args.repositoryFingerprint
     val run = capture.run
-    terminalBlockedReasonFrom(run.phaseId, outputMap)?.let { reason ->
+    val blockedDisposition = args.blockedDisposition
+    terminalBlockedReasonFrom(run.phaseId, outputMap, blockedDisposition)?.let { reason ->
       return FeatureTaskRuntimeRunLoopOutputVerification.terminalOutputAttempt(
         request,
         state,
@@ -652,6 +651,7 @@ object PhaseOutputGate {
           observability = observability,
           fileManifest = capture.fileManifest,
         ),
+        blockedDisposition,
       )
     }
     return null
@@ -711,6 +711,7 @@ object PhaseOutputGate {
         repairEvidence = args.repairEvidence,
         observability = observability,
         repositoryFingerprint = args.repositoryFingerprint,
+        blockedDisposition = stepHooks(args.capture.run).blockedOutputDisposition,
       ),
     ) ?: settleValidatedOutputAfterPause(args)
   }
@@ -736,21 +737,11 @@ object PhaseOutputGate {
         args.capture,
         args.reject,
       )
-      ?: with(FeatureTaskRuntimeRunLoopAuditRetry) {
-        settleCompletedAuditRound(
-          this@settleValidatedOutputAfterPause,
-          args.capture,
-          args.attested.envelopeWireMap(),
-        )
-      }
+      ?: stepHooks(run).settleCompletedRound(this, args.capture, args.attested.envelopeWireMap())
       ?: finalizeValidatedOutputAcceptance(
         FinalizeValidatedOutputAcceptanceArgs(
           capture = args.capture,
-          attested =
-            FeatureTaskRuntimeRunLoopAuditRetry.attestedAuditOutputForAcceptance(
-              args.attested,
-              args.attested.envelopeWireMap(),
-            ),
+          attested = stepHooks(run).acceptedOutput(this, args.capture, args.attested, args.attested.envelopeWireMap()),
           repairEvidence = args.repairEvidence,
           observability = observability,
           repositoryFingerprint = args.repositoryFingerprint,

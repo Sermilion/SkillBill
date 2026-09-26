@@ -16,12 +16,14 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopDrive
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
+import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.error.shellcontent.FeatureTaskRuntimeOperatorDecisionRejectedError
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
+import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
 internal fun FeatureTaskRuntimeRunner.buildExecutePreparedRunTelemetryContext(
@@ -92,7 +94,11 @@ fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
         )
     ) {
       is RemediationBaseBlocked ->
-        return remediationBaseCoherenceBlockedReport(runRequest, remediation.operatorGuidance)
+        return remediationBaseCoherenceBlockedReport(
+          runRequest,
+          remediation.operatorGuidance,
+          PhaseSlot.PREPLAN.steps.first(),
+        )
       is RemediationBaseCoherent -> Unit
     }
   }
@@ -109,14 +115,20 @@ fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
 internal fun FeatureTaskRuntimeRunner.createExecutePreparedRunState(
   runRequest: FeatureTaskRuntimeRunRequest,
   transitions: FeatureTaskRuntimeTransitionDeclaration,
-): FeatureTaskRuntimeRunState =
-  FeatureTaskRuntimeRunState(
+): FeatureTaskRuntimeRunState {
+  val facts = strategySelectionFacts(runRequest)
+  return FeatureTaskRuntimeRunState(
     initialRecords = recorder.loadPhaseRecords(runRequest.workflowId).orEmpty(),
     transitions = transitions,
     durableInitialLedger = recorder.loadPhaseLedger(runRequest.workflowId).orEmpty(),
     outputValidator = outputValidator,
     initialReviewGeneration = recorder.reconcileReviewGeneration(runRequest.workflowId),
+    stepVerdictRule = { stepId ->
+      stepId.takeIf { id -> PhaseSlot.entries.any { slot -> id in slot.steps } }
+        ?.let { id -> strategies.strategyOrNull(id, facts)?.verdictRule(id, diagnostics) }
+    },
   )
+}
 
 fun FeatureTaskRuntimeRunner.finalizeExecutePreparedRunReport(
   runRequest: FeatureTaskRuntimeRunRequest,
@@ -124,7 +136,14 @@ fun FeatureTaskRuntimeRunner.finalizeExecutePreparedRunReport(
   specSource: SpecSource,
 ): FeatureTaskRuntimeRunReport {
   val terminalReport =
-    persistGoalContinuationOutcome(goalContinuationRecorder, recorder, phaseGates.gitOperations, runRequest, report)
+    persistGoalContinuationOutcome(
+      goalContinuationRecorder,
+      recorder,
+      phaseGates.gitOperations,
+      runRequest,
+      report,
+      PhaseSlot.COMMIT_PUSH.steps.first(),
+    )
   phaseGates.specGate.finalizeSingleSpecOnTerminal(
     runRequest,
     terminalReport,

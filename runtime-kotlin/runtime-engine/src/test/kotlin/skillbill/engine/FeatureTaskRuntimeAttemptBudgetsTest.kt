@@ -1,6 +1,7 @@
 package skillbill.engine
 
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
+import skillbill.engine.featuretask.slot.audit.AcceptanceAuditRound
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
@@ -18,7 +19,7 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
 
   @Test
   fun `the same remaining-criteria list as the prior audit session is a stall not another retry`() {
-    val reason = FeatureTaskRuntimeAttemptBudgets.auditRemainingUnchangedBlockReason()
+    val reason = AcceptanceAuditRound.auditRemainingUnchangedBlockReason()
     assertContains(reason, "same remaining-criteria")
     assertContains(reason, "no progress")
   }

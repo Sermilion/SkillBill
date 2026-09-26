@@ -2,8 +2,8 @@ package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.config.model.PhaseModelDirective
 import skillbill.engine.BranchSetupTestConfig
-import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.REVIEW_BLOCKER_MESSAGE
+import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.RuntimeHarnessConfig
 import skillbill.engine.RuntimeRecordingLauncher
 import skillbill.engine.auditSatisfiedOutput

@@ -173,7 +173,7 @@ internal fun DefaultGoalPlanningSweep.validatePlanningAttemptOutput(
       if (payload[SharedPayloadKeys.STATUS].workflowStepStatus() != WorkflowStepStatus.COMPLETED) {
         val reason = unsuccessfulStatusReason(phaseId, payload)
         val canonical = accepted.normalizedOutput.canonicalJson
-        if (FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(phaseId, payload).retryOnResume) {
+        if (FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(payload).retryOnResume) {
           GoalPlanningPhaseProduction.RetryableDecline(reason, canonical, agentId)
         } else {
           GoalPlanningPhaseProduction.UnsuccessfulStatus(

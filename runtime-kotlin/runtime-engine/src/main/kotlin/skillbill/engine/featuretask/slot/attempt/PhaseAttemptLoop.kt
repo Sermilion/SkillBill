@@ -11,7 +11,6 @@ import skillbill.engine.featuretask.runloop.core.phaseAttemptAccumulatorContext
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.observability.featureTaskRuntimeStartContinuationKind
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.settlement.FeatureTaskRuntimeRunLoopAuditRetry
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeNonOutputAttempt
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -34,7 +33,7 @@ object PhaseAttemptLoop {
       ).coerceAtLeast(1)
     val crashResumed = state.resumedFromPriorProcess(run.phaseId)
     state.recordPhaseLaunched(run.phaseId)
-    FeatureTaskRuntimeRunLoopAuditRetry.clearRetryHintOnFreshLaunch(state, session, run.phaseId)
+    stepHooks(run).onLaunch(run, this)
     observability.started(
       run.phaseId,
       agentId,

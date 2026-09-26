@@ -36,10 +36,6 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 
 private const val BUILD_RECEIPT_KEY = "build_receipt"
 
-/**
- * One build gate cycle of the running build step: the runtime runs the pack build command, and the triage and repair
- * sessions it launches between gate runs go through the step's [call].
- */
 internal class PackBuildGateCycle(
   private val context: FeatureTaskRuntimeRunLoopContext,
   private val call: PhaseStepCall,

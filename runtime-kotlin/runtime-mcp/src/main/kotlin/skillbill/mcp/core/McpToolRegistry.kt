@@ -67,14 +67,16 @@ internal object McpToolRegistry {
       ),
       McpTool(
         name = "feature_task_phase_block",
-        description = "Durable-block a prose feature-task phase (preplan|plan|implement|simplify|audit|validate).",
+        description =
+          "Durable-block a prose feature-task phase " +
+            "(preplan|plan|implement|simplify|audit|validate|write_history|pr).",
         handler = ::featureTaskPhaseBlock,
       ),
       McpTool(
         name = "feature_task_phase_complete",
         description =
-          "Complete a prose feature-task phase (preplan|plan|implement|simplify|audit|validate) " +
-            "via durable settlement.",
+          "Complete a prose feature-task phase " +
+            "(preplan|plan|implement|simplify|audit|validate|write_history|pr) via durable settlement.",
         handler = ::featureTaskPhaseComplete,
       ),
       McpTool(

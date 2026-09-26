@@ -1,7 +1,9 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
+import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion6
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import java.nio.file.Files
 import java.sql.Connection
@@ -87,6 +89,43 @@ class GoalPlanningPhaseOutputMigrationTest {
       assertEquals(0, scalar(connection, "SELECT COUNT(*) FROM schema_migrations WHERE version = 11"))
       assertEquals(0, scalar(connection, "SELECT COUNT(*) FROM schema_migrations WHERE version = 17"))
       assertEquals(0, scalar(connection, "SELECT COUNT(*) FROM schema_migrations WHERE version = 18"))
+    }
+  }
+
+  @Test
+  fun `phase-output 0-7 migration keeps stored 0-6 rows and admits the current contract version`() {
+    val dbPath = Files.createTempDirectory("goal-planning-phase-output-0-7-migration").resolve("metrics.db")
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      rebuildGoalPlanningPlansForPhaseOutputVersion6(connection)
+      connection.createStatement().use { it.execute("DELETE FROM schema_migrations WHERE version = 46") }
+      seedPlanningRow(connection, phaseOutputContractVersion = "0.6")
+      assertFailsWith<SQLException> {
+        seedPlanningRow(
+          connection,
+          phaseOutputContractVersion = FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+          workflowId = "wfl-before-migration",
+        )
+      }
+
+      DatabaseMigrations.apply(connection)
+
+      assertEquals(1, scalar(connection, "SELECT COUNT(*) FROM schema_migrations WHERE version = 46"))
+      assertEquals(
+        "0.6",
+        textScalar(connection, "SELECT phase_output_contract_version FROM goal_shared_preplans"),
+      )
+      assertEquals(
+        "0.6",
+        textScalar(connection, "SELECT phase_output_contract_version FROM goal_subtask_plans"),
+      )
+      seedPlanningRow(
+        connection,
+        phaseOutputContractVersion = FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+        workflowId = "wfl-current",
+      )
+      assertEquals(2, scalar(connection, "SELECT COUNT(*) FROM goal_shared_preplans"))
+      assertEquals(2, scalar(connection, "SELECT COUNT(*) FROM goal_subtask_plans"))
     }
   }
 

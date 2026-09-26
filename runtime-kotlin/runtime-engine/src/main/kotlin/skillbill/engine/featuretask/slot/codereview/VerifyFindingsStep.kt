@@ -1,19 +1,14 @@
 package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
-import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseRunState
-import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
-import skillbill.engine.featuretask.slot.strategy.runStepAttempts
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
 
-internal class VerifyFindingsStep(
-  private val runner: PhaseRunner,
-) : PhaseStepHooks {
+internal class VerifyFindingsStep : PhaseStepHooks {
   val policy =
     PhaseStepPolicy(
       mutating = false,
@@ -23,12 +18,6 @@ internal class VerifyFindingsStep(
       fileMutating = true,
       generationScoped = false,
     )
-
-  fun run(
-    run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
-  ): PhaseOutcome = runner.runStepAttempts(run, context, state, policy)
 
   override fun launchPromptSupplement(
     run: PhaseRun,

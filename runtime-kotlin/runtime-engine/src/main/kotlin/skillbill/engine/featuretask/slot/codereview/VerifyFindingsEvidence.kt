@@ -2,9 +2,9 @@ package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.application.review.spec.toProjectionPayload
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeVerificationGateReasons
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFindingBoundaryMemoryRequest
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFindingBoundaryMemorySection
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContex
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
+import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewStructuredFindingsParse
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope
@@ -137,11 +138,7 @@ internal object VerifyFindingsEvidence {
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? =
     boundaryDispositionGate(run, context, state, outputMap)
-      ?: FeatureTaskRuntimeVerificationGateReasons.findingVerificationDisposition(
-        run.phaseId,
-        outputMap,
-        reviewFindingIds(state),
-      )
+      ?: findingVerificationDisposition(outputMap, reviewFindingIds(state))
 
   fun recordRejectedFindings(
     run: PhaseRun,
@@ -196,6 +193,30 @@ internal object VerifyFindingsEvidence {
             )
           }
       }
+  }
+
+  private fun findingVerificationDisposition(
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+    reviewFindingIds: Set<String>,
+  ): String? {
+    if (reviewFindingIds.isEmpty()) {
+      return null
+    }
+    val dispositionsKey = FeatureTaskRuntimeVerificationSignalKeys.FINDINGS_VERIFICATION_DISPOSITIONS
+    val dispositionsRaw =
+      outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS]
+        ?.let(JsonCodec::anyToStringAnyMap)
+        ?.get(dispositionsKey) as? List<*>
+        ?: return "verify_findings reported 'completed' without produced_outputs.$dispositionsKey."
+    return runCatching {
+      FeatureTaskRuntimeFindingVerificationDisposition.parseList(
+        dispositionsRaw,
+        "produced_outputs.$dispositionsKey",
+      )
+    }.fold(
+      onSuccess = { validateDispositionCoverage(it, reviewFindingIds) },
+      onFailure = { failure -> failure.message ?: "finding verification dispositions are not contract-safe." },
+    )
   }
 
   private fun coveredDispositions(

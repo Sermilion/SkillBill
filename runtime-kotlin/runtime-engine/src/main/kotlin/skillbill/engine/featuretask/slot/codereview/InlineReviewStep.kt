@@ -10,6 +10,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.persist.RuntimeOwnedFactUnavailable
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
+import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -57,7 +58,7 @@ internal class InlineReviewStep(
     run: PhaseRun,
     context: FeatureTaskRuntimeRunLoopContext,
     state: PhaseRunState,
-    directive: String,
+    prompt: PhaseStepPromptSource,
   ): PhaseOutcome {
     val input =
       when (val prepared = InlineReviewPreparation.prepare(run, context, state)) {
@@ -73,7 +74,7 @@ internal class InlineReviewStep(
     val fingerprint =
       repositoryFingerprint(run, context)
         ?: return PhaseOutcome.blocked("Runtime-owned review could not resolve a repository checkpoint fingerprint.")
-    state.prepareReviewBriefing(directive, input)
+    state.prepareReviewBriefing(prompt, input)
     state.reviewLaunched(iteration)
     val pass =
       InlineReviewPass(

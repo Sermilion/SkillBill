@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.runloop.phase
 
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCommitPushUpstreamHeadFallback
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistArgs
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
@@ -26,14 +25,7 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
     state: FeatureTaskRuntimeRunState,
     observability: FeatureTaskRuntimeRunObservability,
   ): PhaseOutcome? {
-    FeatureTaskRuntimeCommitPushUpstreamHeadFallback.reconcile(
-      context.request,
-      run,
-      state,
-      context.phaseGates,
-      context.diagnostics,
-    )
-    FeatureTaskRuntimeCommitPushUpstreamHeadFallback.clearUpstreamPersistedBlockIfRecovered(run, state)
+    context.strategyFor(run.phaseId).stepHooks(run.phaseId).reconcileBeforeLaunch(run, context)
     val persisted =
       state.persistedBlockedReason(run.phaseId)?.let { persistedReason ->
         val nextIteration = state.nextIteration(run.phaseId)

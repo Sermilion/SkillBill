@@ -1,6 +1,7 @@
 package skillbill.engine
 
 import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
@@ -287,7 +288,7 @@ private fun nitFinding(findingId: String) = "- [$findingId] Nit | High | Bar.kt:
 private fun seededReviewFinding(): String =
   """
   {
-    "contract_version": "0.6",
+    "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
     "phase_id": "review",
     "status": "completed",
     "summary": "Review produced a validated output.",
@@ -320,7 +321,7 @@ private fun verifyCensus(
   val extra = if (extraProduced.isEmpty()) "" else ",$extraProduced"
   return """
     {
-      "contract_version": "0.6",
+      "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
       "phase_id": "verify_findings",
       "status": "completed",
       "summary": "Verified findings.",
@@ -351,7 +352,7 @@ private fun censusFix(
 ): String =
   """
   {
-    "contract_version": "0.6",
+    "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
     "phase_id": "implement_fix",
     "status": "completed",
     "summary": "Fixed findings.",
@@ -371,7 +372,7 @@ private fun censusFix(
 private fun emptyCensusFix(): String =
   """
   {
-    "contract_version": "0.6",
+    "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
     "phase_id": "implement_fix",
     "status": "completed",
     "summary": "No carried findings to repair.",

@@ -57,7 +57,6 @@ fun resolveCurrentPhaseId(
   }?.phaseId
 }
 
-/** A pending step the run's traversal reaches only through a backward edge is never the current step. */
 fun shouldSkipPendingLoopOnlyPhase(
   phaseId: String,
   status: String,

@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.planning.sweep
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.planning.attempt.GoalPlanningAttemptRecorder
 import skillbill.engine.goalrunner.planning.model.GoalPlanningBurstSchedule
@@ -36,4 +37,5 @@ data class GoalPlanningSweepLaunchBoundaries(
   val fanOutPort: BoundedWorkFanOutPort,
   val burstSchedule: GoalPlanningBurstSchedule,
   val refreshLiveness: GoalPlanningRefreshLiveness,
+  val phaseStrategies: PhaseStrategyLookup,
 )

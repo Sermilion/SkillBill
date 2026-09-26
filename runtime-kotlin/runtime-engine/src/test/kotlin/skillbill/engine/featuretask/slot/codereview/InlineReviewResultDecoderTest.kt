@@ -17,7 +17,9 @@ class InlineReviewResultDecoderTest {
     val result =
       InlineReviewResultDecoder.decode(
         "cursor",
-        reviewStepOutput("- [F-001] Blocker | High | src/main/App.kt:42 | remaining defect\nverdict: changes_requested"),
+        reviewStepOutput(
+          "- [F-001] Blocker | High | src/main/App.kt:42 | remaining defect\nverdict: changes_requested",
+        ),
       )
 
     val finding = result.mergeResult.findings.single()

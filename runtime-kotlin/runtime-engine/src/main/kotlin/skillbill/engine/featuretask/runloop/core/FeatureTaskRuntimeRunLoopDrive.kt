@@ -12,7 +12,6 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionContext
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeTransitionFunction
 
 object FeatureTaskRuntimeRunLoopDrive {
@@ -205,15 +204,9 @@ object FeatureTaskRuntimeRunLoopDrive {
     phaseId: String,
   ): String? =
     if (context.state.isComplete(phaseId)) {
-      context.state.outputFor(phaseId)
-        ?.takeIf { phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN }
-        ?.let {
-          FeatureTaskRuntimeRunLoopBackwardEdge.applyPlanningStop(
-            context = context,
-            phaseId = phaseId,
-            planOutput = it,
-          )
-        }
+      context.state.outputFor(phaseId)?.let { output ->
+        FeatureTaskRuntimeRunLoopBackwardEdge.afterCompletion(context, output)
+      }
     } else {
       with(FeatureTaskRuntimeRunLoopBackwardEdge) {
         FeatureTaskRuntimeRunLoopBackwardEdge.establishBranchIfNeeded(
