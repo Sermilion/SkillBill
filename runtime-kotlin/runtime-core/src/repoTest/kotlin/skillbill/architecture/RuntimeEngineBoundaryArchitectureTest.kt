@@ -422,19 +422,14 @@ class RuntimeEnginePublicTopLevelDeclarationArchitectureTest {
 
 class FeatureTaskStepIdentityArchitectureTest {
   @Test
-  fun `no step-owned feature-task file decides behaviour by step identity`() {
+  fun `no shared feature-task file decides behaviour by step identity`() {
     val sources = featureTaskEngineSources()
-    val scanned = FeatureTaskStepIdentityScan.scannedSources(sources, STEP_OWNED_PACKAGES)
-    val readPerPackage =
-      STEP_OWNED_PACKAGES.associateWith {
-          pkg ->
-        scanned.keys.count { path -> path.startsWith(pkg) }
-      }
-    assertTrue(readPerPackage.values.all { count -> count > 0 }, "The step-identity rule read $readPerPackage.")
+    val read = FeatureTaskStepIdentityScan.scannedSources(sources).size
+    assertTrue(read > 0, "The step-identity rule read no shared feature-task file.")
 
-    val violations = FeatureTaskStepIdentityScan.violations(sources, STEP_IDS, STEP_OWNED_PACKAGES)
+    val violations = FeatureTaskStepIdentityScan.violations(sources, STEP_IDS)
 
-    assertEquals(emptyList(), violations, "Read $readPerPackage files.\n" + violations.joinToString("\n"))
+    assertEquals(emptyList(), violations, "Read $read files.\n" + violations.joinToString("\n"))
   }
 
   @Test
@@ -479,12 +474,12 @@ class FeatureTaskStepIdentityArchitectureTest {
         "runloop/core/Synthetic.kt:13 phase-id constant Steps.PHASE_PR",
         "runloop/core/Synthetic.kt:14 phase-id constant VERIFY_FINDINGS",
       ),
-      FeatureTaskStepIdentityScan.violations(mapOf("runloop/core/Synthetic.kt" to source), STEP_IDS, SYNTHETIC_SCOPE),
+      FeatureTaskStepIdentityScan.violations(mapOf("runloop/core/Synthetic.kt" to source), STEP_IDS),
     )
   }
 
   @Test
-  fun `step-identity rule covers only the scanned packages`() {
+  fun `step-identity rule scans every package outside slot`() {
     val source =
       """
       package skillbill.engine.featuretask.runloop.core
@@ -493,11 +488,19 @@ class FeatureTaskStepIdentityArchitectureTest {
         fun review(step: String) = step == "review"
       }
       """.trimIndent()
-    val sources = mapOf("runloop/core/Synthetic.kt" to source, "phase/core/Synthetic.kt" to source)
+    val sources =
+      mapOf(
+        "runloop/core/Synthetic.kt" to source,
+        "validation/Synthetic.kt" to source,
+        "slot/codereview/Synthetic.kt" to source,
+      )
 
     assertEquals(
-      listOf("phase/core/Synthetic.kt:4 step-id literal \"review\""),
-      FeatureTaskStepIdentityScan.violations(sources, STEP_IDS, STEP_OWNED_PACKAGES),
+      listOf(
+        "runloop/core/Synthetic.kt:4 step-id literal \"review\"",
+        "validation/Synthetic.kt:4 step-id literal \"review\"",
+      ),
+      FeatureTaskStepIdentityScan.violations(sources, STEP_IDS),
     )
   }
 
@@ -522,7 +525,7 @@ class FeatureTaskStepIdentityArchitectureTest {
         "review/core/Synthetic.kt:5 step-id literal \"plan\"",
         "review/core/Synthetic.kt:6 step-id literal \"verify_findings\"",
       ),
-      FeatureTaskStepIdentityScan.violations(mapOf("review/core/Synthetic.kt" to source), STEP_IDS, SYNTHETIC_SCOPE),
+      FeatureTaskStepIdentityScan.violations(mapOf("review/core/Synthetic.kt" to source), STEP_IDS),
     )
   }
 
@@ -557,7 +560,7 @@ class FeatureTaskStepIdentityArchitectureTest {
         "phase/core/Synthetic.kt:12 step element access " +
           "FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds.last",
       ),
-      FeatureTaskStepIdentityScan.violations(mapOf("phase/core/Synthetic.kt" to source), STEP_IDS, SYNTHETIC_SCOPE),
+      FeatureTaskStepIdentityScan.violations(mapOf("phase/core/Synthetic.kt" to source), STEP_IDS),
     )
   }
 
@@ -594,8 +597,77 @@ class FeatureTaskStepIdentityArchitectureTest {
       FeatureTaskStepIdentityScan.violations(
         mapOf("slot/codereview/ReviewStepNames.kt" to alias, "runloop/core/Synthetic.kt" to runLoop),
         STEP_IDS,
-        SYNTHETIC_SCOPE,
       ),
+    )
+  }
+
+  @Test
+  fun `step-identity rule catches a slot enum whose entries wrap step ids however it is referenced`() {
+    val roles =
+      """
+      package skillbill.engine.featuretask.slot
+
+      import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+
+      internal enum class SyntheticStepRole(val stepId: String) {
+        REVIEW_PASS(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW),
+        ACCEPTANCE(stepId = "audit"),
+        PLANNING(
+          "plan",
+        ),
+        ;
+
+        fun matches(candidate: String?): Boolean = candidate == stepId
+      }
+
+      internal enum class SyntheticGate(val label: String) {
+        BUILD("build gate"),
+        VALIDATION("validation gate"),
+      }
+
+      private enum class HiddenRole(val stepId: String) {
+        REVIEW(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW),
+      }
+      """.trimIndent()
+    val runLoop =
+      """
+      package skillbill.engine.featuretask.runloop.core
+
+      import skillbill.engine.featuretask.slot.SyntheticGate
+      import skillbill.engine.featuretask.slot.SyntheticStepRole
+      import skillbill.engine.featuretask.slot.SyntheticStepRole.*
+      import skillbill.engine.featuretask.slot.SyntheticStepRole.PLANNING
+      import skillbill.engine.featuretask.slot.SyntheticStepRole as Roles
+
+      internal object Synthetic {
+        fun qualified(step: String) = SyntheticStepRole.REVIEW_PASS.matches(step)
+        fun aliased(step: String) = Roles.ACCEPTANCE.stepId == step
+        fun imported(step: String) = PLANNING.matches(step)
+        fun starred(step: String) = ACCEPTANCE.matches(step)
+        fun gate() = SyntheticGate.BUILD
+        fun count() = SyntheticStepRole.entries.size
+      }
+      """.trimIndent()
+    val sources = mapOf("slot/SyntheticStepRole.kt" to roles, "runloop/core/Synthetic.kt" to runLoop)
+
+    assertEquals(
+      listOf(
+        "slot/SyntheticStepRole.kt:6 step-id alias SyntheticStepRole.REVIEW_PASS",
+        "slot/SyntheticStepRole.kt:7 step-id alias SyntheticStepRole.ACCEPTANCE",
+        "slot/SyntheticStepRole.kt:8 step-id alias SyntheticStepRole.PLANNING",
+      ),
+      FeatureTaskStepIdentityScan.stepIdAliases(sources, STEP_IDS),
+    )
+    assertEquals(
+      listOf(
+        "runloop/core/Synthetic.kt:5 step-id alias SyntheticStepRole.*",
+        "runloop/core/Synthetic.kt:6 step-id alias SyntheticStepRole.PLANNING",
+        "runloop/core/Synthetic.kt:10 step-id alias SyntheticStepRole.REVIEW_PASS",
+        "runloop/core/Synthetic.kt:11 step-id alias Roles.ACCEPTANCE",
+        "runloop/core/Synthetic.kt:12 step-id alias PLANNING",
+        "runloop/core/Synthetic.kt:13 step-id alias ACCEPTANCE",
+      ),
+      FeatureTaskStepIdentityScan.violations(sources, STEP_IDS),
     )
   }
 
@@ -656,13 +728,12 @@ class FeatureTaskStepIdentityArchitectureTest {
 
     assertEquals(
       emptyList(),
-      FeatureTaskStepIdentityScan.violations(mapOf("runloop/core/Synthetic.kt" to source), STEP_IDS, SYNTHETIC_SCOPE),
+      FeatureTaskStepIdentityScan.violations(mapOf("runloop/core/Synthetic.kt" to source), STEP_IDS),
     )
   }
 
   private companion object {
     val STEP_IDS: List<String> = PhaseSlot.entries.flatMap { slot -> slot.steps }
-    val SYNTHETIC_SCOPE: List<String> = STEP_OWNED_PACKAGES + listOf("runloop/", "review/")
   }
 }
 
@@ -746,7 +817,7 @@ class FeatureTaskSlotDependencyDirectionArchitectureTest {
   }
 
   @Test
-  fun `dependency-direction rule catches strategy imports, run-loop drivers and the run state`() {
+  fun `dependency-direction rule catches strategy imports, run-loop drivers, run state and context`() {
     val shared =
       """
       package skillbill.engine.featuretask.runloop.core
@@ -767,17 +838,22 @@ class FeatureTaskSlotDependencyDirectionArchitectureTest {
 
       import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopDrive
       import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
+      import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
       import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopPlanningBranch
       import skillbill.engine.featuretask.runloop.core.PhaseRun
       import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState as RunState
 
-      internal class SyntheticStrategy(private val state: RunState)
+      internal class SyntheticStrategy(private val state: RunState) {
+        fun run(context: FeatureTaskRuntimeRunLoopContext) = context
+      }
       """.trimIndent()
     val machinery =
       """
       package skillbill.engine.featuretask.slot.attempt
 
       import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
+
+      internal class SyntheticAttempt(private val context: FeatureTaskRuntimeRunLoopContext)
       """.trimIndent()
 
     assertEquals(
@@ -793,6 +869,8 @@ class FeatureTaskSlotDependencyDirectionArchitectureTest {
         "slot/audit/SyntheticStrategy.kt imports " +
           "skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopPlanningBranch",
         "slot/audit/SyntheticStrategy.kt references FeatureTaskRuntimeRunState",
+        "slot/audit/SyntheticStrategy.kt references FeatureTaskRuntimeRunLoopContext",
+        "slot/attempt/SyntheticAttempt.kt references FeatureTaskRuntimeRunLoopContext",
       ),
       FeatureTaskDependencyDirectionScan.violations(
         mapOf(
@@ -827,6 +905,86 @@ class FeatureTaskSlotDependencyDirectionArchitectureTest {
       emptyList(),
       FeatureTaskDependencyDirectionScan.violations(
         mapOf("runloop/core/SharedSynthetic.kt" to shared, "slot/qualitygate/QualityGateSteps.kt" to strategy),
+      ),
+    )
+  }
+}
+
+class FeatureTaskDurableStoreArchitectureTest {
+  @Test
+  fun `only the durable run state depends on durable stores, writers and checkpoint git ops`() {
+    val sources = featureTaskEngineSources()
+    val guarded = FeatureTaskDurableStoreScan.guardedSources(sources).size
+    val durable = FeatureTaskDurableStoreScan.durableReferences(sources)
+    assertTrue(guarded > 0, "The durable-store rule read no run-loop or slot file.")
+    assertTrue(durable.isNotEmpty(), "The durable package references no durable store; the name list is stale.")
+
+    val violations = FeatureTaskDurableStoreScan.violations(sources)
+
+    assertEquals(emptyList(), violations, "Read $guarded files.\n" + violations.joinToString("\n"))
+  }
+
+  @Test
+  fun `durable-store rule catches run-loop and slot store references and passes the durable package`() {
+    val runLoop =
+      """
+      package skillbill.engine.featuretask.runloop.core
+
+      import skillbill.engine.featuretask.persist.FeatureTaskRuntimePhaseRecorder
+      import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunState
+
+      internal class Synthetic(private val recorder: FeatureTaskRuntimePhaseRecorder)
+      """.trimIndent()
+    val edge =
+      """
+      package skillbill.engine.featuretask.runloop.core
+
+      internal fun establish(gates: Any) = gates.branchSetupRunner.ensureFeatureBranch(request, telemetry, phase)
+      """.trimIndent()
+    val strategy =
+      """
+      package skillbill.engine.featuretask.slot.audit
+
+      internal class SyntheticStrategy {
+        fun commit(git: Any) = git.toString().also { amendHeadCommit() }
+      }
+      """.trimIndent()
+    val planStop =
+      """
+      package skillbill.engine.featuretask.slot.plan
+
+      import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder as Terminals
+
+      internal class SyntheticStop(private val terminals: Terminals, private val git: Any) {
+        fun pin() = git.updateCheckpointRef(root, prefix, name, sha)
+      }
+      """.trimIndent()
+    val durable =
+      """
+      package skillbill.engine.featuretask.runloop.durable
+
+      import skillbill.engine.featuretask.persist.FeatureTaskRuntimePhaseRecorder
+
+      internal class SyntheticDurable(private val recorder: FeatureTaskRuntimePhaseRecorder)
+      """.trimIndent()
+
+    assertEquals(
+      listOf(
+        "runloop/core/Synthetic.kt imports skillbill.engine.featuretask.runloop.durable.DurablePhaseRunState",
+        "runloop/core/Synthetic.kt references FeatureTaskRuntimePhaseRecorder",
+        "runloop/core/SyntheticEdge.kt references branchSetupRunner",
+        "slot/audit/SyntheticStrategy.kt references amendHeadCommit",
+        "slot/plan/SyntheticStop.kt references FeatureTaskRuntimeDecomposeTerminalRecorder",
+        "slot/plan/SyntheticStop.kt references updateCheckpointRef",
+      ),
+      FeatureTaskDurableStoreScan.violations(
+        mapOf(
+          "runloop/core/Synthetic.kt" to runLoop,
+          "runloop/core/SyntheticEdge.kt" to edge,
+          "slot/audit/SyntheticStrategy.kt" to strategy,
+          "slot/plan/SyntheticStop.kt" to planStop,
+          "runloop/durable/SyntheticDurable.kt" to durable,
+        ),
       ),
     )
   }

@@ -9,22 +9,24 @@ import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
+import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepSession
+import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
 import skillbill.engine.featuretask.slot.ReviewTarget
+import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.review.model.ParallelReviewMergeResult
@@ -59,11 +61,17 @@ class DelegatedReviewStrategy(
 
   override fun runStep(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
-  ): PhaseOutcome = codeReview.runStep(this, run, context, state)
+    state: PhaseStepState,
+  ): PhaseOutcome = codeReview.runStep(this, run, state)
 
   override fun stepHooks(stepId: String): PhaseStepHooks = codeReview.stepHooks(stepId)
+
+  override fun verdictRule(
+    stepId: String,
+    diagnostics: RuntimeDiagnostics,
+  ): FeatureTaskRuntimeStepVerdictRule? = codeReview.verdictRule(stepId)
+
+  override fun resumeRules(stepId: String): PhaseResumeRules = codeReview.resumeRules(stepId)
 
   override val loopRules: PhaseLoopRules = codeReview.loopRules
 
@@ -100,7 +108,7 @@ internal class DelegatedReviewPass(
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
     runner: PhaseRunner,
-    state: PhaseRunState,
+    state: PhaseStepState,
   ): ParallelCodeReviewResult {
     val agentId = run.resolvedAgent.resolvedAgentId
     var reviewed: ParallelCodeReviewResult? = null
@@ -134,7 +142,7 @@ internal class DelegatedReviewPass(
     run: PhaseRun,
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
-    state: PhaseRunState,
+    state: PhaseStepState,
     launch: SkillRunRequest,
   ): ParallelCodeReviewRequest {
     val branch = state.resolvedBranch()

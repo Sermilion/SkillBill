@@ -17,6 +17,8 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhase
 private const val VALIDATION_REPAIR_PLAN_KEY = "validation_repair_plan"
 
 internal object PackBuildStepHooks : PhaseStepHooks {
+  override val carriesPackBuildCommand: Boolean = true
+
   override fun earlyOutput(
     run: PhaseRun,
     iteration: Int,

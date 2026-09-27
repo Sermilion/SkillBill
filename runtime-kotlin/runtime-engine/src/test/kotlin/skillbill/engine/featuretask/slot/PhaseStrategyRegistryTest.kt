@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slot
 
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.error.featuretask.DuplicatePhaseStrategyError
@@ -133,8 +132,7 @@ class PhaseStrategyRegistryTest {
 
     override fun runStep(
       run: PhaseRun,
-      context: FeatureTaskRuntimeRunLoopContext,
-      state: PhaseRunState,
+      state: PhaseStepState,
     ): PhaseOutcome = error("unused")
   }
 

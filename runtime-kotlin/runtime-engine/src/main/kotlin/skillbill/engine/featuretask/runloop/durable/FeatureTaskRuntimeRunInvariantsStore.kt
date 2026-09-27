@@ -1,4 +1,4 @@
-package skillbill.engine.featuretask.runloop.state
+package skillbill.engine.featuretask.runloop.durable
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec

@@ -25,12 +25,12 @@ import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeProviderLimitSignal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_STATUS_PAUSED
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitDetector
 
@@ -64,14 +64,11 @@ internal fun terminalBlockedReasonFrom(
   val disposition = FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(outputMap, blockedDisposition)
   val operatorTerminalQualityGate =
     disposition == FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION &&
-      (
-        phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE ||
-          phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
-      )
+      phaseId in PhaseSlot.QUALITY_GATE.steps
   val prefix =
     when {
       operatorTerminalQualityGate -> "Phase output reported status '$status'."
-      phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE ->
+      blockedDisposition == FeatureTaskRuntimeFailureDisposition.RETRYABLE ->
         "Validation phase reported status '$status'; retrying so the agent can fix failures."
       else -> "Phase output reported status '$status'."
     }
@@ -223,14 +220,6 @@ private val PROCESS_FAILURE_REASON_MARKERS: List<String> =
     "launch was interrupted",
     "could not launch an agent",
   )
-
-fun invalidateLegacyPlanWithoutPreplan(completed: MutableSet<String>) {
-  val plan = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
-  val preplan = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN
-  if (plan in completed && preplan !in completed) {
-    completed.remove(plan)
-  }
-}
 
 fun phaseDeclaration(
   phaseId: String,

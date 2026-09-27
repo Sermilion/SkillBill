@@ -2,19 +2,15 @@ package skillbill.engine.featuretask.runloop.phase
 
 import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
-import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.continuation.GoalContinuationStateRecordRequest
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
-import skillbill.engine.featuretask.lifecycle.continuation.reviewState
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistArgs
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistInPhaseArgs
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.FixLoopBranchContext
 import skillbill.engine.featuretask.runloop.core.PauseAndPersistInPhaseArgs
@@ -39,18 +35,20 @@ import skillbill.engine.featuretask.runner.STATUS_PAUSED
 import skillbill.engine.featuretask.runner.isProcessFailureBlockReason
 import skillbill.engine.featuretask.runner.nonRetryingPhaseSchemaBlockReason
 import skillbill.engine.featuretask.runner.withSchemaGateDetail
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.state.PhaseRunGoal
+import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.workflow.model.goalreview.GOAL_SUBTASK_REVIEW_BLOCKER_SEVERITY
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.goalreview.ReviewPassResolution
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttemptStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 object FeatureTaskRuntimeRunLoopPhaseBlocking {
   internal fun blockInPhase(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     observability: FeatureTaskRuntimeRunObservability,
     block: PhaseBlockRequest,
   ): PhaseOutcome =
@@ -68,22 +66,22 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
       ).withDisposition(block.failureDisposition),
     )
 
-  internal fun FeatureTaskRuntimeRunLoopContext.blockAndPersist(args: BlockAndPersistArgs): PhaseOutcome =
+  internal fun PhaseAttemptEnvironment.blockAndPersist(args: BlockAndPersistArgs): PhaseOutcome =
     blockAndPersistCore(request, state, recorder, goalContinuationRecorder, args)
 
   internal fun blockAndPersist(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
-    recorder: FeatureTaskRuntimePhaseRecorder,
-    goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder?,
+    recorder: PhaseRunRecords,
+    goalContinuationRecorder: PhaseRunGoal?,
     args: BlockAndPersistArgs,
   ): PhaseOutcome = blockAndPersistCore(request, state, recorder, goalContinuationRecorder, args)
 
   internal fun blockAndPersistInPhase(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
-    recorder: FeatureTaskRuntimePhaseRecorder,
-    goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder?,
+    recorder: PhaseRunRecords,
+    goalContinuationRecorder: PhaseRunGoal?,
     args: BlockAndPersistInPhaseArgs,
   ): PhaseOutcome =
     blockAndPersistCore(
@@ -104,10 +102,10 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     )
 
   private fun blockAndPersistCore(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
-    recorder: FeatureTaskRuntimePhaseRecorder,
-    goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder?,
+    recorder: PhaseRunRecords,
+    goalContinuationRecorder: PhaseRunGoal?,
     args: BlockAndPersistArgs,
   ): PhaseOutcome {
     val run = args.run
@@ -160,7 +158,7 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     return PhaseOutcome.blocked(reason)
   }
 
-  internal fun FeatureTaskRuntimeRunLoopContext.pauseAndPersistInPhase(
+  internal fun PhaseAttemptEnvironment.pauseAndPersistInPhase(
     args: PauseAndPersistInPhaseArgs,
   ): PhaseOutcome {
     val run = args.run
@@ -211,7 +209,7 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     return PhaseOutcome.paused(reason)
   }
 
-  internal fun FeatureTaskRuntimeRunLoopContext.blockAndPersistInPhase(
+  internal fun PhaseAttemptEnvironment.blockAndPersistInPhase(
     args: BlockAndPersistInPhaseArgs,
   ): PhaseOutcome =
     blockAndPersist(
@@ -233,7 +231,7 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
   ): Boolean = session.operatorBlockRetry?.phaseId == phaseId && !session.operatorBlockRetryCompleted
 
   internal fun blockAt(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
     session: FeatureTaskRuntimeRunLoopSession,
     phaseId: String,
@@ -252,9 +250,9 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     )
   }
 
-  fun persistBranchSetupBlock(
-    request: FeatureTaskRuntimeRunRequest,
-    recorder: FeatureTaskRuntimePhaseRecorder,
+  internal fun persistBranchSetupBlock(
+    request: FeatureTaskRuntimeRunFacts,
+    recorder: PhaseRunRecords,
     observability: FeatureTaskRuntimeRunObservability,
     phaseId: String,
     reason: String,
@@ -305,9 +303,9 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     )
   }
 
-  fun goalReviewStateOrNull(
-    request: FeatureTaskRuntimeRunRequest,
-    goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
+  internal fun goalReviewStateOrNull(
+    request: FeatureTaskRuntimeRunFacts,
+    goalContinuationRecorder: PhaseRunGoal,
   ): GoalSubtaskReviewState? =
     if (!isGoalContinuationRun(request)) {
       null
@@ -315,9 +313,9 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
       goalContinuationRecorder.reviewState(request.workflowId)
     }
 
-  fun priorBlockerFindingIds(
-    request: FeatureTaskRuntimeRunRequest,
-    goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
+  internal fun priorBlockerFindingIds(
+    request: FeatureTaskRuntimeRunFacts,
+    goalContinuationRecorder: PhaseRunGoal,
   ): List<String> {
     val priorPass =
       goalReviewStateOrNull(request, goalContinuationRecorder)?.passResults?.lastOrNull()
@@ -328,12 +326,13 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
   }
 
   internal fun persistResolvedReviewTier(
-    request: FeatureTaskRuntimeRunRequest,
-    goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
+    request: FeatureTaskRuntimeRunFacts,
+    goalContinuationRecorder: PhaseRunGoal,
     run: PhaseRun,
+    state: FeatureTaskRuntimeRunState,
     resolution: ReviewPassResolution,
   ) {
-    if (run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW || !isGoalContinuationRun(request)) {
+    if (!state.resumeRules(run.phaseId).tracksReviewPasses || !isGoalContinuationRun(request)) {
       return
     }
     goalContinuationRecorder.updateReviewState(request.workflowId) { state ->
@@ -345,12 +344,12 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
   }
 
   internal fun reviewPassNumber(
-    request: FeatureTaskRuntimeRunRequest,
-    goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder?,
+    request: FeatureTaskRuntimeRunFacts,
+    goalContinuationRecorder: PhaseRunGoal?,
     run: PhaseRun,
     state: FeatureTaskRuntimeRunState,
   ): Int? {
-    if (run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) return null
+    if (!state.resumeRules(run.phaseId).tracksReviewPasses) return null
     if (goalContinuationRecorder == null) return state.currentReviewPassNumber ?: 1
     val durable = goalReviewStateOrNull(request, goalContinuationRecorder) ?: return 1
     return resolveReviewPassNumber(
@@ -360,9 +359,9 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
   }
 
   internal fun phaseStateRequest(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
-    goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
+    goalContinuationRecorder: PhaseRunGoal,
     args: PhaseStateRequestArgs,
   ): FeatureTaskRuntimePhaseStateRequest {
     val write = args.write
@@ -395,17 +394,18 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
   }
 
   internal fun reviewedCheckpointFingerprint(
-    request: FeatureTaskRuntimeRunRequest,
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    request: FeatureTaskRuntimeRunFacts,
+    recorder: PhaseRunRecords,
+    reviewStepId: String,
   ): String? =
     recorder.loadDeliveredProjections(request.workflowId)
-      ?.get(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW)
+      ?.get(reviewStepId)
       ?.repositoryCheckpointFingerprint
 
   internal fun settleSemanticFailure(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     observability: FeatureTaskRuntimeRunObservability,
     context: FixLoopBranchContext,
   ): PhaseOutcome? {
@@ -418,7 +418,9 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
       return blockNonRetryableSemanticFailure(request, state, recorder, context)
     }
     loop.outputGateFailures += 1
-    FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(run.phaseId, loop.outputGateFailures)?.let { capReason ->
+    val budgetBlock =
+      FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(run.phaseId, run.policy, loop.outputGateFailures)
+    budgetBlock?.let { capReason ->
       return blockInPhase(
         request,
         state,
@@ -453,9 +455,9 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
   }
 
   private fun blockNonRetryableSemanticFailure(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     context: FixLoopBranchContext,
   ): PhaseOutcome {
     val run = context.run
@@ -491,7 +493,7 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     state.trailingNonOutputAttempts(run.phaseId) { reason -> isProcessFailureBlockReason(run.phaseId, reason) }
 
   internal fun durableContinuationSegmentCount(
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     run: PhaseRun,
   ): Int {
     if (!run.policy.mutating) return 0

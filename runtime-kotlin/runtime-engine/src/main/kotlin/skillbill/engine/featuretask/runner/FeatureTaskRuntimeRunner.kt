@@ -11,8 +11,8 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunInvariantsStore
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunPreparation
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
@@ -51,6 +51,7 @@ class FeatureTaskRuntimeRunner(
         recorder,
         goalContinuationRecorder,
         runInvariantsStore,
+        strategies,
       ).prepare(request)
 
   private fun foreignModeWorkflowBlock(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport.Blocked? {

@@ -49,7 +49,7 @@ import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.prepare.FeatureTaskRuntimeSpecGate
 import skillbill.engine.featuretask.prepare.SpecSourceResolver
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunInvariantsStore
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.slot.ApprovingReviewPhaseRunner
 import skillbill.engine.featuretask.slot.PhaseRunner

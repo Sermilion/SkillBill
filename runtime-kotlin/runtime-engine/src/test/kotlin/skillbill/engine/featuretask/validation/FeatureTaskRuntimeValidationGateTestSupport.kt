@@ -72,6 +72,7 @@ internal fun neverRunsGate(): ValidationGateRunner =
 
 internal fun outOfContractCycle(): ValidationGateCycleRequest =
   ValidationGateCycleRequest(
+    phaseId = "build",
     repoRoot = validationGateTestRepoRoot,
     request = minimalRequest(),
     validationDepth = ValidationDepth.DEFAULT,

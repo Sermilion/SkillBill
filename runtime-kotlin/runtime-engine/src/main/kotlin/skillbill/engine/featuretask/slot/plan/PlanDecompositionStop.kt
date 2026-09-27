@@ -4,15 +4,15 @@ import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePlanningStopDecision
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.observability.blocked
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
 import skillbill.engine.featuretask.runner.STATUS_BLOCKED
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
@@ -26,7 +26,7 @@ import java.io.IOException
 
 internal object PlanDecompositionStop {
   fun apply(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     planOutput: FeatureTaskRuntimePhaseOutput,
   ): String? =
     with(context) {
@@ -34,7 +34,7 @@ internal object PlanDecompositionStop {
         FeatureTaskRuntimePlanningStopper(
           outputValidator,
           phaseGates.decompositionPlanner,
-          phaseGates.decomposeTerminalRecorder,
+          recorder,
           diagnostics,
         )
       when (
@@ -60,7 +60,7 @@ internal object PlanDecompositionStop {
     }
 
   private fun persistPlanningStopBlock(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     phaseId: String,
     reason: String,
   ) = with(context) {
@@ -89,11 +89,11 @@ internal object PlanDecompositionStop {
 internal class FeatureTaskRuntimePlanningStopper(
   private val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
-  private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
+  private val records: PhaseRunRecords,
   private val diagnostics: RuntimeDiagnostics,
 ) {
   fun resolve(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     completedOutput: FeatureTaskRuntimePhaseOutput,
     completedPhaseIds: List<String>,
     resolvedBranch: String?,
@@ -103,7 +103,7 @@ internal class FeatureTaskRuntimePlanningStopper(
       return FeatureTaskRuntimePlanningStopDecision.Proceed
     }
 
-    val recordedTerminal = decomposeTerminalRecorder.loadDecomposeTerminal(request.workflowId)
+    val recordedTerminal = records.loadDecomposeTerminal(request.workflowId)
     return if (recordedTerminal != null) {
       FeatureTaskRuntimePlanningStopDecision.Decomposed(
         recordedTerminal.toRunReport(request, completedPhaseIds, resolvedBranch),
@@ -114,7 +114,7 @@ internal class FeatureTaskRuntimePlanningStopper(
   }
 
   private fun resolveFreshPlanOutput(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     completedOutput: FeatureTaskRuntimePhaseOutput,
     completedPhaseIds: List<String>,
     resolvedBranch: String?,
@@ -130,7 +130,7 @@ internal class FeatureTaskRuntimePlanningStopper(
   }
 
   private fun resolveFromPlanOutput(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     completedOutput: FeatureTaskRuntimePhaseOutput,
     completedPhaseIds: List<String>,
     resolvedBranch: String?,
@@ -146,7 +146,7 @@ internal class FeatureTaskRuntimePlanningStopper(
       decomposePlanOutcomeFromPhaseOutput(parsed, specSource)
         ?: return FeatureTaskRuntimePlanningStopDecision.Proceed
     val terminal = writeDecompositionTerminal(request, outcome)
-    decomposeTerminalRecorder.recordDecomposeTerminal(request.workflowId, terminal, completedOutput.phaseId)
+    records.recordDecomposeTerminal(request.workflowId, terminal, completedOutput.phaseId)
     emitDecomposedAtPlanning(request, terminal, completedOutput.phaseId)
     return FeatureTaskRuntimePlanningStopDecision.Decomposed(
       terminal.toRunReport(request, completedPhaseIds, resolvedBranch),
@@ -154,7 +154,7 @@ internal class FeatureTaskRuntimePlanningStopper(
   }
 
   private fun writeDecompositionTerminal(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     outcome: FeatureTaskRuntimeDecomposePlanOutcome,
   ): FeatureTaskRuntimeDecomposeTerminal {
     val writeResult =
@@ -176,7 +176,7 @@ internal class FeatureTaskRuntimePlanningStopper(
   }
 
   private fun emitDecomposedAtPlanning(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     terminal: FeatureTaskRuntimeDecomposeTerminal,
     planStepId: String,
   ) {
@@ -198,7 +198,7 @@ internal class FeatureTaskRuntimePlanningStopper(
   }
 
   private fun FeatureTaskRuntimeDecomposeTerminal.toRunReport(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     completedPhaseIds: List<String>,
     resolvedBranch: String?,
   ): FeatureTaskRuntimeRunReport.Decomposed =

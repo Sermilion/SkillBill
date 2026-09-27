@@ -1,11 +1,11 @@
 package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.contracts.JsonCodec
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
+import skillbill.engine.featuretask.slot.PhaseStepState
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
@@ -20,11 +20,12 @@ internal class ImplementFixStep : PhaseStepHooks {
       readOnlyIdle = false,
       fileMutating = true,
       generationScoped = true,
+      extendsOwnedInventory = true,
     )
 
   override val fingerprintsCompletedRepository: Boolean = true
 
-  override fun handoffFindingVerdicts(state: PhaseRunState): List<ReviewFindingVerdict> {
+  override fun handoffFindingVerdicts(state: PhaseStepState): List<ReviewFindingVerdict> {
     val review = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
     val envelope =
       state.completedStepEnvelope(review)
@@ -38,8 +39,8 @@ internal class ImplementFixStep : PhaseStepHooks {
 
   override fun settleCompletedOutput(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck = ImplementFixReceipt.settle(context, state, outputMap)
 }

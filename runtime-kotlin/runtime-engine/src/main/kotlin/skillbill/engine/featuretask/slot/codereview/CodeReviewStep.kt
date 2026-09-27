@@ -9,14 +9,14 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.persist.RuntimeOwnedFactUnavailable
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseLaunchReviewTier
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStepState
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.error.shellcontent.InvalidReviewContextSchemaError
 import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
@@ -41,8 +41,8 @@ internal class CodeReviewStep(
 ) : PhaseStepHooks {
   fun run(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     prompt: PhaseStepPromptSource,
   ): PhaseOutcome {
     val input =
@@ -82,7 +82,7 @@ internal class CodeReviewStep(
 
   override fun launchReviewTier(
     run: PhaseRun,
-    state: PhaseRunState,
+    state: PhaseStepState,
   ): PhaseLaunchReviewTier {
     val passNumber = state.reviewPassNumber()
     val resolution =
@@ -93,8 +93,8 @@ internal class CodeReviewStep(
 
   override fun completionRejection(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? {
     val hasVerdict = (outputMap[FeatureTaskRuntimeVerificationSignalKeys.VERDICT] as? String)?.isNotBlank() == true
@@ -113,8 +113,8 @@ internal class CodeReviewStep(
 
   private fun launchAndSettle(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     input: GoalSubtaskReviewInput,
     pass: ReviewPassRun,
   ): PhaseOutcome {
@@ -149,7 +149,7 @@ internal class CodeReviewStep(
 
   private fun launch(
     run: PhaseRun,
-    state: PhaseRunState,
+    state: PhaseStepState,
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
   ): ReviewPassLaunch {
@@ -160,8 +160,8 @@ internal class CodeReviewStep(
 
   private fun settle(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     pass: ReviewPassRun,
     result: ParallelCodeReviewResult,
     manifest: PhaseStepFileManifest,
@@ -221,7 +221,7 @@ internal class CodeReviewStep(
 
   private fun complete(
     run: PhaseRun,
-    state: PhaseRunState,
+    state: PhaseStepState,
     iteration: Int,
     outputText: String,
     output: AcceptedFeatureTaskRuntimePhaseOutput,
@@ -235,7 +235,7 @@ internal class CodeReviewStep(
 
   private fun blockerDispositions(
     run: PhaseRun,
-    state: PhaseRunState,
+    state: PhaseStepState,
     result: ParallelCodeReviewResult,
     pass: ReviewPassRun,
   ): List<GoalSubtaskBlockerDisposition> {
@@ -270,12 +270,12 @@ internal class CodeReviewStep(
 
   private fun repositoryFingerprint(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
   ): String? =
     context.phaseGates.gitOperations.repositoryFingerprint(run.request.repoRoot).value.takeIf(String::isNotBlank)
 
   private fun blockStep(
-    state: PhaseRunState,
+    state: PhaseStepState,
     iteration: Int,
     reason: String,
     disposition: FeatureTaskRuntimeFailureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,

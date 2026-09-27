@@ -1,12 +1,8 @@
-package skillbill.engine.featuretask.runloop.state
+package skillbill.engine.featuretask.runloop.durable
 
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
-import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.continuation.GoalReviewPassCompletionRequest
-import skillbill.engine.featuretask.lifecycle.continuation.lastGoalReviewResult
-import skillbill.engine.featuretask.lifecycle.continuation.reviewState
-import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparation
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
@@ -15,7 +11,6 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistArgs
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
 import skillbill.engine.featuretask.runloop.core.PersistPhaseArgs
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
@@ -32,12 +27,11 @@ import skillbill.engine.featuretask.runloop.output.isGoalReviewRun
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
-import skillbill.engine.featuretask.slot.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.PhaseRunState
-import skillbill.engine.featuretask.slot.PhaseSettledEnvelopeRead
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
+import skillbill.engine.featuretask.slot.PhaseStepState
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
@@ -55,73 +49,37 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhase
 import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
-import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
-  private val context: FeatureTaskRuntimeRunLoopContext,
+internal class DurablePhaseStepState(
+  private val environment: PhaseAttemptEnvironment,
   private val run: PhaseRun,
-) : PhaseRunState {
-  private val workflowId = context.request.workflowId
-  private val repoRoot = context.request.repoRoot
+) : PhaseStepState,
+  PhaseRunState by environment.runState {
+  private val workflowId = environment.request.workflowId
+  private val repoRoot = environment.request.repoRoot
 
-  override fun settlementTarget(attempt: Int): FeatureTaskRuntimePhaseSettlementTarget =
-    FeatureTaskRuntimePhaseSettlementTarget(workflowId, attempt)
-
-  override fun launchObservation(stepName: String): PhaseLaunchObservation =
-    PhaseLaunchObservation(
-      activityStampSink =
-        context.activityStampWriter.sink(
-          workflowId = workflowId,
-          parentWorkflowId = context.request.goalContinuation?.parentWorkflowId,
-        ),
-      worktreeEditObserver =
-        context.worktreeEditJournalWriter.observer(
-          repoRoot = repoRoot,
-          resolveWorkflowId = { workflowId },
-          resolvePhaseId = { stepName },
-        ),
-    )
-
-  override fun recordTokenUsage(
-    stepName: String,
-    inputTokens: Int,
-    outputTokens: Int,
-  ) {
-    context.state.recordPhaseTokenUsage(stepName, inputTokens, outputTokens)
-  }
-
-  override fun settledEnvelope(
-    stepName: String,
-    target: FeatureTaskRuntimePhaseSettlementTarget,
-  ): PhaseSettledEnvelopeRead =
-    try {
-      context.phaseSettlementService.findEnvelope(target.workflowId, stepName, target.attempt)
-        ?.let { PhaseSettledEnvelopeRead.Found(it.envelope) }
-        ?: PhaseSettledEnvelopeRead.None
-    } catch (error: InvalidFeatureTaskRuntimeValidationEvidenceSchemaError) {
-      PhaseSettledEnvelopeRead.Failed(error)
-    }
-
-  override fun nextStepIteration(): Int = context.state.nextIteration(run.phaseId)
+  override fun nextStepIteration(): Int = environment.state.nextIteration(run.phaseId)
 
   override fun reserveReviewPass(): GoalSubtaskReviewPassReservation =
-    context.goalContinuationRecorder.reserveGoalReviewPass(workflowId)
+    environment.goalContinuationRecorder.reserveGoalReviewPass(workflowId)
 
-  override fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch? = context.recorder.loadResolvedBranch(workflowId)
+  override fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch? =
+    environment.recorder.loadResolvedBranch(workflowId)
 
   override fun prepareGoalReviewInput(
     scopedUntrackedExclusions: List<String>?,
     ownedPathspec: List<String>,
   ): GoalSubtaskReviewInputPreparation =
-    context.goalContinuationRecorder.buildGoalReviewInput(
+    environment.goalContinuationRecorder.buildGoalReviewInput(
       workflowId = workflowId,
-      gitOperations = context.phaseGates.gitOperations,
+      gitOperations = environment.phaseGates.gitOperations,
       repoRoot = repoRoot,
-      scope = FeatureTaskRuntimeGoalContinuationRecorder.GoalReviewInputScope(scopedUntrackedExclusions, ownedPathspec),
+      scopedUntrackedExclusions = scopedUntrackedExclusions,
+      ownedPathspec = ownedPathspec,
     )
 
-  override fun carriedForwardReviewResult(): String? = context.goalContinuationRecorder.lastGoalReviewResult(workflowId)
+  override fun carriedForwardReviewResult(): String? =
+    environment.goalContinuationRecorder.lastGoalReviewResult(workflowId)
 
   override fun completeCarriedForwardReview(
     iteration: Int,
@@ -130,18 +88,18 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
     val normalizedOutput = output.normalizedOutput
     val phaseState =
       FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
-        context.request,
-        context.state,
-        context.goalContinuationRecorder,
+        environment.request,
+        environment.state,
+        environment.goalContinuationRecorder,
         PhaseStateRequestArgs(
           write = PhaseStateWriteArgs(run, iteration, STATUS_COMPLETED, true, normalizedOutput.canonicalJson),
           extras =
             PhaseStateRequestAttachments(normalizedOutput = normalizedOutput, repairEvidence = output.repairEvidence),
         ),
       )
-    context.state.reserveReviewPass(phaseState.reviewPassNumber)
+    environment.state.reserveReviewPass(phaseState.reviewPassNumber)
     val prefix = "Carried-forward goal review could not atomically persist its canonical result."
-    return runCatching { context.recorder.recordCompletedPhase(phaseState) }.fold(
+    return runCatching { environment.recorder.recordCompletedPhase(phaseState) }.fold(
       onSuccess = { persisted -> if (persisted) null else prefix },
       onFailure = { error -> "$prefix ${error.message.orEmpty()}" },
     )
@@ -149,14 +107,14 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
 
   override fun reviewPassNumber(): Int =
     FeatureTaskRuntimeRunLoopPhaseBlocking.reviewPassNumber(
-      context.request,
-      context.goalContinuationRecorder,
+      environment.request,
+      environment.goalContinuationRecorder,
       run,
-      context.state,
+      environment.state,
     ) ?: 1
 
   override fun recordedReviewRunId(passNumber: Int): String? =
-    context.state.recordFor(run.phaseId)
+    environment.state.recordFor(run.phaseId)
       ?.takeIf { (it.reviewPassNumber ?: 1) == passNumber }
       ?.reviewRunId
       ?.takeIf(String::isNotBlank)
@@ -166,10 +124,10 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
     reviewRunId: String,
   ) {
     FeatureTaskRuntimeRunLoopOutputPersistence.persistPhase(
-      context.request,
-      context.state,
-      context.recorder,
-      context.goalContinuationRecorder,
+      environment.request,
+      environment.state,
+      environment.recorder,
+      environment.goalContinuationRecorder,
       PersistPhaseArgs(
         write = PhaseStateWriteArgs(run, iteration, STATUS_RUNNING, false, null),
         reviewRunId = reviewRunId,
@@ -182,9 +140,9 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
     input: GoalSubtaskReviewInput,
   ) {
     PhaseLaunchPreparation.prepareLaunchForCapture(
-      context,
+      environment,
       run.copy(goalReviewInput = input),
-      context.state,
+      environment.state,
       null,
       null,
       prompt,
@@ -192,7 +150,7 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
   }
 
   override fun reviewLaunched(iteration: Int) {
-    context.observability.started(
+    environment.observability.started(
       run.phaseId,
       run.resolvedAgent.resolvedAgentId,
       iteration,
@@ -203,67 +161,72 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
 
   override fun recordReviewContentIdentities() {
     FeatureTaskRuntimeRunLoopLaunch.capturePhaseContentIdentities(
-      context.request,
-      context.session,
-      context.phaseGates,
+      environment.request,
+      environment.session,
+      environment.phaseGates,
       run.phaseId,
     )
   }
 
   override fun unaddressedReviewFindings(): List<UnaddressedFinding> =
-    context.recorder.fetchUnaddressedLedger(workflowId)
+    environment.recorder.fetchUnaddressedLedger(workflowId)
 
   override fun recordedFindingVerdicts(envelope: Map<String, Any?>): List<ReviewFindingVerdict> =
-    context.recorder.recordedFindingVerdicts(envelope)
+    environment.recorder.recordedFindingVerdicts(envelope)
 
   override fun completedStepEnvelope(stepId: String): FeatureTaskRuntimeWorkflowArtifactMap? =
-    context.state.outputFor(stepId)?.normalizedOutput?.envelopeWireMap()
+    environment.state.outputFor(stepId)?.normalizedOutput?.envelopeWireMap()
 
-  override fun completedStepPayload(stepId: String): String? = context.state.outputFor(stepId)?.payload
+  override fun completedStepPayload(stepId: String): String? = environment.state.outputFor(stepId)?.payload
 
-  override fun resolvedBranchName(): String? = context.session.resolvedBranch
+  override fun resolvedBranchName(): String? = environment.session.resolvedBranch
 
   override fun completedReviewPassCount(): Int? =
-    context.goalContinuationRecorder.reviewState(workflowId)?.completedPassCount
+    environment.goalContinuationRecorder.reviewState(workflowId)?.completedPassCount
 
   override fun findingVerificationCheckpoint(): List<FeatureTaskRuntimeFindingVerificationDisposition>? =
-    context.recorder.loadFindingVerificationCheckpoint(workflowId)
+    environment.recorder.loadFindingVerificationCheckpoint(workflowId)
 
   override fun persistFindingVerificationCheckpoint(
     dispositions: List<FeatureTaskRuntimeFindingVerificationDisposition>,
-  ): Boolean = context.recorder.persistFindingVerificationCheckpoint(workflowId, dispositions)
+  ): Boolean = environment.recorder.persistFindingVerificationCheckpoint(workflowId, dispositions)
 
-  override fun verificationBoundarySelection() = context.recorder.loadFindingVerificationBoundarySelection(workflowId)
+  override fun verificationBoundarySelection() =
+    environment.recorder.loadFindingVerificationBoundarySelection(workflowId)
 
   override fun persistVerificationBoundarySelection(
     selections: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>,
-  ): Boolean = context.recorder.persistFindingVerificationBoundarySelection(workflowId, selections)
+  ): Boolean = environment.recorder.persistFindingVerificationBoundarySelection(workflowId, selections)
 
   override fun appendRejectedVerificationFindings(
     passNumber: Int,
     rejected: List<UnaddressedFinding>,
   ) {
-    context.recorder.appendRejectedVerificationFindings(workflowId, passNumber, rejected)
+    environment.recorder.appendRejectedVerificationFindings(workflowId, passNumber, rejected)
   }
 
   override fun persistResolvedReviewTier(resolution: ReviewPassResolution) {
     FeatureTaskRuntimeRunLoopPhaseBlocking.persistResolvedReviewTier(
-      context.request,
-      context.goalContinuationRecorder,
+      environment.request,
+      environment.goalContinuationRecorder,
       run,
+      environment.state,
       resolution,
     )
   }
 
   override fun goalReviewState(): GoalSubtaskReviewState? =
-    FeatureTaskRuntimeRunLoopPhaseBlocking.goalReviewStateOrNull(context.request, context.goalContinuationRecorder)
+    FeatureTaskRuntimeRunLoopPhaseBlocking.goalReviewStateOrNull(
+      environment.request,
+      environment.goalContinuationRecorder,
+    )
 
   override fun recordRepairReceipt(receipt: FeatureTaskRuntimeRepairReceipt): Boolean =
-    context.goalContinuationRecorder.updateReviewState(workflowId) { it.upsertRepairReceipt(receipt) } != null
+    environment.goalContinuationRecorder.updateReviewState(workflowId) { it.upsertRepairReceipt(receipt) } != null
 
   override fun amendReviewRemediationCheckpoint(): Boolean =
     FeatureTaskRuntimeRunLoopCheckpointRemediation.checkpointEstablished(
-      context,
+      environment,
       precedingPhaseId = run.phaseId,
       loopId = null,
       intent = FeatureTaskRuntimeCheckpointMessage.INTENT_REMEDIATION,
@@ -279,18 +242,18 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
     outputText: String,
   ) {
     val outputBytes = outputText.encodeToByteArray()
-    context.recorder.retainProducerOutput(
+    environment.recorder.retainProducerOutput(
       ProducerOutputEvidence(
         workflowId = workflowId,
         phaseId = run.phaseId,
         attempt = iteration,
         agentId = run.resolvedAgent.resolvedAgentId,
         model = run.modelDirective?.model ?: "unspecified",
-        recordedAt = context.clock.instant(),
+        recordedAt = environment.clock.instant(),
         byteSize = outputBytes.size.toLong(),
         sha256 = RejectedOutputDiagnosticService.sha256(outputBytes),
         payload = outputBytes,
-        generation = context.state.evidenceGeneration(run.policy.generationScoped),
+        generation = environment.state.evidenceGeneration(run.policy.generationScoped),
       ),
     )
   }
@@ -303,16 +266,16 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
   ): String? {
     val persistence =
       ReviewOutputPersistenceContext(
-        request = context.request,
-        state = context.state,
-        recorder = context.recorder,
-        observability = context.observability,
-        goalContinuationRecorder = context.goalContinuationRecorder,
+        request = environment.request,
+        state = environment.state,
+        recorder = environment.recorder,
+        observability = environment.observability,
+        goalContinuationRecorder = environment.goalContinuationRecorder,
       )
-    val args = PhaseReviewPersistenceArgs(run, iteration, context.observability, fileManifest.toPhaseManifest())
+    val args = PhaseReviewPersistenceArgs(run, iteration, environment.observability, fileManifest.toPhaseManifest())
     val blocked =
       with(FeatureTaskRuntimeRunLoopReviewCompletion) {
-        if (isGoalReviewRun(run)) {
+        if (isGoalReviewRun(run, environment.state)) {
           persistence.persistGoalReviewCompletion(args, output.normalizedOutput, output.repairEvidence)
         } else {
           persistence.persistStandaloneReviewCompletion(args, outputText, output)
@@ -322,7 +285,7 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
   }
 
   override fun stepCompleted(iteration: Int) {
-    context.observability.completed(run.phaseId, run.resolvedAgent.resolvedAgentId, iteration)
+    environment.observability.completed(run.phaseId, run.resolvedAgent.resolvedAgentId, iteration)
   }
 
   override fun blockReviewPreparation(
@@ -332,15 +295,15 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
     carriedOutput: AcceptedFeatureTaskRuntimePhaseOutput?,
   ) {
     FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersist(
-      context.request,
-      context.state,
-      context.recorder,
-      context.goalContinuationRecorder.takeIf { isGoalReviewRun(run) },
+      environment.request,
+      environment.state,
+      environment.recorder,
+      environment.goalContinuationRecorder.takeIf { isGoalReviewRun(run, environment.state) },
       BlockAndPersistArgs(
         run = run,
         attemptCount = attemptCount,
         reason = reason,
-        observability = context.observability,
+        observability = environment.observability,
         loopId = null,
         edgeIteration = null,
         failureDisposition = disposition,
@@ -363,40 +326,45 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
     fileManifest: PhaseStepFileManifest?,
   ) {
     FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-      context.request,
-      context.state,
-      context.recorder,
-      context.observability,
+      environment.request,
+      environment.state,
+      environment.recorder,
+      environment.observability,
       PhaseBlockRequest(
         run = run,
         attemptCount = iteration,
         reason = reason,
-        observability = context.observability,
+        observability = environment.observability,
         payload = BlockAndPersistPayload(fileManifest = fileManifest?.toPhaseManifest()),
         failureDisposition = disposition,
       ),
     )
   }
 
-  override fun isStepCompleted(stepId: String): Boolean = context.state.isComplete(stepId)
+  override fun isStepCompleted(stepId: String): Boolean = environment.state.isComplete(stepId)
 
   override fun isEvidenceInvalidated(stepId: String): Boolean =
-    stepId in context.state.phasesRequiringDurableGateInvalidation()
+    stepId in environment.state.phasesRequiringDurableGateInvalidation()
 
-  override fun reviewedCheckpointFingerprint(): String? =
-    FeatureTaskRuntimeRunLoopPhaseBlocking.reviewedCheckpointFingerprint(context.request, context.recorder)
+  override fun reviewedCheckpointFingerprint(reviewStepId: String): String? =
+    FeatureTaskRuntimeRunLoopPhaseBlocking.reviewedCheckpointFingerprint(
+      environment.request,
+      environment.recorder,
+      reviewStepId,
+    )
 
-  override fun persistReviewGenerationInvalidation(): Int? =
-    context.recorder.persistReviewGenerationInvalidation(workflowId)
+  override fun persistReviewGenerationInvalidation(reviewStepId: String): Int? =
+    environment.recorder.persistReviewGenerationInvalidation(workflowId, reviewStepId)
 
   override fun advanceReviewGeneration(
     generation: Int,
     reentryLoopId: String,
+    reviewStepId: String,
   ) {
-    context.state.advanceReviewGeneration(generation)
-    context.state.resetInvalidatedReviewGeneration()
-    if (context.session.pendingReentry?.loopId == reentryLoopId) {
-      context.session.transitionReentryPair(null, null)
+    environment.state.advanceReviewGeneration(generation)
+    environment.state.resetInvalidatedReviewGeneration(reviewStepId)
+    if (environment.session.pendingReentry?.loopId == reentryLoopId) {
+      environment.session.transitionReentryPair(null, null)
     }
   }
 
@@ -404,10 +372,10 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
     output: String,
     envelope: Map<String, Any?>,
   ): Boolean {
-    val recordedVerdicts = context.recorder.recordedFindingVerdicts(envelope)
+    val recordedVerdicts = environment.recorder.recordedFindingVerdicts(envelope)
     val findings = GoalSubtaskReviewSummaryReducer.fromOutput(envelope, recordedVerdicts)
     val outcome = GoalSubtaskReviewSummaryReducer.outcomeFor(envelope, findings)
-    return context.goalContinuationRecorder.completeGoalReviewPass(
+    return environment.goalContinuationRecorder.completeGoalReviewPass(
       request =
         GoalReviewPassCompletionRequest(
           workflowId = workflowId,
@@ -420,8 +388,8 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
             GoalSubtaskReviewSummaryReducer.blockerDispositions(
               envelope,
               FeatureTaskRuntimeRunLoopPhaseBlocking.priorBlockerFindingIds(
-                context.request,
-                context.goalContinuationRecorder,
+                environment.request,
+                environment.goalContinuationRecorder,
               ),
             ),
           commitFocusedAccounting = GoalSubtaskReviewSummaryReducer.commitFocusedAccounting(envelope),
@@ -431,15 +399,15 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
 
   override fun settleCarriedForwardReview(output: AcceptedFeatureTaskRuntimePhaseOutput) {
     val phaseId = run.phaseId
-    if (context.state.isComplete(phaseId)) {
+    if (environment.state.isComplete(phaseId)) {
       return
     }
-    val reentry = context.session.activeReentry
+    val reentry = environment.session.activeReentry
     val normalizedOutput = output.normalizedOutput
-    val iteration = context.state.nextIteration(phaseId)
-    val priorRecord = context.state.recordFor(phaseId)
+    val iteration = environment.state.nextIteration(phaseId)
+    val priorRecord = environment.state.recordFor(phaseId)
     val persisted =
-      context.recorder.recordCompletedPhase(
+      environment.recorder.recordCompletedPhase(
         FeatureTaskRuntimePhaseStateRequest(
           workflowId = workflowId,
           phaseId = phaseId,
@@ -457,8 +425,8 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
     if (!persisted) {
       error("Carried-forward goal review could not atomically persist its canonical result.")
     }
-    if (reentry != null) context.session.transitionPendingReentry(null)
-    context.state.recordCompleted(
+    if (reentry != null) environment.session.transitionPendingReentry(null)
+    environment.state.recordCompleted(
       FeatureTaskRuntimePhaseOutput(
         phaseId,
         iteration,
@@ -467,21 +435,6 @@ internal class FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
         output.repairEvidence,
       ),
     )
-  }
-
-  override fun loadGateProgress(): FeatureTaskRuntimeValidationGateProgress? =
-    if (run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD) {
-      context.recorder.loadBuildGateProgress(workflowId)
-    } else {
-      context.recorder.loadValidationGateProgress(workflowId)
-    }
-
-  override fun persistGateProgress(progress: FeatureTaskRuntimeValidationGateProgress) {
-    if (run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD) {
-      context.recorder.persistBuildGateProgress(workflowId, progress)
-    } else {
-      context.recorder.persistValidationGateProgress(workflowId, progress)
-    }
   }
 
   private fun PhaseStepFileManifest.toPhaseManifest() = FeatureTaskRuntimePhaseFileManifest(before, after)

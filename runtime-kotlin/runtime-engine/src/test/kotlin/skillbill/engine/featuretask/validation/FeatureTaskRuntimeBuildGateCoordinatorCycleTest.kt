@@ -37,6 +37,7 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
     val cycle =
       buildCoordinator(declaredResolver(declarationWithBuild()), runner).execute(
         ValidationGateCycleRequest(
+          phaseId = "build",
           repoRoot = validationGateTestRepoRoot,
           request = minimalRequest(),
           validationDepth = ValidationDepth.DEFAULT,
@@ -68,6 +69,7 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
     val progress = RecordingProgressStore(mutableListOf(), null)
     buildCoordinator(declaredResolver(declarationWithBuild()), runner).execute(
       ValidationGateCycleRequest(
+        phaseId = "build",
         repoRoot = validationGateTestRepoRoot,
         request = minimalRequest(),
         validationDepth = ValidationDepth.DEFAULT,
@@ -93,6 +95,7 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
         NoopRuntimeDiagnostics,
       ).execute(
         ValidationGateCycleRequest(
+          phaseId = "build",
           repoRoot = validationGateTestRepoRoot,
           request = minimalRequest(),
           validationDepth = ValidationDepth.DEFAULT,
@@ -122,6 +125,7 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
     val cycle =
       buildCoordinator(declaredResolver(declarationWithBuild()), runner).execute(
         ValidationGateCycleRequest(
+          phaseId = "build",
           repoRoot = validationGateTestRepoRoot,
           request = minimalRequest(),
           validationDepth = ValidationDepth.DEFAULT,
@@ -161,6 +165,7 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
     val progress = RecordingProgressStore(recorded, null)
     buildCoordinator(declaredResolver(declarationWithBuild()), runner).execute(
       ValidationGateCycleRequest(
+        phaseId = "build",
         repoRoot = validationGateTestRepoRoot,
         request = minimalRequest(),
         validationDepth = ValidationDepth.DEFAULT,

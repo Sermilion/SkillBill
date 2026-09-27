@@ -153,8 +153,10 @@ class FeatureTaskRuntimePhaseRecorder
     fun completeGoalReviewPhase(completion: GoalReviewPhaseCompletionRequest): Boolean =
       goalReviewCompletion.completeGoalReviewPhase(completion)
 
-    fun persistReviewGenerationInvalidation(workflowId: String): Int? =
-      reviewCheckpoint.persistReviewGenerationInvalidation(workflowId)
+    fun persistReviewGenerationInvalidation(
+      workflowId: String,
+      reviewStepId: String,
+    ): Int? = reviewCheckpoint.persistReviewGenerationInvalidation(workflowId, reviewStepId)
 
     fun reconcileReviewGeneration(workflowId: String): Int = reviewCheckpoint.reconcileReviewGeneration(workflowId)
 

@@ -10,7 +10,7 @@ import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWi
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunInvariantsStore
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts

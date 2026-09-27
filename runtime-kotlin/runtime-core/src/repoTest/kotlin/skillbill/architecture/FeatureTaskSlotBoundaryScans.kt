@@ -15,8 +15,6 @@ internal fun featureTaskEngineSources(): Map<String, String> {
 
 internal fun isFeatureTaskSlotPath(path: String): Boolean = path.startsWith("slot/")
 
-internal val STEP_OWNED_PACKAGES: List<String> = listOf("phase/", "lifecycle/")
-
 internal object FeatureTaskStepIdentityScan {
   private const val CONSTANT_FORM = "phase-id constant"
   private const val LITERAL_FORM = "step-id literal"
@@ -42,18 +40,23 @@ internal object FeatureTaskStepIdentityScan {
       """^\s*(?:@[\w.]+(?:\([^)]*\))?\s+)*((?:(?:public|internal|protected|private|override|const|open|""" +
         """final|actual)\s+)*)va[lr]\s+(\w+)\s*(?::\s*[\w.<>?, ]+?)?\s*(?:get\s*\(\s*\)\s*)?=\s*(.+?)\s*;?\s*$""",
     )
+  private val ENUM_HEADER =
+    Regex("""^[ \t]*((?:(?:public|internal|protected|private)\s+)*)enum\s+class\s+(\w+)\b""", RegexOption.MULTILINE)
+  private val ENUM_ENTRY = Regex("""(?<![\w.])([A-Z][A-Z0-9_]*)\s*\(([^()]*)\)""")
+  private val NAMED_ARGUMENT = Regex("""^\w+\s*=\s*""")
 
   fun violations(
     sources: Map<String, String>,
     stepIds: List<String>,
-    scannedPackages: List<String>,
   ): List<String> {
     val vocabulary = StepVocabulary(stepIds)
-    val aliasNames = slotAliases(sources, vocabulary).map { alias -> alias.name }.toSet()
-    return scannedSources(sources, scannedPackages).flatMap { (path, source) ->
+    val aliases = slotAliases(sources, vocabulary)
+    val aliasNames = aliases.filter { alias -> alias.enumName == null }.map { alias -> alias.name }.toSet()
+    val owners = vocabulary.owners + enumEntryOwners(aliases)
+    return scannedSources(sources).flatMap { (path, source) ->
       val scanned = ScannedKotlinSource(source)
       val hits =
-        constantHits(scanned, vocabulary) + literalHits(scanned, vocabulary) +
+        constantHits(scanned, owners) + literalHits(scanned, vocabulary) +
           elementAccessHits(scanned) + aliasHits(scanned, aliasNames)
       hits.sortedBy { hit -> hit.offset }.map { hit ->
         "$path:${scanned.lineOf(hit.offset)} ${hit.form} ${hit.token}"
@@ -61,18 +64,16 @@ internal object FeatureTaskStepIdentityScan {
     }
   }
 
-  fun scannedSources(
-    sources: Map<String, String>,
-    scannedPackages: List<String>,
-  ): Map<String, String> =
-    sources.filterKeys { path -> !isFeatureTaskSlotPath(path) && scannedPackages.any(path::startsWith) }
+  fun scannedSources(sources: Map<String, String>): Map<String, String> =
+    sources.filterKeys { path -> !isFeatureTaskSlotPath(path) }
 
   fun stepIdAliases(
     sources: Map<String, String>,
     stepIds: List<String>,
   ): List<String> =
     slotAliases(sources, StepVocabulary(stepIds)).map { alias ->
-      "${alias.path}:${alias.line} $ALIAS_FORM ${alias.name}"
+      "${alias.path}:${alias.line} $ALIAS_FORM ${alias.enumName?.let { enumName -> "$enumName." }.orEmpty()}" +
+        alias.name
     }
 
   private fun slotAliases(
@@ -80,13 +81,65 @@ internal object FeatureTaskStepIdentityScan {
     vocabulary: StepVocabulary,
   ): List<StepAlias> =
     sources.filterKeys(::isFeatureTaskSlotPath).flatMap { (path, source) ->
-      aliasDeclarations(path, source, vocabulary)
+      aliasDeclarations(path, source, vocabulary) + enumEntryAliases(path, ScannedKotlinSource(source), vocabulary)
+    }
+
+  private fun enumEntryOwners(aliases: List<StepAlias>): List<ConstantOwner> =
+    aliases.mapNotNull { alias -> alias.enumName?.let { enumName -> enumName to alias.name } }
+      .groupBy({ (enumName, _) -> enumName }, { (_, entry) -> entry })
+      .map { (enumName, entries) ->
+        val pattern = entries.joinToString("|", prefix = "(?:", postfix = ")") { entry -> Regex.escape(entry) }
+        ConstantOwner(enumName, pattern, entries.toSet(), ALIAS_FORM)
+      }
+
+  private fun enumEntryAliases(
+    path: String,
+    scanned: ScannedKotlinSource,
+    vocabulary: StepVocabulary,
+  ): List<StepAlias> =
+    ENUM_HEADER.findAll(scanned.blanked)
+      .filterNot { header -> "private" in header.groupValues[1].split(WHITESPACE) }
+      .flatMap { header ->
+        val entries = enumEntriesRange(scanned.blanked, header.range.last + 1) ?: return@flatMap emptySequence()
+        ENUM_ENTRY.findAll(scanned.blanked.substring(0, entries.last + 1), entries.first)
+          .filter { entry ->
+            val arguments = entry.groups[2]?.range?.let { range -> scanned.code.substring(range) }.orEmpty()
+            wrapsStep(arguments, vocabulary)
+          }
+          .map { entry ->
+            StepAlias(path, scanned.lineOf(entry.range.first), entry.groupValues[1], header.groupValues[2])
+          }
+      }.toList()
+
+  private fun enumEntriesRange(
+    text: String,
+    from: Int,
+  ): IntRange? {
+    val open = text.indexOf('{', from)
+    if (open < 0) return null
+    var depth = 0
+    val close =
+      (open + 1 until text.length).firstOrNull { index ->
+        val character = text[index]
+        val ends = depth == 0 && (character == ';' || character == '}')
+        if (character in "({[") depth++ else if (character in ")}]") depth--
+        ends
+      }
+    return close?.let { index -> open + 1 until index }
+  }
+
+  private fun wrapsStep(
+    arguments: String,
+    vocabulary: StepVocabulary,
+  ): Boolean =
+    arguments.split(',').any { argument ->
+      exposesSingleStep(argument.trim().replace(NAMED_ARGUMENT, ""), vocabulary)
     }
 
   private fun constantHits(
     scanned: ScannedKotlinSource,
-    vocabulary: StepVocabulary,
-  ): List<StepHit> = vocabulary.owners.flatMap { owner -> ownerHits(scanned, owner) }
+    owners: List<ConstantOwner>,
+  ): List<StepHit> = owners.flatMap { owner -> ownerHits(scanned, owner) }
 
   private fun ownerHits(
     scanned: ScannedKotlinSource,
@@ -106,7 +159,7 @@ internal object FeatureTaskStepIdentityScan {
         Regex("""(?<![\w.])${Regex.escape(name)}\b""").findAll(scanned.body).toList()
       }
     return (qualified + star + bare).map { match ->
-      StepHit(match.range.first, CONSTANT_FORM, compact(match.value))
+      StepHit(match.range.first, owner.form, compact(match.value))
     }
   }
 
@@ -115,7 +168,7 @@ internal object FeatureTaskStepIdentityScan {
     owner: ConstantOwner,
   ): Set<String> =
     Regex(
-      """^\s*import\s+[\w.]*\b${Regex.escape(owner.name)}\.(${owner.memberPattern})(?:\s+as\s+(\w+))?""",
+      """^\s*import\s+[\w.]*\b${Regex.escape(owner.name)}\.(${owner.memberPattern})\b(?:\s+as\s+(\w+))?""",
       RegexOption.MULTILINE,
     ).findAll(scanned.blanked).map { match -> match.groupValues[2].ifEmpty { match.groupValues[1] } }.toSet()
 
@@ -217,6 +270,7 @@ internal object FeatureTaskStepIdentityScan {
     val name: String,
     val memberPattern: String,
     val bareMembers: Set<String>,
+    val form: String = CONSTANT_FORM,
   )
 
   private data class StepHit(
@@ -229,6 +283,7 @@ internal object FeatureTaskStepIdentityScan {
     val path: String,
     val line: Int,
     val name: String,
+    val enumName: String? = null,
   )
 }
 
@@ -266,9 +321,11 @@ internal object FeatureTaskLaunchPortScan {
 internal object FeatureTaskDependencyDirectionScan {
   private const val RUN_LOOP_PREFIX = "skillbill.engine.featuretask.runloop."
   private const val RUN_STATE = "FeatureTaskRuntimeRunState"
+  private const val RUN_LOOP_CONTEXT = "FeatureTaskRuntimeRunLoopContext"
 
   private val RUN_STATE_REFERENCE = Regex("""\b$RUN_STATE\b""")
-  private val SHARED_SLOT_PACKAGES = setOf("attempt", "runner")
+  private val RUN_LOOP_CONTEXT_REFERENCE = Regex("""\b$RUN_LOOP_CONTEXT\b""")
+  private val SHARED_SLOT_PACKAGES = setOf("attempt", "runner", "state")
   private val STRATEGY_PACKAGE_REFERENCE = Regex("""^skillbill\.engine\.featuretask\.slot\.([a-z]\w*)(?:\.|$)""")
   private val RUN_LOOP_DRIVER =
     Regex(
@@ -281,8 +338,10 @@ internal object FeatureTaskDependencyDirectionScan {
       val scanned = ScannedKotlinSource(source)
       when (packageRole(path)) {
         PackageRole.SHARED -> strategyPackageReferences(path, scanned)
-        PackageRole.STRATEGY -> runLoopDriverReferences(path, scanned) + runStateReferences(path, scanned)
-        PackageRole.SLOT_MACHINERY -> emptyList()
+        PackageRole.STRATEGY ->
+          runLoopDriverReferences(path, scanned) + runStateReferences(path, scanned) +
+            contextReferences(path, scanned)
+        PackageRole.SLOT_MACHINERY -> contextReferences(path, scanned)
       }
     }
 
@@ -326,7 +385,73 @@ internal object FeatureTaskDependencyDirectionScan {
   ): List<String> =
     if (RUN_STATE_REFERENCE.containsMatchIn(scanned.blanked)) listOf("$path references $RUN_STATE") else emptyList()
 
+  private fun contextReferences(
+    path: String,
+    scanned: ScannedKotlinSource,
+  ): List<String> =
+    if (RUN_LOOP_CONTEXT_REFERENCE.containsMatchIn(scanned.blanked)) {
+      listOf("$path references $RUN_LOOP_CONTEXT")
+    } else {
+      emptyList()
+    }
+
   private enum class PackageRole { SHARED, SLOT_MACHINERY, STRATEGY }
+}
+
+internal object FeatureTaskDurableStoreScan {
+  const val DURABLE_PACKAGE = "runloop/durable/"
+  private const val DURABLE_PACKAGE_PREFIX = "skillbill.engine.featuretask.runloop.durable"
+
+  private val DURABLE_NAMES =
+    listOf(
+      "FeatureTaskRuntimePhaseRecorder",
+      "FeatureTaskRuntimeDecomposeTerminalRecorder",
+      "decomposeTerminalRecorder",
+      "FeatureTaskRuntimeBranchSetupRunner",
+      "branchSetupRunner",
+      "FeatureTaskRuntimeGoalContinuationRecorder",
+      "FeatureTaskPhaseSettlementService",
+      "FeatureTaskPhaseSettlementRepository",
+      "FeatureTaskRuntimeWorkflowPersistence",
+      "WorkflowStateRepository",
+      "FeatureTaskRuntimeReviewGenerationRecorder",
+      "FeatureTaskRuntimeGoalReviewCompletionRecorder",
+      "AgentActivityStampWriter",
+      "WorktreeEditJournalWriter",
+      "FeatureTaskRuntimeRunInvariantsStore",
+      "FeatureTaskRuntimeProbeWriters",
+      "SupersededCheckpointPromoter",
+      "pruneSubtaskCheckpointRefs",
+      "writeSubtaskCommitPreservingHistory",
+      "amendHeadCommit",
+      "updateCheckpointRef",
+      "resolveCheckpointRef",
+      "listCheckpointRefs",
+      "deleteCheckpointRef",
+      "deleteCheckpointRefsUnderPrefix",
+    )
+  private val DURABLE_REFERENCE = Regex("""\b(${DURABLE_NAMES.joinToString("|")})\b""")
+
+  fun violations(sources: Map<String, String>): List<String> =
+    guardedSources(sources).flatMap { (path, source) ->
+      val scanned = ScannedKotlinSource(source)
+      val imports = scanned.imports.filter { target -> target.startsWith(DURABLE_PACKAGE_PREFIX) }
+      imports.map { target -> "$path imports $target" } +
+        durableNames(scanned).map { name -> "$path references $name" }
+    }
+
+  fun guardedSources(sources: Map<String, String>): Map<String, String> =
+    sources.filterKeys { path ->
+      (path.startsWith("runloop/") && !path.startsWith(DURABLE_PACKAGE)) || isFeatureTaskSlotPath(path)
+    }
+
+  fun durableReferences(sources: Map<String, String>): Set<String> =
+    sources.filterKeys { path -> path.startsWith(DURABLE_PACKAGE) }.values
+      .flatMap { source -> durableNames(ScannedKotlinSource(source)) }
+      .toSet()
+
+  private fun durableNames(scanned: ScannedKotlinSource): List<String> =
+    DURABLE_REFERENCE.findAll(scanned.blanked).map { match -> match.value }.distinct().toList()
 }
 
 private class ScannedKotlinSource(source: String) {

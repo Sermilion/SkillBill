@@ -1,16 +1,14 @@
 package skillbill.engine.featuretask.runloop.state
 
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 object FeatureTaskRuntimeAttemptBudgets {
   const val MAX_OUTPUT_GATE_RETRY_ATTEMPTS: Int = 1
   const val MAX_FORMAT_RETRY_ATTEMPTS: Int = MAX_OUTPUT_GATE_RETRY_ATTEMPTS
   const val MAX_PROCESS_FAILURE_ATTEMPTS: Int = 3
-  private const val MAX_VALIDATE_MALFORMED_ATTEMPTS: Int = 2
 
-  fun validateRemainingUnchangedBlockReason(): String =
-    "Phase '${FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE}' reported the same remaining check " +
+  fun validateRemainingUnchangedBlockReason(phaseId: String): String =
+    "Phase '$phaseId' reported the same remaining check " +
       "failures as the prior repair turn; the leftover set did not shrink, so the run blocks rather than " +
       "repeating a session that made no progress."
 
@@ -38,17 +36,13 @@ object FeatureTaskRuntimeAttemptBudgets {
 
   fun outputGateBlockReason(
     phaseId: String,
+    policy: PhaseStepPolicy,
     failureCount: Int,
   ): String? {
     require(failureCount >= 1) {
       "failureCount must be >= 1, was $failureCount."
     }
-    val cap =
-      if (phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE) {
-        MAX_VALIDATE_MALFORMED_ATTEMPTS
-      } else {
-        MAX_OUTPUT_GATE_RETRY_ATTEMPTS
-      }
+    val cap = policy.outputGateAttempts
     return if (failureCount >= cap) {
       val attemptWord = if (failureCount == 1) "attempt" else "attempts"
       "Phase '$phaseId' exhausted the bounded output-gate correction budget after " +
@@ -60,8 +54,9 @@ object FeatureTaskRuntimeAttemptBudgets {
 
   fun malformedOutputBlockReason(
     phaseId: String,
+    policy: PhaseStepPolicy,
     malformedAttemptCount: Int,
-  ): String? = outputGateBlockReason(phaseId, malformedAttemptCount)
+  ): String? = outputGateBlockReason(phaseId, policy, malformedAttemptCount)
 
   fun outputGateRejectionExhaustsBudget(
     phaseId: String,
@@ -72,7 +67,7 @@ object FeatureTaskRuntimeAttemptBudgets {
       "priorOutputGateFailures must be >= 0, was $priorOutputGateFailures."
     }
     val relaunches = policy.relaunchOnInvalidOutput && !policy.singleAgentSession
-    return !relaunches || outputGateBlockReason(phaseId, priorOutputGateFailures + 1) != null
+    return !relaunches || outputGateBlockReason(phaseId, policy, priorOutputGateFailures + 1) != null
   }
 
   fun unresolvedFindingBlockReason(

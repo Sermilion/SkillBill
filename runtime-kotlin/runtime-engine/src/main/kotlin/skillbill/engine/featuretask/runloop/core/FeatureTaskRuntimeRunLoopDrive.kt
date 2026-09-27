@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.runloop.core
 
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
 import skillbill.engine.featuretask.runloop.observability.loopCapExhausted
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
@@ -221,7 +221,7 @@ object FeatureTaskRuntimeRunLoopDrive {
     }
 
   internal fun settleAdvanceOutcome(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
     session: FeatureTaskRuntimeRunLoopSession,
     phaseId: String,

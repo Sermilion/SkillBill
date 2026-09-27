@@ -5,9 +5,9 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExe
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.core.PhaseSlot
@@ -39,8 +39,7 @@ abstract class PhaseStrategy {
 
   internal abstract fun runStep(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    state: PhaseStepState,
   ): PhaseOutcome
 
   internal open fun stepHooks(stepId: String): PhaseStepHooks = PhaseStepHooks.None
@@ -49,6 +48,8 @@ abstract class PhaseStrategy {
     stepId: String,
     diagnostics: RuntimeDiagnostics,
   ): FeatureTaskRuntimeStepVerdictRule? = null
+
+  internal open fun resumeRules(stepId: String): PhaseResumeRules = PhaseResumeRules.None
 
   internal open val loopRules: PhaseLoopRules?
     get() = null
@@ -59,7 +60,11 @@ abstract class PhaseStrategyStatusProjection : PhaseStrategy() {
     stepId: String,
     context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
   ): IdeStatusCurrentPhaseExecution?
+
+  internal open fun reportedGate(stepId: String): PhaseReportedGate? = null
 }
+
+internal enum class PhaseReportedGate { BUILD, VALIDATION }
 
 internal fun jsonValueContent(
   innerJsonExample: String,

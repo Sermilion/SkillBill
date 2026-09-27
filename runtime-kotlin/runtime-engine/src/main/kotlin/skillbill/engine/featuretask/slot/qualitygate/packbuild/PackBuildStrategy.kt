@@ -3,13 +3,14 @@ package skillbill.engine.featuretask.slot.qualitygate.packbuild
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseRunState
+import skillbill.engine.featuretask.slot.PhaseReportedGate
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.stepCall
 import skillbill.engine.featuretask.slot.qualitygate.BUILD_VALUE_CONTENT
@@ -64,9 +65,8 @@ class PackBuildStrategy(override val runner: PhaseRunner) : PhaseStrategyStatusP
 
   override fun runStep(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
-  ): PhaseOutcome = PackBuildGateCycle(context, stepCall(run, state)).run(run)
+    state: PhaseStepState,
+  ): PhaseOutcome = PackBuildGateCycle(PhaseAttemptScope(run.request, state), stepCall(run, state)).run(run)
 
   override fun stepHooks(stepId: String): PhaseStepHooks =
     if (stepId in policies) PackBuildStepHooks else PhaseStepHooks.None
@@ -75,6 +75,9 @@ class PackBuildStrategy(override val runner: PhaseRunner) : PhaseStrategyStatusP
     stepId: String,
     context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
   ): IdeStatusCurrentPhaseExecution? = gateCurrentExecution(stepId, context)
+
+  override fun reportedGate(stepId: String): PhaseReportedGate? =
+    PhaseReportedGate.BUILD.takeIf { stepId in policies }
 
   companion object {
     const val ID = "pack-build"

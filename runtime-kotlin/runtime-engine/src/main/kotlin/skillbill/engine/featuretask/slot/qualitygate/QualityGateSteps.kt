@@ -2,7 +2,6 @@ package skillbill.engine.featuretask.slot.qualitygate
 
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.core.attemptPhaseExecution
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -14,7 +13,8 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.settlement.FeatureTaskRuntimeRunLoopValidationScope
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
-import skillbill.engine.featuretask.slot.PhaseRunState
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.validation.model.ValidationGateProgressStore
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
@@ -47,10 +47,10 @@ internal fun gateCurrentExecution(
     )
   } ?: attemptPhaseExecution(stepId, context)
 
-internal fun FeatureTaskRuntimeRunLoopContext.gateCheckpoint(run: PhaseRun): String? =
+internal fun PhaseAttemptEnvironment.gateCheckpoint(run: PhaseRun): String? =
   phaseGates.gitOperations.repositoryFingerprint(run.request.repoRoot).value.takeIf(String::isNotBlank)
 
-internal fun FeatureTaskRuntimeRunLoopContext.gateChangedPaths(run: PhaseRun): List<String> =
+internal fun PhaseAttemptEnvironment.gateChangedPaths(run: PhaseRun): List<String> =
   FeatureTaskRuntimeRunLoopValidationScope.validationChangedPaths(
     phaseGates,
     recorder,
@@ -59,18 +59,18 @@ internal fun FeatureTaskRuntimeRunLoopContext.gateChangedPaths(run: PhaseRun): L
     run,
   ).orEmpty()
 
-internal fun PhaseRunState.gateProgressStore(): ValidationGateProgressStore =
+internal fun PhaseRunRecords.buildGateProgressStore(): ValidationGateProgressStore =
   object : ValidationGateProgressStore {
     override fun persist(
       workflowId: String,
       progress: FeatureTaskRuntimeValidationGateProgress,
-    ) = persistGateProgress(progress)
+    ) = persistBuildGateProgress(workflowId, progress)
 
-    override fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress? = loadGateProgress()
+    override fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress? = loadBuildGateProgress(workflowId)
   }
 
 internal class RuntimeOwnedGateSettlement(
-  private val context: FeatureTaskRuntimeRunLoopContext,
+  private val context: PhaseAttemptEnvironment,
   private val label: String,
   private val acceptance: (PhaseRun, AcceptedFeatureTaskRuntimePhaseOutput) -> Unit = { _, _ -> },
   private val afterCompleted: (PhaseRun) -> Unit = {},
@@ -161,7 +161,7 @@ internal class RuntimeOwnedGateSettlement(
     )
 }
 
-internal fun FeatureTaskRuntimeRunLoopContext.blockGateStep(
+internal fun PhaseAttemptEnvironment.blockGateStep(
   run: PhaseRun,
   iteration: Int,
   reason: String,

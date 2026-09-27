@@ -105,7 +105,6 @@ class CodeReviewSlotBoundaryArchitectureTest {
     val ALLOWED_RUN_LOOP_TYPES =
       setOf(
         "skillbill.engine.featuretask.runloop.core.PhaseRun",
-        "skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext",
         "skillbill.engine.featuretask.runloop.core.PhaseOutcome",
       )
   }

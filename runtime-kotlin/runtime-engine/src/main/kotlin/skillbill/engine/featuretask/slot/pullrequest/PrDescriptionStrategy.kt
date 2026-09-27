@@ -2,14 +2,15 @@ package skillbill.engine.featuretask.slot.pullrequest
 
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.withMeasuredFacts
@@ -45,7 +46,7 @@ class PrDescriptionStrategy(
   private val measuredHooks =
     object : PhaseStepHooks {
       override fun acceptedOutput(
-        context: FeatureTaskRuntimeRunLoopContext,
+        context: PhaseAttemptEnvironment,
         capture: ValidatedOutputCapture,
         attested: NormalizedFeatureTaskRuntimePhaseOutput,
         outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
@@ -78,9 +79,9 @@ class PrDescriptionStrategy(
 
   override fun runStep(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    state: PhaseStepState,
   ): PhaseOutcome {
+    val context = PhaseAttemptScope(run.request, state)
     readinessGate.blockedReason(
       workflowId = context.request.workflowId,
       repoRoot = context.request.repoRoot,
@@ -90,7 +91,7 @@ class PrDescriptionStrategy(
     val workflowId = context.request.workflowId
     beforeLookups[workflowId] = measurement(context).identity(branch(context))
     return try {
-      runAgentStep(run, context, state)
+      runAgentStep(run, state)
     } finally {
       beforeLookups.remove(workflowId)
     }
@@ -98,10 +99,10 @@ class PrDescriptionStrategy(
 
   override fun stepHooks(stepId: String): PhaseStepHooks = measuredHooks
 
-  private fun measurement(context: FeatureTaskRuntimeRunLoopContext): PullRequestMeasurement =
+  private fun measurement(context: PhaseAttemptEnvironment): PullRequestMeasurement =
     PullRequestMeasurement(pullRequestIdentityLookup, context.request.repoRoot, context.diagnostics)
 
-  private fun branch(context: FeatureTaskRuntimeRunLoopContext): String? =
+  private fun branch(context: PhaseAttemptEnvironment): String? =
     context.recorder.loadResolvedBranch(context.request.workflowId)?.branch
 
   companion object {

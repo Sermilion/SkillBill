@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.slot.runner
 
-import skillbill.engine.featuretask.slot.PhaseRunState
+import skillbill.engine.featuretask.slot.PhaseLaunchState
 import skillbill.engine.featuretask.slot.PhaseStepFacts
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.install.model.SupportedAgent
@@ -59,16 +59,16 @@ class DefaultPhaseRunnerTest {
     )
 }
 
-private val PrepareOnlyPhaseRunState: PhaseRunState =
+private val PrepareOnlyPhaseRunState: PhaseLaunchState =
   Proxy.newProxyInstance(
-    PhaseRunState::class.java.classLoader,
-    arrayOf(PhaseRunState::class.java),
+    PhaseLaunchState::class.java.classLoader,
+    arrayOf(PhaseLaunchState::class.java),
   ) { _, method, args ->
     when (method.name) {
       "prepareLaunch" -> args?.single()
       "toString" -> "PrepareOnlyPhaseRunState"
       "hashCode" -> 0
       "equals" -> false
-      else -> fail("an untracked launch reached PhaseRunState.${method.name}")
+      else -> fail("an untracked launch reached PhaseLaunchState.${method.name}")
     }
-  } as PhaseRunState
+  } as PhaseLaunchState

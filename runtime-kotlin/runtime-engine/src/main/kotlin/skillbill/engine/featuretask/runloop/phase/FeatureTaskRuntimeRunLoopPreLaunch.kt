@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.runloop.phase
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistArgs
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.LEGACY_PLANNING_PROJECTION_LAUNCH_SEAM_REJECTION
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -12,15 +11,16 @@ import skillbill.engine.featuretask.runloop.core.PreLaunchBlock
 import skillbill.engine.featuretask.runloop.core.ShouldRetryPersistedBlockArgs
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.runloop.state.LEGACY_SQLITE_BUSY_REASON_MARKER
 import skillbill.engine.featuretask.runner.missingUpstream
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 object FeatureTaskRuntimeRunLoopPreLaunch {
   internal fun preLaunchBlock(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     run: PhaseRun,
     state: FeatureTaskRuntimeRunState,
     observability: FeatureTaskRuntimeRunObservability,
@@ -69,7 +69,7 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
   }
 
   private fun persistPreLaunchBlock(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     run: PhaseRun,
     state: FeatureTaskRuntimeRunState,
     observability: FeatureTaskRuntimeRunObservability,
@@ -113,35 +113,6 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
       state.outputs(run.declaration.consumedUpstreamPhaseIds),
     )?.takeIf(List<String>::isNotEmpty)
 
-  fun isRetryableGoalReviewPreparation(
-    phaseId: String,
-    reason: String,
-  ): Boolean {
-    if (phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) return false
-    val legacyDatabaseContention =
-      reason.startsWith("Goal-subtask review state or durable raw evidence is malformed:") &&
-        LEGACY_SQLITE_BUSY_REASON_MARKER in reason
-    return legacyDatabaseContention ||
-      LEGACY_SQLITE_BUSY_REASON_MARKER in reason && (
-        reason.startsWith("Goal-subtask review reservation failed") ||
-          reason.startsWith("Goal-subtask review input persistence failed")
-      )
-  }
-
-  fun isRemovedGoalReviewSchemaGateBlock(
-    phaseId: String,
-    reason: String,
-  ): Boolean =
-    phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW &&
-      reason.startsWith("Goal-subtask review output failed schema validation after its reserved pass")
-
-  fun isRemovedImplementationContinuationBudgetBlock(
-    phaseId: String,
-    reason: String,
-  ): Boolean =
-    phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT &&
-      "exhausted the bounded implementation-continuation budget" in reason
-
   fun isReenterableLaunchSeamRecordRejection(
     phaseId: String,
     reason: String,
@@ -165,16 +136,12 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
     persistedReason: String,
     relaunchOnInvalidOutput: Boolean,
   ): Boolean {
-    val retryReviewPreparation =
-      isRetryableGoalReviewPreparation(phaseId, persistedReason) ||
-        state.legacyReviewPreparationRetryConsumedBudget(phaseId, persistedReason)
+    val resume = state.persistedBlockResume(phaseId, persistedReason)
     val reenterableRecordRejection = isReenterableRecordRejection(state, phaseId, persistedReason)
-    val removedContinuationBudget = isRemovedImplementationContinuationBudgetBlock(phaseId, persistedReason)
     val restartsBudget =
       listOf(
-        retryReviewPreparation,
+        resume == PhaseBlockResume.RELAUNCH_WITH_FRESH_BUDGET,
         reenterableRecordRejection,
-        removedContinuationBudget,
         FeatureTaskRuntimeRunLoopPhaseBlocking.operatorReopenedPhase(session, phaseId),
       ).any { it }
     if (restartsBudget) {
@@ -185,9 +152,8 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
       ShouldRetryPersistedBlockArgs(
         phaseId = phaseId,
         durable = durable,
-        retryReviewPreparation = retryReviewPreparation,
+        resume = resume,
         reenterableRecordRejection = reenterableRecordRejection,
-        persistedReason = persistedReason,
         relaunchOnInvalidOutput = relaunchOnInvalidOutput,
       ),
     )
@@ -197,18 +163,11 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
     session: FeatureTaskRuntimeRunLoopSession,
     args: ShouldRetryPersistedBlockArgs,
   ): Boolean {
-    val phaseId = args.phaseId
-    val durable = args.durable
-    val retryReviewPreparation = args.retryReviewPreparation
-    val reenterableRecordRejection = args.reenterableRecordRejection
-    val persistedReason = args.persistedReason
-    val disposition = durable?.failureDisposition
+    val disposition = args.durable?.failureDisposition
     return when {
-      FeatureTaskRuntimeRunLoopPhaseBlocking.operatorReopenedPhase(session, phaseId) -> true
-      retryReviewPreparation -> true
-      reenterableRecordRejection -> true
-      isRemovedGoalReviewSchemaGateBlock(phaseId, persistedReason) -> true
-      isRemovedImplementationContinuationBudgetBlock(phaseId, persistedReason) -> true
+      FeatureTaskRuntimeRunLoopPhaseBlocking.operatorReopenedPhase(session, args.phaseId) -> true
+      args.resume != PhaseBlockResume.DEFAULT -> true
+      args.reenterableRecordRejection -> true
       disposition != null -> disposition.retryOnResume
       else -> args.relaunchOnInvalidOutput
     }

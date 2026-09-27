@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
+import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
@@ -24,11 +25,7 @@ val CONTINUATION_KIND_ACTIONS =
     FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE,
     FeatureTaskRuntimePhaseLedgerAction.FIX_LOOP_ITERATION,
   )
-val OPERATOR_DECISION_QUALITY_GATE_PHASE_IDS: Set<String> =
-  setOf(
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
-  )
+val OPERATOR_DECISION_QUALITY_GATE_PHASE_IDS: Set<String> = PhaseSlot.QUALITY_GATE.steps.toSet()
 
 fun phaseStatuses(
   records: Map<String, FeatureTaskRuntimePhaseRecord>,

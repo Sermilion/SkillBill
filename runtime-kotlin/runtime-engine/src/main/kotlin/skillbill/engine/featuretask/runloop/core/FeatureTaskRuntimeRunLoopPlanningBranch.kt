@@ -3,15 +3,13 @@ package skillbill.engine.featuretask.runloop.core
 import skillbill.application.decomposition.specSource
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
-import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPreLaunch
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopSkeletonPhaseRunState
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.engine.featuretask.slot.PhaseRunState
+import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseDeclaration
@@ -113,12 +111,12 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       state = args.state,
       observability = args.observability,
     )?.let { return it }
-    return runPreparedPhase(context, run, args.state, args.observability)
+    return runPreparedPhase(context, run)
   }
 
   internal fun phaseDeclarationForRun(
     context: FeatureTaskRuntimeRunLoopContext,
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     phaseId: String,
   ): FeatureTaskRuntimePhaseDeclaration =
     phaseDeclaration(
@@ -129,7 +127,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
 
   internal fun buildPhaseRun(
     phaseId: String,
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     declaration: FeatureTaskRuntimePhaseDeclaration,
     specSource: SpecSource,
     reentry: PendingReentry?,
@@ -162,28 +160,18 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
   internal fun runPreparedPhase(
     context: FeatureTaskRuntimeRunLoopContext,
     run: PhaseRun,
-    state: FeatureTaskRuntimeRunState,
-    observability: FeatureTaskRuntimeRunObservability,
-  ): PhaseOutcome {
-    val gateContext =
-      context.copy(
-        state = state,
-        observability = observability,
-      )
-    return gateContext.strategyFor(run.phaseId)
-      .runStep(run, gateContext, FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(gateContext, run))
-  }
+  ): PhaseOutcome = context.strategyFor(run.phaseId).runStep(run, context.runState.step(run))
 
   internal fun <T : Any> decideByStep(
     context: FeatureTaskRuntimeRunLoopContext,
     stepId: String,
-    decide: (PhaseLoopRules, PhaseRunState) -> T?,
+    decide: (PhaseLoopRules, PhaseStepState) -> T?,
   ): T? = context.strategyFor(stepId).loopRules?.let { rules -> decide(rules, loopRuleState(context, stepId)) }
 
   internal fun <T : Any> decideByLoop(
     context: FeatureTaskRuntimeRunLoopContext,
     loopId: String,
-    decide: (PhaseLoopRules, PhaseRunState) -> T?,
+    decide: (PhaseLoopRules, PhaseStepState) -> T?,
   ): T? =
     context.transitions.backwardEdges
       .firstOrNull { it.loopId == loopId }
@@ -191,7 +179,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
 
   internal fun forEachSlotRules(
     context: FeatureTaskRuntimeRunLoopContext,
-    act: (PhaseLoopRules, PhaseRunState) -> Unit,
+    act: (PhaseLoopRules, PhaseStepState) -> Unit,
   ) {
     context.transitions.forwardPhaseIds.map(context::strategyFor).distinct().forEach { strategy ->
       strategy.loopRules?.let { rules -> act(rules, loopRuleState(context, strategy.entryStep)) }
@@ -201,9 +189,8 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
   private fun loopRuleState(
     context: FeatureTaskRuntimeRunLoopContext,
     stepId: String,
-  ): PhaseRunState =
-    FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(
-      context,
+  ): PhaseStepState =
+    context.runState.step(
       buildPhaseRun(
         phaseId = stepId,
         request = context.request,

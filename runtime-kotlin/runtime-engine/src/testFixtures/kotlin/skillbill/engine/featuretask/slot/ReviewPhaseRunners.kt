@@ -7,7 +7,7 @@ import java.security.MessageDigest
 object ApprovingReviewPhaseRunner : PhaseRunner {
   override fun run(
     input: PhaseStepInput,
-    state: PhaseRunState,
+    state: PhaseLaunchState,
   ): PhaseStepOutput = reviewStepOutput("verdict: approved")
 }
 
@@ -15,7 +15,7 @@ fun scriptedReviewPhaseRunner(stdout: () -> String): PhaseRunner =
   object : PhaseRunner {
     override fun run(
       input: PhaseStepInput,
-      state: PhaseRunState,
+      state: PhaseLaunchState,
     ): PhaseStepOutput = reviewStepOutput(stdout())
   }
 
@@ -51,7 +51,7 @@ fun reviewRoutingPhaseRunner(
   object : PhaseRunner {
     override fun run(
       input: PhaseStepInput,
-      state: PhaseRunState,
+      state: PhaseLaunchState,
     ): PhaseStepOutput =
       if (input.stepName == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) {
         review.run(input, state)

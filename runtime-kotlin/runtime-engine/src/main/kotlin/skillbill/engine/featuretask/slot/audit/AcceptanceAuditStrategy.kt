@@ -4,16 +4,16 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExe
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
+import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -57,9 +57,8 @@ class AcceptanceAuditStrategy(override val runner: PhaseRunner) : PhaseStrategyS
 
   override fun runStep(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
-  ): PhaseOutcome = runAgentStep(run, context, state)
+    state: PhaseStepState,
+  ): PhaseOutcome = runAgentStep(run, state)
 
   override fun stepHooks(stepId: String): PhaseStepHooks {
     policies.policyOf(stepId)
@@ -72,6 +71,11 @@ class AcceptanceAuditStrategy(override val runner: PhaseRunner) : PhaseStrategyS
   ): FeatureTaskRuntimeStepVerdictRule {
     policies.policyOf(stepId)
     return AcceptanceAuditVerdictRule(diagnostics)
+  }
+
+  override fun resumeRules(stepId: String): PhaseResumeRules {
+    policies.policyOf(stepId)
+    return AcceptanceAuditResumeRules
   }
 
   override val loopRules: PhaseLoopRules = AcceptanceAuditLoopRules

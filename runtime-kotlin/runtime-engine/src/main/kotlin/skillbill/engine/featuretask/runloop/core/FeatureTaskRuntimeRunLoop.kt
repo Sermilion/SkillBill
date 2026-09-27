@@ -1,54 +1,22 @@
 package skillbill.engine.featuretask.runloop.core
 
-import skillbill.application.idestatus.AgentActivityStampWriter
-import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
-import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
-import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunEvidenceOwnership
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
-import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
-import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
-import skillbill.workflow.decomposition.model.SpecSource
-import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import java.nio.file.Path
-import java.time.Clock
 
 internal data class FeatureTaskRuntimeRunLoopContext(
-  val request: FeatureTaskRuntimeRunRequest,
-  val state: FeatureTaskRuntimeRunState,
-  val observability: FeatureTaskRuntimeRunObservability,
-  val specSource: SpecSource,
-  val transitions: FeatureTaskRuntimeTransitionDeclaration,
-  val recorder: FeatureTaskRuntimePhaseRecorder,
-  val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
-  val phaseGates: FeatureTaskRuntimePhaseGates,
+  override val request: FeatureTaskRuntimeRunFacts,
+  override val runState: PhaseRunState,
   val strategies: PhaseStrategyLookup,
-  val phaseSettlementService: FeatureTaskPhaseSettlementService,
-  val activityStampWriter: AgentActivityStampWriter,
-  val worktreeEditJournalWriter: WorktreeEditJournalWriter,
-  val clock: Clock,
-  val diagnostics: RuntimeDiagnostics,
-  val session: FeatureTaskRuntimeRunLoopSession,
-) {
-  fun strategyFor(stepId: String): PhaseStrategy = strategies.strategyFor(stepId, strategySelectionFacts(request))
-
-  fun stepPolicy(stepId: String): PhaseStepPolicy = strategyFor(stepId).policyFor(stepId)
-
-  fun unselectedStepIds(): Set<String> = strategies.unselectedStepIds(strategySelectionFacts(request))
-}
+) : PhaseAttemptEnvironment
 
 internal data class LaunchRejectionAttribution(
   val projectionContractId: String,

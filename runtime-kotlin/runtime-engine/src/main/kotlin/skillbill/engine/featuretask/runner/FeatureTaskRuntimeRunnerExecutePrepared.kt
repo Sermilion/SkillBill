@@ -17,6 +17,7 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContex
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopDrive
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
+import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunState
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.error.shellcontent.FeatureTaskRuntimeOperatorDecisionRejectedError
@@ -54,35 +55,20 @@ fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
   observability: FeatureTaskRuntimeRunObservability,
   state: FeatureTaskRuntimeRunState,
 ): FeatureTaskRuntimeRunReport {
-  val context =
-    FeatureTaskRuntimeRunLoopContext(
-      runRequest,
-      state,
-      observability,
-      specSource,
-      transitions,
-      recorder,
-      goalContinuationRecorder,
-      outputValidator,
-      phaseGates,
-      strategies,
-      phaseSettlementService,
-      activityStampWriter,
-      worktreeEditJournalWriter,
-      clock,
-      diagnostics,
-      FeatureTaskRuntimeRunLoopSession(
-        operatorBlockRetry =
-          recorder
-            .loadOperatorBlockRetry(runRequest.workflowId)
-            ?.takeIf { retry ->
-              state.recordFor(retry.phaseId)?.status.let { status ->
-                status == null || status.workflowStepStatus() == WorkflowStepStatus.PENDING
-              }
-            },
-        initialPendingReentry = null,
-      ),
+  val session =
+    FeatureTaskRuntimeRunLoopSession(
+      operatorBlockRetry =
+        recorder
+          .loadOperatorBlockRetry(runRequest.workflowId)
+          ?.takeIf { retry ->
+            state.recordFor(retry.phaseId)?.status.let { status ->
+              status == null || status.workflowStepStatus() == WorkflowStepStatus.PENDING
+            }
+          },
+      initialPendingReentry = null,
     )
+  val runState = DurablePhaseRunState(runRequest, state, session, observability, specSource, transitions, this)
+  val context = FeatureTaskRuntimeRunLoopContext(runRequest, runState, strategies)
   FeatureTaskRuntimeRunLoopDrive.reopenStaleSettledSteps(context)
   if (isGoalContinuationRun(runRequest)) {
     when (
@@ -97,7 +83,7 @@ fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
         return remediationBaseCoherenceBlockedReport(
           runRequest,
           remediation.operatorGuidance,
-          PhaseSlot.PREPLAN.steps.first(),
+          transitions.forwardPhaseIds.first(),
         )
       is RemediationBaseCoherent -> Unit
     }
@@ -127,6 +113,7 @@ internal fun FeatureTaskRuntimeRunner.createExecutePreparedRunState(
       stepId.takeIf { id -> PhaseSlot.entries.any { slot -> id in slot.steps } }
         ?.let { id -> strategies.strategyOrNull(id, facts)?.verdictRule(id, diagnostics) }
     },
+    resumeRules = strategies.resumeRules(facts),
   )
 }
 
@@ -135,6 +122,10 @@ fun FeatureTaskRuntimeRunner.finalizeExecutePreparedRunReport(
   report: FeatureTaskRuntimeRunReport,
   specSource: SpecSource,
 ): FeatureTaskRuntimeRunReport {
+  val commitStepId =
+    strategies.selectedStrategies(strategySelectionFacts(runRequest))
+      .first { strategy -> strategy.slot == PhaseSlot.COMMIT_PUSH }
+      .entryStep
   val terminalReport =
     persistGoalContinuationOutcome(
       goalContinuationRecorder,
@@ -142,7 +133,7 @@ fun FeatureTaskRuntimeRunner.finalizeExecutePreparedRunReport(
       phaseGates.gitOperations,
       runRequest,
       report,
-      PhaseSlot.COMMIT_PUSH.steps.first(),
+      commitStepId,
     )
   phaseGates.specGate.finalizeSingleSpecOnTerminal(
     runRequest,

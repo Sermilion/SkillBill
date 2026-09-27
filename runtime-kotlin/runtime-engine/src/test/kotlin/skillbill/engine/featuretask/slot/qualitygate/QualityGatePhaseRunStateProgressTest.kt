@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.slot.qualitygate
 
-import skillbill.engine.featuretask.slot.PhaseRunState
+import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.ScriptedGateRunner
 import skillbill.engine.featuretask.validation.blockedRepair
@@ -30,7 +30,7 @@ import kotlin.test.fail
 class QualityGatePhaseRunStateProgressTest {
   @Test
   fun `a resumed build cycle reads the open findings a failed cycle wrote only through the run state`() {
-    val state = GateOnlyPhaseRunState()
+    val state = GateOnlyRunRecords()
     val finding = ValidationGateFinding("m", "compile", "broken", "Foo.kt")
 
     val first =
@@ -64,7 +64,7 @@ class QualityGatePhaseRunStateProgressTest {
     )
     assertEquals(listOf("compile"), repairedRules)
     assertEquals(1, resumedRunner.calls)
-    assertEquals(setOf("loadGateProgress", "persistGateProgress"), state.calls.toSet())
+    assertEquals(setOf("loadBuildGateProgress", "persistBuildGateProgress"), state.calls.toSet())
   }
 
   private fun coordinator(runner: ScriptedGateRunner): FeatureTaskRuntimeBuildGateCoordinator =
@@ -81,40 +81,41 @@ class QualityGatePhaseRunStateProgressTest {
     )
 
   private fun cycle(
-    state: PhaseRunState,
+    records: PhaseRunRecords,
     repair: ValidationGateAgentRepairLauncher,
   ): ValidationGateCycleRequest =
     ValidationGateCycleRequest(
+      phaseId = "build",
       repoRoot = validationGateTestRepoRoot,
       request = minimalRequest(),
       validationDepth = ValidationDepth.DEFAULT,
       changedPaths = listOf("runtime-kotlin/foo.kt"),
       repositoryCheckpoint = "checkpoint",
       agentRepairLauncher = repair,
-      progressStore = state.gateProgressStore(),
+      progressStore = records.buildGateProgressStore(),
     )
 }
 
-private class GateOnlyPhaseRunState {
+private class GateOnlyRunRecords {
   var progress: FeatureTaskRuntimeValidationGateProgress? = null
   val calls = mutableListOf<String>()
 
-  val proxy: PhaseRunState =
+  val proxy: PhaseRunRecords =
     Proxy.newProxyInstance(
-      PhaseRunState::class.java.classLoader,
-      arrayOf(PhaseRunState::class.java),
+      PhaseRunRecords::class.java.classLoader,
+      arrayOf(PhaseRunRecords::class.java),
     ) { _, method, args ->
       if (method.declaringClass != Any::class.java) calls += method.name
       when (method.name) {
-        "loadGateProgress" -> progress
-        "persistGateProgress" -> {
-          progress = args?.single() as FeatureTaskRuntimeValidationGateProgress
+        "loadBuildGateProgress" -> progress
+        "persistBuildGateProgress" -> {
+          progress = args?.last() as FeatureTaskRuntimeValidationGateProgress
           Unit
         }
-        "toString" -> "GateOnlyPhaseRunState"
+        "toString" -> "GateOnlyRunRecords"
         "hashCode" -> System.identityHashCode(this)
         "equals" -> false
-        else -> fail("gate code reached PhaseRunState.${method.name}")
+        else -> fail("gate code reached PhaseRunRecords.${method.name}")
       }
-    } as PhaseRunState
+    } as PhaseRunRecords
 }

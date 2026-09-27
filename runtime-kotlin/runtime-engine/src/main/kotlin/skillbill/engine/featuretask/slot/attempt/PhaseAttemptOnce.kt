@@ -5,7 +5,6 @@ import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrecti
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
 import skillbill.engine.featuretask.runloop.core.CapturedPhaseOutput
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
 import skillbill.engine.featuretask.runloop.core.LaunchMeasurementContextReady
 import skillbill.engine.featuretask.runloop.core.LaunchPreparationRejected
@@ -25,7 +24,7 @@ import skillbill.engine.featuretask.runloop.state.featureTaskRuntimeChildOutput
 import skillbill.engine.featuretask.runner.LaunchResult
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
-import skillbill.engine.featuretask.slot.PhaseRunState
+import skillbill.engine.featuretask.slot.PhaseLaunchState
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.stepFacts
@@ -33,7 +32,7 @@ import skillbill.ports.agentrun.model.AgentRunTermination
 
 object PhaseAttemptOnce {
   internal fun attemptOnce(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     args: RecordRejectionAttemptArgs,
   ): AttemptResult {
     with(context) {
@@ -63,7 +62,7 @@ object PhaseAttemptOnce {
   }
 
   internal fun launchAndCapture(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     run: PhaseRun,
     state: FeatureTaskRuntimeRunState,
     iteration: Int,
@@ -72,7 +71,7 @@ object PhaseAttemptOnce {
   ): LaunchResult {
     var rejected: LaunchResult? = null
     val preparingState =
-      object : PhaseRunState by call.state {
+      object : PhaseLaunchState by call.state {
         override fun prepareLaunch(input: PhaseStepInput): PhaseStepInput? =
           when (
             val preparation =
@@ -113,7 +112,7 @@ object PhaseAttemptOnce {
   }
 
   private fun reconcileLaunch(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     run: PhaseRun,
     output: PhaseStepOutput,
   ): LaunchResult {
@@ -158,7 +157,7 @@ object PhaseAttemptOnce {
   }
 
   internal fun settleRecordRejectionLaunchOutcome(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     args: RecordRejectionAttemptArgs,
     launch: LaunchResult,
   ): AttemptResult {
@@ -191,7 +190,7 @@ object PhaseAttemptOnce {
   }
 
   private fun settleProviderLimit(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     args: RecordRejectionAttemptArgs,
     launch: LaunchResult,
     reason: String,
@@ -211,7 +210,7 @@ object PhaseAttemptOnce {
     )
 
   private fun settleInfrastructureFailure(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     args: RecordRejectionAttemptArgs,
     launch: LaunchResult,
     reason: String,
@@ -248,7 +247,7 @@ object PhaseAttemptOnce {
   }
 
   private fun settleRecordRejection(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     args: RecordRejectionAttemptArgs,
     rejection: RecordRejection,
   ): AttemptResult =

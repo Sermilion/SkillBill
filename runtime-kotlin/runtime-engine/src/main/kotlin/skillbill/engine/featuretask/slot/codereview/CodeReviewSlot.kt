@@ -7,18 +7,21 @@ import skillbill.engine.featuretask.phase.core.attemptPhaseExecution
 import skillbill.engine.featuretask.phase.core.defaultPhaseExecution
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
+import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
+import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepInput
+import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.promptSource
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
+import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.stepFacts
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
@@ -51,7 +54,7 @@ internal interface CodeReviewPass {
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
     runner: PhaseRunner,
-    state: PhaseRunState,
+    state: PhaseStepState,
   ): ParallelCodeReviewResult
 }
 
@@ -113,20 +116,19 @@ internal class CodeReviewSlot(
   fun runStep(
     strategy: PhaseStrategy,
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    state: PhaseStepState,
   ): PhaseOutcome =
     when (run.phaseId) {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW ->
         review.run(
           run,
-          context,
+          PhaseAttemptScope(run.request, state),
           state,
           strategy.promptSource(run.phaseId),
         )
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS,
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
-      -> strategy.runAgentStep(run, context, state)
+      -> strategy.runAgentStep(run, state)
       else -> throw UnknownPhaseStepError(run.phaseId)
     }
 
@@ -136,6 +138,21 @@ internal class CodeReviewSlot(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> verifyFindings
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> implementFix
       else -> PhaseStepHooks.None
+    }
+
+  fun verdictRule(stepId: String): FeatureTaskRuntimeStepVerdictRule? =
+    when (stepId) {
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> FeatureTaskRuntimeOutputVerification.reviewVerdictRule
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS ->
+        FeatureTaskRuntimeOutputVerification.findingVerificationVerdictRule
+      else -> null
+    }
+
+  fun resumeRules(stepId: String): PhaseResumeRules =
+    if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) {
+      CodeReviewResumeRules
+    } else {
+      PhaseResumeRules.None
     }
 
   fun currentExecution(

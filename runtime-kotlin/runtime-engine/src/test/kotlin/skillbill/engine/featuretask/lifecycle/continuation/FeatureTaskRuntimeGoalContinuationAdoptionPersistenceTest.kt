@@ -11,9 +11,10 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePreparation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
 import skillbill.engine.featuretask.runloop.observability.continuation
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunInvariantsStore
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunPreparation
+import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -338,7 +339,13 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
       )
     return AdoptionHarness(
       repository = repository,
-      preparation = FeatureTaskRuntimeRunPreparation(recorder, continuationRecorder, runInvariantsStore),
+      preparation =
+        FeatureTaskRuntimeRunPreparation(
+          recorder,
+          continuationRecorder,
+          runInvariantsStore,
+          statusProjectionPhaseStrategies(),
+        ),
     )
   }
 

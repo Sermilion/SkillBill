@@ -1,18 +1,24 @@
 package skillbill.engine.featuretask.slot.implementation
 
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseRunner
+import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
+import skillbill.engine.featuretask.slot.state.PhaseBlockResume
+import skillbill.engine.featuretask.slot.state.PhaseResumeRules
+import skillbill.engine.featuretask.slot.state.isRetiredAuditGapLoop
+import skillbill.engine.featuretask.slot.state.recordEnvelope
 import skillbill.error.featuretask.UnknownPhaseStepError
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 class ImplementThenSimplifyStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
@@ -26,6 +32,7 @@ class ImplementThenSimplifyStrategy(override val runner: PhaseRunner) : PhaseStr
           readOnlyIdle = false,
           fileMutating = true,
           generationScoped = false,
+          extendsOwnedInventory = true,
         ),
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to
         PhaseStepPolicy(
@@ -35,6 +42,7 @@ class ImplementThenSimplifyStrategy(override val runner: PhaseRunner) : PhaseStr
           readOnlyIdle = false,
           fileMutating = true,
           generationScoped = false,
+          extendsOwnedInventory = true,
         ),
     )
 
@@ -68,9 +76,42 @@ class ImplementThenSimplifyStrategy(override val runner: PhaseRunner) : PhaseStr
 
   override fun runStep(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
-  ): PhaseOutcome = runAgentStep(run, context, state)
+    state: PhaseStepState,
+  ): PhaseOutcome = runAgentStep(run, state)
+
+  override fun resumeRules(stepId: String): PhaseResumeRules {
+    policies.policyOf(stepId)
+    return if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT) {
+      ImplementResumeRules
+    } else {
+      PhaseResumeRules.None
+    }
+  }
+
+  private object ImplementResumeRules : PhaseResumeRules {
+    override fun resumedRecord(
+      record: FeatureTaskRuntimePhaseRecord,
+      stripped: FeatureTaskRuntimePhaseRecord,
+    ): FeatureTaskRuntimePhaseRecord =
+      if (
+        isRetiredAuditGapLoop(record.loopId) &&
+        recordEnvelope(record)?.get(SharedPayloadKeys.STATUS) == WorkflowStepStatus.COMPLETED.wireValue
+      ) {
+        stripped.copy(status = WorkflowStepStatus.COMPLETED, blockedReason = null, failureDisposition = null)
+      } else {
+        stripped
+      }
+
+    override fun persistedBlockResume(
+      reason: String,
+      recentBlockedReasons: List<String?>,
+    ): PhaseBlockResume =
+      if ("exhausted the bounded implementation-continuation budget" in reason) {
+        PhaseBlockResume.RELAUNCH_WITH_FRESH_BUDGET
+      } else {
+        PhaseBlockResume.DEFAULT
+      }
+  }
 
   companion object {
     const val ID = "implement-then-simplify"

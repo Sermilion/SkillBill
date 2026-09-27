@@ -3,14 +3,14 @@ package skillbill.engine.featuretask.slot.writehistory
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.withMeasuredFacts
@@ -32,6 +32,7 @@ class BoundaryHistoryStrategy(override val runner: PhaseRunner) : PhaseStrategy(
           readOnlyIdle = false,
           fileMutating = true,
           generationScoped = false,
+          extendsOwnedInventory = true,
         ),
     )
 
@@ -63,15 +64,14 @@ class BoundaryHistoryStrategy(override val runner: PhaseRunner) : PhaseStrategy(
 
   override fun runStep(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
-  ): PhaseOutcome = runAgentStep(run, context, state)
+    state: PhaseStepState,
+  ): PhaseOutcome = runAgentStep(run, state)
 
   override fun stepHooks(stepId: String): PhaseStepHooks = MeasuredHistoryHooks
 
   private object MeasuredHistoryHooks : PhaseStepHooks {
     override fun acceptedOutput(
-      context: FeatureTaskRuntimeRunLoopContext,
+      context: PhaseAttemptEnvironment,
       capture: ValidatedOutputCapture,
       attested: NormalizedFeatureTaskRuntimePhaseOutput,
       outputMap: FeatureTaskRuntimeWorkflowArtifactMap,

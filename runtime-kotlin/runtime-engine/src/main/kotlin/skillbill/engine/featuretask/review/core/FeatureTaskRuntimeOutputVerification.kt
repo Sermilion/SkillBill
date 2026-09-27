@@ -14,11 +14,15 @@ import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewFindi
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewVerdict
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationVerdict
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 object FeatureTaskRuntimeOutputVerification {
+  internal val reviewVerdictRule: FeatureTaskRuntimeStepVerdictRule =
+    FeatureTaskRuntimeStepVerdictRule { wireVerdict, outputObject -> reviewVerdict(outputObject, wireVerdict) }
+
+  internal val findingVerificationVerdictRule: FeatureTaskRuntimeStepVerdictRule =
+    FeatureTaskRuntimeStepVerdictRule { wireVerdict, _ -> findingVerificationVerdict(wireVerdict) }
+
   internal fun verdictFor(
-    phaseId: String,
     outputObject: FeatureTaskRuntimeWorkflowArtifactMap?,
     stepRule: FeatureTaskRuntimeStepVerdictRule? = null,
   ): FeatureTaskRuntimeVerdict {
@@ -26,12 +30,7 @@ object FeatureTaskRuntimeOutputVerification {
       (outputObject?.get(SharedPayloadKeys.VERDICT) as? String)
         ?.takeIf(String::isNotBlank)
         ?.let { value -> FeatureTaskRuntimeVerdict.rejectRemovedVerdict(value, "phase output verdict") }
-    return when (phaseId) {
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> reviewVerdict(outputObject, wireVerdict)
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS ->
-        findingVerificationVerdict(wireVerdict)
-      else -> stepRule?.verdictFor(wireVerdict, outputObject) ?: wireVerdict ?: FeatureTaskRuntimeVerdict.ADVANCE
-    }
+    return stepRule?.verdictFor(wireVerdict, outputObject) ?: wireVerdict ?: FeatureTaskRuntimeVerdict.ADVANCE
   }
 
   internal fun carriesFindingDispositions(outputObject: FeatureTaskRuntimeWorkflowArtifactMap?): Boolean =

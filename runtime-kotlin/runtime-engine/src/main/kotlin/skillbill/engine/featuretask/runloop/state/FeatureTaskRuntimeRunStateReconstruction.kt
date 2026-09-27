@@ -1,9 +1,8 @@
 package skillbill.engine.featuretask.runloop.state
 
-import skillbill.contracts.JsonCodec
-import skillbill.contracts.SharedPayloadKeys
-import skillbill.engine.featuretask.persist.durationMillis
 import skillbill.engine.featuretask.runloop.core.ReconstructFixLoopBudgetBasesArgs
+import skillbill.engine.featuretask.slot.state.PhaseResumeRules
+import skillbill.engine.featuretask.slot.state.isRetiredAuditGapLoop
 import skillbill.engine.goalrunner.status.completed
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -13,7 +12,6 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 data class FeatureTaskRuntimeStatelessAuditInputs(
   val records: Map<String, FeatureTaskRuntimePhaseRecord>,
@@ -21,32 +19,27 @@ data class FeatureTaskRuntimeStatelessAuditInputs(
 )
 
 object FeatureTaskRuntimeRunStateReconstruction {
-  fun isRetiredAuditGapLoop(loopId: String?): Boolean =
-    loopId == FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_GAP_LOOP_ID
-
-  fun normalizeForStatelessAudit(
+  internal fun normalizeForStatelessAudit(
     rawRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
     rawLedger: List<FeatureTaskRuntimePhaseLedgerEntry>,
+    rules: (String) -> PhaseResumeRules,
   ): FeatureTaskRuntimeStatelessAuditInputs =
     FeatureTaskRuntimeStatelessAuditInputs(
-      records = normalizeInitialRecordsForStatelessAudit(rawRecords),
-      ledger = normalizeLedgerForStatelessAudit(rawLedger, rawRecords),
+      records = normalizeInitialRecordsForStatelessAudit(rawRecords, rules),
+      ledger = normalizeLedgerForStatelessAudit(rawLedger, rawRecords, rules),
     )
 
-  fun normalizeLedgerForStatelessAudit(
+  internal fun normalizeLedgerForStatelessAudit(
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
     rawRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
+    rules: (String) -> PhaseResumeRules,
   ): List<FeatureTaskRuntimePhaseLedgerEntry> {
-    val normalizedRecords = normalizeInitialRecordsForStatelessAudit(rawRecords)
+    val normalizedRecords = normalizeInitialRecordsForStatelessAudit(rawRecords, rules)
     return ledger.filterNot { entry ->
       isRetiredAuditGapLoop(entry.loopId) ||
         (
-          entry.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT &&
-            entry.action == FeatureTaskRuntimePhaseLedgerAction.BLOCKED &&
-            (
-              rawRecords[entry.phaseId]?.let(::hasLegacyAuditGapLineage) == true ||
-                normalizedRecords[entry.phaseId]?.status?.workflowStepStatus() == WorkflowStepStatus.PENDING
-            )
+          entry.action == FeatureTaskRuntimePhaseLedgerAction.BLOCKED &&
+            rules(entry.phaseId).dropsBlockedLedgerEntry(rawRecords[entry.phaseId], normalizedRecords[entry.phaseId])
         )
     }
   }
@@ -55,9 +48,10 @@ object FeatureTaskRuntimeRunStateReconstruction {
     transitions: FeatureTaskRuntimeTransitionDeclaration,
     initialLedger: List<FeatureTaskRuntimePhaseLedgerEntry>,
     initialRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
+    rules: (String) -> PhaseResumeRules,
   ): Map<String, InFlightReentry> =
     buildMap {
-      val ledger = normalizeLedgerForStatelessAudit(initialLedger, initialRecords)
+      val ledger = normalizeLedgerForStatelessAudit(initialLedger, initialRecords, rules)
       transitions.backwardEdges.forEach { edge ->
         val latestEdge =
           ledger
@@ -101,8 +95,8 @@ object FeatureTaskRuntimeRunStateReconstruction {
   internal fun reconstructFixLoopBudgetBases(args: ReconstructFixLoopBudgetBasesArgs): MutableMap<String, Int> {
     val transitions = args.transitions
     val edgeIterationByLoop = args.edgeIterationByLoop
-    val initialRecords = normalizeInitialRecordsForStatelessAudit(args.initialRecords)
-    val initialLedger = normalizeLedgerForStatelessAudit(args.initialLedger, args.initialRecords)
+    val initialRecords = normalizeInitialRecordsForStatelessAudit(args.initialRecords, args.resumeRules)
+    val initialLedger = normalizeLedgerForStatelessAudit(args.initialLedger, args.initialRecords, args.resumeRules)
     val completed = args.completed
     val gateInvalidatedPhases = args.gateInvalidatedPhases
     val nextIteration = args.nextIteration
@@ -133,136 +127,37 @@ object FeatureTaskRuntimeRunStateReconstruction {
     }
   }
 
-  fun normalizeInitialRecordsForStatelessAudit(
+  internal fun normalizeInitialRecordsForStatelessAudit(
     initialRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
+    rules: (String) -> PhaseResumeRules,
   ): Map<String, FeatureTaskRuntimePhaseRecord> =
     initialRecords.mapValues { (_, record) ->
-      val legacyLineage = hasLegacyAuditGapLineage(record)
-      val withoutAuditGapLoop =
+      val stripped =
         if (isRetiredAuditGapLoop(record.loopId)) {
           record.copy(loopId = null, edgeIteration = null)
         } else {
           record
         }
-      if (record.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT &&
-        isRetiredAuditGapLoop(record.loopId) &&
-        phaseOutputEnvelope(record)?.get(SharedPayloadKeys.STATUS) == WorkflowStepStatus.COMPLETED.wireValue
-      ) {
-        return@mapValues withoutAuditGapLoop.copy(
-          status = WorkflowStepStatus.COMPLETED,
-          blockedReason = null,
-          failureDisposition = null,
-        )
-      }
-      if (!legacyLineage) {
-        return@mapValues withoutAuditGapLoop
-      }
-      when (withoutAuditGapLoop.status.workflowStepStatus()) {
-        WorkflowStepStatus.COMPLETED ->
-          if (hasLegacyRemovedAuditVerdict(withoutAuditGapLoop)) {
-            discardLegacyAuditActiveState(withoutAuditGapLoop)
-          } else {
-            withoutAuditGapLoop
-          }
-        WorkflowStepStatus.BLOCKED,
-        WorkflowStepStatus.PAUSED,
-        WorkflowStepStatus.RUNNING,
-        -> discardLegacyAuditActiveState(withoutAuditGapLoop)
-        else -> withoutAuditGapLoop
-      }
+      rules(record.phaseId).resumedRecord(record, stripped)
     }
 
-  internal fun hasLegacyAuditGapLineage(record: FeatureTaskRuntimePhaseRecord): Boolean {
-    if (record.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT) return false
-    return isRetiredAuditGapLoop(record.loopId) ||
-      hasLegacyRemovedAuditVerdict(record) ||
-      hasLegacyAuditGapInnerGaps(record)
-  }
-
-  internal fun isLegacyAuditGapPersistedBlock(record: FeatureTaskRuntimePhaseRecord): Boolean =
-    record.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT &&
-      record.status.workflowStepStatus() == WorkflowStepStatus.BLOCKED &&
-      hasLegacyAuditGapLineage(record)
-
-  private fun discardLegacyAuditActiveState(record: FeatureTaskRuntimePhaseRecord): FeatureTaskRuntimePhaseRecord =
-    record.copy(
-      status = WorkflowStepStatus.PENDING,
-      outputArtifact = null,
-      finishedAt = null,
-      durationMillis = null,
-      blockedReason = null,
-      failureDisposition = null,
-      loopId = null,
-      edgeIteration = null,
-    )
-
-  fun invalidateDownstreamOfIncompleteAudit(
+  internal fun invalidateLaterStepsOfIncompleteSteps(
     transitions: FeatureTaskRuntimeTransitionDeclaration,
     completedPhases: MutableSet<String>,
     gateInvalidatedPhases: MutableSet<String>,
+    rules: (String) -> PhaseResumeRules,
   ) {
-    val auditPhase = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
-    if (auditPhase in completedPhases) return
-    val auditIndex = transitions.forwardPhaseIds.indexOf(auditPhase)
-    if (auditIndex < 0) return
-    transitions.forwardPhaseIds
-      .drop(auditIndex + 1)
-      .filter(completedPhases::contains)
-      .forEach { phaseId ->
-        completedPhases.remove(phaseId)
-        gateInvalidatedPhases += phaseId
-      }
-  }
-
-  fun invalidateLegacyRemovedAuditCompletion(
-    initialRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
-    completedPhases: MutableSet<String>,
-    gateInvalidatedPhases: MutableSet<String>,
-  ) {
-    val auditPhase = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
-    val record = initialRecords[auditPhase] ?: return
-    if (!isLegacyRemovedAuditCompletion(record)) return
-    completedPhases.remove(auditPhase)
-    gateInvalidatedPhases += auditPhase
-  }
-
-  internal fun hasLegacyRemovedAuditVerdict(record: FeatureTaskRuntimePhaseRecord): Boolean {
-    if (record.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT) return false
-    val envelope = phaseOutputEnvelope(record) ?: return false
-    val verdict = (envelope[SharedPayloadKeys.VERDICT] as? String)?.trim()?.lowercase()
-    return verdict == FeatureTaskRuntimeVerdict.GAPS_FOUND.wireValue
-  }
-
-  private fun hasLegacyAuditGapInnerGaps(record: FeatureTaskRuntimePhaseRecord): Boolean {
-    if (record.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT) return false
-    val envelope = phaseOutputEnvelope(record) ?: return false
-    val produced = JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]) ?: return false
-    val directGaps = produced["gaps"] as? List<*>
-    return !directGaps.isNullOrEmpty() || hasLegacyInnerGaps(produced[SharedPayloadKeys.VALUE]?.toString())
-  }
-
-  private fun hasLegacyInnerGaps(value: String?): Boolean {
-    if (value.isNullOrBlank()) return false
-    val inner =
-      runCatching {
-        JsonCodec.parseObjectOrNull(value)
-          ?.let(JsonCodec::jsonElementToValue)
-          ?.let(JsonCodec::anyToStringAnyMap)
-      }.getOrNull() ?: return false
-    return (inner["gaps"] as? List<*>)?.isNotEmpty() == true
-  }
-
-  private fun phaseOutputEnvelope(record: FeatureTaskRuntimePhaseRecord): Map<String, Any?>? =
-    record.outputArtifact?.let { artifact ->
-      runCatching {
-        JsonCodec.parseObjectOrNull(artifact)
-          ?.let(JsonCodec::jsonElementToValue)
-          ?.let(JsonCodec::anyToStringAnyMap)
-      }.getOrNull()
+    transitions.forwardPhaseIds.forEachIndexed { index, stepId ->
+      if (!rules(stepId).invalidatesLaterStepsWhileIncomplete || stepId in completedPhases) return@forEachIndexed
+      transitions.forwardPhaseIds
+        .drop(index + 1)
+        .filter(completedPhases::contains)
+        .forEach { phaseId ->
+          completedPhases.remove(phaseId)
+          gateInvalidatedPhases += phaseId
+        }
     }
-
-  internal fun isLegacyRemovedAuditCompletion(record: FeatureTaskRuntimePhaseRecord): Boolean =
-    hasLegacyRemovedAuditVerdict(record) && record.status.workflowStepStatus() == WorkflowStepStatus.COMPLETED
+  }
 
   fun invalidateUnsatisfiedGateSuccessors(
     transitions: FeatureTaskRuntimeTransitionDeclaration,

@@ -7,19 +7,21 @@ import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
+import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutput
+import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
 import skillbill.engine.featuretask.slot.ReviewTarget
+import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.agentrun.model.AgentRunTermination
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.review.model.ParallelReviewLaneResult
@@ -56,11 +58,17 @@ class InlineReviewStrategy(
 
   override fun runStep(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
-  ): PhaseOutcome = codeReview.runStep(this, run, context, state)
+    state: PhaseStepState,
+  ): PhaseOutcome = codeReview.runStep(this, run, state)
 
   override fun stepHooks(stepId: String): PhaseStepHooks = codeReview.stepHooks(stepId)
+
+  override fun verdictRule(
+    stepId: String,
+    diagnostics: RuntimeDiagnostics,
+  ): FeatureTaskRuntimeStepVerdictRule? = codeReview.verdictRule(stepId)
+
+  override fun resumeRules(stepId: String): PhaseResumeRules = codeReview.resumeRules(stepId)
 
   override val loopRules: PhaseLoopRules = codeReview.loopRules
 
@@ -95,7 +103,7 @@ internal object InlineReviewPass : CodeReviewPass {
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
     runner: PhaseRunner,
-    state: PhaseRunState,
+    state: PhaseStepState,
   ): ParallelCodeReviewResult {
     val directive =
       InlineReviewDirective.compose(

@@ -5,10 +5,10 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeMeasuredFactKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runner.missingUpstream
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.WorkflowStepStatus
@@ -23,7 +23,7 @@ private const val HEAD_SETTLED_HISTORY_SUMMARY = "Boundary history settled from 
 internal object RuntimeCommitUpstreamHeadFallback : PhaseStepHooks {
   override fun reconcileBeforeLaunch(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
   ) {
     reconcile(run, context)
     clearUpstreamPersistedBlockIfRecovered(run, context)
@@ -31,7 +31,7 @@ internal object RuntimeCommitUpstreamHeadFallback : PhaseStepHooks {
 
   private fun reconcile(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
   ) {
     val headSha =
       context.phaseGates.gitOperations.headCommitSha(context.request.repoRoot)
@@ -49,7 +49,7 @@ internal object RuntimeCommitUpstreamHeadFallback : PhaseStepHooks {
 
   private fun clearUpstreamPersistedBlockIfRecovered(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
   ) {
     val reason = context.state.persistedBlockedReason(run.phaseId) ?: return
     if (!reason.contains("requires upstream output", ignoreCase = true)) return
@@ -60,7 +60,7 @@ internal object RuntimeCommitUpstreamHeadFallback : PhaseStepHooks {
   private fun reconcilePhase(
     phaseId: String,
     headSha: String,
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
   ) {
     val state = context.state
     val record = state.recordFor(phaseId)
@@ -111,6 +111,7 @@ internal object RuntimeCommitUpstreamHeadFallback : PhaseStepHooks {
     when (phaseId) {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD ->
         FeatureTaskRuntimeBuildGateCoordinator.runtimeOwnedBuildOutput(
+          phaseId = phaseId,
           repositoryCheckpoint = headSha,
           measurements =
             listOf(

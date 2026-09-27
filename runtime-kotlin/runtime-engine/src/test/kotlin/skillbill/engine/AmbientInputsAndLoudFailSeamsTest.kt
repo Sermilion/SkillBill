@@ -3,6 +3,7 @@ package skillbill.engine
 import skillbill.engine.featuretask.lifecycle.core.AlwaysValidValidator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditVerdictRule
+import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
 import skillbill.engine.goalrunner.execution.support.GoalRunnerChildProgressRead
@@ -20,6 +21,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+
+private val RESUME_RULES = statusProjectionPhaseStrategies().resumeRules()
 
 class AmbientInputsAndLoudFailSeamsTest {
   @Test
@@ -52,6 +55,7 @@ class AmbientInputsAndLoudFailSeamsTest {
           AcceptanceAuditVerdictRule(SilentDiagnostics)
             .takeIf { stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT }
         },
+        resumeRules = RESUME_RULES,
       )
 
     val start = state.explicitResumeStart(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
@@ -88,6 +92,7 @@ class AmbientInputsAndLoudFailSeamsTest {
           ),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
+        resumeRules = RESUME_RULES,
       )
 
     val start = state.explicitResumeStart(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
@@ -118,6 +123,7 @@ class AmbientInputsAndLoudFailSeamsTest {
           ),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
+        resumeRules = RESUME_RULES,
       )
 
     val start = state.explicitResumeStart(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
@@ -135,6 +141,7 @@ class AmbientInputsAndLoudFailSeamsTest {
             listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT),
           ),
         outputValidator = ThrowingValidator(setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT)),
+        resumeRules = RESUME_RULES,
       )
     val output =
       FeatureTaskRuntimePhaseOutput(

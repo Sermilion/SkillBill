@@ -3,13 +3,13 @@ package skillbill.engine.featuretask.slot.commitpush
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
@@ -59,9 +59,8 @@ class RuntimeCommitStrategy(override val runner: PhaseRunner) : PhaseStrategy() 
 
   override fun runStep(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
-  ): PhaseOutcome = with(RuntimeCommitCycle) { context.runDeclaredCommitPushCycle(run) }
+    state: PhaseStepState,
+  ): PhaseOutcome = with(RuntimeCommitCycle) { PhaseAttemptScope(run.request, state).runDeclaredCommitPushCycle(run) }
 
   override fun stepHooks(stepId: String): PhaseStepHooks {
     policies.policyOf(stepId)

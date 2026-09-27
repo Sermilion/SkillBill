@@ -7,13 +7,13 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManife
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStepState
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditVerdictRule.Companion.auditProseValue
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditVerdictRule.Companion.removedVerdictRejection
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -31,7 +31,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 internal object AcceptanceAuditRound : PhaseStepHooks {
   override fun onLaunch(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
   ) {
     if (context.state.resumedFromPriorProcess(run.phaseId)) {
       context.session.transitionAuditRetryFocusHint(null)
@@ -40,13 +40,13 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
 
   override fun completionRejection(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? = removedVerdictRejection(outputMap)
 
   override fun settleCompletedRound(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     capture: ValidatedOutputCapture,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): AttemptResult? =
@@ -103,7 +103,7 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
     }
 
   override fun acceptedOutput(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
@@ -135,7 +135,7 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
   }
 
   private fun commitCompletedAuditRound(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     precedingPhaseId: String,
     blockedReason: (
       String,
@@ -181,7 +181,7 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
     }
 
   private fun blockAuditWhitespaceOnlyFinalResponse(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     run: PhaseRun,
     iteration: Int,
     fileManifest: FeatureTaskRuntimePhaseFileManifest?,

@@ -1,11 +1,10 @@
 package skillbill.engine.featuretask.slot.qualitygate.agentvalidate
 
 import skillbill.application.decomposition.baseBranch
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
 import skillbill.engine.featuretask.slot.qualitygate.RuntimeOwnedGateSettlement
 import skillbill.engine.featuretask.slot.qualitygate.blockGateStep
@@ -21,7 +20,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 private const val DEFAULT_BASE_BRANCH = "main"
 
 internal class AgentValidateGateCycle(
-  private val context: FeatureTaskRuntimeRunLoopContext,
+  private val context: PhaseAttemptEnvironment,
   private val call: PhaseStepCall,
 ) {
   internal fun run(run: PhaseRun): PhaseOutcome {
@@ -36,7 +35,7 @@ internal class AgentValidateGateCycle(
   }
 
   private fun repair(run: PhaseRun): ValidationGateAgentRepairResult {
-    val settled = with(PhaseAttemptLoop) { context.runPhaseAttempts(run, call) }
+    val settled = call.state.attemptLoop.run(run, call)
     val completed = settled.completedOutput
     val paused = settled.pausedReason
     return when {

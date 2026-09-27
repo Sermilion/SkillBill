@@ -3,23 +3,21 @@ package skillbill.engine.featuretask.slot.attempt
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.runloop.core.CapturedPhaseOutput
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptAccumulatorContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptLoopState
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopSkeletonPhaseRunState
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseSettledEnvelopeRead
 import skillbill.engine.featuretask.slot.PhaseStepDescription
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStepState
 
 internal data class PhaseStepCall(
   val description: PhaseStepDescription,
   val runner: PhaseRunner,
-  val state: PhaseRunState,
+  val state: PhaseStepState,
 )
 
 internal data class RecordRejectionAttemptArgs(
@@ -43,7 +41,7 @@ internal class GateOutput(
   val settledEnvelope: PhaseSettledEnvelopeRead,
   val call: PhaseStepCall,
   val outputGateFailuresBefore: Int? = null,
-  val settlementContext: FeatureTaskRuntimeRunLoopContext,
+  val settlementContext: PhaseAttemptEnvironment,
 ) {
   val request get() = settlementContext.request
   val state get() = settlementContext.state
@@ -63,11 +61,10 @@ internal class GateOutput(
       }
 }
 
-internal fun FeatureTaskRuntimeRunLoopContext.stepHooks(run: PhaseRun): PhaseStepHooks =
+internal fun PhaseAttemptEnvironment.stepHooks(run: PhaseRun): PhaseStepHooks =
   strategyFor(run.phaseId).stepHooks(run.phaseId)
 
-internal fun FeatureTaskRuntimeRunLoopContext.stepState(run: PhaseRun): PhaseRunState =
-  FeatureTaskRuntimeRunLoopSkeletonPhaseRunState(this, run)
+internal fun PhaseAttemptEnvironment.stepState(run: PhaseRun): PhaseStepState = runState.step(run)
 
 internal fun recordRejectionAttemptArgs(
   context: PhaseAttemptContext,

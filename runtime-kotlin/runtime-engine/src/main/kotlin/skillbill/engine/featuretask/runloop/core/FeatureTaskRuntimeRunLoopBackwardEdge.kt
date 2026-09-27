@@ -2,7 +2,7 @@ package skillbill.engine.featuretask.runloop.core
 
 import skillbill.application.decomposition.specSource
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.WorkflowStepStatus
@@ -94,7 +94,7 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
   }
 
   internal fun warnOnThresholdCrossing(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     diagnostics: RuntimeDiagnostics,
     edge: FeatureTaskRuntimeBackwardEdge,
     edgeIteration: Int,
@@ -108,7 +108,7 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
   }
 
   internal fun thresholdCrossingWarning(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     loopId: String,
     threshold: Int,
     edgeIteration: Int,
@@ -239,9 +239,7 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
         return null
       }
       val setup =
-        phaseGates.branchSetupRunner.ensureFeatureBranch(
-          request,
-          observability,
+        runState.ensureFeatureBranch(
           guardPhase =
             strategies.selectedStrategies(strategySelectionFacts(request))
               .firstOrNull { strategy -> strategy.slot == PhaseSlot.IMPLEMENTATION }

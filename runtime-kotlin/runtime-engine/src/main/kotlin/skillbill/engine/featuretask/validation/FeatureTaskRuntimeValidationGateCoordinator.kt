@@ -21,7 +21,6 @@ import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidat
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 private const val VALIDATE_PHASE_STATUS_COMPLETED = "completed"
 
@@ -51,6 +50,7 @@ class FeatureTaskRuntimeValidationGateCoordinator {
       "No installed platform pack declares validation_gate."
 
     fun runtimeOwnedValidationOutput(
+      phaseId: String,
       repositoryCheckpoint: String,
       measurements: List<FeatureTaskRuntimeValidationGateRunRecord>,
       requiredCommand: String,
@@ -63,11 +63,11 @@ class FeatureTaskRuntimeValidationGateCoordinator {
         }
       if (evidence.isEmpty()) {
         throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(
-          "validate",
+          phaseId,
           "runtime-owned validation evidence has no command results.",
         )
       }
-      FeatureTaskRuntimeValidationEvidence(evidence).requireSuccessfulCommand(requiredCommand, "validate")
+      FeatureTaskRuntimeValidationEvidence(evidence).requireSuccessfulCommand(requiredCommand, phaseId)
       val gateExecutionEvidence = FeatureTaskRuntimeValidationGateExecutionEvidence.fromGateMeasurements(measurements)
       val validationResult =
         linkedMapOf<String, Any?>().apply {
@@ -81,7 +81,7 @@ class FeatureTaskRuntimeValidationGateCoordinator {
         JsonCodec.mapToJsonString(
           mapOf(
             SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-            SharedPayloadKeys.PHASE_ID to FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
+            SharedPayloadKeys.PHASE_ID to phaseId,
             SharedPayloadKeys.STATUS to VALIDATE_PHASE_STATUS_COMPLETED,
             SharedPayloadKeys.SUMMARY to "Validation satisfied by runtime-owned gate execution.",
             SharedPayloadKeys.VERDICT to FeatureTaskRuntimeVerdict.SATISFIED.wireValue,
@@ -94,7 +94,7 @@ class FeatureTaskRuntimeValidationGateCoordinator {
           ),
         )
       return FeatureTaskRuntimePhaseOutput(
-        phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
+        phaseId = phaseId,
         iteration = 1,
         payload = payload,
       )

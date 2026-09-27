@@ -1,16 +1,17 @@
 package skillbill.engine.featuretask.runloop.core
 
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
 import skillbill.engine.featuretask.runloop.observability.loopEdge
 import skillbill.engine.featuretask.runner.skeletonDefinitionFor
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
-internal fun strategySelectionFacts(request: FeatureTaskRuntimeRunRequest): PhaseStrategySelectionFacts =
+internal fun strategySelectionFacts(request: FeatureTaskRuntimeRunFacts): PhaseStrategySelectionFacts =
   PhaseStrategySelectionFacts(
     skeletonDefinitionFor(request),
     setOfNotNull(request.runInvariants.codeReviewMode, request.goalContinuation?.qualityGateSelection),
@@ -98,7 +99,7 @@ object FeatureTaskRuntimeRunLoopTransitions {
     }
 
   internal fun reentersMutatingPhase(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     edge: FeatureTaskRuntimeBackwardEdge,
     destinationPhaseId: String,
   ): Boolean =
@@ -109,7 +110,7 @@ object FeatureTaskRuntimeRunLoopTransitions {
     ).any { context.stepPolicy(it).mutating }
 
   internal fun establishForwardCheckpoint(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     precedingPhaseId: String,
     destinationPhaseId: String,
   ): Boolean {

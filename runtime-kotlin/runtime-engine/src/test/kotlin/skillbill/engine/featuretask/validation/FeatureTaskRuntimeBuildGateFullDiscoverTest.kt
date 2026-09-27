@@ -37,6 +37,7 @@ class FeatureTaskRuntimeBuildGateFullDiscoverTest {
         NoopRuntimeDiagnostics,
       ).execute(
         ValidationGateCycleRequest(
+          phaseId = "build",
           repoRoot = validationGateTestRepoRoot,
           request = minimalRequest(),
           validationDepth = ValidationDepth.DEFAULT,

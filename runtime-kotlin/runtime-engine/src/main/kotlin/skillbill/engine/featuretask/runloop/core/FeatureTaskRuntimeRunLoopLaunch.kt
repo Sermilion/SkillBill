@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.runloop.core
 
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.install.model.SupportedAgent
@@ -13,7 +13,7 @@ import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeCorrec
 
 object FeatureTaskRuntimeRunLoopLaunch {
   internal fun capturePhaseContentIdentities(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     session: FeatureTaskRuntimeRunLoopSession,
     phaseGates: FeatureTaskRuntimePhaseGates,
     phaseId: String,

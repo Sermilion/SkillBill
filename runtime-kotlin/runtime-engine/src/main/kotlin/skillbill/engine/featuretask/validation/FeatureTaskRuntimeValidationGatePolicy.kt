@@ -1,7 +1,6 @@
 package skillbill.engine.featuretask.validation
 
 import skillbill.config.model.applyValidationGateGradleWrapper
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.validation.model.ValidationGateCyclePhase
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
@@ -9,7 +8,6 @@ import skillbill.scaffold.model.ValidationGateDeclaration
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal fun validationGateArgv(
   declaration: ValidationGateDeclaration,
@@ -51,26 +49,6 @@ internal fun requiredValidationGateCommand(
     requiredValidationGateCyclePhase(progress),
     gradleWrapper,
   )
-
-internal fun durableValidationChangedPaths(
-  recorder: FeatureTaskRuntimePhaseRecorder,
-  workflowId: String,
-): List<String>? {
-  val checkpointPaths =
-    recorder.loadPhaseBriefings(workflowId)
-      ?.get(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE)
-      ?.handoffEnvelope
-      ?.repositoryCheckpoint
-      ?.workingTreeOwnedPaths
-  if (checkpointPaths != null) {
-    return checkpointPaths.filter(String::isNotBlank).distinct().sorted()
-  }
-  return recorder.loadResolvedBranch(workflowId)
-    ?.workflowOwnedPaths
-    ?.filter(String::isNotBlank)
-    ?.distinct()
-    ?.sorted()
-}
 
 internal fun resolveRequiredValidationCommand(
   resolver: ValidationGateResolver,

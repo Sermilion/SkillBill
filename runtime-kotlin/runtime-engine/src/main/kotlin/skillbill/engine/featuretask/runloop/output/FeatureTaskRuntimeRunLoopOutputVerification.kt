@@ -2,9 +2,8 @@ package skillbill.engine.featuretask.runloop.output
 
 import skillbill.application.decomposition.baseBranch
 import skillbill.engine.featuretask.lifecycle.continuation.matches
-import skillbill.engine.featuretask.lifecycle.continuation.reviewState
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeImplementationObligations
@@ -12,13 +11,11 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.phase.core.featureTaskRuntimeImplementationContinuationFrom
 import skillbill.engine.featuretask.phase.planning.producerProjectionGateReason
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeSharedReviewEvidenceResolver
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
 import skillbill.engine.featuretask.runloop.core.CheckpointRevisions
 import skillbill.engine.featuretask.runloop.core.CompletionProjectionRejectionArgs
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PersistAcceptedOutputArgs
 import skillbill.engine.featuretask.runloop.core.PersistStandardAcceptedOutputArgs
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
@@ -39,6 +36,9 @@ import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
 import skillbill.engine.featuretask.runner.mutatingReconciliationGateReason
 import skillbill.engine.featuretask.runner.phaseDeclaration
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.stepHooks
+import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.goalrunner.status.completed
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
@@ -58,7 +58,6 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputF
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairOperation
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputSourceLocation
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 object FeatureTaskRuntimeRunLoopOutputVerification {
   internal fun implementationObligations(run: PhaseRun): FeatureTaskRuntimeImplementationObligations =
@@ -70,7 +69,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     )
 
   internal fun implementationContinuationFor(
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     run: PhaseRun,
   ): FeatureTaskRuntimeImplementationContinuation? {
     if (!run.policy.mutating) return null
@@ -82,7 +81,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
   }
 
   internal fun completionProjectionRejection(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     args: CompletionProjectionRejectionArgs,
   ): Pair<String, String>? =
     with(context) {
@@ -109,7 +108,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     )?.let { "mutating-reconciliation" to it }
 
   internal fun immediateConsumerProjectionGateReason(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     args: CompletionProjectionRejectionArgs,
   ): String? {
     with(context) {
@@ -118,7 +117,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       val normalizedOutput = args.normalizedOutput
       val repairEvidence = args.repairEvidence
       val repositoryFingerprint = args.repositoryFingerprint
-      if (run.phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE) return null
+      if (!stepHooks(run).checksImmediateConsumerProjection) return null
       if (run.validationGateFindings != null) return null
       val producerIndex = transitions.forwardPhaseIds.indexOf(run.phaseId)
       if (producerIndex < 0 || producerIndex == transitions.forwardPhaseIds.lastIndex) return null
@@ -203,9 +202,9 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     }
 
   internal fun terminalOutputAttempt(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     observability: FeatureTaskRuntimeRunObservability,
     args: TerminalOutputAttemptArgs,
     blockedDisposition: FeatureTaskRuntimeFailureDisposition,
@@ -219,27 +218,6 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     val observability = args.observability
     val fileManifest = args.fileManifest
     val disposition = FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(outputMap, blockedDisposition)
-    val operatorTerminalQualityGate =
-      !disposition.retryOnResume &&
-        run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
-    if (operatorTerminalQualityGate) {
-      return AttemptResult.settled(
-        FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-          request,
-          state,
-          recorder,
-          observability,
-          PhaseBlockRequest(
-            run = run,
-            attemptCount = iteration,
-            reason = reason,
-            observability = observability,
-            payload = BlockAndPersistPayload(fileManifest = fileManifest),
-            failureDisposition = disposition,
-          ),
-        ),
-      )
-    }
     return if (
       disposition.retryOnResume &&
       run.policy.relaunchOnInvalidOutput
@@ -312,7 +290,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
   }
 
   internal fun persistAcceptedOutput(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     args: PersistAcceptedOutputArgs,
   ): AttemptResult {
     with(context) {
@@ -502,7 +480,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     )
 
   internal fun persistStandardAcceptedOutput(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     args: PersistStandardAcceptedOutputArgs,
   ): AttemptResult? {
     with(context) {

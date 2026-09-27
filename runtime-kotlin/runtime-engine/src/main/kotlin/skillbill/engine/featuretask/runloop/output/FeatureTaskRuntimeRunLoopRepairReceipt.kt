@@ -1,24 +1,25 @@
 package skillbill.engine.featuretask.runloop.output
 
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
 import skillbill.engine.featuretask.runloop.core.CheckpointCommitMessageArgs
 import skillbill.engine.featuretask.runloop.core.CommitCheckpointArgs
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.RecordCheckpointIdentityArgs
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshot
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshotResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 
 object FeatureTaskRuntimeRunLoopRepairReceipt {
   internal fun blockRemediationBaseSha(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
     session: FeatureTaskRuntimeRunLoopSession,
     precedingPhaseId: String,
+    reenteredStepId: String,
     error: String,
   ): Boolean {
     FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
@@ -27,7 +28,7 @@ object FeatureTaskRuntimeRunLoopRepairReceipt {
       session,
       precedingPhaseId,
       "Feature-task-runtime could not record the pre-fix remediation base sha before re-entering " +
-        "implement_fix" + (if (error.isBlank()) "." else " ($error).") +
+        reenteredStepId + (if (error.isBlank()) "." else " ($error).") +
         " Without it the reserved remediation pass would silently review the full base-to-current " +
         "delta instead of the remediation delta.",
     )
@@ -35,7 +36,7 @@ object FeatureTaskRuntimeRunLoopRepairReceipt {
   }
 
   private fun blockCheckpointAfterIndexMutation(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     args: CommitCheckpointArgs,
     error: String,
     indexSnapshot: WorkflowGitIndexSnapshot,
@@ -57,7 +58,7 @@ object FeatureTaskRuntimeRunLoopRepairReceipt {
     }
 
   internal fun commitCheckpoint(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     args: CommitCheckpointArgs,
   ): Boolean {
     with(context) {
@@ -105,7 +106,7 @@ object FeatureTaskRuntimeRunLoopRepairReceipt {
   }
 
   private fun stageAndWriteCheckpoint(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     args: CommitCheckpointArgs,
   ): CheckpointCommitAttempt {
     with(context) {

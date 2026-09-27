@@ -1,4 +1,4 @@
-package skillbill.engine.featuretask.runloop.state
+package skillbill.engine.featuretask.runloop.durable
 
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.continuation.GoalContinuationStateRecordRequest
@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuatio
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePreparation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
@@ -27,6 +28,7 @@ class FeatureTaskRuntimeRunPreparation(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   private val continuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
   private val runInvariantsStore: FeatureTaskRuntimeRunInvariantsStore,
+  private val strategies: PhaseStrategyLookup,
 ) {
   fun prepare(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimePreparation {
     val persistedInvariants =
@@ -38,10 +40,11 @@ class FeatureTaskRuntimeRunPreparation(
             .filter { it.status == WorkflowStepStatus.COMPLETED }
             .map { it.phaseId }
         val transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions
+        val resumeRules = strategies.resumeRules()
         val phase =
           transitions.forwardPhaseIds.firstOrNull {
             it !in completedPhases && it !in transitions.loopOnlyPhaseIds
-          } ?: FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+          } ?: transitions.forwardPhaseIds.first { resumeRules(it).resumesPastCompletion }
         return FeatureTaskRuntimePreparation.PreparationBlocked(
           goalContinuationPolicyBlockedReport(
             request,

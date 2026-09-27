@@ -16,10 +16,10 @@ import skillbill.engine.featuretask.review.finding.validateBoundarySelectionsDel
 import skillbill.engine.featuretask.review.finding.validateDispositionBoundaryBodies
 import skillbill.engine.featuretask.review.finding.validateDispositionBoundaryContext
 import skillbill.engine.featuretask.review.finding.validateDispositionBoundaryProvenance
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
+import skillbill.engine.featuretask.slot.PhaseStepState
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewStructuredFindingsParse
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
@@ -40,8 +40,8 @@ import java.nio.file.Path
 internal object VerifyFindingsEvidence {
   fun launchSections(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
   ): String {
     val checkpoint = state.findingVerificationCheckpoint()
     val boundarySelection = state.verificationBoundarySelection()?.takeIf { it.isNotEmpty() }
@@ -93,7 +93,7 @@ internal object VerifyFindingsEvidence {
   }
 
   fun retainCheckpoint(
-    state: PhaseRunState,
+    state: PhaseStepState,
     outputText: String,
   ) {
     val outputMap =
@@ -109,8 +109,8 @@ internal object VerifyFindingsEvidence {
 
   fun boundaryBodyDelivery(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck {
     val dispositions = coveredDispositions(state, outputMap) ?: return PhaseStepOutputCheck.Accept
@@ -133,8 +133,8 @@ internal object VerifyFindingsEvidence {
 
   fun completionRejection(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? =
     boundaryDispositionGate(run, context, state, outputMap)
@@ -142,8 +142,8 @@ internal object VerifyFindingsEvidence {
 
   fun recordRejectedFindings(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     verifyOutput: FeatureTaskRuntimeWorkflowArtifactMap,
   ) {
     if (!isGoalContinuationRun(run.request)) return
@@ -173,8 +173,8 @@ internal object VerifyFindingsEvidence {
 
   private fun boundaryDispositionGate(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? {
     val dispositions = coveredDispositions(state, outputMap) ?: return null
@@ -220,7 +220,7 @@ internal object VerifyFindingsEvidence {
   }
 
   private fun coveredDispositions(
-    state: PhaseRunState,
+    state: PhaseStepState,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): List<FeatureTaskRuntimeFindingVerificationDisposition>? {
     val dispositions = FeatureTaskRuntimeOutputVerification.dispositionsFrom(outputMap)
@@ -230,8 +230,8 @@ internal object VerifyFindingsEvidence {
 
   private fun boundarySections(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
   ): List<FeatureTaskRuntimeFindingBoundaryMemorySection> {
     val reviewOutput = state.completedStepEnvelope(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW)
     val recordedVerdicts = reviewOutput?.let(state::recordedFindingVerdicts).orEmpty()
@@ -251,7 +251,7 @@ internal object VerifyFindingsEvidence {
     )
   }
 
-  private fun reviewFindingIds(state: PhaseRunState): Set<String> {
+  private fun reviewFindingIds(state: PhaseStepState): Set<String> {
     val reviewOutput =
       state.completedStepEnvelope(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) ?: return emptySet()
     val recordedVerdicts = state.recordedFindingVerdicts(reviewOutput)

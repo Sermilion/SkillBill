@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.lifecycle.branch
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.baseBranch
 import skillbill.engine.featuretask.lifecycle.subtask.decide
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.goalrunner.execution.support.protectedBranchName
@@ -19,7 +19,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
   private val gitOperations: WorkflowGitOperations,
 ) {
   internal fun ensureFeatureBranch(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     observability: FeatureTaskRuntimeRunObservability,
     guardPhase: String,
   ): FeatureTaskRuntimeBranchSetupOutcome {
@@ -48,7 +48,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
   }
 
   private fun reattachGoalContinuationBranch(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     resolved: BranchResolvedEvent,
     currentBranch: String,
   ): FeatureTaskRuntimeBranchSetupOutcome {
@@ -68,7 +68,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
   }
 
   private fun reattachPersisted(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     resolved: BranchResolvedEvent,
     persistedBranch: String,
     currentBranch: String,
@@ -81,7 +81,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
   }
 
   private fun reattachBlockedReason(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     persistedBranch: String,
     currentBranch: String,
   ): String? {
@@ -96,7 +96,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
   }
 
   private fun persistedBranchUnusableReason(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     persistedBranch: String,
     currentBranch: String,
   ): String? {
@@ -110,7 +110,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
   }
 
   private fun checkoutAndConfirmReason(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     persistedBranch: String,
     currentBranch: String,
   ): String? {
@@ -123,7 +123,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
   }
 
   private fun resolveAndEstablish(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     resolved: BranchResolvedEvent,
     currentBranch: String,
   ): FeatureTaskRuntimeBranchSetupOutcome {
@@ -146,7 +146,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
   }
 
   private fun createAndSwitch(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     resolved: BranchResolvedEvent,
     branch: String,
     baseBranch: String,
@@ -162,7 +162,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
   }
 
   private fun landedBranchBlockedReason(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     expectedBranch: String,
   ): String? {
     val landed = gitOperations.currentBranch(request.repoRoot)
@@ -182,7 +182,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
   }
 
   private fun establishBranch(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     resolved: BranchResolvedEvent,
     branch: String,
     baseBranch: String?,

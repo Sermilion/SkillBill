@@ -6,10 +6,9 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMetadata
-import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinalisation
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinaliseRequest
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushHandoff
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushHandoffInvalid
@@ -18,10 +17,8 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommi
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinalisationBlocked
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinalisationResult
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinalised
-import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
@@ -33,7 +30,6 @@ import skillbill.engine.featuretask.runloop.core.CommitPushSettled
 import skillbill.engine.featuretask.runloop.core.CompletionProjectionRejectionArgs
 import skillbill.engine.featuretask.runloop.core.CorrectiveRepairRejectionArgs
 import skillbill.engine.featuretask.runloop.core.CorrectiveRepairRejectionDetail
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSubtaskCommit
 import skillbill.engine.featuretask.runloop.core.FinalizeValidatedOutputAcceptanceArgs
@@ -72,6 +68,9 @@ import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
 import skillbill.engine.featuretask.runner.terminalBlockedReasonFrom
 import skillbill.engine.featuretask.slot.PhaseSettledEnvelopeRead
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
+import skillbill.engine.featuretask.slot.state.PhaseRunGoal
+import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureKind
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
@@ -92,13 +91,13 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.time.Clock
 
 internal data class SettleValidatedOutputCommitArgs(
-  val request: FeatureTaskRuntimeRunRequest,
+  val request: FeatureTaskRuntimeRunFacts,
   val state: FeatureTaskRuntimeRunState,
-  val recorder: FeatureTaskRuntimePhaseRecorder,
+  val recorder: PhaseRunRecords,
   val diagnostics: RuntimeDiagnostics,
   val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   val phaseGates: FeatureTaskRuntimePhaseGates,
-  val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
+  val goalContinuationRecorder: PhaseRunGoal,
   val session: FeatureTaskRuntimeRunLoopSession,
   val run: PhaseRun,
   val capture: ValidatedOutputCapture,
@@ -107,9 +106,9 @@ internal data class SettleValidatedOutputCommitArgs(
 )
 
 internal data class FinaliseSubtaskCommitArgs(
-  val request: FeatureTaskRuntimeRunRequest,
+  val request: FeatureTaskRuntimeRunFacts,
   val state: FeatureTaskRuntimeRunState,
-  val recorder: FeatureTaskRuntimePhaseRecorder,
+  val recorder: PhaseRunRecords,
   val diagnostics: RuntimeDiagnostics,
   val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   val phaseGates: FeatureTaskRuntimePhaseGates,
@@ -201,7 +200,7 @@ object PhaseOutputGate {
 
   internal fun recordRejectedOutput(
     state: FeatureTaskRuntimeRunState,
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     args: RecordRejectedOutputArgs,
   ): FeatureTaskRuntimeRejectedOutputWrite {
     val run = args.run
@@ -229,7 +228,7 @@ object PhaseOutputGate {
   }
 
   internal fun persistChildProcessFailureOutput(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     run: PhaseRun,
     iteration: Int,
     reason: String,
@@ -415,8 +414,8 @@ object PhaseOutputGate {
 
   private fun clearAndRecordPersistedEvidenceFailure(
     state: FeatureTaskRuntimeRunState,
-    recorder: FeatureTaskRuntimePhaseRecorder,
-    phaseSettlementService: FeatureTaskPhaseSettlementService,
+    recorder: PhaseRunRecords,
+    phaseSettlementService: PhaseRunSettlements,
     args: GateOutput,
     error: InvalidFeatureTaskRuntimeValidationEvidenceSchemaError,
   ) {
@@ -483,8 +482,8 @@ object PhaseOutputGate {
 
   private data class PersistedEnvelopeSchemaRejection(
     val state: FeatureTaskRuntimeRunState,
-    val recorder: FeatureTaskRuntimePhaseRecorder,
-    val phaseSettlementService: FeatureTaskPhaseSettlementService,
+    val recorder: PhaseRunRecords,
+    val phaseSettlementService: PhaseRunSettlements,
     val args: GateOutput,
     val error: InvalidFeatureTaskRuntimePhaseOutputSchemaError,
   )
@@ -496,7 +495,7 @@ object PhaseOutputGate {
 
   internal fun gateOutputSchemaInvalid(
     state: FeatureTaskRuntimeRunState,
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     args: GateOutput,
     error: InvalidFeatureTaskRuntimePhaseOutputSchemaError,
   ): AttemptResult {
@@ -557,7 +556,7 @@ object PhaseOutputGate {
 
   internal fun resolveRepositoryFingerprint(
     context: PhaseAttemptContext,
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     phaseGates: FeatureTaskRuntimePhaseGates,
     fileManifest: FeatureTaskRuntimePhaseFileManifest,
     fingerprintsCompletedRepository: Boolean,
@@ -589,7 +588,7 @@ object PhaseOutputGate {
     return RepositoryFingerprintResolution(result.value, null)
   }
 
-  private fun FeatureTaskRuntimeRunLoopContext.settleStepOutputCheck(
+  private fun PhaseAttemptEnvironment.settleStepOutputCheck(
     check: PhaseStepOutputCheck,
     capture: ValidatedOutputCapture,
     reject: (
@@ -623,9 +622,9 @@ object PhaseOutputGate {
     }
 
   internal fun settleValidatedOutputPauseOrTerminal(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     observability: FeatureTaskRuntimeRunObservability,
     args: SettleValidatedOutputPauseArgs,
   ): AttemptResult? {
@@ -697,7 +696,7 @@ object PhaseOutputGate {
           )
     }
 
-  internal fun FeatureTaskRuntimeRunLoopContext.settleValidatedOutputAfterFingerprint(
+  internal fun PhaseAttemptEnvironment.settleValidatedOutputAfterFingerprint(
     args: SettleValidatedOutputAfterFingerprintArgs,
   ): AttemptResult {
     return settleValidatedOutputPauseOrTerminal(
@@ -716,7 +715,7 @@ object PhaseOutputGate {
     ) ?: settleValidatedOutputAfterPause(args)
   }
 
-  private fun FeatureTaskRuntimeRunLoopContext.settleValidatedOutputAfterPause(
+  private fun PhaseAttemptEnvironment.settleValidatedOutputAfterPause(
     args: SettleValidatedOutputAfterFingerprintArgs,
   ): AttemptResult {
     val run = args.capture.run
@@ -749,7 +748,7 @@ object PhaseOutputGate {
       )
   }
 
-  private fun FeatureTaskRuntimeRunLoopContext.stepCompletionRejection(
+  private fun PhaseAttemptEnvironment.stepCompletionRejection(
     run: PhaseRun,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
   ): Pair<String, String>? =
@@ -757,7 +756,7 @@ object PhaseOutputGate {
       "output-verification" to it
     }
 
-  internal fun FeatureTaskRuntimeRunLoopContext.finalizeValidatedOutputAcceptance(
+  internal fun PhaseAttemptEnvironment.finalizeValidatedOutputAcceptance(
     args: FinalizeValidatedOutputAcceptanceArgs,
   ): AttemptResult {
     val capture = args.capture
@@ -861,9 +860,9 @@ object PhaseOutputGate {
   }
 
   internal fun retainSettledProducerOutput(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     clock: Clock,
     capture: ValidatedOutputCapture,
   ) {
@@ -1010,9 +1009,9 @@ object PhaseOutputGate {
 }
 
 private data class FinaliseSubtaskCommitOutcomeArgs(
-  val request: FeatureTaskRuntimeRunRequest,
+  val request: FeatureTaskRuntimeRunFacts,
   val state: FeatureTaskRuntimeRunState,
-  val recorder: FeatureTaskRuntimePhaseRecorder,
+  val recorder: PhaseRunRecords,
   val diagnostics: RuntimeDiagnostics,
   val phaseGates: FeatureTaskRuntimePhaseGates,
   val phase: PhaseRun,

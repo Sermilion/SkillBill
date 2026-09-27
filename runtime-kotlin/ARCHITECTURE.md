@@ -106,9 +106,10 @@ inputs:
   audit/checkpoint and accepted-output persistence tail retains
   `settlementContext`.
 - Review preparation and the review step live in the `code_review` slot
-  (`slot.codereview`). They reach durable run state only through
-  `PhaseRunState`, and read git operations, the output validator, and the clock
-  from the run-loop context.
+  (`slot.codereview`). They reach durable run state, git operations, the
+  output validator, and the clock only through `PhaseStepState` and its
+  attempt scope. Since SKILL-380 subtask 7, no slot class takes the run-loop
+  context.
 - PhaseAttempts exposes top-level block/pause seams with request/state/
   recorder/goal-recorder/observability arguments; its context overloads remain
   only for the generic attempt-loop adjacency.
@@ -990,13 +991,33 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   settled envelope, typed launch failure). `DefaultPhaseRunner` is the only
   implementation, and it is the only featuretask type that depends on
   `GoalRunnerSubtaskLauncher`.
-- `PhaseRunState` is the per-call port `runStep` receives. It carries the
-  review members the `code_review` strategy needs: pass reservation, goal
-  review input and carry-forward, review start and launch records, content
-  identities, the remediation checkpoint amend, review completion, and review
-  blocks. `FeatureTaskRuntimeRunLoopSkeletonPhaseRunState` backs it for full
-  runs. The other strategies still take `FeatureTaskRuntimeRunLoopContext` and
-  read run state through it; SKILL-380 subtask 7 moves them behind this port.
+- The run state sits behind three ports. `PhaseLaunchState` is what a
+  `PhaseRunner` reads and writes around one launch: the settlement target,
+  launch observation, token accounting, and the settled envelope.
+  `PhaseRunState` extends it with everything one run reads and writes: the
+  in-memory progress, the session, telemetry, the attempt loop, strategy
+  selection, and the sub-ports in `slot.state` (`PhaseRunRecords`,
+  `PhaseRunGoal`, `PhaseRunSettlements`, `PhaseRunCheckpoints`).
+  `PhaseStepState` is the per-call port `runStep` receives. It adds the
+  review members of the `code_review` strategy. The run loop's entry takes
+  (definition, `PhaseRunState`, facts). `FeatureTaskRuntimeRunRequest` is
+  only the durable entry's input. The runner builds `DurablePhaseRunState`
+  and `DurablePhaseStepState` (`runloop.durable`). They are the only
+  run-loop and slot classes that hold the durable stores, writers, and
+  checkpoint git operations.
+- Strategies are context-free. No slot class references
+  `FeatureTaskRuntimeRunLoopContext`. A strategy builds its
+  `PhaseAttemptScope` (the run request and the run state) from the
+  `PhaseRun` and `PhaseStepState` it receives. Hooks and loop rules take a
+  `PhaseAttemptEnvironment`.
+- Shared code never names a step. It asks
+  `PhaseStrategyLookup.resumeRules(facts)` for the owning strategy's
+  `PhaseResumeRules` (tracks review passes, resumes past completion,
+  persisted-block retry). It asks a status projection's `reportedGate(stepId)`
+  (`BUILD` or `VALIDATION`) which step reports a gate. It reads entry and
+  loop steps from the transition declaration. The validation and readiness
+  gates and the review-generation writes take the step id from the calling
+  strategy.
 - `ReviewTarget` is a per-call fact on `PhaseRun`: `LastCommit` (the full-run
   default), `Uncommitted`, or `Commit(sha)`. It composes the opening lines of
   the review prompt.
@@ -1040,7 +1061,7 @@ Composition:
   `runtime-core` remains; `CodeReviewSlotBoundaryArchitectureTest` keeps the
   package off the launcher, recorders, `FeatureTaskRuntimeRunState`,
   persistence writers, checkpoint git, and run-loop types other than
-  `PhaseRun`, `FeatureTaskRuntimeRunLoopContext`, and `PhaseOutcome`.
+  `PhaseRun` and `PhaseOutcome`.
 - Run-loop decisions a slot owns sit behind `PhaseStrategy.loopRules`
   (`PhaseLoopRules`). The loop asks the strategy selected for a step, or for a
   backward edge's destination. It does not name the step or the loop.
@@ -1062,8 +1083,8 @@ Composition:
   omits the unselected steps' outputs, and the handoff rejects a settled output
   from an unselected step. Nothing rewrites transitions, and no shared
   runloop, phase, runner, review, validation, or lifecycle code imports the
-  strategy packages. The gate cycles read and write gate progress through the
-  run-loop context until subtask 7.
+  strategy packages. The gate cycles read and write gate progress through
+  `PhaseRunRecords`.
 - Validate settles with the uniform output. Completed means every check
   passed. Blocked carries the remaining failures as the value and a verdict:
   `progress` continues the repair session, and `no_progress`, an absent
@@ -1134,23 +1155,30 @@ Guard rules (`RuntimeEngineBoundaryArchitectureTest`, scanning with
 `FeatureTaskSlotBoundaryScans`; each rule reports the files it read, has no
 baseline or exemption, and has synthetic violations that call its own scan):
 
-- Step identity: no file in a step-owned package decides behaviour by step
-  identity. `STEP_OWNED_PACKAGES` lists the covered packages, `phase` and
-  `lifecycle`; subtask 7 widens it to every package outside `slot`. The scan
+- Step identity: no shared file decides behaviour by step identity. The rule
+  scans every feature-task package outside `slot`, with no exemption. It
   rejects a `FeatureTaskRuntimePhaseIds` or
   `FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_*` constant (qualified,
   aliased, or imported), a string literal equal to a step id, element access
   on a slot's `steps` or `stepIds`, and any use of a non-private `slot`
-  declaration whose value is a single step id. Shared code asks the selection
-  for the slot or strategy that owns the step, or takes the step id as a
+  declaration whose value is a single step id. That includes an entry of a
+  non-private `slot` enum whose constructor arguments wrap a step id, however
+  it is reached (qualified, import-aliased, star-imported, or bare). Shared
+  code asks the selection for the slot or strategy that owns the step, asks
+  that strategy's resume rules or reported gate, or takes the step id as a
   parameter, instead.
 - Launch port: only the `PhaseRunner` implementation depends on
   `GoalRunnerSubtaskLauncher`.
 - Dependency direction: shared feature-task packages import no strategy
   package; strategy packages import none of the run loop's drive, launch,
   attempt, or planning-branch objects and do not reference
-  `FeatureTaskRuntimeRunState` by name. Strategies take collaborators by
+  `FeatureTaskRuntimeRunState` by name. No slot file references
+  `FeatureTaskRuntimeRunLoopContext`. Strategies take collaborators by
   constructor.
+- Durable stores: outside `runloop.durable`, no `runloop` or `slot` file
+  imports that package or names the phase recorder, goal-continuation
+  recorder, settlement service, activity-stamp and worktree-edit writers,
+  run-invariants store, probe writers, or the checkpoint git operations.
 
 Adding a phase strategy:
 

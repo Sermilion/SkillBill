@@ -4,7 +4,7 @@ import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.config.model.PhaseCompactionDirective
 import skillbill.config.model.PhaseModelDirective
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAgent
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrecti
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runner.LaunchResult
 import skillbill.engine.featuretask.slot.ReviewTarget
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -175,7 +176,7 @@ internal class SettleValidatedOutput(
   val run: PhaseRun,
   val iteration: Int,
   val output: SettledOutputContext,
-  val settlementContext: FeatureTaskRuntimeRunLoopContext,
+  val settlementContext: PhaseAttemptEnvironment,
 ) {
   val request get() = settlementContext.request
   val state get() = settlementContext.state
@@ -209,7 +210,7 @@ internal data class PhaseStateRequestAttachments(
 internal data class PhaseStateRequestArgs(
   val write: PhaseStateWriteArgs,
   val extras: PhaseStateRequestAttachments = PhaseStateRequestAttachments(),
-  val context: FeatureTaskRuntimeRunLoopContext? = null,
+  val context: PhaseAttemptEnvironment? = null,
 )
 
 internal data class PersistPhaseArgs(
@@ -268,7 +269,7 @@ internal data class PhaseRun(
   val resolvedAgent: FeatureTaskRuntimeResolvedPhaseAgent,
   val modelDirective: PhaseModelDirective?,
   val compaction: PhaseCompactionDirective?,
-  val request: FeatureTaskRuntimeRunRequest,
+  val request: FeatureTaskRuntimeRunFacts,
   val specSource: SpecSource,
   val policy: PhaseStepPolicy,
   val reentry: PendingReentry? = null,

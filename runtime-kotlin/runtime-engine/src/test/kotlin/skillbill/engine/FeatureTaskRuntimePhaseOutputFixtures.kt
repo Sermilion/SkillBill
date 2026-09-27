@@ -1,7 +1,7 @@
 package skillbill.engine
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-import skillbill.engine.featuretask.slot.PhaseRunState
+import skillbill.engine.featuretask.slot.PhaseLaunchState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
@@ -20,7 +20,7 @@ internal fun harnessReviewRunnerSyncingPendingVerifyFindings(delegate: PhaseRunn
   object : PhaseRunner {
     override fun run(
       input: PhaseStepInput,
-      state: PhaseRunState,
+      state: PhaseLaunchState,
     ): PhaseStepOutput {
       val output = delegate.run(input, state)
       val lane =

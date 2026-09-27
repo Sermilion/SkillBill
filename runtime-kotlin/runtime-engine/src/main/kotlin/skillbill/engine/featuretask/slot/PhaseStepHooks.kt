@@ -5,10 +5,10 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeMeasuredFactKeys
 import skillbill.engine.featuretask.runloop.core.AttemptResult
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.goalreview.ReviewPassResolution
@@ -28,6 +28,14 @@ internal interface PhaseStepHooks {
   val fingerprintsCompletedRepository: Boolean
     get() = false
 
+  /** Whether the launch prompt of this step carries the build command the validation gate declares. */
+  val carriesPackBuildCommand: Boolean
+    get() = false
+
+  /** Whether completed output of this step must carry the projections its immediate consumers read. */
+  val checksImmediateConsumerProjection: Boolean
+    get() = false
+
   /** The failure disposition a blocked terminal output of this step gets when it names none. */
   val blockedOutputDisposition: FeatureTaskRuntimeFailureDisposition
     get() = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION
@@ -35,8 +43,8 @@ internal interface PhaseStepHooks {
   /** The prompt sections appended after the composed launch prompt of [run]. */
   fun launchPromptSupplement(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
   ): String = ""
 
   /** The repository checkpoint the launch handoff of [run] expects, given the [current] checkpoint fingerprint. */
@@ -48,7 +56,7 @@ internal interface PhaseStepHooks {
   /** The review pass and review tier the launch prompt of [run] carries. */
   fun launchReviewTier(
     run: PhaseRun,
-    state: PhaseRunState,
+    state: PhaseStepState,
   ): PhaseLaunchReviewTier =
     PhaseLaunchReviewTier(
       passNumber = null,
@@ -57,11 +65,11 @@ internal interface PhaseStepHooks {
     )
 
   /** The recorded finding verdicts the launch handoff of this step carries. */
-  fun handoffFindingVerdicts(state: PhaseRunState): List<ReviewFindingVerdict> = emptyList()
+  fun handoffFindingVerdicts(state: PhaseStepState): List<ReviewFindingVerdict> = emptyList()
 
   /** Retains step evidence from [outputText] after the output gate rejected its schema. */
   fun retainSchemaRejectedOutput(
-    state: PhaseRunState,
+    state: PhaseStepState,
     outputText: String,
   ) = Unit
 
@@ -78,31 +86,31 @@ internal interface PhaseStepHooks {
   /** Checks validated [outputMap] of [run] before the shared output checks run. */
   fun checkValidatedOutput(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck = PhaseStepOutputCheck.Accept
 
   /** The reason completed [outputMap] of [run] cannot settle, or null when it can. */
   fun completionRejection(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? = null
 
   /** Settles the step records that completed [outputMap] of [run] carries, once every completion check passed. */
   fun settleCompletedOutput(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck = PhaseStepOutputCheck.Accept
 
   /** Resets the step state a launch of [run] must not carry over from a prior process. */
   fun onLaunch(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
   ) = Unit
 
   /**
@@ -110,7 +118,7 @@ internal interface PhaseStepHooks {
    * an in-phase retry, or null when the output goes on to acceptance.
    */
   fun settleCompletedRound(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     capture: ValidatedOutputCapture,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): AttemptResult? = null
@@ -120,7 +128,7 @@ internal interface PhaseStepHooks {
    * step stamps the facts the runtime measured around it here.
    */
   fun acceptedOutput(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
@@ -129,8 +137,8 @@ internal interface PhaseStepHooks {
   /** Records step evidence from accepted [outputMap] of [run] before the completed step is persisted. */
   fun recordAcceptedOutput(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ) = Unit
 
@@ -139,14 +147,14 @@ internal interface PhaseStepHooks {
    * completed: the blocked reason that stops the run, or null when the run continues.
    */
   fun afterCompletion(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     output: FeatureTaskRuntimePhaseOutput,
   ): String? = null
 
   /** Reconciles the durable state [run] reads before the shared pre-launch checks decide whether it can launch. */
   fun reconcileBeforeLaunch(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
   ) = Unit
 
   companion object {

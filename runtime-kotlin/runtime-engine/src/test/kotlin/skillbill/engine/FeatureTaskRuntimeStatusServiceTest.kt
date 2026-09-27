@@ -14,8 +14,8 @@ import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistenc
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.runner.operatorDecisionPause
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies

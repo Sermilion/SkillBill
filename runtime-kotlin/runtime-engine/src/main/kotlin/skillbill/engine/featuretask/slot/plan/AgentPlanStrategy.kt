@@ -2,16 +2,17 @@ package skillbill.engine.featuretask.slot.plan
 
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.jsonValueContent
+import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
@@ -56,20 +57,31 @@ class AgentPlanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
 
   override fun runStep(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
-  ): PhaseOutcome = runAgentStep(run, context, state)
+    state: PhaseStepState,
+  ): PhaseOutcome = runAgentStep(run, state)
 
   override fun stepHooks(stepId: String): PhaseStepHooks {
     policies.policyOf(stepId)
     return PlanStepHooks
   }
 
+  override fun resumeRules(stepId: String): PhaseResumeRules {
+    policies.policyOf(stepId)
+    return PlanResumeRules
+  }
+
   private object PlanStepHooks : PhaseStepHooks {
     override fun afterCompletion(
-      context: FeatureTaskRuntimeRunLoopContext,
+      context: PhaseAttemptEnvironment,
       output: FeatureTaskRuntimePhaseOutput,
     ): String? = PlanDecompositionStop.apply(context, output)
+  }
+
+  private object PlanResumeRules : PhaseResumeRules {
+    override val buffersIncompleteOutput: Boolean = false
+
+    override fun dropsResumedCompletion(completedStepIds: Set<String>): Boolean =
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN !in completedStepIds
   }
 
   companion object {

@@ -8,7 +8,7 @@ import skillbill.engine.featuretask.runner.providerLimitSignal
 import skillbill.engine.featuretask.slot.PhaseLaunchFailure
 import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.PhaseLaunchObservation
-import skillbill.engine.featuretask.slot.PhaseRunState
+import skillbill.engine.featuretask.slot.PhaseLaunchState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseSettledEnvelopeRead
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
@@ -38,12 +38,12 @@ class DefaultPhaseRunner(
 ) : PhaseRunner {
   override fun run(
     input: PhaseStepInput,
-    state: PhaseRunState,
+    state: PhaseLaunchState,
   ): PhaseStepOutput = run(input, state, PhaseStepSession(launcher::launch))
 
   override fun run(
     input: PhaseStepInput,
-    state: PhaseRunState,
+    state: PhaseLaunchState,
     session: PhaseStepSession,
   ): PhaseStepOutput {
     val step = input.stepName
@@ -62,7 +62,7 @@ class DefaultPhaseRunner(
 
   private fun launchPrepared(
     input: PhaseStepInput,
-    state: PhaseRunState,
+    state: PhaseLaunchState,
     attempt: Int,
     before: BeforeCapture.Ready,
     session: PhaseStepSession,
@@ -90,7 +90,7 @@ class DefaultPhaseRunner(
 
   private fun launchUntracked(
     unprepared: PhaseStepInput,
-    state: PhaseRunState,
+    state: PhaseLaunchState,
     session: PhaseStepSession,
   ): PhaseStepOutput {
     val input = state.prepareLaunch(unprepared) ?: return preparationRejected(unprepared.stepName)
@@ -100,7 +100,7 @@ class DefaultPhaseRunner(
 
   private fun launchRequest(
     input: PhaseStepInput,
-    state: PhaseRunState,
+    state: PhaseLaunchState,
   ): GoalRunnerSubtaskLaunchRequest {
     val facts = input.facts
     val readOnly = input.policy.readOnlyIdle

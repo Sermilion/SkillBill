@@ -10,9 +10,9 @@ import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimePars
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRemediationRoundNumberOrNull
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptSettleRejection
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptShapeRejection
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
+import skillbill.engine.featuretask.slot.PhaseStepState
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.goalrunner.model.UNADDRESSED_FINDING_REJECTED_DISPOSITION
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
@@ -25,8 +25,8 @@ internal object ImplementFixReceipt {
     "the review persistence.state could not be updated with the repair receipt."
 
   fun settle(
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck {
     val produced = completedProducedOutputs(outputMap) ?: return PhaseStepOutputCheck.Accept
@@ -55,8 +55,8 @@ internal object ImplementFixReceipt {
       ?.let { JsonCodec.anyToStringAnyMap(it[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty() }
 
   private fun settleValid(
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     receipt: FeatureTaskRuntimeRepairReceipt,
     reviewState: GoalSubtaskReviewState,
   ): PhaseStepOutputCheck =
@@ -70,8 +70,8 @@ internal object ImplementFixReceipt {
       ?: PhaseStepOutputCheck.Accept
 
   private fun persist(
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     receipt: FeatureTaskRuntimeRepairReceipt,
   ): String? =
     runCatching { state.recordRepairReceipt(receipt) }.fold(
@@ -88,8 +88,8 @@ internal object ImplementFixReceipt {
     )
 
   private fun refutedCarriedFindingIds(
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
     reviewState: GoalSubtaskReviewState,
   ): Set<String> {
     val passNumber = reviewState.passResults.lastOrNull()?.passNumber ?: return emptySet()
@@ -113,7 +113,7 @@ internal object ImplementFixReceipt {
   }
 
   private fun anchor(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     reviewState: GoalSubtaskReviewState,
   ): ReceiptAnchor? {
     val baseSha = reviewState.remediationBaseSha

@@ -3,9 +3,9 @@ package skillbill.engine.featuretask.runloop.observability
 import skillbill.config.model.PhaseModelDirective
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import kotlin.coroutines.cancellation.CancellationException
@@ -61,9 +61,9 @@ fun emitFeatureTaskRuntimeEventSafely(
     }
 }
 
-class FeatureTaskRuntimeRunObservability(
-  val recorder: FeatureTaskRuntimePhaseRecorder,
-  val request: FeatureTaskRuntimeRunRequest,
+class FeatureTaskRuntimeRunObservability internal constructor(
+  internal val recorder: PhaseRunRecords,
+  val request: FeatureTaskRuntimeRunFacts,
   val diagnostics: RuntimeDiagnostics,
 ) {
   fun branchResolved(

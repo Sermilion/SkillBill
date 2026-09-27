@@ -9,10 +9,10 @@ import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassInFlight
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReserved
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeScopedReviewBaseline
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseRunState
+import skillbill.engine.featuretask.slot.PhaseStepState
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.error.core.DatabaseBusyError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
@@ -30,8 +30,8 @@ internal sealed interface InlineReviewPrepared {
 internal object InlineReviewPreparation {
   fun prepare(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
   ): InlineReviewPrepared =
     if (isGoalContinuationRun(run.request)) {
       reserveGoalReview(run, context, state)
@@ -59,8 +59,8 @@ internal object InlineReviewPreparation {
 
   private fun prepareStandaloneReview(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
   ): InlineReviewPrepared {
     val resolved =
       state.resolvedBranch()
@@ -85,8 +85,8 @@ internal object InlineReviewPreparation {
 
   private fun reserveGoalReview(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
   ): InlineReviewPrepared =
     runCatching { state.reserveReviewPass() }.fold(
       onSuccess = { reservation ->
@@ -110,8 +110,8 @@ internal object InlineReviewPreparation {
 
   private fun buildGoalReviewInput(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
   ): InlineReviewPrepared =
     runCatching {
       val resolved = state.resolvedBranch()
@@ -146,8 +146,8 @@ internal object InlineReviewPreparation {
 
   private fun settleCarriedForward(
     run: PhaseRun,
-    context: FeatureTaskRuntimeRunLoopContext,
-    state: PhaseRunState,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
   ): InlineReviewPrepared {
     val accepted =
       runCatching {
@@ -179,7 +179,7 @@ internal object InlineReviewPreparation {
   }
 
   private fun blocked(
-    state: PhaseRunState,
+    state: PhaseStepState,
     reason: String,
     disposition: FeatureTaskRuntimeFailureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
   ): InlineReviewPrepared {

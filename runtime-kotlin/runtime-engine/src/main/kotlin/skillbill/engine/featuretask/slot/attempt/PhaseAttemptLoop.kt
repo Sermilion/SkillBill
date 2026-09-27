@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.slot.attempt
 
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
+import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.core.FixLoopBranchContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptLoopState
@@ -13,10 +13,28 @@ import skillbill.engine.featuretask.runloop.observability.featureTaskRuntimeStar
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeNonOutputAttempt
+import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import java.time.Clock
 
-object PhaseAttemptLoop {
-  internal fun FeatureTaskRuntimeRunLoopContext.runPhaseAttempts(
+internal class PhaseAttemptLoop(
+  val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
+  val phaseGates: FeatureTaskRuntimePhaseGates,
+  val clock: Clock,
+  val diagnostics: RuntimeDiagnostics,
+) {
+  fun run(
+    run: PhaseRun,
+    call: PhaseStepCall,
+  ): PhaseOutcome =
+    with(PhaseAttemptSteps) {
+      PhaseAttemptScope(run.request, call.state).runPhaseAttempts(run, call)
+    }
+}
+
+internal object PhaseAttemptSteps {
+  fun PhaseAttemptEnvironment.runPhaseAttempts(
     run: PhaseRun,
     call: PhaseStepCall,
   ): PhaseOutcome {
@@ -83,7 +101,7 @@ object PhaseAttemptLoop {
     return outcome
   }
 
-  internal fun FeatureTaskRuntimeRunLoopContext.prepareFixLoopState(run: PhaseRun): PhaseOutcome? {
+  fun PhaseAttemptEnvironment.prepareFixLoopState(run: PhaseRun): PhaseOutcome? {
     if (run.policy.singleAgentSession) return null
     val nonOutputAttempts = FeatureTaskRuntimeRunLoopPhaseBlocking.durableNonOutputAttempts(state, run)
     val processFailures = nonOutputAttempts.filterNot(FeatureTaskRuntimeNonOutputAttempt::paused)
@@ -111,7 +129,7 @@ object PhaseAttemptLoop {
     return null
   }
 
-  internal fun FeatureTaskRuntimeRunLoopContext.resolveFixLoopOutcome(args: FixLoopOutcomeArgs): PhaseOutcome? {
+  fun PhaseAttemptEnvironment.resolveFixLoopOutcome(args: FixLoopOutcomeArgs): PhaseOutcome? {
     val run = args.context.attempt.run
     val state = args.context.attempt.state
     val observability = args.context.attempt.observability

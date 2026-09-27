@@ -7,4 +7,6 @@ data class PhaseStepPolicy(
   val readOnlyIdle: Boolean,
   val fileMutating: Boolean,
   val generationScoped: Boolean,
+  val outputGateAttempts: Int = 1,
+  val extendsOwnedInventory: Boolean = false,
 )

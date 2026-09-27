@@ -5,8 +5,8 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeSubtaskOutcome
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
@@ -29,7 +29,7 @@ private fun String.isRuntimeAgentId(): Boolean =
 fun completedGoalContinuationOutcome(
   recorder: FeatureTaskRuntimePhaseRecorder,
   gitOperations: WorkflowGitOperations,
-  request: FeatureTaskRuntimeRunRequest,
+  request: FeatureTaskRuntimeRunFacts,
   context: FeatureTaskRuntimeGoalContinuationContext,
   commitStepId: String,
 ): FeatureTaskRuntimeSubtaskOutcome {
@@ -57,7 +57,7 @@ fun completedGoalContinuationOutcome(
 }
 
 fun completeSubtaskOutcome(
-  request: FeatureTaskRuntimeRunRequest,
+  request: FeatureTaskRuntimeRunFacts,
   context: FeatureTaskRuntimeGoalContinuationContext,
   commitSha: String?,
   commitStepId: String,
@@ -74,7 +74,7 @@ fun completeSubtaskOutcome(
 
 fun measuredHeadSha(
   gitOperations: WorkflowGitOperations,
-  request: FeatureTaskRuntimeRunRequest,
+  request: FeatureTaskRuntimeRunFacts,
 ): String? {
   val result = gitOperations.headCommitSha(request.repoRoot)
   return result.value.trim().takeIf { result is WorkflowGitOperationResult.Ok && it.isNotBlank() }
@@ -134,7 +134,7 @@ private fun terminalRecordAgentId(records: Map<String, FeatureTaskRuntimePhaseRe
 
 fun commitShaFromPhaseRecords(
   recorder: FeatureTaskRuntimePhaseRecorder,
-  request: FeatureTaskRuntimeRunRequest,
+  request: FeatureTaskRuntimeRunFacts,
   commitStepId: String,
 ): String? {
   val commitOutput =
@@ -169,7 +169,7 @@ fun Map<String, Any?>.commitShaFromPhasePayload(): String? {
 }
 
 fun remediationBaseCoherenceBlockedReport(
-  request: FeatureTaskRuntimeRunRequest,
+  request: FeatureTaskRuntimeRunFacts,
   operatorGuidance: String,
   firstStepId: String,
 ): FeatureTaskRuntimeRunReport.Blocked =

@@ -2,6 +2,7 @@ package skillbill.engine
 
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditRound
+import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
@@ -54,22 +55,24 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
   @Test
   fun `validate malformed envelopes retry twice then block`() {
     val phase = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
-    assertEquals(null, FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, 1))
-    val blocked = requireNotNull(FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, 2))
+    val policy = productionPolicy(phase)
+    assertEquals(null, FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, policy, 1))
+    val blocked = requireNotNull(FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, policy, 2))
     assertContains(blocked, "cap=2")
     assertContains(blocked, "2 attempts")
   }
 
   @Test
   fun `the same remaining check failures as the prior validate repair is a stall`() {
-    val reason = FeatureTaskRuntimeAttemptBudgets.validateRemainingUnchangedBlockReason()
+    val reason = FeatureTaskRuntimeAttemptBudgets.validateRemainingUnchangedBlockReason("validate")
     assertContains(reason, "leftover set did not shrink")
     assertContains(reason, "no progress")
   }
 
   @Test
   fun `the first schema-invalid output blocks instead of relaunching`() {
-    val reason = FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason("audit", 1)
+    val phase = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+    val reason = FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, productionPolicy(phase), 1)
     assertContains(requireNotNull(reason), "cap=1")
     assertContains(reason, "blocks rather than relaunching")
   }
@@ -145,7 +148,7 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
     val phase = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
     (0..3).forEach { priorFailures ->
       assertEquals(
-        FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, priorFailures + 1) != null,
+        FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, RELAUNCHING_POLICY, priorFailures + 1) != null,
         FeatureTaskRuntimeAttemptBudgets.outputGateRejectionExhaustsBudget(phase, RELAUNCHING_POLICY, priorFailures),
         "the rejection record and the block decision must agree at $priorFailures prior failures",
       )
@@ -174,5 +177,8 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
         fileMutating = true,
         generationScoped = false,
       )
+
+    fun productionPolicy(stepId: String): PhaseStepPolicy =
+      statusProjectionPhaseStrategies().registry.strategies.first { stepId in it.steps }.policyFor(stepId)
   }
 }

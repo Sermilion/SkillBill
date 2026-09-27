@@ -153,6 +153,7 @@ class FeatureTaskRuntimeReadinessGateCoordinatorTest {
     val result =
       coordinator(store).bindCommittedHead(
         workflowId = WORKFLOW_ID,
+        stepId = "commit_push",
         repoRoot = validationGateTestRepoRoot,
         baseBranch = "main",
         gitOperations = RecordingWorkflowGitOperations().apply { readinessTreeIdentity = committed },
@@ -188,6 +189,7 @@ internal fun coordinator(store: FeatureTaskRuntimeReadinessEvidencePort): Featur
 private fun settleRequest(identity: ReadinessTreeIdentity): ReadinessCommitPushSettleRequest =
   ReadinessCommitPushSettleRequest(
     workflowId = WORKFLOW_ID,
+    stepId = "commit_push",
     repoRoot = validationGateTestRepoRoot,
     baseBranch = "main",
     changedPaths = listOf("core/application/src/main/kotlin/news/readian/core/application/api/ApiValidationError.kt"),

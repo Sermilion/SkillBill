@@ -4,7 +4,6 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.runner.SCHEMA_GATE_DETAIL_MAX_CHARS
 import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal fun rejectionPath(detail: String): String {
   Regex("""(?:instance location|path|pointer)\s*[:=]\s*['"]?(/[^\s,'"]*)""", RegexOption.IGNORE_CASE)
@@ -139,12 +138,3 @@ val SCHEMA_DETAIL_TYPE_WORDS =
   )
 
 const val MIN_RESPONSE_STRING_VALUE_LENGTH = 4
-
-val INVENTORY_EXTENDING_PHASES: Set<String> =
-  setOf(
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY,
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
-  )

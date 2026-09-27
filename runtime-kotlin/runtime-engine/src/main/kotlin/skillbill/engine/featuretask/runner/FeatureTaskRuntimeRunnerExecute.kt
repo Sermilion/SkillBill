@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
 import skillbill.engine.featuretask.review.core.reviewFixCapExhaustion
+import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunRecords
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
 import skillbill.workflow.model.WorkflowStepStatus
@@ -39,7 +40,12 @@ fun FeatureTaskRuntimeRunner.executePreparedRun(
     )
   }
   val telemetrySessionId = lifecycleTelemetry.started(runRequest)
-  val observability = FeatureTaskRuntimeRunObservability(recorder, runRequest, diagnostics)
+  val observability =
+    FeatureTaskRuntimeRunObservability(
+      DurablePhaseRunRecords(recorder, phaseGates.decomposeTerminalRecorder),
+      runRequest,
+      diagnostics,
+    )
   val transitions = transitionsFor(runRequest)
   val state = createExecutePreparedRunState(runRequest, transitions)
   val telemetryContext =
@@ -78,9 +84,12 @@ internal fun FeatureTaskRuntimeRunner.loadFindingVerificationTelemetry(
   request: FeatureTaskRuntimeRunRequest,
 ): FeatureTaskRuntimeFindingVerificationTelemetry {
   val capExhausted = reviewFixCapExhaustion(request.workflowId)
+  val verifyStepId =
+    FeatureTaskRuntimePhaseWorkflowDefinition.transitions.backwardEdges
+      .firstOrNull { edge -> edge.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID }
+      ?.fromPhaseId
   val verifyRecord =
-    recorder.loadPhaseRecords(request.workflowId)
-      ?.get(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS)
+    verifyStepId?.let { stepId -> recorder.loadPhaseRecords(request.workflowId)?.get(stepId) }
       ?: return FeatureTaskRuntimeFindingVerificationTelemetry(reviewFixCapExhausted = capExhausted)
   val outputMap =
     verifyRecord.outputArtifact

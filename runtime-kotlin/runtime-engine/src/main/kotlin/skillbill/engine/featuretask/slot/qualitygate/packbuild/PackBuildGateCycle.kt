@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.slot.qualitygate.packbuild
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -12,14 +11,15 @@ import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptOnce
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
 import skillbill.engine.featuretask.slot.attempt.recordRejectionAttemptArgs
 import skillbill.engine.featuretask.slot.qualitygate.RuntimeOwnedGateSettlement
 import skillbill.engine.featuretask.slot.qualitygate.blockGateStep
+import skillbill.engine.featuretask.slot.qualitygate.buildGateProgressStore
 import skillbill.engine.featuretask.slot.qualitygate.gateChangedPaths
 import skillbill.engine.featuretask.slot.qualitygate.gateCheckpoint
-import skillbill.engine.featuretask.slot.qualitygate.gateProgressStore
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
@@ -37,7 +37,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 private const val BUILD_RECEIPT_KEY = "build_receipt"
 
 internal class PackBuildGateCycle(
-  private val context: FeatureTaskRuntimeRunLoopContext,
+  private val context: PhaseAttemptEnvironment,
   private val call: PhaseStepCall,
 ) {
   internal fun run(run: PhaseRun): PhaseOutcome {
@@ -102,6 +102,7 @@ internal class PackBuildGateCycle(
     ValidationGateCycleRequest(
       repoRoot = run.request.repoRoot,
       request = run.request,
+      phaseId = run.phaseId,
       validationDepth = ValidationDepth.DEFAULT,
       changedPaths = context.gateChangedPaths(run),
       repositoryCheckpoint = checkpoint,
@@ -109,7 +110,7 @@ internal class PackBuildGateCycle(
         ValidationGateAgentRepairLauncher { findings, repairTurn, triagePlan ->
           launchRepair(run, iteration, PackBuildRepairTurn(findings, repairTurn, triagePlan))
         },
-      progressStore = call.state.gateProgressStore(),
+      progressStore = call.state.records.buildGateProgressStore(),
       agentTriageLauncher = ValidationGateAgentTriageLauncher { findings -> launchTriage(run, iteration, findings) },
     )
 
@@ -174,6 +175,7 @@ internal class PackBuildGateCycle(
           run,
           iteration,
           FeatureTaskRuntimeBuildGateCoordinator.runtimeOwnedBuildOutput(
+            phaseId = run.phaseId,
             repositoryCheckpoint = checkpoint,
             measurements = emptyList(),
           ).payload,

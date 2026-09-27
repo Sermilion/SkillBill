@@ -11,9 +11,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposer
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.core.DeclaredLaunchArgs
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.LaunchMeasurementContextReady
 import skillbill.engine.featuretask.runloop.core.LaunchPreparation
 import skillbill.engine.featuretask.runloop.core.LaunchPreparationRejected
@@ -29,6 +27,7 @@ import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutp
 import skillbill.engine.featuretask.runloop.settlement.FeatureTaskRuntimeRunLoopValidationScope
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runner.LaunchResult
+import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePlanningProjectionSchemaError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
@@ -45,7 +44,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 
 object PhaseLaunchPreparation {
   internal fun prepareLaunchForCapture(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     run: PhaseRun,
     state: FeatureTaskRuntimeRunState,
     iteration: Int?,
@@ -76,7 +75,7 @@ object PhaseLaunchPreparation {
   }
 
   internal fun resolveLaunchMeasurementContext(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     run: PhaseRun,
   ): LaunchPreparation {
     with(context) {
@@ -129,12 +128,12 @@ object PhaseLaunchPreparation {
   }
 
   internal fun prepareDeclaredLaunch(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     args: DeclaredLaunchArgs,
   ): LaunchPreparation = PhaseLaunchPreparation.prepareDeclaredLaunchBody(context, args)
 
   internal fun recordLaunchSeamRejection(
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     args: LaunchSeamRejectionArgs,
   ) {
     val run = args.run
@@ -164,7 +163,7 @@ object PhaseLaunchPreparation {
   }
 
   internal fun launchPreparationRejected(
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     args: LaunchPreparationRejectedArgs,
   ): LaunchPreparationRejected {
     PhaseLaunchPreparation.recordLaunchSeamRejection(
@@ -182,7 +181,7 @@ object PhaseLaunchPreparation {
   }
 
   internal fun prepareDeclaredLaunchBody(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     args: DeclaredLaunchArgs,
   ): LaunchPreparation {
     with(context) {
@@ -212,7 +211,7 @@ object PhaseLaunchPreparation {
   }
 
   private fun rejectedHandoffLaunch(
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     run: PhaseRun,
     state: FeatureTaskRuntimeRunState,
     error: InvalidFeatureTaskRuntimeHandoffProjectionError,
@@ -233,7 +232,7 @@ object PhaseLaunchPreparation {
     )
 
   private fun rejectedPlanningProjectionLaunch(
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     run: PhaseRun,
     state: FeatureTaskRuntimeRunState,
     error: InvalidFeatureTaskRuntimePlanningProjectionSchemaError,
@@ -259,7 +258,7 @@ object PhaseLaunchPreparation {
   }
 
   private fun rejectedDurableBriefingLaunch(
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     run: PhaseRun,
     state: FeatureTaskRuntimeRunState,
     error: InvalidWorkflowStateSchemaError,
@@ -280,7 +279,7 @@ object PhaseLaunchPreparation {
     )
 
   internal fun prepareLaunch(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     run: PhaseRun,
     iteration: Int?,
     priorCorrection: PriorAttemptCorrection?,
@@ -330,7 +329,7 @@ object PhaseLaunchPreparation {
   }
 
   private fun assembleLaunchHandoff(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     run: PhaseRun,
     repositoryCheckpoint: FeatureTaskRuntimeRepositoryCheckpoint?,
     resolvedBranchRecord: FeatureTaskRuntimeResolvedBranch?,
@@ -357,7 +356,7 @@ object PhaseLaunchPreparation {
   }
 
   private fun composeLaunchPrompt(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     run: PhaseRun,
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
     prompt: PhaseStepPromptSource,
@@ -366,7 +365,7 @@ object PhaseLaunchPreparation {
       context.stepHooks(run).launchPromptSupplement(run, context, context.stepState(run))
 
   private fun composeLaunchPromptInputs(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     run: PhaseRun,
     handoff: FeatureTaskRuntimePhaseHandoff,
     priorCorrection: PriorAttemptCorrection?,
@@ -403,13 +402,17 @@ object PhaseLaunchPreparation {
         validationGateTriage = run.validationGateTriage,
         agentRunValidateFallback = run.agentRunValidateFallback,
         packBuildCommand =
-          FeatureTaskRuntimeRunLoopValidationScope.packBuildCommand(
-            phaseGates,
-            recorder,
-            goalContinuationRecorder,
-            session,
-            run,
-          ),
+          if (stepHooks(run).carriesPackBuildCommand) {
+            FeatureTaskRuntimeRunLoopValidationScope.packBuildCommand(
+              phaseGates,
+              recorder,
+              goalContinuationRecorder,
+              session,
+              run,
+            )
+          } else {
+            null
+          },
         auditRetryFocusHint =
           session.auditRetryFocusHint?.takeIf {
             run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT

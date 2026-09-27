@@ -11,7 +11,7 @@ interface PhaseRunner {
   /** Runs [input] against the per-call [state] through the runner's default agent-launch session. */
   fun run(
     input: PhaseStepInput,
-    state: PhaseRunState,
+    state: PhaseLaunchState,
   ): PhaseStepOutput
 
   /**
@@ -20,7 +20,7 @@ interface PhaseRunner {
    */
   fun run(
     input: PhaseStepInput,
-    state: PhaseRunState,
+    state: PhaseLaunchState,
     session: PhaseStepSession,
   ): PhaseStepOutput = run(input, state)
 }

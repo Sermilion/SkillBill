@@ -41,7 +41,7 @@ class PhaseStrategyCompositionTest {
     object : PhaseRunner {
       override fun run(
         input: PhaseStepInput,
-        state: PhaseRunState,
+        state: PhaseLaunchState,
       ): PhaseStepOutput = error("Policy lookups must not launch a step.")
     }
 
@@ -103,15 +103,18 @@ class PhaseStrategyCompositionTest {
       mapOf(
         PHASE_PREPLAN to policy(relaunch = true),
         PHASE_PLAN to policy(relaunch = true),
-        PHASE_IMPLEMENT to policy(mutating = true, relaunch = true, fileMutating = true),
-        PHASE_SIMPLIFY to policy(mutating = true, relaunch = true, single = true, fileMutating = true),
+        PHASE_IMPLEMENT to policy(mutating = true, relaunch = true, fileMutating = true).extendingInventory(),
+        PHASE_SIMPLIFY to
+          policy(mutating = true, relaunch = true, single = true, fileMutating = true).extendingInventory(),
         PHASE_AUDIT to policy(single = true, fileMutating = true),
         PHASE_REVIEW to policy(relaunch = true, fileMutating = true, generationScoped = true),
         PHASE_VERIFY_FINDINGS to policy(relaunch = true, readOnlyIdle = true, fileMutating = true),
-        PHASE_IMPLEMENT_FIX to policy(mutating = true, relaunch = true, fileMutating = true, generationScoped = true),
+        PHASE_IMPLEMENT_FIX to
+          policy(mutating = true, relaunch = true, fileMutating = true, generationScoped = true).extendingInventory(),
         PHASE_BUILD to policy(relaunch = true, fileMutating = true),
-        PHASE_VALIDATE to policy(relaunch = true, fileMutating = true),
-        PHASE_WRITE_HISTORY to policy(fileMutating = true),
+        PHASE_VALIDATE to
+          policy(relaunch = true, fileMutating = true).copy(outputGateAttempts = 2).extendingInventory(),
+        PHASE_WRITE_HISTORY to policy(fileMutating = true).extendingInventory(),
         PHASE_COMMIT_PUSH to policy(fileMutating = true),
         PHASE_PR to policy(fileMutating = true),
       )
@@ -124,5 +127,7 @@ class PhaseStrategyCompositionTest {
       fileMutating: Boolean = false,
       generationScoped: Boolean = false,
     ) = PhaseStepPolicy(mutating, relaunch, single, readOnlyIdle, fileMutating, generationScoped)
+
+    fun PhaseStepPolicy.extendingInventory() = copy(extendsOwnedInventory = true)
   }
 }
