@@ -1,12 +1,19 @@
 package skillbill.workflow.taskruntime.phase.task
 
 import skillbill.error.featuretask.InvalidSkeletonDefinitionError
+import skillbill.error.featuretask.UnknownSkeletonDefinitionError
 import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+
+enum class SkeletonRunStateKind(val wireValue: String) {
+  DURABLE("durable"),
+  IN_MEMORY("in_memory"),
+}
 
 data class SkeletonDefinition(
   val id: String,
   val slots: List<PhaseSlot>,
+  val runStateKind: SkeletonRunStateKind = SkeletonRunStateKind.DURABLE,
 ) {
   init {
     val canonicalOrder = slots.zipWithNext().all { (previous, next) -> previous.ordinal < next.ordinal }
@@ -46,7 +53,17 @@ data class SkeletonDefinition(
     val STANDALONE: SkeletonDefinition = SkeletonDefinition("standalone", PhaseSlot.entries)
     val GOAL_CHILD: SkeletonDefinition =
       SkeletonDefinition("goal-child", PhaseSlot.entries.filter { it != PhaseSlot.PULL_REQUEST })
+    val REVIEW: SkeletonDefinition =
+      SkeletonDefinition("review", listOf(PhaseSlot.CODE_REVIEW), SkeletonRunStateKind.IN_MEMORY)
+    val VALIDATION: SkeletonDefinition =
+      SkeletonDefinition("validation", listOf(PhaseSlot.QUALITY_GATE), SkeletonRunStateKind.IN_MEMORY)
+
+    val entries: List<SkeletonDefinition> get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION)
 
     fun forRun(goalContinuation: Boolean): SkeletonDefinition = if (goalContinuation) GOAL_CHILD else STANDALONE
+
+    fun byId(id: String): SkeletonDefinition =
+      entries.firstOrNull { it.id == id }
+        ?: throw UnknownSkeletonDefinitionError(id, entries.map(SkeletonDefinition::id))
   }
 }

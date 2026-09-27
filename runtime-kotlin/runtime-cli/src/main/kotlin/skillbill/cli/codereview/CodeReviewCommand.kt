@@ -15,7 +15,6 @@ import skillbill.application.review.model.ParallelReviewLaneStatus
 import skillbill.application.review.model.ReviewPrelaunchExpansion
 import skillbill.application.review.model.StackDetectionException
 import skillbill.application.review.model.UsageValidationException
-import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.review.service.RequestedReviewMode
 import skillbill.application.reviewevidence.model.DiffResolutionException
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
@@ -24,20 +23,29 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.model.CliRunInputs
+import skillbill.engine.featuretask.model.review.ReviewInvocation
+import skillbill.engine.featuretask.model.review.ReviewTarget
+import skillbill.engine.featuretask.phaserun.PhaseRunEntry
+import skillbill.engine.featuretask.phaserun.PhaseRunRequest
+import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.error.core.ShellContentContractException
 import skillbill.error.shellcontent.ReviewAggregationIntegrityError
+import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.toReviewAccountingBoundedJson
+import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.minutes
 
 @Inject
 class CodeReviewCommand(
-  private val runner: ParallelCodeReviewRunner,
+  private val entry: PhaseRunEntry,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand(
     "code-review",
-    "Run a standalone single-agent runtime-driven code review (inline or delegated).",
+    "Run the in-memory review phase: both modes run the whole code_review slot and fix findings in the working " +
+      "tree. Inline reviews through InlineReviewStrategy; delegated runs the multi-agent review, then " +
+      "verify_findings and implement_fix.",
   ) {
   private val commitArgument by argument(
     name = "commit",
@@ -107,44 +115,24 @@ class CodeReviewCommand(
     val repo = resolveCliRepositoryRoot(repoRoot, inputs)
     validateCommitTarget()
     val target = resolveStandaloneCodeReviewTarget(commitArgument, scope)
-    val result =
-      runParallelReviewDriver(
-        runner,
-        request(resolvedAgent1, target, repo),
-        state,
-      ) ?: return
-    writeParallelReviewResult(state, result)
-  }
-
-  private fun request(
-    resolvedAgent1: String,
-    target: StandaloneCodeReviewTarget,
-    repo: Path,
-  ): ParallelCodeReviewRequest {
-    val (resolvedBase, resolvedHead) =
-      resolveCodeReviewRevisions(
-        target.commitRevision,
-        baseRevision,
-        headRevision,
+    val flags =
+      CodeReviewFlags(
+        agentId = resolvedAgent1,
+        repoRoot = repo,
+        target = target,
+        executionMode = codeReviewMode,
+        diffFile = diffFile,
+        baseRevision = baseRevision,
+        headRevision = headRevision,
+        expandFiles = expandFiles,
+        baselineUntrackedIncludes = baselineUntrackedIncludes,
+        baselineUntrackedExcludes = baselineUntrackedExcludes,
+        reviewRunId = reviewRunId,
+        reviewSessionId = reviewSessionId,
+        timeoutMinutes = timeoutMinutes,
       )
-    return ParallelCodeReviewRequest(
-      agent1Id = resolvedAgent1,
-      scope = target.scope,
-      repoRoot = repo,
-      timeout = timeoutMinutes?.minutes,
-      codeReviewMode = parseExecutionMode(codeReviewMode),
-      suppliedDiffPath = suppliedDiffPath(),
-      reviewRunId = reviewRunId?.takeIf(String::isNotBlank),
-      reviewSessionId = reviewSessionId?.takeIf(String::isNotBlank),
-      baseRevision = resolvedBase,
-      headRevision = resolvedHead,
-      prelaunchExpansions = expandFiles.map(::parseExpansion),
-      baselineUntrackedPolicy =
-        ParallelCodeReviewRequest.baselineUntrackedPolicy(
-          baselineUntrackedIncludes,
-          baselineUntrackedExcludes,
-        ),
-    )
+    val result = runPhaseReview(entry, codeReviewPhaseRequest(flags), state) ?: return
+    writePhaseReviewResult(state, result)
   }
 
   private fun resolveAgent1(): String = requireInvokingAgentId(agent1, inputs.environment, "--agent1")
@@ -162,43 +150,90 @@ class CodeReviewCommand(
       throw UsageError(error)
     }
   }
+}
 
-  private fun parseExecutionMode(value: String) = RequestedReviewMode.parse(value)
+internal data class CodeReviewFlags(
+  val agentId: String,
+  val repoRoot: Path,
+  val target: StandaloneCodeReviewTarget,
+  val executionMode: String = RequestedReviewMode.defaultWireValue,
+  val diffFile: String? = null,
+  val baseRevision: String? = null,
+  val headRevision: String? = null,
+  val expandFiles: List<String> = emptyList(),
+  val baselineUntrackedIncludes: List<String> = emptyList(),
+  val baselineUntrackedExcludes: List<String> = emptyList(),
+  val reviewRunId: String? = null,
+  val reviewSessionId: String? = null,
+  val timeoutMinutes: Long? = null,
+)
 
-  private fun suppliedDiffPath(): Path? =
-    diffFile?.let { value ->
-      Path.of(value).toAbsolutePath().normalize()
-    }
-
-  private fun parseExpansion(value: String): ReviewPrelaunchExpansion {
-    val laneSeparator = value.indexOf(':')
-    val reasonSeparator = value.indexOf('=', startIndex = laneSeparator + 1)
-    if (laneSeparator <= 0 || reasonSeparator <= laneSeparator + 1 || reasonSeparator == value.lastIndex) {
-      throw UsageError("--expand-file must use LANE:PATH=REACHABILITY_REASON with non-blank values.")
-    }
-    val prefix = value.substring(0, laneSeparator)
-    val remainder = value.substring(laneSeparator + 1, reasonSeparator)
-    val skill = remainder.substringBefore(':')
-    val resolvedLaneSeparator =
-      if (
-        isPlatformLanePrefix(prefix) &&
-        ':' in remainder &&
-        skill.matches(Regex("bill-[a-z0-9]+(?:-[a-z0-9]+)*"))
-      ) {
-        value.indexOf(':', startIndex = laneSeparator + 1)
-      } else {
-        laneSeparator
-      }
-    return ReviewPrelaunchExpansion(
-      lane = value.substring(0, resolvedLaneSeparator),
-      path = value.substring(resolvedLaneSeparator + 1, reasonSeparator),
-      reachabilityReason = value.substring(reasonSeparator + 1),
+internal fun codeReviewPhaseRequest(flags: CodeReviewFlags): PhaseRunRequest {
+  val (resolvedBase, resolvedHead) =
+    resolveCodeReviewRevisions(flags.target.commitRevision, flags.baseRevision, flags.headRevision)
+  if ((resolvedBase == null) != (resolvedHead == null)) {
+    throw UsageError("--base-revision and --head-revision must be supplied together.")
+  }
+  if (flags.diffFile != null && resolvedBase == null) {
+    throw UsageError("--diff-file requires paired --base-revision and --head-revision.")
+  }
+  val mode = RequestedReviewMode.parse(flags.executionMode)
+  val delegatedOnly = flags.expandFiles + flags.baselineUntrackedIncludes + flags.baselineUntrackedExcludes
+  if (mode != CodeReviewExecutionMode.DELEGATED && delegatedOnly.isNotEmpty()) {
+    throw UsageError(
+      "--expand-file and --baseline-untracked-include/-exclude apply only to --execution-mode delegated.",
     )
   }
-
-  private fun isPlatformLanePrefix(prefix: String): Boolean =
-    !prefix.startsWith("bill-") && prefix != "parallel-code-review"
+  val suppliedDiffPath = flags.diffFile?.let { value -> Path.of(value).toAbsolutePath().normalize() }
+  return PhaseRunRequest(
+    definitionId = SkeletonDefinition.REVIEW.id,
+    repoRoot = flags.repoRoot,
+    invokedAgentId = flags.agentId,
+    codeReviewMode = mode,
+    reviewInvocation =
+      ReviewInvocation(
+        target = ReviewTarget.Scoped(flags.target.scope, resolvedBase, resolvedHead, suppliedDiffPath),
+        reviewRunId = flags.reviewRunId?.takeIf(String::isNotBlank),
+        reviewSessionId = flags.reviewSessionId?.takeIf(String::isNotBlank),
+        prelaunchExpansions = flags.expandFiles.map(::parseExpansion),
+        baselineUntrackedPolicy =
+          ParallelCodeReviewRequest.baselineUntrackedPolicy(
+            flags.baselineUntrackedIncludes,
+            flags.baselineUntrackedExcludes,
+          ),
+      ),
+    timeout = flags.timeoutMinutes?.minutes,
+  )
 }
+
+private fun parseExpansion(value: String): ReviewPrelaunchExpansion {
+  val laneSeparator = value.indexOf(':')
+  val reasonSeparator = value.indexOf('=', startIndex = laneSeparator + 1)
+  if (laneSeparator <= 0 || reasonSeparator <= laneSeparator + 1 || reasonSeparator == value.lastIndex) {
+    throw UsageError("--expand-file must use LANE:PATH=REACHABILITY_REASON with non-blank values.")
+  }
+  val prefix = value.substring(0, laneSeparator)
+  val remainder = value.substring(laneSeparator + 1, reasonSeparator)
+  val skill = remainder.substringBefore(':')
+  val resolvedLaneSeparator =
+    if (
+      isPlatformLanePrefix(prefix) &&
+      ':' in remainder &&
+      skill.matches(Regex("bill-[a-z0-9]+(?:-[a-z0-9]+)*"))
+    ) {
+      value.indexOf(':', startIndex = laneSeparator + 1)
+    } else {
+      laneSeparator
+    }
+  return ReviewPrelaunchExpansion(
+    lane = value.substring(0, resolvedLaneSeparator),
+    path = value.substring(resolvedLaneSeparator + 1, reasonSeparator),
+    reachabilityReason = value.substring(reasonSeparator + 1),
+  )
+}
+
+private fun isPlatformLanePrefix(prefix: String): Boolean =
+  !prefix.startsWith("bill-") && prefix != "parallel-code-review"
 
 internal fun resolveCodeReviewRevisions(
   commitTarget: String?,
@@ -210,13 +245,13 @@ internal fun resolveCodeReviewRevisions(
   return baseRevision?.takeIf(String::isNotBlank) to headRevision?.takeIf(String::isNotBlank)
 }
 
-private fun runParallelReviewDriver(
-  runner: ParallelCodeReviewRunner,
-  request: ParallelCodeReviewRequest,
+private fun runPhaseReview(
+  entry: PhaseRunEntry,
+  request: PhaseRunRequest,
   state: CliRunState,
-): ParallelCodeReviewResult? =
+): PhaseRunResult? =
   try {
-    runner.run(request)
+    entry.run(request)
   } catch (error: UsageValidationException) {
     usageError(error)
   } catch (error: DiffResolutionException) {
@@ -236,15 +271,33 @@ internal fun usageError(error: Throwable): Nothing {
   }
 }
 
+private fun writePhaseReviewResult(
+  state: CliRunState,
+  phase: PhaseRunResult,
+) {
+  val blocked = (phase as? PhaseRunResult.Blocked)?.reason
+  val result = phase.reviewResult
+  if (result == null) {
+    state.completeText(blocked ?: "The review phase produced no review result.", emptyMap(), exitCode = 1)
+    return
+  }
+  writeParallelReviewResult(state, result, blocked)
+}
+
 private fun writeParallelReviewResult(
   state: CliRunState,
   result: ParallelCodeReviewResult,
+  blocked: String?,
 ) {
   val parent = result.lane1
-  val exitCode = if (parent.success) 0 else 1
+  val exitCode = if (parent.success && blocked == null) 0 else 1
   val output =
     buildString {
       append(laneStatusOutput(listOf(parent), result.output))
+      blocked?.let { reason ->
+        appendLine()
+        append("# Review phase blocked — $reason")
+      }
       result.reviewSessionId?.let { sessionId ->
         appendLine()
         appendLine("Review session ID: $sessionId")

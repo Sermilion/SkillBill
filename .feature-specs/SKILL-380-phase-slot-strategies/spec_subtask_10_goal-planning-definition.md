@@ -37,13 +37,23 @@ all, stopped, halted). Shared-context gathering, provenance checks, and child hy
 **Guard.** Extend the subtask 5 launch-port rule to `skillbill.engine.goalrunner.planning`:
 no class there depends on `GoalRunnerSubtaskLauncher`.
 
+## Verification ownership
+
+Implement and audit can't run builds, tests, generators, or the fixture capture
+(added 2026-09-27). Audit checks each behavioural criterion against the code and the
+tests that assert it, and does not list a criterion as remaining just because nothing
+has run.
+- Validate runs the capture command
+  `cd runtime-kotlin && SKILL_BILL_SLOTBASELINE_CAPTURE=1 ./gradlew :runtime-engine:test --tests skillbill.engine.featuretask.slotbaseline.SlotBaselineCaptureTest`,
+  confirms the goal-planning fixtures are byte-identical, then runs `./gradlew check`.
+
 ## Acceptance Criteria
 
 1. Goal planning runs the `goal-planning` definition through the one run loop. No class under `skillbill.engine.goalrunner.planning` depends on `GoalRunnerSubtaskLauncher`, and the extended guard fails on a synthetic violation.
 2. The shared preplan runs once per goal through `agent-preplan`, and each active subtask's plan runs through `goal-plan-fan-out`, which composes the `agent-plan` step without copying it.
-3. Composed goal planning prompts, the shared preplan checkpoint, plan records, the planning attempt log, and `skill-bill goal planning-log` output match the subtask 1 fixtures byte for byte.
-4. Wave order, burst caps, the attempt gate, and the planning budget behave as before, proved by the existing goal planning suites.
-5. Planning recovery and resume after an interrupted sweep behave as before, and goal children still hydrate their preplan and plan records.
+3. This subtask's diff changes no goal-planning fixture file (composed prompts, shared preplan checkpoint, plan records, planning attempt log, `skill-bill goal planning-log` output), and `SlotBaselineFixtureTest` compares each of them.
+4. Wave order, burst caps, the attempt gate, and the planning budget keep their behaviour: the existing goal planning suites lose no assertion and are not weakened.
+5. Tests assert that planning recovery and resume after an interrupted sweep behave as before, and that goal children still hydrate their preplan and plan records.
 
 ## Non-goals
 

@@ -4,6 +4,7 @@ import skillbill.agentaddon.model.AgentAddonPromptFormatter
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelReviewLaneStatus
 import skillbill.application.review.service.RuntimeOwnedReviewMode
+import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
@@ -17,7 +18,6 @@ import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
-import skillbill.engine.featuretask.slot.ReviewTarget
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.agentrun.model.AgentRunTermination
@@ -95,6 +95,8 @@ internal object InlineReviewPass : CodeReviewPass {
 
   override val directive: String = InlineReviewPromptSections.REVIEW_DIRECTIVE
 
+  override val recordsLaneTelemetry: Boolean = false
+
   override fun executedTier(resolved: CodeReviewExecutionMode): CodeReviewExecutionMode =
     RuntimeOwnedReviewMode.execute(resolved)
 
@@ -110,11 +112,12 @@ internal object InlineReviewPass : CodeReviewPass {
         target = run.reviewTarget,
         baseRevision = input.reviewBaseSha,
         headRevision = input.currentHeadSha,
-        specPath = Path.of(run.request.runInvariants.specReference),
+        specPath = reviewSpecPath(run),
         agentAddonsSection = AgentAddonPromptFormatter.format(run.request.agentAddonSelection),
       )
     val output = runner.run(reviewStepInput(run, directive), state)
     return InlineReviewResultDecoder.decode(run.resolvedAgent.resolvedAgentId, output)
+      .copy(reviewSessionId = run.request.reviewInvocation?.reviewSessionId)
   }
 }
 
@@ -129,7 +132,11 @@ object InlineReviewDirective {
     val prompt =
       buildString {
         target.openingLines(baseRevision, headRevision).forEach(::appendLine)
-        appendLine("Do not use `origin/main...HEAD`, a merge base, the full feature branch, or a pre-baked diff blob.")
+        if (target !is ReviewTarget.Scoped) {
+          appendLine(
+            "Do not use `origin/main...HEAD`, a merge base, the full feature branch, or a pre-baked diff blob.",
+          )
+        }
         appendLine("Do not launch bill-code-review, delegated review subagents, or an isolated review process.")
         appendLine("Fix every Blocker and Major finding in this same session before you emit.")
         appendLine("You may edit files. Leave Minor and Nit unfixed unless the edit is local and obvious.")

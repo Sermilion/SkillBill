@@ -1,6 +1,7 @@
 package skillbill.workflow.taskruntime.phase.task
 
 import skillbill.error.featuretask.InvalidSkeletonDefinitionError
+import skillbill.error.featuretask.UnknownSkeletonDefinitionError
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
@@ -87,6 +88,35 @@ class SkeletonDefinitionTest {
   fun `a definition that repeats a slot raises a typed error`() {
     assertFailsWith<InvalidSkeletonDefinitionError> {
       SkeletonDefinition("repeated", listOf(PhaseSlot.PLAN, PhaseSlot.PLAN))
+    }
+  }
+
+  @Test
+  fun `review keeps the capped review_fix loop and no gate from implementation or audit`() {
+    val declaration = SkeletonDefinition.REVIEW.declaration()
+
+    assertEquals(listOf("review", "verify_findings", "implement_fix"), declaration.forwardPhaseIds)
+    assertEquals(todaysDeclaration(emptyList()).backwardEdges, declaration.backwardEdges)
+    assertEquals(
+      listOf(
+        FeatureTaskRuntimePhaseEntryGate(
+          "implement_fix",
+          "verify_findings",
+          FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED,
+        ),
+      ),
+      declaration.entryGates,
+    )
+    assertEquals(SkeletonRunStateKind.IN_MEMORY, SkeletonDefinition.REVIEW.runStateKind)
+    assertEquals(SkeletonRunStateKind.DURABLE, SkeletonDefinition.STANDALONE.runStateKind)
+  }
+
+  @Test
+  fun `lookup knows the short definitions and rejects commit_push and unknown ids`() {
+    assertEquals(SkeletonDefinition.VALIDATION, SkeletonDefinition.byId("validation"))
+    listOf("commit_push", "bogus").forEach { id ->
+      val error = assertFailsWith<UnknownSkeletonDefinitionError> { SkeletonDefinition.byId(id) }
+      assertEquals(id, error.definitionId)
     }
   }
 

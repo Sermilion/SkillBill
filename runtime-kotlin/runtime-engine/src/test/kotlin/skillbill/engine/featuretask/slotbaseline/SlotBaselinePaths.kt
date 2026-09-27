@@ -9,9 +9,10 @@ internal object SlotBaselinePaths {
   const val GOAL_PLANNING = "$RESOURCE_ROOT/goal-planning"
   const val CODE_REVIEW = "$RESOURCE_ROOT/code-review"
   const val MCP_LIFECYCLE = "$RESOURCE_ROOT/mcp-lifecycle"
+  const val PHASE = "$RESOURCE_ROOT/phase"
 
   val BUNDLE_DIRECTORIES =
-    listOf(STANDALONE, GOAL_CHILD_BUILD, GOAL_CHILD_VALIDATE, GOAL_PLANNING, CODE_REVIEW, MCP_LIFECYCLE)
+    listOf(STANDALONE, GOAL_CHILD_BUILD, GOAL_CHILD_VALIDATE, GOAL_PLANNING, CODE_REVIEW, MCP_LIFECYCLE, PHASE)
 
   const val WORKFLOW_SNAPSHOT = "workflow-snapshot.json"
   const val PHASE_RECORDS = "phase-records.json"
@@ -38,4 +39,11 @@ internal object SlotBaselinePaths {
   const val QUALITY_CHECK_STARTED = "quality-check-started.json"
   const val QUALITY_CHECK_FINISHED = "quality-check-finished.json"
   const val PR_DESCRIPTION_GENERATED = "pr-description-generated.json"
+
+  const val PHASE_REVIEW_INLINE_OUTPUT = "review-inline-output.json"
+  const val PHASE_REVIEW_INLINE_TELEMETRY = "review-inline-telemetry.json"
+  const val PHASE_REVIEW_DELEGATED_OUTPUT = "review-delegated-output.json"
+  const val PHASE_REVIEW_DELEGATED_TELEMETRY = "review-delegated-telemetry.json"
+  const val PHASE_VALIDATION_OUTPUT = "validation-output.json"
+  const val PHASE_VALIDATION_TELEMETRY = "validation-telemetry.json"
 }

@@ -1,6 +1,8 @@
 package skillbill.engine.featuretask.slot
 
+import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
+import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
@@ -63,4 +65,48 @@ internal interface PhaseRunState : PhaseLaunchState {
 
   /** Resolves, checks out, and records the feature branch file-mutating steps run on, reported under [guardPhase]. */
   fun ensureFeatureBranch(guardPhase: String): FeatureTaskRuntimeBranchSetupOutcome
+
+  /**
+   * Records the review run [reviewRunId] and its [result] where the state keeps review history, emitting the pass's
+   * stage telemetry only when [laneTelemetryRecorded] says the review strategy did not already record it. A durable
+   * run records review history through its workflow records and keeps this a no-op.
+   */
+  fun recordReviewRun(
+    reviewRunId: String,
+    result: ParallelCodeReviewResult,
+    laneTelemetryRecorded: Boolean,
+  ) = Unit
+
+  /**
+   * The target every review pass of the run reviews: [resolve] runs on the first pass and a state that pins the
+   * target returns that result on later passes, so a fix that dirties the tree does not change what is re-reviewed.
+   */
+  fun pinnedReviewTarget(resolve: () -> ReviewTarget): ReviewTarget = resolve()
+
+  /**
+   * Called when the quality gate of [stepName] finds no declared pack gate. A durable run falls back to the
+   * runtime-owned build and keeps this a no-op; a state with no fallback fails the run here.
+   */
+  fun qualityGateAbsent(stepName: String) = Unit
+
+  /**
+   * Reports that the quality-check gate of [stepName] started on the [detectedStack] pack, whose first gate run found
+   * [initialFailureCount] failures. A durable run reports through its run telemetry.
+   */
+  fun qualityCheckStarted(
+    stepName: String,
+    detectedStack: String,
+    initialFailureCount: Int,
+  ) = Unit
+
+  /**
+   * Reports that the quality-check gate of [stepName] finished after [iterations] gate runs, whose last run found
+   * [finalFailureCount] failures in [failingCheckNames]; the check passed exactly when that count is zero.
+   */
+  fun qualityCheckFinished(
+    stepName: String,
+    finalFailureCount: Int,
+    failingCheckNames: List<String>,
+    iterations: Int,
+  ) = Unit
 }

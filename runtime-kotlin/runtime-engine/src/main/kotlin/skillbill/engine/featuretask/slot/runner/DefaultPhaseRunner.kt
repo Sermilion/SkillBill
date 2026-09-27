@@ -72,7 +72,9 @@ class DefaultPhaseRunner(
     if (outcome is AgentRunLaunchFacts) {
       state.recordTokenUsage(step, estimateTokens(input.facts.briefingText), estimateTokens(outcome.stdout))
     }
-    val settled = state.settledEnvelope(step, state.settlementTarget(attempt))
+    val settled =
+      state.settlementTarget(attempt)?.let { target -> state.settledEnvelope(step, target) }
+        ?: PhaseSettledEnvelopeRead.None
     val manifest =
       when (val captured = captureAfter(input, before)) {
         is AfterCapture.Ready -> captured.manifest

@@ -20,6 +20,8 @@ Non-negotiable contracts:
 
 `bill-feature` presents one confirmation gate, then delegates to the foreground runtime driver with durable state, telemetry, packs, add-ons, and native subagents.
 
+`skill-bill phase <review|validation>` and `skill-bill code-review` run one in-memory phase through the same run loop, with no workflow row, branch, or checkpoint commit. `skill-bill code-review` finds, verifies, and fixes findings in both modes. `commit_push` and the durable definitions are not runnable on their own.
+
 Bundled skills and packs are defaults, not the framework boundary. Teams may replace them while retaining governed source shape, generated-output boundaries, manifests, install staging, validators, dynamic discovery, and loud-fail.
 
 ## Taxonomy

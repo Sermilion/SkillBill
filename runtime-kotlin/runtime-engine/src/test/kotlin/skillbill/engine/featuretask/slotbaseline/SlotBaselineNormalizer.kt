@@ -13,6 +13,7 @@ internal object SlotBaselineNormalizer {
   const val REPO_ROOT_PLACEHOLDER = "__NORMALIZED_REPO_ROOT__"
   const val TEMP_PATH_PLACEHOLDER = "__NORMALIZED_TEMP_PATH__"
   const val EVENT_UUID_PLACEHOLDER = "__NORMALIZED_EVENT_UUID__"
+  const val INVOCATION_ID_PLACEHOLDER = "__NORMALIZED_INVOCATION_ID__"
 
   private const val REPO_ROOT_PREFIX = "skillbill-slot-baseline-repo-"
   private const val TEMP_HOME_PREFIX = "skillbill-slot-baseline-home-"
@@ -53,6 +54,8 @@ internal object SlotBaselineNormalizer {
 
   private val reviewRunIdPattern = Regex("""rvw-\d{8}-\d{6}-[a-z0-9]+""")
 
+  private val invocationIdPattern = Regex("""phr-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}""")
+
   fun newRepoRoot(): Path = Files.createTempDirectory(REPO_ROOT_PREFIX)
 
   fun newTempHome(): Path = Files.createTempDirectory(TEMP_HOME_PREFIX)
@@ -75,6 +78,7 @@ internal object SlotBaselineNormalizer {
       .let { sha64Pattern.replace(it, SHA64_PLACEHOLDER) }
       .let { sha40Pattern.replace(it, SHA40_PLACEHOLDER) }
       .let { reviewRunIdPattern.replace(it, REVIEW_RUN_ID_PLACEHOLDER) }
+      .let { invocationIdPattern.replace(it, INVOCATION_ID_PLACEHOLDER) }
 
   private fun enumWireValue(value: Enum<*>): Any =
     value.javaClass.methods

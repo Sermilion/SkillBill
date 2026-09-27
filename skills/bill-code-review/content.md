@@ -119,9 +119,10 @@ When the caller supplied an explicit `mode:delegated`, pass `--execution-mode de
 instead. Omission and `mode:auto` always pass `--execution-mode inline`.
 
 Pass `--diff-file` with paired `--base-revision` and
-`--head-revision` when the caller already materialized an exact diff. Pass
-`--baseline-untracked-include` / `--baseline-untracked-exclude` when the caller
-supplied that inventory.
+`--head-revision` when the caller already materialized an exact diff. With
+`--execution-mode delegated`, pass `--baseline-untracked-include` /
+`--baseline-untracked-exclude` when the caller supplied that inventory; inline
+mode rejects them.
 
 When a governed feature caller supplies a labelled `Selected agent add-ons`
 section, treat that section as an immutable compact-context field. The driver
@@ -132,3 +133,8 @@ forwards it; do not rediscover add-ons.
 Display the driver's stdout as the review result. It already includes the risk
 register with provenance labels and any recorded stage verdicts. Do not rewrite
 findings, invent a second merge, or re-run the review in this session.
+
+The driver runs the in-memory review phase: it verifies the findings and fixes
+Blocker and Major findings in the working tree before it reports the rest. Do
+not apply those fixes again. A `# Review phase blocked` line means the phase
+stopped before it finished; report it and exit non-zero.

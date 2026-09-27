@@ -2287,3 +2287,27 @@ Decision: Delete the whole experiment surface — engine services, ports, domain
 Reason: Unreachable machinery with no consumer costs maintenance at every contract bump and blocks the boundary guards it sits behind. Deletion over addition.
 Alternatives considered: Keep the surface behind a disabled flag (rejected: the flag is still a live seam across nine modules). Drop the tables without a migration (rejected: existing stores would keep orphan tables forever). Loud-fail a leftover `experiments` config key (rejected: breaks upgrades for repos that enabled it).
 Revisit when: a concrete experiment with a named consumer of its outcome exists; re-add from the SKILL-366 history rather than reviving the generic framework speculatively.
+
+## [2026-09-27] Phase runs share the run loop over an in-memory run state (SKILL-380)
+
+Context: `skill-bill code-review` drove `ParallelCodeReviewRunner` directly, so a standalone review never verified or fixed findings, and no other phase could run outside a durable feature-task workflow.
+Decision: `PhaseRunEntry` (`skillbill.engine.featuretask.phaserun`) drives an `IN_MEMORY` skeleton definition (`review`, `validation`) through the same `FeatureTaskRuntimeRunLoopEntry` as a full run, over `InMemoryPhaseRunState`. It keeps no workflow row, resolves no branch, and loud-fails a checkpoint commit with `InMemoryPhaseRunUnsupportedError`. `PhaseRunState` gains three default no-op capabilities (`recordReviewRun`, `qualityCheckStarted`, `qualityCheckFinished`) that only the in-memory state implements, so full-run records and telemetry are unchanged. `skill-bill phase` and `skill-bill code-review` both route through it; `RuntimeComponent.phaseRunEntry` replaces `parallelCodeReviewRunner`.
+Reason: One loop and one strategy set means a phase run cannot drift from the full run. A second, review-only driver would duplicate the review, verify, and fix edges.
+Alternatives considered: Run a phase over a throwaway durable workflow row (rejected: leaves rows and branches behind and needs cleanup). A dedicated review driver (rejected: duplicates the slot strategies).
+Revisit when: a phase run needs resume, or phase-run lifecycle events are wanted (they wait for a telemetry contract-version bump, which would also carry a phase invocation id).
+
+## [2026-09-27] Phase validation keeps pack-build's triage and repair cap (SKILL-380)
+
+Context: `skill-bill phase validation` reports the same quality_check events as `bill-code-check`. The skill runs the pack gate and opens one repair session. The `pack-build` strategy triages each failing gate run and repairs for up to `MAX_REPAIR_TURNS` (3) turns.
+Decision: The `VALIDATION` definition selects `pack-build` unchanged, so a phase run inherits its triage and repair-turn cap. quality_check_finished reports the last gate run's failure count and its distinct sorted rule or test ids. A phase run reports `scope_type` `working_tree`, since it validates the working tree rather than a branch diff.
+Reason: One quality-gate strategy for full runs and phase runs. A phase-only single-repair variant would be a second strategy that drifts.
+Alternatives considered: A phase-run strategy with one repair session, matching `bill-code-check` (rejected: duplicates `pack-build`). Report `branch_diff` like the skill (rejected: a phase run has no branch).
+Revisit when: `bill-code-check` routes through `skill-bill phase validation`, so the two paths must agree on the repair budget.
+
+## [2026-09-27] Census of the inline review lane shape for SKILL-383 (SKILL-380)
+
+Context: Both review modes now run the whole `code_review` slot. Inline reviews through `InlineReviewStrategy`, so `ParallelCodeReviewRunner` no longer runs an inline lane for `skill-bill code-review`.
+Decision: Record a grep census over production sources (`src/main`, `skills/`, `platform-packs/`) for SKILL-383. `ParallelCodeReviewRunner` has one production caller, `DelegatedReviewStrategy`, bound in `RuntimeFeatureTaskSlotProvides`, and it always passes `CodeReviewExecutionMode.DELEGATED`. The inline lane shape is still in runtime-application but no production request reaches it: `PARALLEL_REVIEW_INLINE_NATIVE_WORKER` (`ParallelCodeReviewRunner`, `ParallelCodeReviewRunnerLaneLaunch`, `ParallelCodeReviewInlineCoverageContinuation`), `PARALLEL_REVIEW_INLINE_DEPTH_DIRECTIVE` (`ParallelCodeReviewRunnerParentPrompt`), and `attributeInlineFindings` (`ParallelCodeReviewRunnerFailureAdmission`). `bill-code-review-inline` appears in `skills/bill-code-review-inline/` (its content and native agent) and in `skills/bill-code-review/content.md`.
+Reason: SKILL-383 decides whether to delete the inline lane shape and the `bill-code-review-inline` agent. The census saves it from re-deriving the caller set.
+Alternatives considered: Delete the inline lane shape in SKILL-380 (rejected: out of scope, and the listed skill stays installed).
+Revisit when: SKILL-383 starts; re-run the census first, since callers may have changed.

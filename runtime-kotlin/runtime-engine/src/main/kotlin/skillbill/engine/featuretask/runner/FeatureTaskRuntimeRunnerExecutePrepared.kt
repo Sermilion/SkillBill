@@ -12,10 +12,10 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.subtask.RemediationBaseBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationBaseCoherent
 import skillbill.engine.featuretask.review.core.auditGapIterationCount
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopDrive
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
+import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunState
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
@@ -88,14 +88,13 @@ fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
       is RemediationBaseCoherent -> Unit
     }
   }
-  val loop = FeatureTaskRuntimeRunLoop(context = context)
-  runRequest.operatorDecision?.let { decision ->
-    loop.applyOperatorDecision()?.let { rejection ->
-      throw FeatureTaskRuntimeOperatorDecisionRejectedError(runRequest.workflowId, decision.wireValue, rejection)
+  return runLoopEntry.run(context) { loop ->
+    runRequest.operatorDecision?.let { decision ->
+      loop.applyOperatorDecision()?.let { rejection ->
+        throw FeatureTaskRuntimeOperatorDecisionRejectedError(runRequest.workflowId, decision.wireValue, rejection)
+      }
     }
   }
-  loop.drive()
-  return loop.report()
 }
 
 internal fun FeatureTaskRuntimeRunner.createExecutePreparedRunState(
@@ -109,10 +108,7 @@ internal fun FeatureTaskRuntimeRunner.createExecutePreparedRunState(
     durableInitialLedger = recorder.loadPhaseLedger(runRequest.workflowId).orEmpty(),
     outputValidator = outputValidator,
     initialReviewGeneration = recorder.reconcileReviewGeneration(runRequest.workflowId),
-    stepVerdictRule = { stepId ->
-      stepId.takeIf { id -> PhaseSlot.entries.any { slot -> id in slot.steps } }
-        ?.let { id -> strategies.strategyOrNull(id, facts)?.verdictRule(id, diagnostics) }
-    },
+    stepVerdictRule = slotStepVerdictRule(strategies, facts, diagnostics),
     resumeRules = strategies.resumeRules(facts),
   )
 }

@@ -102,7 +102,7 @@ object PhaseAttemptOnce {
           stepName = run.phaseId,
           directive = "",
           priorValues = emptyMap(),
-          operatorInstructions = null,
+          operatorInstructions = run.request.phaseInstructions?.forStep(run.phaseId),
           facts = run.stepFacts(run.request.issueKey, iteration),
           policy = run.policy,
         ),

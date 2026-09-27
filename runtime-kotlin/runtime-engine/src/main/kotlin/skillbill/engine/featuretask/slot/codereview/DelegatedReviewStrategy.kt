@@ -6,6 +6,7 @@ import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelReviewLaneStatus
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.reviewevidence.model.ParallelReviewScope
+import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
@@ -18,7 +19,6 @@ import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepSession
 import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
-import skillbill.engine.featuretask.slot.ReviewTarget
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.install.model.SupportedAgent
@@ -100,6 +100,8 @@ internal class DelegatedReviewPass(
 
   override val directive: String = DELEGATED_REVIEW_DIRECTIVE
 
+  override val recordsLaneTelemetry: Boolean = true
+
   override fun executedTier(resolved: CodeReviewExecutionMode): CodeReviewExecutionMode =
     CodeReviewExecutionMode.DELEGATED
 
@@ -147,15 +149,20 @@ internal class DelegatedReviewPass(
   ): ParallelCodeReviewRequest {
     val branch = state.resolvedBranch()
     val baselineUntracked = branch?.baselineUntrackedPaths.orEmpty().filter(String::isNotBlank).distinct().sorted()
+    val invocation = run.request.reviewInvocation
     return delegatedReviewRequest(run.resolvedAgent.resolvedAgentId, run.request.repoRoot, run.reviewTarget, input)
       .copy(
         timeout = launch.timeout,
         reviewRunId = reviewRunId,
+        reviewSessionId = invocation?.reviewSessionId,
         activityWorkflowId = run.request.workflowId.takeIf(String::isNotBlank),
         activityParentWorkflowId = run.request.goalContinuation?.parentWorkflowId?.takeIf(String::isNotBlank),
-        baselineUntrackedPolicy = ParallelCodeReviewRequest.baselineUntrackedPolicy(emptyList(), baselineUntracked),
+        prelaunchExpansions = invocation?.prelaunchExpansions.orEmpty(),
+        baselineUntrackedPolicy =
+          invocation?.baselineUntrackedPolicy
+            ?: ParallelCodeReviewRequest.baselineUntrackedPolicy(emptyList(), baselineUntracked),
         ownedPathspec = branch?.workflowOwnedPaths.orEmpty().filter(String::isNotBlank).distinct(),
-        specPath = Path.of(run.request.runInvariants.specReference),
+        specPath = reviewSpecPath(run),
         selectedAgentAddonsSection = AgentAddonPromptFormatter.format(run.request.agentAddonSelection),
         laneProgressIdleTimeout = launch.progressIdleTimeout ?: READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes,
       )
@@ -182,6 +189,7 @@ internal fun delegatedReviewRequest(
         Triple(ParallelReviewScope.WORKTREE_FROM_BASE, input.reviewBaseSha, input.currentHeadSha)
       ReviewTarget.Uncommitted -> Triple(ParallelReviewScope.UNCOMMITTED, null, null)
       is ReviewTarget.Commit -> Triple(ParallelReviewScope.BRANCH, "${target.sha}^", target.sha)
+      is ReviewTarget.Scoped -> Triple(target.scope, target.baseRevision, target.headRevision)
     }
   return ParallelCodeReviewRequest(
     agent1Id = agentId,
@@ -190,6 +198,7 @@ internal fun delegatedReviewRequest(
     timeout = null,
     codeReviewMode = CodeReviewExecutionMode.DELEGATED,
     resolvedTier = CodeReviewExecutionMode.DELEGATED,
+    suppliedDiffPath = (target as? ReviewTarget.Scoped)?.suppliedDiffPath,
     baseRevision = base,
     headRevision = head,
   )

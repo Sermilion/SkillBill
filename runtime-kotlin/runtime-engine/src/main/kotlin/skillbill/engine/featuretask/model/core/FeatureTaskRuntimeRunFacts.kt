@@ -2,9 +2,11 @@ package skillbill.engine.featuretask.model.core
 
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.config.model.CompactionSettings
+import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.time.Duration
 
@@ -59,4 +61,20 @@ interface FeatureTaskRuntimeRunFacts {
 
   /** The transitions that replace the definition's declaration, when a caller overrides them. */
   val transitionsOverride: FeatureTaskRuntimeTransitionDeclaration?
+
+  /** The skeleton a phase run drives; null lets the run derive the standalone or goal-child skeleton. */
+  val skeletonDefinition: SkeletonDefinition? get() = null
+
+  /** The caller-supplied review target and review identity of a phase run; null for a full run. */
+  val reviewInvocation: ReviewInvocation? get() = null
+
+  /** The operator instructions a phase run adds to its step prompts; null for a full run. */
+  val phaseInstructions: PhaseInstructions? get() = null
+}
+
+data class PhaseInstructions(
+  val text: String,
+  val stepIds: Set<String> = emptySet(),
+) {
+  fun forStep(stepId: String): String? = text.takeIf { stepIds.isEmpty() || stepId in stepIds }
 }

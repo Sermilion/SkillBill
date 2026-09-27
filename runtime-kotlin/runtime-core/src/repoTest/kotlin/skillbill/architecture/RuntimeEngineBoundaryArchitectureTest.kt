@@ -918,6 +918,12 @@ class FeatureTaskDurableStoreArchitectureTest {
     val durable = FeatureTaskDurableStoreScan.durableReferences(sources)
     assertTrue(guarded > 0, "The durable-store rule read no run-loop or slot file.")
     assertTrue(durable.isNotEmpty(), "The durable package references no durable store; the name list is stale.")
+    listOf("runloop/", "slot/", "phaserun/").forEach { root ->
+      assertTrue(
+        FeatureTaskDurableStoreScan.guardedSources(sources).keys.any { path -> path.startsWith(root) },
+        "The durable-store rule read no file under $root.",
+      )
+    }
 
     val violations = FeatureTaskDurableStoreScan.violations(sources)
 
@@ -986,6 +992,55 @@ class FeatureTaskDurableStoreArchitectureTest {
           "runloop/durable/SyntheticDurable.kt" to durable,
         ),
       ),
+    )
+  }
+
+  @Test
+  fun `the phase-run entry stays off durable stores, step ids, definition ids and the launch port`() {
+    val sources = featureTaskEngineSources()
+    val read = sources.keys.count(::isFeatureTaskPhaseRunPath)
+    assertTrue(read > 0, "The phase-run rules read no phaserun file.")
+
+    assertEquals(emptyList(), FeatureTaskPhaseRunDefinitionScan.violations(sources), "Read $read phaserun files.")
+  }
+
+  @Test
+  fun `phase-run rules catch a synthetic entry that decides by definition, step or durable store`() {
+    val entry =
+      """
+      package skillbill.engine.featuretask.phaserun
+
+      import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunState
+      import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+
+      internal class SyntheticEntry(private val launcher: GoalRunnerSubtaskLauncher) {
+        fun review(definition: Any) = definition == SkeletonDefinition.REVIEW
+        fun step(step: String) = step == "review"
+        fun commit(git: Any) = git.toString().also { amendHeadCommit() }
+      }
+      """.trimIndent()
+    val sources = mapOf("phaserun/SyntheticEntry.kt" to entry)
+
+    assertEquals(
+      listOf("phaserun/SyntheticEntry.kt references SkeletonDefinition.REVIEW"),
+      FeatureTaskPhaseRunDefinitionScan.violations(sources),
+    )
+    assertEquals(
+      listOf(
+        "phaserun/SyntheticEntry.kt imports skillbill.engine.featuretask.runloop.durable.DurablePhaseRunState",
+        "phaserun/SyntheticEntry.kt references amendHeadCommit",
+      ),
+      FeatureTaskDurableStoreScan.violations(sources),
+    )
+    assertEquals(
+      listOf("phaserun/SyntheticEntry.kt:8 step-id literal \"review\""),
+      FeatureTaskStepIdentityScan.violations(sources, PhaseSlot.entries.flatMap { slot -> slot.steps }),
+    )
+    assertEquals(
+      listOf(
+        "phaserun/SyntheticEntry.kt imports skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
+      ),
+      FeatureTaskLaunchPortScan.violations(sources),
     )
   }
 }

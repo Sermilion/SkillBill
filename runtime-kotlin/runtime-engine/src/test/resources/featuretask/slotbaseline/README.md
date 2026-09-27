@@ -16,8 +16,9 @@ Harness sources live in
 | `goal-child-build/` | `SlotBaselineFullRunCapture.goalChildBuild()` | Goal child for subtask 1 at the BUILD gate (`kotlinPackWithBuildGate`) |
 | `goal-child-validate/` | `SlotBaselineFullRunCapture.goalChildValidate()` | Goal child for subtask 2 at the VALIDATE gate (`kotlinPackWithValidationGate`) |
 | `goal-planning/` | `SlotBaselineGoalPlanningCapture.encodedFiles()` | `DefaultGoalPlanningSweep` preplan and plan over a two-subtask manifest, then `GoalPlanningLogService.log` |
-| `code-review/` | `SlotBaselineCodeReviewCapture.encodedFiles()` | `parallelCodeReviewRunnerOf` in INLINE and DELEGATED mode |
+| `code-review/` | `SlotBaselineCodeReviewCapture.encodedFiles()` | `PhaseRunEntry` over the review definition with the request `skill-bill code-review` builds (a scoped `HEAD^..HEAD` target, the pinned run and session ids), in INLINE and DELEGATED mode |
 | `mcp-lifecycle/` | `SlotBaselineMcpLifecycleCapture.encodedFiles()` | `LifecycleTelemetryService`, the service the MCP tools call |
+| `phase/` | `SlotBaselinePhaseRunCapture.encodedFiles()` | `skill-bill phase review` in INLINE and DELEGATED mode with no target, and `skill-bill phase validation` over a gate that fails once and then passes |
 
 Full-run bundles run through `telemetryRunnerHarness` against real SQLite.
 The phase launcher is `satisfiedAuditLauncher()`. The review step runs
@@ -39,14 +40,24 @@ contains:
 - `planning-attempt-log.json`: progress events in persistence wire form
 - `planning-log.json`
 
+Both `code-review/` and the review captures in `phase/` run
+`SlotBaselinePhaseRunHarness`. The review finds one Blocker in `src/Foo.kt`.
+`verify_findings` confirms it, `implement_fix` rewrites the file, and the
+re-review approves. Delegated mode runs `scriptedDelegatedReviewRunner`.
+
 `code-review/` holds, for each mode:
 
-- `inline-output.json` and `delegated-output.json`: the result fields the CLI prints
+- `inline-output.json` and `delegated-output.json`: the phase-run result fields the CLI prints, with the review result under `review_result`
 - `review-runs-*.json`: every `review_*` table
 - `review-telemetry-*.json`: `telemetry_outbox` rows
 
 `mcp-lifecycle/` holds the outbox payloads for `quality_check_started`,
 `quality_check_finished` and `pr_description_generated`.
+
+`phase/` holds:
+
+- `review-inline-output.json`, `review-delegated-output.json` and `validation-output.json`: the phase-run result fields the CLI prints, including the invocation id
+- `review-inline-telemetry.json`, `review-delegated-telemetry.json` and `validation-telemetry.json`: `telemetry_outbox` rows
 
 ## Pinned ids and clock
 
@@ -81,6 +92,7 @@ In any string, in this order:
 5. `__NORMALIZED_SHA64__` replaces 64-hex-digit hashes.
 6. `__NORMALIZED_SHA40__` replaces 40-hex-digit hashes.
 7. `__NORMALIZED_REVIEW_RUN_ID__` replaces `rvw-<8 digits>-<6 digits>-<suffix>`.
+8. `__NORMALIZED_INVOCATION_ID__` replaces a phase-run invocation id, `phr-<uuid>`.
 
 ## Canonicalisations
 
@@ -107,7 +119,7 @@ to runtime-cli, and runtime-engine tests cannot reach them. So instead of
 rendered CLI text, these fixtures record:
 
 - `planning-log.json`: the payload `GoalPlanningLogCommand` prints under JSON output
-- `*-output.json`: the `ParallelCodeReviewResult` fields that `writeParallelReviewResult` prints
+- `*-output.json`: the `PhaseRunResult` fields the CLI prints, and the `ParallelCodeReviewResult` fields that `writeParallelReviewResult` prints
 
 ## Regenerating
 
@@ -145,3 +157,6 @@ ledger expects must be regenerated in the subtask that the ledger names.
   directive (settle completed, or blocked with a progress or no_progress verdict) in
   place of the `validation_passed` directive. This is the ledger's allowed validate
   prompt change. Every other file is unchanged.
+- Subtask 8 (phase review and validation): `code-review/` routes through
+  `PhaseRunEntry` over the review definition, so both modes find, verify and fix.
+  `phase/` is new.

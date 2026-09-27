@@ -8,6 +8,8 @@ import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassCarryForwa
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassInFlight
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReserved
+import skillbill.engine.featuretask.model.review.ReviewTarget
+import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeScopedReviewBaseline
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -16,10 +18,12 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.error.core.DatabaseBusyError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
+import java.nio.file.Path
 
 internal sealed interface InlineReviewPrepared {
   data class Ready(val input: GoalSubtaskReviewInput) : InlineReviewPrepared
@@ -33,11 +37,24 @@ internal object InlineReviewPreparation {
     context: PhaseAttemptEnvironment,
     state: PhaseStepState,
   ): InlineReviewPrepared =
-    if (isGoalContinuationRun(run.request)) {
-      reserveGoalReview(run, context, state)
-    } else {
-      prepareStandaloneReview(run, context, state)
+    when {
+      run.request.reviewInvocation != null -> preparePhaseReview(run, context, state)
+      isGoalContinuationRun(run.request) -> reserveGoalReview(run, context, state)
+      else -> prepareStandaloneReview(run, context, state)
     }
+
+  private fun preparePhaseReview(
+    run: PhaseRun,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
+  ): InlineReviewPrepared {
+    val head = context.phaseGates.gitOperations.runtimePhaseHeadCommit(run.request.repoRoot)
+    if (head !is WorkflowGitOperationResult.Ok) {
+      return blocked(state, "Phase review could not resolve HEAD: ${head.error}")
+    }
+    val sha = head.value.trim()
+    return InlineReviewPrepared.Ready(GoalSubtaskReviewInput(sha, sha, trackedDelta = "", ownedUntrackedPatches = ""))
+  }
 
   fun goalReviewPreparationFailure(
     stage: String,
@@ -200,6 +217,23 @@ internal fun completedOutput(
     output.normalizedOutput,
     output.repairEvidence,
   )
+
+internal fun reviewSpecPath(run: PhaseRun): Path? =
+  if (run.request.reviewInvocation != null) null else Path.of(run.request.runInvariants.specReference)
+
+object ReviewTargetResolver {
+  fun resolve(
+    requested: ReviewTarget?,
+    porcelainStatus: String,
+  ): ReviewTarget =
+    requested ?: if (FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(porcelainStatus).isNotEmpty()) {
+      ReviewTarget.Uncommitted
+    } else {
+      ReviewTarget.Commit(HEAD_REVISION)
+    }
+
+  private const val HEAD_REVISION: String = "HEAD"
+}
 
 class MissingCarriedForwardGoalReviewResultException : SkillBillRuntimeException(
   "Goal review result was not carried forward from the prior phase.",

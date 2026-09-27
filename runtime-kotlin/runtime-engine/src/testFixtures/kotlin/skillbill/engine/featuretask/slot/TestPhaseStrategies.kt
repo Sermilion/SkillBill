@@ -118,5 +118,15 @@ fun testPhaseStrategyBindings(
             ),
           ),
       ),
+    SkeletonDefinition.REVIEW to
+      mapOf(
+        PhaseSlot.CODE_REVIEW to
+          PhaseStrategyBinding.ByFact(
+            CodeReviewExecutionMode.entries.associateWith { mode ->
+              if (mode == CodeReviewExecutionMode.DELEGATED) codeReviewStrategyId else InlineReviewStrategy.ID
+            },
+          ),
+      ),
+    SkeletonDefinition.VALIDATION to mapOf(PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(PackBuildStrategy.ID)),
   )
 }

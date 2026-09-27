@@ -1,4 +1,4 @@
-package skillbill.engine.featuretask.runloop.durable
+package skillbill.engine.featuretask.runloop.state
 
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
@@ -50,7 +50,7 @@ import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhas
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 
-internal class DurablePhaseStepState(
+internal class RunLoopPhaseStepState(
   private val environment: PhaseAttemptEnvironment,
   private val run: PhaseRun,
 ) : PhaseStepState,

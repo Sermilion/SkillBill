@@ -601,7 +601,7 @@ object PrincipleEnforcementInventory {
       "installService",
       "learningService",
       "lifecycleTelemetryService",
-      "parallelCodeReviewRunner",
+      "phaseRunEntry",
       "repoValidationGateway",
       "repositoryEnclosingRootPort",
       "resolvedEnvironmentContext",

@@ -255,7 +255,7 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
           reason,
         )
       } ?: run {
-        session.transitionResolvedBranch(requireNotNull(setup.establishedBranch))
+        setup.establishedBranch?.let(session::transitionResolvedBranch)
         FeatureTaskRuntimeRunLoopPhaseBlocking.clearRecoveredBranchSetupBlock(state, phaseId)
         null
       }

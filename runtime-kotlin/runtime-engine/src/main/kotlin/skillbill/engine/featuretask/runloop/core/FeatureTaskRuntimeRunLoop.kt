@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.runloop.core
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
@@ -90,6 +91,19 @@ fun resolveReviewPassNumber(
     "Review completed-pass count cannot exceed one, was $completedReviewPassCount."
   }
   return 1
+}
+
+@Inject
+open class FeatureTaskRuntimeRunLoopEntry {
+  internal open fun run(
+    context: FeatureTaskRuntimeRunLoopContext,
+    beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit = {},
+  ): FeatureTaskRuntimeRunReport {
+    val loop = FeatureTaskRuntimeRunLoop(context = context)
+    beforeDrive(loop)
+    loop.drive()
+    return loop.report()
+  }
 }
 
 class FeatureTaskRuntimeRunLoop internal constructor(

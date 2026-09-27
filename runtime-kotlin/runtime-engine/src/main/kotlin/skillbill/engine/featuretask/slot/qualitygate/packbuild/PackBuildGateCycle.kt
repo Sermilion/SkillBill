@@ -27,14 +27,18 @@ import skillbill.engine.featuretask.validation.model.ValidationGateAgentTriageLa
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleRequest
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
+import skillbill.engine.featuretask.validation.model.ValidationGateProgressStore
+import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult
 import skillbill.ports.taskruntime.validateBuildReceipt
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 
 private const val BUILD_RECEIPT_KEY = "build_receipt"
+private const val RULE_OR_TEST_ID_KEY = "rule_or_test_id"
 
 internal class PackBuildGateCycle(
   private val context: PhaseAttemptEnvironment,
@@ -46,12 +50,26 @@ internal class PackBuildGateCycle(
         ?: return PhaseOutcome.blocked("Build gate cycle could not resolve a repository checkpoint fingerprint.")
     val iteration = call.state.nextStepIteration()
     persistRunning(run, iteration)?.let { return it }
+    var gateRuns = 0
+    val changedPaths = context.gateChangedPaths(run)
+    val reporting = QualityCheckReportingStore(run, changedPaths, call.state.records.buildGateProgressStore())
     val cycle =
       context.phaseGates.buildGateCoordinator.execute(
-        cycle = cycleRequest(run, iteration, checkpoint),
-        onGateRunCount = { context.observability.validationGateProgress() },
+        cycle = cycleRequest(run, iteration, checkpoint, changedPaths, reporting),
+        onGateRunCount = { count ->
+          gateRuns = count
+          context.observability.validationGateProgress()
+        },
       )
-    return settle(run, iteration, checkpoint, cycle)
+    val outcome = settle(run, iteration, checkpoint, cycle)
+    val finalFindings = reporting.lastFindings
+    context.runState.qualityCheckFinished(
+      run.phaseId,
+      finalFailureCount = finalFindings.size,
+      failingCheckNames = finalFindings.mapNotNull { it[RULE_OR_TEST_ID_KEY] }.distinct().sorted(),
+      iterations = gateRuns,
+    )
+    return outcome
   }
 
   private fun persistRunning(
@@ -98,21 +116,56 @@ internal class PackBuildGateCycle(
     run: PhaseRun,
     iteration: Int,
     checkpoint: String,
+    changedPaths: List<String>,
+    progressStore: ValidationGateProgressStore,
   ): ValidationGateCycleRequest =
     ValidationGateCycleRequest(
       repoRoot = run.request.repoRoot,
       request = run.request,
       phaseId = run.phaseId,
       validationDepth = ValidationDepth.DEFAULT,
-      changedPaths = context.gateChangedPaths(run),
+      changedPaths = changedPaths,
       repositoryCheckpoint = checkpoint,
       agentRepairLauncher =
         ValidationGateAgentRepairLauncher { findings, repairTurn, triagePlan ->
           launchRepair(run, iteration, PackBuildRepairTurn(findings, repairTurn, triagePlan))
         },
-      progressStore = call.state.records.buildGateProgressStore(),
+      progressStore = progressStore,
       agentTriageLauncher = ValidationGateAgentTriageLauncher { findings -> launchTriage(run, iteration, findings) },
     )
+
+  /**
+   * Reports the quality-check start once the first gate run has counted its failures, and keeps the findings of the
+   * latest gate run for the finish report.
+   */
+  private inner class QualityCheckReportingStore(
+    private val run: PhaseRun,
+    private val changedPaths: List<String>,
+    private val delegate: ValidationGateProgressStore,
+  ) : ValidationGateProgressStore {
+    var lastFindings: List<Map<String, String?>> = emptyList()
+      private set
+
+    private var reported = false
+
+    override fun persist(
+      workflowId: String,
+      progress: FeatureTaskRuntimeValidationGateProgress,
+    ) {
+      delegate.persist(workflowId, progress)
+      lastFindings = progress.completeFindings
+      if (reported) return
+      reported = true
+      val resolution = context.phaseGates.validationGateResolver.resolve(changedPaths)
+      context.runState.qualityCheckStarted(
+        run.phaseId,
+        detectedStack = (resolution as? ValidationGateResolution.Declared)?.packSlug.orEmpty(),
+        initialFailureCount = progress.completeFindings.size,
+      )
+    }
+
+    override fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress? = delegate.load(workflowId)
+  }
 
   private fun launchTriage(
     run: PhaseRun,
@@ -170,7 +223,8 @@ internal class PackBuildGateCycle(
     cycle: ValidationGateCycleResult,
   ): PhaseOutcome =
     when (cycle) {
-      ValidationGateCycleResult.AbsentFallback ->
+      ValidationGateCycleResult.AbsentFallback -> {
+        context.runState.qualityGateAbsent(run.phaseId)
         runtimeOwnedBuild(
           run,
           iteration,
@@ -180,6 +234,7 @@ internal class PackBuildGateCycle(
             measurements = emptyList(),
           ).payload,
         )
+      }
       is ValidationGateCycleResult.Terminal ->
         when (val terminal = cycle.outcome) {
           is ValidationGateCycleTerminalOutcome.Paused -> PhaseOutcome.paused(terminal.reason)

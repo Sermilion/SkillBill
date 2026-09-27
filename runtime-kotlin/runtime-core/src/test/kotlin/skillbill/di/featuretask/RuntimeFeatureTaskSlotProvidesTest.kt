@@ -79,6 +79,24 @@ class RuntimeFeatureTaskSlotProvidesTest {
   }
 
   @Test
+  fun `the review definition selects delegated only for delegated mode and validation runs pack-build`() {
+    val expected =
+      mapOf(
+        CodeReviewExecutionMode.AUTO to InlineReviewStrategy.ID,
+        CodeReviewExecutionMode.INLINE to InlineReviewStrategy.ID,
+        CodeReviewExecutionMode.DELEGATED to DelegatedReviewStrategy.ID,
+      )
+    expected.forEach { (mode, strategyId) ->
+      val facts = PhaseStrategySelectionFacts(SkeletonDefinition.REVIEW, setOf(mode))
+      assertEquals(strategyId, strategies.strategyFor(PHASE_REVIEW, facts).strategyId, "$mode")
+    }
+    assertEquals(
+      setOf(PHASE_BUILD),
+      strategies.selectedStepIds(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet())),
+    )
+  }
+
+  @Test
   fun `the goal child runs the stamped gate and the standalone run always validates`() {
     fun selectedGateSteps(
       definition: SkeletonDefinition,

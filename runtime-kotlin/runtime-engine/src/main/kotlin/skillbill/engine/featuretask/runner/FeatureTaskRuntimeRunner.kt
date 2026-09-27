@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
@@ -33,6 +34,7 @@ class FeatureTaskRuntimeRunner(
   val diagnostics: RuntimeDiagnostics,
   val clock: Clock,
   val probeWriters: FeatureTaskRuntimeProbeWriters,
+  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
 ) {
   val activityStampWriter get() = probeWriters.activityStampWriter
   val worktreeEditJournalWriter get() = probeWriters.worktreeEditJournalWriter

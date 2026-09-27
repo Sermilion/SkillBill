@@ -237,7 +237,14 @@ internal sealed interface FeatureTaskRuntimeBranchSetupOutcome {
     fun established(branch: String): FeatureTaskRuntimeBranchSetupOutcome = Established(branch)
 
     fun blocked(reason: String): FeatureTaskRuntimeBranchSetupOutcome = Blocked(reason)
+
+    fun unchanged(): FeatureTaskRuntimeBranchSetupOutcome = Unchanged
   }
+}
+
+private data object Unchanged : FeatureTaskRuntimeBranchSetupOutcome {
+  override val establishedBranch: String? get() = null
+  override val blockedReason: String? get() = null
 }
 
 private data class Established(val branch: String) : FeatureTaskRuntimeBranchSetupOutcome {

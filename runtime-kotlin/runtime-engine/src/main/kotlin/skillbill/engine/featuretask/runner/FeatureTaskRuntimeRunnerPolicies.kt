@@ -32,7 +32,7 @@ fun serializeTokenData(accumulator: Map<String, Pair<Int, Int>>): Pair<String?, 
 }
 
 fun skeletonDefinitionFor(request: FeatureTaskRuntimeRunFacts): SkeletonDefinition =
-  SkeletonDefinition.forRun(isGoalContinuationRun(request))
+  request.skeletonDefinition ?: SkeletonDefinition.forRun(isGoalContinuationRun(request))
 
 fun transitionsFor(request: FeatureTaskRuntimeRunFacts): FeatureTaskRuntimeTransitionDeclaration =
   request.transitionsOverride ?: skeletonDefinitionFor(request).declaration()

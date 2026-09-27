@@ -24,5 +24,6 @@ internal object SlotBaselineCommittedTree {
       putAll(SlotBaselineGoalPlanningCapture.encodedFiles())
       putAll(SlotBaselineCodeReviewCapture.encodedFiles())
       putAll(SlotBaselineMcpLifecycleCapture.encodedFiles())
+      putAll(SlotBaselinePhaseRunCapture.encodedFiles())
     }.toSortedMap()
 }

@@ -45,6 +45,9 @@ internal interface CodeReviewPass {
   /** The review step's task directive. */
   val directive: String
 
+  /** Whether [review] already records the pass's lane and stage telemetry, so the run state must not repeat it. */
+  val recordsLaneTelemetry: Boolean
+
   /** The tier this pass executes for the review mode the pass sequence [resolved]. */
   fun executedTier(resolved: CodeReviewExecutionMode): CodeReviewExecutionMode
 
@@ -205,7 +208,7 @@ internal fun reviewStepInput(
     stepName = run.phaseId,
     directive = directive,
     priorValues = emptyMap(),
-    operatorInstructions = null,
+    operatorInstructions = run.request.phaseInstructions?.forStep(run.phaseId),
     facts = run.stepFacts(run.request.workflowId.takeIf(String::isNotBlank) ?: REVIEW_ISSUE_KEY, attempt = null),
     policy = run.policy,
   )

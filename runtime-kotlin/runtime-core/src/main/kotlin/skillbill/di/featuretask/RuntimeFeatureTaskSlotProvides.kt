@@ -87,6 +87,20 @@ internal interface RuntimeFeatureTaskSlotProvides {
                 ),
               ),
           ),
+        SkeletonDefinition.REVIEW to
+          mapOf(
+            PhaseSlot.CODE_REVIEW to
+              PhaseStrategyBinding.ByFact(
+                CodeReviewExecutionMode.entries.associateWith { mode ->
+                  when (mode) {
+                    CodeReviewExecutionMode.DELEGATED -> DelegatedReviewStrategy.ID
+                    CodeReviewExecutionMode.AUTO, CodeReviewExecutionMode.INLINE -> InlineReviewStrategy.ID
+                  }
+                },
+              ),
+          ),
+        SkeletonDefinition.VALIDATION to
+          mapOf(PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(PackBuildStrategy.ID)),
       ),
     )
 

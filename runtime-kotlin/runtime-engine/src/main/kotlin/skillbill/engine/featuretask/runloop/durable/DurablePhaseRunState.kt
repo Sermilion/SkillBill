@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.RunLoopPhaseStepState
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.slot.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.PhaseRunState
@@ -52,7 +53,7 @@ internal class DurablePhaseRunState(
 
   override fun unselectedStepIds(): Set<String> = runner.strategies.unselectedStepIds(strategySelectionFacts(facts))
 
-  override fun step(run: PhaseRun): PhaseStepState = DurablePhaseStepState(PhaseAttemptScope(run.request, this), run)
+  override fun step(run: PhaseRun): PhaseStepState = RunLoopPhaseStepState(PhaseAttemptScope(run.request, this), run)
 
   override fun ensureFeatureBranch(guardPhase: String): FeatureTaskRuntimeBranchSetupOutcome =
     runner.phaseGates.branchSetupRunner.ensureFeatureBranch(facts, telemetry, guardPhase)

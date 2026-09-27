@@ -15,6 +15,20 @@ internal fun featureTaskEngineSources(): Map<String, String> {
 
 internal fun isFeatureTaskSlotPath(path: String): Boolean = path.startsWith("slot/")
 
+internal fun isFeatureTaskPhaseRunPath(path: String): Boolean = path.startsWith("phaserun/")
+
+internal object FeatureTaskPhaseRunDefinitionScan {
+  private val DEFINITION_REFERENCE = Regex("""\bSkeletonDefinition\s*\.\s*([A-Z][A-Z0-9_]*)\b""")
+
+  fun violations(sources: Map<String, String>): List<String> =
+    sources.filterKeys(::isFeatureTaskPhaseRunPath).flatMap { (path, source) ->
+      DEFINITION_REFERENCE.findAll(ScannedKotlinSource(source).blanked)
+        .map { match -> "$path references SkeletonDefinition.${match.groupValues[1]}" }
+        .distinct()
+        .toList()
+    }
+}
+
 internal object FeatureTaskStepIdentityScan {
   private const val CONSTANT_FORM = "phase-id constant"
   private const val LITERAL_FORM = "step-id literal"
@@ -442,7 +456,8 @@ internal object FeatureTaskDurableStoreScan {
 
   fun guardedSources(sources: Map<String, String>): Map<String, String> =
     sources.filterKeys { path ->
-      (path.startsWith("runloop/") && !path.startsWith(DURABLE_PACKAGE)) || isFeatureTaskSlotPath(path)
+      (path.startsWith("runloop/") && !path.startsWith(DURABLE_PACKAGE)) || isFeatureTaskSlotPath(path) ||
+        isFeatureTaskPhaseRunPath(path)
     }
 
   fun durableReferences(sources: Map<String, String>): Set<String> =

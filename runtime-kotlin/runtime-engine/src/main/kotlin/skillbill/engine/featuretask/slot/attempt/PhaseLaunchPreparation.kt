@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.slot.attempt
 import skillbill.application.decomposition.baseBranch
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
-import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.phase.core.toMeasurementFailureClassification
@@ -322,7 +321,7 @@ object PhaseLaunchPreparation {
         PhaseLaunchPreparation
           .composeLaunchPromptInputs(context, run, handoff, priorCorrection, briefing)
           .copy(
-            phaseSettlement = iteration?.let { FeatureTaskRuntimePhaseSettlementTarget(run.request.workflowId, it) },
+            phaseSettlement = iteration?.let(runState::settlementTarget),
           )
       return PreparedLaunch(briefing, PhaseLaunchPreparation.composeLaunchPrompt(context, run, inputs, prompt))
     }

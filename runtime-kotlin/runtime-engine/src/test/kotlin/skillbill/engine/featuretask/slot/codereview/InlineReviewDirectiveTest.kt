@@ -4,7 +4,8 @@ import skillbill.agentaddon.model.AgentAddonPromptFormatter
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.agentaddon.model.HydratedAgentAddonSelectionEntry
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
-import skillbill.engine.featuretask.slot.ReviewTarget
+import skillbill.application.reviewevidence.model.ParallelReviewScope
+import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.slotbaseline.SlotBaselineFullRunCapture
 import skillbill.engine.featuretask.slotbaseline.SlotBaselinePaths
 import skillbill.engine.featuretask.slotbaseline.SlotBaselineTestResources
@@ -44,6 +45,17 @@ class InlineReviewDirectiveTest {
     assertTrue(prompt.contains("`git diff c0ffee^ c0ffee`"))
     assertTrue(NORMALIZED_SHA !in prompt)
     assertFalse(prompt.contains("last commit", ignoreCase = true))
+  }
+
+  @Test
+  fun `a scoped supplied-diff target reads the diff file and drops the no-blob rule`() {
+    val target =
+      ReviewTarget.Scoped(ParallelReviewScope.BRANCH, "base1", "head1", Path.of("/tmp/review.diff"))
+
+    val prompt = compose(target)
+
+    assertTrue(prompt.startsWith("Review exactly the diff in `/tmp/review.diff`, taken between `base1` and `head1`."))
+    assertFalse(prompt.contains("pre-baked diff blob"))
   }
 
   @Test

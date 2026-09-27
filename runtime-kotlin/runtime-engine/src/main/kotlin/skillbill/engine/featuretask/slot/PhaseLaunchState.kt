@@ -17,8 +17,11 @@ interface PhaseLaunchState {
    */
   fun prepareLaunch(input: PhaseStepInput): PhaseStepInput? = input
 
-  /** The settlement target the step prompt pins for [attempt]. */
-  fun settlementTarget(attempt: Int): FeatureTaskRuntimePhaseSettlementTarget
+  /**
+   * The settlement target the step prompt pins for [attempt], or null when the state records no settlements and the
+   * step settles through its final object.
+   */
+  fun settlementTarget(attempt: Int): FeatureTaskRuntimePhaseSettlementTarget?
 
   /** The activity and worktree-edit observation attached to a launch of [stepName]. */
   fun launchObservation(stepName: String): PhaseLaunchObservation

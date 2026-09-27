@@ -6,6 +6,7 @@ import skillbill.application.review.model.UsageValidationException
 import skillbill.application.reviewevidence.model.DiffResolutionException
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.persist.RuntimeOwnedFactUnavailable
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
@@ -17,6 +18,7 @@ import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.error.shellcontent.InvalidReviewContextSchemaError
 import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
@@ -40,11 +42,19 @@ internal class CodeReviewStep(
   private val reviewPass: CodeReviewPass,
 ) : PhaseStepHooks {
   fun run(
-    run: PhaseRun,
+    requestedRun: PhaseRun,
     context: PhaseAttemptEnvironment,
     state: PhaseStepState,
     prompt: PhaseStepPromptSource,
   ): PhaseOutcome {
+    val run =
+      when (val phaseRun = phaseReviewRun(requestedRun, context)) {
+        is PhaseReviewRun.Resolved -> phaseRun.run
+        is PhaseReviewRun.Unresolved -> {
+          state.blockReviewPreparation(1, phaseRun.reason, FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION)
+          return PhaseOutcome.blocked(phaseRun.reason)
+        }
+      }
     val input =
       when (val prepared = InlineReviewPreparation.prepare(run, context, state)) {
         is InlineReviewPrepared.Ready -> prepared.input
@@ -54,7 +64,10 @@ internal class CodeReviewStep(
     val passNumber = state.reviewPassNumber()
     val resolution =
       FeatureTaskRuntimeReviewPassSequence.resolveForPass(run.request.runInvariants.codeReviewMode, passNumber)
-    val reviewRunId = state.recordedReviewRunId(passNumber) ?: InlineReviewEnvelope.mintReviewRunId(context.clock)
+    val reviewRunId =
+      state.recordedReviewRunId(passNumber)
+        ?: run.request.reviewInvocation?.reviewRunId?.takeIf { passNumber == 1 }
+        ?: InlineReviewEnvelope.mintReviewRunId(context.clock)
     state.startReview(iteration, reviewRunId)
     val fingerprint =
       repositoryFingerprint(run, context)
@@ -134,6 +147,7 @@ internal class CodeReviewStep(
       return blockStep(state, pass.iteration, worktreeFailure("after", after.error))
     }
     state.recordReviewContentIdentities()
+    context.runState.recordReviewRun(pass.reviewRunId, result, reviewPass.recordsLaneTelemetry)
     val manifest =
       PhaseStepFileManifest(
         before = FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(before.value.orEmpty()),
@@ -268,6 +282,32 @@ internal class CodeReviewStep(
     return GoalSubtaskReviewSummaryReducer.refutedBlockerSupersedes(prior, current, verdicts)
   }
 
+  private fun phaseReviewRun(
+    run: PhaseRun,
+    context: PhaseAttemptEnvironment,
+  ): PhaseReviewRun {
+    val invocation = run.request.reviewInvocation ?: return PhaseReviewRun.Resolved(run)
+    val gitOperations = context.phaseGates.gitOperations
+    val repoRoot = run.request.repoRoot
+    val status = gitOperations.worktreeStatus(repoRoot)
+    if (status !is WorkflowGitOperationResult.Ok) {
+      return PhaseReviewRun.Unresolved(
+        "Feature-task-runtime phase 'review' could not read the worktree status to resolve its target: " +
+          status.error,
+      )
+    }
+    val target =
+      context.runState.pinnedReviewTarget {
+        ReviewTargetResolver.resolve(invocation.target, status.value.orEmpty()).also { target ->
+          if (target is ReviewTarget.Commit) {
+            val resolved = gitOperations.resolveCommit(repoRoot, target.sha)
+            if (resolved !is WorkflowGitOperationResult.Ok) throw UnknownPhaseReviewTargetError(target.sha)
+          }
+        }
+      }
+    return PhaseReviewRun.Resolved(run.copy(reviewTarget = target))
+  }
+
   private fun repositoryFingerprint(
     run: PhaseRun,
     context: PhaseAttemptEnvironment,
@@ -296,6 +336,12 @@ private data class ReviewPassRun(
   val reviewRunId: String,
   val cycle: InlineReviewCycle,
 )
+
+private sealed interface PhaseReviewRun {
+  data class Resolved(val run: PhaseRun) : PhaseReviewRun
+
+  data class Unresolved(val reason: String) : PhaseReviewRun
+}
 
 private sealed interface ReviewPassLaunch {
   data class Reviewed(val result: ParallelCodeReviewResult) : ReviewPassLaunch

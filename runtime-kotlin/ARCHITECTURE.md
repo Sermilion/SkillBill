@@ -1019,12 +1019,47 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   gates and the review-generation writes take the step id from the calling
   strategy.
 - `ReviewTarget` is a per-call fact on `PhaseRun`: `LastCommit` (the full-run
-  default), `Uncommitted`, or `Commit(sha)`. It composes the opening lines of
-  the review prompt.
+  default), `Uncommitted`, `Commit(revision)` (a sha, branch, or tag), or
+  `Scoped` (the base and head `skill-bill code-review` resolves). It composes
+  the opening lines of the review prompt.
 - `SkeletonDefinition` (`runtime-domain`) lists a run's slots in order.
   `STANDALONE` has every slot; `GOAL_CHILD` omits `pull_request`.
   `forRun(goalContinuation)` picks one. The declaration derived from a
   definition equals the phase workflow's, and a reorder raises a typed error.
+  `REVIEW` (the `code_review` slot) and `VALIDATION` (the `quality_gate` slot)
+  are in-memory definitions (`runStateKind` `IN_MEMORY`) that a phase run
+  drives on its own.
+- A phase run (`skillbill.engine.featuretask.phaserun`) drives one in-memory
+  definition through the same `FeatureTaskRuntimeRunLoopEntry` as a full run.
+  `PhaseRunEntry` builds `InMemoryPhaseRunState` over `InMemoryPhaseRunRecords`
+  and the in-memory goal, settlement, and checkpoint adapters. It writes no
+  workflow row, session, phase record, ledger entry, run invariant, or
+  checkpoint ref, resolves no branch, and skips checkpoint commits. A
+  checkpoint commit or a durable definition raises a typed error. The state
+  has no settlement target, so every step settles through the minimal final
+  object its agent prints, and a phase run has no resume. `PhaseRunState` adds
+  four no-op capabilities that the in-memory state implements:
+  `recordReviewRun` (review-pass claims, plus stage telemetry unless the
+  `CodeReviewPass` already recorded it), `qualityCheckStarted` /
+  `qualityCheckFinished` (quality_check telemetry around the pack build gate,
+  with the last gate run's failure count and rule or test ids), and
+  `qualityGateAbsent`. A durable run falls back to the runtime-owned build
+  when no pack gate is declared. A phase run fails with
+  `MissingValidationGateError` instead.
+  A phase run adds no telemetry event of its own and runs through
+  `FeatureTaskRuntimeRunEventSink.NONE`. It returns an invocation id (the
+  review session id when one is given, else `phr-<uuid>`) that the CLI prints.
+  `skill-bill phase <review|validation> [intake] [mode:..] [target:..]` takes
+  `mode:inline|delegated|auto` (`auto` resolves inline) and
+  `target:HEAD|uncommitted|<commit-sha|branch|tag>`. An omitted target reviews
+  uncommitted changes when the worktree is dirty and `HEAD` when it is clean.
+  A target that names no commit is a usage error, and a worktree status that
+  cannot be read blocks the review step. `skill-bill code-review` routes
+  through `PhaseRunEntry` too, so both modes find, verify, and fix Blocker and
+  Major findings before it reports. `PhaseInstructions` carries the operator
+  instructions a phase run adds to its step prompts.
+  `FeatureTaskPhaseRunDefinitionScan` keeps the package off named definitions,
+  and the durable-store scan covers it.
 - `PhaseStrategyRegistry` holds the registered strategies. `PhaseStrategySelection`
   binds each definition's slots to a strategy id, either fixed or keyed by a
   selection fact (code review mode, quality gate). `PhaseStrategySelectionFacts`
@@ -1108,7 +1143,7 @@ Composition:
   | `implement-then-simplify` | `slot.implementation` | Implement and simplify directives, continuation segments, simplify scope boundary, receipt checks |
   | `acceptance-audit` | `slot.audit` | Audit directive, remaining-criteria retry prompt and briefing rewrite, unchanged-remainder block, audit verdict rule (`AcceptanceAuditVerdictRule`) and its `gaps_found` rejection, audit-to-review checkpoint (`AcceptanceAuditLoopRules.forwardCheckpoint`) |
   | `inline` | `slot.codereview` | Review, verify_findings, and implement_fix prompts, review envelope decoding, finding-disposition gate, review briefing field set; standalone and goal-child selection maps `inline` and `auto` here, and `RuntimeOwnedReviewMode` rejects a requested `delegated` |
-  | `delegated` | `slot.codereview` | The same `CodeReviewSlot` steps, with a review step that runs `ParallelCodeReviewRunner` lanes (bounded by `withBoundedLaneProgress`) inside its `PhaseRunner` session and edits no files; registered, unselected until subtask 8 |
+  | `delegated` | `slot.codereview` | The same `CodeReviewSlot` steps, with a review step that runs `ParallelCodeReviewRunner` lanes (bounded by `withBoundedLaneProgress`) inside its `PhaseRunner` session and edits no files; the `REVIEW` definition selects it for `delegated`, standalone and goal-child runs do not |
   | `pack-build` | `slot.qualitygate.packbuild` | Runtime-owned build gate, triage and repair sessions |
   | `agent-validate` | `slot.qualitygate.agentvalidate` | Agent validate step, its repair session, retryable blocked disposition |
   | `boundary-history` | `slot.writehistory` | write_history directive, finalization briefing field set, changed paths and history and decision writes measured by `WriteHistoryMeasurement` under `FeatureTaskRuntimeMeasuredFactKeys`; a fact it cannot measure is recorded as unknown with a diagnostics record |

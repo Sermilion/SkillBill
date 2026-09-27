@@ -1,0 +1,89 @@
+package skillbill.engine.featuretask.phaserun
+
+import skillbill.agentaddon.model.HydratedAgentAddonSelection
+import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.config.model.CompactionSettings
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.model.core.PhaseInstructions
+import skillbill.engine.featuretask.model.review.ReviewInvocation
+import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
+import java.nio.file.Path
+import kotlin.time.Duration
+
+data class PhaseRunRequest(
+  val definitionId: String,
+  val repoRoot: Path,
+  val invokedAgentId: String,
+  val intake: String? = null,
+  val codeReviewMode: CodeReviewExecutionMode? = null,
+  val reviewInvocation: ReviewInvocation = ReviewInvocation(),
+  val instructions: PhaseInstructions? = null,
+  val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
+  val timeout: Duration? = null,
+) {
+  init {
+    require(definitionId.isNotBlank()) { "PhaseRunRequest.definitionId is required." }
+    require(invokedAgentId.isNotBlank()) { "PhaseRunRequest.invokedAgentId is required." }
+  }
+}
+
+sealed interface PhaseRunResult {
+  val invocationId: String
+  val completedStepIds: List<String>
+  val reviewResult: ParallelCodeReviewResult?
+
+  data class Completed(
+    override val invocationId: String,
+    override val completedStepIds: List<String>,
+    override val reviewResult: ParallelCodeReviewResult?,
+    val value: String?,
+  ) : PhaseRunResult
+
+  data class Blocked(
+    override val invocationId: String,
+    override val completedStepIds: List<String>,
+    override val reviewResult: ParallelCodeReviewResult?,
+    val stepId: String,
+    val reason: String,
+  ) : PhaseRunResult
+}
+
+internal data class InMemoryPhaseRunFacts(
+  val request: PhaseRunRequest,
+  val definition: SkeletonDefinition,
+) : FeatureTaskRuntimeRunFacts {
+  override val issueKey: String = request.definitionId
+  override val workflowId: String = ""
+  override val runInvariants: FeatureTaskRuntimeRunInvariants =
+    FeatureTaskRuntimeRunInvariants(
+      specReference = request.intake?.takeIf(String::isNotBlank) ?: "$PHASE_SPEC_PREFIX${request.definitionId}",
+      acceptanceCriteria = listOf(PHASE_ACCEPTANCE_CRITERION),
+      mandatesAndOverrides = emptyList(),
+      codeReviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT,
+    )
+  override val invokedAgentId: String = request.invokedAgentId
+  override val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment()
+  override val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment()
+  override val compactionSettings: CompactionSettings = CompactionSettings.DEFAULT
+  override val environment: Map<String, String> = emptyMap()
+  override val repoRoot: Path = request.repoRoot
+  override val timeout: Duration? = request.timeout
+  override val requestedCodeReviewMode: CodeReviewExecutionMode? = request.codeReviewMode
+  override val goalContinuation: FeatureTaskRuntimeGoalContinuationContext? = null
+  override val agentAddonSelection: HydratedAgentAddonSelection = request.agentAddonSelection
+  override val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE
+  override val transitionsOverride: FeatureTaskRuntimeTransitionDeclaration? = null
+  override val skeletonDefinition: SkeletonDefinition = definition
+  override val reviewInvocation: ReviewInvocation = request.reviewInvocation
+  override val phaseInstructions: PhaseInstructions? = request.instructions
+}
+
+private const val PHASE_SPEC_PREFIX = "phase:"
+private const val PHASE_ACCEPTANCE_CRITERION = "The phase leaves no unresolved Blocker or Major finding."
