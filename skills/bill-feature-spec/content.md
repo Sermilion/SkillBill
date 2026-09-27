@@ -133,6 +133,20 @@ contract or the runtime fails the run with "must list at least one criterion":
   that later phase. Audit cannot mint validate evidence; implement cannot
   mint review clearance. A criterion that needs a future phase is
   impossible and must not be written.
+- A criterion MUST NOT require running a command. Implement and audit never
+  run builds, tests, or generators; validate does. Every criterion must be
+  checkable by reading the tree. Do not write criteria like:
+  - "`./gradlew check` passes", "the suite is green", or "lint is clean"
+  - "fixtures match their baseline" when that needs a capture or generator run
+  - "goal planning runs end to end", or any other runtime behavior observed by
+    running it
+  Instead, state the repository fact that makes the result true: the code
+  exists, a named test exists and asserts the behavior, or the guard rule has
+  a synthetic-violation test. Put the command in Validation Strategy.
+- A criterion MUST NOT require content in an artifact the runtime writes: the
+  commit message, the commit sha, the PR title or body, or history entries.
+  Ask for a file under the spec folder instead (for example
+  `census_subtask_N.md`).
 
 Prefer the canonical numbered form the runtime writer emits:
 
