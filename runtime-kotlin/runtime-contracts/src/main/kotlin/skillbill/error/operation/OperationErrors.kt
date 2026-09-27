@@ -73,6 +73,48 @@ class UnresolvableOperationScopeError(
   val detail: String,
 ) : OperationUsageError("Could not resolve scope '$scope': $detail")
 
+class InvalidOperationArgumentError(
+  val key: String,
+  val value: String,
+  val expected: String,
+) : OperationUsageError("Unknown $key:$value; expected $expected.")
+
+class MissingOperationSelectionError(
+  val operationId: String,
+  val expected: String,
+) : OperationUsageError("Operation '$operationId' needs a selection with confirm:; pass $expected.")
+
+class InvalidOperationSelectionError(
+  val selection: String,
+  val detail: String,
+) : OperationUsageError("Selection '$selection' is invalid: $detail")
+
+class PullRequestNotFoundError(
+  val reference: String?,
+) : OperationRefusalError(
+    reference?.let { "No pull request matches '$it'." }
+      ?: "The current branch has no pull request; pass a PR number or URL.",
+  )
+
+class PullRequestBranchNotCheckedOutError(
+  val pullRequestBranch: String,
+  val currentBranch: String,
+) : OperationRefusalError(
+    "The pull request's branch '$pullRequestBranch' is not checked out (current: '$currentBranch'); check it out " +
+      "before confirming fixes.",
+  )
+
+class ProtectedBranchPushError(
+  val branch: String,
+) : OperationRefusalError("Refusing to push protected branch '$branch'; re-run with push:off.")
+
+class PushWorktreeDirtyError(
+  val repoRoot: String,
+) : OperationRefusalError(
+    "push:on commits every change in the worktree, and '$repoRoot' already has uncommitted changes; commit or " +
+      "stash them, or re-run with push:off.",
+  )
+
 class ReleaseWorktreeDirtyError(
   val repoRoot: String,
 ) : OperationRefusalError("Release requires a clean worktree; '$repoRoot' has uncommitted changes.")

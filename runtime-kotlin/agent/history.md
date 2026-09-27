@@ -1,3 +1,16 @@
+## [2026-09-27] SKILL-382 subtask 3 — pr-review-fix operation
+Areas: runtime-kotlin/runtime-engine/operation/{core,prreviewfix (new)} (main, resources, test, test resources), runtime-kotlin/runtime-ports/review/pullrequest (new), runtime-kotlin/runtime-infra/workflow/git/{github (new),goal}, runtime-kotlin/runtime-contracts/error/operation, runtime-kotlin/runtime-core/di/operation, runtime-kotlin/runtime-cli/operation, runtime-kotlin/ARCHITECTURE.md, skills/skill-bill, AGENTS.md, README.md
+- New `pr-review-fix` operation. The first call runs a read-only analysis step (`operation.pr-review-fix.analysis`) and stores a numbered thread proposal. `scope:analyze-only` issues no token. `confirm:<token> select:<ordinals|all-recommended|fix-all-unresolved>` runs one editing step per selected thread (`operation.pr-review-fix.thread`), then validation, then replies. `push:on` also commits and pushes.
+- Thread state comes from the new `PullRequestReviewThreadOperations` port. `GhPullRequestReviewThreads` implements it with GraphQL `reviewThreads` (isResolved/isOutdated), not the flat comments list. Threads are paged 50 at a time up to 40 pages, and comments are capped at 100 per thread. The port lives in `ports.review.pullrequest` so the goalrunner.runner star-import launch ban still holds. reusable
+- `ConfirmableOperation.admit(context, proposal)` is a new gate hook, a no-op by default. It runs after refusal checks and before the token is consumed, so a bad selection, the wrong checked-out branch, or `push:on` on a protected branch refuses without burning the token. reusable
+- `currentAnchors` re-measures pr_number, pr_head_sha, and the actionable thread-id set on confirm. A changed PR head or thread set refuses the token, and an unreadable PR refuses with `OperationAnchorUnreadableError` (Blocked).
+- `OperationStepResult.Settled.changedPaths` (manifest after minus before) lets execution map threads to files. Learnings and spec rows are derived from changed agent/history.md and .feature-specs/ paths. reusable
+- A blocked validation gate returns Failed with the edits left in place, and posts no reply and no push.
+- Test seam: `PrReviewFixHarness`. The outcomes fixture under test resources `operation/pr-review-fix/` was written by hand. Regenerate it with `SKILL_BILL_PR_REVIEW_FIX_CAPTURE=1`.
+- Limitations: still no operation telemetry event. `skills/bill-pr-review-fix` is untouched until SKILL-383.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented (validate confirms fixtures and the test suite)
+
 ## [2026-09-27] SKILL-382 subtask 2 — Checklist operations
 Areas: runtime-kotlin/runtime-engine/operation/{core,unittestvalue (new),featureguard (new),featureguardcleanup (new)} (main, test, test resources), runtime-kotlin/runtime-contracts/error/operation, runtime-kotlin/runtime-core/di/operation, runtime-kotlin/runtime-cli/{operation,repoTest phase}, runtime-kotlin/ARCHITECTURE.md, skills/skill-bill, AGENTS.md, README.md
 - New operations `unit-test-value-check`, `feature-guard`, and `feature-guard-cleanup`, registered in `RuntimeOperationProvides`. The CLI help lists operation names from `OperationRegistry.ids`, so a new operation needs no CLI text edit. The dispatcher routes all three.

@@ -1009,6 +1009,21 @@ has the `opr-` prefix.
 - `OperationStepRunner.runReadOnly` compares the repository fingerprint before
   and after each read-only step. A step that changes it fails, and the gate
   stores no proposal. Only a confirmed `execute` calls `runEditing`.
+- `ConfirmableOperation.admit` checks a confirm invocation against the stored
+  proposal before the gate consumes the token, so a bad selection leaves the
+  token valid.
+- `pr-review-fix` (`operation.prreviewfix`) reads review threads through the
+  `PullRequestReviewThreadOperations` port (runtime-ports
+  `review.pullrequest`; adapter `GhPullRequestReviewThreads` over
+  `gh api graphql`, paged, never `gh pr view --comments`). The port has no
+  resolve member. Analysis is one read-only step over a runtime-rendered
+  thread digest. It proposes a matrix whose actionable (unresolved, not
+  outdated) threads carry runtime ordinals `T1..Tn`, anchored on the PR number,
+  PR head sha, and the actionable thread-id set. `scope:analyze-only` stores
+  nothing. `confirm:<token>` with `select:` runs one editing step per selected
+  thread, then `validation`, then posts (or, with `replies:draft`, prints) the
+  replies, and commits and pushes only with `push:on`. A failed step or gate
+  stops before any reply.
 
 ## Phase slots and strategies
 

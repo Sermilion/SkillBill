@@ -89,7 +89,7 @@ class OperationCommandTest {
     assertContains(
       output,
       "Unknown operation 'deploy'; expected one of update-check, release, unit-test-value-check, feature-guard, " +
-        "feature-guard-cleanup.",
+        "feature-guard-cleanup, pr-review-fix.",
     )
   }
 
@@ -146,6 +146,17 @@ class OperationCommandTest {
 
     assertEquals(OperationArguments(bump = "minor", confirm = "opt-1"), invocation.arguments)
     assertEquals("mention the CLI note:kept", invocation.instructions)
+  }
+
+  @Test
+  fun `push and replies reach pr-review-fix and are usage errors on any other operation`() {
+    val invocation = OperationInvocationParser.parse("pr-review-fix", listOf("42", "push:on", "replies:draft"))
+
+    assertEquals(OperationArguments(push = "on", replies = "draft"), invocation.arguments)
+    assertEquals("42", invocation.instructions)
+    listOf("push:on", "replies:draft").forEach { token ->
+      assertFailsWith<UsageError> { OperationInvocationParser.parse("release", listOf("bump:minor", token)) }
+    }
   }
 
   @Test

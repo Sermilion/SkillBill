@@ -51,15 +51,12 @@ class OperationConfirmationGate(
     token: String,
   ): OperationOutcome {
     val proposal = proposals.find(token) ?: throw UnknownOperationTokenError(token)
+    refusal(operation, context, proposal)?.let { refusal -> throw refusal }
+    val confirmed = ConfirmedOperationProposal(token, proposal.proposalValue, proposal.anchors.operationValues)
+    operation.admit(context, confirmed)
     // Consume before executing: a crash after the consume refuses a retry instead of executing twice.
-    val refusal =
-      refusal(operation, context, proposal)
-        ?: ConsumedOperationTokenError(token).takeUnless { proposals.markConsumed(token, clock.instant().toString()) }
-    if (refusal != null) throw refusal
-    return operation.execute(
-      context,
-      ConfirmedOperationProposal(token, proposal.proposalValue, proposal.anchors.operationValues),
-    )
+    if (!proposals.markConsumed(token, clock.instant().toString())) throw ConsumedOperationTokenError(token)
+    return operation.execute(context, confirmed)
   }
 
   private fun refusal(

@@ -2,6 +2,7 @@ package skillbill.engine.operation.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
+import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFacts
 import skillbill.engine.featuretask.slot.PhaseStepInput
@@ -9,9 +10,12 @@ import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.error.operation.OperationAnchorUnreadableError
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 /**
@@ -39,13 +43,24 @@ class OperationStepRunner(
     return result
   }
 
-  /** Runs a step that edits the worktree; only a confirmed proposal's execute calls it. */
+  /**
+   * Runs a step that edits the worktree; only a confirmed proposal's execute calls it. Files already dirty before the
+   * step count as changed when their content changed, which the path-only manifests cannot see.
+   */
   fun runEditing(
     context: OperationContext,
     stepName: String,
     directive: String,
     priorValues: Map<String, String>,
-  ): OperationStepResult = launch(context, stepName, directive, priorValues, EDITING_STEP_POLICY)
+  ): OperationStepResult {
+    val dirty = dirtyPaths(context)
+    val before = contentIdentities(context, dirty)
+    val result = launch(context, stepName, directive, priorValues, EDITING_STEP_POLICY)
+    if (result !is OperationStepResult.Settled) return result
+    val after = contentIdentities(context, dirty)
+    val reedited = dirty.filter { path -> before[path] != after[path] }
+    return result.copy(changedPaths = (result.changedPaths + reedited).distinct().sorted())
+  }
 
   private fun launch(
     context: OperationContext,
@@ -81,7 +96,10 @@ class OperationStepRunner(
       )
     val output = runner.run(input, OperationPhaseLaunchState)
     return failureOf(stepName, output, policy)?.let(OperationStepResult::Failed)
-      ?: OperationStepResult.Settled(output.value)
+      ?: OperationStepResult.Settled(
+        output.value,
+        output.fileManifest?.let { manifest -> manifest.after - manifest.before.toSet() }.orEmpty(),
+      )
   }
 
   private fun failureOf(
@@ -101,10 +119,32 @@ class OperationStepRunner(
 
   private fun fingerprint(context: OperationContext): String =
     gitOperations.repositoryFingerprint(context.repoRoot).requireGitValue(REPOSITORY_FINGERPRINT)
+
+  // Not requireGitValue: its trim would eat the first porcelain entry's leading status column.
+  private fun dirtyPaths(context: OperationContext): List<String> =
+    when (val status = gitOperations.worktreeStatus(context.repoRoot)) {
+      is WorkflowGitOperationResult.Ok -> FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(status.value.orEmpty())
+      else -> throw OperationAnchorUnreadableError(WORKTREE_STATUS, status.error)
+    }
+
+  /** A deleted file has no identity, so deleting a dirty file also reads as a change. */
+  private fun contentIdentities(
+    context: OperationContext,
+    paths: List<String>,
+  ): Map<String, String> =
+    when (val identities = gitOperations.pathContentIdentities(context.repoRoot, paths)) {
+      is WorkflowPathContentIdentitiesResult.Resolved -> identities.identities
+      is WorkflowPathContentIdentitiesResult.Failed ->
+        throw OperationAnchorUnreadableError(CONTENT_IDENTITIES, identities.error)
+    }
 }
 
 sealed interface OperationStepResult {
-  data class Settled(val value: String) : OperationStepResult
+  data class Settled(
+    val value: String,
+    /** Paths the step newly left changed, from the runner's before and after manifests. */
+    val changedPaths: List<String> = emptyList(),
+  ) : OperationStepResult
 
   data class Failed(val reason: String) : OperationStepResult
 }
@@ -135,6 +175,8 @@ private object OperationPhaseLaunchState : PhaseLaunchState {
 private const val TRACKED_ATTEMPT = 1
 
 private const val REPOSITORY_FINGERPRINT = "repository fingerprint"
+private const val WORKTREE_STATUS = "worktree status"
+private const val CONTENT_IDENTITIES = "dirty file contents"
 
 private val FAILED_STATUSES = setOf("blocked", "failed")
 

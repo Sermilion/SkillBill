@@ -61,6 +61,7 @@ class DispatcherSkillInstallRepoTest {
     listOf(
       "operation:update-check" to "`skill-bill operation update-check`",
       "operation:release" to "`skill-bill operation release bump:<value>",
+      "operation:pr-review-fix" to "`skill-bill operation pr-review-fix [<pr>] [<tokens>]",
     ).forEach { (token, command) ->
       assertTrue(
         routingRows.any { row -> token in row && command in row },
@@ -73,6 +74,8 @@ class DispatcherSkillInstallRepoTest {
       "ask the operator once whether to proceed. On yes, run the same operation with `confirm:<token>`." in prose,
     )
     assertTrue("Never pass `confirm:` without an operator answer." in content)
+    assertTrue("`confirm:<token>` and that `select:`" in prose, "pr-review-fix must re-run with the operator's select:")
+    assertTrue("Never pass `confirm:` or `select:` without an operator answer." in prose)
     assertTrue("the caller passes `phase:` together with `operation:`: report a usage error." in content)
     assertTrue("SKILL-382" !in content, "the pre-SKILL-382 operation refusal must be gone")
   }

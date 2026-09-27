@@ -37,7 +37,8 @@ class OperationCommand(
     name = "args",
     help =
       "key:value pairs (${OperationInvocationParser.KEYS.joinToString(", ") { "$it:" }}); any other text is " +
-        "operator instructions for the operation's agent step.",
+        "operator instructions for the operation's agent step. pr-review-fix reads a leading #<number> or PR " +
+        "URL, or a lone PR number (default: the current branch's PR) and alone accepts push:on|off and replies:post|draft.",
   ).multiple()
   private val agent by option(
     "--agent",
@@ -79,8 +80,13 @@ object OperationInvocationParser {
   const val SELECT: String = "select"
   const val MODE: String = "mode"
   const val SCOPE: String = "scope"
-  val KEYS: List<String> = listOf(BUMP, CONFIRM, SELECT, MODE, SCOPE)
+  const val PUSH: String = "push"
+  const val REPLIES: String = "replies"
+  val KEYS: List<String> = listOf(BUMP, CONFIRM, SELECT, MODE, SCOPE, PUSH, REPLIES)
   private const val KEY_SEPARATOR = ':'
+
+  /** Keys only one operation reads; any other operation rejects them rather than silently ignoring them. */
+  private val OPERATION_ONLY_KEYS: Map<String, String> = mapOf(PUSH to "pr-review-fix", REPLIES to "pr-review-fix")
 
   fun parse(
     name: String,
@@ -92,6 +98,9 @@ object OperationInvocationParser {
     if (values[CONFIRM]?.isBlank() == true) {
       throw UsageError("confirm: needs the token from the proposal's status line.")
     }
+    OPERATION_ONLY_KEYS.forEach { (key, owner) ->
+      if (key in values && name != owner) throw UsageError("$key: is accepted only by operation $owner.")
+    }
     return OperationInvocation(
       operationId = name,
       arguments =
@@ -101,6 +110,8 @@ object OperationInvocationParser {
           select = values[SELECT],
           mode = values[MODE],
           scope = values[SCOPE],
+          push = values[PUSH],
+          replies = values[REPLIES],
         ),
       instructions = rest.filterNot(::isKeyValue).joinToString(" ").takeIf(String::isNotBlank),
     )

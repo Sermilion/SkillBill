@@ -43,6 +43,7 @@ intake. Forwarded `key:value` tokens follow the intake unchanged.
 | `/skill-bill [<scope>] operation:unit-test-value-check` | `skill-bill operation unit-test-value-check [scope:<value>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill <intake> operation:feature-guard` | `skill-bill operation feature-guard <intake> --agent <currently-executing-agent>` | required |
 | `/skill-bill <intake> operation:feature-guard-cleanup` | `skill-bill operation feature-guard-cleanup <intake> --agent <currently-executing-agent>` | required |
+| `/skill-bill [<pr>] operation:pr-review-fix [scope:analyze-only] [push:on] [replies:draft]` | `skill-bill operation pr-review-fix [<pr>] [<tokens>] --agent <currently-executing-agent>` | optional |
 
 If `phase:plan` or `phase:implement` has no intake, stop and ask for it. For any
 other `phase:` name, stop and list the names in this table. If
@@ -50,12 +51,16 @@ other `phase:` name, stop and list the names in this table. If
 `operation:feature-guard-cleanup` has no intake naming the flag, stop and ask for
 it. For `operation:unit-test-value-check`, forward a scope the caller gives (a test
 file, commit sha, or ref) verbatim as `scope:<value>`; without one, omit `scope:`
-and the runtime reviews the current staged and unstaged changes.
+and the runtime reviews the current staged and unstaged changes. For
+`operation:pr-review-fix`, forward a PR the caller gives first, before any
+token, as `#<number>` or its URL; without one, the runtime uses the current
+branch's PR.
 
 `operation:<name>` translates to `skill-bill operation <name>`, forwarding
-`bump:`, `confirm:`, `select:`, `mode:`, and `scope:` tokens verbatim and any
-other text as operator instructions. The runtime rejects an unknown operation
-name, a missing bump, or a missing guard intake; relay its usage error.
+`bump:`, `confirm:`, `select:`, `mode:`, `scope:`, `push:`, and `replies:` tokens
+verbatim and any other text as operator instructions. The runtime rejects an
+unknown operation name, a missing bump, a missing guard intake, or a `push:` or
+`replies:` token outside `operation:pr-review-fix`; relay its usage error.
 
 ## Token Forwarding
 
@@ -154,10 +159,21 @@ the translated command once and relay its output verbatim.
 
 When the command exits with `awaiting_confirmation` (its last line reads
 `status: awaiting_confirmation confirm:<token>`), show the proposal and ask the
-operator once whether to proceed. This covers `operation:release`,
-`operation:feature-guard`, and `operation:feature-guard-cleanup`; a cleanup
-proposal's stabilization checklist is part of the proposal the operator answers,
-so never answer it yourself. On yes, run the same operation with
+operator once whether to proceed. On yes, run the same operation with
 `confirm:<token>`. If the operator asks for changes, run the same operation again
 with those changes as instructions and relay the new proposal and its new token.
-Never pass `confirm:` without an operator answer.
+Never pass `confirm:` without an operator answer. This covers `operation:release`,
+`operation:feature-guard`, and `operation:feature-guard-cleanup`; a cleanup
+proposal's stabilization checklist is part of the proposal the operator answers,
+so never answer it yourself.
+
+For `operation:pr-review-fix` the proposal is a per-thread recommendation matrix
+with threads labelled `T1`, `T2`, and so on. Show it and ask the operator once
+which threads to fix and with which option. Map the answer to exactly one of
+`select:all-recommended`, `select:fix-all-unresolved`, or
+`select:<thread>=<option>,...` (for example `select:T1=1,T3=2`), and re-run the
+operation with the same `<pr>`, `push:`, and `replies:` tokens plus
+`confirm:<token>` and that `select:`. If the answer is ambiguous, ask again; do
+not infer a scope. Never pass `confirm:` or `select:` without an operator answer.
+The runtime owns the thread options and refuses a selection it does not
+recognise; relay that usage error and ask again.
