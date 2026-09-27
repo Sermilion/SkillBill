@@ -45,13 +45,25 @@ fixtures in this commit. Each diff contains only the directive change. Keep the
 authoring test that reads `skills/bill-pr-description/content.md` or
 `skills/bill-boundary-*/content.md` keep passing; SKILL-383 updates or removes them.
 
+## Verification ownership
+
+Implement and audit can't run builds, tests, generators, or the fixture capture
+(added 2026-09-27). Audit checks each behavioural criterion against the code and the
+tests that assert it, and does not list a criterion as remaining just because nothing
+has run.
+- Validate runs the capture command
+  `cd runtime-kotlin && SKILL_BILL_SLOTBASELINE_CAPTURE=1 ./gradlew :runtime-engine:test --tests skillbill.engine.featuretask.slotbaseline.SlotBaselineCaptureTest`,
+  which re-baselines the pr and write_history step prompt fixtures. It confirms each of
+  those diffs contains only the directive change and every other fixture is unchanged,
+  then runs `./gradlew check`.
+
 ## Acceptance Criteria
 
 1. Neither the pr nor the write_history prompt tells the agent to invoke a skill. Both compose their rules from runtime-owned fragments.
 2. When `.github/pull_request_template.md` (or another search-path template) exists, the PR summary from the skeleton and from `phase:pr` keeps that template's headings and drops its checklist. When none exists, the coded fallback is used. Two templates with no default is a usage error naming both paths.
-3. A write_history run over a fixture change the old rules would skip still settles as skipped, and one they would write still writes an entry of the same shape.
-4. The pr and write_history prompt fixtures are re-baselined and each diff contains only the directive change. Every other fixture still matches.
-5. The skeleton pr step and `skill-bill phase pr` each emit `pr_description_generated` matching the subtask 1 payload fixture.
+3. Tests assert that a write_history run over a fixture change the old rules would skip still settles as skipped, and one they would write still writes an entry of the same shape.
+4. No fixture file other than the pr and write_history step prompts changes in this subtask's diff. Their re-baseline runs in validate (see Verification ownership).
+5. Tests assert that the skeleton pr step and `skill-bill phase pr` each emit `pr_description_generated` matching the subtask 1 payload fixture.
 
 ## Non-goals
 

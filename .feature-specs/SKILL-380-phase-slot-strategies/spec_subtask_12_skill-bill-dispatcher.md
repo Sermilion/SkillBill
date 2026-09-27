@@ -58,14 +58,24 @@ Persisted add-on selections that record `bill-feature` still decode. SKILL-383 d
 **Docs.** `AGENTS.md` and the README list `/skill-bill` and its forms beside the old
 skills.
 
+## Verification ownership
+
+Implement and audit can't run builds, tests, generators, or the fixture capture
+(added 2026-09-27). Audit checks each behavioural criterion against the code and the
+tests that assert it, and does not list a criterion as remaining just because nothing
+has run.
+- Validate runs `skill-bill validate` on the tree, the capture command
+  `cd runtime-kotlin && SKILL_BILL_SLOTBASELINE_CAPTURE=1 ./gradlew :runtime-engine:test --tests skillbill.engine.featuretask.slotbaseline.SlotBaselineCaptureTest`
+  to confirm the full-run and phase-run fixtures are unchanged, then `./gradlew check`.
+
 ## Acceptance Criteria
 
-1. `skills/skill-bill/content.md` exists, renders with the `feature-launch-warning` class sidecars, passes `skill-bill validate`, and an install into a temporary `HOME` lists `skill-bill` together with every old listed skill.
+1. `skills/skill-bill/content.md` exists and declares the `feature-launch-warning` class sidecars, and an install test into a temporary `HOME` asserts it lists `skill-bill` together with every old listed skill.
 2. `/skill-bill <intake>` with no `phase:` launches the skeleton with the one confirmation gate. A missing spec routes to `phase:plan`, not to `bill-feature-spec`.
 3. A routing table test proves every `phase` definition from subtasks 8–9 is reachable, and that `code-review:` and `mode:` tokens reach the runtime unchanged. `phase:` and `operation:` together remains a usage error.
 4. Uninstall removes the `skill-bill` link and leaves an unrelated non-`bill-` skill in place.
 5. The `execution-budget` add-on renders into `skill-bill` and `bill-feature`, and a persisted selection naming `bill-feature` still decodes.
-6. `/bill-feature` and every other old listed skill still work. Full-run and phase-run fixtures still match.
+6. No old listed skill's content or routing is removed, and this subtask's diff changes no fixture file.
 
 ## Non-goals
 

@@ -42,8 +42,12 @@ definition, so `phase commit_push` is a usage error.
 a root-level `phase:` token cannot parse. runtime-cli reaches `PhaseRunEntry` through a
 new `RuntimeComponent` accessor, and `PhaseRunRequest`, `PhaseRunResult`, and
 `PhaseRunEntry` are added to `RuntimeEngineInboundApiTest`'s pinned engine inbound API.
-Telemetry uses `invocation_id`, no `workflow_id`; every start, finish, fail, and
-fallback emits a record.
+Telemetry (decided 2026-09-27): a phase run adds no telemetry event and changes no
+payload. It emits today's review events and `quality_check_started` /
+`quality_check_finished` unchanged, and no record carries `workflow_id`; the run-loop
+events stay dropped (the in-memory facts use the `NONE` event sink). The CLI prints the
+invocation id. Phase-run lifecycle events would bump the telemetry `contract_version`,
+which every captured fixture payload holds, so they wait until a phase needs them.
 
 **Settlement.** The in-memory state supplies no settlement target, so steps get no
 MCP settlement directive and settle through the minimal final object that subtask 5
@@ -98,15 +102,28 @@ No listed-skill changes.
 **Fixtures.** Capture the printed output and telemetry records of both definitions
 under `featuretask/slotbaseline/phase/`.
 
+## Verification ownership
+
+Implement and audit can't run builds, tests, or the fixture capture. So:
+- Audit checks that the code and tests behind criteria 1–7 exist and assert the
+  behaviour. It does not list a criterion as remaining just because nothing has run.
+- Validate re-captures the fixtures with
+  `cd runtime-kotlin && SKILL_BILL_SLOTBASELINE_CAPTURE=1 ./gradlew :runtime-engine:test --tests skillbill.engine.featuretask.slotbaseline.SlotBaselineCaptureTest`.
+  This re-baselines the `skill-bill code-review` output fixtures and first captures the
+  phase-run fixtures. Validate reviews the diff against the parent fixture ledger: the
+  code-review diff shows only the ledger's `skill-bill code-review` change, and every
+  other skeleton fixture is unchanged. It then runs `./gradlew check`.
+  `SlotBaselineFixtureTest` in `check` fails on stale fixtures.
+
 ## Acceptance Criteria
 
 1. A `review` or `validation` run inserts no row into `feature_task_workflows` or `feature_task_runtime_sessions`, writes no phase record, ledger entry, run invariant, or git checkpoint ref, and goes through the same run loop entry as a durable run.
 2. No production class runs a phase outside the run loop: `PhaseRunEntry` contains no step, launch, or definition-specific code, and the launch-port and durable-store rules cover its package and fail on synthetic violations.
 3. `skill-bill phase review` runs the whole `code_review` slot with `InlineReviewStrategy` when `mode` is omitted, `inline`, or `auto`, and with `DelegatedReviewStrategy` with `mode:delegated`. In both modes it finds, verifies, and fixes, changes files but creates no commit and no git checkpoint ref, and applies the `review_fix` cap. It resolves an omitted target to `uncommitted` when dirty and `HEAD` otherwise. Unknown targets and modes are usage errors.
-4. `skill-bill code-review` goes through the `review` definition. Its output in both modes differs from the subtask 1 fixture only as the fixture ledger allows, and both modes still write a `review_runs` record and review telemetry matching the subtask 1 fixture's shape.
-5. `skill-bill phase validation` runs `pack-build` against the dominant pack gate and emits `quality_check_started` / `quality_check_finished` matching the subtask 1 payload fixture. A repo whose dominant pack has no `validation_gate` fails with the existing typed error. `skill-bill phase commit_push` is a usage error.
-6. The CLI reaches `PhaseRunEntry` only through pinned inbound API types, and `RuntimeEngineInboundApiTest` passes.
-7. Phase-run telemetry carries `invocation_id` and no `workflow_id`. Skeleton fixtures still match. No listed skills are added or removed.
+4. `skill-bill code-review` builds a `PhaseRunRequest` for the `review` definition and no longer calls the review service directly. A test asserts that both modes still write a `review_runs` record and review telemetry of the subtask 1 fixture's shape. The re-capture of its output fixtures runs in validate (see Verification ownership).
+5. `skill-bill phase validation` runs `pack-build` against the dominant pack gate and emits `quality_check_started` / `quality_check_finished`, and a test asserts both payloads match the subtask 1 payload fixture. A repo whose dominant pack has no `validation_gate` fails with the existing typed error. `skill-bill phase commit_push` is a usage error.
+6. The CLI reaches `PhaseRunEntry` only through pinned inbound API types, and `RuntimeEngineInboundApiTest` pins `PhaseRunRequest`, `PhaseRunResult`, and `PhaseRunEntry`.
+7. A phase run emits no telemetry event beyond the review and quality-check events, no phase-run record carries `workflow_id`, and the telemetry contract version is unchanged. No listed skills are added or removed.
 8. ARCHITECTURE.md documents skeleton definitions, the in-memory state, and the `phase` CLI for review and validation.
 
 ## Non-goals

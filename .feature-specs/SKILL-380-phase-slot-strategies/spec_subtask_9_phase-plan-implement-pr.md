@@ -46,13 +46,24 @@ changes.
 Capture all three definitions' output and telemetry fixtures under
 `featuretask/slotbaseline/phase/`.
 
+## Verification ownership
+
+Implement and audit can't run builds, tests, generators, or the fixture capture
+(added 2026-09-27). Audit checks each behavioural criterion against the code and the
+tests that assert it, and does not list a criterion as remaining just because nothing
+has run.
+- Validate runs the capture command
+  `cd runtime-kotlin && SKILL_BILL_SLOTBASELINE_CAPTURE=1 ./gradlew :runtime-engine:test --tests skillbill.engine.featuretask.slotbaseline.SlotBaselineCaptureTest`,
+  which first captures the three new phase-run fixtures. It confirms every existing
+  fixture is unchanged, then runs `./gradlew check`.
+
 ## Acceptance Criteria
 
-1. `skill-bill phase plan <intake>` writes a schema-valid spec bundle through `FeatureSpecPreparationWriter` that `skill-bill goal preflight` accepts, does not launch plan when preplan fails, and inserts no feature-task workflow or session row. Missing intake is a usage error.
+1. `skill-bill phase plan <intake>` writes a schema-valid spec bundle through `FeatureSpecPreparationWriter` (a test asserts `skill-bill goal preflight` accepts it), does not launch plan when preplan fails, and inserts no feature-task workflow or session row. Missing intake is a usage error.
 2. `skill-bill phase implement` refuses without a spec. With a spec it mutates the worktree, creates no commit, and writes no workflow row.
 3. `skill-bill phase pr` does not commit uncommitted work. On a local branch whose commits are not on the remote it pushes that branch and then opens the PR. Protected or default-branch checkouts fail with a typed error. No workflow or session row.
 4. None of the three definitions adds step, launch, or entry code; each is a definition plus selection entries.
-5. Subtask 8 phase-run fixtures and the full-run fixtures still match.
+5. `SlotBaselineCaptureTest` captures the plan, implement, and pr phase-run outputs, and this subtask's diff changes no existing fixture file.
 
 ## Non-goals
 
