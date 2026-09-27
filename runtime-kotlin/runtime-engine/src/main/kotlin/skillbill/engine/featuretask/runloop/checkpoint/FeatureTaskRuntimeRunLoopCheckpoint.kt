@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.lifecycle.checkpoint.CheckpointScopePreparat
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMetadata
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointScope
+import skillbill.engine.featuretask.lifecycle.checkpoint.goalScopedBaselinePaths
 import skillbill.engine.featuretask.lifecycle.checkpoint.isRuntimePrivatePath
 import skillbill.engine.featuretask.lifecycle.checkpoint.phaseWrittenPaths
 import skillbill.engine.featuretask.lifecycle.continuation.appendRemediationRollbackDegradationEvidence
@@ -271,7 +272,10 @@ object FeatureTaskRuntimeRunLoopCheckpoint {
         FeatureTaskRuntimeRunLoopCheckpoint.checkpointWorktreeDelta(
           request,
           phaseGates,
-          resolved?.baselineOwnedPathsForCheckpoint().orEmpty(),
+          goalScopedBaselinePaths(
+            resolved?.baselineOwnedPathsForCheckpoint().orEmpty(),
+            recorder.goalStartBaselinePaths(request),
+          ),
         )
           ?: run {
             FeatureTaskRuntimeRunLoopCheckpoint.blockCheckpointScope(

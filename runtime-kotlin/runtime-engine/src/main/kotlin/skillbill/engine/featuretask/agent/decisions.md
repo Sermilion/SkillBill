@@ -1,5 +1,12 @@
 # featuretask runtime boundary decisions
 
+## [2026-09-27] A goal child's ownership baseline is the goal-start baseline
+Context: `goal replan` deletes the child workflow and clears the subtask's workflow id. The next child snapshotted every dirty path as its baseline, including the earlier attempts' uncommitted subtask work, so its checkpoints committed only part of the subtask. On SKILL-380 subtask 5 the commit referenced a class that existed only as an untracked leftover, and review then refused to amend.
+Decision: A goal child's checkpoint and review-checkpoint baseline is its own recorded baseline intersected with the goal-start baseline. The goal-start baseline is the recorded baseline of the earliest surviving goal child. `goalScopedBaselinePaths` applies the intersection in both readers. The recorded baseline itself stays unchanged.
+Reason: This completes "Active subtask owns every dirty path" (2026-09-11) for retried subtasks. Operator edits made before the goal started stay protected. Dirt that appeared while the goal ran is the goal's, and it belongs to the active subtask because earlier subtasks committed theirs. It also repairs children that already recorded a leftover-heavy baseline, because the intersection is applied when the baseline is read.
+Alternatives considered: carry the discarded child's owned paths forward at replan time (rejected: it needs new durable goal-level state, and it cannot repair children whose baseline already absorbed the leftovers).
+Revisit when: a goal branch must share its worktree with edits that start after the goal and must stay out of its commits, or completed goal children stop being retained.
+
 ## [2026-09-20] Validate keeps repairing until true
 Context: Three honest `validation_passed: false` reports burned the output-gate cap while `./gradlew check` was still red. The agent knew the leftover detekt and Feed failures and stopped because the phase required a boolean handoff.
 Decision: Do not emit until `validation_passed` is true. Keep repairing in the same session. False is not a successful handoff: continue only when the remaining-failure text shrank; block when leftovers stay the same. Wall-clock timeout still stops the subtask. Malformed JSON retries twice.

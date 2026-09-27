@@ -277,6 +277,8 @@ private interface FeatureTaskRuntimePhaseEvidenceApi {
 
   fun loadResolvedBranch(workflowId: String): FeatureTaskRuntimeResolvedBranch?
 
+  fun loadGoalStartResolvedBranch(parentWorkflowId: String): FeatureTaskRuntimeResolvedBranch?
+
   fun appendCheckpointIdentity(args: AppendCheckpointIdentityArgs): Boolean
 
   fun loadCheckpointIdentities(workflowId: String): List<FeatureTaskRuntimeCheckpointIdentity>?
@@ -321,6 +323,9 @@ private class FeatureTaskRuntimePhaseEvidenceApiDelegate(
 
   override fun loadResolvedBranch(workflowId: String): FeatureTaskRuntimeResolvedBranch? =
     evidence.loadResolvedBranch(workflowId)
+
+  override fun loadGoalStartResolvedBranch(parentWorkflowId: String): FeatureTaskRuntimeResolvedBranch? =
+    evidence.loadGoalStartResolvedBranch(parentWorkflowId)
 
   override fun appendCheckpointIdentity(args: AppendCheckpointIdentityArgs): Boolean =
     evidence.appendCheckpointIdentity(args)

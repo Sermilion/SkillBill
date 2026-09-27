@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointDecis
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommitIdentity
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.core.CheckpointCommitMessageArgs
 import skillbill.engine.featuretask.runloop.core.CommitCheckpointArgs
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
@@ -570,3 +571,9 @@ object FeatureTaskRuntimeRunLoopCheckpointRemediation {
 
 fun FeatureTaskRuntimeResolvedBranch.baselineOwnedPathsForCheckpoint(): List<String> =
   baselineOwnedPaths.ifEmpty { baselineUntrackedPaths }
+
+fun FeatureTaskRuntimePhaseRecorder.goalStartBaselinePaths(request: FeatureTaskRuntimeRunRequest): List<String>? =
+  request.goalContinuation?.parentWorkflowId
+    ?.takeIf(String::isNotBlank)
+    ?.let(::loadGoalStartResolvedBranch)
+    ?.baselineOwnedPathsForCheckpoint()

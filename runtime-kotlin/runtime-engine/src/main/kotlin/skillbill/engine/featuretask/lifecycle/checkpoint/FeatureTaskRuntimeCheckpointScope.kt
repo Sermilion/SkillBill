@@ -73,6 +73,14 @@ fun isRuntimePrivatePath(path: String): Boolean {
     normalized.startsWith(RUNTIME_PRIVATE_ROOT)
 }
 
+fun goalScopedBaselinePaths(
+  ownBaseline: List<String>,
+  goalStartBaseline: List<String>?,
+): List<String> {
+  val goalStart = goalStartBaseline?.toSet() ?: return ownBaseline
+  return ownBaseline.filter { it in goalStart }
+}
+
 fun phaseWrittenPaths(
   worktreeDeltaPaths: List<String>,
   phaseManifestPaths: List<String>,

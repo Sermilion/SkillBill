@@ -148,6 +148,15 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
       resolvedBranchFromWorkflowArtifacts(record.artifacts)
     }
 
+  fun loadGoalStartResolvedBranch(parentWorkflowId: String): FeatureTaskRuntimeResolvedBranch? =
+    database.read { unitOfWork ->
+      unitOfWork.workflowStates.listGoalChildWorkflowIdsByParent(parentWorkflowId)
+        .firstNotNullOfOrNull { childWorkflowId ->
+          unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, childWorkflowId)
+            ?.let { record -> resolvedBranchFromWorkflowArtifacts(record.artifacts) }
+        }
+    }
+
   fun appendCheckpointIdentity(args: AppendCheckpointIdentityArgs): Boolean {
     quarantineCheckpointIdentitiesOnVersionDrift(args.workflowId, args.phaseId, args.generation)
     return appendCheckpointIdentityAtCurrentVersion(args)

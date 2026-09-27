@@ -4,6 +4,7 @@ import skillbill.application.decomposition.baseBranch
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.lifecycle.checkpoint.goalScopedBaselinePaths
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.lifecycle.continuation.matches
 import skillbill.engine.featuretask.lifecycle.continuation.reviewState
@@ -27,6 +28,7 @@ import skillbill.engine.featuretask.review.finding.validateBoundarySelectionsDel
 import skillbill.engine.featuretask.review.finding.validateDispositionBoundaryBodies
 import skillbill.engine.featuretask.review.finding.validateDispositionBoundaryContext
 import skillbill.engine.featuretask.review.finding.validateDispositionBoundaryProvenance
+import skillbill.engine.featuretask.runloop.checkpoint.goalStartBaselinePaths
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
 import skillbill.engine.featuretask.runloop.core.BoundaryBodyDeliveryDecision
@@ -656,9 +658,12 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         args = args,
         persistedOwnedPaths = resolvedBranchRecord?.workflowOwnedPaths,
         baselineOwnedPaths =
-          resolvedBranchRecord?.baselineOwnedPaths
-            ?: goalReviewState?.baselineUntrackedPaths
-            ?: resolvedBranchRecord?.baselineUntrackedPaths.orEmpty(),
+          goalScopedBaselinePaths(
+            resolvedBranchRecord?.baselineOwnedPaths
+              ?: goalReviewState?.baselineUntrackedPaths
+              ?: resolvedBranchRecord?.baselineUntrackedPaths.orEmpty(),
+            args.recorder.goalStartBaselinePaths(run.request),
+          ),
         revisions = revisions,
       ) ?: return null
     val fingerprint =

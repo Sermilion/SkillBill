@@ -2174,6 +2174,17 @@ private fun FeatureTaskRuntimeWorkerOwnership.matchesActiveOwnership(
 
 internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaults() {
   private var workerOwnership: FeatureTaskRuntimeWorkerOwnership? = null
+  private val goalChildWorkflowIds = mutableMapOf<String, List<String>>()
+
+  fun seedGoalChildWorkflowIds(
+    parentWorkflowId: String,
+    childWorkflowIds: List<String>,
+  ) {
+    synchronized(this) { goalChildWorkflowIds[parentWorkflowId] = childWorkflowIds }
+  }
+
+  override fun listGoalChildWorkflowIdsByParent(parentWorkflowId: String): List<String> =
+    synchronized(this) { goalChildWorkflowIds[parentWorkflowId].orEmpty() }
 
   fun seedWorkerOwnership(ownership: FeatureTaskRuntimeWorkerOwnership) {
     workerOwnership = ownership

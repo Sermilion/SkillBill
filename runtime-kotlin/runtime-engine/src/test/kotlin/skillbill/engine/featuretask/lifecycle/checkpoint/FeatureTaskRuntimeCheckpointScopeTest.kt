@@ -18,6 +18,24 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeCheckpointScopeTest {
   @Test
+  fun `a goal child's baseline keeps only paths already dirty when the goal started`() {
+    val baseline =
+      goalScopedBaselinePaths(
+        ownBaseline = listOf("operator/Notes.md", "src/LeftoverFromEarlierAttempt.kt"),
+        goalStartBaseline = listOf("operator/Notes.md"),
+      )
+
+    assertEquals(listOf("operator/Notes.md"), baseline)
+  }
+
+  @Test
+  fun `a workflow outside a goal keeps its own baseline`() {
+    val own = listOf("operator/Notes.md", "src/Dirty.kt")
+
+    assertEquals(own, goalScopedBaselinePaths(ownBaseline = own, goalStartBaseline = null))
+  }
+
+  @Test
   fun `stages owned inventory without foreign staged paths`() {
     val decision =
       decide(
