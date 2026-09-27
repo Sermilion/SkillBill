@@ -201,6 +201,13 @@ class GoalRunnerResetReplanCoordinator(
             planningIdentity = planningIdentity,
           ),
       )
+    pruneResetSubtaskCheckpointRefs(
+      gitOperations = gitOperations,
+      repoRoot = request.repoRoot ?: repositoryRoot.path,
+      issueKey = written.state.manifest.issueKey,
+      subtaskIds = written.clearedChildSubtaskIds,
+      record = { message -> RuntimeDiagnosticsBestEffortWarning.record(diagnostics, message) },
+    )
     return toReplanResult(request, loaded, written, beforeSubtasks)
   }
 

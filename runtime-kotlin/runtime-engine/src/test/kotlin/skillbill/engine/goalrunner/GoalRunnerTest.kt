@@ -3849,6 +3849,7 @@ internal class InMemoryGoalManifestStore(
   var sharedPreplanPayloadSha256ForTest: String? = "c".repeat(64)
   var scopedReplanCount: Int = 0
     private set
+  var clearedChildSubtaskIdsOnReplan: List<Int> = emptyList()
   var lastIncludeSharedPreplan: Boolean? = null
     private set
   var forceSharedDigestMismatchOnReplan: Boolean = false
@@ -3948,6 +3949,7 @@ internal class InMemoryGoalManifestStore(
       sharedPreplanPreparedBefore = sharedBefore,
       discardedSharedPreplan = sharedBefore && !sharedPreplanPrepared,
       cascadedPlanSubtaskIds = cascadedIds,
+      clearedChildSubtaskIds = clearedChildSubtaskIdsOnReplan,
     )
   }
 

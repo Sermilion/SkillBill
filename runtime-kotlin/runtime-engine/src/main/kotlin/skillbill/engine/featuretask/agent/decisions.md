@@ -1,5 +1,12 @@
 # featuretask runtime boundary decisions
 
+## [2026-09-27] Scoped replan prunes the cleared child's checkpoint refs
+Context: `goal replan` deleted the child workflow but left its `refs/skill-bill/checkpoints/<issue>/<subtask>/<n>` refs. The next child restarts its checkpoint sequence at 0, so its first remediation amend that reached an old number found a foreign occupant. It refused, because overwriting would drop the only reachability that commit had. SKILL-380 subtask 5 blocked at `verify_findings` this way.
+Decision: scoped replan prunes the checkpoint refs of every subtask whose child workflow it cleared, the same way reset and scoped child recovery already do (`pruneResetSubtaskCheckpointRefs`).
+Reason: a checkpoint ref belongs to the workflow whose identity ledger names it. Once replan deletes that workflow, nothing reads the ref except the next child's collision check.
+Alternatives considered: start a new child's sequence after the highest ref already in git (rejected: the identity ledger derives its recorded ref name from its own sequence, so both would have to be threaded through two append paths, and it would keep refs that nothing owns).
+Revisit when: a replanned subtask must keep its abandoned attempt's pre-amend snapshots.
+
 ## [2026-09-27] A goal child's ownership baseline is the goal-start baseline
 Context: `goal replan` deletes the child workflow and clears the subtask's workflow id. The next child snapshotted every dirty path as its baseline, including the earlier attempts' uncommitted subtask work, so its checkpoints committed only part of the subtask. On SKILL-380 subtask 5 the commit referenced a class that existed only as an untracked leftover, and review then refused to amend.
 Decision: A goal child's checkpoint and review-checkpoint baseline is its own recorded baseline intersected with the goal-start baseline. The goal-start baseline is the recorded baseline of the earliest surviving goal child. `goalScopedBaselinePaths` applies the intersection in both readers. The recorded baseline itself stays unchanged.

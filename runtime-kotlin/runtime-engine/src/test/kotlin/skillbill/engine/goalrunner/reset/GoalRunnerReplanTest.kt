@@ -12,15 +12,24 @@ import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.model.GoalPlanningStatusState.NOT_STARTED
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FEATURE_TASK_RUNTIME_CHECKPOINT_REF_NAMESPACE
+import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.featureTaskRuntimeCheckpointRefName
+import java.nio.file.Files
+import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -440,6 +449,73 @@ class GoalRunnerReplanTest {
     assertEquals("wfl-1", store.manifest.subtasks[0].workflowId)
     assertEquals("complete", store.manifest.subtasks[1].status)
     assertEquals("pending", store.manifest.subtasks[2].status)
+  }
+
+  @Test
+  fun `scoped replan prunes the cleared child's checkpoint refs and keeps its siblings'`() {
+    val repo = Files.createTempDirectory("skillbill-replan-checkpoint-refs")
+    try {
+      initGitRepository(repo)
+      val git = GitWorkflowGitOperations()
+      val head = gitCommand(repo, "rev-parse", "HEAD")
+      val siblingRef = featureTaskRuntimeCheckpointRefName("SKILL-56", "1", 0)
+      listOf(
+        siblingRef,
+        featureTaskRuntimeCheckpointRefName("SKILL-56", "2", 0),
+        featureTaskRuntimeCheckpointRefName("SKILL-56", "2", 1),
+      ).forEach { ref ->
+        assertIs<WorkflowGitOperationResult.Ok>(
+          git.updateCheckpointRef(repo, FEATURE_TASK_RUNTIME_CHECKPOINT_REF_NAMESPACE, ref, head),
+        )
+      }
+      val store =
+        refusalBaseStore().apply {
+          seedIdleLease()
+          clearedChildSubtaskIdsOnReplan = listOf(2)
+        }
+      val service =
+        testGoalRunnerStatusService(
+          manifestStore = store,
+          outcomeStore = RecordingOutcomeStore(),
+          phaseRecorder = goalTestPhaseRecorder(),
+          clock = idleClock,
+          ports = GoalRunnerStatusTestPorts(gitOperations = git, workerSupervisor = DeadProcessSupervisor),
+        )
+
+      service.replan(GoalRunnerReplanRequest("SKILL-56", subtaskId = 2, repoRoot = repo))
+
+      val remaining =
+        assertIs<WorkflowGitNameListResult.Listed>(
+          git.listCheckpointRefs(repo, "$FEATURE_TASK_RUNTIME_CHECKPOINT_REF_NAMESPACE/SKILL-56/"),
+        ).names
+      assertEquals(listOf(siblingRef), remaining.map(String::trim))
+    } finally {
+      repo.toFile().deleteRecursively()
+    }
+  }
+
+  private fun initGitRepository(repo: Path) {
+    gitCommand(repo, "init", "--initial-branch", "main")
+    gitCommand(repo, "config", "user.email", "runtime@skill-bill.test")
+    gitCommand(repo, "config", "user.name", "Skill Bill Runtime")
+    gitCommand(repo, "config", "commit.gpgsign", "false")
+    repo.resolve("Base.kt").writeText("base\n")
+    gitCommand(repo, "add", "-A")
+    gitCommand(repo, "commit", "-m", "base")
+  }
+
+  private fun gitCommand(
+    repo: Path,
+    vararg args: String,
+  ): String {
+    val process =
+      ProcessBuilder(listOf("git", "-C", repo.toString()) + args.toList())
+        .redirectErrorStream(true)
+        .start()
+    val output = process.inputStream.bufferedReader().readText().trim()
+    val exitCode = process.waitFor()
+    check(exitCode == 0) { "git ${args.joinToString(" ")} failed with $exitCode: $output" }
+    return output
   }
 
   private fun refusalBaseManifest() =
