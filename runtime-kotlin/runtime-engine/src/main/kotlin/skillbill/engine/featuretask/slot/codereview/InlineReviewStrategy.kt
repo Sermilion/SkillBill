@@ -16,9 +16,9 @@ import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutput
-import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -29,9 +29,9 @@ import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.parallel.ParallelReviewFindingParser
 import skillbill.review.parallel.ParallelReviewMerger
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
-import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path
 
 class InlineReviewStrategy(

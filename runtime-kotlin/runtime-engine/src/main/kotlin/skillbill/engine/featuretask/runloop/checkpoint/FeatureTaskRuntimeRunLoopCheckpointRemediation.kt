@@ -58,9 +58,7 @@ object FeatureTaskRuntimeRunLoopCheckpointRemediation {
           val head = phaseGates.gitOperations.headCommitSha(request.repoRoot)
           if (head !is WorkflowGitOperationResult.Ok || head.value.isBlank()) {
             return FeatureTaskRuntimeRunLoopRepairReceipt.blockRemediationBaseSha(
-              request,
-              state,
-              session,
+              context,
               precedingPhaseId,
               reenteredStepId,
               head.error.ifBlank { "HEAD resolved to an empty sha." },
@@ -80,9 +78,7 @@ object FeatureTaskRuntimeRunLoopCheckpointRemediation {
             true
           } else {
             FeatureTaskRuntimeRunLoopRepairReceipt.blockRemediationBaseSha(
-              request,
-              state,
-              session,
+              context,
               precedingPhaseId,
               reenteredStepId,
               "the review persistence.state could not be updated.",
@@ -91,9 +87,7 @@ object FeatureTaskRuntimeRunLoopCheckpointRemediation {
         },
         onFailure = { error ->
           FeatureTaskRuntimeRunLoopRepairReceipt.blockRemediationBaseSha(
-            request,
-            state,
-            session,
+            context,
             precedingPhaseId,
             reenteredStepId,
             error.message.orEmpty(),

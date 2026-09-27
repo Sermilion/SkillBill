@@ -10,7 +10,7 @@ import skillbill.engine.phaseIdFromPrompt
 import skillbill.engine.telemetryRunnerHarness
 import skillbill.engine.validJsonOutput
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -85,7 +85,6 @@ class PhasePlanRunTest {
       intake = "$ISSUE_KEY split the runtime work into ordered subtasks",
     )
 
-  /** The harness seeds its own spec under .feature-specs, so look only for this plan's issue key. */
   private fun planBundleDirectories(): List<String> =
     repoRoot.resolve(FEATURE_SPECS).toFile().list().orEmpty().filter { name -> name.startsWith("$ISSUE_KEY-") }
 

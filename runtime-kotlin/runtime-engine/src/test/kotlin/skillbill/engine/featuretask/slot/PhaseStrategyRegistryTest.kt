@@ -2,18 +2,19 @@ package skillbill.engine.featuretask.slot
 
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.error.featuretask.DuplicatePhaseStrategyError
 import skillbill.error.featuretask.PhaseStrategySelectionSlotMismatchError
 import skillbill.error.featuretask.PhaseStrategyStepOutsideSlotError
 import skillbill.error.featuretask.UnknownPhaseStrategyError
 import skillbill.error.featuretask.UnregisteredPhaseStrategySelectionError
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
-import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

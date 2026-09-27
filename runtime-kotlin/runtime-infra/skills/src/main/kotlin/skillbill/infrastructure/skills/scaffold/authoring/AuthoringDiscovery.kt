@@ -7,6 +7,7 @@ import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPac
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlatformPackManifests
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.addonUsageFor
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.displayNameFromSlug
+import skillbill.install.model.ListedSkillNames
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
 import java.io.IOException
@@ -201,7 +202,7 @@ private fun platformFromSkillPath(relative: Path): String =
   if (
     relative.nameCount >= PRE_SHELL_PLATFORM_PATH_PARTS &&
     relative.getName(0).toString() == "skills" &&
-    !relative.getName(1).toString().startsWith("bill-")
+    !ListedSkillNames.isListed(relative.getName(1).toString())
   ) {
     relative.getName(1).toString()
   } else {

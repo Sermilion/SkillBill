@@ -2,6 +2,7 @@ package skillbill.engine
 
 import skillbill.application.realPlanningProjectionValidator
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
@@ -15,8 +16,8 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhase
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeResolvedUpstreamOutputs
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReviewEvidenceReference
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -170,7 +171,10 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
           derivedContextKeys = emptyList(),
         ),
         planningProjectionValidator = realPlanningProjectionValidator,
-        invariantFields = strategies.strategyFor(phaseId, facts).briefingInvariantFields(phaseId),
+        scope =
+          FeatureTaskRuntimeBriefingScope(
+            invariantFields = strategies.strategyFor(phaseId, facts).briefingInvariantFields(phaseId),
+          ),
       )
 
     val implementText = briefingFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT).briefingText
@@ -279,7 +283,7 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
       val briefing =
         FeatureTaskRuntimePhaseBriefingAssembler.assemble(
           handoff,
-          sharedReviewEvidence = evidence(hunksPerFile),
+          scope = FeatureTaskRuntimeBriefingScope(sharedReviewEvidence = evidence(hunksPerFile)),
           planningProjectionValidator = realPlanningProjectionValidator,
         )
       assertFalse(briefing.briefingText.contains("@@"), "diff hunk bodies must not reach the briefing")

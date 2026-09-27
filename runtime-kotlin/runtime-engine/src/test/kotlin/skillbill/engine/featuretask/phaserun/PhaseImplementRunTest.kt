@@ -9,7 +9,7 @@ import skillbill.engine.phaseIdFromPrompt
 import skillbill.engine.telemetryRunnerHarness
 import skillbill.engine.validJsonOutput
 import skillbill.error.featuretask.PhaseSpecRequiredError
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -45,7 +45,10 @@ class PhaseImplementRunTest {
   fun `implement over a governed spec leaves the agent's edit uncommitted and writes no workflow state`() {
     val spec = repoRoot.resolve(".feature-specs/$ISSUE_KEY-phase-implement/spec.md")
     Files.createDirectories(spec.parent)
-    Files.writeString(spec, "# $ISSUE_KEY - phase implement\n\n## Acceptance Criteria\n\n1. The feature is implemented.\n")
+    Files.writeString(
+      spec,
+      "# $ISSUE_KEY - phase implement\n\n## Acceptance Criteria\n\n1. The feature is implemented.\n",
+    )
 
     val result = entry().run(implementRequest(ISSUE_KEY))
 

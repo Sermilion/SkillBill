@@ -4,6 +4,7 @@ import skillbill.application.decomposition.baseBranch
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
+import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.phase.core.toMeasurementFailureClassification
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
@@ -45,7 +46,6 @@ object PhaseLaunchPreparation {
   internal fun prepareLaunchForCapture(
     context: PhaseAttemptEnvironment,
     run: PhaseRun,
-    state: FeatureTaskRuntimeRunState,
     iteration: Int?,
     priorCorrection: PriorAttemptCorrection?,
     prompt: PhaseStepPromptSource,
@@ -190,14 +190,7 @@ object PhaseLaunchPreparation {
       val measurementContext = args.context
       return try {
         PreparedLaunchReady(
-          PhaseLaunchPreparation.prepareLaunch(
-            context,
-            run = run,
-            iteration = args.iteration,
-            priorCorrection = priorCorrection,
-            repositoryCheckpoint = measurementContext.repositoryCheckpoint,
-            prompt = args.prompt,
-          ),
+          PhaseLaunchPreparation.prepareLaunch(context, args),
         )
       } catch (error: InvalidFeatureTaskRuntimeHandoffProjectionError) {
         rejectedHandoffLaunch(recorder, run, state, error, measurementContext)
@@ -279,12 +272,13 @@ object PhaseLaunchPreparation {
 
   internal fun prepareLaunch(
     context: PhaseAttemptEnvironment,
-    run: PhaseRun,
-    iteration: Int?,
-    priorCorrection: PriorAttemptCorrection?,
-    repositoryCheckpoint: FeatureTaskRuntimeRepositoryCheckpoint?,
-    prompt: PhaseStepPromptSource,
+    args: DeclaredLaunchArgs,
   ): PreparedLaunch {
+    val run = args.run
+    val iteration = args.iteration
+    val priorCorrection = args.priorCorrection
+    val repositoryCheckpoint = args.context.repositoryCheckpoint
+    val prompt = args.prompt
     with(context) {
       val resolvedBranchRecord = recorder.loadResolvedBranch(run.request.workflowId)
       val handoff =
@@ -307,8 +301,10 @@ object PhaseLaunchPreparation {
           run.request.workflowId,
           phaseGates.planningProjectionValidator,
           run.request.agentAddonSelection,
-          sharedEvidence?.reference,
-          strategyFor(run.phaseId).briefingInvariantFields(run.phaseId),
+          FeatureTaskRuntimeBriefingScope(
+            sharedEvidence?.reference,
+            strategyFor(run.phaseId).briefingInvariantFields(run.phaseId),
+          ),
         )
       if (!run.policy.singleAgentSession) {
         recorder.recordPhaseBriefing(

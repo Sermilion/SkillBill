@@ -13,8 +13,8 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPoli
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeScopedReviewBaseline
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.error.core.DatabaseBusyError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
@@ -48,7 +48,7 @@ internal object InlineReviewPreparation {
     context: PhaseAttemptEnvironment,
     state: PhaseStepState,
   ): InlineReviewPrepared {
-    val head = context.phaseGates.gitOperations.runtimePhaseHeadCommit(run.request.repoRoot)
+    val head = context.phaseGates.gitOperations.headCommitSha(run.request.repoRoot)
     if (head !is WorkflowGitOperationResult.Ok) {
       return blocked(state, "Phase review could not resolve HEAD: ${head.error}")
     }

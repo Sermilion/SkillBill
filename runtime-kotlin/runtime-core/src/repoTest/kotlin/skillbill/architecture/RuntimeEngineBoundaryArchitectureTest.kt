@@ -1,6 +1,6 @@
 package skillbill.architecture
 
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals

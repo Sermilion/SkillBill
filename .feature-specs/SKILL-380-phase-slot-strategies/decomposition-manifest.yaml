@@ -9,7 +9,7 @@ base_branch: "main"
 feature_branch: "feat/SKILL-380-phase-slot-strategies"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 11
+  subtask_id: 12
   action: "resume"
 subtasks:
 - id: 1
@@ -181,12 +181,12 @@ subtasks:
 - id: 11
   name: "pr-description and boundary-history own their rules"
   spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_11_pr-and-history-rules.md"
-  status: "in_progress"
+  status: "complete"
   branch: null
   commit_sha: null
   workflow_id: "wftr-20260927-172410-h8lm"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
@@ -200,10 +200,10 @@ subtasks:
 - id: 12
   name: "skill-bill dispatcher for the full run and phases"
   spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_12_skill-bill-dispatcher.md"
-  status: "pending"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20260927-180034-xu34"
   blocked_reason: null
   last_resumable_step: null
   linear_issue_id: null

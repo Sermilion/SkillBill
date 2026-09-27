@@ -1,6 +1,7 @@
 package skillbill.application.review.parallel.runner
 
 import skillbill.application.review.model.ParallelCodeReviewRequest
+import skillbill.application.review.model.ReviewEvidenceReadCount
 import skillbill.application.review.model.boundedReviewLane
 import skillbill.application.review.parallel.verification.ParallelCodeReviewRunnerFailureAdmission
 import skillbill.application.review.parallel.verification.parallelCodeReviewInlineTerminalStatus
@@ -18,7 +19,6 @@ import skillbill.review.context.model.hunk.ReviewBudgetEvaluator
 import skillbill.review.context.model.hunk.ReviewLaneIdentity
 import skillbill.review.model.ParallelReviewRawFinding
 import skillbill.review.model.ReviewLaneReviewDisposition
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
 import kotlin.time.TimeSource
 
@@ -38,7 +38,7 @@ internal class ParallelCodeReviewInlineCoverageContinuation(
   private val governedEvidenceEndpointBinder: GovernedReviewEvidenceEndpointBinder,
   private val failureAdmission: ParallelCodeReviewRunnerFailureAdmission,
   private val sliceOutcome: (LaunchedBoundParentArgs, AgentRunLaunchFacts) -> ParallelReviewLaneOutcome,
-  private val evidenceReadCallback: (ParallelCodeReviewRequest, AtomicLong) -> (() -> Unit)?,
+  private val evidenceReadCallback: (ParallelCodeReviewRequest, ReviewEvidenceReadCount) -> (() -> Unit)?,
 ) {
   fun run(args: LaunchedBoundParentArgs): ParallelReviewLaneOutcome {
     val bound = args.bound

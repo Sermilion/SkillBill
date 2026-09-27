@@ -39,6 +39,7 @@ import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.engine.featuretask.validation.ReadinessCommitPushSettleRequest
 import skillbill.engine.featuretask.validation.ReadinessCommitPushSettleResult
+import skillbill.engine.featuretask.validation.ReadinessCommittedHeadBindRequest
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -183,12 +184,14 @@ object RuntimeCommitCycle {
   ): PhaseOutcome {
     val rebound =
       context.phaseGates.readinessGateCoordinator.bindCommittedHead(
-        workflowId = context.request.workflowId,
-        stepId = args.run.phaseId,
-        repoRoot = context.request.repoRoot,
-        baseBranch = args.baseBranch,
-        gitOperations = context.phaseGates.gitOperations,
-        commitSha = args.outcome.commitSha,
+        ReadinessCommittedHeadBindRequest(
+          workflowId = context.request.workflowId,
+          stepId = args.run.phaseId,
+          repoRoot = context.request.repoRoot,
+          baseBranch = args.baseBranch,
+          gitOperations = context.phaseGates.gitOperations,
+          commitSha = args.outcome.commitSha,
+        ),
       )
     return if (rebound is ReadinessCommitPushSettleResult.Blocked) {
       context.block(args.run, args.iteration, rebound.reason)

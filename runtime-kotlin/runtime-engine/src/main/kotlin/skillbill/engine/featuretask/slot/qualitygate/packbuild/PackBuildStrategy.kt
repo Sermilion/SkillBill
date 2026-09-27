@@ -8,7 +8,6 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseReportedGate
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
-import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.policyOf
@@ -20,9 +19,10 @@ import skillbill.engine.featuretask.slot.qualitygate.buildGateTriagePhaseTask
 import skillbill.engine.featuretask.slot.qualitygate.gateCurrentExecution
 import skillbill.engine.featuretask.slot.qualitygate.gateRepairNoOutputSchemaDirective
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedBuildPhaseTask
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
-import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 class PackBuildStrategy(override val runner: PhaseRunner) : PhaseStrategyStatusProjection() {
@@ -76,8 +76,7 @@ class PackBuildStrategy(override val runner: PhaseRunner) : PhaseStrategyStatusP
     context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
   ): IdeStatusCurrentPhaseExecution? = gateCurrentExecution(stepId, context)
 
-  override fun reportedGate(stepId: String): PhaseReportedGate? =
-    PhaseReportedGate.BUILD.takeIf { stepId in policies }
+  override fun reportedGate(stepId: String): PhaseReportedGate? = PhaseReportedGate.BUILD.takeIf { stepId in policies }
 
   companion object {
     const val ID = "pack-build"

@@ -2,6 +2,12 @@ package skillbill.engine.featuretask.slot
 
 import skillbill.engine.PROMPT_COMPOSER_ISSUE_KEY
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
+import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.FILE_MUTATING
+import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.GENERATION_SCOPED
+import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.MUTATING
+import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.READ_ONLY_IDLE
+import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.RELAUNCH
+import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.SINGLE
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
@@ -12,12 +18,13 @@ import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.engine.promptComposerBriefingFor
 import skillbill.infrastructure.contracts.FeatureTaskRuntimePhaseOutputSchemaValidator
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
-import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.ProsePhaseOutputSynthesizer
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
@@ -102,33 +109,38 @@ class PhaseStrategyCompositionTest {
 
     val EXPECTED_POLICIES =
       mapOf(
-        PHASE_PREPLAN to policy(relaunch = true),
-        PHASE_PLAN to policy(relaunch = true),
-        PHASE_IMPLEMENT to policy(mutating = true, relaunch = true, fileMutating = true).extendingInventory(),
+        PHASE_PREPLAN to policy(RELAUNCH),
+        PHASE_PLAN to policy(RELAUNCH),
+        PHASE_IMPLEMENT to policy(MUTATING, RELAUNCH, FILE_MUTATING).extendingInventory(),
         PHASE_SIMPLIFY to
-          policy(mutating = true, relaunch = true, single = true, fileMutating = true).extendingInventory(),
-        PHASE_AUDIT to policy(single = true, fileMutating = true),
-        PHASE_REVIEW to policy(relaunch = true, fileMutating = true, generationScoped = true),
-        PHASE_VERIFY_FINDINGS to policy(relaunch = true, readOnlyIdle = true, fileMutating = true),
+          policy(MUTATING, RELAUNCH, SINGLE, FILE_MUTATING).extendingInventory(),
+        PHASE_AUDIT to policy(SINGLE, FILE_MUTATING),
+        PHASE_REVIEW to policy(RELAUNCH, FILE_MUTATING, GENERATION_SCOPED),
+        PHASE_VERIFY_FINDINGS to policy(RELAUNCH, READ_ONLY_IDLE, FILE_MUTATING),
         PHASE_IMPLEMENT_FIX to
-          policy(mutating = true, relaunch = true, fileMutating = true, generationScoped = true).extendingInventory(),
-        PHASE_BUILD to policy(relaunch = true, fileMutating = true),
+          policy(MUTATING, RELAUNCH, FILE_MUTATING, GENERATION_SCOPED).extendingInventory(),
+        PHASE_BUILD to policy(RELAUNCH, FILE_MUTATING),
         PHASE_VALIDATE to
-          policy(relaunch = true, fileMutating = true).copy(outputGateAttempts = 2).extendingInventory(),
-        PHASE_WRITE_HISTORY to policy(fileMutating = true).extendingInventory(),
-        PHASE_COMMIT_PUSH to policy(fileMutating = true),
-        PHASE_PR to policy(fileMutating = true),
+          policy(RELAUNCH, FILE_MUTATING).copy(outputGateAttempts = 2).extendingInventory(),
+        PHASE_WRITE_HISTORY to policy(FILE_MUTATING).extendingInventory(),
+        PHASE_COMMIT_PUSH to policy(FILE_MUTATING),
+        PHASE_PR to policy(FILE_MUTATING),
       )
 
-    fun policy(
-      mutating: Boolean = false,
-      relaunch: Boolean = false,
-      single: Boolean = false,
-      readOnlyIdle: Boolean = false,
-      fileMutating: Boolean = false,
-      generationScoped: Boolean = false,
-    ) = PhaseStepPolicy(mutating, relaunch, single, readOnlyIdle, fileMutating, generationScoped)
+    fun policy(vararg traits: PolicyTrait): PhaseStepPolicy {
+      val set = traits.toSet()
+      return PhaseStepPolicy(
+        mutating = MUTATING in set,
+        relaunchOnInvalidOutput = RELAUNCH in set,
+        singleAgentSession = SINGLE in set,
+        readOnlyIdle = READ_ONLY_IDLE in set,
+        fileMutating = FILE_MUTATING in set,
+        generationScoped = GENERATION_SCOPED in set,
+      )
+    }
 
     fun PhaseStepPolicy.extendingInventory() = copy(extendsOwnedInventory = true)
   }
+
+  private enum class PolicyTrait { MUTATING, RELAUNCH, SINGLE, READ_ONLY_IDLE, FILE_MUTATING, GENERATION_SCOPED }
 }

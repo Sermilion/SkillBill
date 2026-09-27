@@ -6,6 +6,8 @@ import com.github.ajalt.clikt.parameters.arguments.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.config.ConfigResolutionService
+import skillbill.application.review.service.RequestedReviewMode
+import skillbill.cli.codereview.usageError
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
 import skillbill.cli.kernel.cli.CliRunState
@@ -19,11 +21,10 @@ import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.error.core.ShellContentContractException
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.SpecSource
-import skillbill.workflow.taskruntime.phase.task.PhaseIntakeRequirement
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
-import skillbill.workflow.taskruntime.phase.task.SkeletonRunStateKind
+import skillbill.workflow.taskruntime.model.skeleton.PhaseIntakeRequirement
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 
 @Inject
 class PhaseCommand(
@@ -58,7 +59,6 @@ class PhaseCommand(
     val invokedAgentId = requireInvokingAgentId(agent, inputs.environment, "--agent")
     val result =
       runPhase(state) {
-        // Only the spec-backed phases (plan, implement) read the spec type, so a bad config cannot fail the others.
         val specBacked = SkeletonDefinition.byId(invocation.definitionId).intake != PhaseIntakeRequirement.OPTIONAL
         val specSource =
           if (specBacked) {
@@ -72,7 +72,7 @@ class PhaseCommand(
             repoRoot = repoRoot,
             invokedAgentId = invokedAgentId,
             intake = invocation.intake,
-            codeReviewMode = invocation.mode,
+            codeReviewMode = invocation.mode?.let(RequestedReviewMode::parse),
             reviewInvocation = ReviewInvocation(target = invocation.target),
             specSource = specSource ?: SpecSource.LOCAL,
           ),
@@ -89,7 +89,7 @@ internal fun runPhase(
   try {
     run()
   } catch (error: UnknownPhaseReviewTargetError) {
-    throw UsageError(error.message.orEmpty())
+    usageError(error)
   } catch (error: ShellContentContractException) {
     state.completeText(error.message.orEmpty(), emptyMap(), exitCode = 1)
     null
@@ -103,7 +103,7 @@ object PhaseCommandKeys {
 data class PhaseInvocation(
   val definitionId: String,
   val intake: String?,
-  val mode: CodeReviewExecutionMode?,
+  val mode: String?,
   val target: ReviewTarget?,
 )
 
@@ -139,28 +139,28 @@ object PhaseInvocationParser {
 
   private fun definitionId(name: String): String {
     val names = phaseNames()
-    return when {
-      name in names -> name
-      name == COMMIT_PUSH ->
-        throw UsageError("Phase '$COMMIT_PUSH' is not runnable on its own; run the full feature-task workflow.")
-      SkeletonDefinition.entries.any { it.id == name } ->
-        throw UsageError("Phase '$name' runs over durable workflow state; expected ${expectedList(names)}.")
-      else -> throw UsageError("Unknown phase '$name'; expected ${expectedList(names)}.")
-    }
+    if (name in names) return name
+    throw UsageError(
+      when {
+        name == COMMIT_PUSH -> "Phase '$COMMIT_PUSH' is not runnable on its own; run the full feature-task workflow."
+        SkeletonDefinition.entries.any { it.id == name } ->
+          "Phase '$name' runs over durable workflow state; expected ${expectedList(names)}."
+        else -> "Unknown phase '$name'; expected ${expectedList(names)}."
+      },
+    )
   }
 
   fun expectedList(names: List<String>): String =
     if (names.size < 2) names.joinToString() else "${names.dropLast(1).joinToString(", ")}, or ${names.last()}"
 
-  // Only known keys split off, so intake words such as `Foo.kt:12` or URLs stay intake.
   private fun isKeyValue(value: String): Boolean =
     KEY_SEPARATOR in value && value.substringBefore(KEY_SEPARATOR) in KEYS
 
-  private fun mode(value: String): CodeReviewExecutionMode =
-    CodeReviewExecutionMode.entries.firstOrNull { it.wireValue == value }
+  private fun mode(value: String): String =
+    value.takeIf(RequestedReviewMode::isKnown)
       ?: throw UsageError(
-        "Unknown ${PhaseCommandKeys.MODE} '$value'; expected ${CodeReviewExecutionMode.INLINE.wireValue} or " +
-          "${CodeReviewExecutionMode.DELEGATED.wireValue} (${CodeReviewExecutionMode.AUTO.wireValue} resolves inline).",
+        "Unknown ${PhaseCommandKeys.MODE} '$value'; expected ${RequestedReviewMode.inlineWireValue} or " +
+          "${RequestedReviewMode.delegatedWireValue} (${RequestedReviewMode.autoWireValue} resolves inline).",
       )
 
   private fun target(value: String): ReviewTarget =

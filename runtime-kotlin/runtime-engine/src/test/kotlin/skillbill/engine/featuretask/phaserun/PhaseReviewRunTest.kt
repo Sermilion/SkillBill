@@ -18,10 +18,8 @@ import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
-import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunState
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDurableState
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
-import skillbill.engine.featuretask.slot.PhaseLaunchState
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
@@ -31,6 +29,8 @@ import skillbill.engine.featuretask.slot.codereview.LaneScript
 import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunner
 import skillbill.engine.featuretask.slot.reviewStepOutput
 import skillbill.engine.featuretask.slot.scriptedReviewPhaseRunner
+import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slotbaseline.SlotBaselineSqlite
 import skillbill.engine.phaseIdFromPrompt
 import skillbill.engine.telemetryRunnerHarness
@@ -40,9 +40,9 @@ import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -127,7 +127,7 @@ class PhaseReviewRunTest {
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
     assertEquals(1, launchedPhases(launcher).count { it == PHASE_IMPLEMENT_FIX }, "review_fix allows one fix")
-    assertEquals(2, reviews, "the capped loop re-reviews the fix once and then stops")
+    assertEquals(1, reviews, "the capped loop advances after the fix without a re-review, as in a full run")
     git.assertNoCommitOrCheckpointRef(headBefore)
     database.assertNoDurableWorkflowState()
   }
@@ -190,7 +190,7 @@ class PhaseReviewRunTest {
 
     assertEquals(2, loopEntry.runStates.size, loopEntry.runStates.toString())
     assertIs<InMemoryPhaseRunState>(loopEntry.runStates[0])
-    assertIs<DurablePhaseRunState>(loopEntry.runStates[1])
+    assertIs<FeatureTaskRuntimeRunLoopDurableState>(loopEntry.runStates[1])
   }
 
   private fun reviewRequest(
@@ -219,7 +219,6 @@ class PhaseReviewRunTest {
 
   private fun isFixed(): Boolean = Files.readString(source) == FIXED_SOURCE
 
-  /** verify_findings confirms the Blocker on the first pass (or every pass); implement_fix rewrites the file. */
   private fun fixLauncher(
     verifyEveryPass: Boolean = false,
     onFix: () -> Unit = {},
@@ -296,7 +295,6 @@ class PhaseReviewRunTest {
   private fun launchedPhases(launcher: RuntimeRecordingLauncher): List<String> =
     launcher.requests.mapNotNull { it.skillRunRequest.promptOverride }.map(::phaseIdFromPrompt)
 
-  /** The run wrote review_runs rows, pass claims, and review telemetry in the subtask 1 fixture's shape. */
   private fun assertReviewRecordShape(fixtures: ReviewFixtures) {
     val tables = requireNotNull(JsonCodec.anyToStringAnyMap(slotBaselineFixture(fixtures.reviewRuns)))
     val fixtureRun = rowsOf(tables["review_runs"]).first()
@@ -318,7 +316,6 @@ class PhaseReviewRunTest {
     database.assertOnlyOutboxEvents(fixtureEvents.map { it["event_name"] as String }.toSet())
   }
 
-  /** Each recorded review run carries exactly the fixture's count of stage degradations, so none is emitted twice. */
   private fun assertStageDegradationsPerRun(fixtures: ReviewFixtures) {
     val eventName = TelemetryOutboxEvent.REVIEW_STAGE_DEGRADATION.wireValue
     val fixtureCount = rowsOf(slotBaselineFixture(fixtures.telemetry)).count { it["event_name"] == eventName }
@@ -382,10 +379,9 @@ private fun FeatureTaskRuntimeRunner.withRunLoopEntry(
     strategies = strategies,
     recorder = recorder,
     goalContinuationRecorder = goalContinuationRecorder,
-    runInvariantsStore = runInvariantsStore,
     outputValidator = outputValidator,
     phaseGates = phaseGates,
-    crashReconciler = crashReconciler,
+    startup = startup,
     phaseSettlementService = phaseSettlementService,
     diagnostics = diagnostics,
     clock = clock,

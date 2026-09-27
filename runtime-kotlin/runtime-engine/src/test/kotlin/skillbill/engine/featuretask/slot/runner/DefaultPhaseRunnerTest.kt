@@ -1,13 +1,13 @@
 package skillbill.engine.featuretask.slot.runner
 
-import skillbill.engine.featuretask.slot.PhaseLaunchState
 import skillbill.engine.featuretask.slot.PhaseStepFacts
 import skillbill.engine.featuretask.slot.PhaseStepInput
+import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
-import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.lang.reflect.Proxy
 import java.nio.file.Path
 import kotlin.test.Test

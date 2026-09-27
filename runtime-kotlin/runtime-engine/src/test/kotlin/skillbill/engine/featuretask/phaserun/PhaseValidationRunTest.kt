@@ -14,9 +14,9 @@ import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
 import skillbill.scaffold.model.PlatformManifest
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -145,7 +145,6 @@ class PhaseValidationRunTest {
     return phaseRunEntry(runner, database, clock)
   }
 
-  /** Every fixture value matches except the normalised session id and duration, and the phase's own scope. */
   private fun assertMatchesFixture(
     expected: Map<String, Any?>,
     actual: Map<String, Any?>,

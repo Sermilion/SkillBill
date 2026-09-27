@@ -1,11 +1,12 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.config.model.PhaseCompactionDirective
+import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.agentrun.model.AgentRunTermination
-import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path
 import kotlin.time.Duration
 

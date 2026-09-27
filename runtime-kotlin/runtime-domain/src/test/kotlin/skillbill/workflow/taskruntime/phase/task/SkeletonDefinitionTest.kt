@@ -3,12 +3,14 @@ package skillbill.workflow.taskruntime.phase.task
 import skillbill.error.featuretask.InvalidSkeletonDefinitionError
 import skillbill.error.featuretask.UnknownSkeletonDefinitionError
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdgeCapScope
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCapExhaustionBehavior
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseEntryGate
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -96,7 +98,7 @@ class SkeletonDefinitionTest {
     val declaration = SkeletonDefinition.REVIEW.declaration()
 
     assertEquals(listOf("review", "verify_findings", "implement_fix"), declaration.forwardPhaseIds)
-    assertEquals(todaysDeclaration(emptyList()).backwardEdges, declaration.backwardEdges)
+    assertEquals(todaysDeclaration(goalChildForward).backwardEdges, declaration.backwardEdges)
     assertEquals(
       listOf(
         FeatureTaskRuntimePhaseEntryGate(

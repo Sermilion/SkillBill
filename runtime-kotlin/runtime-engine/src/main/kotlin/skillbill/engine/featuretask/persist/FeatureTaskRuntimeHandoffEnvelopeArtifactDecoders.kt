@@ -6,8 +6,8 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePersistenceSchemaEr
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.decodeDeliveredProjectionRecordFromArtifact
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phaseartifacts.decodeStrictKeyedArtifactMap
 import skillbill.workflow.taskruntime.phaseartifacts.schemaError
 

@@ -1,9 +1,7 @@
-package skillbill.workflow.taskruntime.phase.task
+package skillbill.workflow.taskruntime.model.skeleton
 
 import skillbill.error.featuretask.InvalidSkeletonDefinitionError
 import skillbill.error.featuretask.UnknownSkeletonDefinitionError
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
 enum class SkeletonRunStateKind(val wireValue: String) {
   DURABLE("durable"),
@@ -31,31 +29,6 @@ data class SkeletonDefinition(
   }
 
   val stepIds: List<String> get() = slots.flatMap(PhaseSlot::steps)
-
-  fun declaration(): FeatureTaskRuntimeTransitionDeclaration = derive(stepIds, entryStepIds = emptySet())
-
-  fun traversal(
-    selectedStepIds: Set<String>,
-    entryStepIds: Set<String>,
-  ): FeatureTaskRuntimeTransitionDeclaration = derive(stepIds.filter { it in selectedStepIds }, entryStepIds)
-
-  private fun derive(
-    steps: List<String>,
-    entryStepIds: Set<String>,
-  ): FeatureTaskRuntimeTransitionDeclaration {
-    val canonical = FeatureTaskRuntimePhaseWorkflowDefinition.transitions
-    val present = steps.toSet()
-    val loopOnly = canonical.loopOnlyPhaseIds.filter { it in present && it !in entryStepIds }.toSet()
-    return FeatureTaskRuntimeTransitionDeclaration(
-      forwardPhaseIds = steps,
-      entryGates = canonical.entryGates.filter { it.phaseId in present && it.requiredPhaseId in present },
-      backwardEdges =
-        canonical.backwardEdges.filter { it.fromPhaseId in present && it.destinationPhaseId in present },
-      loopOnlyPhaseIds = loopOnly,
-      loopOnlySuccessors =
-        canonical.loopOnlySuccessors.filter { (source, successor) -> source in loopOnly && successor in loopOnly },
-    )
-  }
 
   companion object {
     val STANDALONE: SkeletonDefinition = SkeletonDefinition("standalone", PhaseSlot.entries)

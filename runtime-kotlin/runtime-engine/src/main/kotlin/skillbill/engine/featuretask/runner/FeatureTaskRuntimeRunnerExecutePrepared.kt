@@ -17,15 +17,15 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopDrive
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
-import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunState
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDurableState
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.error.shellcontent.FeatureTaskRuntimeOperatorDecisionRejectedError
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
 internal fun FeatureTaskRuntimeRunner.buildExecutePreparedRunTelemetryContext(
   runRequest: FeatureTaskRuntimeRunRequest,
@@ -67,7 +67,8 @@ fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
           },
       initialPendingReentry = null,
     )
-  val runState = DurablePhaseRunState(runRequest, state, session, observability, specSource, transitions, this)
+  val runState =
+    FeatureTaskRuntimeRunLoopDurableState(runRequest, state, session, observability, specSource, transitions, this)
   val context = FeatureTaskRuntimeRunLoopContext(runRequest, runState, strategies)
   FeatureTaskRuntimeRunLoopDrive.reopenStaleSettledSteps(context)
   if (isGoalContinuationRun(runRequest)) {
@@ -124,9 +125,6 @@ fun FeatureTaskRuntimeRunner.finalizeExecutePreparedRunReport(
       .entryStep
   val terminalReport =
     persistGoalContinuationOutcome(
-      goalContinuationRecorder,
-      recorder,
-      phaseGates.gitOperations,
       runRequest,
       report,
       commitStepId,

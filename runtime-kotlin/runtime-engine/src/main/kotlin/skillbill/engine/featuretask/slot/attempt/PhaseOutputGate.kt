@@ -66,11 +66,11 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeChildOutput
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
 import skillbill.engine.featuretask.runner.terminalBlockedReasonFrom
-import skillbill.engine.featuretask.slot.PhaseSettledEnvelopeRead
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
+import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureKind
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
@@ -640,7 +640,6 @@ object PhaseOutputGate {
         request,
         state,
         recorder,
-        observability,
         TerminalOutputAttemptArgs(
           run = run,
           iteration = capture.iteration,

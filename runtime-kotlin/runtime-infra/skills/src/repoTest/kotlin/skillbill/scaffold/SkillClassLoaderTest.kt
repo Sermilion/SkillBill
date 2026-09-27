@@ -39,6 +39,12 @@ private val LEGACY_POINTER_GOLDEN: Map<String, Set<String>> =
         "telemetry-contract.md",
       ),
     "bill-feature-verify" to setOf("shell-ceremony.md", "telemetry-contract.md"),
+    "skill-bill" to
+      setOf(
+        "peak-hours-warner.md",
+        "shell-ceremony.md",
+        "telemetry-contract.md",
+      ),
   )
 
 private val LEGACY_PATTERN_GOLDEN: List<Pair<Regex, Set<String>>> =

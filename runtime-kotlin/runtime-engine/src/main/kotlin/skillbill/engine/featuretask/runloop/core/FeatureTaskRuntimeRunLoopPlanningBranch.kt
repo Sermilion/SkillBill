@@ -7,11 +7,11 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPreLaunch
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.unresolvedReviewFindings
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.engine.featuretask.slot.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.workflow.decomposition.model.SpecSource
-import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -95,15 +95,13 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     args: RunPhaseArgs,
   ): PhaseOutcome {
     val phaseId = args.phaseId
-    val declaration = phaseDeclarationForRun(context, args.request, phaseId)
     val run =
       buildPhaseRun(
+        context = context,
         phaseId = phaseId,
         request = args.request,
-        declaration = declaration,
         specSource = args.specSource,
         reentry = args.reentry,
-        policy = context.stepPolicy(phaseId),
       )
     FeatureTaskRuntimeRunLoopPreLaunch.preLaunchBlock(
       context = context,
@@ -126,12 +124,11 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     )
 
   internal fun buildPhaseRun(
+    context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
     request: FeatureTaskRuntimeRunFacts,
-    declaration: FeatureTaskRuntimePhaseDeclaration,
     specSource: SpecSource,
     reentry: PendingReentry?,
-    policy: PhaseStepPolicy,
   ): PhaseRun {
     val resolvedAgent =
       FeatureTaskRuntimeAgentResolver.resolve(
@@ -141,7 +138,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       )
     return PhaseRun(
       phaseId = phaseId,
-      declaration = declaration,
+      declaration = phaseDeclarationForRun(context, request, phaseId),
       resolvedAgent = resolvedAgent,
       modelDirective =
         FeatureTaskRuntimeModelResolver.resolve(
@@ -152,7 +149,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       compaction = request.compactionSettings.directiveFor(phaseId),
       request = request,
       specSource = specSource,
-      policy = policy,
+      policy = context.stepPolicy(phaseId),
       reentry = reentry,
     )
   }
@@ -192,12 +189,11 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
   ): PhaseStepState =
     context.runState.step(
       buildPhaseRun(
+        context = context,
         phaseId = stepId,
         request = context.request,
-        declaration = phaseDeclarationForRun(context, context.request, stepId),
         specSource = context.specSource,
         reentry = null,
-        policy = context.stepPolicy(stepId),
       ),
     )
 

@@ -4,7 +4,7 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManife
 import skillbill.engine.featuretask.runloop.core.CapturedPhaseOutput
 import skillbill.engine.featuretask.runloop.core.RecordRejection
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeChildOutput
-import skillbill.engine.featuretask.slot.PhaseSettledEnvelopeRead
+import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
 internal sealed interface LaunchResult {

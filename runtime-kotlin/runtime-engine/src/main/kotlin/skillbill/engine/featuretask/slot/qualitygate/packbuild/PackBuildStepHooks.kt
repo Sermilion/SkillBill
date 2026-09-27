@@ -26,7 +26,7 @@ internal object PackBuildStepHooks : PhaseStepHooks {
   ): PhaseOutcome? =
     when {
       run.validationGateTriage -> PhaseOutcome.completed(triageSegmentOutput(run, iteration, outputText))
-      runtimeOwnedGateTurn(run) && !operatorTerminal(run, outputText) ->
+      runtimeOwnedGateTurn(run) && !operatorTerminal(outputText) ->
         PhaseOutcome.completed(repairSegmentOutput(run, iteration))
       else -> null
     }
@@ -78,10 +78,7 @@ internal object PackBuildStepHooks : PhaseStepHooks {
     !run.agentRunValidateFallback &&
       (run.validationGateRepair || run.validationGateRepairTurn > 0 || run.validationGateFindings != null)
 
-  private fun operatorTerminal(
-    run: PhaseRun,
-    outputText: String,
-  ): Boolean =
+  private fun operatorTerminal(outputText: String): Boolean =
     looseOutputEnvelope(outputText)?.let {
       !FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(it).retryOnResume
     } == true

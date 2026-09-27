@@ -19,14 +19,13 @@ import skillbill.engine.featuretask.runloop.core.phaseBlockArgs
 import skillbill.engine.featuretask.runloop.core.withDisposition
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutputPersistence
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runloop.state.featureTaskRuntimeChildOutput
 import skillbill.engine.featuretask.runner.LaunchResult
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
-import skillbill.engine.featuretask.slot.PhaseLaunchState
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
+import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.stepFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
 
@@ -56,7 +55,7 @@ object PhaseAttemptOnce {
           launched = FeatureTaskRuntimeRunLoopLaunch.launchedModelDirective(run),
         ),
       )
-      val launch = PhaseAttemptOnce.launchAndCapture(context, run, state, iteration, priorCorrection, args.call)
+      val launch = PhaseAttemptOnce.launchAndCapture(context, run, iteration, priorCorrection, args.call)
       return PhaseAttemptOnce.settleRecordRejectionLaunchOutcome(context, args, launch)
     }
   }
@@ -64,7 +63,6 @@ object PhaseAttemptOnce {
   internal fun launchAndCapture(
     context: PhaseAttemptEnvironment,
     run: PhaseRun,
-    state: FeatureTaskRuntimeRunState,
     iteration: Int,
     priorCorrection: PriorAttemptCorrection?,
     call: PhaseStepCall,
@@ -78,7 +76,6 @@ object PhaseAttemptOnce {
               PhaseLaunchPreparation.prepareLaunchForCapture(
                 context,
                 run,
-                state,
                 iteration,
                 priorCorrection,
                 call.description.prompt,

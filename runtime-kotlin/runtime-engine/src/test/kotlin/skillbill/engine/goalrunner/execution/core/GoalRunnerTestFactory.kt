@@ -6,6 +6,7 @@ import skillbill.application.realPlanningProjectionValidator
 import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
 import skillbill.application.telemetry.lifecycle.noopGoalLifecycleTelemetryEmitter
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.slot.goalPlanningPhaseStrategies
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.GoalRunner
@@ -340,6 +341,7 @@ internal fun testGoalPlanningSweepPorts(params: GoalPlanningSweepPortsParams): D
         goalPlanningPhaseStrategies(params.subtaskLauncher, params.fanOutPort, params.burstSchedule.planFanOutCap),
       clock = Clock.systemUTC(),
       diagnostics = NoopRuntimeDiagnostics,
+      runLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
     ),
     repositoryEnclosingRootPort = params.repositoryEnclosingRootPort,
   )

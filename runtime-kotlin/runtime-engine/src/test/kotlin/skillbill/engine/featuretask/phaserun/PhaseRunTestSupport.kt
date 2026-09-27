@@ -23,7 +23,6 @@ import java.time.Clock
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** Tables a durable run writes its workflow, session, phase records, ledger, and run invariants into. */
 internal val DURABLE_WORKFLOW_TABLES =
   listOf(
     "feature_task_workflows",
@@ -42,11 +41,9 @@ internal fun phaseRunDatabase(
     environment = emptyMap(),
     clock = clock,
   ).also { database ->
-    // Create the schema up front, so a run that refuses before any write still leaves empty tables to assert on.
     database.transaction { }
   }
 
-/** A [PhaseRunEntry] over the strategies and gates of [runner], recording into [database]. */
 internal fun phaseRunEntry(
   runner: FeatureTaskRuntimeRunner,
   database: DatabaseSessionFactory,
@@ -79,7 +76,6 @@ internal fun DatabaseSessionFactory.assertNoDurableWorkflowState() {
   }
 }
 
-/** The phase run created no commit, moved no HEAD, and wrote no checkpoint ref. */
 internal fun RecordingWorkflowGitOperations.assertNoCommitOrCheckpointRef(headBefore: String) {
   assertEquals(headBefore, headCommitShaValue, "HEAD must not move")
   assertEquals(emptyList(), createCommitMessages, "no commit may be created")
@@ -94,7 +90,6 @@ internal fun DatabaseSessionFactory.outboxPayloads(eventName: String): List<Map<
     .filter { row -> row["event_name"] == eventName }
     .map { row -> requireNotNull(JsonCodec.anyToStringAnyMap(row["payload_json"])) }
 
-/** Every telemetry_outbox event is one of [allowedEventNames], and no payload carries a workflow_id. */
 internal fun DatabaseSessionFactory.assertOnlyOutboxEvents(allowedEventNames: Set<String>) {
   val rows = SlotBaselineSqlite.rows(resolveDbPath(), "telemetry_outbox")
   assertEquals(allowedEventNames, allowedEventNames + rows.map { row -> row["event_name"] as String }, "outbox events")

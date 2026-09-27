@@ -10,11 +10,10 @@ import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
-import skillbill.workflow.taskruntime.phase.task.PhaseIntakeRequirement
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.PhaseIntakeRequirement
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 
-/** Resolves a phase run's issue key and run invariants from its intake, as the definition's intake requirement says. */
 @Inject
 class PhaseRunIntakeResolver(
   private val specPathResolver: FeatureSpecPathResolverPort,
@@ -33,7 +32,6 @@ class PhaseRunIntakeResolver(
     return when (definition.intake) {
       PhaseIntakeRequirement.OPTIONAL ->
         PhaseRunIntake(
-          // A pr prompt titles the pull request with this key, so prefer a real key over the definition id.
           issueKey = issueKey ?: currentBranch?.let(::issueKeyOfBranch) ?: request.definitionId,
           runInvariants =
             FeatureTaskRuntimeRunInvariants(
@@ -83,7 +81,6 @@ class PhaseRunIntakeResolver(
             ?.let(Path::of)
         }
         ?: return null
-    // The invariants source rejects a path that names no readable governed spec.
     return try {
       invariantsSource.read(specPath)
     } catch (_: IllegalArgumentException) {

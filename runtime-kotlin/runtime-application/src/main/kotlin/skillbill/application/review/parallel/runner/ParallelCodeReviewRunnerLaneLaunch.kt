@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.getOrElseUnlessCooperative
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.review.model.ParallelCodeReviewRequest
+import skillbill.application.review.model.ReviewEvidenceReadCount
 import skillbill.application.review.model.ReviewSpecialistLaunchRequest
 import skillbill.application.review.model.ReviewWorkerKind
 import skillbill.application.review.model.boundedReviewLane
@@ -42,7 +43,6 @@ import skillbill.review.context.model.packet.ReviewLaneCompletionState
 import skillbill.review.context.model.packet.asFailedLaneRun
 import skillbill.review.model.ReviewEvidenceBoundaryAccounting
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicLong
 
 @Inject
 class ParallelCodeReviewRunnerLaneLaunch(
@@ -162,7 +162,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
           )
         }
     return runCatching {
-      val evidenceReads = AtomicLong(0)
+      val evidenceReads = ReviewEvidenceReadCount()
       val onEvidenceRead = evidenceReadCallback(request, evidenceReads)
       ParallelCodeReviewGovernedEvidenceBind.Bound(
         broker,
@@ -179,11 +179,11 @@ class ParallelCodeReviewRunnerLaneLaunch(
 
   internal fun evidenceReadCallback(
     request: ParallelCodeReviewRequest,
-    evidenceReads: AtomicLong,
+    evidenceReads: ReviewEvidenceReadCount,
   ): () -> Unit {
     val workflowId = request.activityWorkflowId?.takeIf(String::isNotBlank)
     return {
-      evidenceReads.incrementAndGet()
+      evidenceReads.increment()
       workflowId?.let { activityStampWriter.recordEvidenceRead(it, request.activityParentWorkflowId) }
     }
   }

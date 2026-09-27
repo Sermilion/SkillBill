@@ -45,8 +45,6 @@ internal object PullRequestTemplateSearch {
       return files.regularFile(repoRoot.resolve(entry))?.let { real -> found(Hit(entry, real), files) }
     }
     val directory = entry.removeSuffix(DIRECTORY_SUFFIX)
-    // shortcut: a symlinked file inside a template directory reports its target's file name,
-    // have markdownFiles return link paths if that matters
     val hits =
       files.markdownFiles(repoRoot.resolve(directory)).map { real -> Hit("$directory/${real.fileName}", real) }
     return when (hits.size) {
@@ -79,13 +77,16 @@ internal object PullRequestTemplateSearch {
   private fun found(
     hit: Hit,
     files: PullRequestTemplateFiles,
-  ): PullRequestTemplate.Found = PullRequestTemplate.Found(hit.relativePath, withoutChecklists(files.readText(hit.real)))
+  ): PullRequestTemplate.Found =
+    PullRequestTemplate.Found(
+      hit.relativePath,
+      withoutChecklists(files.readText(hit.real)),
+    )
 
   private data class Hit(
     val searched: String,
     val real: Path,
   ) {
-    /** The searched location, spelled as on disk when the real path is that location in another case. */
     val relativePath: String
       get() {
         val depth = searched.split('/').size

@@ -27,34 +27,29 @@ import skillbill.engine.featuretask.runloop.output.isGoalReviewRun
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
-import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
-import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation
-import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.engine.featuretask.slot.state.PhaseFindingVerificationState
+import skillbill.engine.featuretask.slot.state.PhaseRunState
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
-import skillbill.review.model.ReviewFindingVerdict
-import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
-import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.goalreview.ReviewPassResolution
-import skillbill.workflow.model.goalreview.upsertRepairReceipt
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 
-internal class RunLoopPhaseStepState(
+internal class FeatureTaskRuntimeRunLoopStepState(
   private val environment: PhaseAttemptEnvironment,
   private val run: PhaseRun,
 ) : PhaseStepState,
-  PhaseRunState by environment.runState {
+  PhaseRunState by environment.runState,
+  PhaseFindingVerificationState by FeatureTaskRuntimeRunLoopFindingVerificationState(environment) {
   private val workflowId = environment.request.workflowId
   private val repoRoot = environment.request.repoRoot
 
@@ -63,8 +58,7 @@ internal class RunLoopPhaseStepState(
   override fun reserveReviewPass(): GoalSubtaskReviewPassReservation =
     environment.goalContinuationRecorder.reserveGoalReviewPass(workflowId)
 
-  override fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch? =
-    environment.recorder.loadResolvedBranch(workflowId)
+  override fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch? = environment.recorder.loadResolvedBranch(workflowId)
 
   override fun prepareGoalReviewInput(
     scopedUntrackedExclusions: List<String>?,
@@ -142,7 +136,6 @@ internal class RunLoopPhaseStepState(
     PhaseLaunchPreparation.prepareLaunchForCapture(
       environment,
       run.copy(goalReviewInput = input),
-      environment.state,
       null,
       null,
       prompt,
@@ -168,12 +161,6 @@ internal class RunLoopPhaseStepState(
     )
   }
 
-  override fun unaddressedReviewFindings(): List<UnaddressedFinding> =
-    environment.recorder.fetchUnaddressedLedger(workflowId)
-
-  override fun recordedFindingVerdicts(envelope: Map<String, Any?>): List<ReviewFindingVerdict> =
-    environment.recorder.recordedFindingVerdicts(envelope)
-
   override fun completedStepEnvelope(stepId: String): FeatureTaskRuntimeWorkflowArtifactMap? =
     environment.state.outputFor(stepId)?.normalizedOutput?.envelopeWireMap()
 
@@ -184,27 +171,6 @@ internal class RunLoopPhaseStepState(
   override fun completedReviewPassCount(): Int? =
     environment.goalContinuationRecorder.reviewState(workflowId)?.completedPassCount
 
-  override fun findingVerificationCheckpoint(): List<FeatureTaskRuntimeFindingVerificationDisposition>? =
-    environment.recorder.loadFindingVerificationCheckpoint(workflowId)
-
-  override fun persistFindingVerificationCheckpoint(
-    dispositions: List<FeatureTaskRuntimeFindingVerificationDisposition>,
-  ): Boolean = environment.recorder.persistFindingVerificationCheckpoint(workflowId, dispositions)
-
-  override fun verificationBoundarySelection() =
-    environment.recorder.loadFindingVerificationBoundarySelection(workflowId)
-
-  override fun persistVerificationBoundarySelection(
-    selections: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>,
-  ): Boolean = environment.recorder.persistFindingVerificationBoundarySelection(workflowId, selections)
-
-  override fun appendRejectedVerificationFindings(
-    passNumber: Int,
-    rejected: List<UnaddressedFinding>,
-  ) {
-    environment.recorder.appendRejectedVerificationFindings(workflowId, passNumber, rejected)
-  }
-
   override fun persistResolvedReviewTier(resolution: ReviewPassResolution) {
     FeatureTaskRuntimeRunLoopPhaseBlocking.persistResolvedReviewTier(
       environment.request,
@@ -214,15 +180,6 @@ internal class RunLoopPhaseStepState(
       resolution,
     )
   }
-
-  override fun goalReviewState(): GoalSubtaskReviewState? =
-    FeatureTaskRuntimeRunLoopPhaseBlocking.goalReviewStateOrNull(
-      environment.request,
-      environment.goalContinuationRecorder,
-    )
-
-  override fun recordRepairReceipt(receipt: FeatureTaskRuntimeRepairReceipt): Boolean =
-    environment.goalContinuationRecorder.updateReviewState(workflowId) { it.upsertRepairReceipt(receipt) } != null
 
   override fun amendReviewRemediationCheckpoint(): Boolean =
     FeatureTaskRuntimeRunLoopCheckpointRemediation.checkpointEstablished(

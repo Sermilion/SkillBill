@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.goalreview.ReviewPassResolution
@@ -23,13 +24,9 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
  * preparation and output gate ask the strategy of the running step for its hooks, so step-specific evidence,
  * prompt sections, and output checks live with the step instead of in the shared code.
  */
-internal interface PhaseStepHooks {
+internal interface PhaseStepHooks : PhaseStepLaunchHooks {
   /** Whether the output gate fingerprints the repository when this step completes. */
   val fingerprintsCompletedRepository: Boolean
-    get() = false
-
-  /** Whether the launch prompt of this step carries the build command the validation gate declares. */
-  val carriesPackBuildCommand: Boolean
     get() = false
 
   /** Whether completed output of this step must carry the projections its immediate consumers read. */
@@ -39,33 +36,6 @@ internal interface PhaseStepHooks {
   /** The failure disposition a blocked terminal output of this step gets when it names none. */
   val blockedOutputDisposition: FeatureTaskRuntimeFailureDisposition
     get() = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION
-
-  /** The prompt sections appended after the composed launch prompt of [run]. */
-  fun launchPromptSupplement(
-    run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
-  ): String = ""
-
-  /** The repository checkpoint the launch handoff of [run] expects, given the [current] checkpoint fingerprint. */
-  fun expectedLaunchCheckpoint(
-    run: PhaseRun,
-    current: String?,
-  ): String? = run.reentry?.expectedRepositoryCheckpoint ?: current
-
-  /** The review pass and review tier the launch prompt of [run] carries. */
-  fun launchReviewTier(
-    run: PhaseRun,
-    state: PhaseStepState,
-  ): PhaseLaunchReviewTier =
-    PhaseLaunchReviewTier(
-      passNumber = null,
-      resolution = null,
-      executedTier = RuntimeOwnedReviewMode.execute(run.request.runInvariants.codeReviewMode),
-    )
-
-  /** The recorded finding verdicts the launch handoff of this step carries. */
-  fun handoffFindingVerdicts(state: PhaseStepState): List<ReviewFindingVerdict> = emptyList()
 
   /** Retains step evidence from [outputText] after the output gate rejected its schema. */
   fun retainSchemaRejectedOutput(
@@ -107,12 +77,6 @@ internal interface PhaseStepHooks {
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck = PhaseStepOutputCheck.Accept
 
-  /** Resets the step state a launch of [run] must not carry over from a prior process. */
-  fun onLaunch(
-    run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-  ) = Unit
-
   /**
    * The attempt result completed [outputMap] of [capture] settles to once the step's records are settled: a block or
    * an in-phase retry, or null when the output goes on to acceptance.
@@ -151,15 +115,55 @@ internal interface PhaseStepHooks {
     output: FeatureTaskRuntimePhaseOutput,
   ): String? = null
 
+  companion object {
+    val None: PhaseStepHooks = object : PhaseStepHooks {}
+  }
+}
+
+/** The launch behaviour one strategy step adds to the shared launch preparation and pre-launch checks. */
+internal interface PhaseStepLaunchHooks {
+  /** Whether the launch prompt of this step carries the build command the validation gate declares. */
+  val carriesPackBuildCommand: Boolean
+    get() = false
+
+  /** The prompt sections appended after the composed launch prompt of [run]. */
+  fun launchPromptSupplement(
+    run: PhaseRun,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
+  ): String = ""
+
+  /** The repository checkpoint the launch handoff of [run] expects, given the [current] checkpoint fingerprint. */
+  fun expectedLaunchCheckpoint(
+    run: PhaseRun,
+    current: String?,
+  ): String? = run.reentry?.expectedRepositoryCheckpoint ?: current
+
+  /** The review pass and review tier the launch prompt of [run] carries. */
+  fun launchReviewTier(
+    run: PhaseRun,
+    state: PhaseStepState,
+  ): PhaseLaunchReviewTier =
+    PhaseLaunchReviewTier(
+      passNumber = null,
+      resolution = null,
+      executedTier = RuntimeOwnedReviewMode.execute(run.request.runInvariants.codeReviewMode),
+    )
+
+  /** The recorded finding verdicts the launch handoff of this step carries. */
+  fun handoffFindingVerdicts(state: PhaseStepState): List<ReviewFindingVerdict> = emptyList()
+
+  /** Resets the step state a launch of [run] must not carry over from a prior process. */
+  fun onLaunch(
+    run: PhaseRun,
+    context: PhaseAttemptEnvironment,
+  ) = Unit
+
   /** Reconciles the durable state [run] reads before the shared pre-launch checks decide whether it can launch. */
   fun reconcileBeforeLaunch(
     run: PhaseRun,
     context: PhaseAttemptEnvironment,
   ) = Unit
-
-  companion object {
-    val None: PhaseStepHooks = object : PhaseStepHooks {}
-  }
 }
 
 internal data class PhaseLaunchReviewTier(

@@ -10,7 +10,7 @@ import skillbill.error.featuretask.PullRequestBranchRefusedError
 import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock

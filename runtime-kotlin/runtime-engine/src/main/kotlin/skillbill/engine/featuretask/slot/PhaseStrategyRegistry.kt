@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.slot
 import skillbill.error.featuretask.DuplicatePhaseStrategyError
 import skillbill.error.featuretask.PhaseStrategyStepOutsideSlotError
 import skillbill.error.featuretask.UnknownPhaseStrategyError
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
 class PhaseStrategyRegistry(val strategies: List<PhaseStrategy>) {
   private val byKey: Map<Pair<PhaseSlot, String>, PhaseStrategy>

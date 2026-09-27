@@ -99,6 +99,8 @@ In any string, in this order:
 6. `__NORMALIZED_SHA40__` replaces 40-hex-digit hashes.
 7. `__NORMALIZED_REVIEW_RUN_ID__` replaces `rvw-<8 digits>-<6 digits>-<suffix>`.
 8. `__NORMALIZED_INVOCATION_ID__` replaces a phase-run invocation id, `phr-<uuid>`.
+9. `__NORMALIZED_REVIEW_SESSION_ID__` replaces a generated review session id, `rvs-<uuid>`. `skill-bill phase review`
+   pins no session id, so the delegated phase capture carries a generated one.
 
 ## Canonicalisations
 

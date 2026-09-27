@@ -1,6 +1,7 @@
-package skillbill.workflow.taskruntime.model.core
+package skillbill.workflow.taskruntime.model.skeleton
 
 import skillbill.error.featuretask.UnknownQualityGateSelectionError
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
 
 enum class FeatureTaskRuntimeQualityGateSelection(val wireValue: String, val stepId: String) {
   BUILD("build", FeatureTaskRuntimePhaseIds.BUILD),

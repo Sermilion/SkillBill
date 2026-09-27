@@ -14,7 +14,12 @@ class PhaseInvocationParserTest {
     val invocation = PhaseInvocationParser.parse("review", listOf("tighten", "errors", "mode:delegated", "target:HEAD"))
 
     assertEquals(
-      PhaseInvocation("review", "tighten errors", CodeReviewExecutionMode.DELEGATED, ReviewTarget.Commit("HEAD")),
+      PhaseInvocation(
+        "review",
+        "tighten errors",
+        CodeReviewExecutionMode.DELEGATED.wireValue,
+        ReviewTarget.Commit("HEAD"),
+      ),
       invocation,
     )
   }
@@ -24,7 +29,7 @@ class PhaseInvocationParserTest {
     val invocation = PhaseInvocationParser.parse("review", listOf("check", "Foo.kt:12", "https://x.io", "mode:inline"))
 
     assertEquals("check Foo.kt:12 https://x.io", invocation.intake)
-    assertEquals(CodeReviewExecutionMode.INLINE, invocation.mode)
+    assertEquals(CodeReviewExecutionMode.INLINE.wireValue, invocation.mode)
   }
 
   @Test

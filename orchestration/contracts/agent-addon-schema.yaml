@@ -34,6 +34,7 @@ properties:
     items:
       enum:
         - bill-feature
+        - skill-bill
 x-coherence-checks:
   - Kotlin contract version equals properties.contract_version.const.
   - Source directory name equals slug.

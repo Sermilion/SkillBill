@@ -158,9 +158,7 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     return PhaseOutcome.blocked(reason)
   }
 
-  internal fun PhaseAttemptEnvironment.pauseAndPersistInPhase(
-    args: PauseAndPersistInPhaseArgs,
-  ): PhaseOutcome {
+  internal fun PhaseAttemptEnvironment.pauseAndPersistInPhase(args: PauseAndPersistInPhaseArgs): PhaseOutcome {
     val run = args.run
     val attemptCount = args.attemptCount
     val reason = args.reason
@@ -209,9 +207,7 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     return PhaseOutcome.paused(reason)
   }
 
-  internal fun PhaseAttemptEnvironment.blockAndPersistInPhase(
-    args: BlockAndPersistInPhaseArgs,
-  ): PhaseOutcome =
+  internal fun PhaseAttemptEnvironment.blockAndPersistInPhase(args: BlockAndPersistInPhaseArgs): PhaseOutcome =
     blockAndPersist(
       BlockAndPersistArgs(
         run = args.run,

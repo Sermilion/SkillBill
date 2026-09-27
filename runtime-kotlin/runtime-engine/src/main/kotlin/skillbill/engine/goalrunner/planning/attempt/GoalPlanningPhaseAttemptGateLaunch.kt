@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.planning.attempt
 
+import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposer
@@ -72,7 +73,7 @@ internal fun DefaultGoalPlanningSweep.composePlanningPrompt(args: GoalPlanningPr
       handoff,
       planningProjectionValidator = planningProjectionValidator,
       agentAddonSelection = phase.request.agentAddonSelection,
-      invariantFields = phase.launch.invariantFields,
+      scope = FeatureTaskRuntimeBriefingScope(invariantFields = phase.launch.invariantFields),
     )
   val basePrompt =
     FeatureTaskRuntimePhasePromptComposer.compose(

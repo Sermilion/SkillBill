@@ -8,7 +8,6 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseReportedGate
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
-import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.policyOf
@@ -19,9 +18,10 @@ import skillbill.engine.featuretask.slot.qualitygate.gateCurrentExecution
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedValidateAgentPhaseTask
 import skillbill.engine.featuretask.slot.qualitygate.validateGateTriagePhaseTask
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
-import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 class AgentValidateStrategy(override val runner: PhaseRunner) : PhaseStrategyStatusProjection() {

@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.runloop.state
 
-import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 object FeatureTaskRuntimeAttemptBudgets {
   const val MAX_OUTPUT_GATE_RETRY_ATTEMPTS: Int = 1

@@ -1,6 +1,7 @@
 package skillbill.workflow.taskruntime.model.core
 
 import skillbill.error.featuretask.UnknownPhaseStepError
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

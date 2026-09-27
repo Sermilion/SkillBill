@@ -2,6 +2,7 @@ package skillbill.application.review.parallel.runner
 
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ReviewDelegatedStageLaunch
+import skillbill.application.review.model.ReviewEvidenceReadCount
 import skillbill.application.review.model.ReviewSpecialistLaunchRequest
 import skillbill.application.reviewevidence.SharedReviewEvidenceCommits
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
@@ -29,7 +30,6 @@ import skillbill.review.model.ReviewFindingCitationDiagnosticWithFinding
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.model.ReviewStageResumeReport
 import skillbill.scaffold.model.PlatformManifest
-import java.util.concurrent.atomic.AtomicLong
 
 internal data class LaunchParentLaneArgs(
   val agentId: String,
@@ -130,7 +130,7 @@ internal sealed class ParallelCodeReviewGovernedEvidenceBind {
   class Bound(
     val broker: ReviewEvidenceBroker,
     val endpoint: GovernedReviewEvidenceEndpointHandle,
-    val evidenceReads: AtomicLong,
+    val evidenceReads: ReviewEvidenceReadCount,
   ) : ParallelCodeReviewGovernedEvidenceBind()
 
   class Unbound(

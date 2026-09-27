@@ -1,4 +1,4 @@
-package skillbill.engine.featuretask.slot
+package skillbill.engine.featuretask.slot.state
 
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
@@ -8,13 +8,9 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSessio
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
-import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
-import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
-import skillbill.engine.featuretask.slot.state.PhaseRunGoal
-import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
@@ -24,7 +20,9 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDe
  * its strategies, and the attempt loop reach the step records, the goal continuation, the settlements, and the
  * checkpoint writes only through the sub-ports it exposes, so an implementation decides where the run state lives.
  */
-internal interface PhaseRunState : PhaseLaunchState {
+internal interface PhaseRunState :
+  PhaseLaunchState,
+  PhaseQualityGateReporting {
   /** The in-memory progress of the run: step records, iterations, completions, and the review generation. */
   val progress: FeatureTaskRuntimeRunState
 
@@ -98,7 +96,10 @@ internal interface PhaseRunState : PhaseLaunchState {
    * target returns that result on later passes, so a fix that dirties the tree does not change what is re-reviewed.
    */
   fun pinnedReviewTarget(resolve: () -> ReviewTarget): ReviewTarget = resolve()
+}
 
+/** The quality-gate lifecycle a run reports while its quality gate step runs. */
+internal interface PhaseQualityGateReporting {
   /**
    * Called when the quality gate of [stepName] finds no declared pack gate. A durable run falls back to the
    * runtime-owned build and keeps this a no-op; a state with no fallback fails the run here.

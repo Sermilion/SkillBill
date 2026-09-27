@@ -8,11 +8,12 @@ import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRul
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
-import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 abstract class PhaseStrategy {
   abstract val slot: PhaseSlot

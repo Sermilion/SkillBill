@@ -11,8 +11,8 @@ import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeReme
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptSettleRejection
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptShapeRejection
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
-import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.goalrunner.model.UNADDRESSED_FINDING_REJECTED_DISPOSITION
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt

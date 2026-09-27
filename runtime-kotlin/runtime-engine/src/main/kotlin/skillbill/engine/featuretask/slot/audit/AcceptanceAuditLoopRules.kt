@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.slot.audit
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
 import skillbill.engine.featuretask.slot.PhaseForwardCheckpoint
 import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
 internal object AcceptanceAuditLoopRules : PhaseLoopRules {
   private val auditedImplementation =

@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.runner
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeProbeWriters
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePreparation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
@@ -12,7 +11,6 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
-import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -26,16 +24,17 @@ class FeatureTaskRuntimeRunner(
   val strategies: PhaseStrategyLookup,
   val recorder: FeatureTaskRuntimePhaseRecorder,
   val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
-  val runInvariantsStore: FeatureTaskRuntimeRunInvariantsStore,
   val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   val phaseGates: FeatureTaskRuntimePhaseGates,
-  val crashReconciler: FeatureTaskRuntimeCrashReconciler,
+  val startup: FeatureTaskRuntimeRunStartup,
   val phaseSettlementService: FeatureTaskPhaseSettlementService,
   val diagnostics: RuntimeDiagnostics,
   val clock: Clock,
   val probeWriters: FeatureTaskRuntimeProbeWriters,
-  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) {
+  val crashReconciler get() = startup.crashReconciler
+  val runInvariantsStore get() = startup.runInvariantsStore
   val activityStampWriter get() = probeWriters.activityStampWriter
   val worktreeEditJournalWriter get() = probeWriters.worktreeEditJournalWriter
 

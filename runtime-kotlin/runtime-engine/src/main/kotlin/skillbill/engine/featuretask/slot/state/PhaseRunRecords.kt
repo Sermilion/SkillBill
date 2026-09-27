@@ -31,7 +31,47 @@ import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidat
  * The phase records, ledger, evidence, briefing, review-checkpoint, and gate-progress reads and writes one run makes.
  * Every operation is keyed by the run's workflow id, so an implementation decides where the records live.
  */
-internal interface PhaseRunRecords {
+internal interface PhaseRunRecords : PhaseStepRecords, PhaseReviewRecords, PhaseLaunchRecords {
+  /** Appends a ledger entry. */
+  fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean
+
+  /** Appends a quarantine entry. */
+  fun appendQuarantineEntry(
+    workflowId: String,
+    entry: FeatureTaskRuntimeQuarantineEntry,
+  ): Boolean
+
+  /** The quarantine entries of [workflowId]. */
+  fun loadQuarantinedRecords(workflowId: String): List<FeatureTaskRuntimeQuarantineEntry>?
+
+  /** The feature branch the run resolved. */
+  fun loadResolvedBranch(workflowId: String): FeatureTaskRuntimeResolvedBranch?
+
+  /** Appends a checkpoint identity. */
+  fun appendCheckpointIdentity(args: AppendCheckpointIdentityArgs): Boolean
+
+  /** The checkpoint identities of [workflowId]. */
+  fun loadCheckpointIdentities(workflowId: String): List<FeatureTaskRuntimeCheckpointIdentity>?
+
+  /** Records the paths the run owns. */
+  fun recordWorkflowOwnedPaths(
+    workflowId: String,
+    ownedPaths: List<String>,
+  ): Boolean
+
+  /** The decompose terminal planning recorded for [workflowId], if the run decomposed. */
+  fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal?
+
+  /** Records the decompose [terminal] reached at [planStepId]. Returns false when the write did not apply. */
+  fun recordDecomposeTerminal(
+    workflowId: String,
+    terminal: FeatureTaskRuntimeDecomposeTerminal,
+    planStepId: String,
+  ): Boolean
+}
+
+/** The step state, completion, and producer-output records of one run. */
+internal interface PhaseStepRecords {
   /** Records a rejected producer output, returning the write that names the retained evidence. */
   fun recordRejectedOutput(
     request: RejectedOutputDiagnosticRequest,
@@ -58,7 +98,10 @@ internal interface PhaseRunRecords {
 
   /** The step records of [workflowId], keyed by step id. */
   fun loadPhaseRecords(workflowId: String): Map<String, FeatureTaskRuntimePhaseRecord>?
+}
 
+/** The review pass, finding ledger, verification checkpoint, and review-generation records of one run. */
+internal interface PhaseReviewRecords {
   /** Completes a goal review step atomically with its pass result. */
   fun completeGoalReviewPhase(completion: GoalReviewPhaseCompletionRequest): Boolean
 
@@ -108,7 +151,10 @@ internal interface PhaseRunRecords {
     workflowId: String,
     dispositions: List<FeatureTaskRuntimeFindingVerificationDisposition>,
   ): Boolean
+}
 
+/** The briefing, handoff-projection, and quality-gate progress records a step launch reads and writes. */
+internal interface PhaseLaunchRecords {
   /** Records the launch briefing of a step. */
   fun recordPhaseBriefing(
     workflowId: String,
@@ -150,41 +196,4 @@ internal interface PhaseRunRecords {
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   )
-
-  /** Appends a ledger entry. */
-  fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean
-
-  /** Appends a quarantine entry. */
-  fun appendQuarantineEntry(
-    workflowId: String,
-    entry: FeatureTaskRuntimeQuarantineEntry,
-  ): Boolean
-
-  /** The quarantine entries of [workflowId]. */
-  fun loadQuarantinedRecords(workflowId: String): List<FeatureTaskRuntimeQuarantineEntry>?
-
-  /** The feature branch the run resolved. */
-  fun loadResolvedBranch(workflowId: String): FeatureTaskRuntimeResolvedBranch?
-
-  /** Appends a checkpoint identity. */
-  fun appendCheckpointIdentity(args: AppendCheckpointIdentityArgs): Boolean
-
-  /** The checkpoint identities of [workflowId]. */
-  fun loadCheckpointIdentities(workflowId: String): List<FeatureTaskRuntimeCheckpointIdentity>?
-
-  /** Records the paths the run owns. */
-  fun recordWorkflowOwnedPaths(
-    workflowId: String,
-    ownedPaths: List<String>,
-  ): Boolean
-
-  /** The decompose terminal planning recorded for [workflowId], if the run decomposed. */
-  fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal?
-
-  /** Records the decompose [terminal] reached at [planStepId]. Returns false when the write did not apply. */
-  fun recordDecomposeTerminal(
-    workflowId: String,
-    terminal: FeatureTaskRuntimeDecomposeTerminal,
-    planStepId: String,
-  ): Boolean
 }

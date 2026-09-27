@@ -39,8 +39,6 @@ import skillbill.workflow.taskruntime.artifact.phaseRecords
 import skillbill.workflow.taskruntime.artifact.resolvedBranch
 import skillbill.workflow.taskruntime.artifact.reviewGeneration
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL_ARTIFACT_KEY
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection.BUILD
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection.VALIDATE
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
@@ -66,6 +64,8 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputR
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputSourceLocation
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeOperatorBlockRetry
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.BUILD
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.VALIDATE
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.time.Instant

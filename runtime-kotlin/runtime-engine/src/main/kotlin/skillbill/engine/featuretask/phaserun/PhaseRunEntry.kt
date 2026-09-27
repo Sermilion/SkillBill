@@ -18,8 +18,8 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
-import skillbill.workflow.taskruntime.phase.task.SkeletonRunStateKind
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 import java.time.Clock
 import java.util.UUID
 
@@ -33,7 +33,7 @@ class PhaseRunEntry(
   internal val diagnostics: RuntimeDiagnostics,
   internal val clock: Clock,
   private val intakeResolver: PhaseRunIntakeResolver,
-  private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+  private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) {
   fun run(request: PhaseRunRequest): PhaseRunResult {
     val definition = SkeletonDefinition.byId(request.definitionId)

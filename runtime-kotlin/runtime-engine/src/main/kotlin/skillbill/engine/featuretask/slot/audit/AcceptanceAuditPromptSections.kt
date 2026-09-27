@@ -28,7 +28,7 @@ internal object AcceptanceAuditPromptSections {
       "planning criterion list is missing or unreadable or an external dependency prevents repair. " +
       AUDIT_READONLY_EVIDENCE_SENTENCE
 
-  private val VALUE_CONTENT: String =
+  private const val VALUE_CONTENT: String =
     "value carries the remaining acceptance criteria only. Only an explicit empty list `[]` (ordinary whitespace\n" +
       "or Markdown fencing allowed when the complete value is exactly that empty list) completes audit; any other\n" +
       "non-blank text starts one fresh audit retry with that text forwarded verbatim as the only criterion scope\n" +

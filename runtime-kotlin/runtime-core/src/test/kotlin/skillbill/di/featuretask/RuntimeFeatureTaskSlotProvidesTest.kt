@@ -18,12 +18,12 @@ import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidate
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.model.EnvironmentContext
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals

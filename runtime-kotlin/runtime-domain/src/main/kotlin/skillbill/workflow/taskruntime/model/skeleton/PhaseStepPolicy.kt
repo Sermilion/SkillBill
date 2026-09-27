@@ -1,4 +1,4 @@
-package skillbill.workflow.taskruntime.model.core
+package skillbill.workflow.taskruntime.model.skeleton
 
 data class PhaseStepPolicy(
   val mutating: Boolean,

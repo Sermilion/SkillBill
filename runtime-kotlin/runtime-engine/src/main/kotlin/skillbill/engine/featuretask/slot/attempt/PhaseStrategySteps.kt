@@ -4,11 +4,11 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseStepDescription
-import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.phaseEnvelopeDecoder
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.error.featuretask.UnknownPhaseStepError
-import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 internal fun PhaseStrategy.promptSource(stepId: String): PhaseStepPromptSource =
   PhaseStepPromptSource { inputs -> promptSections(stepId, inputs) }

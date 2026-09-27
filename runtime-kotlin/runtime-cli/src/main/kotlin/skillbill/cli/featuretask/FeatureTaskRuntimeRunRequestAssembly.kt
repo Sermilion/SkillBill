@@ -18,7 +18,7 @@ import skillbill.error.featuretask.UnknownQualityGateSelectionError
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
@@ -165,7 +165,9 @@ private fun parseQualityGateSelection(
   } catch (error: UnknownQualityGateSelectionError) {
     throw UsageError(
       "Unknown $source value '$raw'. Allowed: ${error.allowedValues.joinToString()}.",
-    )
+    ).also { usage ->
+      runCatching { usage.initCause(error) }
+    }
   }
 
 internal fun FeatureTaskRuntimePhaseAgentCommand.requestedOperatorDecision(): GoalSubtaskOperatorDecision? {

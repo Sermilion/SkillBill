@@ -3,7 +3,7 @@ package skillbill.cli.featuretask
 import com.github.ajalt.clikt.core.UsageError
 import com.github.ajalt.clikt.parsers.CommandLineParser
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals

@@ -28,7 +28,6 @@ import skillbill.engine.featuretask.runloop.core.RepositoryCheckpointResolutionA
 import skillbill.engine.featuretask.runloop.core.TerminalOutputAttemptArgs
 import skillbill.engine.featuretask.runloop.core.isFeatureSpecPathForIssue
 import skillbill.engine.featuretask.runloop.core.reconcileCheckpointPathInventory
-import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.observability.completedEvent
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
@@ -205,7 +204,6 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
     recorder: PhaseRunRecords,
-    observability: FeatureTaskRuntimeRunObservability,
     args: TerminalOutputAttemptArgs,
     blockedDisposition: FeatureTaskRuntimeFailureDisposition,
   ): AttemptResult {

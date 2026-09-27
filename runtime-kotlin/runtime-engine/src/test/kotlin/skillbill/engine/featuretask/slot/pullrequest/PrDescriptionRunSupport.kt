@@ -23,7 +23,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateRunRequest
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -46,7 +46,6 @@ internal data class PhasePrRun(
   val prPrompts: List<String> get() = launcher.promptsFor(PR_STEP)
 }
 
-/** The standalone skeleton run up to and including pr, over recorded git. */
 internal fun standalonePrRun(
   repoRoot: Path,
   database: DatabaseSessionFactory,
@@ -81,7 +80,6 @@ internal fun standalonePrRun(
 internal fun standaloneGit(): RecordingWorkflowGitOperations =
   committedRepoBranchSetup().gitOperations.also { it.currentBranchValue = PR_FEATURE_BRANCH }
 
-/** `skill-bill phase pr` over real git against [repoRoot]. */
 internal fun phasePrRun(
   repoRoot: Path,
   database: DatabaseSessionFactory,
@@ -107,7 +105,6 @@ internal fun phasePrRun(
   return PhasePrRun(phaseRunEntry(runner, database, clock).run(request), launcher)
 }
 
-/** A work repository with a bare origin whose main holds one pushed commit, checked out on [PR_FEATURE_BRANCH]. */
 internal class PrRunRepository(private val root: Path) {
   private val origin: Path = root.resolve("origin.git")
   val repoRoot: Path = root.resolve("repo")

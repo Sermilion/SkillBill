@@ -4,7 +4,7 @@ import com.github.ajalt.clikt.core.UsageError
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,7 +30,10 @@ class CodeReviewPhaseRequestTest {
     assertEquals(SkeletonDefinition.REVIEW.id, request.definitionId)
     assertEquals(repoRoot, request.repoRoot)
     assertEquals(CodeReviewExecutionMode.DELEGATED, request.codeReviewMode)
-    assertEquals(ReviewTarget.Scoped(ParallelReviewScope.BRANCH, "abc1234^", "abc1234"), request.reviewInvocation.target)
+    assertEquals(
+      ReviewTarget.Scoped(ParallelReviewScope.BRANCH, "abc1234^", "abc1234"),
+      request.reviewInvocation.target,
+    )
     assertEquals("rvw-20260927-120000-abcd", request.reviewInvocation.reviewRunId)
     assertEquals("rss-1", request.reviewInvocation.reviewSessionId)
   }

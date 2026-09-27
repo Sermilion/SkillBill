@@ -4,6 +4,7 @@ import skillbill.model.FileLocation
 
 enum class AgentAddonConsumer(val id: String) {
   BILL_FEATURE("bill-feature"),
+  SKILL_BILL("skill-bill"),
   ;
 
   companion object {

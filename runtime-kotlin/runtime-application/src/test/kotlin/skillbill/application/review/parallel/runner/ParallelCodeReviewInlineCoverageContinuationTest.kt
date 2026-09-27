@@ -1,6 +1,7 @@
 package skillbill.application.review.parallel.runner
 
 import skillbill.application.review.model.ParallelCodeReviewRequest
+import skillbill.application.review.model.ReviewEvidenceReadCount
 import skillbill.application.review.parallel.verification.ParallelCodeReviewRunnerFailureAdmission
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.install.model.SupportedAgent
@@ -26,7 +27,6 @@ import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.parallel.ParallelReviewFindingParser
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -96,7 +96,7 @@ class ParallelCodeReviewInlineCoverageContinuationTest {
             segments = emptyList(),
           ),
       ),
-    bound = ParallelCodeReviewGovernedEvidenceBind.Bound(broker, endpoint, AtomicLong(0)),
+    bound = ParallelCodeReviewGovernedEvidenceBind.Bound(broker, endpoint, ReviewEvidenceReadCount()),
     budget = ReviewContextBudgetPolicy(),
     request =
       ParallelCodeReviewRequest(

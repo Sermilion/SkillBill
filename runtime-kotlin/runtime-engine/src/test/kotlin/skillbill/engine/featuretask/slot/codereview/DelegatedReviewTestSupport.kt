@@ -43,7 +43,6 @@ private const val DELEGATED_FINDING_REGISTER =
   "- [F-001] Blocker | High | specialist=bill-kotlin-code-review-architecture | " +
     "path=\"$DELEGATED_REVIEWED_PATH\" | line=1 | $DELEGATED_FINDING_MESSAGE"
 
-/** A [ParallelCodeReviewRunner] whose bounded lanes run through [lanes] and record into [database]. */
 internal fun scriptedDelegatedReviewRunner(
   database: DatabaseSessionFactory,
   home: Path,
@@ -71,7 +70,6 @@ internal fun scriptedDelegatedReviewRunner(
   )
 }
 
-/** Scripts delegated review lanes: the specialist reports one Blocker until [fixed], and verification confirms it. */
 internal class LaneScript(
   private val onSpecialistLaunch: () -> Unit = {},
 ) : GoalRunnerSubtaskLauncher {

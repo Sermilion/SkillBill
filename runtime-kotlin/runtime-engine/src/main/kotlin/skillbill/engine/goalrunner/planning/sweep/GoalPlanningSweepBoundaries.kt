@@ -39,5 +39,5 @@ data class GoalPlanningSweepLaunchBoundaries(
   val phaseStrategies: PhaseStrategyLookup,
   val clock: Clock,
   val diagnostics: RuntimeDiagnostics,
-  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 )

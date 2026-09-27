@@ -134,10 +134,6 @@ internal class PackBuildGateCycle(
       agentTriageLauncher = ValidationGateAgentTriageLauncher { findings -> launchTriage(run, iteration, findings) },
     )
 
-  /**
-   * Reports the quality-check start once the first gate run has counted its failures, and keeps the findings of the
-   * latest gate run for the finish report.
-   */
   private inner class QualityCheckReportingStore(
     private val run: PhaseRun,
     private val changedPaths: List<String>,

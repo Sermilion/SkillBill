@@ -9,10 +9,10 @@ import skillbill.engine.featuretask.runloop.core.PhaseAttemptLoopState
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.engine.featuretask.slot.PhaseRunner
-import skillbill.engine.featuretask.slot.PhaseSettledEnvelopeRead
 import skillbill.engine.featuretask.slot.PhaseStepDescription
 import skillbill.engine.featuretask.slot.PhaseStepHooks
-import skillbill.engine.featuretask.slot.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 
 internal data class PhaseStepCall(
   val description: PhaseStepDescription,

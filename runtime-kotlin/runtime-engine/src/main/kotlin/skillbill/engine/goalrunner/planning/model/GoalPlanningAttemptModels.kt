@@ -1,8 +1,8 @@
 package skillbill.engine.goalrunner.planning.model
 
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
-import skillbill.engine.featuretask.slot.PhaseLaunchState
 import skillbill.engine.featuretask.slot.PhaseRunner
+import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
@@ -13,10 +13,10 @@ import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.goalreview.GoalProgressEventKind
 import skillbill.workflow.model.goalreview.GoalProgressOutcome
-import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
+import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 internal data class GoalPlanningAttemptScope(
   val shared: GoalPlanningSharedContext,

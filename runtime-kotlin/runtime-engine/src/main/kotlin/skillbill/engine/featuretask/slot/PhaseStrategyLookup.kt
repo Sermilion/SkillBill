@@ -1,8 +1,9 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.phase.task.traversal
 
 class PhaseStrategyLookup(
   val registry: PhaseStrategyRegistry,
@@ -32,7 +33,6 @@ class PhaseStrategyLookup(
   fun selectedStepIds(facts: PhaseStrategySelectionFacts): Set<String> =
     selectedStrategies(facts).flatMap(PhaseStrategy::steps).toSet()
 
-  /** Every canonical step the run does not select, including steps outside a short definition. */
   fun unselectedStepIds(facts: PhaseStrategySelectionFacts): Set<String> =
     PhaseSlot.entries.flatMap(PhaseSlot::steps).toSet() - selectedStepIds(facts)
 

@@ -9,11 +9,10 @@ fun retryCorrectionDirective(
   briefing: FeatureTaskRuntimePhaseLaunchBriefing,
   priorSchemaFailure: String?,
   correctiveRepairContext: FeatureTaskRuntimeCorrectiveRepairContext?,
-  singleAgentSession: Boolean,
   shape: PhaseRetryShape = PhaseRetryShape(),
   stepCorrection: ((String) -> String)? = null,
 ): String {
-  if (singleAgentSession || priorSchemaFailure.isNullOrBlank()) {
+  if (priorSchemaFailure.isNullOrBlank()) {
     return ""
   }
   val base =

@@ -11,7 +11,6 @@ import skillbill.review.context.model.packet.ReviewContextPacket
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ReviewFindingVerdict
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 
@@ -27,11 +26,11 @@ internal data class ReviewDelegatedStageLaunch(
 
 internal fun SkillRunRequest.boundedReviewLane(
   bound: Duration,
-  evidenceReads: AtomicLong? = null,
+  evidenceReads: ReviewEvidenceReadCount? = null,
 ): SkillRunRequest =
   withBoundedLaneProgress(
     bound,
-    evidenceReads?.let { reads -> AgentRunProgressProbe { reads.get().toString() } } ?: AgentRunProgressProbe.NONE,
+    evidenceReads?.let { reads -> AgentRunProgressProbe { reads.current().toString() } } ?: AgentRunProgressProbe.NONE,
   )
 
 internal data class ReviewClaimVerificationRunRequest(

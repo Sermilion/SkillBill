@@ -22,7 +22,7 @@ import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant

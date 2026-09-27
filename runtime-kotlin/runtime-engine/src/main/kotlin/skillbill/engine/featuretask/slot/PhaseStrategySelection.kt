@@ -3,8 +3,8 @@ package skillbill.engine.featuretask.slot
 import skillbill.error.featuretask.PhaseStrategySelectionSlotMismatchError
 import skillbill.error.featuretask.UnknownPhaseStrategyError
 import skillbill.error.featuretask.UnregisteredPhaseStrategySelectionError
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 data class PhaseStrategySelectionFacts(
   val definition: SkeletonDefinition,

@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 
 /**

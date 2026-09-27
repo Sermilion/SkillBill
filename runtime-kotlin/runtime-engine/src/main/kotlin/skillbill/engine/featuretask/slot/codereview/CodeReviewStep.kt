@@ -16,8 +16,8 @@ import skillbill.engine.featuretask.slot.PhaseLaunchReviewTier
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepHooks
-import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.error.shellcontent.InvalidReviewContextSchemaError
 import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
@@ -146,19 +146,29 @@ internal class CodeReviewStep(
     if (after !is WorkflowGitOperationResult.Ok) {
       return blockStep(state, pass.iteration, worktreeFailure("after", after.error))
     }
-    state.recordReviewContentIdentities()
-    context.runState.recordReviewRun(pass.reviewRunId, result, reviewPass.recordsLaneTelemetry)
     val manifest =
       PhaseStepFileManifest(
         before = FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(before.value.orEmpty()),
         after = FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(after.value.orEmpty()),
       )
-    failedLaneReason(result)?.let { reason ->
+    return recordAndSettle(run, context, state, ReviewedPass(pass, result, manifest))
+  }
+
+  private fun recordAndSettle(
+    run: PhaseRun,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
+    reviewed: ReviewedPass,
+  ): PhaseOutcome {
+    val pass = reviewed.pass
+    state.recordReviewContentIdentities()
+    context.runState.recordReviewRun(pass.reviewRunId, reviewed.result, reviewPass.recordsLaneTelemetry)
+    failedLaneReason(reviewed.result)?.let { reason ->
       return blockStep(state, pass.iteration, reason, FeatureTaskRuntimeFailureDisposition.RETRYABLE)
     }
-    val dispositions = blockerDispositions(run, state, result, pass)
+    val dispositions = blockerDispositions(run, state, reviewed.result, pass)
     val settled = pass.copy(cycle = pass.cycle.copy(blockerDispositions = dispositions))
-    return settle(run, context, state, settled, result, manifest)
+    return settle(run, context, state, reviewed.copy(pass = settled))
   }
 
   private fun launch(
@@ -176,11 +186,11 @@ internal class CodeReviewStep(
     run: PhaseRun,
     context: PhaseAttemptEnvironment,
     state: PhaseStepState,
-    pass: ReviewPassRun,
-    result: ParallelCodeReviewResult,
-    manifest: PhaseStepFileManifest,
+    reviewed: ReviewedPass,
   ): PhaseOutcome {
-    val initialText = InlineReviewEnvelope.assemble(result, pass.reviewRunId, pass.cycle)
+    val pass = reviewed.pass
+    val manifest = reviewed.manifest
+    val initialText = InlineReviewEnvelope.assemble(reviewed.result, pass.reviewRunId, pass.cycle)
     val accepted =
       runCatching {
         context.outputValidator.validatePhaseOutput(initialText, sourceLabel = run.phaseId)
@@ -194,7 +204,7 @@ internal class CodeReviewStep(
         )
       }
     if (manifest.before == manifest.after) {
-      return complete(run, state, pass.iteration, initialText, accepted, manifest)
+      return complete(run, state, reviewed, initialText, accepted)
     }
     if (!reviewPass.policy.fileMutating) {
       return blockStep(
@@ -205,6 +215,17 @@ internal class CodeReviewStep(
         fileManifest = manifest,
       )
     }
+    return settleAmended(run, context, state, reviewed, accepted)
+  }
+
+  private fun settleAmended(
+    run: PhaseRun,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
+    reviewed: ReviewedPass,
+    accepted: AcceptedFeatureTaskRuntimePhaseOutput,
+  ): PhaseOutcome {
+    val pass = reviewed.pass
     if (!state.amendReviewRemediationCheckpoint()) {
       return blockStep(
         state,
@@ -222,27 +243,26 @@ internal class CodeReviewStep(
           FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
         )
     val outputText =
-      InlineReviewEnvelope.assemble(result, pass.reviewRunId, pass.cycle.copy(repositoryFingerprint = refreshed))
-    return complete(
-      run,
-      state,
-      pass.iteration,
-      outputText,
-      accepted.withNormalizedEnvelope(outputText),
-      manifest,
-    )
+      InlineReviewEnvelope.assemble(
+        reviewed.result,
+        pass.reviewRunId,
+        pass.cycle.copy(repositoryFingerprint = refreshed),
+      )
+    return complete(run, state, reviewed, outputText, accepted.withNormalizedEnvelope(outputText))
   }
 
   private fun complete(
     run: PhaseRun,
     state: PhaseStepState,
-    iteration: Int,
+    reviewed: ReviewedPass,
     outputText: String,
     output: AcceptedFeatureTaskRuntimePhaseOutput,
-    manifest: PhaseStepFileManifest,
   ): PhaseOutcome {
+    val iteration = reviewed.pass.iteration
     state.retainReviewOutput(iteration, outputText)
-    state.completeReview(iteration, outputText, output, manifest)?.let { reason -> return PhaseOutcome.blocked(reason) }
+    state.completeReview(iteration, outputText, output, reviewed.manifest)?.let { reason ->
+      return PhaseOutcome.blocked(reason)
+    }
     state.stepCompleted(iteration)
     return PhaseOutcome.completed(completedOutput(run, iteration, output))
   }
@@ -335,6 +355,12 @@ private data class ReviewPassRun(
   val iteration: Int,
   val reviewRunId: String,
   val cycle: InlineReviewCycle,
+)
+
+private data class ReviewedPass(
+  val pass: ReviewPassRun,
+  val result: ParallelCodeReviewResult,
+  val manifest: PhaseStepFileManifest,
 )
 
 private sealed interface PhaseReviewRun {

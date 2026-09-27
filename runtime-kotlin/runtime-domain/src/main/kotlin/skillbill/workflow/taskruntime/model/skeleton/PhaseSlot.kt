@@ -1,6 +1,7 @@
-package skillbill.workflow.taskruntime.model.core
+package skillbill.workflow.taskruntime.model.skeleton
 
 import skillbill.error.featuretask.UnknownPhaseStepError
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
 
 enum class PhaseSlot(val wireValue: String, val steps: List<String>) {
   PREPLAN("preplan", listOf(FeatureTaskRuntimePhaseIds.PREPLAN)),

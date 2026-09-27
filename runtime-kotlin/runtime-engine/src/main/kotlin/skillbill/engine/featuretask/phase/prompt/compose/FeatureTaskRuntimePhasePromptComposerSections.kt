@@ -49,9 +49,8 @@ fun phasePromptTrailingSections(
     sections.continuation,
     retryCorrectionDirective(
       inputs.briefing,
-      inputs.priorSchemaFailure,
+      inputs.priorSchemaFailure.takeUnless { inputs.singleAgentSession },
       inputs.correctiveRepairContext,
-      inputs.singleAgentSession,
       sections.retryShape,
       sections.schemaFailureCorrection,
     ),

@@ -25,10 +25,10 @@ import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 

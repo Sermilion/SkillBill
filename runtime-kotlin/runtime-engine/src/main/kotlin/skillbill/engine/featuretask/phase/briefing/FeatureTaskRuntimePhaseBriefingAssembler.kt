@@ -31,16 +31,21 @@ object FeatureTaskRuntimeRunInvariantPromptAllowlist {
     IDENTITY_CEREMONY_AND_POLICY + FeatureTaskRuntimeRunInvariantPromptField.FINALIZATION_CONTEXT
 }
 
+data class FeatureTaskRuntimeBriefingScope(
+  val sharedReviewEvidence: FeatureTaskRuntimeSharedReviewEvidenceReference? = null,
+  val invariantFields: Set<FeatureTaskRuntimeRunInvariantPromptField> =
+    FeatureTaskRuntimeRunInvariantPromptAllowlist.ACCEPTANCE_CONTRACT_PHASES,
+)
+
 object FeatureTaskRuntimePhaseBriefingAssembler {
   fun assemble(
     handoff: FeatureTaskRuntimePhaseHandoff,
     workflowId: String? = null,
     planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidator,
     agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
-    sharedReviewEvidence: FeatureTaskRuntimeSharedReviewEvidenceReference? = null,
-    invariantFields: Set<FeatureTaskRuntimeRunInvariantPromptField> =
-      FeatureTaskRuntimeRunInvariantPromptAllowlist.ACCEPTANCE_CONTRACT_PHASES,
+    scope: FeatureTaskRuntimeBriefingScope = FeatureTaskRuntimeBriefingScope(),
   ): FeatureTaskRuntimePhaseLaunchBriefing {
+    val invariantFields = scope.invariantFields
     val boundedAddonSelection =
       FeatureTaskRuntimePhasePromptComposer.budgetedAddonsFor(
         agentAddonSelection,
@@ -72,7 +77,7 @@ object FeatureTaskRuntimePhaseBriefingAssembler {
             declarations = promptDeclarations,
             workflowId = workflowId,
             planningProjectionValidator = planningProjectionValidator,
-            sharedReviewEvidence = sharedReviewEvidence,
+            sharedReviewEvidence = scope.sharedReviewEvidence,
             addonContentBySlug = boundedAddonSelection.entries.associate { it.persisted.slug to it.content },
           ),
         ),

@@ -1,19 +1,19 @@
 package skillbill.engine.featuretask.runloop.core
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
 import skillbill.engine.featuretask.runloop.observability.loopEdge
-import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runner.skeletonDefinitionFor
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
 internal fun strategySelectionFacts(request: FeatureTaskRuntimeRunFacts): PhaseStrategySelectionFacts =
   PhaseStrategySelectionFacts(

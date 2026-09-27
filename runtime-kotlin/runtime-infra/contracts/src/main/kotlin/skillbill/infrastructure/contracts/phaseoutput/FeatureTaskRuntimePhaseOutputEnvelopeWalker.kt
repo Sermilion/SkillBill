@@ -71,12 +71,14 @@ internal object FeatureTaskRuntimePhaseOutputEnvelopeWalker {
     recoverSummary: Boolean,
   ): WalkedEnvelope? {
     val summarySource = if (recoverSummary) text.substring(0, span.first) else null
-    shapedEnvelope(text.substring(span), span, spliceOffset = null, phaseId, summarySource)?.let {
-      return it
-    }
-    if (!StructuralRepairSyntax.looksLikeObjectFieldContinuation(text, span.last + 1)) return null
-    val repaired = text.removeRange(span.last, span.last + 1).substring(span.first)
-    return shapedEnvelope(repaired, span, spliceOffset = span.last, phaseId, summarySource)
+    val spliced =
+      if (StructuralRepairSyntax.looksLikeObjectFieldContinuation(text, span.last + 1)) {
+        val repaired = text.removeRange(span.last, span.last + 1).substring(span.first)
+        shapedEnvelope(repaired, span, spliceOffset = span.last, phaseId, summarySource)
+      } else {
+        null
+      }
+    return spliced ?: shapedEnvelope(text.substring(span), span, spliceOffset = null, phaseId, summarySource)
   }
 
   private fun shapedEnvelope(

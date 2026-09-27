@@ -33,12 +33,12 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection.BUILD
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection.VALIDATE
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.BUILD
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.VALIDATE
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test

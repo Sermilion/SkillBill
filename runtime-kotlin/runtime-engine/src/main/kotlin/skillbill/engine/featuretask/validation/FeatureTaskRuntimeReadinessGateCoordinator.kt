@@ -44,6 +44,15 @@ data class ReadinessCommitPushSettleRequest(
   val gitOperations: WorkflowGitOperations,
 )
 
+data class ReadinessCommittedHeadBindRequest(
+  val workflowId: String,
+  val stepId: String,
+  val repoRoot: Path,
+  val baseBranch: String,
+  val gitOperations: WorkflowGitOperations,
+  val commitSha: String,
+)
+
 sealed interface ReadinessCommitPushSettleResult {
   data object Ready : ReadinessCommitPushSettleResult
 
@@ -314,18 +323,11 @@ class FeatureTaskRuntimeReadinessGateCoordinator(
       blocked(error.message.orEmpty())
     }
 
-  fun bindCommittedHead(
-    workflowId: String,
-    stepId: String,
-    repoRoot: Path,
-    baseBranch: String,
-    gitOperations: WorkflowGitOperations,
-    commitSha: String,
-  ): ReadinessCommitPushSettleResult {
+  fun bindCommittedHead(request: ReadinessCommittedHeadBindRequest): ReadinessCommitPushSettleResult {
     val current =
-      gitOperations.readinessTreeIdentityOrNull(repoRoot, baseBranch, workflowId)
+      request.gitOperations.readinessTreeIdentityOrNull(request.repoRoot, request.baseBranch, request.workflowId)
         ?: return identityAfterCommitBlocked()
-    return bindCommittedHeadWithIdentity(workflowId, stepId, current, commitSha)
+    return bindCommittedHeadWithIdentity(request.workflowId, request.stepId, current, request.commitSha)
   }
 
   private fun bindCommittedHeadWithIdentity(

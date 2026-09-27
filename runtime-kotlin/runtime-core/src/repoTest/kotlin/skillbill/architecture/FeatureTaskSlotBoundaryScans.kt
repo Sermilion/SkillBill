@@ -147,7 +147,11 @@ internal object FeatureTaskStepIdentityScan {
       (open + 1 until text.length).firstOrNull { index ->
         val character = text[index]
         val ends = depth == 0 && (character == ';' || character == '}')
-        if (character in "({[") depth++ else if (character in ")}]") depth--
+        if (character in "({[") {
+          depth++
+        } else if (character in ")}]") {
+          depth--
+        }
         ends
       }
     return close?.let { index -> open + 1 until index }

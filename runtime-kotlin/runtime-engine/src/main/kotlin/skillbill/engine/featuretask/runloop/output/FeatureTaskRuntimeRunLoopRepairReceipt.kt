@@ -1,13 +1,10 @@
 package skillbill.engine.featuretask.runloop.output
 
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
 import skillbill.engine.featuretask.runloop.core.CheckpointCommitMessageArgs
 import skillbill.engine.featuretask.runloop.core.CommitCheckpointArgs
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.RecordCheckpointIdentityArgs
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshot
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshotResult
@@ -15,17 +12,15 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 
 object FeatureTaskRuntimeRunLoopRepairReceipt {
   internal fun blockRemediationBaseSha(
-    request: FeatureTaskRuntimeRunFacts,
-    state: FeatureTaskRuntimeRunState,
-    session: FeatureTaskRuntimeRunLoopSession,
+    context: PhaseAttemptEnvironment,
     precedingPhaseId: String,
     reenteredStepId: String,
     error: String,
   ): Boolean {
     FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
-      request,
-      state,
-      session,
+      context.request,
+      context.state,
+      context.session,
       precedingPhaseId,
       "Feature-task-runtime could not record the pre-fix remediation base sha before re-entering " +
         reenteredStepId + (if (error.isBlank()) "." else " ($error).") +

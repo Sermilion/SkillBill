@@ -12,10 +12,10 @@ import skillbill.engine.featuretask.model.core.PhaseInstructions
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.SpecSource
-import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.time.Duration
 
@@ -59,7 +59,6 @@ sealed interface PhaseRunResult {
   ) : PhaseRunResult
 }
 
-/** The governed spec bundle a plan run wrote: the parent spec, the decomposition manifest, and the subtask specs. */
 data class PhaseRunSpecBundle(
   val parentSpecPath: String,
   val decompositionManifestPath: String,

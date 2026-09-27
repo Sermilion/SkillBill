@@ -12,23 +12,23 @@ import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepState
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.runloop.state.RunLoopPhaseStepState
-import skillbill.engine.featuretask.slot.PhaseLaunchObservation
-import skillbill.engine.featuretask.slot.PhaseRunState
-import skillbill.engine.featuretask.slot.PhaseSettledEnvelopeRead
-import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
 import skillbill.engine.featuretask.slot.state.PhaseFanOutUnits
+import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
+import skillbill.engine.featuretask.slot.state.PhaseRunState
+import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.engine.goalrunner.planning.attempt.GoalPlanningStepAttempts
 import skillbill.error.featuretask.GoalPlanningPhaseGatesUnsupportedError
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
@@ -70,7 +70,11 @@ internal class GoalPlanningPhaseRunState(
 
   override fun unselectedStepIds(): Set<String> = strategies.unselectedStepIds(strategySelectionFacts(facts))
 
-  override fun step(run: PhaseRun): PhaseStepState = RunLoopPhaseStepState(PhaseAttemptScope(run.request, this), run)
+  override fun step(run: PhaseRun): PhaseStepState =
+    FeatureTaskRuntimeRunLoopStepState(
+      PhaseAttemptScope(run.request, this),
+      run,
+    )
 
   override fun ensureFeatureBranch(guardPhase: String): FeatureTaskRuntimeBranchSetupOutcome =
     FeatureTaskRuntimeBranchSetupOutcome.unchanged()
@@ -115,7 +119,7 @@ private class GoalPlanningPlanFanOut(
     outputSink: AgentRunOutputSink,
   ): PhaseStepState {
     val unitRunState = GoalPlanningUnitRunState(runState, GoalPlanningStepAttempts(planning, unitId, outputSink))
-    return RunLoopPhaseStepState(PhaseAttemptScope(run.request, unitRunState), run)
+    return FeatureTaskRuntimeRunLoopStepState(PhaseAttemptScope(run.request, unitRunState), run)
   }
 
   override fun settleUnit(

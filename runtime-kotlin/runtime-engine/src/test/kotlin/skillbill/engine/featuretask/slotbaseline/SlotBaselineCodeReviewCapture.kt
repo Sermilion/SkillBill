@@ -4,7 +4,7 @@ import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 internal object SlotBaselineCodeReviewCapture {
   fun encodedFiles(): Map<String, String> {

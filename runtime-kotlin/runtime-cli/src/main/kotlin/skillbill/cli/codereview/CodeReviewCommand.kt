@@ -30,9 +30,8 @@ import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.error.core.ShellContentContractException
 import skillbill.error.shellcontent.ReviewAggregationIntegrityError
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.toReviewAccountingBoundedJson
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.minutes
 
@@ -171,15 +170,20 @@ internal data class CodeReviewFlags(
 internal fun codeReviewPhaseRequest(flags: CodeReviewFlags): PhaseRunRequest {
   val (resolvedBase, resolvedHead) =
     resolveCodeReviewRevisions(flags.target.commitRevision, flags.baseRevision, flags.headRevision)
-  if ((resolvedBase == null) != (resolvedHead == null)) {
-    throw UsageError("--base-revision and --head-revision must be supplied together.")
-  }
-  if (flags.diffFile != null && resolvedBase == null) {
-    throw UsageError("--diff-file requires paired --base-revision and --head-revision.")
+  val revisionError =
+    when {
+      (resolvedBase == null) != (resolvedHead == null) ->
+        "--base-revision and --head-revision must be supplied together."
+      flags.diffFile != null && resolvedBase == null ->
+        "--diff-file requires paired --base-revision and --head-revision."
+      else -> null
+    }
+  if (revisionError != null) {
+    throw UsageError(revisionError)
   }
   val mode = RequestedReviewMode.parse(flags.executionMode)
   val delegatedOnly = flags.expandFiles + flags.baselineUntrackedIncludes + flags.baselineUntrackedExcludes
-  if (mode != CodeReviewExecutionMode.DELEGATED && delegatedOnly.isNotEmpty()) {
+  if (!RequestedReviewMode.isDelegated(mode) && delegatedOnly.isNotEmpty()) {
     throw UsageError(
       "--expand-file and --baseline-untracked-include/-exclude apply only to --execution-mode delegated.",
     )

@@ -159,9 +159,8 @@ internal class InMemoryPhaseRunRecords(
 
   override fun validateHandoffDeclarations(declarations: List<PhaseHandoffProjectionDeclaration>) = Unit
 
-  override fun loadDeliveredProjections(
-    workflowId: String,
-  ): Map<String, FeatureTaskRuntimeDeliveredProjectionRecord> = emptyMap()
+  override fun loadDeliveredProjections(workflowId: String): Map<String, FeatureTaskRuntimeDeliveredProjectionRecord> =
+    emptyMap()
 
   override fun loadValidationGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
     validationGateProgress[workflowId]

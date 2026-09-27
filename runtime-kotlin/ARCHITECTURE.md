@@ -1093,6 +1093,8 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   base branch with `PullRequestBranchRefusedError`, pushes the branch when it
   has unpushed commits, and runs the pull-request readiness gate only when the
   run's forward steps include `commit_push`.
+  The listed `skill-bill` dispatcher skill translates `phase:<name>` into this
+  subcommand; `ListedSkillNames` admits it beside the `bill-` prefix.
   `FeatureTaskPhaseRunDefinitionScan` keeps the package off named definitions,
   and the durable-store scan covers it.
 - `PhaseStrategyRegistry` holds the registered strategies. `PhaseStrategySelection`

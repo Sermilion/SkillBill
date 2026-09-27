@@ -49,7 +49,9 @@ import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.prepare.FeatureTaskRuntimeSpecGate
 import skillbill.engine.featuretask.prepare.SpecSourceResolver
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
+import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunStartup
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.slot.ApprovingReviewPhaseRunner
 import skillbill.engine.featuretask.slot.PhaseRunner
@@ -647,7 +649,6 @@ internal data class RuntimeHarnessConfig(
   val diagnostics: RuntimeDiagnostics? = null,
   val pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
   val delegatedReviewRunner: ParallelCodeReviewRunner? = null,
-  /** Replaces the recording git operations in the telemetry harness's strategies and gates, e.g. with real git. */
   val gitOperationsOverride: WorkflowGitOperations? = null,
 ) {
   val harnessGitOperations: WorkflowGitOperations get() = gitOperationsOverride ?: branchSetup.gitOperations
@@ -981,7 +982,6 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
       ),
     recorder = deps.recorder,
     goalContinuationRecorder = deps.goalContinuationRecorder,
-    runInvariantsStore = deps.runInvariantsStore,
     outputValidator = deps.validator,
     phaseGates =
       runtimePhaseGates(
@@ -1000,7 +1000,11 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
           validationGatePlatformManifests = deps.runtimeConfig.validationGatePlatformManifests,
         ),
       ),
-    crashReconciler = harnessCrashReconciler(deps.database, deps.crashSupervisor),
+    startup =
+      FeatureTaskRuntimeRunStartup(
+        crashReconciler = harnessCrashReconciler(deps.database, deps.crashSupervisor),
+        runInvariantsStore = deps.runInvariantsStore,
+      ),
     phaseSettlementService = harnessPhaseSettlement(),
     diagnostics = deps.diagnostics,
     clock = testHarnessClock,
@@ -1016,6 +1020,7 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
             NoopWorkflowGitOperations,
           ),
       ),
+    runLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
   )
 }
 
@@ -1121,7 +1126,6 @@ private fun telemetryHarnessRunner(
       ),
     recorder = workflow.recorder,
     goalContinuationRecorder = workflow.goalContinuationRecorder,
-    runInvariantsStore = workflow.runInvariantsStore,
     outputValidator = validator,
     phaseGates =
       telemetryRunnerPhaseGates(
@@ -1130,11 +1134,16 @@ private fun telemetryHarnessRunner(
         workflow,
         branchSetupRunner,
       ),
-    crashReconciler = harnessCrashReconciler(database, NoopFeatureTaskRuntimeWorkerSupervisor),
+    startup =
+      FeatureTaskRuntimeRunStartup(
+        crashReconciler = harnessCrashReconciler(database, NoopFeatureTaskRuntimeWorkerSupervisor),
+        runInvariantsStore = workflow.runInvariantsStore,
+      ),
     phaseSettlementService = harnessPhaseSettlement(),
     diagnostics = NoopRuntimeDiagnostics,
     clock = testHarnessClock,
     probeWriters = telemetryRunnerProbeWriters(database),
+    runLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
   )
 }
 

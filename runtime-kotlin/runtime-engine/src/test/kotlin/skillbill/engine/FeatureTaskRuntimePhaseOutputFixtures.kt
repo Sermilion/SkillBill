@@ -1,10 +1,10 @@
 package skillbill.engine
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-import skillbill.engine.featuretask.slot.PhaseLaunchState
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
+import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.review.model.ParallelReviewLaneResult
 import skillbill.review.parallel.ParallelReviewFindingParser
 import skillbill.review.parallel.ParallelReviewMerger
@@ -168,25 +168,29 @@ internal fun validProducedOutputs(
   phaseId: String,
   commitPushChangedPaths: List<String>? = null,
 ): String =
-  when (phaseId) {
-    "validate" -> VALIDATE_PRODUCED_OUTPUTS
-    "write_history" -> WRITE_HISTORY_PRODUCED_OUTPUTS
-    "commit_push" ->
-      commitPushProducedOutputs(
-        commitSha = null,
-        changedPaths = commitPushChangedPaths ?: listOf("src/Foo.kt"),
-      )
-    "preplan" -> preplanProducedOutputs()
-    "plan" -> planProducedOutputs()
-    "implement" -> implementProducedOutputs()
-    "simplify" -> PlanningProjectionFixtures.SIMPLIFY_PROSE
-    "implement_fix" -> implementFixProducedOutputs()
-    "review" -> """{"findings": []}"""
-    "audit" -> """{"value": "{\"gaps\":[],\"non_blocking_findings\":[]}"}"""
-    "verify_findings" -> """{"finding_dispositions": []}"""
-    "pr" -> """{"value": "Opened the pull request for the branch."}"""
-    else -> """{"tasks":["task-1"]}"""
+  if (phaseId == "commit_push") {
+    commitPushProducedOutputs(
+      commitSha = null,
+      changedPaths = commitPushChangedPaths ?: listOf("src/Foo.kt"),
+    )
+  } else {
+    STATIC_PRODUCED_OUTPUTS[phaseId] ?: """{"tasks":["task-1"]}"""
   }
+
+private val STATIC_PRODUCED_OUTPUTS: Map<String, String> =
+  mapOf(
+    "validate" to VALIDATE_PRODUCED_OUTPUTS,
+    "write_history" to WRITE_HISTORY_PRODUCED_OUTPUTS,
+    "preplan" to preplanProducedOutputs(),
+    "plan" to planProducedOutputs(),
+    "implement" to implementProducedOutputs(),
+    "simplify" to PlanningProjectionFixtures.SIMPLIFY_PROSE,
+    "implement_fix" to implementFixProducedOutputs(),
+    "review" to """{"findings": []}""",
+    "audit" to """{"value": "{\"gaps\":[],\"non_blocking_findings\":[]}"}""",
+    "verify_findings" to """{"finding_dispositions": []}""",
+    "pr" to """{"value": "Opened the pull request for the branch."}""",
+  )
 
 private const val VALIDATE_PRODUCED_OUTPUTS =
   """{"value":"Project checks passed.","validation_passed":true}"""

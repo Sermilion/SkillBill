@@ -324,9 +324,7 @@ object PhaseAttemptContinuations {
 
   internal fun blockUnattributableRecordRejection(
     request: FeatureTaskRuntimeRunFacts,
-    state: FeatureTaskRuntimeRunState,
     recorder: PhaseRunRecords,
-    observability: FeatureTaskRuntimeRunObservability,
     args: UnattributableRecordRejectionArgs,
     generationScoped: (String) -> Boolean,
   ): PhaseOutcome {
@@ -341,7 +339,7 @@ object PhaseAttemptContinuations {
         "reconciliation-${rejection.rejectionClass}",
         rejectionPath(rejection.rejectionDetail),
       )
-    recordUnattributableRejectedEvidence(request, recorder, run, state, rejection, generationScoped)
+    recordUnattributableRejectedEvidence(request, recorder, args, generationScoped)
     return FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersistInPhase(
       request,
       state,
@@ -360,11 +358,12 @@ object PhaseAttemptContinuations {
   internal fun recordUnattributableRejectedEvidence(
     request: FeatureTaskRuntimeRunFacts,
     recorder: PhaseRunRecords,
-    run: PhaseRun,
-    state: FeatureTaskRuntimeRunState,
-    rejection: RecordRejection,
+    args: UnattributableRecordRejectionArgs,
     generationScoped: (String) -> Boolean,
   ) {
+    val run = args.context.run
+    val state = args.context.state
+    val rejection = args.rejection
     val detail =
       payloadFreeRejectionReason(
         "reconciliation-${rejection.rejectionClass}",
@@ -486,9 +485,7 @@ object PhaseAttemptContinuations {
     if (regeneration == null) {
       return PhaseAttemptContinuations.blockUnattributableRecordRejection(
         request,
-        state,
         recorder,
-        observability,
         UnattributableRecordRejectionArgs(
           context = PhaseAttemptContext(run, state, iteration, observability),
           rejection = rejection,

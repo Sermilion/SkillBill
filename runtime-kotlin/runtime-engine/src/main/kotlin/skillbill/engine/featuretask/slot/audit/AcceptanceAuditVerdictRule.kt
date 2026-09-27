@@ -12,7 +12,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 internal class AcceptanceAuditVerdictRule(
   private val diagnostics: RuntimeDiagnostics,
 ) : FeatureTaskRuntimeStepVerdictRule {
-  // Settled verdicts are re-derived on every transition; one output records its fallback once.
   private val recordedFallbacks: MutableSet<Map<String, Any?>> = mutableSetOf()
 
   override fun verdictFor(
@@ -36,8 +35,9 @@ internal class AcceptanceAuditVerdictRule(
       return FeatureTaskRuntimeVerdict.SATISFIED
     }
     if (recordedFallbacks.add(outputObject?.toMap().orEmpty())) {
-      val observed = wireVerdict?.let { "Audit verdict '${it.wireValue}' is not an audit verdict word" }
-        ?: "Audit phase output carries no verdict word"
+      val observed =
+        wireVerdict?.let { "Audit verdict '${it.wireValue}' is not an audit verdict word" }
+          ?: "Audit phase output carries no verdict word"
       diagnostics.warning(
         "$observed (${FeatureTaskRuntimeVerdict.AUDIT_VERDICTS.joinToString { it.wireValue }}); it settles to " +
           "'${UNKNOWN_WORD_DEFAULT.wireValue}'.",

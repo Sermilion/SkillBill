@@ -152,12 +152,14 @@ class FeatureTaskRuntimeReadinessGateCoordinatorTest {
       }
     val result =
       coordinator(store).bindCommittedHead(
-        workflowId = WORKFLOW_ID,
-        stepId = "commit_push",
-        repoRoot = validationGateTestRepoRoot,
-        baseBranch = "main",
-        gitOperations = RecordingWorkflowGitOperations().apply { readinessTreeIdentity = committed },
-        commitSha = committed.headSha,
+        ReadinessCommittedHeadBindRequest(
+          workflowId = WORKFLOW_ID,
+          stepId = "commit_push",
+          repoRoot = validationGateTestRepoRoot,
+          baseBranch = "main",
+          gitOperations = RecordingWorkflowGitOperations().apply { readinessTreeIdentity = committed },
+          commitSha = committed.headSha,
+        ),
       )
 
     assertIs<ReadinessCommitPushSettleResult.Ready>(result)

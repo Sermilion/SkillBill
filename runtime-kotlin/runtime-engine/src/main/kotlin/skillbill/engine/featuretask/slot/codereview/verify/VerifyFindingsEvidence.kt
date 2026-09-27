@@ -1,4 +1,4 @@
-package skillbill.engine.featuretask.slot.codereview
+package skillbill.engine.featuretask.slot.codereview.verify
 
 import skillbill.application.review.spec.toProjectionPayload
 import skillbill.contracts.JsonCodec
@@ -18,8 +18,9 @@ import skillbill.engine.featuretask.review.finding.validateDispositionBoundaryCo
 import skillbill.engine.featuretask.review.finding.validateDispositionBoundaryProvenance
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
-import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.codereview.reviewSpecPath
+import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewStructuredFindingsParse
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
@@ -35,7 +36,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.validateDispositionCoverage
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import java.nio.file.Path
 
 internal object VerifyFindingsEvidence {
   fun launchSections(
@@ -49,7 +49,7 @@ internal object VerifyFindingsEvidence {
       context.phaseGates.specIntentProjectionResolver.resolve(
         SpecIntentProjectionResolveRequest(
           repoRoot = run.request.repoRoot.toFileLocation(),
-          explicitSpecPath = Path.of(run.request.runInvariants.specReference).toFileLocation(),
+          explicitSpecPath = reviewSpecPath(run)?.toFileLocation(),
           branchName = state.resolvedBranchName() ?: "HEAD",
           changedPaths = emptyList(),
           budget = ReviewContextBudgetPolicy.DEFAULT,

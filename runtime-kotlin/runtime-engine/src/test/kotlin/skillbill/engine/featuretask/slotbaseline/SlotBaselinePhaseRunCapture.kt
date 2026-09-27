@@ -28,11 +28,11 @@ import skillbill.engine.telemetryRunnerHarness
 import skillbill.engine.validJsonOutput
 import skillbill.engine.verifyFindingsOutput
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.workflow.model.goalreview.toReviewAccountingBoundedJson
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS
-import skillbill.workflow.model.goalreview.toReviewAccountingBoundedJson
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
@@ -58,7 +58,6 @@ internal object SlotBaselinePhaseRunCapture {
       captureAgentPhase(SkeletonDefinition.PR.id, intake = null).encodedFiles(SlotBaselinePaths.PHASE_PR)
   }
 
-  /** A plan, implement, or pr phase run whose agents answer with the fixture outputs; plan decomposes. */
   private fun captureAgentPhase(
     definitionId: String,
     intake: String?,
@@ -103,7 +102,7 @@ internal object SlotBaselinePhaseRunCapture {
 
   private const val PHASE_PLAN = "plan"
   private const val PLAN_INTAKE = "SKILL-380 slot baseline phase plan"
-  private const val IMPLEMENT_INTAKE = "SKILL-380"
+  private const val IMPLEMENT_INTAKE = SlotBaselinePhaseRunHarness.IMPLEMENT_SPEC
   private const val PROMPT_ATTEMPT_SEPARATOR = "\n---\n"
 
   private fun captureReview(mode: CodeReviewExecutionMode): PhaseRunCapture =
@@ -124,7 +123,6 @@ internal object SlotBaselinePhaseRunCapture {
   )
 }
 
-/** The fields `skill-bill phase` and `skill-bill code-review` print from a [PhaseRunResult]. */
 internal fun PhaseRunResult.printedFields(): Map<String, Any?> =
   mapOf(
     "status" to if (this is PhaseRunResult.Completed) "completed" else "blocked",
@@ -160,15 +158,11 @@ private fun ParallelCodeReviewResult.printedFields(): Map<String, Any?> =
       accountingSummary?.toReviewAccountingBoundedJson()?.let(SlotBaselineJson::parseEmbedded),
   )
 
-/**
- * One phase run over a fresh repo and SQLite home: the review finds one Blocker, verify_findings confirms it,
- * implement_fix rewrites the file, and the re-review approves.
- */
 internal class SlotBaselinePhaseRunHarness private constructor(
   private val repoRoot: Path,
   private val home: Path,
 ) {
-  val database = SlotBaselineFullRunCapture.sqliteDatabase(home)
+  val database = SlotBaselineFullRunCapture.sqliteDatabase(home).also { it.transaction { } }
   private val git = committedRepoBranchSetup().gitOperations.also { it.repositoryFingerprintValue = "before-fix" }
   private val lanes = LaneScript()
   private val source: Path =
@@ -230,7 +224,6 @@ internal class SlotBaselinePhaseRunHarness private constructor(
     Files.writeString(spec, IMPLEMENT_SPEC_TEXT)
   }
 
-  /** Every file of [bundle], by repo-relative path. */
   fun specBundleFiles(bundle: PhaseRunSpecBundle): Map<String, String> =
     (listOf(bundle.parentSpecPath, bundle.decompositionManifestPath) + bundle.subtaskSpecPaths)
       .associateWith { path -> Files.readString(repoRoot.resolve(path)) }

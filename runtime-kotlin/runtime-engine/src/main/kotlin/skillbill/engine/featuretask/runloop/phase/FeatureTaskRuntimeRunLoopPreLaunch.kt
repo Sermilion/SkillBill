@@ -34,10 +34,9 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
           shouldRelaunchPersistedBlock(
             session = context.session,
             state = state,
-            phaseId = run.phaseId,
+            run = run,
             durable = durable,
             persistedReason = persistedReason,
-            relaunchOnInvalidOutput = run.policy.relaunchOnInvalidOutput,
           )
         ) {
           return@let null
@@ -131,11 +130,11 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
   internal fun shouldRelaunchPersistedBlock(
     session: FeatureTaskRuntimeRunLoopSession,
     state: FeatureTaskRuntimeRunState,
-    phaseId: String,
+    run: PhaseRun,
     durable: FeatureTaskRuntimePhaseRecord?,
     persistedReason: String,
-    relaunchOnInvalidOutput: Boolean,
   ): Boolean {
+    val phaseId = run.phaseId
     val resume = state.persistedBlockResume(phaseId, persistedReason)
     val reenterableRecordRejection = isReenterableRecordRejection(state, phaseId, persistedReason)
     val restartsBudget =
@@ -154,7 +153,7 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
         durable = durable,
         resume = resume,
         reenterableRecordRejection = reenterableRecordRejection,
-        relaunchOnInvalidOutput = relaunchOnInvalidOutput,
+        relaunchOnInvalidOutput = run.policy.relaunchOnInvalidOutput,
       ),
     )
   }

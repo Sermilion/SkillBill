@@ -471,15 +471,17 @@ class FeatureTaskRuntimeRunState internal constructor(
     return span.any { phaseId -> transitions.entryGateViolation(phaseId, settledVerdicts) != null }
   }
 
-  fun unresolvedReviewFindings(phaseId: String): List<FeatureTaskRuntimeReviewFinding> =
-    FeatureTaskRuntimeOutputVerification.unresolvedReviewFindings(parsedOutput(outputFor(phaseId)))
-
   fun durableVerdictFor(phaseId: String): FeatureTaskRuntimeVerdict {
     val record = initialRecords[phaseId] ?: return verdictFor(phaseId)
     val output = validatedRecordToOutput(record) ?: return verdictFor(phaseId)
     return FeatureTaskRuntimeOutputVerification.verdictFor(parsedOutput(output), stepVerdictRuleFor(phaseId))
   }
 }
+
+internal fun FeatureTaskRuntimeRunState.unresolvedReviewFindings(
+  phaseId: String,
+): List<FeatureTaskRuntimeReviewFinding> =
+  FeatureTaskRuntimeOutputVerification.unresolvedReviewFindings(parsedOutput(outputFor(phaseId)))
 
 private fun recentBlockedReasons(
   ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,

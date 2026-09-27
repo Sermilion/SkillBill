@@ -38,7 +38,18 @@ class CliPhasePlanRuntimeTest {
 
     val plan =
       CliRuntime.run(
-        listOf("--db", fixture.dbPath.toString(), "phase", "plan", ISSUE_KEY, "split", "the", "work", "--agent", "codex"),
+        listOf(
+          "--db",
+          fixture.dbPath.toString(),
+          "phase",
+          "plan",
+          ISSUE_KEY,
+          "split",
+          "the",
+          "work",
+          "--agent",
+          "codex",
+        ),
         fixture.context(launcher = launcher).copy(repositoryRoot = tempDir),
       )
 
@@ -76,7 +87,6 @@ class CliPhasePlanRuntimeTest {
     assertEquals(0, rowCount("feature_task_runtime_sessions"))
   }
 
-  /** Rows in [table]; a table the run never created holds none. */
   private fun rowCount(table: String): Int =
     DriverManager.getConnection("jdbc:sqlite:${fixture.dbPath}").use { connection ->
       val exists =

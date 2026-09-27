@@ -17,8 +17,8 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExe
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunStateReconstruction
 import skillbill.engine.featuretask.runloop.durable.LEGACY_QUALITY_GATE_SELECTION
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunStateReconstruction
 import skillbill.engine.featuretask.slot.PhaseReportedGate
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
@@ -30,8 +30,8 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerm
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
-import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
 
 @Inject
 class FeatureTaskRuntimeStatusService(
