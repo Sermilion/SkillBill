@@ -4,6 +4,7 @@ import skillbill.infrastructure.host.process.InstallerProcessAdapter
 import skillbill.infrastructure.http.HttpInstallerScriptFetchAdapter
 import skillbill.infrastructure.launcher.agentrun.FileSystemAgentRunLauncher
 import skillbill.infrastructure.launcher.agentrun.PathExecutableLookup
+import skillbill.infrastructure.workflow.git.goal.FileSystemPullRequestTemplateFiles
 import skillbill.infrastructure.workflow.git.goal.GhGoalPullRequestPort
 import skillbill.infrastructure.workflow.git.goal.GhPullRequestIdentityLookup
 import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
@@ -11,6 +12,7 @@ import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
+import skillbill.ports.goalrunner.runner.PullRequestTemplateFiles
 import skillbill.ports.process.InstallerProcessPort
 import skillbill.ports.process.InstallerScriptFetchPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -26,6 +28,9 @@ internal interface RuntimeOptionalCallbackProvides {
 
   @Provides
   fun pullRequestIdentityLookup(): PullRequestIdentityLookup = GhPullRequestIdentityLookup()
+
+  @Provides
+  fun pullRequestTemplateFiles(): PullRequestTemplateFiles = FileSystemPullRequestTemplateFiles()
 
   @Provides
   fun agentRunLauncher(

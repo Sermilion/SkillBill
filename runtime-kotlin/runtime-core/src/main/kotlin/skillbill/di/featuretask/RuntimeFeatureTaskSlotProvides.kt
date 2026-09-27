@@ -27,6 +27,7 @@ import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
+import skillbill.ports.goalrunner.runner.PullRequestTemplateFiles
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
@@ -48,13 +49,26 @@ internal interface RuntimeFeatureTaskSlotProvides {
   ): GoalPlanFanOutStrategy = GoalPlanFanOutStrategy(runner, fanOutPort, burstSchedule.planFanOutCap)
 
   @Provides
-  fun phaseStrategyRegistry(
+  fun prDescriptionStrategy(
     runner: () -> PhaseRunner,
     pullRequestIdentityLookup: PullRequestIdentityLookup,
     readinessEvidence: FeatureTaskRuntimeReadinessEvidencePort,
     diagnostics: RuntimeDiagnostics,
+    templateFiles: PullRequestTemplateFiles,
+  ): PrDescriptionStrategy =
+    PrDescriptionStrategy(
+      runner(),
+      pullRequestIdentityLookup,
+      PullRequestReadinessGate(readinessEvidence, diagnostics),
+      templateFiles,
+    )
+
+  @Provides
+  fun phaseStrategyRegistry(
+    runner: () -> PhaseRunner,
     reviewRunner: ParallelCodeReviewRunner,
     goalPlanFanOut: GoalPlanFanOutStrategy,
+    prDescription: PrDescriptionStrategy,
   ): PhaseStrategyRegistry =
     PhaseStrategyRegistry(
       listOf(
@@ -69,11 +83,7 @@ internal interface RuntimeFeatureTaskSlotProvides {
         AgentValidateStrategy(runner()),
         BoundaryHistoryStrategy(runner()),
         RuntimeCommitStrategy(runner()),
-        PrDescriptionStrategy(
-          runner(),
-          pullRequestIdentityLookup,
-          PullRequestReadinessGate(readinessEvidence, diagnostics),
-        ),
+        prDescription,
       ),
     )
 

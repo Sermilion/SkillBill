@@ -16,7 +16,7 @@ class PullRequestMeasurementTest {
   fun `a pull request that appears during the step is created`() {
     val diagnostics = RecordingDiagnostics()
 
-    val facts = measurement(found, diagnostics).facts(PullRequestIdentity.Absent, BRANCH)
+    val facts = measurement(diagnostics).facts(PullRequestIdentity.Absent, found)
 
     assertEquals(
       mapOf(
@@ -31,7 +31,7 @@ class PullRequestMeasurementTest {
 
   @Test
   fun `a pull request that was already open is reused`() {
-    val facts = measurement(found, RecordingDiagnostics()).facts(found, BRANCH)
+    val facts = measurement(RecordingDiagnostics()).facts(found, found)
 
     assertEquals(false, facts[FeatureTaskRuntimeMeasuredFactKeys.PR_CREATED])
   }
@@ -40,7 +40,7 @@ class PullRequestMeasurementTest {
   fun `an unavailable pre-step lookup leaves created unknown and emits a diagnostics record`() {
     val diagnostics = RecordingDiagnostics()
 
-    val facts = measurement(found, diagnostics).facts(PullRequestIdentity.Unavailable("gh missing"), BRANCH)
+    val facts = measurement(diagnostics).facts(PullRequestIdentity.Unavailable("gh missing"), found)
 
     assertEquals(found.url, facts[FeatureTaskRuntimeMeasuredFactKeys.PR_URL])
     assertEquals(FeatureTaskRuntimeMeasuredFactKeys.UNKNOWN, facts[FeatureTaskRuntimeMeasuredFactKeys.PR_CREATED])
@@ -52,7 +52,7 @@ class PullRequestMeasurementTest {
     listOf(PullRequestIdentity.Absent, PullRequestIdentity.Unavailable("gh missing")).forEach { after ->
       val diagnostics = RecordingDiagnostics()
 
-      val facts = measurement(after, diagnostics).facts(PullRequestIdentity.Absent, BRANCH)
+      val facts = measurement(diagnostics).facts(PullRequestIdentity.Absent, after)
 
       assertEquals(
         mapOf(
@@ -75,10 +75,8 @@ class PullRequestMeasurementTest {
     assertTrue(measurement.identity(null) is PullRequestIdentity.Unavailable)
   }
 
-  private fun measurement(
-    after: PullRequestIdentity,
-    diagnostics: RuntimeDiagnostics,
-  ): PullRequestMeasurement = PullRequestMeasurement({ _, _ -> after }, Path.of("/tmp/repo"), diagnostics)
+  private fun measurement(diagnostics: RuntimeDiagnostics): PullRequestMeasurement =
+    PullRequestMeasurement({ _, _ -> PullRequestIdentity.Absent }, Path.of("/tmp/repo"), diagnostics)
 
   private companion object {
     const val BRANCH = "feat/SKILL-1-thing"

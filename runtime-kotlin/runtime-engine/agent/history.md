@@ -1,3 +1,13 @@
+## [2026-09-27] SKILL-380 subtask 11 — pr-description and boundary-history own their rules
+Areas: runtime-kotlin/runtime-engine/skillbill/engine/featuretask/{slot/{pullrequest,writehistory,attempt},lifecycle/core,phase/prompt/compose}, runtime-kotlin/runtime-core/di/{core,featuretask}, runtime-kotlin/runtime-ports/{goalrunner/runner,workflow/gitops}, runtime-kotlin/runtime-infra/workflow/git/{goal,standard}, docs, runtime-kotlin/ARCHITECTURE.md
+- The pr and write_history prompts no longer tell the agent to invoke a skill. Their rules come from the runtime-owned `PrDescriptionPromptRules` and `BoundaryMemoryPromptRules`. `BoundaryMemoryRulesParityTest` holds the history write/skip rules equal to the skill's.
+- `PullRequestTemplateSearch` (slot/pullrequest) resolves the PR template: the first single-file match wins, a single directory template is used, several with no default block the run as ambiguous and name each path, and no template falls back to the coded default. Checklists are stripped. reusable
+- Template IO goes through the new `PullRequestTemplateFiles` port with the `FileSystemPullRequestTemplateFiles` adapter, because engine main bans java.nio.file. `repoRoot` joined `FeatureTaskRuntimePhasePromptComposeInputs`.
+- A completed pr step emits `pr_description_generated` from both the skeleton run and `phase pr`, via `FeatureTaskRuntimeLifecycleTelemetry.prDescriptionGenerated`. It measures commit_count (new `WorkflowGitCommitHistoryOperations.commitCountAhead`), files_changed_count and pr_title (new `PullRequestIdentity.Found.title`). If any value can't be measured, the event is skipped with a warning. reusable
+- Limitation: the slotbaseline pr and write_history prompt fixtures are re-baselined in validate. The standalone pr.txt fixture was already stale from earlier subtasks.
+Feature flag: N/A
+Acceptance criteria: 4/5 implemented (AC-4 fixture re-baseline runs in validate)
+
 ## [2026-09-27] SKILL-380 subtask 5 — Remaining slots and the no-phase-id guard
 Areas: runtime-kotlin/runtime-engine/skillbill/engine/featuretask/{slot/{audit,pullrequest,writehistory,commitpush,runner,qualitygate,codereview,plan,preplan,implementation},phase,lifecycle,runloop}, runtime-kotlin/runtime-core/{di/featuretask,repoTest/architecture}, runtime-kotlin/runtime-{domain,infra/contracts,infra/sqlite,infra/workflow,mcp,ports}, orchestration/contracts
 - Every slot's behaviour now lives in its strategy package: acceptance-audit owns gaps_found rejection, remaining-criteria retry, the retry prompt and the unchanged-remainder block; the phase/prompt audit-retry directives file is gone.

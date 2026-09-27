@@ -10,6 +10,7 @@ import skillbill.workflow.model.goalreview.FeatureTaskRuntimePriorReviewContext
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedger
 import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeCorrectiveRepairContext
 import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeOperatorBlockRetry
+import java.nio.file.Path
 
 data class FeatureTaskRuntimePhasePromptComposeInputs(
   val issueKey: String,
@@ -42,4 +43,5 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val phaseSettlement: FeatureTaskRuntimePhaseSettlementTarget? = null,
   val mutating: Boolean = false,
   val singleAgentSession: Boolean = false,
+  val repoRoot: Path? = null,
 )

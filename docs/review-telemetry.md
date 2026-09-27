@@ -406,7 +406,7 @@ If a parent skill forgets to pass `orchestrated=true` to a child, the child emit
 | `skillbill_quality_check_finished` | standalone quality-check lifecycle | `quality_check_finished(orchestrated=true)` returns payload |
 | `skillbill_feature_verify_started` | `bill-feature-verify` (standalone) | skipped in orchestrated mode |
 | `skillbill_feature_verify_finished` | `bill-feature-verify` (standalone) | `feature_verify_finished(orchestrated=true)` returns payload |
-| `skillbill_pr_description_generated` | `bill-pr-description` (standalone) | `pr_description_generated(orchestrated=true)` returns payload |
+| `skillbill_pr_description_generated` | `bill-pr-description` (standalone), and the runtime `pr` step after it completes (skeleton run and `skill-bill phase pr`) | `pr_description_generated(orchestrated=true)` returns payload |
 
 ## Quality-check telemetry
 

@@ -419,6 +419,7 @@ object PhaseLaunchPreparation {
           },
         mutating = run.policy.mutating,
         singleAgentSession = run.policy.singleAgentSession,
+        repoRoot = run.request.repoRoot,
       )
     }
   }

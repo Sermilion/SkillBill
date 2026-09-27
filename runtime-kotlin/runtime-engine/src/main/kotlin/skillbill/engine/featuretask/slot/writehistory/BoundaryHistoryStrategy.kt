@@ -54,6 +54,7 @@ class BoundaryHistoryStrategy(override val runner: PhaseRunner) : PhaseStrategy(
   ): PhaseStepPromptSections =
     PhaseStepPromptSections(
       taskDirective = directiveFor(stepId),
+      stepContext = BoundaryMemoryPromptRules.section,
       valueContent = VALUE_CONTENT,
     )
 
@@ -83,7 +84,7 @@ class BoundaryHistoryStrategy(override val runner: PhaseRunner) : PhaseStrategy(
     const val ID = "boundary-history"
 
     private const val DIRECTIVE: String =
-      "Invoke bill-boundary-history inline and apply its write/skip rules for the implemented runtime change; " +
+      "Apply the boundary history and decision rules below to the implemented runtime change; " +
         "do not forward implementation or validation reports."
 
     private const val VALUE_CONTENT: String =

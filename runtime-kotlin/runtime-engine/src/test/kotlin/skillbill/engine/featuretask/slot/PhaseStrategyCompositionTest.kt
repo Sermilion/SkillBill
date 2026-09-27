@@ -60,6 +60,7 @@ class PhaseStrategyCompositionTest {
         runner,
         UnavailablePullRequestIdentityLookup,
         PullRequestReadinessGate(AbsentReadinessEvidence, NoopRuntimeDiagnostics),
+        LocalPullRequestTemplateFiles,
       ),
     )
 

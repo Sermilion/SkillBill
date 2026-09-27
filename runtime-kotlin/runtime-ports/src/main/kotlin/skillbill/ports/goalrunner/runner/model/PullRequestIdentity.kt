@@ -4,6 +4,7 @@ sealed interface PullRequestIdentity {
   data class Found(
     val url: String,
     val number: Int,
+    val title: String = "",
   ) : PullRequestIdentity
 
   data object Absent : PullRequestIdentity

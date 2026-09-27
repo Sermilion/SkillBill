@@ -2,6 +2,8 @@
 package skillbill.engine
 
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditPromptSections
+import skillbill.engine.featuretask.slot.pullrequest.PullRequestTemplateSearch
+import skillbill.engine.featuretask.slot.writehistory.BoundaryMemoryPromptRules
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
@@ -47,11 +49,20 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
       !historyPrompt.contains("Mutating-phase idempotency contract"),
       "non-mutating write_history phase must not carry the idempotency directive",
     )
-    assertContains(historyPrompt, "bill-boundary-history")
+    mapOf("write_history" to historyPrompt, "pr" to prPrompt).forEach { (phaseId, prompt) ->
+      listOf("Invoke ", "bill-boundary-history", "bill-boundary-decisions", "bill-pr-description").forEach { skill ->
+        assertFalse(prompt.contains(skill), "the $phaseId prompt must not name '$skill'")
+      }
+    }
+    assertContains(historyPrompt, "Always write for `MEDIUM` and `LARGE` features.")
+    assertContains(historyPrompt, BoundaryMemoryPromptRules.HISTORY_ENTRY_FORMAT)
+    assertContains(historyPrompt, BoundaryMemoryPromptRules.DECISION_ENTRY_FORMAT)
     assertFalse(historyPrompt.contains("history_result"), "write_history must not ask the agent for history_result")
     assertContains(commitPrompt, "does not launch an agent")
     assertContains(commitPrompt, "records commit_sha")
-    assertContains(prPrompt, "bill-pr-description")
+    assertContains(prPrompt, PullRequestTemplateSearch.SEARCH_ORDER.joinToString(", ") { "`$it`" })
+    assertContains(prPrompt, "`[<issue key>] <descriptive title>`")
+    assertContains(prPrompt, "# How Has This Been Tested?")
     assertContains(prPrompt, "create or reuse the open")
     assertFalse(prPrompt.contains("pr_result"), "pr must not ask the agent for pr_result")
   }

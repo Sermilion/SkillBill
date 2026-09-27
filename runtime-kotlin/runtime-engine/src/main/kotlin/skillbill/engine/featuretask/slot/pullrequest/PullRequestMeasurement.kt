@@ -22,9 +22,9 @@ internal class PullRequestMeasurement(
 
   fun facts(
     before: PullRequestIdentity?,
-    branch: String?,
+    after: PullRequestIdentity,
   ): Map<String, Any> =
-    when (val after = identity(branch)) {
+    when (after) {
       is PullRequestIdentity.Found ->
         mapOf(
           FeatureTaskRuntimeMeasuredFactKeys.PR_URL to after.url,
@@ -35,7 +35,7 @@ internal class PullRequestMeasurement(
       is PullRequestIdentity.Unavailable -> unknown("pr could not look the pull request up: ${after.reason}")
     }
 
-  private fun created(
+  fun created(
     before: PullRequestIdentity?,
     after: PullRequestIdentity.Found,
   ): Any =

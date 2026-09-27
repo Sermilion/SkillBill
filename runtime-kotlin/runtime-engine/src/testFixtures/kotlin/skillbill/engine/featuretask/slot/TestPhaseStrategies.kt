@@ -20,6 +20,7 @@ import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
+import skillbill.ports.goalrunner.runner.PullRequestTemplateFiles
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -28,6 +29,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSe
 import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
 import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
+import java.nio.file.Files
 import java.nio.file.Path
 
 fun statusProjectionPhaseStrategies(): PhaseStrategyLookup =
@@ -64,6 +66,7 @@ fun testPhaseStrategies(
           runner(),
           pullRequestIdentityLookup,
           PullRequestReadinessGate(readinessEvidence, NoopRuntimeDiagnostics),
+          LocalPullRequestTemplateFiles,
         ),
       ),
     )
@@ -111,6 +114,22 @@ object UnavailablePullRequestIdentityLookup : PullRequestIdentityLookup {
     repoRoot: Path,
     branch: String,
   ): PullRequestIdentity = PullRequestIdentity.Unavailable("test runs do not reach GitHub")
+}
+
+object LocalPullRequestTemplateFiles : PullRequestTemplateFiles {
+  override fun regularFile(path: Path): Path? = path.takeIf { Files.isRegularFile(it) }?.toRealPath()
+
+  override fun markdownFiles(directory: Path): List<Path> =
+    if (Files.isDirectory(directory)) {
+      Files.list(directory).use { entries -> entries.toList() }
+        .filter { entry -> Files.isRegularFile(entry) && entry.fileName.toString().endsWith(".md") }
+        .map { entry -> entry.toRealPath() }
+        .sortedBy { entry -> entry.fileName.toString() }
+    } else {
+      emptyList()
+    }
+
+  override fun readText(file: Path): String = Files.readString(file)
 }
 
 fun testPhaseStrategyBindings(

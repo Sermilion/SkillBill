@@ -9,22 +9,22 @@ class GhPullRequestIdentityLookupTest {
   private val repoRoot = Path.of("/tmp/skillbill-pr-identity")
 
   @Test
-  fun `the first listed pull request for the branch is found with its url and number`() {
+  fun `the first listed pull request for the branch is found with its url, number, and title`() {
     val calls = mutableListOf<List<String>>()
     val lookup =
       GhPullRequestIdentityLookup { _, args ->
         calls += args
         GhCommandResult(
           exitCode = 0,
-          stdout = """[{"number":42,"url":"https://github.com/acme/repo/pull/42"}]""",
+          stdout = """[{"number":42,"url":"https://github.com/acme/repo/pull/42","title":"[SKILL-380] Rules"}]""",
         )
       }
 
     val identity = lookup.lookup(repoRoot, "feat/SKILL-380")
 
-    assertEquals(PullRequestIdentity.Found("https://github.com/acme/repo/pull/42", 42), identity)
+    assertEquals(PullRequestIdentity.Found("https://github.com/acme/repo/pull/42", 42, "[SKILL-380] Rules"), identity)
     assertEquals(
-      listOf("pr", "list", "--head", "feat/SKILL-380", "--json", "url,number", "--limit", "1"),
+      listOf("pr", "list", "--head", "feat/SKILL-380", "--json", "url,number,title", "--limit", "1"),
       calls.single(),
     )
   }

@@ -27,7 +27,7 @@ class GhPullRequestIdentityLookup internal constructor(
     root: Path,
     head: String,
   ): PullRequestIdentity {
-    val result = gh.run(root, listOf("pr", "list", "--head", head, "--json", "url,number", "--limit", "1"))
+    val result = gh.run(root, listOf("pr", "list", "--head", head, "--json", "url,number,title", "--limit", "1"))
     return if (result.exitCode == 0) {
       parseIdentity(result.stdout)
     } else {
@@ -45,6 +45,7 @@ class GhPullRequestIdentityLookup internal constructor(
     val first = entries.firstOrNull() ?: return PullRequestIdentity.Absent
     val url = first.path("url").takeIf(JsonNode::isTextual)?.asText()?.takeIf(String::isNotBlank)
     val number = first.path("number").takeIf(JsonNode::isInt)?.asInt()
-    return if (url != null && number != null) PullRequestIdentity.Found(url, number) else null
+    val title = first.path("title").takeIf(JsonNode::isTextual)?.asText().orEmpty()
+    return if (url != null && number != null) PullRequestIdentity.Found(url, number, title) else null
   }
 }
