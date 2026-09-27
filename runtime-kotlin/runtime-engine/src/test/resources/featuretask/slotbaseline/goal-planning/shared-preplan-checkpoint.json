@@ -8,12 +8,12 @@
         "parent_spec_hash": "__NORMALIZED_SHA64__",
         "payload_sha256": "__NORMALIZED_SHA64__",
         "phase_output_contract_id": "https://skill-bill.dev/contracts/feature-task-runtime-phase-output-schema.yaml",
-        "phase_output_contract_version": "0.6",
+        "phase_output_contract_version": "0.7",
         "planning_contract_id": "https://skill-bill.dev/contracts/goal-planning-preparation-schema.yaml",
         "planning_contract_version": "0.2",
         "preparation_status": "prepared",
         "preplan_payload_json": {
-            "contract_version": "0.6",
+            "contract_version": "0.7",
             "phase_id": "preplan",
             "produced_outputs": {
                 "_goal_planning_shared_context": {

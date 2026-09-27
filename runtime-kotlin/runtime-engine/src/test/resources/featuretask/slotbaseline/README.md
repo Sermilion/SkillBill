@@ -170,3 +170,7 @@ ledger expects must be regenerated in the subtask that the ledger names.
   `phase/` is new.
 - Subtask 9 (phase plan, implement and pr): `phase/plan/`, `phase/implement/` and
   `phase/pr/` are new. Every existing file is unchanged.
+- Subtask 12 validation: the re-captures from subtasks 5 to 11 never reached a commit, so the
+  tree still held the subtask 4 files and `SlotBaselineFixtureTest` failed. Those subtasks' drift
+  (the phase prompt output-contract text, `code-review/` routed through `PhaseRunEntry`, and the
+  new `phase/` bundle) is committed here. Subtask 12's own diff changes no captured behaviour.

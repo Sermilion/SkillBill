@@ -1,228 +1,36 @@
 {
-    "review_accounting": [
-        {
-            "bounded_payload_json": {
-                "aggregate_counters": {
-                    "evidence_bytes": 0,
-                    "expansions": 0,
-                    "launch_bytes": 4167,
-                    "model_turns": 1,
-                    "result_bytes": 46,
-                    "tool_calls": 0
-                },
-                "commit_routing_accounting": {
-                    "commit_count": 1,
-                    "commit_sequence_digest": "__NORMALIZED_SHA64__",
-                    "focused_commit_count": 1,
-                    "focused_pair_count": 2,
-                    "incomplete_lanes": [],
-                    "lane_count": 2,
-                    "routing_digest": "__NORMALIZED_SHA64__",
-                    "skipped_commit_count": 0,
-                    "skipped_pair_count": 0
-                },
-                "contract_version": "2.4",
-                "integration": {
-                    "commit_sequence_digest": "__NORMALIZED_SHA64__",
-                    "counters": {
-                        "evidence_bytes": 0,
-                        "expansions": 0,
-                        "launch_bytes": 0,
-                        "model_turns": 0,
-                        "result_bytes": 0,
-                        "tool_calls": 0
-                    },
-                    "finding_count": 0,
-                    "skip_reason": "this review ran inline, so commit-focused delegated sequencing does not apply",
-                    "summarized_lane_count": 0,
-                    "terminal_outcome": "skipped_not_applicable"
-                },
-                "kind": "accounting_summary",
-                "lanes": [
-                    {
-                        "assignment_digest": "__NORMALIZED_SHA64__",
-                        "bundle_composition_digest": "__NORMALIZED_SHA64__",
-                        "evidence_bytes": 0,
-                        "expansions": 0,
-                        "inclusive_counters": {
-                            "evidence_bytes": 0,
-                            "expansions": 0,
-                            "launch_bytes": 4167,
-                            "model_turns": 1,
-                            "result_bytes": 46,
-                            "tool_calls": 0
-                        },
-                        "lane": "parallel-agent-1",
-                        "launch_bytes": 0,
-                        "model_turns": 0,
-                        "result_bytes": 0,
-                        "segment_accounting": [
-                            {
-                                "composition_digest": "__NORMALIZED_SHA64__",
-                                "entry_count": 1,
-                                "measured_bytes": 10131,
-                                "segment_id": "seg-000"
-                            }
-                        ],
-                        "terminal_outcome": "completed",
-                        "tool_calls": 0
-                    },
-                    {
-                        "assignment_digest": "__NORMALIZED_SHA64__",
-                        "bundle_composition_digest": "__NORMALIZED_SHA64__",
-                        "evidence_bytes": 0,
-                        "expansions": 0,
-                        "inclusive_counters": {
-                            "evidence_bytes": 0,
-                            "expansions": 0,
-                            "launch_bytes": 4167,
-                            "model_turns": 1,
-                            "result_bytes": 46,
-                            "tool_calls": 0
-                        },
-                        "lane": "codex",
-                        "launch_bytes": 4167,
-                        "model_turns": 1,
-                        "result_bytes": 46,
-                        "segment_accounting": [
-                            {
-                                "composition_digest": "__NORMALIZED_SHA64__",
-                                "entry_count": 1,
-                                "measured_bytes": 10131,
-                                "segment_id": "seg-000"
-                            }
-                        ],
-                        "terminal_outcome": "completed",
-                        "tool_calls": 0
-                    }
-                ],
-                "packet_digest": "__NORMALIZED_SHA64__",
-                "parent": {
-                    "assignment_digest": "__NORMALIZED_SHA64__",
-                    "evidence_bytes": 0,
-                    "expansions": 0,
-                    "inclusive_counters": {
-                        "evidence_bytes": 0,
-                        "expansions": 0,
-                        "launch_bytes": 4167,
-                        "model_turns": 1,
-                        "result_bytes": 46,
-                        "tool_calls": 0
-                    },
-                    "lane": "parallel-review",
-                    "launch_bytes": 0,
-                    "model_turns": 0,
-                    "result_bytes": 0,
-                    "terminal_outcome": "completed",
-                    "tool_calls": 0
-                },
-                "parent_analysis_consumption": {
-                    "analyzed_bytes": 595,
-                    "analyzed_pairs": 2,
-                    "max_analysis_bytes": 33554432,
-                    "max_analysis_pairs": 4096
-                },
-                "review_id": "__NORMALIZED_REVIEW_RUN_ID__"
-            },
-            "packet_digest": "__NORMALIZED_SHA64__",
-            "review_id": "__NORMALIZED_REVIEW_RUN_ID__",
-            "updated_at": "__NORMALIZED_TIMESTAMP__"
-        }
-    ],
+    "review_accounting": [],
     "review_finding_outcomes": [],
     "review_run_finding_lanes": [],
     "review_run_finding_verdicts": [],
-    "review_run_lanes": [
-        {
-            "area": "architecture",
-            "budget_dimension": null,
-            "bundle_composition_digest": "__NORMALIZED_SHA64__",
-            "depth": 0,
-            "lane_skill_name": "bill-kotlin-code-review-architecture",
-            "order_index": 0,
-            "origin_layer_chain": "kotlin",
-            "pack_slug": "kotlin",
-            "recorded_at": "__NORMALIZED_TIMESTAMP__",
-            "required": 1,
-            "resolution_state": "resolved",
-            "review_disposition": "complete",
-            "review_run_id": "__NORMALIZED_REVIEW_RUN_ID__",
-            "segment_accounting_json": [
-                {
-                    "composition_digest": "__NORMALIZED_SHA64__",
-                    "entry_count": 1,
-                    "measured_bytes": 10131,
-                    "segment_id": "seg-000"
-                }
-            ],
-            "unreviewed_segment_ids": ""
-        },
-        {
-            "area": "testing",
-            "budget_dimension": null,
-            "bundle_composition_digest": "__NORMALIZED_SHA64__",
-            "depth": 0,
-            "lane_skill_name": "bill-kotlin-code-review-testing",
-            "order_index": 1,
-            "origin_layer_chain": "kotlin",
-            "pack_slug": "kotlin",
-            "recorded_at": "__NORMALIZED_TIMESTAMP__",
-            "required": 0,
-            "resolution_state": "resolved",
-            "review_disposition": "complete",
-            "review_run_id": "__NORMALIZED_REVIEW_RUN_ID__",
-            "segment_accounting_json": [
-                {
-                    "composition_digest": "__NORMALIZED_SHA64__",
-                    "entry_count": 1,
-                    "measured_bytes": 10064,
-                    "segment_id": "seg-000"
-                }
-            ],
-            "unreviewed_segment_ids": ""
-        }
-    ],
+    "review_run_lanes": [],
     "review_run_pass_claims": [
         {
             "claims_json": {
-                "findings": []
+                "findings": [
+                    {
+                        "agent_ids": [
+                            "claude"
+                        ],
+                        "commit_shas": [],
+                        "confidence": "High",
+                        "description": "Foo.kt leaks a connection in the error path",
+                        "f_number": "F-001",
+                        "line": 1,
+                        "location": "src/Foo.kt:1",
+                        "origin_layer_chains": [],
+                        "repository_path": "src/Foo.kt",
+                        "severity": "BLOCKER",
+                        "specialist_skill_names": []
+                    }
+                ]
             },
             "recorded_at": "__NORMALIZED_TIMESTAMP__",
             "review_run_id": "__NORMALIZED_REVIEW_RUN_ID__"
         }
     ],
-    "review_run_spec_projections": [
-        {
-            "absence_reason": "not_applicable_scope",
-            "content_digest": null,
-            "recorded_at": "__NORMALIZED_TIMESTAMP__",
-            "review_run_id": "__NORMALIZED_REVIEW_RUN_ID__",
-            "spec_path": null
-        }
-    ],
-    "review_run_stage_boundaries": [
-        {
-            "contract_version": "2.4",
-            "reached": "not_reached",
-            "recorded_at": "__NORMALIZED_TIMESTAMP__",
-            "review_run_id": "__NORMALIZED_REVIEW_RUN_ID__",
-            "stage": "adjudication"
-        },
-        {
-            "contract_version": "2.4",
-            "reached": "reached",
-            "recorded_at": "__NORMALIZED_TIMESTAMP__",
-            "review_run_id": "__NORMALIZED_REVIEW_RUN_ID__",
-            "stage": "review"
-        },
-        {
-            "contract_version": "2.4",
-            "reached": "reached",
-            "recorded_at": "__NORMALIZED_TIMESTAMP__",
-            "review_run_id": "__NORMALIZED_REVIEW_RUN_ID__",
-            "stage": "verification"
-        }
-    ],
+    "review_run_spec_projections": [],
+    "review_run_stage_boundaries": [],
     "review_runs": [
         {
             "detected_scope": null,

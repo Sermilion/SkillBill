@@ -86,28 +86,46 @@ scoped_owned_paths:
 ## Derived context (layer 3, declared)
 - scoped_repository_state: read the repository at the resolved checkpoint above — the diff over base_ref/head_ref plus the listed scoped_owned_paths — and treat that actual state, not any upstream receipt claim, as the evidence for every criterion. scoped_owned_paths is checkpoint evidence, not a write allowlist; remaining-criteria repair may edit any files those criteria require
 
-## Required final output (validated schema gate)
+## Required final output (durable settlement)
+Finish this phase through the skill-bill MCP settlement tools, not by printing a JSON envelope.
+The tools may be deferred in this session: load them first with ToolSearch
+`select:mcp__skill-bill__feature_task_phase_complete,mcp__skill-bill__feature_task_phase_block`.
+- Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
+  phase_id "audit", attempt 1, and value: one prose string carrying everything
+  the next phase needs (what this phase produced, deviations from the briefing, what was
+  deliberately left to later phases). When a value content section follows, it describes what the
+  next phase expects inside value; carry that content as prose or as JSON text, whichever is clearer.
+  The runtime does not validate the shape of value. Optional summary: one sentence.
+- Cannot finish: call `mcp__skill-bill__feature_task_phase_block` with the same workflow_id, phase_id, and
+  attempt, a reason string naming the obstacle, and failure_disposition one of "retryable",
+  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
+Copy workflow_id, phase_id, and attempt exactly as written here. After the tool returns status
+"ok", end your response with a short prose recap and nothing structured. Print the fallback
+final object below only if both tools stay unavailable after loading them.
+
+## Value content
+value carries the remaining acceptance criteria only. Only an explicit empty list `[]` (ordinary whitespace
+or Markdown fencing allowed when the complete value is exactly that empty list) completes audit; any other
+non-blank text starts one fresh audit retry with that text forwarded verbatim as the only criterion scope
+for the next audit retry. A whitespace-only value, or a remaining-criteria list nested only inside summary,
+is rejected.
+Every audit invocation re-checks the complete in-scope criterion set from scratch against the
+current tree. Prior partial checks, provider sessions, and repair receipts do not skip checks.
+Repair fixable gaps in this same session before you settle. Use blocked or failed with a
+failure_disposition when the criterion list is missing or an external dependency prevents repair.
+Inspect code and test coverage only: do not run builds, tests, or other commands as audit evidence.
+Validation owns test execution and failures.
+verdict: omit it unless every criterion is met, then set satisfied; never invent review-style tokens
+(for example remediation_required or changes_requested).
+
+## Fallback final output (only when the settlement tools are unavailable)
 End your response with exactly one JSON object as the last thing you emit. Prefer a raw
 object with nothing after it; a single ```json fenced block is also accepted. The runtime
-extracts that object and blocks the run if it does not validate against the phase-output
-contract. Copy these field values from this briefing; do not look them up in this checkout:
-- "contract_version": must be exactly "0.6"
-- "phase_id": must be "audit"
+stamps the contract version and phase id itself. Fields:
 - "status": one of "completed", "blocked", "failed"
-- "failure_disposition": required by the runtime when status is "blocked" or "failed"; one of
-  "retryable", "non_retryable_policy_conflict", "needs_user_action", "process_failure", or
-  "invalid_output". Omit it when status is "completed".
-- "summary": non-empty string describing what this phase did
-- "produced_outputs": object. Empty {} is valid when this phase has no structured
-  payload. When this briefing names a required shape below, that shape is required
-- This is a VERIFYING phase. Ignore the optional-verdict bullet above for audit completion: the runtime reads your completed final response from produced_outputs.value. Only an explicit empty list `[]` (ordinary whitespace or Markdown fencing allowed when the complete final response is exactly that empty list) completes audit; any other non-blank text starts one fresh audit retry with that text forwarded verbatim as the only criterion scope for the next audit retry.
-  REJECTED: a whitespace-only value; nesting the remaining-criteria list only inside summary.
-  ACCEPTED completed example root: {"contract_version":"0.6","phase_id":"audit","status":"completed","summary":"<one sentence>","produced_outputs":{"value":"[]"}} when every in-scope criterion is met, or "produced_outputs":{"value":"- AC-002 still missing test coverage"} when criteria remain.
-  Repair fixable gaps in this same session before you emit the final remaining-criteria response. Use status blocked or failed with failure_disposition when the criterion list is missing or an external dependency prevents repair.
-  Every audit invocation re-checks the complete in-scope criterion set from scratch against the
-  current tree. Prior partial checks, provider sessions, and repair receipts do not skip checks.
-  Inspect code and test coverage only: do not run builds, tests, or other commands as audit evidence. Validation owns test execution and failures.
-- "derived_notes": optional; when present, a non-empty string of notes for downstream
-  phases
-- "verdict": omit for audit unless every criterion is met; never invent review-style tokens (for example remediation_required or changes_requested). Remaining criteria belong only in produced_outputs.value.
-No top-level fields other than the ones listed above are allowed.
+- "summary": one sentence describing what this phase did
+- "value": non-blank prose carrying everything the next phase needs
+- "verdict": optional; set it only when this briefing names a verdict for this phase
+- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
+  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
+  Omit it when status is "completed".

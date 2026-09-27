@@ -33,6 +33,7 @@ import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slotbaseline.SlotBaselineSqlite
 import skillbill.engine.phaseIdFromPrompt
+import skillbill.engine.satisfiedAuditLauncher
 import skillbill.engine.telemetryRunnerHarness
 import skillbill.engine.validJsonOutput
 import skillbill.engine.verifyFindingsOutput
@@ -87,7 +88,7 @@ class PhaseReviewRunTest {
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
     assertEquals(FIXED_SOURCE, Files.readString(source), "implement_fix must change the reviewed file")
-    assertEquals(2, reviews, "the fix is re-reviewed once")
+    assertEquals(1, reviews, "review_fix allows one fix and advances without a re-review, as in a full run")
     assertEquals(1, launchedPhases(launcher).count { it == PHASE_IMPLEMENT_FIX })
     git.assertNoCommitOrCheckpointRef(headBefore)
     database.assertNoDurableWorkflowState()
@@ -183,11 +184,12 @@ class PhaseReviewRunTest {
   fun `phase runs and durable runs drive the same run loop entry`() {
     val loopEntry = RecordingRunLoopEntry()
     val phaseEntry = inlineEntry(fixLauncher(), runLoopEntry = loopEntry) { APPROVED_REVIEW }
-    val durable = telemetryRunnerHarness(RuntimeHarnessConfig())
+    val durable = telemetryRunnerHarness(RuntimeHarnessConfig(launcher = satisfiedAuditLauncher()))
 
     phaseEntry.run(reviewRequest(mode = null))
-    durable.runner.withRunLoopEntry(loopEntry).run(durable.request)
+    val durableReport = durable.runner.withRunLoopEntry(loopEntry).run(durable.request)
 
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(durableReport, durableReport.toString())
     assertEquals(2, loopEntry.runStates.size, loopEntry.runStates.toString())
     assertIs<InMemoryPhaseRunState>(loopEntry.runStates[0])
     assertIs<FeatureTaskRuntimeRunLoopDurableState>(loopEntry.runStates[1])
