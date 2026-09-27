@@ -26,6 +26,7 @@ import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.parallel.ParallelReviewFindingParser
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -66,7 +67,7 @@ class ParallelCodeReviewInlineCoverageContinuationTest {
         governedEvidenceEndpointBinder = binder,
         failureAdmission = ParallelCodeReviewRunnerFailureAdmission(ParallelReviewFindingParser::parse),
         sliceOutcome = { _, _ -> ParallelReviewLaneOutcome(success = true, rawOutput = "") },
-        evidenceReadCallback = { null },
+        evidenceReadCallback = { _, _ -> null },
       )
 
     assertFailsWith<SecondSliceReached> {
@@ -95,7 +96,7 @@ class ParallelCodeReviewInlineCoverageContinuationTest {
             segments = emptyList(),
           ),
       ),
-    bound = ParallelCodeReviewGovernedEvidenceBind.Bound(broker, endpoint),
+    bound = ParallelCodeReviewGovernedEvidenceBind.Bound(broker, endpoint, AtomicLong(0)),
     budget = ReviewContextBudgetPolicy(),
     request =
       ParallelCodeReviewRequest(

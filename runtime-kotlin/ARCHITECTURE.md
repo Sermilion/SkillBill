@@ -1019,7 +1019,7 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
 | `plan` | plan | `agent-plan` |
 | `implementation` | implement, simplify | `implement-then-simplify` |
 | `audit` | audit | `acceptance-audit` |
-| `code_review` | review, verify_findings, implement_fix | `inline` |
+| `code_review` | review, verify_findings, implement_fix | `inline` or `delegated` |
 | `quality_gate` | build or validate | `pack-build` or `agent-validate` |
 | `write_history` | write_history | `boundary-history` |
 | `commit_push` | commit_push | `runtime-commit` |
@@ -1086,7 +1086,8 @@ Composition:
   | `agent-plan` | `slot.plan` | Plan directive, goal-continuation constraint, decomposition stop |
   | `implement-then-simplify` | `slot.implementation` | Implement and simplify directives, continuation segments, simplify scope boundary, receipt checks |
   | `acceptance-audit` | `slot.audit` | Audit directive, remaining-criteria retry prompt and briefing rewrite, unchanged-remainder block, audit verdict rule (`AcceptanceAuditVerdictRule`) and its `gaps_found` rejection, audit-to-review checkpoint (`AcceptanceAuditLoopRules.forwardCheckpoint`) |
-  | `inline` | `slot.codereview` | Review, verify_findings, and implement_fix prompts, review envelope decoding, finding-disposition gate, review briefing field set |
+  | `inline` | `slot.codereview` | Review, verify_findings, and implement_fix prompts, review envelope decoding, finding-disposition gate, review briefing field set; standalone and goal-child selection maps `inline` and `auto` here, and `RuntimeOwnedReviewMode` rejects a requested `delegated` |
+  | `delegated` | `slot.codereview` | The same `CodeReviewSlot` steps, with a review step that runs `ParallelCodeReviewRunner` lanes (bounded by `withBoundedLaneProgress`) inside its `PhaseRunner` session and edits no files; registered, unselected until subtask 8 |
   | `pack-build` | `slot.qualitygate.packbuild` | Runtime-owned build gate, triage and repair sessions |
   | `agent-validate` | `slot.qualitygate.agentvalidate` | Agent validate step, its repair session, retryable blocked disposition |
   | `boundary-history` | `slot.writehistory` | write_history directive, finalization briefing field set, changed paths and history and decision writes measured by `WriteHistoryMeasurement` under `FeatureTaskRuntimeMeasuredFactKeys`; a fact it cannot measure is recorded as unknown with a diagnostics record |

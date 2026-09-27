@@ -56,10 +56,11 @@ internal object InlineReviewPromptSections {
   fun review(
     stepName: String,
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
+    directive: String,
   ): PhaseStepPromptSections {
     val scaling = ceremonyScalingOf(inputs.briefing)
     return PhaseStepPromptSections(
-      taskDirective = REVIEW_DIRECTIVE,
+      taskDirective = directive,
       ceremonyLine =
         "The runtime owns ${scaling.reviewScope.promptLabel}. Keep the review gate real: inspect the implemented " +
           "change for defects and record concrete file references.",

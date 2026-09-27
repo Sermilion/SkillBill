@@ -1,6 +1,7 @@
 package skillbill.application.review.model
 
 import skillbill.application.reviewevidence.model.ParallelReviewScope
+import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
 import skillbill.ports.review.model.ReviewIntegrationPassOutcome
 import skillbill.ports.review.model.ReviewLaneAccounting
 import skillbill.review.context.model.accounting.ReviewAccountingSummary
@@ -15,6 +16,7 @@ import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.model.ReviewStageResumeReport
 import java.nio.file.Path
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 
 data class ParallelCodeReviewRequest(
   val agent1Id: String,
@@ -36,6 +38,7 @@ data class ParallelCodeReviewRequest(
   val ownedPathspec: List<String> = emptyList(),
   val specPath: Path? = null,
   val selectedAgentAddonsSection: String = "",
+  val laneProgressIdleTimeout: Duration = READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes,
 ) {
   init {
     reviewRunId?.let { require(it.isNotBlank()) { "reviewRunId must be non-blank when provided." } }

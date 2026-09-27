@@ -1,7 +1,9 @@
 package skillbill.engine.featuretask.slot
 
+import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
+import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
@@ -39,17 +41,19 @@ fun testPhaseStrategies(
   reviewRunner: PhaseRunner? = null,
   pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
   readinessEvidence: FeatureTaskRuntimeReadinessEvidencePort = AbsentReadinessEvidence,
+  delegatedReviewRunner: ParallelCodeReviewRunner? = null,
 ): PhaseStrategyLookup {
   val runner = { DefaultPhaseRunner(launcher, gitOperations) }
   val codeReviewRunner = reviewRunner?.let { reviewRoutingPhaseRunner(it, runner()) } ?: runner()
   val registry =
     PhaseStrategyRegistry(
-      listOf(
+      listOfNotNull(
         AgentPreplanStrategy(runner()),
         AgentPlanStrategy(runner()),
         ImplementThenSimplifyStrategy(runner()),
         AcceptanceAuditStrategy(runner()),
         InlineReviewStrategy(codeReviewRunner),
+        delegatedReviewRunner?.let { DelegatedReviewStrategy(runner(), it) },
         PackBuildStrategy(runner()),
         AgentValidateStrategy(runner()),
         BoundaryHistoryStrategy(runner()),
@@ -61,7 +65,9 @@ fun testPhaseStrategies(
         ),
       ),
     )
-  return PhaseStrategyLookup(registry, PhaseStrategySelection(registry, testPhaseStrategyBindings()))
+  val codeReviewStrategyId = delegatedReviewRunner?.let { DelegatedReviewStrategy.ID } ?: InlineReviewStrategy.ID
+  val bindings = testPhaseStrategyBindings(codeReviewStrategyId)
+  return PhaseStrategyLookup(registry, PhaseStrategySelection(registry, bindings))
 }
 
 object AbsentReadinessEvidence : FeatureTaskRuntimeReadinessEvidencePort {
@@ -80,7 +86,9 @@ object UnavailablePullRequestIdentityLookup : PullRequestIdentityLookup {
   ): PullRequestIdentity = PullRequestIdentity.Unavailable("test runs do not reach GitHub")
 }
 
-fun testPhaseStrategyBindings(): Map<SkeletonDefinition, Map<PhaseSlot, PhaseStrategyBinding>> {
+fun testPhaseStrategyBindings(
+  codeReviewStrategyId: String = InlineReviewStrategy.ID,
+): Map<SkeletonDefinition, Map<PhaseSlot, PhaseStrategyBinding>> {
   val shared =
     mapOf(
       PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID),
@@ -88,7 +96,7 @@ fun testPhaseStrategyBindings(): Map<SkeletonDefinition, Map<PhaseSlot, PhaseStr
       PhaseSlot.IMPLEMENTATION to PhaseStrategyBinding.Fixed(ImplementThenSimplifyStrategy.ID),
       PhaseSlot.AUDIT to PhaseStrategyBinding.Fixed(AcceptanceAuditStrategy.ID),
       PhaseSlot.CODE_REVIEW to
-        PhaseStrategyBinding.ByFact(CodeReviewExecutionMode.entries.associateWith { InlineReviewStrategy.ID }),
+        PhaseStrategyBinding.ByFact(CodeReviewExecutionMode.entries.associateWith { codeReviewStrategyId }),
       PhaseSlot.WRITE_HISTORY to PhaseStrategyBinding.Fixed(BoundaryHistoryStrategy.ID),
       PhaseSlot.COMMIT_PUSH to PhaseStrategyBinding.Fixed(RuntimeCommitStrategy.ID),
     )

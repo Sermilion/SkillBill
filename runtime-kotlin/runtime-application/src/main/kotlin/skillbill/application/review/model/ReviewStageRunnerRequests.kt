@@ -1,5 +1,9 @@
 package skillbill.application.review.model
 
+import skillbill.ports.agentrun.model.AgentRunProgressProbe
+import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
+import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.agentrun.model.withBoundedLaneProgress
 import skillbill.review.context.model.execution.ResolvedReviewExecutionMode
 import skillbill.review.context.model.execution.SpecIntentProjection
 import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
@@ -7,7 +11,9 @@ import skillbill.review.context.model.packet.ReviewContextPacket
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ReviewFindingVerdict
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 
 internal data class ReviewDelegatedStageLaunch(
   val budget: ReviewContextBudgetPolicy,
@@ -16,7 +22,17 @@ internal data class ReviewDelegatedStageLaunch(
   val timeout: Duration?,
   val modelOverride: String? = null,
   val promptSuffix: String = "",
+  val laneProgressIdleTimeout: Duration = READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes,
 )
+
+internal fun SkillRunRequest.boundedReviewLane(
+  bound: Duration,
+  evidenceReads: AtomicLong? = null,
+): SkillRunRequest =
+  withBoundedLaneProgress(
+    bound,
+    evidenceReads?.let { reads -> AgentRunProgressProbe { reads.get().toString() } } ?: AgentRunProgressProbe.NONE,
+  )
 
 internal data class ReviewClaimVerificationRunRequest(
   val packet: ReviewContextPacket?,

@@ -6,6 +6,7 @@ import skillbill.application.RecordingSpecStatusWriter
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.idestatus.AgentActivityStampWriter
+import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.review.spec.SpecIntentProjectionExtractor
 import skillbill.application.review.spec.SpecIntentProjectionResolver
 import skillbill.application.seedHarnessSpecIntentProjection
@@ -645,6 +646,7 @@ internal data class RuntimeHarnessConfig(
   val validator: FeatureTaskRuntimePhaseOutputValidator? = null,
   val diagnostics: RuntimeDiagnostics? = null,
   val pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
+  val delegatedReviewRunner: ParallelCodeReviewRunner? = null,
 )
 
 private fun runtimeSpecSourceResolver(): SpecSourceResolver =
@@ -971,6 +973,7 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
         harnessReviewRunner(deps.runtimeConfig, deps.launcher),
         deps.runtimeConfig.pullRequestIdentityLookup,
         deps.recorder,
+        deps.runtimeConfig.delegatedReviewRunner,
       ),
     recorder = deps.recorder,
     goalContinuationRecorder = deps.goalContinuationRecorder,
@@ -1110,6 +1113,7 @@ private fun telemetryHarnessRunner(
         harnessReviewRunner(runtimeConfig, launcher),
         runtimeConfig.pullRequestIdentityLookup,
         workflow.recorder,
+        runtimeConfig.delegatedReviewRunner,
       ),
     recorder = workflow.recorder,
     goalContinuationRecorder = workflow.goalContinuationRecorder,

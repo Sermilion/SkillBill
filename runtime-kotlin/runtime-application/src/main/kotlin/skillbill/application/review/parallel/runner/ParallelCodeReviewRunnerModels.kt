@@ -29,6 +29,7 @@ import skillbill.review.model.ReviewFindingCitationDiagnosticWithFinding
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.model.ReviewStageResumeReport
 import skillbill.scaffold.model.PlatformManifest
+import java.util.concurrent.atomic.AtomicLong
 
 internal data class LaunchParentLaneArgs(
   val agentId: String,
@@ -94,6 +95,7 @@ internal fun ParallelCodeReviewInitialRun.delegatedStageLaunch(): ReviewDelegate
     repoRoot = request.repoRoot,
     timeout = request.timeout,
     promptSuffix = request.selectedAgentAddonsSection,
+    laneProgressIdleTimeout = request.laneProgressIdleTimeout,
   )
 
 internal data class ParallelCodeReviewCompiledLaunches(
@@ -128,6 +130,7 @@ internal sealed class ParallelCodeReviewGovernedEvidenceBind {
   class Bound(
     val broker: ReviewEvidenceBroker,
     val endpoint: GovernedReviewEvidenceEndpointHandle,
+    val evidenceReads: AtomicLong,
   ) : ParallelCodeReviewGovernedEvidenceBind()
 
   class Unbound(

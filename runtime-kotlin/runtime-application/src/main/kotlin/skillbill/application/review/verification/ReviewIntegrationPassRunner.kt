@@ -2,6 +2,7 @@ package skillbill.application.review.verification
 
 import skillbill.application.review.model.ReviewIntegrationPassRunRequest
 import skillbill.application.review.model.ReviewLaneIntegrationInput
+import skillbill.application.review.model.boundedReviewLane
 import skillbill.application.review.packet.toIntegrationLaunchEnvelope
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
@@ -55,7 +56,7 @@ internal class ReviewIntegrationPassRunner(
               timeout = request.launch.timeout,
               promptOverride = prompt,
               modelOverride = request.launch.modelOverride,
-            ),
+            ).boundedReviewLane(request.launch.laneProgressIdleTimeout),
         ),
       )
     val launchBytes = prompt.toByteArray(Charsets.UTF_8).size.toLong()

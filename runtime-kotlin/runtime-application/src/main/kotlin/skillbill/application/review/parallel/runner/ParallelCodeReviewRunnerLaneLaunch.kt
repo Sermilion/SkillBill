@@ -6,6 +6,7 @@ import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ReviewSpecialistLaunchRequest
 import skillbill.application.review.model.ReviewWorkerKind
+import skillbill.application.review.model.boundedReviewLane
 import skillbill.application.review.packet.ReviewLocatorHunkBodyExtractor
 import skillbill.application.review.parallel.verification.ParallelCodeReviewRunnerFailureAdmission
 import skillbill.application.review.parallel.verification.parallelCodeReviewCaptureLane
@@ -41,6 +42,7 @@ import skillbill.review.context.model.packet.ReviewLaneCompletionState
 import skillbill.review.context.model.packet.asFailedLaneRun
 import skillbill.review.model.ReviewEvidenceBoundaryAccounting
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicLong
 
 @Inject
 class ParallelCodeReviewRunnerLaneLaunch(
@@ -138,7 +140,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
                   PARALLEL_REVIEW_INLINE_NATIVE_WORKER
                     .takeIf { args.resolvedMode == ResolvedReviewExecutionMode.INLINE },
                 reviewFanOut = args.resolvedMode == ResolvedReviewExecutionMode.DELEGATED,
-              ),
+              ).boundedReviewLane(args.request.laneProgressIdleTimeout, args.bound.evidenceReads),
           ),
         )
       when (outcome) {
@@ -160,24 +162,29 @@ class ParallelCodeReviewRunnerLaneLaunch(
           )
         }
     return runCatching {
-      val onEvidenceRead =
-        request.activityWorkflowId?.takeIf(String::isNotBlank)?.let { workflowId ->
-          {
-            activityStampWriter.recordEvidenceRead(
-              workflowId = workflowId,
-              parentWorkflowId = request.activityParentWorkflowId,
-            )
-          }
-        }
+      val evidenceReads = AtomicLong(0)
+      val onEvidenceRead = evidenceReadCallback(request, evidenceReads)
       ParallelCodeReviewGovernedEvidenceBind.Bound(
         broker,
         governedEvidenceEndpointBinder.bind(broker.accounting().lane, broker, onEvidenceRead),
+        evidenceReads,
       )
     }.getOrElseUnlessCooperative {
       ParallelCodeReviewGovernedEvidenceBind.Unbound(
         ReviewEvidenceBoundaryAccounting.GOVERNED_EVIDENCE_SEAM,
         ParallelCodeReviewGovernedEvidenceBindFault.ENDPOINT,
       )
+    }
+  }
+
+  internal fun evidenceReadCallback(
+    request: ParallelCodeReviewRequest,
+    evidenceReads: AtomicLong,
+  ): () -> Unit {
+    val workflowId = request.activityWorkflowId?.takeIf(String::isNotBlank)
+    return {
+      evidenceReads.incrementAndGet()
+      workflowId?.let { activityStampWriter.recordEvidenceRead(it, request.activityParentWorkflowId) }
     }
   }
 

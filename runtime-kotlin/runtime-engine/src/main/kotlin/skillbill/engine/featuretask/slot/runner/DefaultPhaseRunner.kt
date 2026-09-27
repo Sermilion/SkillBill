@@ -14,11 +14,13 @@ import skillbill.engine.featuretask.slot.PhaseSettledEnvelopeRead
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
+import skillbill.engine.featuretask.slot.PhaseStepSession
 import skillbill.engine.featuretask.slot.PhaseStepStdout
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
+import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
@@ -37,9 +39,15 @@ class DefaultPhaseRunner(
   override fun run(
     input: PhaseStepInput,
     state: PhaseRunState,
+  ): PhaseStepOutput = run(input, state, PhaseStepSession(launcher::launch))
+
+  override fun run(
+    input: PhaseStepInput,
+    state: PhaseRunState,
+    session: PhaseStepSession,
   ): PhaseStepOutput {
     val step = input.stepName
-    val attempt = input.facts.attempt ?: return launchUntracked(input, state)
+    val attempt = input.facts.attempt ?: return launchUntracked(input, state, session)
     val before =
       when (val captured = captureBefore(input)) {
         is BeforeCapture.Ready -> captured
@@ -49,7 +57,7 @@ class DefaultPhaseRunner(
           )
       }
     val prepared = state.prepareLaunch(input) ?: return preparationRejected(step)
-    return launchPrepared(prepared, state, attempt, before)
+    return launchPrepared(prepared, state, attempt, before, session)
   }
 
   private fun launchPrepared(
@@ -57,9 +65,10 @@ class DefaultPhaseRunner(
     state: PhaseRunState,
     attempt: Int,
     before: BeforeCapture.Ready,
+    session: PhaseStepSession,
   ): PhaseStepOutput {
     val step = input.stepName
-    val outcome = launcher.launch(launchRequest(input, state))
+    val outcome = session.execute(launchRequest(input, state))
     if (outcome is AgentRunLaunchFacts) {
       state.recordTokenUsage(step, estimateTokens(input.facts.briefingText), estimateTokens(outcome.stdout))
     }
@@ -82,9 +91,10 @@ class DefaultPhaseRunner(
   private fun launchUntracked(
     unprepared: PhaseStepInput,
     state: PhaseRunState,
+    session: PhaseStepSession,
   ): PhaseStepOutput {
     val input = state.prepareLaunch(unprepared) ?: return preparationRejected(unprepared.stepName)
-    val outcome = launcher.launch(launchRequest(input, state))
+    val outcome = session.execute(launchRequest(input, state))
     return launched(input, outcome, null, PhaseSettledEnvelopeRead.None, classify(input.stepName, outcome))
   }
 
@@ -268,5 +278,3 @@ class DefaultPhaseRunner(
     val EMPTY_STDOUT = PhaseStepStdout("", ByteArray(0), truncated = false, byteSize = 0L, sha256 = "")
   }
 }
-
-const val READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES = 30L

@@ -10,12 +10,12 @@ import skillbill.engine.auditSatisfiedOutput
 import skillbill.engine.defaultPhaseOutput
 import skillbill.engine.facts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
-import skillbill.engine.featuretask.slot.runner.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
 import skillbill.engine.featuretask.slot.scriptedReviewPhaseRunner
 import skillbill.engine.phaseIdFromPrompt
 import skillbill.engine.runnerHarness
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
+import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals

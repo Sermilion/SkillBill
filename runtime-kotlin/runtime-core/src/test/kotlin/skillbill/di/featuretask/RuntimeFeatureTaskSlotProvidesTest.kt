@@ -7,6 +7,8 @@ import skillbill.di.core.TransportContext
 import skillbill.di.core.WorkflowOpsContext
 import skillbill.di.core.create
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
+import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
+import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.model.EnvironmentContext
@@ -14,6 +16,7 @@ import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
 import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
 import java.nio.file.Files
@@ -57,6 +60,20 @@ class RuntimeFeatureTaskSlotProvidesTest {
             assertEquals(PhaseSlot.slotForStep(step), strategies.strategyFor(step, facts).slot)
           }
         }
+      }
+    }
+  }
+
+  @Test
+  fun `delegated review is registered yet every accepted mode still selects inline`() {
+    assertEquals(
+      listOf(InlineReviewStrategy.ID, DelegatedReviewStrategy.ID),
+      strategies.registry.strategies.filter { it.slot == PhaseSlot.CODE_REVIEW }.map { it.strategyId },
+    )
+    CodeReviewExecutionMode.entries.forEach { mode ->
+      listOf(SkeletonDefinition.STANDALONE, SkeletonDefinition.GOAL_CHILD).forEach { definition ->
+        val facts = PhaseStrategySelectionFacts(definition, setOf(mode, FeatureTaskRuntimeQualityGateSelection.BUILD))
+        assertEquals(InlineReviewStrategy.ID, strategies.strategyFor(PHASE_REVIEW, facts).strategyId, "$mode")
       }
     }
   }

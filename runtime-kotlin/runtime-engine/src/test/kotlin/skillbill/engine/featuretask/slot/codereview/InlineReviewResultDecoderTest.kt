@@ -28,7 +28,7 @@ class InlineReviewResultDecoderTest {
     assertEquals(42, finding.line)
     assertEquals("remaining defect", finding.description)
     assertTrue(result.lane1.success)
-    assertNull(InlineReviewResultDecoder.failedLaneReason(result))
+    assertNull(failedLaneReason(result))
   }
 
   @Test
@@ -44,7 +44,7 @@ class InlineReviewResultDecoderTest {
     assertEquals(emptyList(), result.mergeResult.findings)
     assertEquals(
       "Feature-task-runtime phase 'review' agent timed out",
-      InlineReviewResultDecoder.failedLaneReason(result),
+      failedLaneReason(result),
     )
   }
 

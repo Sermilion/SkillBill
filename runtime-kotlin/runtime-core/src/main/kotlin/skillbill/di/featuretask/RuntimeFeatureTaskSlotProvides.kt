@@ -1,6 +1,7 @@
 package skillbill.di.featuretask
 
 import me.tatarka.inject.annotations.Provides
+import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategyBinding
@@ -8,6 +9,7 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategyRegistry
 import skillbill.engine.featuretask.slot.PhaseStrategySelection
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
+import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
@@ -41,6 +43,7 @@ internal interface RuntimeFeatureTaskSlotProvides {
     pullRequestIdentityLookup: PullRequestIdentityLookup,
     readinessEvidence: FeatureTaskRuntimeReadinessEvidencePort,
     diagnostics: RuntimeDiagnostics,
+    reviewRunner: ParallelCodeReviewRunner,
   ): PhaseStrategyRegistry =
     PhaseStrategyRegistry(
       listOf(
@@ -49,6 +52,7 @@ internal interface RuntimeFeatureTaskSlotProvides {
         ImplementThenSimplifyStrategy(runner()),
         AcceptanceAuditStrategy(runner()),
         InlineReviewStrategy(runner()),
+        DelegatedReviewStrategy(runner(), reviewRunner),
         PackBuildStrategy(runner()),
         AgentValidateStrategy(runner()),
         BoundaryHistoryStrategy(runner()),
