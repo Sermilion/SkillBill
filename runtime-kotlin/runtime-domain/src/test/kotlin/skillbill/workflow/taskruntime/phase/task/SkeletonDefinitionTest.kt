@@ -121,6 +121,14 @@ class SkeletonDefinitionTest {
   }
 
   @Test
+  fun `goal-planning is the preplan and plan slots over the goal-planning state`() {
+    val definition = SkeletonDefinition.byId("goal-planning")
+
+    assertEquals(listOf("preplan", "plan"), definition.declaration().forwardPhaseIds)
+    assertEquals(SkeletonRunStateKind.GOAL_PLANNING, definition.runStateKind)
+  }
+
+  @Test
   fun `an entry step selected for traversal is no longer loop-only`() {
     val selected =
       SkeletonDefinition.GOAL_CHILD.stepIds.toSet() - FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE

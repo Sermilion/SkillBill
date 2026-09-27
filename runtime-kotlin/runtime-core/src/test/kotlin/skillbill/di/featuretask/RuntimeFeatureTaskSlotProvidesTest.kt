@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
+import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
@@ -62,6 +63,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
           SkeletonDefinition.STANDALONE,
           SkeletonDefinition.GOAL_CHILD,
           SkeletonDefinition.PLAN,
+          SkeletonDefinition.GOAL_PLANNING,
           SkeletonDefinition.IMPLEMENT,
           SkeletonDefinition.PR,
         ).forEach { definition ->
@@ -90,6 +92,20 @@ class RuntimeFeatureTaskSlotProvidesTest {
         definition.id,
       )
     }
+  }
+
+  @Test
+  fun `goal planning runs the shared preplan and fans the plan out over the agent plan`() {
+    val facts = PhaseStrategySelectionFacts(SkeletonDefinition.GOAL_PLANNING, emptySet())
+
+    assertEquals(
+      listOf(AgentPreplanStrategy.ID, GoalPlanFanOutStrategy.ID),
+      SkeletonDefinition.GOAL_PLANNING.stepIds.map { step -> strategies.strategyFor(step, facts).strategyId },
+    )
+    assertEquals(
+      listOf(AgentPlanStrategy.ID, GoalPlanFanOutStrategy.ID),
+      strategies.registry.strategies.filter { it.slot == PhaseSlot.PLAN }.map { it.strategyId },
+    )
   }
 
   @Test

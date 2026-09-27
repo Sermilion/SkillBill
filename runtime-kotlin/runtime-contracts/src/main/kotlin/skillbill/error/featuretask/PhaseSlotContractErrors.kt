@@ -52,6 +52,17 @@ class InMemoryPhaseRunUnsupportedError(
       "run the full feature-task workflow instead.",
   )
 
+class PhaseRunFanOutUnsupportedError(
+  val stepId: String,
+) : ShellContentContractException(
+    "Phase step '$stepId' fans out over units, and only the goal-planning run state keeps fan-out units.",
+  )
+
+class GoalPlanningPhaseGatesUnsupportedError :
+  ShellContentContractException(
+    "Goal planning runs read-only preplan and plan steps and has no branch, git, or validation gates.",
+  )
+
 class UnknownPhaseReviewTargetError(
   val target: String,
 ) : ShellContentContractException(

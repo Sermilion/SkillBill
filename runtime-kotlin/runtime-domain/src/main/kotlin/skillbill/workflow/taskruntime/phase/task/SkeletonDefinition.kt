@@ -8,6 +8,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDe
 enum class SkeletonRunStateKind(val wireValue: String) {
   DURABLE("durable"),
   IN_MEMORY("in_memory"),
+  GOAL_PLANNING("goal_planning"),
 }
 
 enum class PhaseIntakeRequirement(val wireValue: String) {
@@ -80,9 +81,15 @@ data class SkeletonDefinition(
       )
     val PR: SkeletonDefinition =
       SkeletonDefinition("pr", listOf(PhaseSlot.PULL_REQUEST), SkeletonRunStateKind.IN_MEMORY)
+    val GOAL_PLANNING: SkeletonDefinition =
+      SkeletonDefinition(
+        "goal-planning",
+        listOf(PhaseSlot.PREPLAN, PhaseSlot.PLAN),
+        SkeletonRunStateKind.GOAL_PLANNING,
+      )
 
     val entries: List<SkeletonDefinition>
-      get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, PLAN, IMPLEMENT, PR)
+      get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, PLAN, IMPLEMENT, PR, GOAL_PLANNING)
 
     fun forRun(goalContinuation: Boolean): SkeletonDefinition = if (goalContinuation) GOAL_CHILD else STANDALONE
 

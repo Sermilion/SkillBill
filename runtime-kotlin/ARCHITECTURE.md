@@ -1032,6 +1032,14 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `IN_MEMORY`) that a phase run drives on its own. Each carries a
   `PhaseIntakeRequirement`: `plan` needs an issue key, `implement` needs an
   existing governed spec, and the rest take an optional intake.
+  `GOAL_PLANNING` (`preplan` and `plan`) is the goal planning sweep's
+  definition. It selects `agent-preplan` for the shared preplan and
+  `goal-plan-fan-out` for the plans. `GoalPlanFanOutStrategy` runs
+  `agent-plan` once per active subtask, in waves capped by the burst
+  schedule, over the run state's `PhaseRunFanOut`. The sweep drives it through
+  `FeatureTaskRuntimeRunLoopEntry` over an in-memory
+  `GoalPlanningPhaseRunState`, whose attempt loop keeps the planning attempt
+  gate, budget, and checkpoints, and writes no feature-task workflow row.
   `PhaseStrategyLookup.unselectedStepIds` counts every canonical step a run
   does not select, including steps outside a short definition, so a step
   drops its projections from producers the definition never runs.
@@ -1230,7 +1238,11 @@ baseline or exemption, and has synthetic violations that call its own scan):
   that strategy's resume rules or reported gate, or takes the step id as a
   parameter, instead.
 - Launch port: only the `PhaseRunner` implementation depends on
-  `GoalRunnerSubtaskLauncher`.
+  `GoalRunnerSubtaskLauncher`. The rule scans the feature-task packages and
+  `goalrunner.planning`, so goal planning launches only through a
+  `PhaseRunner`. Under `goalrunner.planning` the `PhaseRunner` exemption does
+  not apply: no planning class may hold the launcher, even behind a local
+  `PhaseRunner`.
 - Dependency direction: shared feature-task packages import no strategy
   package; strategy packages import none of the run loop's drive, launch,
   attempt, or planning-branch objects and do not reference

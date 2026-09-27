@@ -119,13 +119,18 @@ class DefaultPhaseRunner(
         SkillRunRequest(
           issueKey = facts.issueKey,
           repoRoot = facts.repoRoot,
+          subtaskId = facts.subtaskId,
           timeout = facts.timeout,
           modelOverride = facts.modelOverride,
           effortOverride = facts.effortOverride,
           compaction = facts.compaction,
+          outputSink = facts.outputSink,
           promptOverride = composePrompt(input),
+          streamOutputForLiveness = facts.streamOutputForLiveness,
           readOnlyPhase = readOnly,
-          progressIdleTimeout = READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes.takeIf { readOnly },
+          progressIdleTimeout =
+            if (readOnly) READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes else facts.progressIdleTimeout,
+          spawnAuthorization = facts.spawnAuthorization,
           activityStampSink = observation.activityStampSink,
           worktreeEditObserver = observation.worktreeEditObserver,
         ),
@@ -232,6 +237,7 @@ class DefaultPhaseRunner(
       fileManifest = manifest,
       settledEnvelope = settled,
       launchFailure = failure,
+      launchOutcome = outcome,
     )
   }
 

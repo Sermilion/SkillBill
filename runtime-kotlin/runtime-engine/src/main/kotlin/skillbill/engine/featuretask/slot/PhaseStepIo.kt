@@ -1,6 +1,9 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.config.model.PhaseCompactionDirective
+import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
+import skillbill.ports.agentrun.model.AgentRunOutputSink
+import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
 import java.nio.file.Path
@@ -27,6 +30,11 @@ data class PhaseStepFacts(
   val attempt: Int?,
   val observeLaunch: Boolean,
   val briefingText: String,
+  val subtaskId: Int? = null,
+  val progressIdleTimeout: Duration? = null,
+  val outputSink: AgentRunOutputSink = AgentRunOutputSink.NONE,
+  val streamOutputForLiveness: Boolean = false,
+  val spawnAuthorization: AgentRunSpawnAuthorization? = null,
 )
 
 data class PhaseStepOutput(
@@ -42,6 +50,7 @@ data class PhaseStepOutput(
   val fileManifest: PhaseStepFileManifest?,
   val settledEnvelope: PhaseSettledEnvelopeRead,
   val launchFailure: PhaseLaunchFailure?,
+  val launchOutcome: AgentRunLaunchOutcome? = null,
 )
 
 data class PhaseStepFileManifest(

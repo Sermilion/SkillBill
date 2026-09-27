@@ -6,10 +6,21 @@ import kotlin.io.path.readText
 internal const val FEATURE_TASK_ENGINE_ROOT =
   "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask"
 
-internal fun featureTaskEngineSources(): Map<String, String> {
-  val root = ArchitectureScanSupport.runtimeRoot.resolve(FEATURE_TASK_ENGINE_ROOT)
+internal const val GOAL_PLANNING_ENGINE_ROOT =
+  "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/goalrunner/planning"
+
+internal fun featureTaskEngineSources(): Map<String, String> = engineSources(FEATURE_TASK_ENGINE_ROOT, "")
+
+internal fun goalPlanningEngineSources(): Map<String, String> =
+  engineSources(GOAL_PLANNING_ENGINE_ROOT, "goalrunner/planning/")
+
+private fun engineSources(
+  engineRoot: String,
+  pathPrefix: String,
+): Map<String, String> {
+  val root = ArchitectureScanSupport.runtimeRoot.resolve(engineRoot)
   return kotlinFilesUnderWithArchitectureAsserts(root).associate { path ->
-    root.relativize(path).invariantSeparatorsPathString to path.readText()
+    pathPrefix + root.relativize(path).invariantSeparatorsPathString to path.readText()
   }
 }
 
@@ -304,6 +315,7 @@ internal object FeatureTaskStepIdentityScan {
 internal object FeatureTaskLaunchPortScan {
   private const val LAUNCHER = "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher"
   private const val LAUNCHER_PACKAGE_STAR = "skillbill.ports.goalrunner.runner.*"
+  private const val GOAL_PLANNING_PATH_PREFIX = "goalrunner/planning/"
 
   private val PHASE_RUNNER_IMPLEMENTATION =
     Regex("""\b(?:class|object)\s+\w+(?:\s*\([^{]*?\))?\s*:\s*(?:(?!\bfun\b)[^{}=])*?(?<![\w.])PhaseRunner\b""")
@@ -311,7 +323,8 @@ internal object FeatureTaskLaunchPortScan {
   fun violations(sources: Map<String, String>): List<String> =
     sources.flatMap { (path, source) ->
       val scanned = ScannedKotlinSource(source)
-      if (PHASE_RUNNER_IMPLEMENTATION.containsMatchIn(scanned.blanked)) {
+      val runnerExempt = !path.startsWith(GOAL_PLANNING_PATH_PREFIX)
+      if (runnerExempt && PHASE_RUNNER_IMPLEMENTATION.containsMatchIn(scanned.blanked)) {
         emptyList()
       } else {
         launcherReferences(path, scanned)

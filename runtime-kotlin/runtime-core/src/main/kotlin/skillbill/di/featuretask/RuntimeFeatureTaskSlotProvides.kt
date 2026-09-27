@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
+import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
@@ -21,6 +22,8 @@ import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidate
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
+import skillbill.engine.goalrunner.planning.model.GoalPlanningBurstSchedule
+import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
@@ -38,17 +41,26 @@ internal interface RuntimeFeatureTaskSlotProvides {
   ): PhaseRunner = DefaultPhaseRunner(launcher, gitOperations)
 
   @Provides
+  fun goalPlanFanOutStrategy(
+    runner: () -> PhaseRunner,
+    fanOutPort: BoundedWorkFanOutPort,
+    burstSchedule: GoalPlanningBurstSchedule,
+  ): GoalPlanFanOutStrategy = GoalPlanFanOutStrategy(runner, fanOutPort, burstSchedule.planFanOutCap)
+
+  @Provides
   fun phaseStrategyRegistry(
     runner: () -> PhaseRunner,
     pullRequestIdentityLookup: PullRequestIdentityLookup,
     readinessEvidence: FeatureTaskRuntimeReadinessEvidencePort,
     diagnostics: RuntimeDiagnostics,
     reviewRunner: ParallelCodeReviewRunner,
+    goalPlanFanOut: GoalPlanFanOutStrategy,
   ): PhaseStrategyRegistry =
     PhaseStrategyRegistry(
       listOf(
         AgentPreplanStrategy(runner()),
         AgentPlanStrategy(runner()),
+        goalPlanFanOut,
         ImplementThenSimplifyStrategy(runner()),
         AcceptanceAuditStrategy(runner()),
         InlineReviewStrategy(runner()),
@@ -105,6 +117,11 @@ internal interface RuntimeFeatureTaskSlotProvides {
           mapOf(
             PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID),
             PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(AgentPlanStrategy.ID),
+          ),
+        SkeletonDefinition.GOAL_PLANNING to
+          mapOf(
+            PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID),
+            PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(GoalPlanFanOutStrategy.ID),
           ),
         SkeletonDefinition.IMPLEMENT to
           mapOf(PhaseSlot.IMPLEMENTATION to PhaseStrategyBinding.Fixed(ImplementThenSimplifyStrategy.ID)),

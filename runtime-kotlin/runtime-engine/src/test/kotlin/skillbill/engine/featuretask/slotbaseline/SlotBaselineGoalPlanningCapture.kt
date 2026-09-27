@@ -11,6 +11,8 @@ import skillbill.engine.goalrunner.execution.core.testGoalPlanningSweepPorts
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.planning.GoalPlanningLogService
 import skillbill.engine.goalrunner.planning.attempt.DurableGoalPlanningAttemptRecorder
+import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrator
+import skillbill.engine.goalrunner.planning.model.GoalChildPlanningHydration
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLog
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLogRequest
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
@@ -21,12 +23,17 @@ import skillbill.engine.goalrunner.planning.sweep.fakeContextDiscovery
 import skillbill.engine.goalrunner.planning.sweep.validPhaseOutcome
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.infrastructure.workflow.decomposition.FileSystemDecompositionManifestFileStore
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
 import skillbill.ports.goalrunner.runner.GoalRunnerManifestStoreDefaults
 import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
+import skillbill.ports.goalrunner.runner.model.GoalRunnerChildWorkflowSetup
 import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
+import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
+import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
+import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.NoopGoalPlanningPreparationEnvelopeValidator
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionDependency
@@ -43,23 +50,36 @@ internal object SlotBaselineGoalPlanningCapture {
   private const val BUILD_CHILD = "slot baseline build child"
   private const val VALIDATE_CHILD = "slot baseline validate child"
 
-  fun encodedFiles(): Map<String, String> {
+  fun encodedFiles(): Map<String, String> =
+    inSeededWorkspace { repoRoot, home ->
+      capture(prepare(repoRoot, home)).entries.associate { (fileName, value) ->
+        "${SlotBaselinePaths.GOAL_PLANNING}/$fileName" to SlotBaselineJson.encode(value)
+      }
+    }
+
+  fun preparedRows(table: String): List<Map<String, Any?>> =
+    inSeededWorkspace { repoRoot, home ->
+      SlotBaselineSqlite.rows(prepare(repoRoot, home).database.resolveDbPath(), table)
+    }
+
+  fun hydratedChild(subtaskId: Int): HydratedGoalChild =
+    inSeededWorkspace { repoRoot, home -> hydrate(prepare(repoRoot, home), subtaskId) }
+
+  private fun <T> inSeededWorkspace(block: (Path, Path) -> T): T {
     val repoRoot = SlotBaselineFullRunCapture.seededRepoRoot()
     val home = SlotBaselineNormalizer.newTempHome()
     try {
-      return capture(repoRoot, home).entries.associate { (fileName, value) ->
-        "${SlotBaselinePaths.GOAL_PLANNING}/$fileName" to SlotBaselineJson.encode(value)
-      }
+      return block(repoRoot, home)
     } finally {
       repoRoot.toFile().deleteRecursively()
       home.toFile().deleteRecursively()
     }
   }
 
-  private fun capture(
+  private fun prepare(
     repoRoot: Path,
     home: Path,
-  ): Map<String, Any?> {
+  ): PreparedGoalPlanning {
     val clock = SlotBaselineFullRunCapture.sqliteClock
     val database = SlotBaselineFullRunCapture.sqliteDatabase(home)
     val manifest = slotBaselineManifest()
@@ -92,22 +112,63 @@ internal object SlotBaselineGoalPlanningCapture {
         manifest = manifest,
       )
     val request = GoalRunnerRunRequest(issueKey = ISSUE_KEY, repoRoot = repoRoot, invokedAgentId = "claude")
-    assertIs<GoalPlanningSweepOutcome.PreparedAll>(sweep.prepare(state, request))
+    val outcome = assertIs<GoalPlanningSweepOutcome.PreparedAll>(sweep.prepare(state, request))
+    return PreparedGoalPlanning(repoRoot, database, state, launcher, outcomeStore, outcome)
+  }
+
+  private fun hydrate(
+    prepared: PreparedGoalPlanning,
+    subtaskId: Int,
+  ): HydratedGoalChild {
+    val request = requireNotNull(prepared.outcome.hydrationFor(subtaskId))
+    val setup =
+      GoalRunnerChildWorkflowSetup(
+        subtaskId = subtaskId,
+        workflowId = "wfl-slot-baseline-child-$subtaskId",
+        goalBranch = FEATURE_BRANCH,
+        normalizedIssueKey = request.identity.normalizedIssueKey,
+        repositoryIdentity = request.identity.repositoryIdentity,
+        governedSpecPath = request.descriptor.governedSubSpecPath,
+        reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
+        reviewPolicy = GoalRunnerReviewPolicy(CodeReviewExecutionMode.INLINE),
+        planningHydration = request,
+      )
+    val hydrator =
+      GoalChildPlanningHydrator(
+        realFeatureTaskRuntimePhaseOutputValidator,
+        realPlanningProjectionValidator,
+        SlotBaselineFullRunCapture.sqliteClock,
+      )
+    return prepared.database.read { unitOfWork ->
+      val preparations = unitOfWork.goalPlanningPreparations
+      HydratedGoalChild(
+        hydration = hydrator.hydrate(unitOfWork, setup, request),
+        preplanPayload = requireNotNull(preparations.findSharedPreplan(request.identity)).preplanPayload,
+        planPayload =
+          requireNotNull(
+            preparations.findSubtaskPlan(request.identity, subtaskId, request.descriptor.governedSubSpecPath),
+          ).planPayload,
+      )
+    }
+  }
+
+  private fun capture(prepared: PreparedGoalPlanning): Map<String, Any?> {
     val planningLog =
       GoalPlanningLogService(
-        manifestStore = FixedGoalPlanningManifestStore(state),
-        outcomeStore = outcomeStore,
-        database = database,
+        manifestStore = FixedGoalPlanningManifestStore(prepared.state),
+        outcomeStore = prepared.outcomeStore,
+        database = prepared.database,
         diagnosticMetadataValidator = AcceptingRejectedOutputDiagnosticMetadataValidator,
-        clock = clock,
-      ).log(GoalPlanningLogRequest(issueKey = ISSUE_KEY, repoRoot = repoRoot))
-    val databasePath = database.resolveDbPath()
+        clock = SlotBaselineFullRunCapture.sqliteClock,
+      ).log(GoalPlanningLogRequest(issueKey = ISSUE_KEY, repoRoot = prepared.repoRoot))
+    val databasePath = prepared.database.resolveDbPath()
     return mapOf(
-      SlotBaselinePaths.PREPLAN_PROMPT to launchedPrompts(launcher, "preplan").values.single(),
-      SlotBaselinePaths.PLAN_PROMPTS to launchedPrompts(launcher, "plan"),
+      SlotBaselinePaths.PREPLAN_PROMPT to launchedPrompts(prepared.launcher, "preplan").values.single(),
+      SlotBaselinePaths.PLAN_PROMPTS to launchedPrompts(prepared.launcher, "plan"),
       SlotBaselinePaths.SHARED_PREPLAN_CHECKPOINT to SlotBaselineSqlite.rows(databasePath, "goal_shared_preplans"),
       SlotBaselinePaths.PLAN_RECORDS to SlotBaselineSqlite.rows(databasePath, "goal_subtask_plans"),
-      SlotBaselinePaths.PLANNING_ATTEMPT_LOG to outcomeStore.recordedEvents.map(GoalProgressEvent::toPersistenceWire),
+      SlotBaselinePaths.PLANNING_ATTEMPT_LOG to
+        prepared.outcomeStore.recordedEvents.map(GoalProgressEvent::toPersistenceWire),
       SlotBaselinePaths.PLANNING_LOG to planningLogPayload(planningLog),
     )
   }
@@ -201,6 +262,21 @@ internal object SlotBaselineGoalPlanningCapture {
         },
     )
 }
+
+private class PreparedGoalPlanning(
+  val repoRoot: Path,
+  val database: DatabaseSessionFactory,
+  val state: GoalRunnerManifestState,
+  val launcher: SweepPlanningLauncher,
+  val outcomeStore: SlotBaselinePlanningOutcomeStore,
+  val outcome: GoalPlanningSweepOutcome.PreparedAll,
+)
+
+internal class HydratedGoalChild(
+  val hydration: GoalChildPlanningHydration,
+  val preplanPayload: String,
+  val planPayload: String,
+)
 
 private class SlotBaselinePlanningOutcomeStore(
   private val backing: RecordingOutcomeStore = RecordingOutcomeStore(),

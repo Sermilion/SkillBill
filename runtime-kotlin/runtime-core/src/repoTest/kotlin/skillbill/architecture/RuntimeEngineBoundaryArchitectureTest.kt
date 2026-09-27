@@ -749,6 +749,53 @@ class FeatureTaskLaunchPortArchitectureTest {
   }
 
   @Test
+  fun `goal planning reaches GoalRunnerSubtaskLauncher only through the PhaseRunner`() {
+    val sources = goalPlanningEngineSources()
+    assertTrue(sources.keys.any { it.startsWith("goalrunner/planning/sweep/") }, "Read no goal-planning sweep file.")
+
+    val violations = FeatureTaskLaunchPortScan.violations(sources)
+
+    assertEquals(emptyList(), violations, "Read ${sources.size} files.\n" + violations.joinToString("\n"))
+  }
+
+  @Test
+  fun `launch-port rule catches a goal-planning launcher dependency`() {
+    val sweep =
+      """
+      package skillbill.engine.goalrunner.planning.sweep
+
+      import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+
+      data class SyntheticBoundaries(val subtaskLauncher: GoalRunnerSubtaskLauncher)
+      """.trimIndent()
+    val runner =
+      """
+      package skillbill.engine.goalrunner.planning.attempt
+
+      import skillbill.engine.featuretask.slot.PhaseRunner
+
+      internal class SyntheticPlanningRunner(
+        private val launcher: skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher,
+      ) : PhaseRunner
+      """.trimIndent()
+
+    assertEquals(
+      listOf(
+        "goalrunner/planning/sweep/SyntheticBoundaries.kt imports " +
+          "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
+        "goalrunner/planning/attempt/SyntheticPlanningRunner.kt references " +
+          "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
+      ),
+      FeatureTaskLaunchPortScan.violations(
+        mapOf(
+          "goalrunner/planning/sweep/SyntheticBoundaries.kt" to sweep,
+          "goalrunner/planning/attempt/SyntheticPlanningRunner.kt" to runner,
+        ),
+      ),
+    )
+  }
+
+  @Test
   fun `launch-port rule catches run-loop and strategy launcher references and passes the runner`() {
     val runLoop =
       """

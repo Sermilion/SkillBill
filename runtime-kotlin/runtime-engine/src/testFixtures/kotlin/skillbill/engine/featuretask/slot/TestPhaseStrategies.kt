@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
+import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
@@ -15,6 +16,7 @@ import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidate
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
+import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
@@ -67,6 +69,31 @@ fun testPhaseStrategies(
     )
   val codeReviewStrategyId = delegatedReviewRunner?.let { DelegatedReviewStrategy.ID } ?: InlineReviewStrategy.ID
   val bindings = testPhaseStrategyBindings(codeReviewStrategyId)
+  return PhaseStrategyLookup(registry, PhaseStrategySelection(registry, bindings))
+}
+
+fun goalPlanningPhaseStrategies(
+  launcher: GoalRunnerSubtaskLauncher,
+  fanOutPort: BoundedWorkFanOutPort,
+  planFanOutCap: Int,
+): PhaseStrategyLookup {
+  val runner = { DefaultPhaseRunner(launcher, NoopWorkflowGitOperations) }
+  val registry =
+    PhaseStrategyRegistry(
+      listOf(
+        AgentPreplanStrategy(runner()),
+        AgentPlanStrategy(runner()),
+        GoalPlanFanOutStrategy(runner, fanOutPort, planFanOutCap),
+      ),
+    )
+  val bindings =
+    mapOf(
+      SkeletonDefinition.GOAL_PLANNING to
+        mapOf(
+          PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID),
+          PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(GoalPlanFanOutStrategy.ID),
+        ),
+    )
   return PhaseStrategyLookup(registry, PhaseStrategySelection(registry, bindings))
 }
 

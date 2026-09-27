@@ -9,6 +9,7 @@ import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.model.review.ReviewTarget
+import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
@@ -20,8 +21,10 @@ import skillbill.engine.featuretask.slot.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseSettledEnvelopeRead
 import skillbill.engine.featuretask.slot.PhaseStepState
 import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
+import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
@@ -50,8 +53,10 @@ internal class InMemoryPhaseRunState(
   override val checkpoints: PhaseRunCheckpoints = InMemoryPhaseRunCheckpoints
   override val specSource: SpecSource = facts.request.specSource
   override val transitions: FeatureTaskRuntimeTransitionDeclaration = progress.transitions
-  override val attemptLoop: PhaseAttemptLoop =
-    PhaseAttemptLoop(entry.outputValidator, entry.phaseGates, entry.clock, entry.diagnostics)
+  override val attemptLoop: PhaseStepAttempts = PhaseAttemptLoop
+  override val collaborators: PhaseAttemptCollaborators =
+    PhaseAttemptCollaborators(entry.outputValidator, entry.clock, entry.diagnostics)
+  override val phaseGates: FeatureTaskRuntimePhaseGates = entry.phaseGates
 
   var reviewResult: ParallelCodeReviewResult? = null
     private set

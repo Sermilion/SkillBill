@@ -3,15 +3,19 @@ package skillbill.engine.featuretask.slot
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
 import skillbill.engine.featuretask.model.review.ReviewTarget
+import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
+import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
+import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
+import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
@@ -48,8 +52,20 @@ internal interface PhaseRunState : PhaseLaunchState {
   /** The transitions the run traverses. */
   val transitions: FeatureTaskRuntimeTransitionDeclaration
 
-  /** The attempt loop the run's strategies launch their steps through. */
-  val attemptLoop: PhaseAttemptLoop
+  /** The attempts the run's strategies launch their steps through. */
+  val attemptLoop: PhaseStepAttempts
+
+  /** The validator, clock, and diagnostics the run's attempts and loop read. */
+  val collaborators: PhaseAttemptCollaborators
+
+  /** The branch, git, and validation gates the run's steps consult. */
+  val phaseGates: FeatureTaskRuntimePhaseGates
+
+  /**
+   * The units the fan-out step [stepId] runs. Only a state that keeps fan-out units supports it; the default fails
+   * with a typed error.
+   */
+  fun fanOut(stepId: String): PhaseRunFanOut = throw PhaseRunFanOutUnsupportedError(stepId)
 
   /** The strategy selected for [stepId] in this run. */
   fun strategyFor(stepId: String): PhaseStrategy

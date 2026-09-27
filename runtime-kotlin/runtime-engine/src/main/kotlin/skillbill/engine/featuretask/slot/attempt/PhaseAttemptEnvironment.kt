@@ -20,7 +20,7 @@ import java.time.Clock
 
 /**
  * What one step call of the attempt loop reads: the per-call facts and the run's [PhaseRunState]. Every run-state
- * read and write goes through [runState]; the collaborators come from the run's [PhaseAttemptLoop].
+ * read and write goes through [runState]; the collaborators and gates come from the run state.
  */
 internal interface PhaseAttemptEnvironment {
   /** The per-call facts of the run. */
@@ -31,19 +31,19 @@ internal interface PhaseAttemptEnvironment {
 
   /** The validator step outputs are decoded with. */
   val outputValidator: FeatureTaskRuntimePhaseOutputValidator
-    get() = runState.attemptLoop.outputValidator
+    get() = runState.collaborators.outputValidator
 
   /** The gates a step consults. */
   val phaseGates: FeatureTaskRuntimePhaseGates
-    get() = runState.attemptLoop.phaseGates
+    get() = runState.phaseGates
 
   /** The clock evidence is stamped with. */
   val clock: Clock
-    get() = runState.attemptLoop.clock
+    get() = runState.collaborators.clock
 
   /** The diagnostics best-effort failures are recorded to. */
   val diagnostics: RuntimeDiagnostics
-    get() = runState.attemptLoop.diagnostics
+    get() = runState.collaborators.diagnostics
 
   /** The in-memory progress of the run. */
   val state: FeatureTaskRuntimeRunState

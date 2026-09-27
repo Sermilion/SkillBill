@@ -1,23 +1,28 @@
 package skillbill.engine.goalrunner.planning.sweep
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.engine.goalrunner.execution.core.ProduceMissingPlansArgs
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
+import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
+import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runner.transitionsFor
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.planning.context.GoalPlanningSharedContextPacket
-import skillbill.engine.goalrunner.planning.context.SharedPreplanSettlement
-import skillbill.engine.goalrunner.planning.context.currentProvenance
 import skillbill.engine.goalrunner.planning.context.gatherSharedContext
 import skillbill.engine.goalrunner.planning.context.planningPacketFrom
-import skillbill.engine.goalrunner.planning.context.settleSharedPreplan
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
-import skillbill.engine.goalrunner.planning.model.SharedPreplanSettlementArgs
 import skillbill.engine.goalrunner.planning.outcome.preSweepStopped
 import skillbill.engine.goalrunner.planning.outcome.preparationStateReadReason
-import skillbill.engine.goalrunner.planning.outcome.produceMissingPlans
 import skillbill.engine.goalrunner.planning.outcome.sharedContextReason
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningMissingSharedContextPacketStopReason
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningRemedySubtaskId
+import skillbill.engine.goalrunner.planning.state.GoalPlanningPhaseRunState
+import skillbill.engine.goalrunner.planning.state.GoalPlanningRunFacts
+import skillbill.engine.goalrunner.planning.state.GoalPlanningRunProgress
+import skillbill.engine.goalrunner.planning.state.GoalPlanningRunScope
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
@@ -42,15 +47,16 @@ class DefaultGoalPlanningSweep(
   val manifestFileStore = checkpointBoundaries.manifestFileStore
   val contextDiscovery = checkpointBoundaries.contextDiscovery
   val planningProjectionValidator = checkpointBoundaries.planningProjectionValidator
-  val subtaskLauncher = launchBoundaries.subtaskLauncher
   val manifestStore = launchBoundaries.manifestStore
   val planningAttemptRecorder = launchBoundaries.planningAttemptRecorder
   val planningRejectionRecorder = launchBoundaries.planningRejectionRecorder
   val timingPort = launchBoundaries.timingPort
-  val fanOutPort = launchBoundaries.fanOutPort
   val burstSchedule = launchBoundaries.burstSchedule
   val refreshLiveness = launchBoundaries.refreshLiveness
   val phaseStrategies = launchBoundaries.phaseStrategies
+  private val runLoopEntry = launchBoundaries.runLoopEntry
+  private val clock = launchBoundaries.clock
+  private val diagnostics = launchBoundaries.diagnostics
 
   override fun prepare(
     state: GoalRunnerManifestState,
@@ -88,44 +94,41 @@ class DefaultGoalPlanningSweep(
     request: GoalRunnerRunRequest,
     identity: GoalPlanningIdentity,
     existingShared: SharedGoalPreplanCheckpoint?,
-    gathered: GoalPlanningSharedContext,
+    shared: GoalPlanningSharedContext,
   ): GoalPlanningSweepOutcome {
-    var shared = gathered
     val activeSubtasks =
       state.manifest.subtasks.filter {
         it.id in GoalPlanningSharedContextPacket.includedSubtaskIds(shared.planningPacket)
       }
-    return when (
-      val settled =
-        settleSharedPreplan(
-          SharedPreplanSettlementArgs(
-            existingShared = existingShared,
-            currentProvenance = currentProvenance(shared),
-            shared = shared,
-            state = state,
-            request = request,
-            identity = identity,
-          ),
-        )
-    ) {
-      is SharedPreplanSettlement.Halt -> settled.outcome
-      is SharedPreplanSettlement.Ready -> {
-        shared = settled.shared
-        if (activeSubtasks.isEmpty()) {
-          GoalPlanningSweepOutcome.PreparedAll(identity, settled.provenance)
-        } else {
-          produceMissingPlans(
-            ProduceMissingPlansArgs(
-              shared = shared,
-              request = request,
-              identity = identity,
-              provenance = settled.provenance,
-              sharedCheckpoint = settled.checkpoint,
-              activeSubtasks = activeSubtasks,
-            ),
-          )
-        }
-      }
+    val planning =
+      GoalPlanningRunProgress(
+        this,
+        GoalPlanningRunScope(state, request, identity, existingShared, shared, activeSubtasks),
+      )
+    val facts = GoalPlanningRunFacts(shared, request)
+    val selection = strategySelectionFacts(facts)
+    val progress =
+      FeatureTaskRuntimeRunState(
+        initialRecords = emptyMap(),
+        transitions = transitionsFor(facts),
+        outputValidator = outputValidator,
+        stepVerdictRule = slotStepVerdictRule(phaseStrategies, selection, diagnostics),
+        resumeRules = phaseStrategies.resumeRules(selection),
+      )
+    val runState =
+      GoalPlanningPhaseRunState(
+        facts = facts,
+        progress = progress,
+        planning = planning,
+        strategies = phaseStrategies,
+        collaborators = PhaseAttemptCollaborators(outputValidator, clock, diagnostics),
+        specSource = shared.specSource,
+      )
+    val report = runLoopEntry.run(FeatureTaskRuntimeRunLoopContext(facts, runState, phaseStrategies))
+    return when (report) {
+      is FeatureTaskRuntimeRunReport.Blocked -> planning.outcome(report.blockedReason, report.lastIncompletePhase)
+      is FeatureTaskRuntimeRunReport.Paused -> planning.outcome(report.pauseReason, report.pausedPhase)
+      else -> planning.outcome(null, null)
     }
   }
 }

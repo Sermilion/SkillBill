@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slot.attempt
 
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.core.FixLoopBranchContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptLoopState
@@ -18,13 +17,23 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import java.time.Clock
 
-internal class PhaseAttemptLoop(
+/** Runs the attempts of one step call and settles the step, so a run state decides how its steps launch. */
+internal fun interface PhaseStepAttempts {
+  /** Runs the attempts [call] makes for [run] and returns the step's outcome. */
+  fun run(
+    run: PhaseRun,
+    call: PhaseStepCall,
+  ): PhaseOutcome
+}
+
+internal data class PhaseAttemptCollaborators(
   val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
-  val phaseGates: FeatureTaskRuntimePhaseGates,
   val clock: Clock,
   val diagnostics: RuntimeDiagnostics,
-) {
-  fun run(
+)
+
+internal object PhaseAttemptLoop : PhaseStepAttempts {
+  override fun run(
     run: PhaseRun,
     call: PhaseStepCall,
   ): PhaseOutcome =
