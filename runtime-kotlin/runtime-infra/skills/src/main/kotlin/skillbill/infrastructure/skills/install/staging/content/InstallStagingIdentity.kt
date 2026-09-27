@@ -36,11 +36,9 @@ internal fun agentAddonPointersForSkill(
   repoRoot: Path,
   skillName: String,
 ): List<AgentAddonPointer> =
-  if (skillName == AgentAddonConsumer.BILL_FEATURE.id) {
-    AgentAddonDeliveryResolver().resolve(repoRoot.toAbsolutePath().normalize(), AgentAddonConsumer.BILL_FEATURE)
-  } else {
-    emptyList()
-  }
+  AgentAddonConsumer.entries.firstOrNull { consumer -> consumer.id == skillName }
+    ?.let { consumer -> AgentAddonDeliveryResolver().resolve(repoRoot.toAbsolutePath().normalize(), consumer) }
+    .orEmpty()
 
 internal fun validateAgentAddonPointerNamespace(
   skillName: String,

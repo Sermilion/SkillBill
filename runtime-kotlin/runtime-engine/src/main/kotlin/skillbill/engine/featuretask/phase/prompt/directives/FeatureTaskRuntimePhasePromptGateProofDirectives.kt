@@ -1,11 +1,7 @@
 package skillbill.engine.featuretask.phase.prompt.directives
 
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-
-fun nonValidatePhaseValidationOwnershipDirective(phaseId: String): String {
-  if (phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE ||
-    phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
-  ) {
+fun nonValidatePhaseValidationOwnershipDirective(runsValidationGate: Boolean): String {
+  if (runsValidationGate) {
     return ""
   }
   return """
@@ -20,8 +16,8 @@ fun nonValidatePhaseValidationOwnershipDirective(phaseId: String): String {
     """.trimIndent()
 }
 
-fun nonBuildPhaseBuildOwnershipDirective(phaseId: String): String {
-  if (phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD) {
+fun nonBuildPhaseBuildOwnershipDirective(runsBuildGate: Boolean): String {
+  if (runsBuildGate) {
     return ""
   }
   return """

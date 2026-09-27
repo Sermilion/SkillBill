@@ -71,7 +71,6 @@ import skillbill.ports.goalrunner.planning.model.GoalPlanningBoundaryHeading
 import skillbill.ports.goalrunner.planning.model.GoalPlanningContext
 import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
 import skillbill.ports.goalrunner.runner.GoalRunnerManifestStoreDefaults
-import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.goalrunner.verification.model.GoalVerificationBoundaryDiscovery
@@ -80,7 +79,6 @@ import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
-import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
@@ -100,8 +98,6 @@ import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.goalreview.GoalProgressEventKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputFormat
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
@@ -2601,8 +2597,6 @@ private fun GoalPlanningPreparationRecord.preplanRoot(): Map<String, Any?> =
     .let(JsonCodec::jsonElementToValue)
     .let { requireNotNull(JsonCodec.anyToStringAnyMap(it)) }
 
-private fun validPhaseOutcome(phase: String): AgentRunLaunchOutcome = launchFacts(stdout = phasePayload(phase))
-
 private fun emptyProviderTurnOutcome(): AgentRunLaunchOutcome =
   agentRunLaunchFacts(
     agent = SupportedAgent.CLAUDE,
@@ -2647,95 +2641,6 @@ private fun preplanProsePayload(
 private fun fencedPhasePayload(phaseId: String): String =
   "Here is the $phaseId output.\n```json\n" + phasePayload(phaseId) + "\n```\nLet me know if you need more."
 
-private class SweepPlanningLauncher(
-  private val behavior: (phase: String, subtaskId: Int, request: GoalRunnerSubtaskLaunchRequest)
-  -> AgentRunLaunchOutcome,
-) : GoalRunnerSubtaskLauncher {
-  val requests = mutableListOf<GoalRunnerSubtaskLaunchRequest>()
-  val phases = mutableListOf<String>()
-  val subtaskIds = mutableListOf<Int>()
-
-  override fun launch(request: GoalRunnerSubtaskLaunchRequest): AgentRunLaunchOutcome {
-    val phase = phaseOf(request)
-    val subtaskId = request.skillRunRequest.subtaskId ?: 0
-    synchronized(this) {
-      requests += request
-      phases += phase
-      subtaskIds += subtaskId
-    }
-    return behavior(phase, subtaskId, request)
-  }
-
-  fun phaseOf(request: GoalRunnerSubtaskLaunchRequest): String {
-    val prompt = request.skillRunRequest.promptOverride.orEmpty()
-    return Regex("""Phase: (\w+) \(""").find(prompt)?.groupValues?.get(1) ?: "unknown"
-  }
-}
-
-private class CountingManifestFileStore : DecompositionManifestStore {
-  private val readPaths = mutableListOf<String>()
-  private val removedFileNames = mutableSetOf<String>()
-  private var decompositionManifest = "content-decomposition-manifest.yaml"
-  private val specContents = mutableMapOf<String, String>()
-
-  @Synchronized
-  override fun readText(path: Path): String {
-    check(path.fileName.toString() !in removedFileNames) { "missing scratch spec at ${path.fileName}" }
-    readPaths += path.toString()
-    return if (path.fileName.toString() == "decomposition-manifest.yaml") {
-      decompositionManifest
-    } else {
-      specContents[path.fileName.toString()] ?: "content-${path.fileName}"
-    }
-  }
-
-  override fun readTextWithoutRecovery(path: Path): String = readText(path)
-
-  override fun isRegularFile(path: Path): Boolean = path.fileName.toString() !in removedFileNames
-
-  override fun isRegularFileWithoutRecovery(path: Path): Boolean = isRegularFile(path)
-
-  override fun findDecompositionManifestFiles(repoRoot: Path): List<Path> = emptyList()
-
-  override fun findDecompositionManifestFilesWithoutRecovery(repoRoot: Path): List<Path> =
-    findDecompositionManifestFiles(repoRoot)
-
-  override fun listDirectChildDirectories(directory: Path): List<Path> = emptyList()
-
-  override fun deleteIfExists(target: Path): Unit =
-    error("CountingManifestFileStore is read-only in goal planning sweep tests.")
-
-  override fun writeTextAtomically(
-    target: Path,
-    content: String,
-  ): Unit = error("CountingManifestFileStore is read-only in goal planning sweep tests.")
-
-  override fun <T> writeBundleAtomically(
-    writes: List<Pair<Path, String>>,
-    verify: () -> T,
-  ): T = error("CountingManifestFileStore is read-only in goal planning sweep tests.")
-
-  override fun encodeManifestYaml(wireMap: DecompositionManifestWireMap): String =
-    error("CountingManifestFileStore is read-only in goal planning sweep tests.")
-
-  fun countContaining(fragment: String): Int = readPaths.count { path -> fragment in path }
-
-  fun remove(fileName: String) {
-    removedFileNames += fileName
-  }
-
-  fun replaceDecompositionManifest(content: String) {
-    decompositionManifest = content
-  }
-
-  fun replaceSpec(
-    fileName: String,
-    content: String,
-  ) {
-    specContents[fileName] = content
-  }
-}
-
 private class ThrowingManifestFileStore : DecompositionManifestStore {
   override fun readText(path: Path): String = error("simulated unreadable governed spec at ${path.fileName}")
 
@@ -2767,16 +2672,6 @@ private class ThrowingManifestFileStore : DecompositionManifestStore {
 
   override fun encodeManifestYaml(wireMap: DecompositionManifestWireMap): String =
     error("ThrowingManifestFileStore is read-only in goal planning sweep tests.")
-}
-
-private class FakeInvariantsSource : FeatureTaskRuntimeRunInvariantsSource {
-  override fun read(specPath: Path): FeatureTaskRuntimeRunInvariants =
-    FeatureTaskRuntimeRunInvariants(
-      specReference = specPath.toString(),
-      featureSize = FeatureTaskRuntimeFeatureSize.MEDIUM,
-      acceptanceCriteria = listOf("The sweep produces a schema-valid plan for this sub-spec."),
-      mandatesAndOverrides = emptyList(),
-    )
 }
 
 private class FakePhaseOutputValidator : FeatureTaskRuntimePhaseOutputTestValidator() {
@@ -3442,34 +3337,6 @@ private class MutablePauseGoalPlanningManifestStore : GoalRunnerManifestStoreDef
 internal const val FIXTURE_HEADING_ID = "runtime-kotlin/agent/history.md#0-000000000000"
 internal const val FIXTURE_HEADING = "## [2026-08-01] fixture-entry"
 internal const val FIXTURE_BODY = "distinctive fixture body sentence"
-
-private val fakeContextDiscovery =
-  object : GoalPlanningContextDiscovery {
-    override fun loadPlanningContext(repoRoot: Path): GoalPlanningContext =
-      GoalPlanningContext(
-        boundaryCatalog =
-          listOf(
-            GoalPlanningBoundaryHeading(
-              headingId = FIXTURE_HEADING_ID,
-              sourcePath = "runtime-kotlin/agent/history.md",
-              kind = GoalPlanningContext.KIND_HISTORY,
-              heading = FIXTURE_HEADING,
-            ),
-          ),
-        boundaryCatalogTruncated = false,
-        validationGuidance = "Run focused Gradle checks.",
-      )
-
-    override fun discoverForFindingPaths(
-      repoRoot: Path,
-      findingPaths: List<String>,
-      loudFailOnCapExceeded: Boolean,
-    ) = GoalVerificationBoundaryDiscovery(
-      boundaryCatalog = loadPlanningContext(repoRoot).boundaryCatalog,
-      boundaryCatalogTruncated = false,
-      boundaryContextUnavailable = findingPaths.isEmpty(),
-    )
-  }
 
 private object NoopGoalPlanningManifestStore : GoalRunnerManifestStoreDefaults() {
   override fun loadByIssueKey(

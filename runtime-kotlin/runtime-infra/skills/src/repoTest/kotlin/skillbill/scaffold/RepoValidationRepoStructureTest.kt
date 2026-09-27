@@ -4,10 +4,13 @@ import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.composition.renderNativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.testNativeAgentCompositionContext
 import skillbill.infrastructure.skills.scaffold.runtime.validation.RepoValidationRuntime
+import skillbill.infrastructure.skills.scaffold.runtime.validation.validateReadme
+import skillbill.infrastructure.skills.scaffold.runtime.validation.validateSkillReferencesInFile
 import skillbill.testing.repoRootFromTest
 import skillbill.testing.seedConformingPlatformPack
 import java.nio.file.Files
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -254,6 +257,25 @@ class RepoValidationRepoStructureTest {
       report.issues.any { it.contains("references unknown skill 'bill-code-review-worker'") },
       report.issues.joinToString("\n"),
     )
+  }
+
+  @Test
+  fun `repo validation reads the skill-bill slash command as a skill but not skill-bill cli prose`() {
+    val repoRoot = Files.createTempDirectory("skillbill-dispatcher-refs")
+    val skillFile = repoRoot.resolve("skills/bill-example/content.md")
+    Files.createDirectories(skillFile.parent)
+    Files.writeString(
+      skillFile,
+      "Run `/skill-bill SKILL-1`, or `skill-bill goal SKILL-1` from ~/.local/bin/skill-bill.\n",
+    )
+    val readme = repoRoot.resolve("README.md")
+    Files.writeString(readme, "| Skill | Use |\n| --- | --- |\n| `/skill-bill` | Dispatcher. |\n")
+    val issues = mutableListOf<String>()
+
+    validateSkillReferencesInFile(skillFile, repoRoot, setOf("bill-example"), issues)
+    validateReadme(readme, setOf("skill-bill"), emptySet(), issues)
+
+    assertEquals(listOf("skills/bill-example/content.md: references unknown skill 'skill-bill'"), issues)
   }
 
   @Test

@@ -19,10 +19,14 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerA
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeOperatorBlockRetry
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.ZoneOffset
 
 private const val COMPLETED_UPSTREAM_MISSING_OUTPUT_BLOCK_REASON = "completed_upstream_missing_output"
+
+internal fun qualityGateOmittedStepIds(selection: FeatureTaskRuntimeQualityGateSelection): Set<String> =
+  selection.omittedStepIds
 
 fun phasesToReopenForCompletedUpstreamRepair(
   request: CompletedUpstreamRepairRequest,
@@ -31,7 +35,7 @@ fun phasesToReopenForCompletedUpstreamRepair(
   val phaseRecords = request.phaseRecords
   val resumePhaseId = request.resumePhaseId
   val featureSize = request.featureSize
-  val qualityGateSelection = request.qualityGateSelection
+  val omittedStepIds = qualityGateOmittedStepIds(request.qualityGateSelection)
   val stepOrder = FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
   return when {
     phaseRecords[resumePhaseId]?.status?.workflowStepStatus() == WorkflowStepStatus.BLOCKED -> listOf(resumePhaseId)
@@ -42,7 +46,7 @@ fun phasesToReopenForCompletedUpstreamRepair(
           if (record.status.workflowStepStatus() == WorkflowStepStatus.BLOCKED) {
             val missing =
               missingUpstream(
-                phaseDeclaration(phaseId, featureSize, qualityGateSelection),
+                phaseDeclaration(phaseId, featureSize, omittedStepIds),
                 recordedOutputs,
               )
             if (missing?.contains(resumePhaseId) == true) add(phaseId)

@@ -1,6 +1,8 @@
 package skillbill.application.review.parallel.runner
 
 import skillbill.application.review.model.ParallelCodeReviewRequest
+import skillbill.application.review.model.ReviewEvidenceReadCount
+import skillbill.application.review.model.boundedReviewLane
 import skillbill.application.review.parallel.verification.ParallelCodeReviewRunnerFailureAdmission
 import skillbill.application.review.parallel.verification.parallelCodeReviewInlineTerminalStatus
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -36,7 +38,7 @@ internal class ParallelCodeReviewInlineCoverageContinuation(
   private val governedEvidenceEndpointBinder: GovernedReviewEvidenceEndpointBinder,
   private val failureAdmission: ParallelCodeReviewRunnerFailureAdmission,
   private val sliceOutcome: (LaunchedBoundParentArgs, AgentRunLaunchFacts) -> ParallelReviewLaneOutcome,
-  private val evidenceReadCallback: (ParallelCodeReviewRequest) -> (() -> Unit)?,
+  private val evidenceReadCallback: (ParallelCodeReviewRequest, ReviewEvidenceReadCount) -> (() -> Unit)?,
 ) {
   fun run(args: LaunchedBoundParentArgs): ParallelReviewLaneOutcome {
     val bound = args.bound
@@ -89,7 +91,7 @@ internal class ParallelCodeReviewInlineCoverageContinuation(
               governedEvidenceEndpointBinder.bind(
                 bound.broker.accounting().lane,
                 bound.broker,
-                evidenceReadCallback(args.request),
+                evidenceReadCallback(args.request, bound.evidenceReads),
               )
             remainingTimeout = remainingPassTimeout(args.request.timeout, passStarted)
           }
@@ -194,7 +196,7 @@ internal class ParallelCodeReviewInlineCoverageContinuation(
             PARALLEL_REVIEW_INLINE_NATIVE_WORKER
               .takeIf { args.resolvedMode == ResolvedReviewExecutionMode.INLINE },
           reviewFanOut = args.resolvedMode == ResolvedReviewExecutionMode.DELEGATED,
-        ),
+        ).boundedReviewLane(args.request.laneProgressIdleTimeout, args.bound.evidenceReads),
     )
 
   private fun remainingPassTimeout(

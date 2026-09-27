@@ -1,0 +1,20 @@
+{
+    "blocked_reason": null,
+    "blocked_step_id": null,
+    "completed_step_ids": [
+        "implement",
+        "simplify"
+    ],
+    "invocation_id": "__NORMALIZED_INVOCATION_ID__",
+    "review_result": null,
+    "status": "completed",
+    "value": {
+        "contract_version": "0.7",
+        "phase_id": "simplify",
+        "produced_outputs": {
+            "value": "{\"projection_kind\":\"simplification_receipt\",\"contract_version\":\"0.1\",\"changed_paths\":[],\"reductions\":[],\"unresolved_items\":[],\"reconciliation_evidence\":{\"reconciled\":true,\"evidence\":\"fixture\"},\"reconciled_state\":{\"reconciled\":true,\"evidence\":\"fixture\"}}"
+        },
+        "status": "completed",
+        "summary": "Phase produced a validated output."
+    }
+}

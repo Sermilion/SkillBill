@@ -42,10 +42,7 @@ class FeatureTaskRuntimeSimplifyPhaseBoundariesTest {
   }
 
   @Test
-  fun `simplify is a mutating single-session phase with bounded output retry classification`() {
-    assertTrue(def.isMutatingPhase(def.PHASE_SIMPLIFY))
-    assertTrue(def.singleAgentSessionOnly(def.PHASE_SIMPLIFY))
-    assertTrue(def.retriesOnInvalidOutput(def.PHASE_SIMPLIFY))
+  fun `simplify requires the implement artifact and resumes without replaying completed edits`() {
     assertEquals(
       listOf(def.PHASE_IMPLEMENT),
       def.definition.requiredArtifactsByStep.getValue(def.PHASE_SIMPLIFY),

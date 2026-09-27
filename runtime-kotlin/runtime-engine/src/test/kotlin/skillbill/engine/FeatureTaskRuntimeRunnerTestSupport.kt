@@ -6,7 +6,7 @@ import skillbill.application.RecordingSpecStatusWriter
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.idestatus.AgentActivityStampWriter
-import skillbill.application.review.model.ParallelReviewLaneStatus
+import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.review.spec.SpecIntentProjectionExtractor
 import skillbill.application.review.spec.SpecIntentProjectionResolver
 import skillbill.application.seedHarnessSpecIntentProjection
@@ -18,11 +18,11 @@ import skillbill.config.model.RepoLocalConfig
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.time.JvmSystemClock
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupRunner
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.core.AlwaysValidValidator
-import skillbill.engine.featuretask.lifecycle.core.ApprovingReviewDriverStub
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimePhaseOutputTestValidator
@@ -41,7 +41,6 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGateValida
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
-import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimePlanningStopper
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
@@ -49,12 +48,17 @@ import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.prepare.FeatureTaskRuntimeSpecGate
 import skillbill.engine.featuretask.prepare.SpecSourceResolver
-import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewDriver
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunInvariantsStore
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
+import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunStartup
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
+import skillbill.engine.featuretask.slot.ApprovingReviewPhaseRunner
+import skillbill.engine.featuretask.slot.PhaseRunner
+import skillbill.engine.featuretask.slot.UnavailablePullRequestIdentityLookup
+import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
+import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateProgressStore
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeReadinessGateCoordinator
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
 import skillbill.engine.featuretask.validation.ReadinessCheckSelection
@@ -95,6 +99,7 @@ import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.UnaddressedFindingsRepository
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
@@ -137,13 +142,7 @@ import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.specscratch.SpecScratchStore
 import skillbill.ports.workflow.toRecord
-import skillbill.review.context.model.accounting.ReviewBudgetKind
-import skillbill.review.context.model.hunk.ReviewContextBudgetExceeded
-import skillbill.review.context.model.hunk.ReviewContextBudgetExceededException
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.review.model.ParallelReviewMergeResult
-import skillbill.review.model.ParallelReviewMergedFinding
-import skillbill.review.model.ParallelReviewSeverity.BLOCKER
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.scaffold.model.DeclaredFiles
 import skillbill.scaffold.model.PlatformManifest
@@ -182,7 +181,6 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDe
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode.CACHE_ELIGIBLE
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome.FAILED
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome.PASSED
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.lang.Boolean.TYPE
 import java.lang.reflect.Method
 import java.lang.reflect.Proxy
@@ -230,8 +228,9 @@ internal val VALIDATE_REPAIR_WITHOUT_GATE_COUNTS =
 internal const val VALID_REVIEW_OUTPUT = """{"contract_version":"0.3","produced_outputs":{"findings":[]}}"""
 
 internal const val VALID_AUDIT_OUTPUT =
-  """{"contract_version":"0.6","phase_id":"audit","status":"completed","summary":"Audit satisfied.",""" +
-    """"verdict":"satisfied","produced_outputs":{"value":"{\"gaps\":[],\"non_blocking_findings\":[]}"}}"""
+  """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"audit",""" +
+    """"status":"completed","summary":"Audit satisfied.","verdict":"satisfied",""" +
+    """"produced_outputs":{"value":"{\"gaps\":[],\"non_blocking_findings\":[]}"}}"""
 
 internal val VALID_VERIFY_FINDINGS_OUTPUT = verifyFindingsOutput()
 internal val PREPLAN_OUTPUT = seededProjectionEnvelope("preplan", PlanningProjectionFixtures.PREPLAN_DIGEST)
@@ -643,20 +642,24 @@ internal data class RuntimeHarnessConfig(
     },
   val validationGateRunner: ValidationGateRunner? = null,
   val validationGatePlatformManifests: List<PlatformManifest> = listOf(kotlinPackWithValidationGate()),
-  val reviewDriver: FeatureTaskRuntimeReviewDriver =
-    ApprovingReviewDriverStub,
+  val reviewRunner: PhaseRunner? = ApprovingReviewPhaseRunner,
   val launcher: RuntimeRecordingLauncher? = null,
   val agentAssignment: FeatureTaskRuntimeAgentAssignment? = null,
   val validator: FeatureTaskRuntimePhaseOutputValidator? = null,
   val diagnostics: RuntimeDiagnostics? = null,
-)
+  val pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
+  val delegatedReviewRunner: ParallelCodeReviewRunner? = null,
+  val gitOperationsOverride: WorkflowGitOperations? = null,
+) {
+  val harnessGitOperations: WorkflowGitOperations get() = gitOperationsOverride ?: branchSetup.gitOperations
+}
 
 private fun runtimeSpecSourceResolver(): SpecSourceResolver =
   SpecSourceResolver(TestDecompositionManifestStore, testDecompositionManifestValidator)
 
 private data class RuntimePhaseGatesDeps(
   val branchSetupRunner: FeatureTaskRuntimeBranchSetupRunner,
-  val planningStopper: FeatureTaskRuntimePlanningStopper,
+  val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
   val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
   val gitOperations: WorkflowGitOperations = NoopWorkflowGitOperations,
   val specGate: FeatureTaskRuntimeSpecGate = testSpecGate(),
@@ -676,7 +679,6 @@ private data class RuntimePhaseGatesDeps(
   val recorder: FeatureTaskRuntimePhaseRecorder,
   val validationGateRunnerOverride: ValidationGateRunner? = null,
   val validationGatePlatformManifests: List<PlatformManifest> = listOf(kotlinPackWithValidationGate()),
-  val reviewDriver: FeatureTaskRuntimeReviewDriver = ApprovingReviewDriverStub,
 )
 
 private fun runtimePhaseGates(deps: RuntimePhaseGatesDeps): FeatureTaskRuntimePhaseGates {
@@ -699,7 +701,8 @@ private fun runtimePhaseGates(deps: RuntimePhaseGatesDeps): FeatureTaskRuntimePh
   return FeatureTaskRuntimePhaseGates(
     FeatureTaskRuntimePhaseGateBranchBoundaries(
       branchSetupRunner = deps.branchSetupRunner,
-      planningStopper = deps.planningStopper,
+      decompositionPlanner = testDecompositionPlanner(),
+      decomposeTerminalRecorder = deps.decomposeTerminalRecorder,
       lifecycleTelemetry = deps.lifecycleTelemetry,
       gitOperations = deps.gitOperations,
       specGate = deps.specGate,
@@ -737,13 +740,11 @@ private fun validationGateBoundaries(
       FeatureTaskRuntimeBuildGateCoordinator(
         validationGateResolver,
         validationGateRunner,
-        FeatureTaskRuntimeBuildGateProgressStore(deps.recorder),
         defaultRepoLocalConfigPort(),
         NoopRuntimeDiagnostics,
       ),
     sharedEvidenceResolver = deps.sharedEvidenceResolver,
     diffResolver = deps.diffResolver,
-    reviewDriver = deps.reviewDriver,
     specIntentProjectionResolver =
       SpecIntentProjectionResolver(
         TestDecompositionManifestStore,
@@ -845,7 +846,7 @@ private fun resolvedHarnessSupervision(
   supervision: RunnerHarnessSupervision,
 ): RunnerHarnessSupervision = runtimeConfig.diagnostics?.let { supervision.copy(diagnostics = it) } ?: supervision
 
-private fun harnessPhaseRecorder(database: RuntimeFakeDatabaseSessionFactory): FeatureTaskRuntimePhaseRecorder =
+private fun harnessPhaseRecorder(database: DatabaseSessionFactory): FeatureTaskRuntimePhaseRecorder =
   featureTaskRuntimePhaseRecorder(
     database,
     NoopWorkflowSnapshotValidator,
@@ -856,7 +857,7 @@ private fun harnessPhaseRecorder(database: RuntimeFakeDatabaseSessionFactory): F
   )
 
 private fun harnessGoalContinuationRecorder(
-  database: RuntimeFakeDatabaseSessionFactory,
+  database: DatabaseSessionFactory,
 ): FeatureTaskRuntimeGoalContinuationRecorder =
   FeatureTaskRuntimeGoalContinuationRecorder(
     database,
@@ -864,7 +865,7 @@ private fun harnessGoalContinuationRecorder(
     Clock.systemUTC(),
   )
 
-private fun harnessWorkflowParts(database: RuntimeFakeDatabaseSessionFactory): RunnerHarnessWorkflow =
+private fun harnessWorkflowParts(database: DatabaseSessionFactory): RunnerHarnessWorkflow =
   RunnerHarnessWorkflow(
     recorder = harnessPhaseRecorder(database),
     goalContinuationRecorder = harnessGoalContinuationRecorder(database),
@@ -969,25 +970,24 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
       deps.recorder,
       deps.runtimeConfig.branchSetup.gitOperations,
     )
-  val decompositionPlanner = testDecompositionPlanner()
-  val planningStopper =
-    FeatureTaskRuntimePlanningStopper(
-      deps.validator,
-      decompositionPlanner,
-      deps.decomposeTerminalRecorder,
-      deps.diagnostics,
-    )
   return FeatureTaskRuntimeRunner(
-    subtaskLauncher = deps.launcher,
+    strategies =
+      testPhaseStrategies(
+        deps.launcher,
+        deps.runtimeConfig.branchSetup.gitOperations,
+        harnessReviewRunner(deps.runtimeConfig, deps.launcher),
+        deps.runtimeConfig.pullRequestIdentityLookup,
+        deps.recorder,
+        deps.runtimeConfig.delegatedReviewRunner,
+      ),
     recorder = deps.recorder,
     goalContinuationRecorder = deps.goalContinuationRecorder,
-    runInvariantsStore = deps.runInvariantsStore,
     outputValidator = deps.validator,
     phaseGates =
       runtimePhaseGates(
         RuntimePhaseGatesDeps(
           branchSetupRunner = branchSetupRunner,
-          planningStopper = planningStopper,
+          decomposeTerminalRecorder = deps.decomposeTerminalRecorder,
           lifecycleTelemetry = disabledRuntimeLifecycleTelemetry(deps.database),
           gitOperations = deps.runtimeConfig.branchSetup.gitOperations,
           specGate = testSpecGate(deps.specScratchStore, deps.specStatusWriter),
@@ -998,10 +998,13 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
           recorder = deps.recorder,
           validationGateRunnerOverride = deps.runtimeConfig.validationGateRunner,
           validationGatePlatformManifests = deps.runtimeConfig.validationGatePlatformManifests,
-          reviewDriver = harnessReviewDriverSyncingPendingVerifyFindings(deps.runtimeConfig.reviewDriver),
         ),
       ),
-    crashReconciler = harnessCrashReconciler(deps.database, deps.crashSupervisor),
+    startup =
+      FeatureTaskRuntimeRunStartup(
+        crashReconciler = harnessCrashReconciler(deps.database, deps.crashSupervisor),
+        runInvariantsStore = deps.runInvariantsStore,
+      ),
     phaseSettlementService = harnessPhaseSettlement(),
     diagnostics = deps.diagnostics,
     clock = testHarnessClock,
@@ -1017,6 +1020,7 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
             NoopWorkflowGitOperations,
           ),
       ),
+    runLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
   )
 }
 
@@ -1024,7 +1028,7 @@ internal class TelemetryRunnerHarness(
   val runner: FeatureTaskRuntimeRunner,
   val lifecycle: RecordingLifecycleTelemetryRepository,
   val request: FeatureTaskRuntimeRunRequest,
-  val database: RuntimeFakeDatabaseSessionFactory,
+  val database: DatabaseSessionFactory,
   val recorder: FeatureTaskRuntimePhaseRecorder,
 ) {
   fun seedPhase(
@@ -1048,11 +1052,15 @@ private fun telemetryHarnessRequest(runtimeConfig: RuntimeHarnessConfig): Featur
       FeatureTaskRuntimeRunInvariants(
         specReference = runtimeConfig.branchSetup.specReference,
         featureSize = runtimeConfig.branchSetup.featureSize,
-        acceptanceCriteria = listOf("AC-1", "AC-2"),
+        acceptanceCriteria = runtimeConfig.acceptanceCriteria,
         mandatesAndOverrides = listOf("mandate-X"),
+        codeReviewMode = runtimeConfig.codeReviewMode,
       ),
     invokedAgentId = INVOKED_AGENT,
+    agentAssignment = runtimeConfig.agentAssignment ?: FeatureTaskRuntimeAgentAssignment(),
+    environment = runtimeConfig.environment,
     repoRoot = runtimeConfig.repoRoot,
+    goalContinuation = runtimeConfig.goalContinuation,
   )
 
 internal fun telemetryRunnerHarness(runtimeConfig: RuntimeHarnessConfig): TelemetryRunnerHarness =
@@ -1068,13 +1076,14 @@ internal fun telemetryRunnerHarness(
   launcher: RuntimeRecordingLauncher = RuntimeRecordingLauncher { request -> facts(defaultPhaseOutput(request)) },
   validator: FeatureTaskRuntimePhaseOutputValidator = AlwaysValidValidator,
   runtimeConfig: RuntimeHarnessConfig = RuntimeHarnessConfig(),
+  databaseFactory: (() -> DatabaseSessionFactory)? = null,
 ): TelemetryRunnerHarness {
   val effectiveLauncher = runtimeConfig.launcher ?: launcher
   val effectiveValidator = runtimeConfig.validator ?: validator
   seedHarnessSpecIntentProjection(runtimeConfig.repoRoot, runtimeConfig.branchSetup.specReference)
   val repository = InMemoryRuntimeWorkflowRepository()
   val lifecycle = RecordingLifecycleTelemetryRepository()
-  val database = RuntimeFakeDatabaseSessionFactory(repository, lifecycle)
+  val database = databaseFactory?.invoke() ?: RuntimeFakeDatabaseSessionFactory(repository, lifecycle)
   val workflow = harnessWorkflowParts(database)
   val runner =
     telemetryHarnessRunner(
@@ -1097,27 +1106,26 @@ private fun telemetryHarnessRunner(
   launcher: RuntimeRecordingLauncher,
   validator: FeatureTaskRuntimePhaseOutputValidator,
   runtimeConfig: RuntimeHarnessConfig,
-  database: RuntimeFakeDatabaseSessionFactory,
+  database: DatabaseSessionFactory,
   workflow: RunnerHarnessWorkflow,
 ): FeatureTaskRuntimeRunner {
   val branchSetupRunner =
     FeatureTaskRuntimeBranchSetupRunner(
       workflow.recorder,
-      runtimeConfig.branchSetup.gitOperations,
-    )
-  val decompositionPlanner = testDecompositionPlanner()
-  val planningStopper =
-    FeatureTaskRuntimePlanningStopper(
-      validator,
-      decompositionPlanner,
-      workflow.decomposeTerminalRecorder,
-      NoopRuntimeDiagnostics,
+      runtimeConfig.harnessGitOperations,
     )
   return FeatureTaskRuntimeRunner(
-    subtaskLauncher = launcher,
+    strategies =
+      testPhaseStrategies(
+        launcher,
+        runtimeConfig.harnessGitOperations,
+        harnessReviewRunner(runtimeConfig, launcher),
+        runtimeConfig.pullRequestIdentityLookup,
+        workflow.recorder,
+        runtimeConfig.delegatedReviewRunner,
+      ),
     recorder = workflow.recorder,
     goalContinuationRecorder = workflow.goalContinuationRecorder,
-    runInvariantsStore = workflow.runInvariantsStore,
     outputValidator = validator,
     phaseGates =
       telemetryRunnerPhaseGates(
@@ -1125,27 +1133,38 @@ private fun telemetryHarnessRunner(
         database,
         workflow,
         branchSetupRunner,
-        planningStopper,
       ),
-    crashReconciler = harnessCrashReconciler(database, NoopFeatureTaskRuntimeWorkerSupervisor),
+    startup =
+      FeatureTaskRuntimeRunStartup(
+        crashReconciler = harnessCrashReconciler(database, NoopFeatureTaskRuntimeWorkerSupervisor),
+        runInvariantsStore = workflow.runInvariantsStore,
+      ),
     phaseSettlementService = harnessPhaseSettlement(),
     diagnostics = NoopRuntimeDiagnostics,
     clock = testHarnessClock,
     probeWriters = telemetryRunnerProbeWriters(database),
+    runLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
   )
 }
 
+private fun harnessReviewRunner(
+  runtimeConfig: RuntimeHarnessConfig,
+  launcher: GoalRunnerSubtaskLauncher,
+): PhaseRunner =
+  harnessReviewRunnerSyncingPendingVerifyFindings(
+    runtimeConfig.reviewRunner ?: DefaultPhaseRunner(launcher, runtimeConfig.harnessGitOperations),
+  )
+
 private fun telemetryRunnerPhaseGates(
   runtimeConfig: RuntimeHarnessConfig,
-  database: RuntimeFakeDatabaseSessionFactory,
+  database: DatabaseSessionFactory,
   workflow: RunnerHarnessWorkflow,
   branchSetupRunner: FeatureTaskRuntimeBranchSetupRunner,
-  planningStopper: FeatureTaskRuntimePlanningStopper,
 ): FeatureTaskRuntimePhaseGates =
   runtimePhaseGates(
     RuntimePhaseGatesDeps(
       branchSetupRunner = branchSetupRunner,
-      planningStopper = planningStopper,
+      decomposeTerminalRecorder = workflow.decomposeTerminalRecorder,
       lifecycleTelemetry =
         FeatureTaskRuntimeLifecycleTelemetry(
           LifecycleTelemetryService(
@@ -1156,17 +1175,16 @@ private fun telemetryRunnerPhaseGates(
           ),
           NoopRuntimeDiagnostics,
         ),
-      gitOperations = runtimeConfig.branchSetup.gitOperations,
+      gitOperations = runtimeConfig.harnessGitOperations,
       sharedEvidenceResolver = runtimeConfig.sharedEvidenceResolver,
       diffResolver = runtimeConfig.diffResolver,
       recorder = workflow.recorder,
       validationGateRunnerOverride = runtimeConfig.validationGateRunner,
       validationGatePlatformManifests = runtimeConfig.validationGatePlatformManifests,
-      reviewDriver = harnessReviewDriverSyncingPendingVerifyFindings(runtimeConfig.reviewDriver),
     ),
   )
 
-private fun telemetryRunnerProbeWriters(database: RuntimeFakeDatabaseSessionFactory): FeatureTaskRuntimeProbeWriters =
+private fun telemetryRunnerProbeWriters(database: DatabaseSessionFactory): FeatureTaskRuntimeProbeWriters =
   FeatureTaskRuntimeProbeWriters(
     activityStampWriter =
       AgentActivityStampWriter(database, Clock.systemUTC(), NoopRuntimeDiagnostics, TimeSource.Monotonic),
@@ -1210,8 +1228,6 @@ internal fun defaultPhaseAwareLauncher(): RuntimeRecordingLauncher =
 internal fun defaultPhaseOutput(request: GoalRunnerSubtaskLaunchRequest): String {
   val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
   return when {
-    FeatureTaskRuntimePhaseWorkflowDefinition.isMutatingPhase(phaseId) -> validJsonOutput(phaseId)
-    phaseId == "preplan" || phaseId == "plan" -> validJsonOutput(phaseId)
     phaseId == "review" -> VALID_REVIEW_OUTPUT
     phaseId == "audit" -> VALID_AUDIT_OUTPUT
     phaseId == "verify_findings" -> verifyFindingsOutput()
@@ -1291,168 +1307,6 @@ internal fun reviewFindingsOutput(
       "produced_outputs": {"findings": [$findings], "blocker_dispositions": [$dispositions]}
     }
     """.trimIndent()
-}
-
-internal fun reviewFixDriver(convergeOnReview: Int): FeatureTaskRuntimeReviewDriver {
-  var reviewPasses = 0
-  return FeatureTaskRuntimeReviewDriver { request ->
-    reviewPasses += 1
-    val findings =
-      if (reviewPasses < convergeOnReview) {
-        listOf(
-          ParallelReviewMergedFinding(
-            fNumber = REVIEW_FIX_BLOCKER_FINDING_ID,
-            agentIds = listOf(request.agent1Id),
-            severity = BLOCKER,
-            confidence = "High",
-            location = "Foo.kt:1",
-            description = REVIEW_BLOCKER_MESSAGE,
-          ),
-        )
-      } else {
-        emptyList()
-      }
-    harnessPendingVerifyFindingIds = findings.map { it.fNumber }
-    ApprovingReviewDriverStub.run(request).copy(
-      mergeResult =
-        ParallelReviewMergeResult(
-          findings = findings,
-          formattedOutput = if (findings.isEmpty()) "NO_FINDINGS" else "findings",
-        ),
-    )
-  }
-}
-
-internal fun reviewFixRuntimeConfig(
-  convergeOnReview: Int,
-  gitOperations: RecordingWorkflowGitOperations = RecordingWorkflowGitOperations(),
-): RuntimeHarnessConfig =
-  RuntimeHarnessConfig(
-    branchSetup = BranchSetupTestConfig(gitOperations = gitOperations),
-    reviewDriver = reviewFixDriver(convergeOnReview),
-  )
-
-internal fun crashingRemediationReviewDriver(): FeatureTaskRuntimeReviewDriver {
-  var reviewPasses = 0
-  return FeatureTaskRuntimeReviewDriver { request ->
-    reviewPasses += 1
-    when (reviewPasses) {
-      2 ->
-        ApprovingReviewDriverStub.run(request).copy(
-          lane1 =
-            ParallelReviewLaneStatus(
-              agentId = request.agent1Id,
-              success = false,
-              failureReason = "spawn failed",
-            ),
-        )
-      else -> {
-        val findings =
-          if (reviewPasses == 1) {
-            listOf(
-              ParallelReviewMergedFinding(
-                fNumber = "F-001",
-                agentIds = listOf(request.agent1Id),
-                severity = BLOCKER,
-                confidence = "High",
-                location = "Foo.kt:1",
-                description = REVIEW_BLOCKER_MESSAGE,
-              ),
-            )
-          } else {
-            emptyList()
-          }
-        ApprovingReviewDriverStub.run(request).copy(
-          mergeResult =
-            ParallelReviewMergeResult(
-              findings = findings,
-              formattedOutput = if (findings.isEmpty()) "NO_FINDINGS" else "findings",
-            ),
-        )
-      }
-    }
-  }
-}
-
-internal fun throwingBudgetReviewDriver(): FeatureTaskRuntimeReviewDriver =
-  FeatureTaskRuntimeReviewDriver {
-    throw ReviewContextBudgetExceededException(
-      ReviewContextBudgetExceeded(
-        lane = "architecture",
-        budgetKind = ReviewBudgetKind.PARENT_PACKET_BYTES,
-        configuredLimit = 524_288,
-        observedValue = 584_846,
-        packetDigest = "a".repeat(64),
-        assignmentDigest = "b".repeat(64),
-        enforceable = true,
-      ),
-    )
-  }
-
-internal fun failingReviewDriver(
-  failOnPass: Int,
-  failureReason: String,
-): FeatureTaskRuntimeReviewDriver {
-  var reviewPasses = 0
-  return FeatureTaskRuntimeReviewDriver { request ->
-    reviewPasses += 1
-    if (reviewPasses == failOnPass) {
-      ApprovingReviewDriverStub.run(request).copy(
-        lane1 =
-          ParallelReviewLaneStatus(
-            agentId = request.agent1Id,
-            success = false,
-            failureReason = failureReason,
-          ),
-      )
-    } else {
-      ApprovingReviewDriverStub.run(request)
-    }
-  }
-}
-
-internal fun crashingReviewFixDriver(
-  convergeOnReview: Int,
-  crashOnPass: Int,
-  shouldCrash: () -> Boolean,
-): FeatureTaskRuntimeReviewDriver {
-  var reviewPasses = 0
-  return FeatureTaskRuntimeReviewDriver { request ->
-    reviewPasses += 1
-    if (shouldCrash() && reviewPasses == crashOnPass) {
-      ApprovingReviewDriverStub.run(request).copy(
-        lane1 =
-          ParallelReviewLaneStatus(
-            agentId = request.agent1Id,
-            success = false,
-            failureReason = "spawn failed",
-          ),
-      )
-    } else {
-      val findings =
-        if (reviewPasses < convergeOnReview) {
-          listOf(
-            ParallelReviewMergedFinding(
-              fNumber = "F-001",
-              agentIds = listOf(request.agent1Id),
-              severity = BLOCKER,
-              confidence = "High",
-              location = "Foo.kt:1",
-              description = REVIEW_BLOCKER_MESSAGE,
-            ),
-          )
-        } else {
-          emptyList()
-        }
-      ApprovingReviewDriverStub.run(request).copy(
-        mergeResult =
-          ParallelReviewMergeResult(
-            findings = findings,
-            formattedOutput = if (findings.isEmpty()) "NO_FINDINGS" else "findings",
-          ),
-      )
-    }
-  }
 }
 
 internal fun reviewFixLauncher(
@@ -1643,8 +1497,7 @@ internal fun goalContinuationHarness(
   repoRoot: Path,
   git: RecordingWorkflowGitOperations,
   launcher: RuntimeRecordingLauncher,
-  reviewDriver: FeatureTaskRuntimeReviewDriver =
-    ApprovingReviewDriverStub,
+  reviewRunner: PhaseRunner = ApprovingReviewPhaseRunner,
 ): RunnerHarness =
   runnerHarness(
     runtimeConfig =
@@ -1660,7 +1513,7 @@ internal fun goalContinuationHarness(
             parentWorkflowId = "wfl-parent",
             reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
           ),
-        reviewDriver = reviewDriver,
+        reviewRunner = reviewRunner,
       ),
     core = RunnerHarnessCore(launcher = launcher, agentAssignment = phasePerAgentAssignment()),
   )

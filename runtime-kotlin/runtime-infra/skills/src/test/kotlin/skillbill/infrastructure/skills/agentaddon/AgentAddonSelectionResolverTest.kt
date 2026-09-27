@@ -85,6 +85,24 @@ class AgentAddonSelectionResolverTest {
     }
   }
 
+  @Test
+  fun `selection persisted for bill-feature still verifies after the manifest adds the skill-bill consumer`() {
+    val repo = Files.createTempDirectory("addon-selection-added-consumer")
+    writeAddon(repo, "helper", "Helper", "codex", "original")
+    val resolver = AgentAddonSelectionResolver()
+    val initial =
+      resolver.resolveInitial(repo, listOf("helper"), AgentAddonConsumer.BILL_FEATURE, listOf("codex"))
+    val manifest = repo.resolve("agent-addons/helper/agent-addon.yaml")
+    Files.writeString(
+      manifest,
+      Files.readString(manifest).replace("consumers: [bill-feature]", "consumers: [bill-feature, skill-bill]"),
+    )
+
+    val verified = resolver.verifyPersisted(initial.persisted, AgentAddonConsumer.BILL_FEATURE, listOf("codex"))
+
+    assertEquals(initial, verified)
+  }
+
   private fun writeAddon(
     repo: Path,
     slug: String,

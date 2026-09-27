@@ -1,6 +1,7 @@
 package skillbill.application.review.parallel.runner
 
 import skillbill.application.review.model.ParallelCodeReviewRequest
+import skillbill.application.review.model.ReviewEvidenceReadCount
 import skillbill.application.review.parallel.verification.ParallelCodeReviewRunnerFailureAdmission
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.install.model.SupportedAgent
@@ -66,7 +67,7 @@ class ParallelCodeReviewInlineCoverageContinuationTest {
         governedEvidenceEndpointBinder = binder,
         failureAdmission = ParallelCodeReviewRunnerFailureAdmission(ParallelReviewFindingParser::parse),
         sliceOutcome = { _, _ -> ParallelReviewLaneOutcome(success = true, rawOutput = "") },
-        evidenceReadCallback = { null },
+        evidenceReadCallback = { _, _ -> null },
       )
 
     assertFailsWith<SecondSliceReached> {
@@ -95,7 +96,7 @@ class ParallelCodeReviewInlineCoverageContinuationTest {
             segments = emptyList(),
           ),
       ),
-    bound = ParallelCodeReviewGovernedEvidenceBind.Bound(broker, endpoint),
+    bound = ParallelCodeReviewGovernedEvidenceBind.Bound(broker, endpoint, ReviewEvidenceReadCount()),
     budget = ReviewContextBudgetPolicy(),
     request =
       ParallelCodeReviewRequest(

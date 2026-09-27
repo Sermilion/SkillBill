@@ -66,6 +66,7 @@ class FeatureTaskRuntimeValidationGateStatusProjectionTest {
 
   private fun gateEvidenceOutput(): String =
     FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
+      phaseId = "validate",
       repositoryCheckpoint = "checkpoint",
       measurements =
         listOf(
@@ -102,6 +103,7 @@ class FeatureTaskRuntimeValidationGateStatusProjectionTest {
     recorder.ensureWorkflowOpen(workflowId, "goal-gate-evidence-zero-work")
     val output =
       FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
+        phaseId = "validate",
         repositoryCheckpoint = "checkpoint",
         measurements =
           listOf(

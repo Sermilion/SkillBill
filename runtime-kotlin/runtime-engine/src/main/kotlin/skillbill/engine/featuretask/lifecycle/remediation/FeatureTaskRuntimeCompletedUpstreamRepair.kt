@@ -4,6 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.checkpoint.completedUpstreamRepairRetryEntry
 import skillbill.engine.featuretask.lifecycle.checkpoint.completedUpstreamRepairWorkflowUpdate
 import skillbill.engine.featuretask.lifecycle.checkpoint.phasesToReopenForCompletedUpstreamRepair
+import skillbill.engine.featuretask.lifecycle.checkpoint.qualityGateOmittedStepIds
 import skillbill.engine.featuretask.lifecycle.checkpoint.settledPhaseOutputs
 import skillbill.engine.featuretask.model.subtask.CompletedUpstreamRepairRequest
 import skillbill.engine.featuretask.phase.record.asPendingForOperatorResume
@@ -14,9 +15,9 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.decodeRunInvariantsFromArtifact
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal fun featureSizeFromArtifacts(artifacts: Map<String, Any?>): FeatureTaskRuntimeFeatureSize {
@@ -41,7 +42,7 @@ fun diagnoseUnsettledCompletedUpstreamPhaseId(
       it.status.workflowStepStatus() == WorkflowStepStatus.BLOCKED
     }.keys
   for (consumerPhaseId in blockedConsumers) {
-    val declaration = phaseDeclaration(consumerPhaseId, featureSize, qualityGateSelection)
+    val declaration = phaseDeclaration(consumerPhaseId, featureSize, qualityGateOmittedStepIds(qualityGateSelection))
     val blockedReason = phaseRecords[consumerPhaseId]?.blockedReason.orEmpty()
     val missing =
       missingUpstream(declaration, recordedOutputs)

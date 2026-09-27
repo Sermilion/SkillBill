@@ -43,6 +43,8 @@ class RecordingWorkflowGitOperations(
   val worktreeStatusSequence = ArrayDeque<String>()
   var ownedPathsValue: List<String> = emptyList()
   var ownedPathsResult: WorkflowGitNameListResult? = null
+  var commitCountAheadValue: String? = null
+  var mergeBaseWithHeadValue: String? = null
   val repositoryFingerprintSequence = ArrayDeque<String>()
   var repositoryFingerprintValue: String? = null
   var repositoryFingerprintCalls: Int = 0
@@ -379,6 +381,20 @@ class RecordingWorkflowGitOperations(
     repoRoot: Path,
     baseBranch: String,
   ): WorkflowGitNameListResult = WorkflowGitNameListResult.Listed(ownedPathsValue)
+
+  override fun commitCountAhead(
+    repoRoot: Path,
+    baseRevision: String,
+  ): WorkflowGitOperationResult =
+    commitCountAheadValue?.let { count -> WorkflowGitOperationResult.Ok(value = count) }
+      ?: super.commitCountAhead(repoRoot, baseRevision)
+
+  override fun mergeBaseWithHead(
+    repoRoot: Path,
+    baseRevision: String,
+  ): WorkflowGitOperationResult =
+    mergeBaseWithHeadValue?.let { sha -> WorkflowGitOperationResult.Ok(value = sha) }
+      ?: super.mergeBaseWithHead(repoRoot, baseRevision)
 
   override fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult {
     repositoryFingerprintCalls += 1

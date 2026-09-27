@@ -14,6 +14,7 @@ import skillbill.infrastructure.skills.scaffold.validation.review.contentFiles
 import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.InstallPlanSkill
 import skillbill.install.model.InstallPlanSkillKind
+import skillbill.install.model.ListedSkillNames
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.model.PlatformManifest
@@ -51,7 +52,7 @@ internal fun discoverBaseSkills(skillsRoot: Path): List<InstallPlanSkill> {
     Files.list(skillsRoot).use { stream ->
       stream
         .filter { skillDir -> Files.isDirectory(skillDir, LinkOption.NOFOLLOW_LINKS) }
-        .filter { skillDir -> skillDir.fileName.toString().startsWith("bill-") }
+        .filter { skillDir -> ListedSkillNames.isListed(skillDir.fileName.toString()) }
         .toList()
         .sortedBy { skillDir -> skillDir.fileName.toString() }
     }
@@ -59,7 +60,7 @@ internal fun discoverBaseSkills(skillsRoot: Path): List<InstallPlanSkill> {
     candidateSkillDirs
       .filterNot { skillDir -> Files.isRegularFile(skillDir.resolve("content.md"), LinkOption.NOFOLLOW_LINKS) }
   require(missingContent.isEmpty()) {
-    "Base skills root '$skillsRoot' contains bill-* skill directories without content.md: " +
+    "Base skills root '$skillsRoot' contains listed skill directories without content.md: " +
       missingContent.joinToString(", ") { skillDir -> skillDir.fileName.toString() }
   }
   val baseSkills =

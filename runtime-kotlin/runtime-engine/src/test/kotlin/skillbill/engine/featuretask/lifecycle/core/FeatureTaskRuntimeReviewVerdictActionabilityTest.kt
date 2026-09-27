@@ -4,7 +4,6 @@ import skillbill.engine.envelope
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -38,8 +37,8 @@ class FeatureTaskRuntimeReviewVerdictActionabilityTest {
     assertEquals(
       FeatureTaskRuntimeVerdict.APPROVED,
       FeatureTaskRuntimeOutputVerification.verdictFor(
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
         envelope,
+        FeatureTaskRuntimeOutputVerification.reviewVerdictRule,
       ),
     )
     assertEquals(
@@ -71,8 +70,8 @@ class FeatureTaskRuntimeReviewVerdictActionabilityTest {
     assertEquals(
       FeatureTaskRuntimeVerdict.CHANGES_REQUESTED,
       FeatureTaskRuntimeOutputVerification.verdictFor(
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
         envelope,
+        FeatureTaskRuntimeOutputVerification.reviewVerdictRule,
       ),
     )
     assertEquals(
@@ -101,8 +100,8 @@ class FeatureTaskRuntimeReviewVerdictActionabilityTest {
     assertEquals(
       FeatureTaskRuntimeVerdict.CHANGES_REQUESTED,
       FeatureTaskRuntimeOutputVerification.verdictFor(
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
         envelope,
+        FeatureTaskRuntimeOutputVerification.reviewVerdictRule,
       ),
     )
   }

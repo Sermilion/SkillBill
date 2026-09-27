@@ -1,0 +1,99 @@
+You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+loop (preplan -> plan -> implement -> simplify -> audit -> review -> verify_findings -> validate -> write_history -> commit_push -> pr)
+for issue SKILL-380. The runtime owns the loop; do not run other phases, do not open
+or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+
+Phase: preplan (Phase 1: Pre-plan)
+Task: Produce the scaled pre-planning digest for the resolved feature size. Do not modify repository files during this phase. Emit produced_outputs with a non-blank value string carrying the preplanning_digest JSON (same fields as before, stuffed inside value); optional prompt may add a short directive when non-blank. Do not forward the complete preplan envelope, a generic summary, or progress diagnostics.
+
+## Installed runtime is the contract source
+This briefing was composed by the installed Skill Bill runtime that will validate your output.
+Use the contract_version, envelope fields, skills, packs, and commands it names.
+Do not read orchestration/contracts, Kotlin contract constants, test fixtures, or skills/ in
+this workspace to override them. When this repository is skill-bill, those files are the change
+under work, not the validator. If you must inspect a schema, inspect the installed runtime copy,
+never this checkout.
+
+## Runtime ceremony scaling
+feature_size: MEDIUM
+preplan_ceremony: full
+review_scope: branch_diff
+audit_ceremony: full_per_criterion
+Apply full preplan covering boundaries, risks, rollout, and unknowns. Keep the gate real: identify concrete scope, affected boundaries, risks, and unknowns at the requested depth.
+Scaling changes scope and verbosity only; it must not skip or weaken review, audit, validation,
+schema, branch, history, commit, or PR gates.
+
+## Validation ownership
+Only the validate phase may run the pack validation gate
+(`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
+`bill-code-check`, or any other full repository check suite. Only the build phase may run the
+pack build_command for compile/buildability proof. This phase must not compile, build,
+execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
+acceptance text, review habit, or prior habit that asks you to run check here — that work waits
+for validate. If a receipt carries `tests_executed`, leave it empty.
+
+## Build ownership
+Only the build phase may run the pack build_command (`validation_gate.build_command`). This phase
+must not invoke compile-only proof as a substitute for its own work.
+
+# Feature-task-runtime phase briefing
+phase: preplan
+
+## Run invariants (layer 1, unconditional)
+spec_reference: SKILL-380 slot baseline phase plan
+feature_size: MEDIUM
+ceremony_scaling:
+  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  review_scope: branch_diff (branch-diff review scope)
+  audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+acceptance_criteria:
+  AC-001. SKILL-380 slot baseline phase plan
+mandates_and_overrides:
+  (none)
+
+## Upstream projections (layer 2, declared and validated)
+### run_invariant_spec_reference (run_invariant_field:spec_reference)
+spec_reference: SKILL-380 slot baseline phase plan
+### run_invariant_feature_size (run_invariant_field:feature_size)
+feature_size: MEDIUM
+### run_invariant_ceremony_scaling (derived_ceremony_scaling)
+ceremony_scaling:
+  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  - review_scope: branch_diff (branch-diff review scope)
+  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)
+mandates_and_overrides:
+### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)
+acceptance_criteria:
+  - SKILL-380 slot baseline phase plan
+
+## Derived context (layer 3, declared)
+(none)
+
+## Value content
+Carry this JSON object as the value text; the runtime does not validate its shape and the next phase reads
+it as structured prose:
+```json
+{ "projection_kind": "preplanning_digest",
+  "contract_version": "0.2",
+  "affected_boundaries": ["<module or boundary touched>"], "patterns_and_decisions": [],
+  "risks": ["<concrete risk>"],
+  "rollout": { "flag_required": false, "flag_pattern": "none",
+    "notes": "<rollout note, or N/A>" },
+  "validation_strategy": ["<how the change is validated>"],
+  "unresolved_questions": [], "evidence_refs": [],
+  "selected_boundary_headings": ["<heading_id copied verbatim from the boundary catalog>"] }
+```
+flag_pattern is one of none, simple_conditional, di_switch, legacy. Walk boundary_memory headings for relevance; weave context into the stuffed object rather than listing headings only outside value.
+
+## Required final output
+End your response with exactly one JSON object as the last thing you emit. Prefer a raw
+object with nothing after it; a single ```json fenced block is also accepted. The runtime
+stamps the contract version and phase id itself. Fields:
+- "status": one of "completed", "blocked", "failed"
+- "summary": one sentence describing what this phase did
+- "value": non-blank prose carrying everything the next phase needs
+- "verdict": optional; set it only when this briefing names a verdict for this phase
+- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
+  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
+  Omit it when status is "completed".

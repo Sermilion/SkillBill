@@ -9,7 +9,7 @@ decomposed
 SKILL-380 (phase slot strategies) and SKILL-382 (runtime operations) are merged to
 main. Every capability of every old listed skill then already exists as a phase, a
 strategy, an operation, or the `/skill-bill` dispatcher. Read
-[SKILL-380's spec](../SKILL-380-phase-slot-strategies/spec.md) and
+[SKILL-380's spec](../done/SKILL-380-phase-slot-strategies/spec.md) and
 [SKILL-382's spec](../SKILL-382-runtime-operations/spec.md) first.
 
 ## Intended outcome

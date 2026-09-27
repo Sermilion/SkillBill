@@ -11,4 +11,5 @@ data class PhaseHandoffProjectionTemplate(
   val checkpointPolicy: FeatureTaskRuntimeRepositoryCheckpointPolicy =
     FeatureTaskRuntimeRepositoryCheckpointPolicy.NOT_REQUIRED,
   val required: Boolean = true,
+  val contractVersion: String? = null,
 )

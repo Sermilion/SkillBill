@@ -3,18 +3,16 @@ package skillbill.engine.featuretask.phase.prompt.directives
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeSchemaFailureCorrections
-import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
 import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeCorrectiveRepairContext
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 fun retryCorrectionDirective(
   briefing: FeatureTaskRuntimePhaseLaunchBriefing,
   priorSchemaFailure: String?,
   correctiveRepairContext: FeatureTaskRuntimeCorrectiveRepairContext?,
+  shape: PhaseRetryShape = PhaseRetryShape(),
+  stepCorrection: ((String) -> String)? = null,
 ): String {
-  if (FeatureTaskRuntimePhaseWorkflowDefinition.singleAgentSessionOnly(briefing.phaseId) ||
-    priorSchemaFailure.isNullOrBlank()
-  ) {
+  if (priorSchemaFailure.isNullOrBlank()) {
     return ""
   }
   val base =
@@ -28,7 +26,7 @@ fun retryCorrectionDirective(
     if it still fails, the run blocks.
 
     Expected shape:
-    """.trimIndent() + "\n" + retrySkeleton(briefing)
+    """.trimIndent() + "\n" + retrySkeleton(briefing, shape)
   val structuralRepairNote =
     correctiveRepairContext?.structuralRepairEvidence?.let { evidence ->
       "\nDeterministic syntax repair previously succeeded on this capture (delimiter-only; " +
@@ -49,7 +47,7 @@ fun retryCorrectionDirective(
   return base + structuralRepairNote + repairProjection +
     unparseableRootCorrection(priorSchemaFailure) +
     FeatureTaskRuntimeSchemaFailureCorrections.lengthViolation(priorSchemaFailure) +
-    FeatureTaskRuntimeSchemaFailureCorrections.unreconciledReceipt(priorSchemaFailure)
+    stepCorrection?.invoke(priorSchemaFailure).orEmpty()
 }
 
 private fun unparseableRootCorrection(priorSchemaFailure: String): String {
@@ -64,38 +62,24 @@ private fun unparseableRootCorrection(priorSchemaFailure: String): String {
     "that capture into the expected shape above."
 }
 
-private fun retrySkeleton(briefing: FeatureTaskRuntimePhaseLaunchBriefing): String =
+data class PhaseRetryShape(
+  val verdictLine: String? = null,
+  val producedOutputsEntry: String = "\"result\": \"<concrete output for downstream phases>\"",
+)
+
+private fun retrySkeleton(
+  briefing: FeatureTaskRuntimePhaseLaunchBriefing,
+  shape: PhaseRetryShape,
+): String =
   buildList {
-    val phaseId = briefing.phaseId
     add("```json")
     add("{")
     add("  \"contract_version\": \"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION\",")
-    add("  \"phase_id\": \"$phaseId\",")
+    add("  \"phase_id\": \"${briefing.phaseId}\",")
     add("  \"status\": \"completed\",")
-    verdictSkeletonLine(phaseId)?.let(::add)
+    shape.verdictLine?.let(::add)
     add("  \"summary\": \"<one sentence describing what this phase did>\",")
-    add("  \"produced_outputs\": { ${producedOutputsSkeletonEntry(briefing)} }")
+    add("  \"produced_outputs\": { ${shape.producedOutputsEntry} }")
     add("}")
     add("```")
   }.joinToString(separator = "\n")
-
-private fun verdictSkeletonLine(phaseId: String): String? {
-  val verdict = FeatureTaskRuntimeVerificationSignalKeys.VERDICT
-  return when (phaseId) {
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> "  \"$verdict\": \"approved\","
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> "  \"$verdict\": \"findings_verified\","
-    else -> null
-  }
-}
-
-private fun producedOutputsSkeletonEntry(briefing: FeatureTaskRuntimePhaseLaunchBriefing): String =
-  when (briefing.phaseId) {
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW ->
-      "\"${FeatureTaskRuntimeVerificationSignalKeys.REVIEW_FINDINGS}\": [], " +
-        "\"${FeatureTaskRuntimeVerificationSignalKeys.REVIEW_RUN_ID}\": \"<the Review run ID this pass " +
-        "reported>\""
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS ->
-      "\"${FeatureTaskRuntimeVerificationSignalKeys.FINDINGS_VERIFICATION_DISPOSITIONS}\": [ " +
-        "{ \"finding_id\": \"F-001\", \"disposition\": \"verified\" } ]"
-    else -> "\"result\": \"<concrete output for downstream phases>\""
-  }

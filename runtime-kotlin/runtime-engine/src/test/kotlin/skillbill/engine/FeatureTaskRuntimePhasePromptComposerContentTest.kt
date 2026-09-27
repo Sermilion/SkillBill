@@ -1,7 +1,9 @@
 
 package skillbill.engine
 
-import skillbill.engine.featuretask.phase.prompt.directives.auditPhaseTaskDirective
+import skillbill.engine.featuretask.slot.audit.AcceptanceAuditPromptSections
+import skillbill.engine.featuretask.slot.pullrequest.PullRequestTemplateSearch
+import skillbill.engine.featuretask.slot.writehistory.BoundaryMemoryPromptRules
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
@@ -34,7 +36,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     )
     assertContains(implementPrompt, "Mutating-phase idempotency contract")
     assertContains(implementPrompt, "implementation_receipt JSON")
-    assertContains(implementPrompt, "Inner object to stuff into value")
+    assertContains(implementPrompt, "Carry this JSON object as the value text")
     assertTrue(
       !implementPrompt.contains("reconciliation report missing or \"reconciled\" not true fails the schema gate"),
       "implement must not keep the sibling reconciled_state schema-gate prompt",
@@ -47,13 +49,22 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
       !historyPrompt.contains("Mutating-phase idempotency contract"),
       "non-mutating write_history phase must not carry the idempotency directive",
     )
-    assertContains(historyPrompt, "bill-boundary-history")
-    assertContains(historyPrompt, "history_result")
+    mapOf("write_history" to historyPrompt, "pr" to prPrompt).forEach { (phaseId, prompt) ->
+      listOf("Invoke ", "bill-boundary-history", "bill-boundary-decisions", "bill-pr-description").forEach { skill ->
+        assertFalse(prompt.contains(skill), "the $phaseId prompt must not name '$skill'")
+      }
+    }
+    assertContains(historyPrompt, "Always write for `MEDIUM` and `LARGE` features.")
+    assertContains(historyPrompt, BoundaryMemoryPromptRules.HISTORY_ENTRY_FORMAT)
+    assertContains(historyPrompt, BoundaryMemoryPromptRules.DECISION_ENTRY_FORMAT)
+    assertFalse(historyPrompt.contains("history_result"), "write_history must not ask the agent for history_result")
     assertContains(commitPrompt, "does not launch an agent")
     assertContains(commitPrompt, "records commit_sha")
-    assertContains(prPrompt, "bill-pr-description")
+    assertContains(prPrompt, PullRequestTemplateSearch.SEARCH_ORDER.joinToString(", ") { "`$it`" })
+    assertContains(prPrompt, "`[<issue key>] <descriptive title>`")
+    assertContains(prPrompt, "# How Has This Been Tested?")
     assertContains(prPrompt, "create or reuse the open")
-    assertContains(prPrompt, "pr_result")
+    assertFalse(prPrompt.contains("pr_result"), "pr must not ask the agent for pr_result")
   }
 
   @Test
@@ -248,20 +259,24 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
   }
 
   @Test
-  fun `verifying phases name the structured signal the schema gate keys on`() {
+  fun `review names its schema-gate signal and audit names its remaining-criteria value`() {
     val reviewPrompt = composePromptForPhase("review")
     val auditPrompt = composePromptForPhase("audit")
 
     assertContains(reviewPrompt, "VERIFYING phase", false, "review names itself a verifying phase")
     assertContains(reviewPrompt, "\"findings\" array", false, "review names the findings signal")
     assertContains(reviewPrompt, "\"approved\" or \"changes_requested\"", false, "review names the verdict values")
-    assertContains(auditPrompt, "VERIFYING phase", false, "audit names itself a verifying phase")
-    assertAuditPromptNamesSignal(auditPrompt, "produced_outputs.value", "the audit prose signal")
+    assertFalse(auditPrompt.contains("VERIFYING phase"), "audit carries no envelope verifying-signal addendum")
+    assertAuditPromptNamesSignal(
+      auditPrompt,
+      "value carries the remaining acceptance criteria only",
+      "the audit prose signal",
+    )
     assertAuditPromptNamesSignal(auditPrompt, "explicit empty list", "the remaining-criteria completion contract")
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "Ignore the optional-verdict bullet above for audit completion",
-      "the audit-specific completion rule",
+      "verdict: omit it unless every criterion is met, then set satisfied",
+      "the audit-specific verdict rule",
     )
   }
 
@@ -296,7 +311,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
           )
         }
       assertEquals(baseline, prompt, "audit remaining-criteria contract forked for pack $slug")
-      assertContains(prompt, auditPhaseTaskDirective())
+      assertContains(prompt, AcceptanceAuditPromptSections.DIRECTIVE)
       assertTrue(!prompt.contains("collect-all-$slug"))
       assertTrue(!prompt.contains("confirm-$slug"))
       assertTrue(!prompt.contains("build-$slug"))

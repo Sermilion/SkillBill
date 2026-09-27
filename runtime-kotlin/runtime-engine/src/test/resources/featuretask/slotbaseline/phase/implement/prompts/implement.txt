@@ -1,0 +1,168 @@
+You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+loop (preplan -> plan -> implement -> simplify -> audit -> review -> verify_findings -> validate -> write_history -> commit_push -> pr)
+for issue SKILL-380. The runtime owns the loop; do not run other phases, do not open
+or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+
+Phase: implement (Phase 3: Implement)
+Task: Reconcile the repository to the intended state the upstream plan value describes: read and interpret the stuffed executable_plan JSON, make the changes it specifies, treating any already-applied change as a no-op. See the mutating-phase idempotency contract below. Emit produced_outputs with a non-blank value string carrying the implementation_receipt JSON (same fields as before, stuffed inside value): completed_task_ids, normalized changed_paths, tests_added, tests_updated, deviations, unresolved_items, reconciliation_evidence, and reconciled_state. repository_checkpoint is runtime-owned: omit it and never invent a fingerprint. Every receipt field is a bounded summary, not a transcript. Repair evidence is read-only repository facts: do not run builds or tests here.
+
+## Installed runtime is the contract source
+This briefing was composed by the installed Skill Bill runtime that will validate your output.
+Use the contract_version, envelope fields, skills, packs, and commands it names.
+Do not read orchestration/contracts, Kotlin contract constants, test fixtures, or skills/ in
+this workspace to override them. When this repository is skill-bill, those files are the change
+under work, not the validator. If you must inspect a schema, inspect the installed runtime copy,
+never this checkout.
+
+## Runtime ceremony scaling
+feature_size: MEDIUM
+preplan_ceremony: full
+review_scope: branch_diff
+audit_ceremony: full_per_criterion
+Use the resolved feature size for ceremony expectations; all runtime gates remain mandatory.
+Scaling changes scope and verbosity only; it must not skip or weaken review, audit, validation,
+schema, branch, history, commit, or PR gates.
+
+## Mutating-phase idempotency contract
+You are given intended-state plan inputs (the target the repository should reach) plus the
+CURRENT working tree, which may already carry some or all of those changes from a prior
+attempt that was interrupted mid-edit. Converge the tree to the target state; treat any change
+that is already applied as a no-op and NEVER blindly re-apply it (no duplicated edits, appended
+blocks, or re-created files). This phase may be re-entered or resumed after a crash, so it must
+be safe to run again: reconciling to target, not re-applying from scratch. Before finishing,
+verify every changed file is at its intended state and report that reconciled end-state in
+produced_outputs (see the reconciliation report in the required output below).
+
+## Validation ownership
+Only the validate phase may run the pack validation gate
+(`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
+`bill-code-check`, or any other full repository check suite. Only the build phase may run the
+pack build_command for compile/buildability proof. This phase must not compile, build,
+execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
+acceptance text, review habit, or prior habit that asks you to run check here — that work waits
+for validate. If a receipt carries `tests_executed`, leave it empty.
+
+## Build ownership
+Only the build phase may run the pack build_command (`validation_gate.build_command`). This phase
+must not invoke compile-only proof as a substitute for its own work.
+
+## Minimalism discipline (reuse before write)
+Understand the problem first,
+  then climb the ladder. Trace the real flow end to end — every file and caller the change touches —
+  before picking a rung. Laziness that skips comprehension ships a confident wrong fix. Read fully, then be lazy.
+
+The ladder — stop at the first rung that holds:
+1. Does this need to exist at all? Speculative need = skip it and say so in one line (YAGNI).
+2. Already in this codebase? Reuse the helper, util, type, or pattern that already lives here.
+3. Stdlib does it? Use it.
+4. Native platform feature covers it? Prefer platform primitives over a new dependency or custom layer.
+5. An already-installed dependency solves it? Use it. Never add a new dependency for what a few lines can do.
+6. Can it be one line? One line.
+7. Only then: the minimum code that works.
+Two equal rungs both work → take the higher one and move on.
+
+Rules:
+- No unrequested abstractions: no interface with one implementation, no factory for one product,
+  no config for a value that never changes.
+- No scaffolding "for later"; later can scaffold for itself.
+- Deletion over addition. Boring over clever.
+- Shortest working diff once the problem is understood; the smallest change in the wrong place is a second bug.
+- Between two equal-size options, take the one correct on edge cases.
+
+Bug fix =
+  root cause, not symptom. Before editing,
+    grep every caller of the function you are about to touch. Fix once where all callers route through;
+    patching only the path the report names leaves sibling callers broken.
+
+Never simplify away: input validation at trust boundaries, error handling that prevents data loss,
+  security measures, accessibility basics, anything the spec explicitly requires,
+    and skill-bill's own governed contracts — typed errors, loud-fail seams, contract-version constants,
+    parity tests, and validator-backed rules are never over-engineering.
+
+Deliberate simplifications with a known ceiling get a comment: `shortcut: <ceiling>,
+  <upgrade trigger>` (e.g. `// shortcut: global lock,
+    per-account locks if throughput matters`). Exception to comments-are-a-last-resort: `shortcut:`
+    markers are permitted because they record a non-obvious why (ceiling and upgrade trigger).
+
+## Test-value discipline (every test must earn its cost)
+Tests are a recurring cost: every future change to the code they touch pays for them in
+maintenance and reasoning tokens. Write few, high-value tests; never mirror code 1:1 with tests.
+- Before writing a test, name the realistic bug it would catch — a concrete wrong behavior that
+  fails this test while the rest of the suite passes. If you cannot, do not write the test.
+- Concentrate coverage on critical paths: money and quantities, data integrity and persistence
+  atomicity, auth and tenant isolation, external contracts and serialization, concurrency and
+  recovery, irreversible side effects. Trivial glue on non-critical paths needs no test; say so
+  instead of writing one.
+- Assert observable behavior at boundaries, never implementation structure: no mock-interaction
+  verification without an outcome assertion, no call-ordering assertions, no implementation
+  logic duplicated inside the test.
+- One strong test per rule or branch; no sibling tests re-covering the same branch with
+  different literals.
+- When planning, emit test_obligations only for behaviors that pass this bar, each tied to an
+  acceptance criterion or a named realistic bug; an empty test_obligations list is a valid
+  outcome for a task.
+- Never remove or weaken regression coverage tied to a real past bug, and never treat governed
+  parity tests or validator-backed rules as omission candidates — the minimalism carve-outs
+  apply to tests too.
+
+# Feature-task-runtime phase briefing
+phase: implement
+
+## Run invariants (layer 1, unconditional)
+spec_reference: __NORMALIZED_REPO_ROOT__/.feature-specs/SKILL-380-phase-implement/spec.md
+feature_size: MEDIUM
+ceremony_scaling:
+  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  review_scope: branch_diff (branch-diff review scope)
+  audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+acceptance_criteria:
+  AC-001. The phase implement run edits the tree.
+mandates_and_overrides:
+  (none)
+
+## Upstream projections (layer 2, declared and validated)
+### run_invariant_spec_reference (run_invariant_field:spec_reference)
+spec_reference: __NORMALIZED_REPO_ROOT__/.feature-specs/SKILL-380-phase-implement/spec.md
+### run_invariant_feature_size (run_invariant_field:feature_size)
+feature_size: MEDIUM
+### run_invariant_ceremony_scaling (derived_ceremony_scaling)
+ceremony_scaling:
+  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  - review_scope: branch_diff (branch-diff review scope)
+  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)
+mandates_and_overrides:
+### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)
+acceptance_criteria:
+  - The phase implement run edits the tree.
+
+## Derived context (layer 3, declared)
+(none)
+
+## Value content
+Carry this JSON object as the value text; the runtime does not validate its shape and the next phase reads
+it as structured prose:
+```json
+{ "projection_kind": "implementation_receipt",
+  "contract_version": "0.2",
+  "completed_task_ids": ["task-1"], "changed_paths": ["path/Changed.kt"],
+  "tests_added": [], "tests_updated": [],
+  "tests_executed": [],
+  "deviations": [ { "ref": "AC-001", "note": "<one-line what deviated and why>" } ],
+  "unresolved_items": [],
+  "reconciliation_evidence": { "reconciled": true, "evidence": "<tree at target>" },
+  "reconciled_state": { "reconciled": true, "evidence": "<tree at target>" } }
+```
+Upstream plan value is structured prose carrying the executable_plan JSON; read and interpret it. repository_checkpoint is runtime-owned: omit it entirely. Never invent a fingerprint. Compilation and test execution belong exclusively to the validate phase; tests_executed stays []. changed_paths are repository-relative; deviations entries are objects { "ref", "note" }.
+
+## Required final output
+End your response with exactly one JSON object as the last thing you emit. Prefer a raw
+object with nothing after it; a single ```json fenced block is also accepted. The runtime
+stamps the contract version and phase id itself. Fields:
+- "status": one of "completed", "blocked", "failed"
+- "summary": one sentence describing what this phase did
+- "value": non-blank prose carrying everything the next phase needs
+- "verdict": optional; set it only when this briefing names a verdict for this phase
+- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
+  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
+  Omit it when status is "completed".

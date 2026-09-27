@@ -72,6 +72,7 @@ internal fun neverRunsGate(): ValidationGateRunner =
 
 internal fun outOfContractCycle(): ValidationGateCycleRequest =
   ValidationGateCycleRequest(
+    phaseId = "build",
     repoRoot = validationGateTestRepoRoot,
     request = minimalRequest(),
     validationDepth = ValidationDepth.DEFAULT,
@@ -81,6 +82,7 @@ internal fun outOfContractCycle(): ValidationGateCycleRequest =
       ValidationGateAgentRepairLauncher { _, _, _ ->
         error("repair must not launch when platform packs are out of contract")
       },
+    progressStore = RecordingProgressStore(mutableListOf(), null),
   )
 
 internal fun findingRow(finding: ValidationGateFinding): Map<String, String?> =

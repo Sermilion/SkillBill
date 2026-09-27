@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.lifecycle.continuation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.runloop.observability.continuation
-import skillbill.engine.featuretask.runner.reviewBaseline
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth

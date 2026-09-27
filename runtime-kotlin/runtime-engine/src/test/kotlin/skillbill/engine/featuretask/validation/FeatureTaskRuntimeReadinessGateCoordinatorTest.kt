@@ -5,7 +5,7 @@ import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
-import skillbill.engine.featuretask.runner.phasesFor
+import skillbill.engine.featuretask.runner.transitionsFor
 import skillbill.infrastructure.workflow.github.GitHubPullRequestCheckDiscovery
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.validation.PrCheckDiscovery
@@ -58,7 +58,7 @@ class FeatureTaskRuntimeReadinessGateCoordinatorTest {
             reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
           ),
       )
-    val phases = phasesFor(request)
+    val phases = transitionsFor(request).forwardPhaseIds
     assertFalse(phases.contains(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR))
     assertTrue(phases.contains(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH))
   }
@@ -152,11 +152,14 @@ class FeatureTaskRuntimeReadinessGateCoordinatorTest {
       }
     val result =
       coordinator(store).bindCommittedHead(
-        workflowId = WORKFLOW_ID,
-        repoRoot = validationGateTestRepoRoot,
-        baseBranch = "main",
-        gitOperations = RecordingWorkflowGitOperations().apply { readinessTreeIdentity = committed },
-        commitSha = committed.headSha,
+        ReadinessCommittedHeadBindRequest(
+          workflowId = WORKFLOW_ID,
+          stepId = "commit_push",
+          repoRoot = validationGateTestRepoRoot,
+          baseBranch = "main",
+          gitOperations = RecordingWorkflowGitOperations().apply { readinessTreeIdentity = committed },
+          commitSha = committed.headSha,
+        ),
       )
 
     assertIs<ReadinessCommitPushSettleResult.Ready>(result)
@@ -188,6 +191,7 @@ internal fun coordinator(store: FeatureTaskRuntimeReadinessEvidencePort): Featur
 private fun settleRequest(identity: ReadinessTreeIdentity): ReadinessCommitPushSettleRequest =
   ReadinessCommitPushSettleRequest(
     workflowId = WORKFLOW_ID,
+    stepId = "commit_push",
     repoRoot = validationGateTestRepoRoot,
     baseBranch = "main",
     changedPaths = listOf("core/application/src/main/kotlin/news/readian/core/application/api/ApiValidationError.kt"),

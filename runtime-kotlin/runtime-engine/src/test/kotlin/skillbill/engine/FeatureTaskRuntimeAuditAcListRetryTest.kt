@@ -45,7 +45,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
             val focusSection =
               prompt
                 .substringAfter("## Prior audit focus hint (remaining criteria only)")
-                .substringBefore("## Required final output (validated schema gate)")
+                .substringBefore("\n## ")
             assertEquals(remainingHint, focusSection.lineSequence().last { it.isNotBlank() }.trim())
             facts(auditSatisfiedOutput())
           }

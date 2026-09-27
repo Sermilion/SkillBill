@@ -1,0 +1,127 @@
+You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+loop (preplan -> plan -> implement -> simplify -> audit -> review -> verify_findings -> validate -> write_history -> commit_push -> pr)
+for issue pr. The runtime owns the loop; do not run other phases, do not open
+or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+
+Phase: pr (Phase 9: Pull Request)
+Task: Write the pull request title and description by the pull request description rules below, then create or reuse the open pull request for the branch idempotently.
+
+## Installed runtime is the contract source
+This briefing was composed by the installed Skill Bill runtime that will validate your output.
+Use the contract_version, envelope fields, skills, packs, and commands it names.
+Do not read orchestration/contracts, Kotlin contract constants, test fixtures, or skills/ in
+this workspace to override them. When this repository is skill-bill, those files are the change
+under work, not the validator. If you must inspect a schema, inspect the installed runtime copy,
+never this checkout.
+
+## Runtime ceremony scaling
+feature_size: MEDIUM
+preplan_ceremony: full
+review_scope: branch_diff
+audit_ceremony: full_per_criterion
+Use the resolved feature size for ceremony expectations; all runtime gates remain mandatory.
+Scaling changes scope and verbosity only; it must not skip or weaken review, audit, validation,
+schema, branch, history, commit, or PR gates.
+
+## Validation ownership
+Only the validate phase may run the pack validation gate
+(`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
+`bill-code-check`, or any other full repository check suite. Only the build phase may run the
+pack build_command for compile/buildability proof. This phase must not compile, build,
+execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
+acceptance text, review habit, or prior habit that asks you to run check here — that work waits
+for validate. If a receipt carries `tests_executed`, leave it empty.
+
+## Build ownership
+Only the build phase may run the pack build_command (`validation_gate.build_command`). This phase
+must not invoke compile-only proof as a substitute for its own work.
+
+## Pull request description rules
+
+Read the branch diff against the base branch this briefing names, with the commit log and branch name, and the spec it references when that file exists. Honor CLAUDE.md, AGENTS.md, and the pull request description section of `.agents/skill-overrides.md` when present.
+
+The runtime searched `.github/pull_request_template.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `pull_request_template.md`, `PULL_REQUEST_TEMPLATE.md`, `.github/pull_request_template/*.md`, `.github/PULL_REQUEST_TEMPLATE/*.md`, `docs/pull_request_template.md` and found no repo-native template. Use this fallback template:
+```markdown
+# Summary
+
+<1-3 sentences: what changed, why it matters, and the user-visible outcome. Reference the ticket/spec.>
+
+<optional: bullet list of key changes if more than one logical change>
+
+## Feature Flags
+
+<flag name and description, or "N/A">
+
+## Media
+
+<screenshots or videos for UI changes, or "N/A">
+
+# How Has This Been Tested?
+
+<overview of tests performed — unit tests, manual verification, preview checks>
+
+<reproducible test instructions:>
+1. <step>
+2. <step>
+3. <expected result>
+```
+
+Title: `[<issue key>] <descriptive title>` with the issue key in square brackets, then a concise, title-case description of the user-visible outcome rather than the branch name or slug; keep it under 70 characters when possible.
+
+Writing rules:
+- The summary explains why the change was made, not just which files changed.
+- Test instructions are concrete enough for a reviewer to reproduce.
+- If the change is behind a feature flag, say how to enable it for testing.
+- Include the Media section for UI changes, or write "N/A".
+- Do not include a checklist.
+- Keep it concise.
+
+# Feature-task-runtime phase briefing
+phase: pr
+
+## Run invariants (layer 1, unconditional)
+spec_reference: phase:pr
+feature_size: MEDIUM
+ceremony_scaling:
+  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  review_scope: branch_diff (branch-diff review scope)
+  audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+acceptance_criteria:
+  AC-001. The phase leaves no unresolved Blocker or Major finding.
+mandates_and_overrides:
+  (none)
+
+## Upstream projections (layer 2, declared and validated)
+### run_invariant_spec_reference (run_invariant_field:spec_reference)
+spec_reference: phase:pr
+### run_invariant_feature_size (run_invariant_field:feature_size)
+feature_size: MEDIUM
+### run_invariant_ceremony_scaling (derived_ceremony_scaling)
+ceremony_scaling:
+  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  - review_scope: branch_diff (branch-diff review scope)
+  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)
+mandates_and_overrides:
+### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)
+acceptance_criteria:
+  - The phase leaves no unresolved Blocker or Major finding.
+
+## Derived context (layer 3, declared)
+- pr_branch_diff: read the branch diff yourself; it is not delivered in this briefing
+
+## Value content
+Carry, as prose, the pull request URL and the title you set. The runtime looks the pull request up for the
+branch itself before and after this step to record its number and whether this step created it.
+
+## Required final output
+End your response with exactly one JSON object as the last thing you emit. Prefer a raw
+object with nothing after it; a single ```json fenced block is also accepted. The runtime
+stamps the contract version and phase id itself. Fields:
+- "status": one of "completed", "blocked", "failed"
+- "summary": one sentence describing what this phase did
+- "value": non-blank prose carrying everything the next phase needs
+- "verdict": optional; set it only when this briefing names a verdict for this phase
+- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
+  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
+  Omit it when status is "completed".

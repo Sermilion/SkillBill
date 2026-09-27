@@ -1,10 +1,17 @@
 # featuretask runtime boundary decisions
 
+## [2026-09-26] Quality gate is a slot with two strategies; validate settles with a verdict
+Context: build and validate ran through a routing class that rewrote transitions per `quality_gate_selection`, the handoff carried the selection to drop the unselected gate's projections, and validate's shrink decision compared agent-reported `validation_passed` and remaining text.
+Decision: A `SkeletonDefinition` (standalone, goal child) lists the slots; its declaration equals the phase workflow's. The `quality_gate` slot has two strategies, `PackBuildStrategy` and `AgentValidateStrategy`, in their own packages. Selection facts pick one per run: a BUILD goal child runs build, the final child and a standalone run run validate. Traversal, lookup, and projection omission read the unselected steps generically; nothing rewrites transitions. Gate progress goes through `PhaseRunState`. Validate settles with the uniform output: completed means every check passed; blocked carries the remaining failures and a verdict, `progress` continues the repair and `no_progress`, absent, or unknown blocks with `needs_user_action` (absent or unknown is also a diagnostic). Resume derives validate success from the step status. `biuld` is a CLI usage error; the legacy heal to validate stays with its adoption record.
+Reason: Strategy slots keep shared runloop, phase, and runner code ignorant of gate kinds, and the agent that ran the checks is the one that knows whether its leftovers shrank.
+Supersedes: Validate keeps repairing until true (2026-09-20)
+
 ## [2026-09-20] Validate keeps repairing until true
 Context: Three honest `validation_passed: false` reports burned the output-gate cap while `./gradlew check` was still red. The agent knew the leftover detekt and Feed failures and stopped because the phase required a boolean handoff.
 Decision: Do not emit until `validation_passed` is true. Keep repairing in the same session. False is not a successful handoff: continue only when the remaining-failure text shrank; block when leftovers stay the same. Wall-clock timeout still stops the subtask. Malformed JSON retries twice.
 Reason: The operator chose a remaining-set stall over a false boolean as the stop. Raising the envelope cap would not finish a huge leftover pile, and treating false as schema failure hid real check work.
 Supersedes: Validate discovers project checks and retries up to three times (2026-09-20)
+Superseded by: Quality gate is a slot with two strategies; validate settles with a verdict (2026-09-26)
 
 ## [2026-09-20] Commit_push does not block on validate tree fingerprint
 Context: After validate, the worktree fingerprint no longer matched the capture. commit_push treated that as stale identity and blocked instead of committing.

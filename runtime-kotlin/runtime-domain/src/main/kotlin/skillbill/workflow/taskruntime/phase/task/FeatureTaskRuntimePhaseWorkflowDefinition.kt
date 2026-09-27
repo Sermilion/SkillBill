@@ -42,32 +42,9 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
 
   val REGENERATION_PRODUCER_BY_CONSUMER: Map<String, String> = emptyMap()
 
-  val GENERATION_SCOPED_PHASE_IDS: Set<String> = setOf(PHASE_REVIEW, PHASE_IMPLEMENT_FIX)
-
   val REGENERATION_LOOP_IDS: Set<String> = REGENERATION_LOOP_ID_BY_PRODUCER.values.toSet()
 
   fun isRegenerationLoopId(loopId: String): Boolean = loopId in REGENERATION_LOOP_IDS
-
-  private val MUTATING_PHASES: Set<String> = setOf(PHASE_IMPLEMENT, PHASE_SIMPLIFY, PHASE_IMPLEMENT_FIX)
-
-  fun isMutatingPhase(phaseId: String): Boolean = phaseId in MUTATING_PHASES
-
-  private val OUTPUT_RETRY_PHASES: Set<String> =
-    setOf(
-      PHASE_PREPLAN,
-      PHASE_PLAN,
-      PHASE_IMPLEMENT,
-      PHASE_SIMPLIFY,
-      PHASE_IMPLEMENT_FIX,
-      PHASE_REVIEW,
-      PHASE_VERIFY_FINDINGS,
-      PHASE_BUILD,
-      PHASE_VALIDATE,
-    )
-
-  fun retriesOnInvalidOutput(phaseId: String): Boolean = phaseId in OUTPUT_RETRY_PHASES
-
-  fun singleAgentSessionOnly(phaseId: String): Boolean = phaseId == PHASE_SIMPLIFY || phaseId == PHASE_AUDIT
 
   val definition: WorkflowDefinition = FeatureTaskRuntimePhaseWorkflowGraph.definition
 
@@ -90,6 +67,7 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
     const val BUILD_RECEIPT: String = "feature_task_runtime.build_receipt"
     const val BOUNDARY_CANDIDATES: String = "feature_task_runtime.boundary_candidates"
     const val HISTORY_RECEIPT: String = "feature_task_runtime.history_receipt"
+    const val HISTORY_RECEIPT_VERSION: String = "0.2"
     const val COMMIT_REQUEST: String = "feature_task_runtime.commit_request"
     const val COMMIT_RECEIPT: String = "feature_task_runtime.commit_receipt"
     const val PR_REQUEST: String = "feature_task_runtime.pr_request"

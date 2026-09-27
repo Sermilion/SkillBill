@@ -44,23 +44,19 @@ class McpTelemetrySchemaEnumParityTest {
       FeatureTaskRuntimeFailureDisposition.entries.map(FeatureTaskRuntimeFailureDisposition::wireValue),
       enumOnBranch(defs, "featureTaskPhaseBlockEvent", "failure_disposition"),
     )
-    assertEquals(
+    val settleablePhaseIds =
       listOf(
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
-      ),
-      enumOnBranch(defs, "featureTaskPhaseCompleteEvent", "phase_id"),
-    )
-    assertEquals(
-      listOf(
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
-      ),
-      enumOnBranch(defs, "featureTaskPhaseBlockEvent", "phase_id"),
-    )
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR,
+      )
+    assertEquals(settleablePhaseIds, enumOnBranch(defs, "featureTaskPhaseCompleteEvent", "phase_id"))
+    assertEquals(settleablePhaseIds, enumOnBranch(defs, "featureTaskPhaseBlockEvent", "phase_id"))
     assertEquals(
       FeatureVerifyWorkflowDefinition.definition.workflowStatuses.toList().sorted(),
       enumOnBranch(defs, "featureVerifyWorkflowUpdateEvent", "workflow_status").sorted(),

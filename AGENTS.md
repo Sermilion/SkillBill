@@ -20,6 +20,10 @@ Non-negotiable contracts:
 
 `bill-feature` presents one confirmation gate, then delegates to the foreground runtime driver with durable state, telemetry, packs, add-ons, and native subagents.
 
+`skill-bill phase <review|validation|plan|implement|pr>` and `skill-bill code-review` run one in-memory phase through the same run loop, with no workflow row, new branch, or checkpoint commit. `skill-bill code-review` finds, verifies, and fixes findings in both modes. `phase plan <KEY> [description]` writes a governed spec bundle that `skill-bill goal` runs, and a direct plan blocks. `phase implement <KEY|spec.md>` needs an existing spec and leaves its edits uncommitted. `phase pr` refuses a detached, protected, or base branch and pushes an unpushed branch before opening the pull request. `commit_push` and the durable definitions are not runnable on their own.
+
+`/skill-bill` is a listed dispatcher beside `bill-feature`: it routes the full run with the same single confirmation gate, and routes every `phase:` definition through `skill-bill phase`.
+
 Bundled skills and packs are defaults, not the framework boundary. Teams may replace them while retaining governed source shape, generated-output boundaries, manifests, install staging, validators, dynamic discovery, and loud-fail.
 
 ## Taxonomy

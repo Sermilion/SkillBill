@@ -5,12 +5,12 @@ import skillbill.contracts.JsonCodec
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetup
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinalisation
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.goalrunner.execution.support.protectedBranchName
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
@@ -53,7 +53,7 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
   }
 
   internal fun commitPushChangedPaths(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     phaseGates: FeatureTaskRuntimePhaseGates,
     baseBranch: String,
   ): ReadinessChangedPaths {
@@ -66,7 +66,7 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
   }
 
   internal fun finalisationBranch(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     session: FeatureTaskRuntimeRunLoopSession,
     phaseGates: FeatureTaskRuntimePhaseGates,
   ): String? {
@@ -79,9 +79,9 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
   }
 
   internal fun recordFinalisedCheckpointIdentity(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     state: FeatureTaskRuntimeRunState,
-    recorder: FeatureTaskRuntimePhaseRecorder,
+    recorder: PhaseRunRecords,
     diagnostics: RuntimeDiagnostics,
     args: RecordFinalisedCheckpointIdentityArgs,
   ): String? {

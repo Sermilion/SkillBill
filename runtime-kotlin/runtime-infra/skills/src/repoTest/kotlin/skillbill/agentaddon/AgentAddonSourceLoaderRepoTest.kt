@@ -17,7 +17,7 @@ class AgentAddonSourceLoaderRepoTest {
 
     assertEquals("1.0", declaration.contractVersion)
     assertEquals(listOf("codex"), declaration.agents)
-    assertEquals(listOf("bill-feature"), declaration.consumers.map { it.id })
+    assertEquals(listOf("bill-feature", "skill-bill"), declaration.consumers.map { it.id })
     assertEquals(
       listOf("agent-addon.yaml", "content.md"),
       Files.list(

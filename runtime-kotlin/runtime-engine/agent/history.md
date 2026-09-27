@@ -1,3 +1,38 @@
+## [2026-09-27] SKILL-380 subtask 11 — pr-description and boundary-history own their rules
+Areas: runtime-kotlin/runtime-engine/skillbill/engine/featuretask/{slot/{pullrequest,writehistory,attempt},lifecycle/core,phase/prompt/compose}, runtime-kotlin/runtime-core/di/{core,featuretask}, runtime-kotlin/runtime-ports/{goalrunner/runner,workflow/gitops}, runtime-kotlin/runtime-infra/workflow/git/{goal,standard}, docs, runtime-kotlin/ARCHITECTURE.md
+- The pr and write_history prompts no longer tell the agent to invoke a skill. Their rules come from the runtime-owned `PrDescriptionPromptRules` and `BoundaryMemoryPromptRules`. `BoundaryMemoryRulesParityTest` holds the history write/skip rules equal to the skill's.
+- `PullRequestTemplateSearch` (slot/pullrequest) resolves the PR template: the first single-file match wins, a single directory template is used, several with no default block the run as ambiguous and name each path, and no template falls back to the coded default. Checklists are stripped. reusable
+- Template IO goes through the new `PullRequestTemplateFiles` port with the `FileSystemPullRequestTemplateFiles` adapter, because engine main bans java.nio.file. `repoRoot` joined `FeatureTaskRuntimePhasePromptComposeInputs`.
+- A completed pr step emits `pr_description_generated` from both the skeleton run and `phase pr`, via `FeatureTaskRuntimeLifecycleTelemetry.prDescriptionGenerated`. It measures commit_count (new `WorkflowGitCommitHistoryOperations.commitCountAhead`), files_changed_count and pr_title (new `PullRequestIdentity.Found.title`). If any value can't be measured, the event is skipped with a warning. reusable
+- Limitation: the slotbaseline pr and write_history prompt fixtures are re-baselined in validate. The standalone pr.txt fixture was already stale from earlier subtasks.
+Feature flag: N/A
+Acceptance criteria: 4/5 implemented (AC-4 fixture re-baseline runs in validate)
+
+## [2026-09-27] SKILL-380 subtask 5 — Remaining slots and the no-phase-id guard
+Areas: runtime-kotlin/runtime-engine/skillbill/engine/featuretask/{slot/{audit,pullrequest,writehistory,commitpush,runner,qualitygate,codereview,plan,preplan,implementation},phase,lifecycle,runloop}, runtime-kotlin/runtime-core/{di/featuretask,repoTest/architecture}, runtime-kotlin/runtime-{domain,infra/contracts,infra/sqlite,infra/workflow,mcp,ports}, orchestration/contracts
+- Every slot's behaviour now lives in its strategy package: acceptance-audit owns gaps_found rejection, remaining-criteria retry, the retry prompt and the unchanged-remainder block; the phase/prompt audit-retry directives file is gone.
+- `PullRequestReadinessGate` (slot/pullrequest) replaces the coordinator's `verifyPrEntryIdentity`; PR identity is looked up through the new `PullRequestIdentityLookup` port (gh adapter in runtime-infra/workflow). reusable
+- write_history and pr settle with the uniform output; changed paths, history/decision changes and PR identity are runtime-measured into owned measured-fact keys, and no production code decodes `history_result` or `pr_result`.
+- `DefaultPhaseRunner` prefers the MCP-settled envelope and otherwise reads the minimal final object (status, value, verdict, failure_disposition) from stdout for any step name.
+- Pattern: runtime-owned turns are exempted from settlement by the strategy fact `settles = false`, not a step id (commit_push, build non-repair turns).
+- Guard: the step-identity rule scans an explicit list of step-owned packages with no exempt list, in four forms (constant, literal, `stepIds` element, alias object); phase/ and lifecycle/ are at zero.
+- Phase-output contract bumped to 0.6; one test pins every schema copy to the Kotlin constant.
+- Limitation: the step-identity remainder in runloop, runner, review, validation and persist, plus the PHASE_AUDIT gate in PhaseLaunchPreparation and AuditRetry plumbing, wait for subtask 7 (needs the PhaseRunState port); per-file counts are in `census_subtask_5.md`.
+Feature flag: N/A
+Acceptance criteria: 11/11 implemented
+
+## [2026-09-26] SKILL-380 subtask 1 — Pre-change behaviour fixtures
+Areas: runtime-kotlin/runtime-engine/src/test/{kotlin/skillbill/engine/{featuretask/slotbaseline,goalrunner/planning/sweep},resources/featuretask/slotbaseline}
+- Added a pre-refactor baseline for the phase-slot-strategy work: committed fixtures for the standalone run, goal-child build and validate runs, goal planning, parallel code review (INLINE and DELEGATED), and MCP lifecycle telemetry. The fixtures cover phase records, handoff projections, ledger entries, run invariants, workflow snapshots, and per-phase prompts.
+- `SlotBaselineFixtureTest` compares a live capture against every committed fixture. `SlotBaselineCaptureTest` checks that two consecutive captures are byte-identical. It also holds the writer, which runs only when `SKILL_BILL_SLOTBASELINE_CAPTURE=1`. reusable
+- To regenerate fixtures after an intended behaviour change, rerun the gated writer and review the diff. The README lists every normaliser token and the parent spec's fixture ledger.
+- Pattern: each capture runs against a temp repo root and home, real SQLite, and the real validator. `SlotBaselineNormalizer` replaces paths, ids, and timestamps with fixed tokens so the output is deterministic.
+- The goal-planning sweep test doubles (launcher, manifest store, invariants source, context discovery) moved to the shared `GoalPlanningSweepTestFixtures.kt`, which the capture harness reuses. Test behaviour is unchanged. reusable
+- Limitation: runtime-engine tests can't reach the runtime-cli renderers, so goal-planning ships `planning-log.json` rather than rendered text, and the code-review outputs are result JSON, not CLI text.
+- Limitation: the prompt sets follow what the live loop launches. None of the captured runs includes a commit_push or implement_fix prompt, and goal children have no pr prompt. No `src/main` file changed.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-09-26] SKILL-378 subtask 3 — Goal-runner sequences, reads, and silent reads
 Areas: runtime-kotlin/runtime-engine/skillbill/engine/{goalrunner/{execution/core,findings,persist,planning/{recovery,remedies},repair,status},featuretask/{phase/record,persist,runner,lifecycle/continuation}}, runtime-kotlin/runtime-domain/skillbill/{goalrunner,workflow/model/goalreview}, runtime-kotlin/runtime-contracts/skillbill/error/shellcontent
 - Observability sequence numbers are allocated only by the durable in-transaction issue-wide max+1; no engine class keeps a counter, a `var sequence`, or a per-workflow sequence map.

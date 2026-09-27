@@ -13,7 +13,6 @@ import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDispositionVerdict
 import skillbill.workflow.taskruntime.model.validation.validateDispositionCoverage
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -25,7 +24,6 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
   fun `verify_findings wire verdict settles findings_verified`() {
     val verdict =
       FeatureTaskRuntimeOutputVerification.verdictFor(
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS,
         mapOf(
           "verdict" to FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED.wireValue,
           "produced_outputs" to
@@ -39,6 +37,7 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
                 ),
             ),
         ).toWorkflowArtifactMap(),
+        FeatureTaskRuntimeOutputVerification.findingVerificationVerdictRule,
       )
     assertEquals(FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED, verdict)
   }
@@ -47,7 +46,6 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
   fun `verify_findings wire verdict settles no_findings_verified`() {
     val verdict =
       FeatureTaskRuntimeOutputVerification.verdictFor(
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS,
         mapOf(
           "verdict" to FeatureTaskRuntimeVerdict.NO_FINDINGS_VERIFIED.wireValue,
           "produced_outputs" to
@@ -61,6 +59,7 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
                 ),
             ),
         ).toWorkflowArtifactMap(),
+        FeatureTaskRuntimeOutputVerification.findingVerificationVerdictRule,
       )
     assertEquals(FeatureTaskRuntimeVerdict.NO_FINDINGS_VERIFIED, verdict)
   }
@@ -69,7 +68,6 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
   fun `verify_findings wire verdict findings_verified settles when census has zero verified rows`() {
     val verdict =
       FeatureTaskRuntimeOutputVerification.verdictFor(
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS,
         mapOf(
           "verdict" to FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED.wireValue,
           "produced_outputs" to
@@ -83,6 +81,7 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
                 ),
             ),
         ).toWorkflowArtifactMap(),
+        FeatureTaskRuntimeOutputVerification.findingVerificationVerdictRule,
       )
     assertEquals(FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED, verdict)
   }
@@ -91,7 +90,6 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
   fun `verify_findings wire verdict no_findings_verified settles when census has verified rows`() {
     val verdict =
       FeatureTaskRuntimeOutputVerification.verdictFor(
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS,
         mapOf(
           "verdict" to FeatureTaskRuntimeVerdict.NO_FINDINGS_VERIFIED.wireValue,
           "produced_outputs" to
@@ -105,6 +103,7 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
                 ),
             ),
         ).toWorkflowArtifactMap(),
+        FeatureTaskRuntimeOutputVerification.findingVerificationVerdictRule,
       )
     assertEquals(FeatureTaskRuntimeVerdict.NO_FINDINGS_VERIFIED, verdict)
   }
@@ -113,7 +112,6 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
   fun `verify_findings without wire verdict loud-fails`() {
     assertFailsWith<IllegalArgumentException> {
       FeatureTaskRuntimeOutputVerification.verdictFor(
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS,
         mapOf(
           "produced_outputs" to
             mapOf(
@@ -126,6 +124,7 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
                 ),
             ),
         ).toWorkflowArtifactMap(),
+        FeatureTaskRuntimeOutputVerification.findingVerificationVerdictRule,
       )
     }
   }

@@ -5,6 +5,7 @@ import skillbill.agent.model.AgentPhaseOutput
 import skillbill.application.review.model.ReviewClaimVerificationOutcome
 import skillbill.application.review.model.ReviewClaimVerificationRunRequest
 import skillbill.application.review.model.ReviewDelegatedStageLaunch
+import skillbill.application.review.model.boundedReviewLane
 import skillbill.application.review.packet.toVerificationLaunchEnvelope
 import skillbill.application.review.preparation.ReviewPreparationService
 import skillbill.contracts.JsonCodec
@@ -139,7 +140,7 @@ class ReviewClaimVerificationRunner(
               timeout = input.launch.timeout,
               promptOverride = prompt,
               modelOverride = input.launch.modelOverride,
-            ),
+            ).boundedReviewLane(input.launch.laneProgressIdleTimeout),
         ),
       )
     return when (outcome) {
@@ -233,7 +234,7 @@ class ReviewClaimVerificationRunner(
               timeout = input.launch.timeout,
               promptOverride = prompt,
               modelOverride = input.launch.modelOverride,
-            ),
+            ).boundedReviewLane(input.launch.laneProgressIdleTimeout),
         ),
       )
     return when (outcome) {

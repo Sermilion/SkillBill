@@ -1,0 +1,65 @@
+[
+    {
+        "claim_token": null,
+        "claimed_at": null,
+        "created_at": "__NORMALIZED_TIMESTAMP__",
+        "delivery_attempts": 0,
+        "event_name": "skillbill_review_stage_degradation",
+        "event_uuid": "__NORMALIZED_EVENT_UUID__",
+        "id": 1,
+        "last_error": null,
+        "payload_json": {
+            "actual": "not_applicable_scope",
+            "contract_version": "1.11.0",
+            "event_name": "skillbill_review_stage_degradation",
+            "expected": "resolved",
+            "reason": "spec_context_none",
+            "review_run_id": "__NORMALIZED_REVIEW_RUN_ID__",
+            "seam": "review.spec_intent"
+        },
+        "skill_bill_version": "test-runtime-version",
+        "synced_at": null
+    },
+    {
+        "claim_token": null,
+        "claimed_at": null,
+        "created_at": "__NORMALIZED_TIMESTAMP__",
+        "delivery_attempts": 0,
+        "event_name": "skillbill_review_stage_degradation",
+        "event_uuid": "__NORMALIZED_EVENT_UUID__",
+        "id": 2,
+        "last_error": null,
+        "payload_json": {
+            "actual": "skipped_spec_context_none",
+            "contract_version": "1.11.0",
+            "event_name": "skillbill_review_stage_degradation",
+            "expected": "reached",
+            "reason": "adjudication_skipped",
+            "review_run_id": "__NORMALIZED_REVIEW_RUN_ID__",
+            "seam": "review.adjudication"
+        },
+        "skill_bill_version": "test-runtime-version",
+        "synced_at": null
+    },
+    {
+        "claim_token": null,
+        "claimed_at": null,
+        "created_at": "__NORMALIZED_TIMESTAMP__",
+        "delivery_attempts": 0,
+        "event_name": "skillbill_review_stage_degradation",
+        "event_uuid": "__NORMALIZED_EVENT_UUID__",
+        "id": 3,
+        "last_error": null,
+        "payload_json": {
+            "actual": "not_reached",
+            "contract_version": "1.11.0",
+            "event_name": "skillbill_review_stage_degradation",
+            "expected": "reached",
+            "reason": "stage_boundary_unreached",
+            "review_run_id": "__NORMALIZED_REVIEW_RUN_ID__",
+            "seam": "review.adjudication.boundary"
+        },
+        "skill_bill_version": "test-runtime-version",
+        "synced_at": null
+    }
+]

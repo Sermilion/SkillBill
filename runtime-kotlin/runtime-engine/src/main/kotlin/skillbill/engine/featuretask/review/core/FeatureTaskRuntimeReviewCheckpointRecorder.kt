@@ -26,8 +26,10 @@ class FeatureTaskRuntimeReviewCheckpointRecorder(
       workflowPersistence,
     )
 
-  fun persistReviewGenerationInvalidation(workflowId: String): Int? =
-    reviewGeneration.persistReviewGenerationInvalidation(workflowId)
+  fun persistReviewGenerationInvalidation(
+    workflowId: String,
+    reviewStepId: String,
+  ): Int? = reviewGeneration.persistReviewGenerationInvalidation(workflowId, reviewStepId)
 
   fun reconcileReviewGeneration(workflowId: String): Int = reviewGeneration.reconcileReviewGeneration(workflowId)
 

@@ -1,0 +1,104 @@
+You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+loop (preplan -> plan -> implement -> simplify -> audit -> review -> verify_findings -> validate -> write_history -> commit_push -> pr)
+for issue SKILL-380. The runtime owns the loop; do not run other phases, do not open
+or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+
+Phase: preplan (Phase 1: Pre-plan)
+Task: Produce the scaled pre-planning digest for the resolved feature size. Do not modify repository files during this phase. Emit produced_outputs with a non-blank value string carrying the preplanning_digest JSON (same fields as before, stuffed inside value); optional prompt may add a short directive when non-blank. Do not forward the complete preplan envelope, a generic summary, or progress diagnostics.
+
+## Installed runtime is the contract source
+This briefing was composed by the installed Skill Bill runtime that will validate your output.
+Use the contract_version, envelope fields, skills, packs, and commands it names.
+Do not read orchestration/contracts, Kotlin contract constants, test fixtures, or skills/ in
+this workspace to override them. When this repository is skill-bill, those files are the change
+under work, not the validator. If you must inspect a schema, inspect the installed runtime copy,
+never this checkout.
+
+## Runtime ceremony scaling
+feature_size: MEDIUM
+preplan_ceremony: full
+review_scope: branch_diff
+audit_ceremony: full_per_criterion
+Apply full preplan covering boundaries, risks, rollout, and unknowns. Keep the gate real: identify concrete scope, affected boundaries, risks, and unknowns at the requested depth.
+Scaling changes scope and verbosity only; it must not skip or weaken review, audit, validation,
+schema, branch, history, commit, or PR gates.
+
+## Validation ownership
+Only the validate phase may run the pack validation gate
+(`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
+`bill-code-check`, or any other full repository check suite. Only the build phase may run the
+pack build_command for compile/buildability proof. This phase must not compile, build,
+execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
+acceptance text, review habit, or prior habit that asks you to run check here — that work waits
+for validate. If a receipt carries `tests_executed`, leave it empty.
+
+## Build ownership
+Only the build phase may run the pack build_command (`validation_gate.build_command`). This phase
+must not invoke compile-only proof as a substitute for its own work.
+
+# Feature-task-runtime phase briefing
+phase: preplan
+
+## Run invariants (layer 1, unconditional)
+spec_reference: __NORMALIZED_REPO_ROOT__/.feature-specs/SKILL-380-phase-slot-strategies/spec.md
+feature_size: MEDIUM
+ceremony_scaling:
+  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  review_scope: branch_diff (branch-diff review scope)
+  audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+acceptance_criteria:
+  AC-001. The sweep produces a schema-valid plan for this sub-spec.
+mandates_and_overrides:
+  (none)
+
+## Upstream projections (layer 2, declared and validated)
+### run_invariant_spec_reference (run_invariant_field:spec_reference)
+spec_reference: __NORMALIZED_REPO_ROOT__/.feature-specs/SKILL-380-phase-slot-strategies/spec.md
+### run_invariant_feature_size (run_invariant_field:feature_size)
+feature_size: MEDIUM
+### run_invariant_ceremony_scaling (derived_ceremony_scaling)
+ceremony_scaling:
+  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  - review_scope: branch_diff (branch-diff review scope)
+  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)
+mandates_and_overrides:
+### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)
+acceptance_criteria:
+  - The sweep produces a schema-valid plan for this sub-spec.
+
+## Derived context (layer 3, declared)
+(none)
+
+## Value content
+Carry this JSON object as the value text; the runtime does not validate its shape and the next phase reads
+it as structured prose:
+```json
+{ "projection_kind": "preplanning_digest",
+  "contract_version": "0.2",
+  "affected_boundaries": ["<module or boundary touched>"], "patterns_and_decisions": [],
+  "risks": ["<concrete risk>"],
+  "rollout": { "flag_required": false, "flag_pattern": "none",
+    "notes": "<rollout note, or N/A>" },
+  "validation_strategy": ["<how the change is validated>"],
+  "unresolved_questions": [], "evidence_refs": [],
+  "selected_boundary_headings": ["<heading_id copied verbatim from the boundary catalog>"] }
+```
+flag_pattern is one of none, simple_conditional, di_switch, legacy. Walk boundary_memory headings for relevance; weave context into the stuffed object rather than listing headings only outside value.
+
+## Required final output
+End your response with exactly one JSON object as the last thing you emit. Prefer a raw
+object with nothing after it; a single ```json fenced block is also accepted. The runtime
+stamps the contract version and phase id itself. Fields:
+- "status": one of "completed", "blocked", "failed"
+- "summary": one sentence describing what this phase did
+- "value": non-blank prose carrying everything the next phase needs
+- "verdict": optional; set it only when this briefing names a verdict for this phase
+- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
+  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
+  Omit it when status is "completed".
+
+## Goal planning session context
+Use this immutable shared context for the parent goal: {"packet_version":"0.4","repository_identity":"repo-root-realpath-v1:__NORMALIZED_REPO_ROOT__","normalized_issue_key":"SKILL-380","parent_spec_path":".feature-specs/SKILL-380-phase-slot-strategies/spec.md","parent_spec":"# Harness spec intent\n\n## Intended Outcome\nExercise the feature-task runtime harness.\n\n## Acceptance Criteria\n\n1. AC-1\n2. AC-2","decomposition_manifest":"---\ncontract_version: \"0.5\"\nissue_key: \"SKILL-380\"\nfeature_name: \"phase-slot-strategies\"\nparent_spec_path: \".feature-specs/SKILL-380-phase-slot-strategies/spec.md\"\nstatus: \"pending\"\nexecution_model: \"same_branch_commit_per_subtask\"\nbase_branch: \"main\"\nfeature_branch: \"feat/SKILL-380-phase-slot-strategies\"\nstack_branches: []\ncurrent_subtask_intent:\n  subtask_id: 1\n  action: \"start\"\nsubtasks:\n- id: 1\n  name: \"slot baseline build child\"\n  spec_path: \".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_1.md\"\n  status: \"pending\"\n  branch: null\n  commit_sha: null\n  workflow_id: null\n  blocked_reason: null\n  last_resumable_step: null\n  linear_issue_id: null\n  finalizing_agent_id: null\n  participating_agent_ids: []\n  dependencies: []\n- id: 2\n  name: \"slot baseline validate child\"\n  spec_path: \".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_2.md\"\n  status: \"pending\"\n  branch: null\n  commit_sha: null\n  workflow_id: null\n  blocked_reason: null\n  last_resumable_step: null\n  linear_issue_id: null\n  finalizing_agent_id: null\n  participating_agent_ids: []\n  dependencies:\n  - subtask_id: 1\n    optional: false\n    skipped: false\n","boundary_memory":{"catalog":[{"heading_id":"runtime-kotlin/agent/history.md#0-000000000000","source_path":"runtime-kotlin/agent/history.md","kind":"history","heading":"## [2026-08-01] fixture-entry"}],"truncated":false},"validation_guidance":"Run focused Gradle checks.","ordered_subtasks":[{"id":1,"name":"slot baseline build child","spec_path":".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_1.md","planning_disposition":"included","dependencies":[]},{"id":2,"name":"slot baseline validate child","spec_path":".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_2.md","planning_disposition":"included","dependencies":[{"subtask_id":1,"optional":false,"skipped":false}]}],"integrity_sha256":"__NORMALIZED_SHA64__"}
+This is child-only planning context. Do not copy its payload, implementation summary, audit, review, diagnostic, or raw child output into the parent conversation or parent projection. The parent retains manifest metadata, the current subtask index, and terminal outcomes only: {status, commit_sha, workflow_id}.
+boundary_memory is a heading catalog: heading text and stable heading_id only, no entry bodies. Walk the headings, stop once they are no longer relevant to this goal's scope, and weave the relevant context into produced_outputs.value as prose for the plan phase. Recommended headings may guide your prose; selected_boundary_headings is not required.

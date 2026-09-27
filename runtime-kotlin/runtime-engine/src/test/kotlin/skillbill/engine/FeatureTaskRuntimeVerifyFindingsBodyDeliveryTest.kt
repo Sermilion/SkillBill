@@ -1,6 +1,7 @@
 package skillbill.engine
 
 import skillbill.contracts.time.JvmSystemClock
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningContextDiscovery
@@ -149,7 +150,7 @@ private fun verifyFindingsSelectingBoundary(
 ): String =
   """
   {
-    "contract_version": "0.6",
+    "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
     "phase_id": "verify_findings",
     "status": "completed",
     "summary": "Verified the finding against scoped boundary memory.",
@@ -174,7 +175,7 @@ private fun verifyFindingsCensusOnlyOutput(verifiedFindingIds: List<String>): St
     }
   return """
     {
-      "contract_version": "0.6",
+      "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
       "phase_id": "verify_findings",
       "status": "completed",
       "summary": "Verified the finding without boundary heading selection.",

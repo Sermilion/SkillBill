@@ -1,0 +1,15 @@
+Review the last commit `__NORMALIZED_SHA40__` against its first parent `__NORMALIZED_SHA40__`.
+Inspect with `git diff __NORMALIZED_SHA40__ __NORMALIZED_SHA40__` in this repository workspace.
+Do not use `origin/main...HEAD`, a merge base, the full feature branch, or a pre-baked diff blob.
+Do not launch bill-code-review, delegated review subagents, or an isolated review process.
+Fix every Blocker and Major finding in this same session before you emit.
+You may edit files. Leave Minor and Nit unfixed unless the edit is local and obvious.
+Do not commit, amend, reset, or stage changes; the runtime owns the review checkpoint.
+Criterion-gap detection remains exclusive to audit. Do not report unsatisfied acceptance criteria.
+Do not run `./gradlew check`, the pack collect-all gate, or `bill-code-check`; validate owns those.
+Subtask spec path: `.feature-specs/SKILL-380-phase-slot-strategies/spec.md`.
+After fixes, emit remaining findings in this register shape, one per line:
+- [F-001] Blocker | High | path/File.kt:12 | remaining defect after your edits
+End with exactly one line: `verdict: approved` or `verdict: changes_requested`.
+Use `changes_requested` when any Blocker or Major remains; otherwise `approved`.
+An explicit empty findings list plus `verdict: approved` means no remaining Blocker or Major.

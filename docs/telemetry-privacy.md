@@ -225,6 +225,14 @@ reports a zero failure count, so it cannot land in a clean-gate numerator or den
 clean rate only over rows that are both `operator_completed` and `final_failure_count_availability:
 measured`.
 
+An in-memory phase run (`skill-bill phase validation`) emits `_started` after the first pack build
+gate run and `_finished` when the gate settles, with `routed_skill: bill-code-check`,
+`scope_type: working_tree`, the dominant pack slug as `detected_stack`, the first run's failure
+count as `initial_failure_count`, and the gate run count as `iterations`. `final_failure_count` is
+the last gate run's finding count, and `failing_check_names` (full level only) holds that run's
+distinct rule or test ids, sorted; `result` is `pass` exactly when the count is zero. The fields are the ones
+above; a phase run adds no workflow id or phase invocation id to the payload.
+
 ### `skillbill_feature_verify_started` / `skillbill_feature_verify_finished`
 
 | Field | off | anonymous | full | Source |

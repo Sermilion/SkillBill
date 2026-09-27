@@ -8,7 +8,6 @@ import skillbill.application.install.ExternalAddonOverlayService
 import skillbill.application.install.ExternalPlatformPackResolutionService
 import skillbill.application.install.InstallService
 import skillbill.application.learning.LearningService
-import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.review.service.ReviewService
 import skillbill.application.review.snapshot.ReviewSnapshotPruneService
 import skillbill.application.runtime.RuntimeSingleton
@@ -24,6 +23,7 @@ import skillbill.application.work.WorkListService
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.di.featurespec.RuntimeFeatureSpecProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskProvides
+import skillbill.di.featuretask.RuntimeFeatureTaskSlotProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskValidatorProvides
 import skillbill.di.goal.RuntimeGoalPlanningProvides
 import skillbill.di.goal.RuntimeGoalPlanningSweepProvides
@@ -44,6 +44,7 @@ import skillbill.di.workflow.RuntimeWorkflowValidatorProvides
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
+import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.goalrunner.GoalOperatorDecisionService
@@ -96,6 +97,7 @@ abstract class RuntimeComponent(
     RuntimeReviewAddonCatalogProvides,
     RuntimeReviewEvidenceProvides,
     RuntimeFeatureTaskProvides,
+    RuntimeFeatureTaskSlotProvides,
     RuntimeFeatureSpecProvides,
     RuntimeWorkflowProvides,
     RuntimeWorkflowValidatorProvides,
@@ -158,7 +160,7 @@ abstract class RuntimeComponent(
   abstract val featureTaskPhaseSettlementService: FeatureTaskPhaseSettlementService
   abstract val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService
 
-  abstract val parallelCodeReviewRunner: ParallelCodeReviewRunner
+  abstract val phaseRunEntry: PhaseRunEntry
   abstract val configResolutionService: ConfigResolutionService
   abstract val externalAgentAddonSourceConfigPort: ExternalAgentAddonSourceConfigPort
   abstract val installService: InstallService

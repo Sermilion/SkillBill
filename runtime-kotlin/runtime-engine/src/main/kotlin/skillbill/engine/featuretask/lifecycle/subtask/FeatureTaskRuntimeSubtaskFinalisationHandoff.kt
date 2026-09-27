@@ -1,47 +1,15 @@
 package skillbill.engine.featuretask.lifecycle.subtask
 
-import skillbill.application.decomposition.baseBranch
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
-import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeCommitPushPayloadKeys
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushHandoff
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushHandoffInvalid
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushHandoffResult
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushHandoffValid
-import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushReceipt
-import skillbill.engine.featuretask.runner.STATUS_COMPLETED
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 object FeatureTaskRuntimeSubtaskFinalisationHandoff {
-  internal fun runtimeOwnedOutput(receipt: FeatureTaskRuntimeCommitPushReceipt): String {
-    val result = linkedMapOf<String, Any?>()
-    receipt.commitSha?.trim()?.takeIf(String::isNotBlank)?.let { sha ->
-      result[DecompositionManifestPayloadKeys.COMMIT_SHA] = sha
-    }
-    receipt.branch?.trim()?.takeIf(String::isNotBlank)?.let { branch ->
-      result[DecompositionPlanningPayloadKeys.BRANCH] = branch
-    }
-    receipt.baseBranch?.trim()?.takeIf(String::isNotBlank)?.let { baseBranch ->
-      result[DecompositionPlanningPayloadKeys.BASE_BRANCH] = baseBranch
-    }
-    result[FeatureTaskRuntimeCommitPushPayloadKeys.PUSHED] = receipt.pushed
-    return JsonCodec.mapToJsonString(
-      mapOf(
-        SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-        SharedPayloadKeys.PHASE_ID to FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
-        SharedPayloadKeys.STATUS to STATUS_COMPLETED,
-        SharedPayloadKeys.SUMMARY to "Runtime staged every dirty path, committed, and recorded commit_sha.",
-        SharedPayloadKeys.PRODUCED_OUTPUTS to
-          mapOf(
-            FeatureTaskRuntimeCommitPushPayloadKeys.COMMIT_PUSH_RESULT to result,
-          ),
-      ),
-    )
-  }
-
   internal fun readHandoff(envelope: Map<String, Any?>): FeatureTaskRuntimeCommitPushHandoffResult {
     val result =
       commitPushResult(envelope)

@@ -3,6 +3,7 @@ contract_version: "1.8"
 
 matchers:
   - exact: bill-feature
+  - exact: skill-bill
 
 pointers:
   - peak-hours-warner

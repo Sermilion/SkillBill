@@ -1,0 +1,192 @@
+{
+    "audit": {
+        "attempt_count": 1,
+        "contract_version": "0.2",
+        "duration_millis": "__NORMALIZED_DURATION__",
+        "execution_origin": "agent-executed",
+        "file_manifest_after": [
+            "src/Foo.kt"
+        ],
+        "file_manifest_before": [
+            "src/Foo.kt"
+        ],
+        "finished_at": "__NORMALIZED_TIMESTAMP__",
+        "first_started_at": "__NORMALIZED_TIMESTAMP__",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"audit\",\"status\":\"completed\",\"summary\":\"Every acceptance criterion is met.\",\"produced_outputs\":{\"value\":\"[]\"},\"verdict\":\"satisfied\"}",
+        "phase_id": "audit",
+        "record_kind": "private_phase_record",
+        "resolved_agent_id": "agent-audit",
+        "started_at": "__NORMALIZED_TIMESTAMP__",
+        "status": "completed"
+    },
+    "build": {
+        "attempt_count": 1,
+        "contract_version": "0.2",
+        "duration_millis": "__NORMALIZED_DURATION__",
+        "execution_origin": "agent-executed",
+        "finished_at": "__NORMALIZED_TIMESTAMP__",
+        "first_started_at": "__NORMALIZED_TIMESTAMP__",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"build\",\"status\":\"completed\",\"summary\":\"Build satisfied by runtime-owned gate execution.\",\"verdict\":\"satisfied\",\"produced_outputs\":{\"build_receipt\":{\"contract_version\":\"0.1\",\"validation_status\":\"passed\",\"checks\":[],\"repository_checkpoint\":{\"fingerprint\":\"repository-fingerprint-6\"},\"gate_run_count\":1,\"gate_runs\":[{\"duration_ms\":1,\"outcome\":\"passed\",\"cache_mode\":\"cache_eligible\",\"executed_work_units\":1,\"executed_checks\":[]}]}}}",
+        "phase_id": "build",
+        "record_kind": "private_phase_record",
+        "resolved_agent_id": "agent-build",
+        "started_at": "__NORMALIZED_TIMESTAMP__",
+        "status": "completed"
+    },
+    "commit_push": {
+        "attempt_count": 1,
+        "contract_version": "0.2",
+        "duration_millis": "__NORMALIZED_DURATION__",
+        "execution_origin": "agent-executed",
+        "finished_at": "__NORMALIZED_TIMESTAMP__",
+        "first_started_at": "__NORMALIZED_TIMESTAMP__",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"commit_push\",\"status\":\"completed\",\"summary\":\"Runtime staged every dirty path, committed, and recorded commit_sha.\",\"produced_outputs\":{\"commit_push_result\":{\"commit_sha\":\"__NORMALIZED_SHA40__\",\"branch\":\"feat/SKILL-380-phase-slot-strategies\",\"base_branch\":\"main\",\"pushed\":true}}}",
+        "phase_id": "commit_push",
+        "record_kind": "private_phase_record",
+        "resolved_agent_id": "agent-commit_push",
+        "started_at": "__NORMALIZED_TIMESTAMP__",
+        "status": "completed"
+    },
+    "implement": {
+        "attempt_count": 1,
+        "contract_version": "0.2",
+        "duration_millis": "__NORMALIZED_DURATION__",
+        "execution_origin": "agent-executed",
+        "file_manifest_after": [
+            "src/Foo.kt"
+        ],
+        "file_manifest_before": [
+            "src/Foo.kt"
+        ],
+        "finished_at": "__NORMALIZED_TIMESTAMP__",
+        "first_started_at": "__NORMALIZED_TIMESTAMP__",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"implement\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Fixture implement prose for downstream audit.\"}}",
+        "phase_id": "implement",
+        "record_kind": "private_phase_record",
+        "resolved_agent_id": "agent-implement",
+        "started_at": "__NORMALIZED_TIMESTAMP__",
+        "status": "completed"
+    },
+    "plan": {
+        "attempt_count": 1,
+        "contract_version": "0.2",
+        "duration_millis": "__NORMALIZED_DURATION__",
+        "execution_origin": "agent-executed",
+        "file_manifest_after": [
+            "src/Foo.kt"
+        ],
+        "file_manifest_before": [
+            "src/Foo.kt"
+        ],
+        "finished_at": "__NORMALIZED_TIMESTAMP__",
+        "first_started_at": "__NORMALIZED_TIMESTAMP__",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"plan\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Fixture plan prose for downstream implement and audit.\"}}",
+        "phase_id": "plan",
+        "record_kind": "private_phase_record",
+        "resolved_agent_id": "agent-plan",
+        "started_at": "__NORMALIZED_TIMESTAMP__",
+        "status": "completed"
+    },
+    "preplan": {
+        "attempt_count": 1,
+        "contract_version": "0.2",
+        "duration_millis": "__NORMALIZED_DURATION__",
+        "execution_origin": "agent-executed",
+        "file_manifest_after": [
+            "src/Foo.kt"
+        ],
+        "file_manifest_before": [
+            "src/Foo.kt"
+        ],
+        "finished_at": "__NORMALIZED_TIMESTAMP__",
+        "first_started_at": "__NORMALIZED_TIMESTAMP__",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"preplan\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Fixture preplan prose for downstream plan.\"}}",
+        "phase_id": "preplan",
+        "record_kind": "private_phase_record",
+        "resolved_agent_id": "agent-preplan",
+        "started_at": "__NORMALIZED_TIMESTAMP__",
+        "status": "completed"
+    },
+    "review": {
+        "attempt_count": 1,
+        "contract_version": "0.2",
+        "duration_millis": "__NORMALIZED_DURATION__",
+        "execution_origin": "agent-executed",
+        "file_manifest_after": [
+            "src/Foo.kt"
+        ],
+        "file_manifest_before": [
+            "src/Foo.kt"
+        ],
+        "finished_at": "__NORMALIZED_TIMESTAMP__",
+        "first_started_at": "__NORMALIZED_TIMESTAMP__",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"review\",\"status\":\"completed\",\"summary\":\"{\\\"contract_version\\\":\\\"0.3\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"produced_outputs\":{\"findings\":[],\"review_run_id\":\"__NORMALIZED_REVIEW_RUN_ID__\",\"repository_checkpoint\":{\"fingerprint\":\"repository-fingerprint-3\"}},\"verdict\":\"approved\"}",
+        "phase_id": "review",
+        "record_kind": "private_phase_record",
+        "resolved_agent_id": "agent-review",
+        "review_pass_number": 1,
+        "review_run_id": "__NORMALIZED_REVIEW_RUN_ID__",
+        "started_at": "__NORMALIZED_TIMESTAMP__",
+        "status": "completed"
+    },
+    "simplify": {
+        "attempt_count": 1,
+        "contract_version": "0.2",
+        "duration_millis": "__NORMALIZED_DURATION__",
+        "execution_origin": "agent-executed",
+        "file_manifest_after": [
+            "src/Foo.kt"
+        ],
+        "file_manifest_before": [
+            "src/Foo.kt"
+        ],
+        "finished_at": "__NORMALIZED_TIMESTAMP__",
+        "first_started_at": "__NORMALIZED_TIMESTAMP__",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"simplify\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"{\\\"projection_kind\\\":\\\"simplification_receipt\\\",\\\"contract_version\\\":\\\"0.1\\\",\\\"changed_paths\\\":[],\\\"reductions\\\":[],\\\"unresolved_items\\\":[],\\\"reconciliation_evidence\\\":{\\\"reconciled\\\":true,\\\"evidence\\\":\\\"fixture\\\"},\\\"reconciled_state\\\":{\\\"reconciled\\\":true,\\\"evidence\\\":\\\"fixture\\\"}}\"}}",
+        "phase_id": "simplify",
+        "record_kind": "private_phase_record",
+        "resolved_agent_id": "agent-simplify",
+        "started_at": "__NORMALIZED_TIMESTAMP__",
+        "status": "completed"
+    },
+    "verify_findings": {
+        "attempt_count": 1,
+        "contract_version": "0.2",
+        "duration_millis": "__NORMALIZED_DURATION__",
+        "execution_origin": "agent-executed",
+        "file_manifest_after": [
+            "src/Foo.kt"
+        ],
+        "file_manifest_before": [
+            "src/Foo.kt"
+        ],
+        "finished_at": "__NORMALIZED_TIMESTAMP__",
+        "first_started_at": "__NORMALIZED_TIMESTAMP__",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"verify_findings\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"verdict\":\"no_findings_verified\",\"produced_outputs\":{\"finding_dispositions\":[]}}",
+        "phase_id": "verify_findings",
+        "record_kind": "private_phase_record",
+        "resolved_agent_id": "agent-verify_findings",
+        "started_at": "__NORMALIZED_TIMESTAMP__",
+        "status": "completed"
+    },
+    "write_history": {
+        "attempt_count": 1,
+        "contract_version": "0.2",
+        "duration_millis": "__NORMALIZED_DURATION__",
+        "execution_origin": "agent-executed",
+        "file_manifest_after": [
+            "src/Foo.kt"
+        ],
+        "file_manifest_before": [
+            "src/Foo.kt"
+        ],
+        "finished_at": "__NORMALIZED_TIMESTAMP__",
+        "first_started_at": "__NORMALIZED_TIMESTAMP__",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"write_history\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Recorded the boundary history entry.\",\"runtime_measured_facts\":{\"changed_paths\":[],\"history_written\":false,\"decisions_recorded\":false}}}",
+        "phase_id": "write_history",
+        "record_kind": "private_phase_record",
+        "resolved_agent_id": "agent-write_history",
+        "started_at": "__NORMALIZED_TIMESTAMP__",
+        "status": "completed"
+    }
+}

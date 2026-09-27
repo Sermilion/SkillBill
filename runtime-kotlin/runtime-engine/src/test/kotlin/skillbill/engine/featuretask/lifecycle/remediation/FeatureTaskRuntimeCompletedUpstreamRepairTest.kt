@@ -1,8 +1,8 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

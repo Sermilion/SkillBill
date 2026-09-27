@@ -7,7 +7,6 @@ import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedger
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.MAX_ACCEPTANCE_CRITERION_ORDINAL
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
@@ -121,7 +120,7 @@ data class FeatureTaskRuntimePhaseHandoff(
   val branchIdentity: String? = null,
   val baseBranch: String = "main",
   val validationDepth: ValidationDepth = ValidationDepth.DEFAULT,
-  val qualityGateSelection: FeatureTaskRuntimeQualityGateSelection = FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+  val unselectedStepIds: Set<String> = emptySet(),
   val drivingVerdict: FeatureTaskRuntimeVerdict? = null,
   val repairLedger: FeatureTaskRuntimeRepairLedger? = null,
   val recordedFindingVerdicts: List<ReviewFindingVerdict> = emptyList(),

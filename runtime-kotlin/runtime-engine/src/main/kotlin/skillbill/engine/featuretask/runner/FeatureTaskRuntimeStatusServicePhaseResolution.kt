@@ -6,11 +6,11 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 val PHASE_TERMINAL_STATUSES: Set<WorkflowStepStatus> =
@@ -25,12 +25,7 @@ val CONTINUATION_KIND_ACTIONS =
     FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE,
     FeatureTaskRuntimePhaseLedgerAction.FIX_LOOP_ITERATION,
   )
-val LOOP_ONLY_PHASE_IDS: Set<String> = FeatureTaskRuntimePhaseWorkflowDefinition.transitions.loopOnlyPhaseIds
-val OPERATOR_DECISION_QUALITY_GATE_PHASE_IDS: Set<String> =
-  setOf(
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
-  )
+val OPERATOR_DECISION_QUALITY_GATE_PHASE_IDS: Set<String> = PhaseSlot.QUALITY_GATE.steps.toSet()
 
 fun phaseStatuses(
   records: Map<String, FeatureTaskRuntimePhaseRecord>,
@@ -50,36 +45,20 @@ fun resolveCurrentPhaseId(
   records: Map<String, FeatureTaskRuntimePhaseRecord>,
   phases: List<FeatureTaskRuntimePhaseStatus>,
   ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
-  qualityGateSelection: FeatureTaskRuntimeQualityGateSelection,
+  loopOnlyStepIds: Set<String>,
 ): String? {
   if (terminalDecomposeRecorded) return null
   return currentReentryPhaseId(records, ledger) ?: phases.firstOrNull {
     it.status.workflowStepStatus() != WorkflowStepStatus.COMPLETED &&
-      !shouldSkipPendingLoopOnlyPhase(it.phaseId, it.status, records, qualityGateSelection)
+      !shouldSkipPendingLoopOnlyPhase(it.phaseId, it.status, loopOnlyStepIds)
   }?.phaseId
 }
 
 fun shouldSkipPendingLoopOnlyPhase(
   phaseId: String,
   status: String,
-  records: Map<String, FeatureTaskRuntimePhaseRecord>,
-  qualityGateSelection: FeatureTaskRuntimeQualityGateSelection,
-): Boolean {
-  if (status.workflowStepStatus() != WorkflowStepStatus.PENDING || phaseId !in LOOP_ONLY_PHASE_IDS) {
-    return false
-  }
-  val reviewStatus = records[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW]?.status?.workflowStepStatus()
-  val buildStatus = records[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD]?.status?.workflowStepStatus()
-  val buildStampedCurrent =
-    phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD &&
-      qualityGateSelection == FeatureTaskRuntimeQualityGateSelection.BUILD &&
-      reviewStatus == WorkflowStepStatus.COMPLETED &&
-      buildStatus != WorkflowStepStatus.COMPLETED
-  if (buildStampedCurrent) {
-    return false
-  }
-  return true
-}
+  loopOnlyStepIds: Set<String>,
+): Boolean = status.workflowStepStatus() == WorkflowStepStatus.PENDING && phaseId in loopOnlyStepIds
 
 fun currentReentryPhaseId(
   records: Map<String, FeatureTaskRuntimePhaseRecord>,

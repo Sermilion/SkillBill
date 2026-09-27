@@ -1,5 +1,6 @@
 package skillbill.engine
 
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -25,7 +26,8 @@ class FeatureTaskRuntimeProjectionRejectionTest {
     harness.seedPhase("preplan", "completed", 1, phaseAgent("preplan"), preplanEnvelope())
     harness.seedPhase("plan", "completed", 1, phaseAgent("plan"), validJsonOutput("plan"))
     val legacyImplementation =
-      """{"contract_version":"0.6","phase_id":"implement","status":"completed","summary":"Legacy impl.",""" +
+      """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"implement",""" +
+        """"status":"completed","summary":"Legacy impl.",""" +
         """"produced_outputs":{"steps":["did the thing"],"narration":"free-form legacy body"}}"""
     harness.seedPhase(
       "implement",
@@ -81,6 +83,7 @@ class FeatureTaskRuntimeProjectionRejectionTest {
   }
 
   private fun preplanEnvelope(value: String = "Fixture preplan prose."): String =
-    """{"contract_version":"0.6","phase_id":"preplan","status":"completed","summary":"Prose.",""" +
+    """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"preplan",""" +
+      """"status":"completed","summary":"Prose.",""" +
       """"produced_outputs":{"value":"$value"}}"""
 }

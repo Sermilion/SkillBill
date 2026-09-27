@@ -3,6 +3,7 @@ package skillbill.cli
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliRuntimeContext
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -101,6 +102,30 @@ class CliUninstallRuntimeTest {
     assertFalse(Files.exists(fixture.skillBillMcpLauncher))
     assertTrue(Files.exists(fixture.userSkillDir))
     assertTrue(Files.exists(fixture.userLauncher))
+  }
+
+  @Test
+  fun `uninstall removes the skill-bill and bill-feature links and keeps an unrelated user skill`() {
+    val fixture = uninstallFixture()
+    val codexSkills = fixture.home.resolve(".codex/skills")
+    val installedSkills = fixture.stateRoot.resolve("installed-skills")
+    val dispatcherLink = codexSkills.resolve("skill-bill")
+    val featureLink = codexSkills.resolve("bill-feature")
+    val mySkill = codexSkills.resolve("my-skill")
+    listOf("skill-bill", "bill-feature").forEach { name ->
+      val staged = Files.createDirectories(installedSkills.resolve("$name-2222222222222222"))
+      Files.writeString(staged.resolve("SKILL.md"), "# $name\n")
+      Files.createSymbolicLink(codexSkills.resolve(name), staged)
+    }
+    Files.createDirectories(mySkill)
+    Files.writeString(mySkill.resolve("SKILL.md"), "# my-skill\n")
+
+    val result = runUninstall(fixture.home, "--yes")
+
+    assertEquals(0, result.exitCode, result.stdout)
+    assertFalse(Files.exists(dispatcherLink, LinkOption.NOFOLLOW_LINKS))
+    assertFalse(Files.exists(featureLink, LinkOption.NOFOLLOW_LINKS))
+    assertTrue(Files.isRegularFile(mySkill.resolve("SKILL.md")))
   }
 
   private fun runUninstall(

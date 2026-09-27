@@ -1,11 +1,9 @@
 package skillbill.engine.featuretask.runloop.output
 
-import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
 import skillbill.engine.featuretask.persist.RuntimeOwnedFactUnavailable
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -19,24 +17,27 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
+import skillbill.engine.featuretask.slot.state.PhaseRunGoal
+import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal data class ReviewOutputPersistenceContext(
-  val request: FeatureTaskRuntimeRunRequest,
+  val request: FeatureTaskRuntimeRunFacts,
   val state: FeatureTaskRuntimeRunState,
-  val recorder: FeatureTaskRuntimePhaseRecorder,
+  val recorder: PhaseRunRecords,
   val observability: FeatureTaskRuntimeRunObservability,
-  val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
+  val goalContinuationRecorder: PhaseRunGoal,
 )
 
-internal fun isGoalReviewRun(run: PhaseRun): Boolean =
-  run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW && isGoalContinuationRun(run.request)
+internal fun isGoalReviewRun(
+  run: PhaseRun,
+  state: FeatureTaskRuntimeRunState,
+): Boolean = state.resumeRules(run.phaseId).tracksReviewPasses && isGoalContinuationRun(run.request)
 
 object FeatureTaskRuntimeRunLoopReviewCompletion {
   internal fun ReviewOutputPersistenceContext.persistStandaloneReviewCompletion(

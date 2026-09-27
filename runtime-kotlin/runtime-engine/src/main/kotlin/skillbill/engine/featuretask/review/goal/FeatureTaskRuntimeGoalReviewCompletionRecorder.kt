@@ -36,7 +36,6 @@ import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATU
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction.COMPLETE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 
 class FeatureTaskRuntimeGoalReviewCompletionRecorder(
@@ -264,7 +263,7 @@ class FeatureTaskRuntimeGoalReviewCompletionRecorder(
     completion: GoalReviewPhaseCompletionRequest,
   ): FeatureTaskRuntimePhaseStateRequest {
     val request = completion.phaseState
-    require(request.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) {
+    require(request.reviewPassNumber != null) {
       "Goal review completion can only persist the review phase."
     }
     require(request.status.workflowStepStatus() == WorkflowStepStatus.COMPLETED && request.finished) {

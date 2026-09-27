@@ -2,7 +2,6 @@ package skillbill.workflow.taskruntime.phase
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 
 internal object ProsePhaseOutputRecover {
   private val LEGACY_VALUE_KEYS: List<String> =
@@ -13,13 +12,13 @@ internal object ProsePhaseOutputRecover {
       "preplanning_digest",
       "gaps",
     )
-  private val AUDIT_VERDICTS: Set<String> = setOf("satisfied")
   private const val SUMMARY_MAX_CHARS: Int = 240
   private const val SUMMARY_ELLIPSIS_PREFIX: Int = 237
 
   fun directValue(parsed: Map<String, Any?>): String? {
-    val produced = JsonCodec.anyToStringAnyMap(parsed[SharedPayloadKeys.PRODUCED_OUTPUTS]) ?: return null
-    return produced[SharedPayloadKeys.VALUE]?.toString()?.takeIf { it.any { ch -> !ch.isWhitespace() } }
+    val produced = JsonCodec.anyToStringAnyMap(parsed[SharedPayloadKeys.PRODUCED_OUTPUTS])
+    return produced?.get(SharedPayloadKeys.VALUE)?.toString()?.takeIf { it.any { ch -> !ch.isWhitespace() } }
+      ?: (parsed[SharedPayloadKeys.VALUE] as? String)?.takeIf { it.any { ch -> !ch.isWhitespace() } }
   }
 
   fun recoverLegacyValue(parsed: Map<String, Any?>): String? {
@@ -69,19 +68,10 @@ internal object ProsePhaseOutputRecover {
     }
   }
 
-  fun recoverAuditVerdict(
-    parsed: Map<String, Any?>?,
-    rawText: String,
-  ): String? {
-    val fromField = parsed?.get(SharedPayloadKeys.VERDICT)?.toString()?.trim()?.lowercase()
-    if (fromField != null) return fromField.takeIf { it in AUDIT_VERDICTS }
+  fun recoverVerdict(parsed: Map<String, Any?>?): String? {
     val produced = JsonCodec.anyToStringAnyMap(parsed?.get(SharedPayloadKeys.PRODUCED_OUTPUTS))
-    val fromProduced = produced?.get(SharedPayloadKeys.VERDICT)?.toString()?.trim()?.lowercase()
-    if (fromProduced != null) return fromProduced.takeIf { it in AUDIT_VERDICTS }
-    val lower = rawText.lowercase()
-    if (FeatureTaskRuntimeVerdict.GAPS_FOUND.wireValue in lower) return null
-    val hasSatisfied = Regex("""\bsatisfied\b""").containsMatchIn(lower)
-    return if (hasSatisfied) "satisfied" else null
+    return listOf(parsed?.get(SharedPayloadKeys.VERDICT), produced?.get(SharedPayloadKeys.VERDICT))
+      .firstNotNullOfOrNull { candidate -> (candidate as? String)?.trim()?.takeIf(String::isNotEmpty) }
   }
 
   fun recoverFailureDisposition(parsed: Map<String, Any?>?): String? =

@@ -68,14 +68,14 @@ class FeatureTaskRuntimePhasePromptComposerRepairTest {
   }
 
   @Test
-  fun `preplan plan and implement embed a produced_outputs example with a non-blank value`() {
+  fun `preplan plan and implement embed a parseable value content example`() {
     promptComposerProjectionExampleCases().forEach { (phaseId, briefing) ->
       val prompt = composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, briefing)
       val exampleJson =
-        prompt.substringAfter("Required produced_outputs shape")
+        prompt.substringAfter("## Value content")
           .substringAfter("```json")
           .substringBefore("```")
-      val produced =
+      val example =
         requireNotNull(
           JsonCodec.anyToStringAnyMap(
             JsonCodec.jsonElementToValue(
@@ -83,8 +83,9 @@ class FeatureTaskRuntimePhasePromptComposerRepairTest {
             ),
           ),
         ) { "the $phaseId example is not a JSON object" }
-      val value = produced["value"]?.toString()?.trim().orEmpty()
-      assertTrue(value.isNotBlank(), "the $phaseId example must carry a non-blank value string")
+      val projectionKind = example["projection_kind"]?.toString()?.trim().orEmpty()
+      assertTrue(projectionKind.isNotBlank(), "the $phaseId value example must name its projection kind")
+      assertContains(prompt.substringAfter("## Required final output"), "\"value\": non-blank prose")
     }
   }
 
@@ -92,7 +93,7 @@ class FeatureTaskRuntimePhasePromptComposerRepairTest {
   fun `plan prompt inner example populates representative collection fields`() {
     val prompt = composePromptForPhase(promptComposerPhasePlan)
     val innerExampleJson =
-      prompt.substringAfter("Inner object to stuff into value:")
+      prompt.substringAfter("## Value content")
         .substringAfter("```json")
         .substringBefore("```")
     val example =

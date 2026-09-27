@@ -12,9 +12,12 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.subtask.RemediationBaseBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationBaseCoherent
 import skillbill.engine.featuretask.review.core.auditGapIterationCount
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopDrive
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
+import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
+import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDurableState
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.error.shellcontent.FeatureTaskRuntimeOperatorDecisionRejectedError
@@ -22,6 +25,7 @@ import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
 internal fun FeatureTaskRuntimeRunner.buildExecutePreparedRunTelemetryContext(
   runRequest: FeatureTaskRuntimeRunRequest,
@@ -51,7 +55,22 @@ fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
   observability: FeatureTaskRuntimeRunObservability,
   state: FeatureTaskRuntimeRunState,
 ): FeatureTaskRuntimeRunReport {
-  reopenCappedReviewOnChangedDelta(runRequest)
+  val session =
+    FeatureTaskRuntimeRunLoopSession(
+      operatorBlockRetry =
+        recorder
+          .loadOperatorBlockRetry(runRequest.workflowId)
+          ?.takeIf { retry ->
+            state.recordFor(retry.phaseId)?.status.let { status ->
+              status == null || status.workflowStepStatus() == WorkflowStepStatus.PENDING
+            }
+          },
+      initialPendingReentry = null,
+    )
+  val runState =
+    FeatureTaskRuntimeRunLoopDurableState(runRequest, state, session, observability, specSource, transitions, this)
+  val context = FeatureTaskRuntimeRunLoopContext(runRequest, runState, strategies)
+  FeatureTaskRuntimeRunLoopDrive.reopenStaleSettledSteps(context)
   if (isGoalContinuationRun(runRequest)) {
     when (
       val remediation =
@@ -62,70 +81,54 @@ fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
         )
     ) {
       is RemediationBaseBlocked ->
-        return remediationBaseCoherenceBlockedReport(runRequest, remediation.operatorGuidance)
+        return remediationBaseCoherenceBlockedReport(
+          runRequest,
+          remediation.operatorGuidance,
+          transitions.forwardPhaseIds.first(),
+        )
       is RemediationBaseCoherent -> Unit
     }
   }
-  val loop =
-    FeatureTaskRuntimeRunLoop(
-      context =
-        FeatureTaskRuntimeRunLoopContext(
-          runRequest,
-          state,
-          observability,
-          specSource,
-          transitions,
-          recorder,
-          goalContinuationRecorder,
-          outputValidator,
-          phaseGates,
-          subtaskLauncher,
-          phaseSettlementService,
-          activityStampWriter,
-          worktreeEditJournalWriter,
-          clock,
-          diagnostics,
-          FeatureTaskRuntimeRunLoopSession(
-            operatorBlockRetry =
-              recorder
-                .loadOperatorBlockRetry(runRequest.workflowId)
-                ?.takeIf { retry ->
-                  state.recordFor(retry.phaseId)?.status.let { status ->
-                    status == null || status.workflowStepStatus() == WorkflowStepStatus.PENDING
-                  }
-                },
-            initialPendingReentry = null,
-          ),
-        ),
-    )
-  runRequest.operatorDecision?.let { decision ->
-    loop.applyOperatorDecision()?.let { rejection ->
-      throw FeatureTaskRuntimeOperatorDecisionRejectedError(runRequest.workflowId, decision.wireValue, rejection)
+  return runLoopEntry.run(context) { loop ->
+    runRequest.operatorDecision?.let { decision ->
+      loop.applyOperatorDecision()?.let { rejection ->
+        throw FeatureTaskRuntimeOperatorDecisionRejectedError(runRequest.workflowId, decision.wireValue, rejection)
+      }
     }
   }
-  loop.drive()
-  return loop.report()
 }
 
 internal fun FeatureTaskRuntimeRunner.createExecutePreparedRunState(
   runRequest: FeatureTaskRuntimeRunRequest,
   transitions: FeatureTaskRuntimeTransitionDeclaration,
-): FeatureTaskRuntimeRunState =
-  FeatureTaskRuntimeRunState(
+): FeatureTaskRuntimeRunState {
+  val facts = strategySelectionFacts(runRequest)
+  return FeatureTaskRuntimeRunState(
     initialRecords = recorder.loadPhaseRecords(runRequest.workflowId).orEmpty(),
     transitions = transitions,
     durableInitialLedger = recorder.loadPhaseLedger(runRequest.workflowId).orEmpty(),
     outputValidator = outputValidator,
     initialReviewGeneration = recorder.reconcileReviewGeneration(runRequest.workflowId),
+    stepVerdictRule = slotStepVerdictRule(strategies, facts, diagnostics),
+    resumeRules = strategies.resumeRules(facts),
   )
+}
 
 fun FeatureTaskRuntimeRunner.finalizeExecutePreparedRunReport(
   runRequest: FeatureTaskRuntimeRunRequest,
   report: FeatureTaskRuntimeRunReport,
   specSource: SpecSource,
 ): FeatureTaskRuntimeRunReport {
+  val commitStepId =
+    strategies.selectedStrategies(strategySelectionFacts(runRequest))
+      .first { strategy -> strategy.slot == PhaseSlot.COMMIT_PUSH }
+      .entryStep
   val terminalReport =
-    persistGoalContinuationOutcome(goalContinuationRecorder, recorder, phaseGates.gitOperations, runRequest, report)
+    persistGoalContinuationOutcome(
+      runRequest,
+      report,
+      commitStepId,
+    )
   phaseGates.specGate.finalizeSingleSpecOnTerminal(
     runRequest,
     terminalReport,

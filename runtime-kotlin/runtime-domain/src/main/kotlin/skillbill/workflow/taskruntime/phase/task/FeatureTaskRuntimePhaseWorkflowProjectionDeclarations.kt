@@ -5,6 +5,7 @@ import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeCommitPushPayloadKeys
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeMeasuredFactKeys
 import skillbill.workflow.engine.model.WorkflowDefinition
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
@@ -49,6 +50,8 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
             checkpointPolicy = template.checkpointPolicy,
             required = template.required,
           ),
+        projectionContractVersion =
+          template.contractVersion ?: FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.VERSION,
       ),
     )
 
@@ -333,9 +336,16 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
               producingPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
               name = "history_receipt",
               contractId = FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.HISTORY_RECEIPT,
-              fields = listOf("changed_paths", "decisions_recorded"),
+              fields =
+                listOf(
+                  FeatureTaskRuntimeMeasuredFactKeys.CHANGED_PATHS,
+                  FeatureTaskRuntimeMeasuredFactKeys.HISTORY_WRITTEN,
+                  FeatureTaskRuntimeMeasuredFactKeys.DECISIONS_RECORDED,
+                ),
               checkpointPolicy = FeatureTaskRuntimeRepositoryCheckpointPolicy.NOT_REQUIRED,
               required = true,
+              contractVersion =
+                FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.HISTORY_RECEIPT_VERSION,
             ),
           ),
         ),

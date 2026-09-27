@@ -19,6 +19,7 @@ class FeatureTaskRuntimeValidationGateSettlementEvidenceTest {
   fun `gradle compile and test tasks with zero executed work units still record check identities`() {
     val output =
       FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
+        phaseId = "validate",
         repositoryCheckpoint = "checkpoint",
         measurements =
           listOf(
@@ -62,6 +63,7 @@ class FeatureTaskRuntimeValidationGateSettlementEvidenceTest {
   fun `settlement preserves cache-eligible failure and forced-full pass evidence independently`() {
     val output =
       FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
+        phaseId = "validate",
         repositoryCheckpoint = "checkpoint",
         measurements =
           listOf(
