@@ -59,6 +59,25 @@ class UnknownPhaseReviewTargetError(
       "sha, branch, or tag.",
   )
 
+class PhaseIntakeRequiredError(
+  val definitionId: String,
+  val detail: String,
+) : ShellContentContractException("Phase '$definitionId' requires an intake: $detail")
+
+class PhaseSpecRequiredError(
+  val definitionId: String,
+  val intake: String,
+) : ShellContentContractException(
+    "Phase '$definitionId' requires an existing governed spec; intake '$intake' resolves to none.",
+  )
+
+class PullRequestBranchRefusedError(
+  val branch: String?,
+  val reason: String,
+) : ShellContentContractException(
+    "Refusing to open a pull request from branch '${branch ?: "(detached)"}': $reason",
+  )
+
 class PhaseStrategySelectionSlotMismatchError(
   val definitionId: String,
   val slot: String,

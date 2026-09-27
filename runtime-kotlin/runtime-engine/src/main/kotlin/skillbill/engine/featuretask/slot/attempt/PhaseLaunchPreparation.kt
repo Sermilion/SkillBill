@@ -378,6 +378,7 @@ object PhaseLaunchPreparation {
         issueKey = run.request.issueKey,
         briefing = briefing,
         suppressDecomposition = isGoalContinuationRun(run.request),
+        specBundleRequired = run.request.specBundleRequired,
         codeReviewMode = executedTier,
         reviewPassNumber = passNumber,
         goalSubtaskReviewInput = run.goalReviewInput,

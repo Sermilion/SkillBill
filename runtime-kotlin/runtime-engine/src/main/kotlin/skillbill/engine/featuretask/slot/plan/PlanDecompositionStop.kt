@@ -144,7 +144,11 @@ internal class FeatureTaskRuntimePlanningStopper(
         .envelopePayload()
     val outcome =
       decomposePlanOutcomeFromPhaseOutput(parsed, specSource)
-        ?: return FeatureTaskRuntimePlanningStopDecision.Proceed
+        ?: return if (request.specBundleRequired) {
+          FeatureTaskRuntimePlanningStopDecision.Blocked(SPEC_BUNDLE_MISSING_REASON)
+        } else {
+          FeatureTaskRuntimePlanningStopDecision.Proceed
+        }
     val terminal = writeDecompositionTerminal(request, outcome)
     records.recordDecomposeTerminal(request.workflowId, terminal, completedOutput.phaseId)
     emitDecomposedAtPlanning(request, terminal, completedOutput.phaseId)
@@ -226,5 +230,8 @@ internal class FeatureTaskRuntimePlanningStopper(
 
   private companion object {
     const val MALFORMED_DETAIL_MAX_CHARS = 500
+    const val SPEC_BUNDLE_MISSING_REASON =
+      "Plan must persist as a governed spec bundle but emitted a direct plan with no decomposition package; " +
+        "the runtime blocks rather than completing without a spec."
   }
 }

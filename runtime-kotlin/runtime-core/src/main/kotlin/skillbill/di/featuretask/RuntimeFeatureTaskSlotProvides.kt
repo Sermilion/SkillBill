@@ -101,6 +101,15 @@ internal interface RuntimeFeatureTaskSlotProvides {
           ),
         SkeletonDefinition.VALIDATION to
           mapOf(PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(PackBuildStrategy.ID)),
+        SkeletonDefinition.PLAN to
+          mapOf(
+            PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID),
+            PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(AgentPlanStrategy.ID),
+          ),
+        SkeletonDefinition.IMPLEMENT to
+          mapOf(PhaseSlot.IMPLEMENTATION to PhaseStrategyBinding.Fixed(ImplementThenSimplifyStrategy.ID)),
+        SkeletonDefinition.PR to
+          mapOf(PhaseSlot.PULL_REQUEST to PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID)),
       ),
     )
 

@@ -9,7 +9,7 @@ base_branch: "main"
 feature_branch: "feat/SKILL-380-phase-slot-strategies"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 8
+  subtask_id: 9
   action: "resume"
 subtasks:
 - id: 1
@@ -127,12 +127,12 @@ subtasks:
 - id: 8
   name: "Short definitions, in-memory state, and phase review / validation"
   spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_8_phase-review-and-validation.md"
-  status: "in_progress"
+  status: "complete"
   branch: null
   commit_sha: null
   workflow_id: "wftr-20260927-140405-hxva"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
@@ -146,10 +146,10 @@ subtasks:
 - id: 9
   name: "The plan, implement, and pr definitions"
   spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_9_phase-plan-implement-pr.md"
-  status: "pending"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20260927-155202-qiez"
   blocked_reason: null
   last_resumable_step: null
   linear_issue_id: null

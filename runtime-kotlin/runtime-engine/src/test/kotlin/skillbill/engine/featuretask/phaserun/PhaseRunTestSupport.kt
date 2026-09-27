@@ -11,6 +11,8 @@ import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.slotbaseline.SlotBaselineSqlite
 import skillbill.engine.featuretask.slotbaseline.SlotBaselineTestResources
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
+import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
+import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
@@ -39,7 +41,10 @@ internal fun phaseRunDatabase(
     dbPathOverride = home.resolve("metrics.db").toString(),
     environment = emptyMap(),
     clock = clock,
-  )
+  ).also { database ->
+    // Create the schema up front, so a run that refuses before any write still leaves empty tables to assert on.
+    database.transaction { }
+  }
 
 /** A [PhaseRunEntry] over the strategies and gates of [runner], recording into [database]. */
 internal fun phaseRunEntry(
@@ -63,6 +68,8 @@ internal fun phaseRunEntry(
       LifecycleTelemetryService(database, EnabledRuntimeTelemetrySettingsProvider, clock, NoopRuntimeDiagnostics),
     diagnostics = NoopRuntimeDiagnostics,
     clock = clock,
+    intakeResolver =
+      PhaseRunIntakeResolver(FileSystemFeatureSpecPathResolver(), FileSystemFeatureTaskRuntimeRunInvariantsSource()),
     runLoopEntry = runLoopEntry,
   )
 

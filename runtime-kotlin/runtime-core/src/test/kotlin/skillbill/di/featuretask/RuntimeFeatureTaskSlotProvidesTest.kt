@@ -9,6 +9,10 @@ import skillbill.di.core.create
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
+import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
+import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
+import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.model.EnvironmentContext
@@ -54,13 +58,37 @@ class RuntimeFeatureTaskSlotProvidesTest {
   fun `production selection resolves every slot of each definition for every selection fact`() {
     CodeReviewExecutionMode.entries.forEach { mode ->
       FeatureTaskRuntimeQualityGateSelection.entries.forEach { gate ->
-        listOf(SkeletonDefinition.STANDALONE, SkeletonDefinition.GOAL_CHILD).forEach { definition ->
+        listOf(
+          SkeletonDefinition.STANDALONE,
+          SkeletonDefinition.GOAL_CHILD,
+          SkeletonDefinition.PLAN,
+          SkeletonDefinition.IMPLEMENT,
+          SkeletonDefinition.PR,
+        ).forEach { definition ->
           val facts = PhaseStrategySelectionFacts(definition, setOf(mode, gate))
           definition.stepIds.forEach { step ->
             assertEquals(PhaseSlot.slotForStep(step), strategies.strategyFor(step, facts).slot)
           }
         }
       }
+    }
+  }
+
+  @Test
+  fun `plan, implement, and pr select the existing preplan, plan, implement, and pr strategies`() {
+    val expected =
+      mapOf(
+        SkeletonDefinition.PLAN to setOf(AgentPreplanStrategy.ID, AgentPlanStrategy.ID),
+        SkeletonDefinition.IMPLEMENT to setOf(ImplementThenSimplifyStrategy.ID),
+        SkeletonDefinition.PR to setOf(PrDescriptionStrategy.ID),
+      )
+    expected.forEach { (definition, strategyIds) ->
+      val facts = PhaseStrategySelectionFacts(definition, emptySet())
+      assertEquals(
+        strategyIds,
+        definition.stepIds.map { step -> strategies.strategyFor(step, facts).strategyId }.toSet(),
+        definition.id,
+      )
     }
   }
 

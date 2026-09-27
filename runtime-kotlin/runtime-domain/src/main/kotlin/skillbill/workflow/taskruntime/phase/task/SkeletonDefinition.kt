@@ -10,10 +10,17 @@ enum class SkeletonRunStateKind(val wireValue: String) {
   IN_MEMORY("in_memory"),
 }
 
+enum class PhaseIntakeRequirement(val wireValue: String) {
+  OPTIONAL("optional"),
+  ISSUE_KEY("issue_key"),
+  SPEC("spec"),
+}
+
 data class SkeletonDefinition(
   val id: String,
   val slots: List<PhaseSlot>,
   val runStateKind: SkeletonRunStateKind = SkeletonRunStateKind.DURABLE,
+  val intake: PhaseIntakeRequirement = PhaseIntakeRequirement.OPTIONAL,
 ) {
   init {
     val canonicalOrder = slots.zipWithNext().all { (previous, next) -> previous.ordinal < next.ordinal }
@@ -57,8 +64,25 @@ data class SkeletonDefinition(
       SkeletonDefinition("review", listOf(PhaseSlot.CODE_REVIEW), SkeletonRunStateKind.IN_MEMORY)
     val VALIDATION: SkeletonDefinition =
       SkeletonDefinition("validation", listOf(PhaseSlot.QUALITY_GATE), SkeletonRunStateKind.IN_MEMORY)
+    val PLAN: SkeletonDefinition =
+      SkeletonDefinition(
+        "plan",
+        listOf(PhaseSlot.PREPLAN, PhaseSlot.PLAN),
+        SkeletonRunStateKind.IN_MEMORY,
+        PhaseIntakeRequirement.ISSUE_KEY,
+      )
+    val IMPLEMENT: SkeletonDefinition =
+      SkeletonDefinition(
+        "implement",
+        listOf(PhaseSlot.IMPLEMENTATION),
+        SkeletonRunStateKind.IN_MEMORY,
+        PhaseIntakeRequirement.SPEC,
+      )
+    val PR: SkeletonDefinition =
+      SkeletonDefinition("pr", listOf(PhaseSlot.PULL_REQUEST), SkeletonRunStateKind.IN_MEMORY)
 
-    val entries: List<SkeletonDefinition> get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION)
+    val entries: List<SkeletonDefinition>
+      get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, PLAN, IMPLEMENT, PR)
 
     fun forRun(goalContinuation: Boolean): SkeletonDefinition = if (goalContinuation) GOAL_CHILD else STANDALONE
 

@@ -48,7 +48,7 @@ internal class InMemoryPhaseRunState(
   override val goal: PhaseRunGoal = InMemoryPhaseRunGoal
   override val settlements: PhaseRunSettlements = InMemoryPhaseRunSettlements
   override val checkpoints: PhaseRunCheckpoints = InMemoryPhaseRunCheckpoints
-  override val specSource: SpecSource = SpecSource.LOCAL
+  override val specSource: SpecSource = facts.request.specSource
   override val transitions: FeatureTaskRuntimeTransitionDeclaration = progress.transitions
   override val attemptLoop: PhaseAttemptLoop =
     PhaseAttemptLoop(entry.outputValidator, entry.phaseGates, entry.clock, entry.diagnostics)

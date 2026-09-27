@@ -647,7 +647,11 @@ internal data class RuntimeHarnessConfig(
   val diagnostics: RuntimeDiagnostics? = null,
   val pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
   val delegatedReviewRunner: ParallelCodeReviewRunner? = null,
-)
+  /** Replaces the recording git operations in the telemetry harness's strategies and gates, e.g. with real git. */
+  val gitOperationsOverride: WorkflowGitOperations? = null,
+) {
+  val harnessGitOperations: WorkflowGitOperations get() = gitOperationsOverride ?: branchSetup.gitOperations
+}
 
 private fun runtimeSpecSourceResolver(): SpecSourceResolver =
   SpecSourceResolver(TestDecompositionManifestStore, testDecompositionManifestValidator)
@@ -1103,13 +1107,13 @@ private fun telemetryHarnessRunner(
   val branchSetupRunner =
     FeatureTaskRuntimeBranchSetupRunner(
       workflow.recorder,
-      runtimeConfig.branchSetup.gitOperations,
+      runtimeConfig.harnessGitOperations,
     )
   return FeatureTaskRuntimeRunner(
     strategies =
       testPhaseStrategies(
         launcher,
-        runtimeConfig.branchSetup.gitOperations,
+        runtimeConfig.harnessGitOperations,
         harnessReviewRunner(runtimeConfig, launcher),
         runtimeConfig.pullRequestIdentityLookup,
         workflow.recorder,
@@ -1139,7 +1143,7 @@ private fun harnessReviewRunner(
   launcher: GoalRunnerSubtaskLauncher,
 ): PhaseRunner =
   harnessReviewRunnerSyncingPendingVerifyFindings(
-    runtimeConfig.reviewRunner ?: DefaultPhaseRunner(launcher, runtimeConfig.branchSetup.gitOperations),
+    runtimeConfig.reviewRunner ?: DefaultPhaseRunner(launcher, runtimeConfig.harnessGitOperations),
   )
 
 private fun telemetryRunnerPhaseGates(
@@ -1162,7 +1166,7 @@ private fun telemetryRunnerPhaseGates(
           ),
           NoopRuntimeDiagnostics,
         ),
-      gitOperations = runtimeConfig.branchSetup.gitOperations,
+      gitOperations = runtimeConfig.harnessGitOperations,
       sharedEvidenceResolver = runtimeConfig.sharedEvidenceResolver,
       diffResolver = runtimeConfig.diffResolver,
       recorder = workflow.recorder,

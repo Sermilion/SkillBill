@@ -6,6 +6,7 @@ import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class PhaseInvocationParserTest {
   @Test
@@ -61,6 +62,19 @@ class PhaseInvocationParserTest {
   fun `a durable definition name is a usage error`() {
     val error = assertFailsWith<UsageError> { PhaseInvocationParser.parse("standalone", emptyList()) }
 
-    assertEquals("Phase 'standalone' runs over durable workflow state; expected review or validation.", error.message)
+    assertEquals(
+      "Phase 'standalone' runs over durable workflow state; expected review, validation, plan, implement, or pr.",
+      error.message,
+    )
+  }
+
+  @Test
+  fun `plan and implement require an intake while pr runs without one`() {
+    listOf("plan", "implement").forEach { name ->
+      val error = assertFailsWith<UsageError>(name) { PhaseInvocationParser.parse(name, listOf("mode:inline")) }
+
+      assertTrue(error.message.orEmpty().startsWith("Phase '$name' requires an intake"), error.message)
+    }
+    assertEquals(PhaseInvocation("pr", null, null, null), PhaseInvocationParser.parse("pr", emptyList()))
   }
 }

@@ -32,6 +32,7 @@ import java.time.Clock
 
 internal class InMemoryPhaseRunRecords(
   private val clock: Clock,
+  private val resolvedBranch: FeatureTaskRuntimeResolvedBranch?,
 ) : PhaseRunRecords {
   private val phaseRecords = LinkedHashMap<String, FeatureTaskRuntimePhaseRecord>()
   private val producerOutputs = mutableListOf<ProducerOutputEvidence>()
@@ -191,7 +192,7 @@ internal class InMemoryPhaseRunRecords(
 
   override fun loadQuarantinedRecords(workflowId: String): List<FeatureTaskRuntimeQuarantineEntry> = emptyList()
 
-  override fun loadResolvedBranch(workflowId: String): FeatureTaskRuntimeResolvedBranch? = null
+  override fun loadResolvedBranch(workflowId: String): FeatureTaskRuntimeResolvedBranch? = resolvedBranch
 
   override fun appendCheckpointIdentity(args: AppendCheckpointIdentityArgs): Boolean = true
 

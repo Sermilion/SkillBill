@@ -5,6 +5,7 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.config.ConfigResolutionService
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
 import skillbill.cli.kernel.cli.CliRunState
@@ -19,21 +20,25 @@ import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.error.core.ShellContentContractException
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.workflow.decomposition.model.SpecSource
+import skillbill.workflow.taskruntime.phase.task.PhaseIntakeRequirement
 import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.SkeletonRunStateKind
 
 @Inject
 class PhaseCommand(
   private val entry: PhaseRunEntry,
+  private val configResolution: ConfigResolutionService,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand(
     "phase",
-    "Run one in-memory phase (review or validation) over the working tree, with no workflow state.",
+    "Run one in-memory phase (${PhaseInvocationParser.phaseNames().joinToString(", ")}) over the working tree, " +
+      "with no workflow state.",
   ) {
   private val name by argument(
     name = "name",
-    help = "Phase to run: ${PhaseInvocationParser.phaseNames().joinToString(" or ")}.",
+    help = "Phase to run: ${PhaseInvocationParser.expectedList(PhaseInvocationParser.phaseNames())}.",
   )
   private val rest by argument(
     name = "args",
@@ -49,16 +54,30 @@ class PhaseCommand(
 
   override fun run() {
     val invocation = PhaseInvocationParser.parse(name, rest)
-    val request =
-      PhaseRunRequest(
-        definitionId = invocation.definitionId,
-        repoRoot = resolveCliRepositoryRoot(null, inputs),
-        invokedAgentId = requireInvokingAgentId(agent, inputs.environment, "--agent"),
-        intake = invocation.intake,
-        codeReviewMode = invocation.mode,
-        reviewInvocation = ReviewInvocation(target = invocation.target),
-      )
-    val result = runPhase(state) { entry.run(request) } ?: return
+    val repoRoot = resolveCliRepositoryRoot(null, inputs)
+    val invokedAgentId = requireInvokingAgentId(agent, inputs.environment, "--agent")
+    val result =
+      runPhase(state) {
+        // Only the spec-backed phases (plan, implement) read the spec type, so a bad config cannot fail the others.
+        val specBacked = SkeletonDefinition.byId(invocation.definitionId).intake != PhaseIntakeRequirement.OPTIONAL
+        val specSource =
+          if (specBacked) {
+            SpecSource.fromWireValue(configResolution.resolveSpecType(repoRoot, explicit = null).id)
+          } else {
+            null
+          }
+        entry.run(
+          PhaseRunRequest(
+            definitionId = invocation.definitionId,
+            repoRoot = repoRoot,
+            invokedAgentId = invokedAgentId,
+            intake = invocation.intake,
+            codeReviewMode = invocation.mode,
+            reviewInvocation = ReviewInvocation(target = invocation.target),
+            specSource = specSource ?: SpecSource.LOCAL,
+          ),
+        )
+      } ?: return
     writePhaseResult(state, invocation.definitionId, result)
   }
 }
@@ -105,6 +124,10 @@ object PhaseInvocationParser {
     val definitionId = definitionId(name)
     val pairs = rest.filter(::isKeyValue)
     val intake = rest.filterNot(::isKeyValue).joinToString(" ").takeIf(String::isNotBlank)
+    val intakeRequirement = SkeletonDefinition.byId(definitionId).intake
+    if (intake == null && intakeRequirement != PhaseIntakeRequirement.OPTIONAL) {
+      throw UsageError("Phase '$definitionId' requires an intake (${intakeRequirement.wireValue}).")
+    }
     val values = pairs.associate { pair -> pair.substringBefore(KEY_SEPARATOR) to pair.substringAfter(KEY_SEPARATOR) }
     return PhaseInvocation(
       definitionId = definitionId,
@@ -121,10 +144,13 @@ object PhaseInvocationParser {
       name == COMMIT_PUSH ->
         throw UsageError("Phase '$COMMIT_PUSH' is not runnable on its own; run the full feature-task workflow.")
       SkeletonDefinition.entries.any { it.id == name } ->
-        throw UsageError("Phase '$name' runs over durable workflow state; expected ${names.joinToString(" or ")}.")
-      else -> throw UsageError("Unknown phase '$name'; expected ${names.joinToString(" or ")}.")
+        throw UsageError("Phase '$name' runs over durable workflow state; expected ${expectedList(names)}.")
+      else -> throw UsageError("Unknown phase '$name'; expected ${expectedList(names)}.")
     }
   }
+
+  fun expectedList(names: List<String>): String =
+    if (names.size < 2) names.joinToString() else "${names.dropLast(1).joinToString(", ")}, or ${names.last()}"
 
   // Only known keys split off, so intake words such as `Foo.kt:12` or URLs stay intake.
   private fun isKeyValue(value: String): Boolean =
@@ -158,7 +184,16 @@ private fun writePhaseResult(
   when (result) {
     is PhaseRunResult.Completed ->
       state.completeText(
-        listOfNotNull(register ?: result.value, "Phase invocation ID: ${result.invocationId}").joinToString("\n"),
+        listOfNotNull(
+          register ?: result.value,
+          result.specBundle?.let { bundle ->
+            (
+              listOf("Parent spec: ${bundle.parentSpecPath}", "Manifest: ${bundle.decompositionManifestPath}") +
+                bundle.subtaskSpecPaths.map { path -> "Subtask spec: $path" }
+            ).joinToString("\n")
+          },
+          "Phase invocation ID: ${result.invocationId}",
+        ).joinToString("\n"),
         emptyMap(),
         exitCode = 0,
       )

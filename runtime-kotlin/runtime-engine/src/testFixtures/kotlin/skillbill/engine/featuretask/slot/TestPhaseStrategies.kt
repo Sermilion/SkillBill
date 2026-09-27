@@ -128,5 +128,8 @@ fun testPhaseStrategyBindings(
           ),
       ),
     SkeletonDefinition.VALIDATION to mapOf(PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(PackBuildStrategy.ID)),
+    SkeletonDefinition.PLAN to shared.filterKeys { slot -> slot == PhaseSlot.PREPLAN || slot == PhaseSlot.PLAN },
+    SkeletonDefinition.IMPLEMENT to shared.filterKeys { slot -> slot == PhaseSlot.IMPLEMENTATION },
+    SkeletonDefinition.PR to mapOf(PhaseSlot.PULL_REQUEST to PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID)),
   )
 }

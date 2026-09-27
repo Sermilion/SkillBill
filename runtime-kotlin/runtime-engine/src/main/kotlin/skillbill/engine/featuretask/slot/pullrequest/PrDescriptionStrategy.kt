@@ -14,8 +14,11 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.withMeasuredFacts
+import skillbill.error.featuretask.PullRequestBranchRefusedError
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.workflow.gitops.ProtectedBranches
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.core.PhaseStepPolicy
@@ -82,14 +85,22 @@ class PrDescriptionStrategy(
     state: PhaseStepState,
   ): PhaseOutcome {
     val context = PhaseAttemptScope(run.request, state)
-    readinessGate.blockedReason(
-      workflowId = context.request.workflowId,
-      repoRoot = context.request.repoRoot,
-      baseBranch = context.recorder.loadResolvedBranch(context.request.workflowId)?.baseBranch ?: "main",
-      gitOperations = context.phaseGates.gitOperations,
-    )?.let { reason -> return PhaseOutcome.blocked(reason) }
+    val resolved = context.recorder.loadResolvedBranch(context.request.workflowId)
+    val branch = resolved?.branch
+    val baseBranch = resolved?.baseBranch ?: DEFAULT_BASE_BRANCH
+    refusal(branch, baseBranch)?.let { reason -> throw PullRequestBranchRefusedError(branch, reason) }
+    requireNotNull(branch)
+    if (FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH in context.transitions.forwardPhaseIds) {
+      readinessGate.blockedReason(
+        workflowId = context.request.workflowId,
+        repoRoot = context.request.repoRoot,
+        baseBranch = baseBranch,
+        gitOperations = context.phaseGates.gitOperations,
+      )?.let { reason -> return PhaseOutcome.blocked(reason) }
+    }
+    pushIfAhead(context, branch)?.let { reason -> return PhaseOutcome.blocked(reason) }
     val workflowId = context.request.workflowId
-    beforeLookups[workflowId] = measurement(context).identity(branch(context))
+    beforeLookups[workflowId] = measurement(context).identity(branch)
     return try {
       runAgentStep(run, state)
     } finally {
@@ -105,8 +116,34 @@ class PrDescriptionStrategy(
   private fun branch(context: PhaseAttemptEnvironment): String? =
     context.recorder.loadResolvedBranch(context.request.workflowId)?.branch
 
+  private fun refusal(
+    branch: String?,
+    baseBranch: String,
+  ): String? =
+    when {
+      branch == null -> "the checkout is on no branch."
+      ProtectedBranches.protectedName(branch) != null -> "'$branch' is a protected branch."
+      branch == baseBranch -> "'$branch' is the base branch."
+      else -> null
+    }
+
+  private fun pushIfAhead(
+    context: PhaseAttemptEnvironment,
+    branch: String,
+  ): String? {
+    val git = context.phaseGates.gitOperations
+    val unpushed = git.localBranchHasUnpushedCommits(context.request.repoRoot, branch)
+    if (unpushed !is WorkflowGitOperationResult.Ok) {
+      return "Could not tell whether branch '$branch' has unpushed commits: ${unpushed.error}"
+    }
+    if (!unpushed.value.trim().equals("true", ignoreCase = true)) return null
+    val push = git.pushBranch(context.request.repoRoot, branch)
+    return if (push is WorkflowGitOperationResult.Ok) null else "Could not push branch '$branch': ${push.error}"
+  }
+
   companion object {
     const val ID = "pr-description"
+    private const val DEFAULT_BASE_BRANCH = "main"
 
     private const val DIRECTIVE: String =
       "Invoke bill-pr-description, honor any repo-native PR template except its checklist, and generate a title " +

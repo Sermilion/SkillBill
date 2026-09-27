@@ -18,7 +18,7 @@ Harness sources live in
 | `goal-planning/` | `SlotBaselineGoalPlanningCapture.encodedFiles()` | `DefaultGoalPlanningSweep` preplan and plan over a two-subtask manifest, then `GoalPlanningLogService.log` |
 | `code-review/` | `SlotBaselineCodeReviewCapture.encodedFiles()` | `PhaseRunEntry` over the review definition with the request `skill-bill code-review` builds (a scoped `HEAD^..HEAD` target, the pinned run and session ids), in INLINE and DELEGATED mode |
 | `mcp-lifecycle/` | `SlotBaselineMcpLifecycleCapture.encodedFiles()` | `LifecycleTelemetryService`, the service the MCP tools call |
-| `phase/` | `SlotBaselinePhaseRunCapture.encodedFiles()` | `skill-bill phase review` in INLINE and DELEGATED mode with no target, and `skill-bill phase validation` over a gate that fails once and then passes |
+| `phase/` | `SlotBaselinePhaseRunCapture.encodedFiles()` | `skill-bill phase review` in INLINE and DELEGATED mode with no target, `skill-bill phase validation` over a gate that fails once and then passes, and `skill-bill phase plan`, `implement` and `pr` over the fixture agent outputs |
 
 Full-run bundles run through `telemetryRunnerHarness` against real SQLite.
 The phase launcher is `satisfiedAuditLauncher()`. The review step runs
@@ -58,6 +58,12 @@ re-review approves. Delegated mode runs `scriptedDelegatedReviewRunner`.
 
 - `review-inline-output.json`, `review-delegated-output.json` and `validation-output.json`: the phase-run result fields the CLI prints, including the invocation id
 - `review-inline-telemetry.json`, `review-delegated-telemetry.json` and `validation-telemetry.json`: `telemetry_outbox` rows
+- `plan/`, `implement/` and `pr/`: for each phase, `output.json` (the printed result fields), `telemetry.json`
+  (`telemetry_outbox` rows) and `prompts/<step>.txt`. The plan agent returns a decomposition package, so
+  `plan/output.json` carries `spec_bundle` and `plan/spec-bundle.json` holds every bundle file by repo-relative
+  path. The implement run reads a governed spec written under `.feature-specs/SKILL-380-phase-implement/`.
+  These captures use the existing normaliser tokens; the manifest's absolute paths fall under
+  `__NORMALIZED_REPO_ROOT__`.
 
 ## Pinned ids and clock
 
@@ -160,3 +166,5 @@ ledger expects must be regenerated in the subtask that the ledger names.
 - Subtask 8 (phase review and validation): `code-review/` routes through
   `PhaseRunEntry` over the review definition, so both modes find, verify and fix.
   `phase/` is new.
+- Subtask 9 (phase plan, implement and pr): `phase/plan/`, `phase/implement/` and
+  `phase/pr/` are new. Every existing file is unchanged.

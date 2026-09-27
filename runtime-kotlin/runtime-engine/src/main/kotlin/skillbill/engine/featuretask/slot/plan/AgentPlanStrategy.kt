@@ -51,7 +51,12 @@ class AgentPlanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
     PhaseStepPromptSections(
       taskDirective = directiveFor(stepId),
       testValueDiscipline = true,
-      stepContext = GOAL_CONTINUATION_CONSTRAINT.takeIf { inputs.suppressDecomposition }.orEmpty(),
+      stepContext =
+        when {
+          inputs.suppressDecomposition -> GOAL_CONTINUATION_CONSTRAINT
+          inputs.specBundleRequired -> SPEC_BUNDLE_REQUIREMENT
+          else -> ""
+        },
       valueContent = VALUE_CONTENT,
     )
 
@@ -109,6 +114,19 @@ class AgentPlanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
       happened. Never block planning merely because a later implementation or validation action is not
       yet complete. A blocked plan requires a genuinely missing input or an irreconcilable constraint
       that prevents an implementable plan from being produced.
+      """.trimIndent()
+
+    private val SPEC_BUNDLE_REQUIREMENT: String =
+      """
+      ## Spec bundle planning requirement
+      No later phase consumes this plan: the runtime persists it as a governed spec bundle (parent spec,
+      subtask specs, and decomposition manifest). Plan in mode "decompose" and emit, beside value,
+      produced_outputs.decomposition_package with: "mode": "decompose", "reason", "feature_name",
+      "parent_spec_overview", "validation_strategy", "base_branch", "feature_branch", and "subtasks" (at
+      least two). Each subtask carries an integer "id", "name", "scope", "acceptance_criteria" (list),
+      "non_goals" (list), "dependency_notes", "validation_strategy", "next_path", and "depends_on" (list of
+      earlier subtask ids). Do not write the spec files yourself; the runtime writes them. A plan without a
+      decomposition package blocks.
       """.trimIndent()
 
     private val VALUE_CONTENT: String =

@@ -11,6 +11,8 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.PhaseInstructions
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.workflow.decomposition.model.SpecSource
+import skillbill.workflow.taskruntime.model.core.PhaseSlot
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
@@ -27,6 +29,7 @@ data class PhaseRunRequest(
   val instructions: PhaseInstructions? = null,
   val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
   val timeout: Duration? = null,
+  val specSource: SpecSource = SpecSource.LOCAL,
 ) {
   init {
     require(definitionId.isNotBlank()) { "PhaseRunRequest.definitionId is required." }
@@ -44,6 +47,7 @@ sealed interface PhaseRunResult {
     override val completedStepIds: List<String>,
     override val reviewResult: ParallelCodeReviewResult?,
     val value: String?,
+    val specBundle: PhaseRunSpecBundle? = null,
   ) : PhaseRunResult
 
   data class Blocked(
@@ -55,19 +59,22 @@ sealed interface PhaseRunResult {
   ) : PhaseRunResult
 }
 
+/** The governed spec bundle a plan run wrote: the parent spec, the decomposition manifest, and the subtask specs. */
+data class PhaseRunSpecBundle(
+  val parentSpecPath: String,
+  val decompositionManifestPath: String,
+  val subtaskSpecPaths: List<String>,
+)
+
 internal data class InMemoryPhaseRunFacts(
   val request: PhaseRunRequest,
   val definition: SkeletonDefinition,
+  val intake: PhaseRunIntake,
 ) : FeatureTaskRuntimeRunFacts {
-  override val issueKey: String = request.definitionId
+  override val issueKey: String = intake.issueKey
   override val workflowId: String = ""
-  override val runInvariants: FeatureTaskRuntimeRunInvariants =
-    FeatureTaskRuntimeRunInvariants(
-      specReference = request.intake?.takeIf(String::isNotBlank) ?: "$PHASE_SPEC_PREFIX${request.definitionId}",
-      acceptanceCriteria = listOf(PHASE_ACCEPTANCE_CRITERION),
-      mandatesAndOverrides = emptyList(),
-      codeReviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT,
-    )
+  override val runInvariants: FeatureTaskRuntimeRunInvariants = intake.runInvariants
+  override val specBundleRequired: Boolean = definition.slots.last() == PhaseSlot.PLAN
   override val invokedAgentId: String = request.invokedAgentId
   override val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment()
   override val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment()
@@ -84,6 +91,3 @@ internal data class InMemoryPhaseRunFacts(
   override val reviewInvocation: ReviewInvocation = request.reviewInvocation
   override val phaseInstructions: PhaseInstructions? = request.instructions
 }
-
-private const val PHASE_SPEC_PREFIX = "phase:"
-private const val PHASE_ACCEPTANCE_CRITERION = "The phase leaves no unresolved Blocker or Major finding."

@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slotbaseline
 import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.BranchSetupTestConfig
+import skillbill.engine.DECOMPOSE_PLAN_OUTPUT
 import skillbill.engine.REVIEW_BLOCKER_MESSAGE
 import skillbill.engine.REVIEW_FIX_BLOCKER_FINDING_ID
 import skillbill.engine.RuntimeHarnessConfig
@@ -15,6 +16,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
+import skillbill.engine.featuretask.phaserun.PhaseRunSpecBundle
 import skillbill.engine.featuretask.phaserun.phaseRunEntry
 import skillbill.engine.featuretask.slot.codereview.DELEGATED_REVIEWED_PATH
 import skillbill.engine.featuretask.slot.codereview.LaneScript
@@ -49,8 +51,60 @@ internal object SlotBaselinePhaseRunCapture {
       SlotBaselinePaths.PHASE_VALIDATION_TELEMETRY to validation.telemetry,
     ).entries.associate { (fileName, value) ->
       "${SlotBaselinePaths.PHASE}/$fileName" to SlotBaselineJson.encode(value)
-    }
+    } +
+      captureAgentPhase(SkeletonDefinition.PLAN.id, PLAN_INTAKE).encodedFiles(SlotBaselinePaths.PHASE_PLAN) +
+      captureAgentPhase(SkeletonDefinition.IMPLEMENT.id, IMPLEMENT_INTAKE)
+        .encodedFiles(SlotBaselinePaths.PHASE_IMPLEMENT) +
+      captureAgentPhase(SkeletonDefinition.PR.id, intake = null).encodedFiles(SlotBaselinePaths.PHASE_PR)
   }
+
+  /** A plan, implement, or pr phase run whose agents answer with the fixture outputs; plan decomposes. */
+  private fun captureAgentPhase(
+    definitionId: String,
+    intake: String?,
+  ): AgentPhaseRunCapture =
+    SlotBaselinePhaseRunHarness.use { harness ->
+      if (definitionId == SkeletonDefinition.IMPLEMENT.id) harness.writeImplementSpec()
+      val launcher =
+        RuntimeRecordingLauncher { request ->
+          val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+          facts(if (phaseId == PHASE_PLAN) DECOMPOSE_PLAN_OUTPUT else defaultPhaseOutput(request))
+        }
+      val result =
+        harness.agentEntry(launcher).run(harness.request(definitionId, mode = null).copy(intake = intake))
+      AgentPhaseRunCapture(
+        capture = PhaseRunCapture(result.printedFields(), harness.outboxRows()),
+        prompts =
+          launcher.requests
+            .map { request -> requireNotNull(request.skillRunRequest.promptOverride) }
+            .groupBy(::phaseIdFromPrompt)
+            .mapValues { (_, prompts) -> prompts.joinToString(PROMPT_ATTEMPT_SEPARATOR) },
+        specBundle = (result as? PhaseRunResult.Completed)?.specBundle?.let(harness::specBundleFiles),
+      )
+    }
+
+  private data class AgentPhaseRunCapture(
+    val capture: PhaseRunCapture,
+    val prompts: Map<String, String>,
+    val specBundle: Map<String, String>?,
+  ) {
+    fun encodedFiles(resourcePrefix: String): Map<String, String> =
+      buildMap {
+        put("$resourcePrefix/${SlotBaselinePaths.PHASE_RUN_OUTPUT}", SlotBaselineJson.encode(capture.output))
+        put("$resourcePrefix/${SlotBaselinePaths.PHASE_RUN_TELEMETRY}", SlotBaselineJson.encode(capture.telemetry))
+        specBundle?.let { files ->
+          put("$resourcePrefix/${SlotBaselinePaths.PHASE_PLAN_SPEC_BUNDLE}", SlotBaselineJson.encode(files))
+        }
+        prompts.forEach { (stepId, prompt) ->
+          put("$resourcePrefix/${SlotBaselinePaths.PROMPTS_DIR}/$stepId.txt", SlotBaselineJson.encode(prompt))
+        }
+      }
+  }
+
+  private const val PHASE_PLAN = "plan"
+  private const val PLAN_INTAKE = "SKILL-380 slot baseline phase plan"
+  private const val IMPLEMENT_INTAKE = "SKILL-380"
+  private const val PROMPT_ATTEMPT_SEPARATOR = "\n---\n"
 
   private fun captureReview(mode: CodeReviewExecutionMode): PhaseRunCapture =
     SlotBaselinePhaseRunHarness.use { harness ->
@@ -80,6 +134,13 @@ internal fun PhaseRunResult.printedFields(): Map<String, Any?> =
     "blocked_step_id" to (this as? PhaseRunResult.Blocked)?.stepId,
     "blocked_reason" to (this as? PhaseRunResult.Blocked)?.reason,
     "invocation_id" to invocationId,
+  ) + listOfNotNull((this as? PhaseRunResult.Completed)?.specBundle?.let { bundle -> "spec_bundle" to bundle.fields() })
+
+private fun PhaseRunSpecBundle.fields(): Map<String, Any?> =
+  mapOf(
+    "parent_spec_path" to parentSpecPath,
+    "decomposition_manifest_path" to decompositionManifestPath,
+    "subtask_spec_paths" to subtaskSpecPaths,
   )
 
 private fun ParallelCodeReviewResult.printedFields(): Map<String, Any?> =
@@ -154,6 +215,26 @@ internal class SlotBaselinePhaseRunHarness private constructor(
       ),
     )
 
+  fun agentEntry(launcher: RuntimeRecordingLauncher): PhaseRunEntry =
+    entryFor(
+      RuntimeHarnessConfig(
+        branchSetup = BranchSetupTestConfig(gitOperations = git),
+        repoRoot = repoRoot,
+        launcher = launcher,
+      ),
+    )
+
+  fun writeImplementSpec() {
+    val spec = repoRoot.resolve(IMPLEMENT_SPEC)
+    Files.createDirectories(spec.parent)
+    Files.writeString(spec, IMPLEMENT_SPEC_TEXT)
+  }
+
+  /** Every file of [bundle], by repo-relative path. */
+  fun specBundleFiles(bundle: PhaseRunSpecBundle): Map<String, String> =
+    (listOf(bundle.parentSpecPath, bundle.decompositionManifestPath) + bundle.subtaskSpecPaths)
+      .associateWith { path -> Files.readString(repoRoot.resolve(path)) }
+
   fun outboxRows(): List<Map<String, Any?>> = SlotBaselineSqlite.rows(database.resolveDbPath(), "telemetry_outbox")
 
   private fun entryFor(config: RuntimeHarnessConfig): PhaseRunEntry {
@@ -190,6 +271,9 @@ internal class SlotBaselinePhaseRunHarness private constructor(
     const val BLOCKER_REVIEW =
       "- [F-001] Blocker | High | $DELEGATED_REVIEWED_PATH:1 | $REVIEW_BLOCKER_MESSAGE\nverdict: changes_requested"
     const val APPROVED_REVIEW = "verdict: approved"
+    const val IMPLEMENT_SPEC = ".feature-specs/SKILL-380-phase-implement/spec.md"
+    const val IMPLEMENT_SPEC_TEXT =
+      "# SKILL-380 - phase implement\n\n## Acceptance Criteria\n\n1. The phase implement run edits the tree.\n"
 
     fun <T> use(block: (SlotBaselinePhaseRunHarness) -> T): T {
       val repoRoot = SlotBaselineFullRunCapture.seededRepoRoot()

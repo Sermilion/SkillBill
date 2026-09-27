@@ -70,6 +70,9 @@ interface FeatureTaskRuntimeRunFacts {
 
   /** The operator instructions a phase run adds to its step prompts; null for a full run. */
   val phaseInstructions: PhaseInstructions? get() = null
+
+  /** Whether the plan must persist as a governed spec bundle because no later step consumes it. */
+  val specBundleRequired: Boolean get() = false
 }
 
 data class PhaseInstructions(

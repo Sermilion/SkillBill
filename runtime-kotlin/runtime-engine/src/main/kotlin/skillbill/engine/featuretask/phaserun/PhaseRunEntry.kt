@@ -16,6 +16,8 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.featuretask.InMemorySkeletonDefinitionRequiredError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.phase.task.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.SkeletonRunStateKind
 import java.time.Clock
@@ -30,6 +32,7 @@ class PhaseRunEntry(
   internal val lifecycleTelemetry: LifecycleTelemetryService,
   internal val diagnostics: RuntimeDiagnostics,
   internal val clock: Clock,
+  private val intakeResolver: PhaseRunIntakeResolver,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
 ) {
   fun run(request: PhaseRunRequest): PhaseRunResult {
@@ -37,7 +40,9 @@ class PhaseRunEntry(
     if (definition.runStateKind != SkeletonRunStateKind.IN_MEMORY) {
       throw InMemorySkeletonDefinitionRequiredError(definition.id)
     }
-    val facts = InMemoryPhaseRunFacts(request, definition)
+    val branch = currentBranch(request)
+    val intake = intakeResolver.resolve(definition, request, branch?.branch)
+    val facts = InMemoryPhaseRunFacts(request, definition, intake)
     val selection = strategySelectionFacts(facts)
     val progress =
       FeatureTaskRuntimeRunState(
@@ -47,7 +52,7 @@ class PhaseRunEntry(
         stepVerdictRule = slotStepVerdictRule(strategies, selection, diagnostics),
         resumeRules = strategies.resumeRules(selection),
       )
-    val records = InMemoryPhaseRunRecords(clock)
+    val records = InMemoryPhaseRunRecords(clock, branch)
     val state =
       InMemoryPhaseRunState(
         facts = facts,
@@ -79,8 +84,26 @@ class PhaseRunEntry(
       is FeatureTaskRuntimeRunReport.Paused ->
         blocked(state, report.completedPhaseIds, report.pausedPhase, report.pauseReason)
       is FeatureTaskRuntimeRunReport.Decomposed ->
-        blocked(state, report.completedPhaseIds, report.completedPhaseIds.lastOrNull().orEmpty(), report.reason)
+        PhaseRunResult.Completed(
+          invocationId = state.invocationId,
+          completedStepIds = report.completedPhaseIds,
+          reviewResult = state.reviewResult,
+          value = report.reason,
+          specBundle =
+            PhaseRunSpecBundle(
+              parentSpecPath = report.parentSpecPath,
+              decompositionManifestPath = report.decompositionManifestPath,
+              subtaskSpecPaths = report.subtaskSpecPaths,
+            ),
+        )
     }
+
+  private fun currentBranch(request: PhaseRunRequest): FeatureTaskRuntimeResolvedBranch? =
+    (phaseGates.gitOperations.currentBranch(request.repoRoot) as? WorkflowGitOperationResult.Ok)
+      ?.value
+      ?.trim()
+      ?.takeIf { branch -> branch.isNotBlank() && branch != DETACHED_HEAD }
+      ?.let(::FeatureTaskRuntimeResolvedBranch)
 
   private fun blocked(
     state: InMemoryPhaseRunState,
@@ -92,3 +115,4 @@ class PhaseRunEntry(
 }
 
 private const val INVOCATION_ID_PREFIX = "phr-"
+private const val DETACHED_HEAD = "HEAD"

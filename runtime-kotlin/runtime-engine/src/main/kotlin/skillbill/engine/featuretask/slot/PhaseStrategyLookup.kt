@@ -32,8 +32,9 @@ class PhaseStrategyLookup(
   fun selectedStepIds(facts: PhaseStrategySelectionFacts): Set<String> =
     selectedStrategies(facts).flatMap(PhaseStrategy::steps).toSet()
 
+  /** Every canonical step the run does not select, including steps outside a short definition. */
   fun unselectedStepIds(facts: PhaseStrategySelectionFacts): Set<String> =
-    facts.definition.stepIds.toSet() - selectedStepIds(facts)
+    PhaseSlot.entries.flatMap(PhaseSlot::steps).toSet() - selectedStepIds(facts)
 
   internal fun resumeRules(facts: PhaseStrategySelectionFacts? = null): (String) -> PhaseResumeRules {
     val owners = facts?.let(::selectedStrategies).orEmpty() + registry.strategies

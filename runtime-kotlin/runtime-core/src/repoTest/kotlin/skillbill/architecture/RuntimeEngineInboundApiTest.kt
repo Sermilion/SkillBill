@@ -116,6 +116,7 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.featuretask.phaserun.PhaseRunEntry",
         "skillbill.engine.featuretask.phaserun.PhaseRunRequest",
         "skillbill.engine.featuretask.phaserun.PhaseRunResult",
+        "skillbill.engine.featuretask.phaserun.PhaseRunSpecBundle",
         "skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusProjection",
         "skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest",
         "skillbill.engine.featuretask.model.core.FeatureTaskRuntimeSubtaskOutcome",
