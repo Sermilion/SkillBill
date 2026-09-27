@@ -1,5 +1,8 @@
 package skillbill.cli.phase
 
+import skillbill.cli.core.CliRuntime
+import skillbill.cli.model.CliRuntimeContext
+import skillbill.cli.operation.OperationInvocationParser
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import java.nio.file.Files
 import java.nio.file.Path
@@ -18,6 +21,27 @@ class SkillBillDispatcherRoutingTest {
 
     assertEquals(PhaseInvocationParser.phaseNames().toSet(), routed)
     routed.forEach { name -> assertEquals(name, PhaseInvocationParser.parse(name, listOf("SKILL-1")).definitionId) }
+  }
+
+  @Test
+  fun `dispatcher routes exactly the registered operations and each route parses`() {
+    val routed = Regex("""skill-bill operation ([a-z-]+)""").findAll(dispatcher).map { it.groupValues[1] }.toSet()
+    val home = Files.createTempDirectory("dispatcher-operations")
+    val unknown =
+      try {
+        CliRuntime.run(
+          listOf("--db", home.resolve("metrics.db").toString(), "operation", "not-an-operation"),
+          CliRuntimeContext(userHome = home, repositoryRoot = home),
+        )
+      } finally {
+        home.toFile().deleteRecursively()
+      }
+    val registered =
+      Regex("""expected one of ([a-z, -]+)\.""").find(unknown.stdout + unknown.stderr)?.groupValues?.get(1)
+        ?.split(", ")?.toSet()
+
+    assertEquals(registered, routed)
+    routed.forEach { name -> assertEquals(name, OperationInvocationParser.parse(name, listOf("intake")).operationId) }
   }
 
   @Test

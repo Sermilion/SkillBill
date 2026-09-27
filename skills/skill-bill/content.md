@@ -40,14 +40,22 @@ intake. Forwarded `key:value` tokens follow the intake unchanged.
 | `/skill-bill [<intake>] phase:pr` | `skill-bill phase pr [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill operation:update-check` | `skill-bill operation update-check` | none |
 | `/skill-bill [<instructions>] operation:release bump:<patch\|minor\|major>` | `skill-bill operation release bump:<value> [<instructions>] --agent <currently-executing-agent>` | optional |
+| `/skill-bill [<scope>] operation:unit-test-value-check` | `skill-bill operation unit-test-value-check [scope:<value>] --agent <currently-executing-agent>` | optional |
+| `/skill-bill <intake> operation:feature-guard` | `skill-bill operation feature-guard <intake> --agent <currently-executing-agent>` | required |
+| `/skill-bill <intake> operation:feature-guard-cleanup` | `skill-bill operation feature-guard-cleanup <intake> --agent <currently-executing-agent>` | required |
 
 If `phase:plan` or `phase:implement` has no intake, stop and ask for it. For any
-other `phase:` name, stop and list the names in this table.
+other `phase:` name, stop and list the names in this table. If
+`operation:feature-guard` has no intake describing the change to guard, or
+`operation:feature-guard-cleanup` has no intake naming the flag, stop and ask for
+it. For `operation:unit-test-value-check`, forward a scope the caller gives (a test
+file, commit sha, or ref) verbatim as `scope:<value>`; without one, omit `scope:`
+and the runtime reviews the current staged and unstaged changes.
 
 `operation:<name>` translates to `skill-bill operation <name>`, forwarding
 `bump:`, `confirm:`, `select:`, `mode:`, and `scope:` tokens verbatim and any
 other text as operator instructions. The runtime rejects an unknown operation
-name or a missing bump; relay its usage error.
+name, a missing bump, or a missing guard intake; relay its usage error.
 
 ## Token Forwarding
 
@@ -146,7 +154,10 @@ the translated command once and relay its output verbatim.
 
 When the command exits with `awaiting_confirmation` (its last line reads
 `status: awaiting_confirmation confirm:<token>`), show the proposal and ask the
-operator once whether to proceed. On yes, run the same operation with
+operator once whether to proceed. This covers `operation:release`,
+`operation:feature-guard`, and `operation:feature-guard-cleanup`; a cleanup
+proposal's stabilization checklist is part of the proposal the operator answers,
+so never answer it yourself. On yes, run the same operation with
 `confirm:<token>`. If the operator asks for changes, run the same operation again
 with those changes as instructions and relay the new proposal and its new token.
 Never pass `confirm:` without an operator answer.

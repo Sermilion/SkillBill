@@ -991,6 +991,24 @@ has the `opr-` prefix.
 - Operations: `update-check` shares the text formatter with
   `skill-bill update-check`. `release` tags through
   `WorkflowGitReleaseTagOperations`.
+- Checklist operations carry their rules in runtime-owned prompt objects
+  (`*PromptRules`), copied from the skills they replace.
+  `ChecklistOperationRulesParityTest` keeps the copies equal to those skills
+  until SKILL-383 deletes them.
+  - `unit-test-value-check` is read-only and needs no confirmation. It reviews
+    the unit tests in the current staged, unstaged, and untracked changes, or
+    in `scope:<path|sha|ref>`. With no unit test in scope it says so and
+    launches no agent.
+  - `feature-guard` and `feature-guard-cleanup` confirm in two invocations. A
+    read-only step proposes the plan. Guard proposals anchor on HEAD and the
+    current branch only. On `confirm:<token>` an editing step gets the stored
+    proposal verbatim as its prior value.
+  - After the cleanup edits, `feature-guard-cleanup` runs the in-memory
+    `validation` definition through `PhaseRunEntry`. A blocked validation
+    leaves the edits in place and reports the verdict.
+- `OperationStepRunner.runReadOnly` compares the repository fingerprint before
+  and after each read-only step. A step that changes it fails, and the gate
+  stores no proposal. Only a confirmed `execute` calls `runEditing`.
 
 ## Phase slots and strategies
 

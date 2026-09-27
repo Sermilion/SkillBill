@@ -1,0 +1,50 @@
+package skillbill.engine.operation.featureguard
+
+import skillbill.engine.operation.core.ConfirmableOperation
+import skillbill.engine.operation.core.ConfirmedOperationProposal
+import skillbill.engine.operation.core.OperationContext
+import skillbill.engine.operation.core.OperationOutcome
+import skillbill.engine.operation.core.OperationRunResult
+import skillbill.engine.operation.core.OperationStepResult
+import skillbill.engine.operation.core.applyStoredProposal
+import skillbill.engine.operation.core.proposeFromStep
+import skillbill.error.operation.MissingOperationIntakeError
+
+/**
+ * `operation:feature-guard`: a read-only step proposes the flag, the single switch point, the Legacy vs New split,
+ * and the rollback plan; on confirm, an apply step implements exactly the stored proposal. Anchors are the gate's
+ * HEAD and branch only.
+ */
+class FeatureGuardOperation : ConfirmableOperation {
+  override val id: String = "feature-guard"
+
+  override fun pre(context: OperationContext) {
+    if (!context.confirming && context.instructions.isNullOrBlank()) {
+      throw MissingOperationIntakeError(id, "describe the change to guard behind a feature flag")
+    }
+  }
+
+  override fun run(context: OperationContext): OperationRunResult =
+    context.proposeFromStep(FeatureGuardPromptRules.PROPOSAL_STEP, FeatureGuardPromptRules.proposal, PROPOSAL_TITLE)
+
+  override fun currentAnchors(context: OperationContext): Map<String, String> = emptyMap()
+
+  override fun execute(
+    context: OperationContext,
+    proposal: ConfirmedOperationProposal,
+  ): OperationOutcome {
+    val step =
+      context.applyStoredProposal(
+        FeatureGuardPromptRules.PROPOSAL_STEP,
+        FeatureGuardPromptRules.APPLY_STEP,
+        FeatureGuardPromptRules.apply,
+        proposal,
+      )
+    return when (step) {
+      is OperationStepResult.Failed -> OperationOutcome.Failed(step.reason)
+      is OperationStepResult.Settled -> OperationOutcome.Completed(step.value.trimEnd() + "\n")
+    }
+  }
+}
+
+private const val PROPOSAL_TITLE = "Feature guard proposal"

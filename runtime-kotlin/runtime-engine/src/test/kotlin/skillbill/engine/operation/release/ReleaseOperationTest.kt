@@ -57,13 +57,13 @@ class ReleaseOperationTest {
     OperationExecutor(
       OperationRegistry(listOf(ReleaseOperation(git))),
       OperationConfirmationGate(proposals, git, Clock.systemUTC()),
-      OperationStepRunner(runner),
+      OperationStepRunner(runner, git),
     )
   private val executorWithOtherOperation =
     OperationExecutor(
       OperationRegistry(listOf(ReleaseOperation(git), OtherConfirmableOperation)),
       OperationConfirmationGate(proposals, git, Clock.systemUTC()),
-      OperationStepRunner(runner),
+      OperationStepRunner(runner, git),
     )
 
   init {

@@ -86,7 +86,11 @@ class OperationCommandTest {
     val output = result.stdout + result.stderr
 
     assertNotEquals(0, result.exitCode, output)
-    assertContains(output, "Unknown operation 'deploy'; expected one of update-check, release.")
+    assertContains(
+      output,
+      "Unknown operation 'deploy'; expected one of update-check, release, unit-test-value-check, feature-guard, " +
+        "feature-guard-cleanup.",
+    )
   }
 
   @Test

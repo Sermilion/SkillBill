@@ -91,7 +91,7 @@ class UpdateCheckOperationTest {
           NoopWorkflowGitOperations,
           Clock.systemUTC(),
         ),
-        OperationStepRunner(UnlaunchablePhaseRunner),
+        OperationStepRunner(UnlaunchablePhaseRunner, NoopWorkflowGitOperations),
       )
     val result =
       executor.execute(

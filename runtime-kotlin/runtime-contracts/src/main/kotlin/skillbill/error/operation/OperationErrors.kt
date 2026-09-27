@@ -63,6 +63,16 @@ class MissingReleaseBumpError(
       "; pass bump:patch, bump:minor, or bump:major.",
   )
 
+class MissingOperationIntakeError(
+  val operationId: String,
+  val expected: String,
+) : OperationUsageError("Operation '$operationId' requires an intake: $expected.")
+
+class UnresolvableOperationScopeError(
+  val scope: String,
+  val detail: String,
+) : OperationUsageError("Could not resolve scope '$scope': $detail")
+
 class ReleaseWorktreeDirtyError(
   val repoRoot: String,
 ) : OperationRefusalError("Release requires a clean worktree; '$repoRoot' has uncommitted changes.")

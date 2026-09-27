@@ -15,6 +15,7 @@ import skillbill.cli.model.CliRunInputs
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.operation.core.OperationOutcome
+import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationResult
 import skillbill.error.operation.OperationUsageError
@@ -22,15 +23,16 @@ import skillbill.error.operation.OperationUsageError
 @Inject
 class OperationCommand(
   private val executor: OperationExecutor,
+  registry: OperationRegistry,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand(
     "operation",
-    "Run one runtime operation (update-check, release) with no feature-task workflow. An operation that needs " +
-      "confirmation prints its proposal and `status: awaiting_confirmation confirm:<token>`, then exits " +
+    "Run one runtime operation (${registry.ids.joinToString(", ")}) with no feature-task workflow. An operation " +
+      "that needs confirmation prints its proposal and `status: awaiting_confirmation confirm:<token>`, then exits " +
       "$OPERATION_EXIT_AWAITING_CONFIRMATION; re-run it with that confirm:<token> to execute the stored proposal.",
   ) {
-  private val name by argument(name = "name", help = "Operation to run: update-check or release.")
+  private val name by argument(name = "name", help = "Operation to run: ${registry.ids.joinToString(", ")}.")
   private val rest by argument(
     name = "args",
     help =
