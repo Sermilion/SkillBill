@@ -24,7 +24,11 @@ fun DecompositionManifest.withAttemptedSubtask(subtaskId: Int): DecompositionMan
             DecompositionStatus.PENDING,
           )
         ) {
-          subtask.copy(status = "in_progress", blockedReason = null)
+          subtask.copy(
+            status = "in_progress",
+            blockedReason = null,
+            lastResumableStep = if (subtask.workflowId.isNullOrBlank()) null else subtask.lastResumableStep,
+          )
         } else {
           subtask
         }

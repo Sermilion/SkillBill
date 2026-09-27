@@ -690,15 +690,23 @@ class GoalRunnerTest {
   }
 
   @Test
-  fun `same-branch goal blocks at create branch when feature branch checkout fails`() {
+  fun `same-branch goal retries failed checkout without forwarding create branch to the new child`() {
     val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
-    val launcher = RecordingSubtaskLauncher { launchFacts() }
+    val outcomes = RecordingOutcomeStore()
+    val launcher =
+      RecordingSubtaskLauncher { request ->
+        val continuation = requireNotNull(request.skillRunRequest.goalContinuation)
+        assertNull(continuation.lastResumableStep)
+        val workflowId = requireNotNull(continuation.assignedWorkflowId)
+        outcomes[workflowId] = completeOutcome(1).copy(workflowId = workflowId)
+        launchFacts()
+      }
     val runner =
       testGoalRunner(
         goalRunnerDeps(
           manifestStore = store,
           subtaskLauncher = launcher,
-          outcomeStore = RecordingOutcomeStore(),
+          outcomeStore = outcomes,
           pullRequestPort = RecordingPullRequestPort(),
         ).copy(
           gitOperations =
@@ -718,6 +726,16 @@ class GoalRunnerTest {
     assertEquals(emptyList(), launcher.requests)
     assertEquals("blocked", store.manifest.subtasks.single().status)
     assertEquals("create_branch", store.manifest.subtasks.single().lastResumableStep)
+
+    val retryGit = RecordingGitOperations(currentBranch = "main")
+    val retryRunner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, outcomes, RecordingPullRequestPort()).copy(gitOperations = retryGit),
+      )
+
+    assertIs<GoalRunnerRunReport.Completed>(retryRunner.run(runRequest()))
+    assertEquals(listOf("feat/SKILL-56-goal@main"), retryGit.checkouts)
+    assertEquals(1, launcher.requests.size)
   }
 
   @Test
@@ -5670,6 +5688,7 @@ class GoalRunnerOperatorBlockedResumeTest {
     assertEquals(listOf(1), launcher.requests.map { it.skillRunRequest.subtaskId })
     assertEquals(listOf("wfl-1"), outcomes.reopenBlockedPhaseCalls.map { it.workflowId })
     assertEquals(listOf("validate"), outcomes.reopenBlockedPhaseCalls.map { it.preferredPhaseId })
+    assertEquals("validate", launcher.requests.single().skillRunRequest.goalContinuation?.lastResumableStep)
     assertTrue(
       outcomes.reopenBlockedPhaseCalls.single().reason.contains("Operator resumed the goal"),
       outcomes.reopenBlockedPhaseCalls.single().reason,
