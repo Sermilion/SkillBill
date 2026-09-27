@@ -118,7 +118,13 @@ class SqliteOperationProposalRepositoryTest {
   private fun scalarInt(
     connection: Connection,
     sql: String,
-  ): Int = connection.createStatement().use { statement -> statement.executeQuery(sql).use { it.next(); it.getInt(1) } }
+  ): Int =
+    connection.createStatement().use { statement ->
+      statement.executeQuery(sql).use {
+        it.next()
+        it.getInt(1)
+      }
+    }
 
   private fun ledgerNames(connection: Connection): List<String> =
     connection.createStatement().use { statement ->

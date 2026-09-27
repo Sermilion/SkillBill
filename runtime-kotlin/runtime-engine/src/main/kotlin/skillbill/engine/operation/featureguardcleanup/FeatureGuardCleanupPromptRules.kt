@@ -1,10 +1,5 @@
 package skillbill.engine.operation.featureguardcleanup
 
-/**
- * The feature-guard cleanup rules, copied verbatim from `skills/bill-feature-guard-cleanup/content.md`.
- * `ChecklistOperationRulesParityTest` holds the copies equal to the skill while both exist. The skill's
- * "Run `bill-code-check`" step is the validation run the operation performs after the apply step.
- */
 internal object FeatureGuardCleanupPromptRules {
   const val PROPOSAL_STEP: String = "operation.feature-guard-cleanup.proposal"
   const val APPLY_STEP: String = "operation.feature-guard-cleanup.apply"
@@ -18,7 +13,6 @@ internal object FeatureGuardCleanupPromptRules {
     - Product/team has confirmed the feature is permanent.
     """.trimIndent()
 
-  /** Steps 1-3 of the skill's Cleanup Workflow: identify scope, verify safety, and the ordered removal. */
   val CLEANUP_STEPS: String =
     """
     ### Step 1: Identify Scope
@@ -152,11 +146,9 @@ internal object FeatureGuardCleanupPromptRules {
       "checklist's `bill-code-check` item. Finish with a short report of the files changed and deleted.\n\n" +
       "Apply these feature-guard cleanup rules:"
 
-  /** The read-only proposal directive: report the plan and the stabilization checklist, never edit. */
   val proposal: String =
     listOf(PROPOSAL_TASK, WHEN_TO_USE, CLEANUP_STEPS, CHECKLIST, WHEN_TO_ASK_USER, CLEANUP_PATTERNS)
       .joinToString("\n\n")
 
-  /** The apply directive: execute exactly the stored proposal. */
   val apply: String = listOf(APPLY_TASK, CLEANUP_STEPS, CHECKLIST, CLEANUP_PATTERNS).joinToString("\n\n")
 }

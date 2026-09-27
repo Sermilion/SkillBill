@@ -12,10 +12,6 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
 import java.nio.file.Path
 
-/**
- * `operation:unit-test-value-check`: resolves the scope (current changes by default, or `scope:<path|sha|ref>`),
- * keeps its unit test paths, and runs one read-only review step over them. No confirmation; changes no file.
- */
 class UnitTestValueCheckOperation(
   private val gitOperations: WorkflowGitOperations,
 ) : Operation {
@@ -46,8 +42,6 @@ class UnitTestValueCheckOperation(
       val changed = gitOperations.repositoryOwnedPaths(repoRoot).names(CURRENT_CHANGES)
       return ReviewScope(CURRENT_CHANGES, changed, fromGitChanges = true)
     }
-    // shortcut: a value that does not resolve to a commit is taken as a path, because the engine reads no files to
-    // tell a missing path from a mistyped ref; add a path-existence port if operators trip over it.
     val commit =
       gitOperations.resolveCommit(repoRoot, requested) as? WorkflowGitOperationResult.Ok
         ?: return ReviewScope("path $requested", listOf(requested), fromGitChanges = false)
@@ -59,7 +53,6 @@ class UnitTestValueCheckOperation(
     return ReviewScope("commit $requested ($after)", changed, fromGitChanges = true)
   }
 
-  // Git change lists include deletions; a deleted test has nothing left to review.
   private fun existing(
     repoRoot: Path,
     paths: List<String>,

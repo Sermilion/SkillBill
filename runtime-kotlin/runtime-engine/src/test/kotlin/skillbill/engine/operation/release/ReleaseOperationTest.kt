@@ -261,7 +261,6 @@ class ReleaseOperationTest {
     }
   }
 
-  /** A second confirmable operation, so a release token can be presented under another operation id. */
   private object OtherConfirmableOperation : ConfirmableOperation {
     override val id: String = "checklist"
 

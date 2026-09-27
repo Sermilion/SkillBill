@@ -1,9 +1,5 @@
 package skillbill.engine.operation.unittestvalue
 
-/**
- * Decides from a repository-relative path alone whether it names a unit test: a file under a test source set or test
- * directory, or a file named by a common test convention. Resources under a test source set are fixtures, not tests.
- */
 internal object UnitTestPathClassifier {
   private val TEST_DIRECTORIES = setOf("test", "tests", "__tests__")
   private val TEST_STEM_SUFFIXES = listOf("Test", "Tests", "Spec")

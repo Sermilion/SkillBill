@@ -1,9 +1,5 @@
 package skillbill.engine.operation.featureguard
 
-/**
- * The feature-guard rollout rules, copied verbatim from `skills/bill-feature-guard/content.md`.
- * `ChecklistOperationRulesParityTest` holds the copies equal to the skill while both exist.
- */
 internal object FeatureGuardPromptRules {
   const val PROPOSAL_STEP: String = "operation.feature-guard.proposal"
   const val APPLY_STEP: String = "operation.feature-guard.apply"
@@ -220,11 +216,9 @@ internal object FeatureGuardPromptRules {
       "unchanged.\n\n" +
       "Apply these feature-guard rules:"
 
-  /** The read-only proposal directive: report the plan, never edit. */
   val proposal: String =
     listOf(PROPOSAL_TASK, CORE_PRINCIPLES, IMPLEMENTATION_STRATEGY, CHECKLIST, WHEN_TO_ASK_USER, PATTERNS)
       .joinToString("\n\n")
 
-  /** The apply directive: execute exactly the stored proposal. */
   val apply: String = listOf(APPLY_TASK, CORE_PRINCIPLES, CHECKLIST, PATTERNS).joinToString("\n\n")
 }

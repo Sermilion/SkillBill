@@ -5,6 +5,7 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import me.tatarka.inject.annotations.Inject
+import skillbill.cli.codereview.usageError
 import skillbill.cli.kernel.agent.detectInvokingAgentId
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
@@ -38,7 +39,9 @@ class OperationCommand(
     help =
       "key:value pairs (${OperationInvocationParser.KEYS.joinToString(", ") { "$it:" }}); any other text is " +
         "operator instructions for the operation's agent step. pr-review-fix reads a leading #<number> or PR " +
-        "URL, or a lone PR number (default: the current branch's PR) and alone accepts push:on|off and replies:post|draft.",
+        "URL, or a lone PR number (default: the current branch's PR) and alone accepts push:on|off and " +
+        "replies:post|draft. verify alone accepts spec:<path>, target:<pr-number|branch|base..head>, and " +
+        "mode:inline|delegated; its confirm:<token> is the verify workflow id.",
   ).multiple()
   private val agent by option(
     "--agent",
@@ -62,7 +65,7 @@ class OperationCommand(
       try {
         executor.execute(request)
       } catch (error: OperationUsageError) {
-        throw UsageError(error.message.orEmpty())
+        usageError(error)
       }
     writeOperationResult(state, request.operationId, result)
   }
@@ -82,11 +85,19 @@ object OperationInvocationParser {
   const val SCOPE: String = "scope"
   const val PUSH: String = "push"
   const val REPLIES: String = "replies"
-  val KEYS: List<String> = listOf(BUMP, CONFIRM, SELECT, MODE, SCOPE, PUSH, REPLIES)
+  const val SPEC: String = "spec"
+  const val TARGET: String = "target"
+  val KEYS: List<String> = listOf(BUMP, CONFIRM, SELECT, MODE, SCOPE, PUSH, REPLIES, SPEC, TARGET)
   private const val KEY_SEPARATOR = ':'
 
-  /** Keys only one operation reads; any other operation rejects them rather than silently ignoring them. */
-  private val OPERATION_ONLY_KEYS: Map<String, String> = mapOf(PUSH to "pr-review-fix", REPLIES to "pr-review-fix")
+  private val OPERATION_ONLY_KEYS: Map<String, String> =
+    mapOf(
+      PUSH to "pr-review-fix",
+      REPLIES to "pr-review-fix",
+      MODE to "verify",
+      SPEC to "verify",
+      TARGET to "verify",
+    )
 
   fun parse(
     name: String,
@@ -94,7 +105,6 @@ object OperationInvocationParser {
   ): OperationInvocation {
     val pairs = rest.filter(::isKeyValue)
     val values = pairs.associate { pair -> pair.substringBefore(KEY_SEPARATOR) to pair.substringAfter(KEY_SEPARATOR) }
-    // A blank confirm: would otherwise run as a fresh proposal and supersede the token the operator meant to confirm.
     if (values[CONFIRM]?.isBlank() == true) {
       throw UsageError("confirm: needs the token from the proposal's status line.")
     }
@@ -112,6 +122,8 @@ object OperationInvocationParser {
           scope = values[SCOPE],
           push = values[PUSH],
           replies = values[REPLIES],
+          spec = values[SPEC],
+          target = values[TARGET],
         ),
       instructions = rest.filterNot(::isKeyValue).joinToString(" ").takeIf(String::isNotBlank),
     )
@@ -127,7 +139,6 @@ internal fun writeOperationResult(
   result: OperationResult,
 ) {
   val invocationLine = "Operation invocation ID: ${result.invocationId}"
-  // The machine-readable status line stays last so a relaying agent finds the token on the final line.
   val (lines, exitCode) =
     when (val outcome = result.outcome) {
       is OperationOutcome.Completed -> listOf(outcome.text.trimEnd(), invocationLine) to 0

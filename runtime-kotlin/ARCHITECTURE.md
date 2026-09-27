@@ -974,8 +974,8 @@ skillbill.workflow.verify
 ## Runtime operations
 
 An operation (`skillbill.engine.operation`) is a runtime command outside the
-feature-task workflow family. It opens no workflow row and its invocation id
-has the `opr-` prefix.
+feature-task workflow family. Only `verify` opens a workflow row, in its own
+verify family. Every invocation id has the `opr-` prefix.
 
 - `Operation` runs `pre`, `run`, and `post`. Agent steps launch only through
   `OperationStepRunner` over the generic `PhaseRunner`. The launch-port rule in
@@ -1024,6 +1024,18 @@ has the `opr-` prefix.
   thread, then `validation`, then posts (or, with `replies:draft`, prints) the
   replies, and commits and pushes only with `push:on`. A failed step or gate
   stops before any reply.
+- `verify` (`operation.verify`) is the one operation with a workflow row: a
+  `SelfConfirmingOperation` on the `bill-feature-verify` family. It is
+  report-only and never edits, fixes, or posts. The first invocation opens the
+  row, extracts the criteria read-only, and parks the row at
+  `extract_criteria`. The `confirm:` token is the workflow id, so no
+  `operation_proposals` row is written, and a newer run in the same repo root
+  abandons older parked rows. Confirm runs `gather_diff` through `finish` on
+  that row. Each evaluator's prior values are only its declared launch
+  projection. The rubrics are copied into `VerifyPromptSections` under
+  `ChecklistOperationRulesParityTest`. `mode:delegated` runs the multi-agent
+  review as the `code_review` step's `PhaseStepSession`. Confirming an
+  interrupted row resumes it at `continueWorkflow`'s step.
 
 ## Phase slots and strategies
 

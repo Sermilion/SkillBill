@@ -2,12 +2,10 @@ package skillbill.error.operation
 
 import skillbill.error.core.ShellContentContractException
 
-/** An operation invocation the caller must correct; the CLI reports it as a usage error. */
 open class OperationUsageError(
   message: String,
 ) : ShellContentContractException(message)
 
-/** A refusal that stops an operation before it changes anything; the executor reports it as blocked. */
 open class OperationRefusalError(
   message: String,
 ) : ShellContentContractException(message)
@@ -118,6 +116,45 @@ class PushWorktreeDirtyError(
 class ReleaseWorktreeDirtyError(
   val repoRoot: String,
 ) : OperationRefusalError("Release requires a clean worktree; '$repoRoot' has uncommitted changes.")
+
+class UnresolvableVerifyTargetError(
+  val target: String,
+  val detail: String,
+) : OperationUsageError("Could not resolve verify target '$target': $detail Pass target:<base>..<head> instead.")
+
+class VerifySpecRehydrateNeededError(
+  val specPath: String,
+) : OperationRefusalError(
+    "rehydrate-needed: neither spec '$specPath' nor its decomposition-manifest.yaml exists; rehydrate the spec " +
+      "from Linear to that path, then invoke operation verify again.",
+  )
+
+class VerifyTargetNotCheckedOutError(
+  val target: String,
+  val targetHead: String,
+  val currentHead: String,
+) : OperationRefusalError(
+    "Verify target '$target' is at $targetHead but HEAD is $currentHead; check the target out, or pass " +
+      "target:<base>..HEAD.",
+  )
+
+class UnknownVerifyWorkflowError(
+  val workflowId: String,
+) : OperationRefusalError("No verify workflow has token '$workflowId'.")
+
+class ForeignVerifyWorkflowError(
+  val workflowId: String,
+  val repoRoot: String,
+) : OperationRefusalError("Verify workflow '$workflowId' does not belong to '$repoRoot'.")
+
+class ClosedVerifyWorkflowError(
+  val workflowId: String,
+  val status: String,
+  val supersededBy: String?,
+) : OperationRefusalError(
+    supersededBy?.let { "Verify workflow '$workflowId' was superseded by '$it'; confirm the newest token." }
+      ?: "Verify workflow '$workflowId' is $status; invoke operation verify again for a fresh run.",
+  )
 
 class ReleaseBranchBehindRemoteError(
   val branch: String,

@@ -12,10 +12,6 @@ import skillbill.error.operation.ReleaseWorktreeDirtyError
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 
-/**
- * `operation:release`: pre-flight a clean, up-to-date branch; propose the next version and an agent-curated
- * changelog; on confirm, create the annotated tag with the stored changelog and push it, in-process.
- */
 class ReleaseOperation(
   private val gitOperations: WorkflowGitOperations,
 ) : ConfirmableOperation {
@@ -28,7 +24,6 @@ class ReleaseOperation(
       throw ReleaseWorktreeDirtyError(repoRoot.toString())
     }
     val branch = branch(context)
-    // A failed fetch leaves the last known remote-tracking ref, as the release skill lets a network failure pass.
     gitOperations.refreshRemoteBranch(repoRoot, branch)
     if (gitOperations.localBranchBehindRemote(repoRoot, branch).requireGitValue("branch freshness") == "true") {
       throw ReleaseBranchBehindRemoteError(branch)
@@ -77,7 +72,6 @@ class ReleaseOperation(
     }
     val pushed = gitOperations.pushTag(context.repoRoot, version)
     if (pushed !is WorkflowGitOperationResult.Ok) {
-      // An unpushed local tag would count as the last release and make the next proposal skip this version.
       val removed = gitOperations.deleteLocalTag(context.repoRoot, version)
       val localState =
         if (removed is WorkflowGitOperationResult.Ok) {

@@ -28,7 +28,6 @@ import java.time.Clock
 import kotlin.io.path.createParentDirectories
 import kotlin.io.path.writeText
 
-/** A git repository plus the three checklist operations wired to a scripted agent and a recorded validation run. */
 internal class ChecklistOperationHarness : AutoCloseable {
   private val root: Path = Files.createTempDirectory("checklist-operation")
   val repo: Path = root.resolve("repo")
@@ -121,10 +120,6 @@ internal class ChecklistOperationHarness : AutoCloseable {
   }
 }
 
-/**
- * Settles every step with a fixed value. Only a step named `*.apply` edits the worktree, unless [editDuringProposal]
- * makes every read-only step edit too. The manifest it reports is always empty, so only the fingerprint guard can tell.
- */
 internal class ScriptedStepRunner(
   private val repo: Path,
 ) : PhaseRunner {

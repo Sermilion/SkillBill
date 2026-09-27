@@ -3,15 +3,6 @@ package skillbill.engine.operation.prreviewfix
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.review.pullrequest.model.ReviewThread
 
-/**
- * The PR reference a caller put first in the operator text, split from the instructions that follow it. A bare
- * number is a reference only when it is the whole text, so instructions like "3 things to check" stay instructions.
- */
-internal data class PrReviewFixTarget(
-  val reference: String?,
-  val instructions: String?,
-)
-
 internal fun prReviewFixTarget(instructions: String?): PrReviewFixTarget {
   val text = instructions?.trim().orEmpty()
   val first = text.substringBefore(' ')

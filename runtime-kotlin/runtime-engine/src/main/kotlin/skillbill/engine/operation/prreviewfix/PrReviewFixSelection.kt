@@ -2,20 +2,6 @@ package skillbill.engine.operation.prreviewfix
 
 import skillbill.error.operation.InvalidOperationSelectionError
 
-/** One selected thread: its ordinal, its GitHub node id, and the matrix option to apply. */
-internal data class PrReviewFixSelectedThread(
-  val ordinal: String,
-  val threadId: String,
-  val option: String,
-)
-
-/**
- * Resolves `select:` against the stored ordinals. `all-recommended` applies option 1 (the matrix's recommended
- * option) to every actionable thread; `fix-all-unresolved` applies the reviewer's requested change to every actionable
- * thread; `<thread>=<option>,...` names threads by ordinal (`T3`) or node id. A thread that is unknown or was already
- * handled at analysis, a repeated thread, an option that is not a matrix option number, or an empty selection is a
- * usage error; the token stays unconsumed.
- */
 internal fun parsePrReviewFixSelection(
   select: String,
   ordinals: Map<String, String>,
@@ -48,12 +34,7 @@ private fun selectedEntry(
 ): PrReviewFixSelectedThread {
   val thread = entry.substringBefore('=', missingDelimiterValue = "").trim()
   val option = entry.substringAfter('=', missingDelimiterValue = "").trim()
-  if (thread.isEmpty() || option.isEmpty()) {
-    throw InvalidOperationSelectionError(select, "'${entry.trim()}' is not <thread>=<option>.")
-  }
-  if (!OPTION_NUMBER.matches(option)) {
-    throw InvalidOperationSelectionError(select, "option '$option' is not a matrix option number (1, 2, ...).")
-  }
+  entryShapeProblem(entry, thread, option)?.let { reason -> throw InvalidOperationSelectionError(select, reason) }
   val ordinal =
     ordinals.keys.firstOrNull { known -> known.equals(thread, ignoreCase = true) }
       ?: ordinals.entries.firstOrNull { (_, id) -> id == thread }?.key
@@ -63,6 +44,17 @@ private fun selectedEntry(
       )
   return PrReviewFixSelectedThread(ordinal, ordinals.getValue(ordinal), option)
 }
+
+private fun entryShapeProblem(
+  entry: String,
+  thread: String,
+  option: String,
+): String? =
+  when {
+    thread.isEmpty() || option.isEmpty() -> "'${entry.trim()}' is not <thread>=<option>."
+    !OPTION_NUMBER.matches(option) -> "option '$option' is not a matrix option number (1, 2, ...)."
+    else -> null
+  }
 
 internal const val SELECTION_FORMS: String =
   "select:all-recommended, select:fix-all-unresolved, or select:<thread>=<option>,... (thread T1..Tn or node id)"

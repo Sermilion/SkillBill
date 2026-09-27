@@ -1,6 +1,5 @@
 package skillbill.ports.review.pullrequest.model
 
-/** One review thread as GitHub's GraphQL API reports it; the flags never come from the flat comments list. */
 data class ReviewThread(
   val id: String,
   val isResolved: Boolean,

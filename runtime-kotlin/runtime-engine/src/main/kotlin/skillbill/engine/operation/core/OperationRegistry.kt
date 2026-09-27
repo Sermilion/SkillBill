@@ -3,7 +3,6 @@ package skillbill.engine.operation.core
 import skillbill.error.operation.DuplicateOperationIdError
 import skillbill.error.operation.UnknownOperationIdError
 
-/** The explicit list of registered operations, keyed by wire id. */
 class OperationRegistry(
   operations: List<Operation>,
 ) {

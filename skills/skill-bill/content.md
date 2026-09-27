@@ -44,6 +44,7 @@ intake. Forwarded `key:value` tokens follow the intake unchanged.
 | `/skill-bill <intake> operation:feature-guard` | `skill-bill operation feature-guard <intake> --agent <currently-executing-agent>` | required |
 | `/skill-bill <intake> operation:feature-guard-cleanup` | `skill-bill operation feature-guard-cleanup <intake> --agent <currently-executing-agent>` | required |
 | `/skill-bill [<pr>] operation:pr-review-fix [scope:analyze-only] [push:on] [replies:draft]` | `skill-bill operation pr-review-fix [<pr>] [<tokens>] --agent <currently-executing-agent>` | optional |
+| `/skill-bill operation:verify spec:<path> target:<pr\|branch\|base..head> [mode:inline\|delegated]` | `skill-bill operation verify [spec:<value>] [target:<value>] [mode:inline\|delegated] --agent <currently-executing-agent>` | required |
 
 If `phase:plan` or `phase:implement` has no intake, stop and ask for it. For any
 other `phase:` name, stop and list the names in this table. If
@@ -57,10 +58,13 @@ token, as `#<number>` or its URL; without one, the runtime uses the current
 branch's PR.
 
 `operation:<name>` translates to `skill-bill operation <name>`, forwarding
-`bump:`, `confirm:`, `select:`, `mode:`, `scope:`, `push:`, and `replies:` tokens
-verbatim and any other text as operator instructions. The runtime rejects an
-unknown operation name, a missing bump, a missing guard intake, or a `push:` or
-`replies:` token outside `operation:pr-review-fix`; relay its usage error.
+`bump:`, `confirm:`, `select:`, `mode:`, `scope:`, `push:`, `replies:`, `spec:`,
+and `target:` tokens verbatim and any other text as operator instructions. The
+runtime rejects an unknown operation name, a missing bump, a missing guard
+intake, a `push:` or `replies:` token outside `operation:pr-review-fix`, or a
+`spec:`, `target:`, or `mode:` token outside `operation:verify`; relay its usage
+error. For `operation:verify`, forward `mode:` verbatim; without it, the runtime
+reviews inline.
 
 ## Token Forwarding
 
@@ -81,7 +85,8 @@ Stop without running preflight or any CLI command when:
   parallel review capability.
 - the caller passes `phase:` together with `operation:`: report a usage error.
 - a token reaches a form that does not accept it (`code-review:` or
-  `agent-addon:` with any `phase:`, `mode:` or `target:` outside `phase:review`):
+  `agent-addon:` with any `phase:`, `mode:` or `target:` outside `phase:review`
+  and `operation:verify`):
   report a usage error naming the token and the form that accepts it. Never drop
   the token or fold it into the intake.
 
@@ -177,3 +182,13 @@ operation with the same `<pr>`, `push:`, and `replies:` tokens plus
 not infer a scope. Never pass `confirm:` or `select:` without an operator answer.
 The runtime owns the thread options and refuses a selection it does not
 recognise; relay that usage error and ask again.
+
+For `operation:verify` the proposal is the extracted acceptance criteria. Show
+them and ask the operator once to confirm or adjust them. On confirm, run the same
+operation with `confirm:<token>`. On an adjustment, run the same operation again
+with the same `spec:`, `target:`, and `mode:` tokens and the adjustment as
+instructions, then relay the new criteria and their new token; the new run
+supersedes the earlier one. The verify report is final: never offer a fix or a
+PR comment. When the command is blocked with a reason starting
+`rehydrate-needed:`, run Rehydrate for that spec path, then run the same
+operation once more.

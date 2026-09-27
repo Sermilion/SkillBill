@@ -12,12 +12,6 @@ import skillbill.engine.operation.core.applyStoredProposal
 import skillbill.engine.operation.core.proposeFromStep
 import skillbill.error.operation.MissingOperationIntakeError
 
-/**
- * `operation:feature-guard-cleanup`: a read-only step proposes the flag, the winning path, the dependents, and the
- * stabilization checklist the operator confirms; on confirm, an apply step removes the flag exactly as proposed and
- * the in-memory `validation` definition runs over the result, standing in for the skill's `bill-code-check` step.
- * [runPhase] is `PhaseRunEntry.run`; the operation opens no workflow.
- */
 class FeatureGuardCleanupOperation(
   private val runPhase: (PhaseRunRequest) -> PhaseRunResult,
 ) : ConfirmableOperation {
@@ -54,7 +48,6 @@ class FeatureGuardCleanupOperation(
         is OperationStepResult.Failed -> return OperationOutcome.Failed(step.reason)
         is OperationStepResult.Settled -> step.value.trimEnd()
       }
-    // The apply step launched, so an agent id is present.
     val agentId = requireNotNull(context.invokedAgentId)
     return when (val validation = runPhase(PhaseRunRequest(VALIDATION_DEFINITION, context.repoRoot, agentId))) {
       is PhaseRunResult.Completed ->

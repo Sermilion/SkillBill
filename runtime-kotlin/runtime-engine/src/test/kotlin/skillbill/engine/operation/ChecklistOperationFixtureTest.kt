@@ -6,11 +6,6 @@ import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/**
- * Pins what each checklist operation sends its agent and what it reports: the proposal and review directives and the
- * awaiting-confirmation and no-tests outcomes. Regenerate with SKILL_BILL_CHECKLIST_OPERATION_CAPTURE=1 only after
- * reviewing the diff.
- */
 class ChecklistOperationFixtureTest {
   @Test
   fun `each checklist operation's directive and outcome match the committed fixture`() {

@@ -19,7 +19,10 @@ object NoopWorkflowGitReleaseTagOperations : WorkflowGitReleaseTagOperations {
   override fun remoteBranchHead(
     repoRoot: Path,
     branch: String,
-  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = WorkflowGitRemoteOperations.ABSENT_REMOTE_BRANCH)
+  ): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Ok(
+      value = WorkflowGitRemoteOperations.ABSENT_REMOTE_BRANCH,
+    )
 
   override fun createAnnotatedTag(
     repoRoot: Path,

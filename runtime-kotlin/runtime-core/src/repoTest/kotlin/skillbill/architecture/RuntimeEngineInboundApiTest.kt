@@ -120,6 +120,7 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.operation.core.OperationArguments",
         "skillbill.engine.operation.core.OperationExecutor",
         "skillbill.engine.operation.core.OperationOutcome",
+        "skillbill.engine.operation.core.OperationRegistry",
         "skillbill.engine.operation.core.OperationRequest",
         "skillbill.engine.operation.core.OperationResult",
         "skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusProjection",

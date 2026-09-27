@@ -2335,3 +2335,11 @@ Decision: `ConfirmableOperation.admit(context, proposal)` is a gate hook with a 
 Reason: A refusal the operator can fix, such as a typo in `select:` or checking out the PR branch, should not force a fresh analysis. Consume-before-execute still holds for everything with side effects. Only GraphQL `reviewThreads` exposes `isResolved` and `isOutdated`.
 Alternatives considered: Validate the selection inside `execute` (rejected: the token is already spent). Re-validate on the CLI side (rejected: the CLI has no proposal ordinals, and MCP would need the same logic). Read resolution state from REST comments (rejected: the fields are missing there).
 Revisit when: an admission check needs a side effect, or thread listing needs to page comments past 100 per thread.
+
+## [2026-09-28] operation:verify confirms on its own workflow row (SKILL-382 subtask 4)
+
+Context: `bill-feature-verify` ran as a prose skill. It asked the operator to confirm the extracted criteria, reviewed, and then offered to fix issues or post a PR comment. Verify spans many agent steps and must resume, which is why the 2026-09-27 entry kept it out of the proposal gate.
+Decision: `VerifyOperation` is a `SelfConfirmingOperation`. The executor hands `confirm:` to its `run` and the gate stores nothing. The first invocation opens a `bill-feature-verify` workflow, parks it at `extract_criteria`, and returns the workflow id as the token. No `operation_proposals` row is written. An adjusted re-invocation opens a new row and abandons the older parked rows for the same repo root, recording `superseded_by` in `session_notes`. Confirming a superseded row refuses and names the newer token. Verify is report-only: the verdict step has no fix or PR-comment offer, and no step edits.
+Reason: The workflow row already holds the parked criteria and the resume point, so a second proposal store would be a second source for the same state. The skill's fix offer needs editing steps and a push policy that belong to `pr-review-fix`.
+Alternatives considered: Store the criteria in `operation_proposals` and open the workflow on confirm (rejected: two stores, and the parked row could not resume). Keep the fix and PR-comment offer (rejected: it makes a read-only report an editing operation).
+Revisit when: verify needs to post its report, or a second operation needs a self-owned workflow token.

@@ -11,7 +11,7 @@ import java.nio.file.Path
  * launches an agent any other way.
  *
  * Wire ids: `update-check` and `release` (SKILL-382 subtask 1). Subtasks 2-4 add the checklist, `pr-review-fix`,
- * and verify operations to the same registry.
+ * and `verify` operations to the same registry.
  *
  * A pre failure throws an `OperationRefusalError` (reported as blocked, nothing changed) or an
  * `OperationUsageError` (reported as a usage error).
@@ -52,10 +52,15 @@ interface ConfirmableOperation : Operation {
   ): OperationOutcome
 }
 
+/**
+ * An operation whose own durable workflow holds the pending proposal. The token is that workflow's id, so [run]
+ * reads `confirm:<token>` itself and the confirmation gate stores nothing.
+ */
+interface SelfConfirmingOperation : Operation
+
 data class OperationContext(
   val invocationId: String,
   val repoRoot: Path,
-  /** The agent an agent step launches; null when the caller named none, which only agent-free operations accept. */
   val invokedAgentId: String?,
   val arguments: OperationArguments,
   val instructions: String?,
@@ -72,6 +77,8 @@ data class OperationArguments(
   val scope: String? = null,
   val push: String? = null,
   val replies: String? = null,
+  val spec: String? = null,
+  val target: String? = null,
 )
 
 sealed interface OperationRunResult {

@@ -8,10 +8,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
-/**
- * Pins what `pr-review-fix` reports on both invocations, the text the dispatcher relays: the analysis proposal and
- * the confirm tables. Regenerate with SKILL_BILL_PR_REVIEW_FIX_CAPTURE=1 only after reviewing the diff.
- */
 class PrReviewFixOperationFixtureTest {
   @Test
   fun `the analysis and confirm outputs match the committed fixture`() {

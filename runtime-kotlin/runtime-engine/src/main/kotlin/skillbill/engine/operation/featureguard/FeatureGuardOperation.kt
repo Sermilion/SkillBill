@@ -10,11 +10,6 @@ import skillbill.engine.operation.core.applyStoredProposal
 import skillbill.engine.operation.core.proposeFromStep
 import skillbill.error.operation.MissingOperationIntakeError
 
-/**
- * `operation:feature-guard`: a read-only step proposes the flag, the single switch point, the Legacy vs New split,
- * and the rollback plan; on confirm, an apply step implements exactly the stored proposal. Anchors are the gate's
- * HEAD and branch only.
- */
 class FeatureGuardOperation : ConfirmableOperation {
   override val id: String = "feature-guard"
 

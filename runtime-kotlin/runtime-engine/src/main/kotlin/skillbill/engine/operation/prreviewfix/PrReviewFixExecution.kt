@@ -13,11 +13,6 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 
-/**
- * The confirmed half of `operation:pr-review-fix`, in the skill's order: one editing step per selected thread, the
- * `validation` quality gate, then replies, then an optional push. A failed step or gate stops before any reply or
- * push, so no reply promises a fix the gate did not pass. No thread is ever resolved.
- */
 internal class PrReviewFixExecution(
   private val context: OperationContext,
   private val pullRequest: ReviewPullRequest,
@@ -31,7 +26,6 @@ internal class PrReviewFixExecution(
   private val fixes = mutableListOf<ThreadFix>()
 
   fun run(): OperationOutcome {
-    // Text passed alongside confirm:<token> never reaches an editing step; the confirmed matrix is all it acts on.
     val editing = context.copy(instructions = null)
     selected.forEach { thread ->
       val reviewThread =
@@ -43,7 +37,6 @@ internal class PrReviewFixExecution(
         is OperationStepResult.Settled -> fixes += ThreadFix(thread, step.value.trim(), step.changedPaths)
       }
     }
-    // Every selected thread ran an editing step, which launched, so an agent id is present.
     val agentId = requireNotNull(context.invokedAgentId)
     val gate =
       when (val validation = runPhase(PhaseRunRequest(VALIDATION_DEFINITION, context.repoRoot, agentId))) {
@@ -89,10 +82,8 @@ internal class PrReviewFixExecution(
   private fun push(): PushResult {
     if (context.arguments.push != PUSH_ON) return PushResult("Push: off; the fixes stay uncommitted in the worktree.")
     val repoRoot = context.repoRoot
-    // Admit refused any branch but the PR's head ref, and nothing since switched it.
     val branch = pullRequest.headRefName
     val commit = commitFixes().getOrElse { error -> return PushResult("Push: ${error.message}", failed = true) }
-    // The operation never rebases, so a plain push suffices and it never needs --force-with-lease.
     val pushed = gitOperations.pushBranch(repoRoot, branch)
     return if (pushed is WorkflowGitOperationResult.Ok) {
       PushResult("Push: pushed '$branch'$commit.")
@@ -101,7 +92,6 @@ internal class PrReviewFixExecution(
     }
   }
 
-  /** Commits the fixes to push; the value is the commit's clause in the push line. */
   private fun commitFixes(): Result<String> {
     val staged = gitOperations.stageAll(context.repoRoot)
     if (staged !is WorkflowGitOperationResult.Ok) {

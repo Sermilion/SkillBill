@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFacts
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
+import skillbill.engine.featuretask.slot.PhaseStepSession
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
@@ -18,35 +19,24 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
-/**
- * Runs an operation's agent steps through the generic [PhaseRunner]. Steps settle through their final object;
- * operations have no workflow and record no settlement.
- */
 @Inject
 class OperationStepRunner(
   private val runner: PhaseRunner,
   private val gitOperations: WorkflowGitOperations,
 ) {
-  /**
-   * Runs a step that must not change the worktree. The repository fingerprint is compared before and after, so an
-   * edit to an already-dirty file fails the step even though the changed-path manifest stays the same.
-   */
   fun runReadOnly(
     context: OperationContext,
     stepName: String,
     directive: String,
     priorValues: Map<String, String> = emptyMap(),
+    session: PhaseStepSession? = null,
   ): OperationStepResult {
     val before = fingerprint(context)
-    val result = launch(context, stepName, directive, priorValues, READ_ONLY_STEP_POLICY)
+    val result = launch(stepName, stepInput(context, stepName, directive, priorValues, READ_ONLY_STEP_POLICY), session)
     if (fingerprint(context) != before) return OperationStepResult.Failed(readOnlyViolation(stepName))
     return result
   }
 
-  /**
-   * Runs a step that edits the worktree; only a confirmed proposal's execute calls it. Files already dirty before the
-   * step count as changed when their content changed, which the path-only manifests cannot see.
-   */
   fun runEditing(
     context: OperationContext,
     stepName: String,
@@ -55,7 +45,8 @@ class OperationStepRunner(
   ): OperationStepResult {
     val dirty = dirtyPaths(context)
     val before = contentIdentities(context, dirty)
-    val result = launch(context, stepName, directive, priorValues, EDITING_STEP_POLICY)
+    val result =
+      launch(stepName, stepInput(context, stepName, directive, priorValues, EDITING_STEP_POLICY), session = null)
     if (result !is OperationStepResult.Settled) return result
     val after = contentIdentities(context, dirty)
     val reedited = dirty.filter { path -> before[path] != after[path] }
@@ -63,43 +54,50 @@ class OperationStepRunner(
   }
 
   private fun launch(
+    stepName: String,
+    input: PhaseStepInput?,
+    session: PhaseStepSession?,
+  ): OperationStepResult {
+    input ?: return OperationStepResult.Failed("Operation step '$stepName' launches an agent; name one with --agent.")
+    val output =
+      session?.let { runner.run(input, OperationPhaseLaunchState, it) } ?: runner.run(input, OperationPhaseLaunchState)
+    return failureOf(stepName, output, input.policy)?.let(OperationStepResult::Failed)
+      ?: OperationStepResult.Settled(
+        output.value,
+        output.fileManifest?.let { manifest -> manifest.after - manifest.before.toSet() }.orEmpty(),
+        output,
+      )
+  }
+
+  private fun stepInput(
     context: OperationContext,
     stepName: String,
     directive: String,
     priorValues: Map<String, String>,
     policy: PhaseStepPolicy,
-  ): OperationStepResult {
-    val agentId =
-      context.invokedAgentId
-        ?: return OperationStepResult.Failed("Operation step '$stepName' launches an agent; name one with --agent.")
-    val input =
-      PhaseStepInput(
-        stepName = stepName,
-        directive = directive,
-        priorValues = priorValues,
-        operatorInstructions = context.instructions,
-        facts =
-          PhaseStepFacts(
-            issueKey = context.invocationId,
-            repoRoot = context.repoRoot,
-            timeout = null,
-            invokedAgentId = agentId,
-            configuredAgentOverrideId = null,
-            modelOverride = null,
-            effortOverride = null,
-            compaction = null,
-            attempt = TRACKED_ATTEMPT,
-            observeLaunch = false,
-            briefingText = directive,
-          ),
-        policy = policy,
-      )
-    val output = runner.run(input, OperationPhaseLaunchState)
-    return failureOf(stepName, output, policy)?.let(OperationStepResult::Failed)
-      ?: OperationStepResult.Settled(
-        output.value,
-        output.fileManifest?.let { manifest -> manifest.after - manifest.before.toSet() }.orEmpty(),
-      )
+  ): PhaseStepInput? {
+    val agentId = context.invokedAgentId ?: return null
+    return PhaseStepInput(
+      stepName = stepName,
+      directive = directive,
+      priorValues = priorValues,
+      operatorInstructions = context.instructions,
+      facts =
+        PhaseStepFacts(
+          issueKey = context.invocationId,
+          repoRoot = context.repoRoot,
+          timeout = null,
+          invokedAgentId = agentId,
+          configuredAgentOverrideId = null,
+          modelOverride = null,
+          effortOverride = null,
+          compaction = null,
+          attempt = TRACKED_ATTEMPT,
+          observeLaunch = false,
+          briefingText = directive,
+        ),
+      policy = policy,
+    )
   }
 
   private fun failureOf(
@@ -120,14 +118,12 @@ class OperationStepRunner(
   private fun fingerprint(context: OperationContext): String =
     gitOperations.repositoryFingerprint(context.repoRoot).requireGitValue(REPOSITORY_FINGERPRINT)
 
-  // Not requireGitValue: its trim would eat the first porcelain entry's leading status column.
   private fun dirtyPaths(context: OperationContext): List<String> =
     when (val status = gitOperations.worktreeStatus(context.repoRoot)) {
       is WorkflowGitOperationResult.Ok -> FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(status.value.orEmpty())
       else -> throw OperationAnchorUnreadableError(WORKTREE_STATUS, status.error)
     }
 
-  /** A deleted file has no identity, so deleting a dirty file also reads as a change. */
   private fun contentIdentities(
     context: OperationContext,
     paths: List<String>,
@@ -142,8 +138,8 @@ class OperationStepRunner(
 sealed interface OperationStepResult {
   data class Settled(
     val value: String,
-    /** Paths the step newly left changed, from the runner's before and after manifests. */
     val changedPaths: List<String> = emptyList(),
+    val output: PhaseStepOutput? = null,
   ) : OperationStepResult
 
   data class Failed(val reason: String) : OperationStepResult
@@ -152,7 +148,6 @@ sealed interface OperationStepResult {
 private fun readOnlyViolation(stepName: String): String =
   "Operation step '$stepName' is read-only but changed the worktree."
 
-/** Operation steps pin no settlement target, observe nothing, and keep no token ledger. */
 private object OperationPhaseLaunchState : PhaseLaunchState {
   override fun settlementTarget(attempt: Int): FeatureTaskRuntimePhaseSettlementTarget? = null
 
@@ -171,7 +166,6 @@ private object OperationPhaseLaunchState : PhaseLaunchState {
   ): PhaseSettledEnvelopeRead = PhaseSettledEnvelopeRead.None
 }
 
-/** A non-null attempt makes the runner capture the before and after manifests the read-only check compares. */
 private const val TRACKED_ATTEMPT = 1
 
 private const val REPOSITORY_FINGERPRINT = "repository fingerprint"

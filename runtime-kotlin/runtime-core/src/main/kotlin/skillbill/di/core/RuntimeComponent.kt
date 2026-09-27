@@ -55,6 +55,7 @@ import skillbill.engine.goalrunner.planning.GoalPlanningLogService
 import skillbill.engine.goalrunner.preflight.GoalPreflightService
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.operation.core.OperationExecutor
+import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.work.IdeStatusService
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
 import skillbill.model.EnvironmentContext
@@ -165,6 +166,7 @@ abstract class RuntimeComponent(
 
   abstract val phaseRunEntry: PhaseRunEntry
   abstract val operationExecutor: OperationExecutor
+  abstract val operationRegistry: OperationRegistry
   abstract val configResolutionService: ConfigResolutionService
   abstract val externalAgentAddonSourceConfigPort: ExternalAgentAddonSourceConfigPort
   abstract val installService: InstallService

@@ -1,9 +1,5 @@
 package skillbill.engine.operation.unittestvalue
 
-/**
- * The unit-test value rubric, copied verbatim from `skills/bill-unit-test-value-check/content.md`.
- * `ChecklistOperationRulesParityTest` holds the copies equal to the skill while both exist.
- */
 internal object UnitTestValueCheckPromptRules {
   const val REVIEW_STEP: String = "operation.unit-test-value-check.review"
 
@@ -16,7 +12,6 @@ internal object UnitTestValueCheckPromptRules {
     below defaults to deletion.
     """.trimIndent()
 
-  /** Everything from Supported Scope through Output: workflow, weighting, patterns, review rules, and format. */
   val RUBRIC: String =
     """
     ## Supported Scope
@@ -119,7 +114,6 @@ internal object UnitTestValueCheckPromptRules {
       - `Missing high-value cases:` only concrete critical-path behaviors that are not covered
     """.trimIndent()
 
-  /** The read-only review directive over the scope and the unit test paths the runtime resolved. */
   fun reviewDirective(
     scope: String,
     testPaths: List<String>,

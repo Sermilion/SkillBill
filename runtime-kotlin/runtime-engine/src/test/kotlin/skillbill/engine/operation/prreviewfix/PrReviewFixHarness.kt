@@ -36,10 +36,6 @@ import kotlin.io.path.appendText
 import kotlin.io.path.exists
 import kotlin.io.path.writeText
 
-/**
- * A git repository on the PR branch plus `pr-review-fix` wired to a fake GitHub thread port, a scripted agent, a
- * recorded validation run, and a push counter; proposals persist in a real SQLite store.
- */
 internal class PrReviewFixHarness : AutoCloseable {
   private val root: Path = Files.createTempDirectory("pr-review-fix-operation")
   val repo: Path = root.resolve("repo")
@@ -142,7 +138,6 @@ internal class PrReviewFixHarness : AutoCloseable {
   }
 }
 
-/** Two live threads (T1 on a.kt, T2 on b.kt), one resolved, one outdated; the head sha is settable. */
 internal class FakeReviewThreads : PullRequestReviewThreadOperations {
   var headOid: String = "head-1"
   var threads: List<ReviewThread> =
@@ -207,11 +202,6 @@ internal class FakeReviewThreads : PullRequestReviewThreadOperations {
   }
 }
 
-/**
- * The analysis step settles [matrix]; a thread step edits `fix-<n>.txt`, reports it in its manifest, and settles a
- * reply naming its directive's thread. [editDuringAnalysis] makes the analysis step edit too; [editSharedFile] makes
- * every thread step also append to `shared.txt`, with manifests that list it as dirty before once it exists.
- */
 internal class ScriptedPrReviewFixRunner(
   private val repo: Path,
 ) : PhaseRunner {
@@ -236,7 +226,7 @@ internal class ScriptedPrReviewFixRunner(
       if (editSharedFile) {
         val shared = repo.resolve(SHARED_FILE)
         val before = listOf(SHARED_FILE).filter { shared.exists() }
-        shared.appendText("$ordinal\n")
+        if (shared.exists()) shared.appendText("$ordinal\n") else shared.writeText("$ordinal\n")
         PhaseStepFileManifest(before, listOf(path, SHARED_FILE))
       } else {
         PhaseStepFileManifest(emptyList(), listOf(path))

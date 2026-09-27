@@ -89,8 +89,38 @@ class OperationCommandTest {
     assertContains(
       output,
       "Unknown operation 'deploy'; expected one of update-check, release, unit-test-value-check, feature-guard, " +
-        "feature-guard-cleanup, pr-review-fix.",
+        "feature-guard-cleanup, pr-review-fix, verify.",
     )
+  }
+
+  @Test
+  fun `verify without spec and target is a usage error naming both`() {
+    listOf(emptyList(), listOf("spec:docs/spec.md"), listOf("target:12")).forEach { args ->
+      val result =
+        CliRuntime.run(
+          listOf("--db", dbPath.toString(), "operation", "verify") + args,
+          CliRuntimeContext(userHome = tempDir, repositoryRoot = tempDir),
+        )
+      val output = result.stdout + result.stderr
+
+      assertNotEquals(0, result.exitCode, output)
+      assertContains(output, "spec:<path> and target:<pr-number|branch|base..head>")
+    }
+    assertEquals(0, rowCount("feature_verify_workflows"))
+  }
+
+  @Test
+  fun `spec, target, and mode reach verify and are usage errors on any other operation`() {
+    val invocation =
+      OperationInvocationParser.parse("verify", listOf("spec:docs/spec.md", "target:main..HEAD", "mode:delegated"))
+
+    assertEquals(
+      OperationArguments(spec = "docs/spec.md", target = "main..HEAD", mode = "delegated"),
+      invocation.arguments,
+    )
+    listOf("spec:docs/spec.md", "target:12", "mode:inline").forEach { token ->
+      assertFailsWith<UsageError> { OperationInvocationParser.parse("pr-review-fix", listOf(token)) }
+    }
   }
 
   @Test

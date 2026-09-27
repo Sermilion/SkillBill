@@ -13,7 +13,8 @@ class SqliteOperationProposalRepository(
     databaseSessionFactory.transaction { it.operationProposals.createSupersedingPrior(proposal) }
   }
 
-  override fun find(token: String): OperationProposal? = databaseSessionFactory.read { it.operationProposals.find(token) }
+  override fun find(token: String): OperationProposal? =
+    databaseSessionFactory.read { it.operationProposals.find(token) }
 
   override fun markConsumed(
     token: String,

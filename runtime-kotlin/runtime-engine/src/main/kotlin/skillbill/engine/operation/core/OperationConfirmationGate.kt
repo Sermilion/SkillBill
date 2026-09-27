@@ -16,10 +16,6 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.time.Clock
 import java.util.UUID
 
-/**
- * Two-invocation confirmation: [propose] stores the proposal and returns its token; [confirm] executes exactly the
- * stored proposal once, refusing unknown, consumed, superseded, foreign, or stale tokens before anything changes.
- */
 @Inject
 class OperationConfirmationGate(
   private val proposals: OperationProposalRepository,
@@ -50,13 +46,21 @@ class OperationConfirmationGate(
     context: OperationContext,
     token: String,
   ): OperationOutcome {
-    val proposal = proposals.find(token) ?: throw UnknownOperationTokenError(token)
-    refusal(operation, context, proposal)?.let { refusal -> throw refusal }
+    val proposal = admissibleProposal(operation, context, token)
     val confirmed = ConfirmedOperationProposal(token, proposal.proposalValue, proposal.anchors.operationValues)
     operation.admit(context, confirmed)
-    // Consume before executing: a crash after the consume refuses a retry instead of executing twice.
     if (!proposals.markConsumed(token, clock.instant().toString())) throw ConsumedOperationTokenError(token)
     return operation.execute(context, confirmed)
+  }
+
+  private fun admissibleProposal(
+    operation: ConfirmableOperation,
+    context: OperationContext,
+    token: String,
+  ): OperationProposal {
+    val proposal = proposals.find(token) ?: throw UnknownOperationTokenError(token)
+    refusal(operation, context, proposal)?.let { refusal -> throw refusal }
+    return proposal
   }
 
   private fun refusal(
@@ -88,7 +92,6 @@ class OperationConfirmationGate(
       operationValues = operationValues,
     )
 
-  /** Compares HEAD, the branch, and every anchor the operation reports now; pinned values it does not report stay. */
   private fun movedAnchors(
     stored: OperationAnchors,
     current: OperationAnchors,
@@ -100,7 +103,6 @@ class OperationConfirmationGate(
     }
 }
 
-/** The trimmed value of a successful git read; a failed read refuses the operation, naming [what]. */
 internal fun WorkflowGitOperationResult.requireGitValue(what: String): String =
   (this as? WorkflowGitOperationResult.Ok)?.value?.trim() ?: throw OperationAnchorUnreadableError(what, error)
 

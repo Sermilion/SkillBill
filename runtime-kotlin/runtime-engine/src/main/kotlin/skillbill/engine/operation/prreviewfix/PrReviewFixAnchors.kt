@@ -3,14 +3,8 @@ package skillbill.engine.operation.prreviewfix
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.review.pullrequest.model.ReviewThread
 
-/**
- * What an analysis pins for confirm: the pull request, its head sha, and the actionable threads under the
- * runtime-assigned ordinals `T1..Tn` a selection names. Only [PR_NUMBER], [PR_HEAD_SHA], and [UNRESOLVED_THREAD_IDS]
- * are re-measured on confirm; the rest is pinned.
- */
 internal data class PrReviewFixAnchors(
   val pullRequest: ReviewPullRequest,
-  /** Ordinal to thread id, in ordinal order. */
   val ordinals: Map<String, String>,
 ) {
   fun toOperationValues(): Map<String, String> =
@@ -25,7 +19,6 @@ internal data class PrReviewFixAnchors(
       )
 
   companion object {
-    /** Actionable threads come from the GraphQL flags alone: neither resolved nor outdated. */
     fun actionable(threads: List<ReviewThread>): List<ReviewThread> =
       threads
         .filter { thread -> !thread.isResolved && !thread.isOutdated }
@@ -40,7 +33,6 @@ internal data class PrReviewFixAnchors(
         actionable.withIndex().associate { (index, thread) -> "$ORDINAL_PREFIX${index + 1}" to thread.id },
       )
 
-    /** The anchors confirm re-measures; any change since analysis refuses the token. */
     fun measured(
       pullRequest: ReviewPullRequest,
       actionableIds: Collection<String>,

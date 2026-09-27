@@ -15,10 +15,6 @@ import skillbill.ports.review.pullrequest.model.ReviewThreadListing
 import skillbill.ports.review.pullrequest.model.ReviewThreadReplyResult
 import java.nio.file.Path
 
-/**
- * Review threads through `gh api graphql`, never the flat `gh pr view --comments` list, which drops the resolved and
- * outdated flags. Every unreadable answer is Unavailable, so a failed read never looks like "no open threads".
- */
 class GhPullRequestReviewThreads internal constructor(
   private val gh: GhCommandRunner,
 ) : PullRequestReviewThreadOperations {
@@ -103,7 +99,6 @@ class GhPullRequestReviewThreads internal constructor(
       ) + cursor?.let { listOf("-f", "cursor=$it") }.orEmpty() + listOf("-f", "query=$THREADS_QUERY")
     val result = gh.run(repoRoot, args)
     if (result.exitCode != 0) return ThreadPage.Unavailable(result.describeFailure())
-    // Truncated output fails to parse and lands here too, so a partial listing is never read as complete.
     return runCatching { parseThreadPage(result.stdout, cursor) }
       .getOrElse { error -> ThreadPage.Unavailable("GitHub returned unreadable review threads (${error.message}).") }
   }
@@ -186,7 +181,6 @@ private const val PR_FIELDS = "number,url,headRefName,baseRefName,headRefOid"
 private val NO_PULL_REQUEST = Regex("(?i)no (open )?pull requests? found")
 private val PULL_REQUEST_URL = Regex("""^https?://[^/]+/([^/]+)/([^/]+)/pull/\d+""")
 
-// Comments per thread are not paged; a thread longer than 100 comments shows its first 100.
 private const val THREADS_QUERY =
   "query(\$owner:String!,\$repo:String!,\$number:Int!,\$cursor:String){" +
     "repository(owner:\$owner,name:\$repo){pullRequest(number:\$number){" +

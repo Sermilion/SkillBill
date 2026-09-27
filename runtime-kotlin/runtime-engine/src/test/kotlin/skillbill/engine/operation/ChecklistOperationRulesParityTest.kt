@@ -3,13 +3,13 @@ package skillbill.engine.operation
 import skillbill.engine.operation.featureguard.FeatureGuardPromptRules
 import skillbill.engine.operation.featureguardcleanup.FeatureGuardCleanupPromptRules
 import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
+import skillbill.engine.operation.verify.VerifyPromptSections
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** The checklist operations copy their rules from the skills they replace; this holds the copies equal meanwhile. */
 class ChecklistOperationRulesParityTest {
   private val skillsRoot: Path = locateSkillsRoot()
 
@@ -50,9 +50,29 @@ class ChecklistOperationRulesParityTest {
     assertEquals(span(skill, "## Supported Scope", until = null), UnitTestValueCheckPromptRules.RUBRIC)
   }
 
+  @Test
+  fun `verify carries the skill's criteria extraction, audits, verdict up to the fix offer, and input boundary`() {
+    val skill = content("bill-feature-verify")
+
+    assertEquals(
+      span(
+        skill,
+        "After reading the spec, produce in one pass:",
+        "Then ask: **Confirm or adjust the criteria before I review the PR.**",
+      ),
+      VerifyPromptSections.CRITERIA_EXTRACTION,
+    )
+    assertEquals(section(skill, "## Feature Flag Audit"), VerifyPromptSections.FEATURE_FLAG_AUDIT)
+    assertEquals(section(skill, "## Completeness Audit"), VerifyPromptSections.COMPLETENESS_AUDIT)
+    assertEquals(
+      span(skill, "## Consolidated Verdict", "After presenting the verdict, ask:"),
+      VerifyPromptSections.CONSOLIDATED_VERDICT,
+    )
+    assertEquals(section(skill, "## Verification Input Boundary"), VerifyPromptSections.VERIFICATION_INPUT_BOUNDARY)
+  }
+
   private fun content(skill: String): String = Files.readString(skillsRoot.resolve("$skill/content.md"))
 
-  /** The heading and its body, up to the next heading of the same or a higher level. */
   private fun section(
     content: String,
     heading: String,
@@ -64,7 +84,6 @@ class ChecklistOperationRulesParityTest {
     return (listOf(lines.first()) + lines.drop(1).takeWhile { !next.containsMatchIn(it) }).joinToString("\n").trim()
   }
 
-  /** From the [from] heading line up to, not including, the [until] line; to the end when [until] is null. */
   private fun span(
     content: String,
     from: String,

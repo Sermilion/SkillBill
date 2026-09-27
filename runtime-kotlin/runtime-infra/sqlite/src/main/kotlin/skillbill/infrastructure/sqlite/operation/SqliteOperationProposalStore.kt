@@ -8,7 +8,6 @@ import skillbill.ports.operation.model.OperationProposal
 import java.sql.Connection
 import java.sql.ResultSet
 
-/** Wire keys of the `anchors_json` column. */
 internal object OperationProposalPayloadKeys {
   const val HEAD_SHA = "head_sha"
   const val BRANCH = "branch"

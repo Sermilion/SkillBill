@@ -11,7 +11,6 @@ internal object GitStandardWorkflowGitReleaseTagOperations : WorkflowGitReleaseT
   private val STABLE_RELEASE_TAG = Regex("""^v\d+\.\d+\.\d+$""")
 
   override fun lastReleaseTag(repoRoot: Path): WorkflowGitOperationResult {
-    // All tags, as the release skill read them: a newer tag on another branch must not be proposed again.
     val tags = runGitCommand(repoRoot, "tag", "--sort=-version:refname", "--list", "v*")
     if (tags !is WorkflowGitOperationResult.Ok) return tags
     val latest = tags.value.lines().map(String::trim).firstOrNull(STABLE_RELEASE_TAG::matches)

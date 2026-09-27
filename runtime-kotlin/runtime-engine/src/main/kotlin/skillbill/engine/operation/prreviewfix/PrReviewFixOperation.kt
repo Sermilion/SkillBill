@@ -27,13 +27,6 @@ import skillbill.ports.review.pullrequest.model.ReviewThreadListing
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.gitops.ProtectedBranches
 
-/**
- * `operation:pr-review-fix`: a read-only step turns the PR's unresolved GraphQL review threads into a recommendation
- * matrix, stored as the proposal; `confirm:<token>` with `select:` fixes only the selected threads, one editing step
- * each, runs the `validation` definition, then posts (or drafts) the replies and pushes only with `push:on`. Nothing
- * ever resolves a thread. `scope:analyze-only` prints the matrix and issues no token. [runPhase] is
- * `PhaseRunEntry.run`; the operation opens no workflow.
- */
 class PrReviewFixOperation(
   private val reviewThreads: PullRequestReviewThreadOperations,
   private val gitOperations: WorkflowGitOperations,
@@ -64,7 +57,6 @@ class PrReviewFixOperation(
   override fun run(context: OperationContext): OperationRunResult {
     val target = prReviewFixTarget(context.instructions)
     val pullRequest = pullRequest(context, target.reference)
-    // A token issued off the PR branch could never be confirmed: switching makes it stale, staying fails admit.
     if (context.arguments.scope != ANALYZE_ONLY) requirePullRequestBranch(context, pullRequest)
     val listed = listThreads(context, pullRequest)
     val anchors = PrReviewFixAnchors.of(pullRequest, PrReviewFixAnchors.actionable(listed))
@@ -113,7 +105,6 @@ class PrReviewFixOperation(
     val branch = requirePullRequestBranch(context, anchors.pullRequest)
     if (context.arguments.push != PUSH_ON) return
     ProtectedBranches.protectedName(branch)?.let { protectedBranch -> throw ProtectedBranchPushError(protectedBranch) }
-    // The push commits the whole worktree, so pre-existing changes would ride along into the pushed commit.
     if (gitOperations.worktreeStatus(context.repoRoot).requireGitValue("worktree status").isNotBlank()) {
       throw PushWorktreeDirtyError(context.repoRoot.toString())
     }
@@ -152,7 +143,10 @@ class PrReviewFixOperation(
     when (val resolved = reviewThreads.resolvePullRequest(context.repoRoot, reference)) {
       is ReviewPullRequestResolution.Found -> resolved.pullRequest
       ReviewPullRequestResolution.Absent -> throw PullRequestNotFoundError(reference)
-      is ReviewPullRequestResolution.Unavailable -> throw OperationAnchorUnreadableError("pull request", resolved.reason)
+      is ReviewPullRequestResolution.Unavailable -> throw OperationAnchorUnreadableError(
+        "pull request",
+        resolved.reason,
+      )
     }
 
   private fun listThreads(

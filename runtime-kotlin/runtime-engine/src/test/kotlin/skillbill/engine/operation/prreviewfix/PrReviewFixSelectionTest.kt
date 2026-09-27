@@ -6,7 +6,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class PrReviewFixSelectionTest {
-  // PRRT_d was resolved at analysis, so it has no ordinal.
   private val ordinals = linkedMapOf("T1" to "PRRT_a", "T2" to "PRRT_b", "T3" to "PRRT_c")
 
   @Test

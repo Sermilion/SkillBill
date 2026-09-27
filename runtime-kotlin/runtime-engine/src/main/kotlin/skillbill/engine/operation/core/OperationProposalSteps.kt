@@ -1,6 +1,5 @@
 package skillbill.engine.operation.core
 
-/** Runs [stepName] read-only and turns its report into a proposal to store; a failed step stores nothing. */
 internal fun OperationContext.proposeFromStep(
   stepName: String,
   directive: String,
@@ -16,10 +15,6 @@ internal fun OperationContext.proposeFromStep(
       )
   }
 
-/**
- * Runs [applyStep] fed the stored proposal verbatim as the [proposalStep] prior value; nothing recomputes it. Text
- * passed alongside `confirm:<token>` never reaches the editing step, so the confirmed plan is all it acts on.
- */
 internal fun OperationContext.applyStoredProposal(
   proposalStep: String,
   applyStep: String,

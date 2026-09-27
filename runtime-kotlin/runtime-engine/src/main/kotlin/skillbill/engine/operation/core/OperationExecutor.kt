@@ -19,10 +19,6 @@ data class OperationResult(
   val outcome: OperationOutcome,
 )
 
-/**
- * The inbound entry for `skill-bill operation`: resolves the operation, mints an invocation id, and runs pre, then run
- * or confirm, then post. A refusal becomes [OperationOutcome.Blocked]; usage errors propagate to the caller.
- */
 @Inject
 class OperationExecutor(
   private val registry: OperationRegistry,
@@ -32,7 +28,9 @@ class OperationExecutor(
   fun execute(request: OperationRequest): OperationResult {
     val operation = registry.get(request.operationId)
     val token = request.arguments.confirm
-    if (token != null && operation !is ConfirmableOperation) throw OperationConfirmationUnsupportedError(operation.id)
+    if (token != null && operation !is ConfirmableOperation && operation !is SelfConfirmingOperation) {
+      throw OperationConfirmationUnsupportedError(operation.id)
+    }
     val context =
       OperationContext(
         invocationId = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}",
@@ -45,8 +43,8 @@ class OperationExecutor(
     val outcome =
       try {
         operation.pre(context)
-        if (token != null) {
-          gate.confirm(operation as ConfirmableOperation, context, token)
+        if (token != null && operation is ConfirmableOperation) {
+          gate.confirm(operation, context, token)
         } else {
           proceed(operation, context)
         }

@@ -3,7 +3,6 @@ package skillbill.application.updatecheck
 import skillbill.application.updatecheck.model.UpdateCheckResult
 import skillbill.application.updatecheck.model.UpdateCheckStatus
 
-/** The text report `skill-bill update-check` and `skill-bill operation update-check` both print. */
 fun UpdateCheckResult.toText(): String =
   buildString {
     when (status) {
