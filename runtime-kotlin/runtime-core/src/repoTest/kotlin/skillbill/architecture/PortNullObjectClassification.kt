@@ -37,6 +37,7 @@ object PortNullObjectClassification {
       "NoopWorkflowGitBranchOperations" to PortNullObjectKind.RECORDING_NULL_OBJECT,
       "NoopRepositoryFingerprintGitOperations" to PortNullObjectKind.RECORDING_NULL_OBJECT,
       "NoopGoalSubtaskReviewGitOperations" to PortNullObjectKind.RECORDING_NULL_OBJECT,
+      "NoopWorkflowGitReleaseTagOperations" to PortNullObjectKind.RECORDING_NULL_OBJECT,
       "NoopWorkflowGitOperations" to PortNullObjectKind.DELEGATION_COMPOSITE,
       "NoopRuntimeTimingPort" to PortNullObjectKind.RECORDING_NULL_OBJECT,
       "NoopFeatureTaskRuntimeHeartbeat" to PortNullObjectKind.RECORDING_NULL_OBJECT,

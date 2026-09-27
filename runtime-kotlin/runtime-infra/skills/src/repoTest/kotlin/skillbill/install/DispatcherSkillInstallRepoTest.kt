@@ -52,4 +52,28 @@ class DispatcherSkillInstallRepoTest {
       }
     }
   }
+
+  @Test
+  fun `skill-bill routes both operations to the operation subcommand and states the relay rule`() {
+    val content = Files.readString(repoRootFromTest().resolve("skills/skill-bill/content.md"))
+    val routingRows = content.lines().filter { line -> line.startsWith("| `/skill-bill") }
+
+    listOf(
+      "operation:update-check" to "`skill-bill operation update-check`",
+      "operation:release" to "`skill-bill operation release bump:<value>",
+    ).forEach { (token, command) ->
+      assertTrue(
+        routingRows.any { row -> token in row && command in row },
+        "no routing row sends $token to $command",
+      )
+    }
+    val prose = content.replace(Regex("\\s+"), " ")
+    assertTrue("status: awaiting_confirmation confirm:<token>" in prose)
+    assertTrue(
+      "ask the operator once whether to proceed. On yes, run the same operation with `confirm:<token>`." in prose,
+    )
+    assertTrue("Never pass `confirm:` without an operator answer." in content)
+    assertTrue("the caller passes `phase:` together with `operation:`: report a usage error." in content)
+    assertTrue("SKILL-382" !in content, "the pre-SKILL-382 operation refusal must be gone")
+  }
 }

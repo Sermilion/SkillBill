@@ -9,10 +9,15 @@ internal const val FEATURE_TASK_ENGINE_ROOT =
 internal const val GOAL_PLANNING_ENGINE_ROOT =
   "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/goalrunner/planning"
 
+internal const val OPERATION_ENGINE_ROOT =
+  "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/operation"
+
 internal fun featureTaskEngineSources(): Map<String, String> = engineSources(FEATURE_TASK_ENGINE_ROOT, "")
 
 internal fun goalPlanningEngineSources(): Map<String, String> =
   engineSources(GOAL_PLANNING_ENGINE_ROOT, "goalrunner/planning/")
+
+internal fun operationEngineSources(): Map<String, String> = engineSources(OPERATION_ENGINE_ROOT, "operation/")
 
 private fun engineSources(
   engineRoot: String,
@@ -319,7 +324,7 @@ internal object FeatureTaskStepIdentityScan {
 internal object FeatureTaskLaunchPortScan {
   private const val LAUNCHER = "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher"
   private const val LAUNCHER_PACKAGE_STAR = "skillbill.ports.goalrunner.runner.*"
-  private const val GOAL_PLANNING_PATH_PREFIX = "goalrunner/planning/"
+  private val NON_EXEMPT_PATH_PREFIXES = listOf("goalrunner/planning/", "operation/")
 
   private val PHASE_RUNNER_IMPLEMENTATION =
     Regex("""\b(?:class|object)\s+\w+(?:\s*\([^{]*?\))?\s*:\s*(?:(?!\bfun\b)[^{}=])*?(?<![\w.])PhaseRunner\b""")
@@ -327,7 +332,7 @@ internal object FeatureTaskLaunchPortScan {
   fun violations(sources: Map<String, String>): List<String> =
     sources.flatMap { (path, source) ->
       val scanned = ScannedKotlinSource(source)
-      val runnerExempt = !path.startsWith(GOAL_PLANNING_PATH_PREFIX)
+      val runnerExempt = NON_EXEMPT_PATH_PREFIXES.none(path::startsWith)
       if (runnerExempt && PHASE_RUNNER_IMPLEMENTATION.containsMatchIn(scanned.blanked)) {
         emptyList()
       } else {

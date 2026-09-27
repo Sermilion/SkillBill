@@ -16,4 +16,5 @@ object NoopWorkflowGitOperations :
   ReadinessTreeIdentityGitOperations by UnavailableReadinessTreeIdentityGitOperations,
   RepositoryOwnedPathsGitOperations by UnavailableRepositoryOwnedPathsGitOperations,
   RuntimePhaseFileManifestGitOperations by NoopRuntimePhaseFileManifestGitOperations,
-  ScopedStagingGitOperations by UnavailableScopedStagingGitOperations
+  ScopedStagingGitOperations by UnavailableScopedStagingGitOperations,
+  WorkflowGitReleaseTagOperations by NoopWorkflowGitReleaseTagOperations

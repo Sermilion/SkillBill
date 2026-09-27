@@ -601,6 +601,7 @@ object PrincipleEnforcementInventory {
       "installService",
       "learningService",
       "lifecycleTelemetryService",
+      "operationExecutor",
       "phaseRunEntry",
       "repoValidationGateway",
       "repositoryEnclosingRootPort",

@@ -16,7 +16,8 @@ abstract class WorkflowGitOperationsTestBase :
   RepositoryOwnedPathsGitOperations by UnavailableRepositoryOwnedPathsGitOperations,
   RuntimePhaseFileManifestGitOperations by NoopRuntimePhaseFileManifestGitOperations,
   ScopedStagingGitOperations by UnavailableScopedStagingGitOperations,
-  SuppressionEvidenceGitOperations by NoopSuppressionEvidenceGitOperations {
+  SuppressionEvidenceGitOperations by NoopSuppressionEvidenceGitOperations,
+  WorkflowGitReleaseTagOperations by NoopWorkflowGitReleaseTagOperations {
   override fun worktreeNumstat(repoRoot: Path): WorkflowWorktreeNumstatResult =
     WorkflowWorktreeNumstatResult(status = WorkflowGitOperationStatus.OK, files = emptyList())
 

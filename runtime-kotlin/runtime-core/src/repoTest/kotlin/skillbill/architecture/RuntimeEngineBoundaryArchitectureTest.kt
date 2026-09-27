@@ -759,6 +759,53 @@ class FeatureTaskLaunchPortArchitectureTest {
   }
 
   @Test
+  fun `operations reach GoalRunnerSubtaskLauncher only through the PhaseRunner`() {
+    val sources = operationEngineSources()
+    assertTrue(sources.keys.any { it.startsWith("operation/core/") }, "Read no operation core file.")
+
+    val violations = FeatureTaskLaunchPortScan.violations(sources)
+
+    assertEquals(emptyList(), violations, "Read ${sources.size} files.\n" + violations.joinToString("\n"))
+  }
+
+  @Test
+  fun `launch-port rule catches an operation launcher dependency even in a PhaseRunner implementation`() {
+    val operation =
+      """
+      package skillbill.engine.operation.release
+
+      import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+
+      internal class SyntheticReleaseOperation(private val launcher: GoalRunnerSubtaskLauncher)
+      """.trimIndent()
+    val runner =
+      """
+      package skillbill.engine.operation.core
+
+      import skillbill.engine.featuretask.slot.PhaseRunner
+
+      internal class SyntheticOperationRunner(
+        private val launcher: skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher,
+      ) : PhaseRunner
+      """.trimIndent()
+
+    assertEquals(
+      listOf(
+        "operation/release/SyntheticReleaseOperation.kt imports " +
+          "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
+        "operation/core/SyntheticOperationRunner.kt references " +
+          "skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher",
+      ),
+      FeatureTaskLaunchPortScan.violations(
+        mapOf(
+          "operation/release/SyntheticReleaseOperation.kt" to operation,
+          "operation/core/SyntheticOperationRunner.kt" to runner,
+        ),
+      ),
+    )
+  }
+
+  @Test
   fun `launch-port rule catches a goal-planning launcher dependency`() {
     val sweep =
       """

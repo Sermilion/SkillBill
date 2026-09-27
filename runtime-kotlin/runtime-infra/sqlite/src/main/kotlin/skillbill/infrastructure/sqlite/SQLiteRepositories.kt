@@ -4,6 +4,7 @@ import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.goal.UnaddressedFindingsRuntime
+import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalStore
 import skillbill.infrastructure.sqlite.review.accounting.loadReviewAccounting
 import skillbill.infrastructure.sqlite.review.accounting.persistImportedReview
 import skillbill.infrastructure.sqlite.review.accounting.upsertReviewAccounting
@@ -38,6 +39,7 @@ import skillbill.ports.idestatus.AgentActivityStampRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.learning.model.LearningResolution
+import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.review.model.ReviewAccountingRecord
 import skillbill.ports.review.model.ReviewRepositoryStatsSnapshot
@@ -77,6 +79,7 @@ internal class SQLiteUnitOfWork(
   internal val sessionClock: Clock get() = clock
   internal val sessionDiagnostics: RuntimeDiagnostics get() = diagnostics
   override val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository = phaseSettlementStore
+  override val operationProposals: OperationProposalRepository = SqliteOperationProposalStore(connection)
   override val reviews: ReviewRepository = SQLiteReviewRepository(connection, clock, runtimeVersion)
   override val learnings: LearningRepository = SQLiteLearningRepository(connection)
   override val lifecycleTelemetry: LifecycleTelemetryRepository = LifecycleTelemetryStore(connection, runtimeVersion)

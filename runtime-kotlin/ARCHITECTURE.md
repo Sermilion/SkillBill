@@ -971,6 +971,27 @@ skillbill.workflow.verify
 - `skill-bill feature-task` and `feature-task-stats` are the CLI surfaces for
   this workflow family.
 
+## Runtime operations
+
+An operation (`skillbill.engine.operation`) is a runtime command outside the
+feature-task workflow family. It opens no workflow row and its invocation id
+has the `opr-` prefix.
+
+- `Operation` runs `pre`, `run`, and `post`. Agent steps launch only through
+  `OperationStepRunner` over the generic `PhaseRunner`. The launch-port rule in
+  `FeatureTaskLaunchPortScan` covers `operation/`, so no operation reaches
+  `GoalRunnerSubtaskLauncher` directly.
+- `OperationRegistry` is the explicit list in `RuntimeOperationProvides`
+  (runtime-core). `OperationExecutor` is the inbound API. runtime-cli reaches
+  it through `RuntimeComponent.operationExecutor` for `skill-bill operation`.
+- `OperationConfirmationGate` owns the two-invocation confirmation. Proposals
+  persist through `OperationProposalRepository` (runtime-ports) in the
+  `operation_proposals` table. `SqliteOperationProposalStore` owns the
+  `anchors_json` wire keys (`OperationProposalPayloadKeys`).
+- Operations: `update-check` shares the text formatter with
+  `skill-bill update-check`. `release` tags through
+  `WorkflowGitReleaseTagOperations`.
+
 ## Phase slots and strategies
 
 The feature-task runtime runs a fixed skeleton of slots. A slot is a stage of a

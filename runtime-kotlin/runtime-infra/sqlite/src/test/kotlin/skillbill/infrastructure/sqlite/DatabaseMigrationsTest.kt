@@ -109,6 +109,7 @@ class DatabaseMigrationsTest {
         44 to "skill-366-preserve-experiment-arm-outcomes",
         45 to "skill-378-drop-experiment-tables",
         46 to "allow-goal-planning-phase-output-0-7",
+        47 to "add-operation-proposals",
       ),
       migrationDefinitions,
     )

@@ -191,7 +191,7 @@ These are the user-facing entry points. Stack-specific review skills and the inl
 /skill-bill phase:review mode:delegated target:HEAD
 ```
 
-The phase names are `plan`, `implement`, `review`, `validation`, and `pr`. The full run forwards `code-review:inline|auto` as `--code-review-mode`; `phase:review` forwards `mode:` and `target:` unchanged. When preflight finds no spec, the full run calls `skill-bill phase plan`. `operation:` forms arrive with SKILL-382; until then `/skill-bill` refuses them.
+The phase names are `plan`, `implement`, `review`, `validation`, and `pr`. The full run forwards `code-review:inline|auto` as `--code-review-mode`; `phase:review` forwards `mode:` and `target:` unchanged. When preflight finds no spec, the full run calls `skill-bill phase plan`. `operation:update-check` and `operation:release bump:<patch|minor|major>` run `skill-bill operation <name>`. Release first prints the proposed version and changelog and exits `awaiting_confirmation`; confirming it with `confirm:<token>` creates and pushes the tag.
 
 ## Platform packs
 

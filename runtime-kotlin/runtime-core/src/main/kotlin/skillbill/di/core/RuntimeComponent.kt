@@ -33,6 +33,7 @@ import skillbill.di.install.RuntimeExternalPlatformPackProvides
 import skillbill.di.install.RuntimeInstallPlanProvides
 import skillbill.di.install.RuntimeInstallTargetProvides
 import skillbill.di.install.RuntimeInstallerProvides
+import skillbill.di.operation.RuntimeOperationProvides
 import skillbill.di.review.RuntimeReviewAddonCatalogProvides
 import skillbill.di.review.RuntimeReviewEvidenceProvides
 import skillbill.di.review.RuntimeReviewLaunchProvides
@@ -53,6 +54,7 @@ import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.planning.GoalPlanningLogService
 import skillbill.engine.goalrunner.preflight.GoalPreflightService
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.work.IdeStatusService
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
 import skillbill.model.EnvironmentContext
@@ -98,6 +100,7 @@ abstract class RuntimeComponent(
     RuntimeReviewEvidenceProvides,
     RuntimeFeatureTaskProvides,
     RuntimeFeatureTaskSlotProvides,
+    RuntimeOperationProvides,
     RuntimeFeatureSpecProvides,
     RuntimeWorkflowProvides,
     RuntimeWorkflowValidatorProvides,
@@ -161,6 +164,7 @@ abstract class RuntimeComponent(
   abstract val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService
 
   abstract val phaseRunEntry: PhaseRunEntry
+  abstract val operationExecutor: OperationExecutor
   abstract val configResolutionService: ConfigResolutionService
   abstract val externalAgentAddonSourceConfigPort: ExternalAgentAddonSourceConfigPort
   abstract val installService: InstallService

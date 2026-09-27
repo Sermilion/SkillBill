@@ -1,13 +1,14 @@
 ---
 name: skill-bill
-description: "Dispatcher for the full governed feature run and single in-memory phases."
+description: "Dispatcher for the full governed feature run, single in-memory phases, and runtime operations."
 ---
 
 # Skill Bill Dispatcher
 
-`skill-bill` routes a full feature run, or one phase over the working tree, to the
-`skill-bill` CLI. The full run keeps the `bill-feature` ceremony and its single
-confirmation question. Phase forms run one command and relay its output.
+`skill-bill` routes a full feature run, one phase over the working tree, or one
+runtime operation to the `skill-bill` CLI. The full run keeps the `bill-feature`
+ceremony and its single confirmation question. Phase and operation forms run one
+command and relay its output.
 
 ## Update Check
 
@@ -37,9 +38,16 @@ intake. Forwarded `key:value` tokens follow the intake unchanged.
 | `/skill-bill [<intake>] phase:review` | `skill-bill phase review [<intake>] [mode:<value>] [target:<value>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<intake>] phase:validation` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<intake>] phase:pr` | `skill-bill phase pr [<intake>] --agent <currently-executing-agent>` | optional |
+| `/skill-bill operation:update-check` | `skill-bill operation update-check` | none |
+| `/skill-bill [<instructions>] operation:release bump:<patch\|minor\|major>` | `skill-bill operation release bump:<value> [<instructions>] --agent <currently-executing-agent>` | optional |
 
 If `phase:plan` or `phase:implement` has no intake, stop and ask for it. For any
 other `phase:` name, stop and list the names in this table.
+
+`operation:<name>` translates to `skill-bill operation <name>`, forwarding
+`bump:`, `confirm:`, `select:`, `mode:`, and `scope:` tokens verbatim and any
+other text as operator instructions. The runtime rejects an unknown operation
+name or a missing bump; relay its usage error.
 
 ## Token Forwarding
 
@@ -58,8 +66,6 @@ Stop without running preflight or any CLI command when:
 
 - the caller passes `parallel-review:<agent>`: name the removed dual-agent
   parallel review capability.
-- the caller passes `operation:<name>` without `phase:`: say that operations
-  arrive with SKILL-382.
 - the caller passes `phase:` together with `operation:`: report a usage error.
 - a token reaches a form that does not accept it (`code-review:` or
   `agent-addon:` with any `phase:`, `mode:` or `target:` outside `phase:review`):
@@ -132,3 +138,15 @@ For a `phase:` form, skip Intake, Preflight, Gate, Rehydrate, and Launch. Run th
 translated command from Forms and Routing once and relay its output verbatim,
 adding nothing. Do not add checklists, rubrics, or steps from other skills. Never
 ask the user to run the command manually.
+
+## Operation Forms
+
+For an `operation:` form, skip Intake, Preflight, Gate, Rehydrate, and Launch. Run
+the translated command once and relay its output verbatim.
+
+When the command exits with `awaiting_confirmation` (its last line reads
+`status: awaiting_confirmation confirm:<token>`), show the proposal and ask the
+operator once whether to proceed. On yes, run the same operation with
+`confirm:<token>`. If the operator asks for changes, run the same operation again
+with those changes as instructions and relay the new proposal and its new token.
+Never pass `confirm:` without an operator answer.

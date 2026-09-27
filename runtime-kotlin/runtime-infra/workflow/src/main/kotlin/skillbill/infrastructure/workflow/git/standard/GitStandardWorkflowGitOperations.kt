@@ -2,6 +2,7 @@ package skillbill.infrastructure.workflow.git.standard
 
 import skillbill.ports.workflow.gitops.WorkflowGitBranchOperations
 import skillbill.ports.workflow.gitops.WorkflowGitCommitHistoryOperations
+import skillbill.ports.workflow.gitops.WorkflowGitReleaseTagOperations
 import skillbill.ports.workflow.gitops.WorkflowGitRemoteOperations
 import skillbill.ports.workflow.gitops.worktree.WorkflowGitWorktreeOperations
 
@@ -9,4 +10,5 @@ internal object GitStandardWorkflowGitOperations :
   WorkflowGitBranchOperations by GitStandardWorkflowGitBranchOperations,
   WorkflowGitRemoteOperations by GitStandardWorkflowGitRemoteOperations,
   WorkflowGitCommitHistoryOperations by GitStandardWorkflowGitCommitHistoryOperations,
-  WorkflowGitWorktreeOperations by GitStandardWorkflowGitWorktreeOperations
+  WorkflowGitWorktreeOperations by GitStandardWorkflowGitWorktreeOperations,
+  WorkflowGitReleaseTagOperations by GitStandardWorkflowGitReleaseTagOperations

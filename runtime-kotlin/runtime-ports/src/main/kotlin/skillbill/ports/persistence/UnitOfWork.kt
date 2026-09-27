@@ -10,6 +10,7 @@ import skillbill.ports.goalrunner.UnaddressedFindingsRepository
 import skillbill.ports.idestatus.AgentActivityStampRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.learning.LearningRepository
+import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
@@ -35,6 +36,7 @@ interface UnitOfWork : GoalRunnerPersistenceSession {
   val rejectedOutputDiagnostics: RejectedOutputDiagnosticRepository
   val rejectedOutputDiagnosticPermissions: RejectedOutputDiagnosticPermissions
   val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository
+  val operationProposals: OperationProposalRepository
 
   fun purgeDecomposedGoal(parentWorkflowId: String)
 }
