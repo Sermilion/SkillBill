@@ -400,11 +400,13 @@ class GoalPlanningPreparationCheckpointTest {
       contractVersion: String = FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
       status: String = "completed",
       producedOutputsJson: String = projectionJson(phaseId),
-    ): String =
-      """
-      {"contract_version":"$contractVersion","phase_id":"$phaseId","status":"$status","summary":"s",
-      "produced_outputs":$producedOutputsJson}
-      """.trimIndent().replace("\n", "")
+    ): String {
+      val disposition = if (status == "completed") "" else ""","failure_disposition":"needs_user_action""""
+      return """
+        {"contract_version":"$contractVersion","phase_id":"$phaseId","status":"$status","summary":"s",
+        "produced_outputs":$producedOutputsJson$disposition}
+        """.trimIndent().replace("\n", "")
+    }
 
     const val MISSING_VALUE_PLAN_PROJECTION = """{"prompt":"optional only"}"""
 

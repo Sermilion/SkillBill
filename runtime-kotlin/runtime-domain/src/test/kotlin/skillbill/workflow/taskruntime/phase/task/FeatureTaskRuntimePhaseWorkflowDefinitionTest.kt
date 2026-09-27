@@ -8,7 +8,6 @@ import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
@@ -179,11 +178,8 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
   }
 
   @Test
-  fun `implement_fix is the sole loop-only mutating phase reached by the bounded review_fix edge`() {
+  fun `implement_fix is reached only by the bounded review_fix edge`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
-    assertTrue(def.isMutatingPhase(def.PHASE_IMPLEMENT_FIX))
-    assertTrue(def.isMutatingPhase(def.PHASE_IMPLEMENT))
-    assertTrue(def.isMutatingPhase(def.PHASE_SIMPLIFY))
     val transitions = def.transitions
     assertEquals(setOf(def.PHASE_IMPLEMENT_FIX, def.PHASE_BUILD), transitions.loopOnlyPhaseIds)
     assertEquals(emptyMap(), transitions.loopOnlySuccessors)
@@ -229,10 +225,10 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
       val declaration =
         when (phaseId) {
           def.PHASE_WRITE_HISTORY, def.PHASE_COMMIT_PUSH ->
-            FeatureTaskRuntimePhaseWorkflowQueries.phaseDeclarationForQualityGate(
+            FeatureTaskRuntimePhaseWorkflowQueries.phaseDeclarationWithoutSteps(
               phaseId,
               FeatureTaskRuntimeFeatureSize.MEDIUM,
-              FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+              setOf(def.PHASE_BUILD),
             )
           else -> declarations.getValue(phaseId)
         }

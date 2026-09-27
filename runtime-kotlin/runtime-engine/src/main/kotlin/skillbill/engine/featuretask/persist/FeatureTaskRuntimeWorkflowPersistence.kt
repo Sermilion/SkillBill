@@ -30,7 +30,7 @@ import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATU
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_STATUS_PAUSED
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_STATUS_PENDING
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
@@ -203,7 +203,7 @@ fun workflowStatusFor(request: FeatureTaskRuntimePhaseStateRequest): String =
   when {
     request.status.workflowStepStatus() == WorkflowStepStatus.PAUSED -> "paused"
     request.status.workflowStepStatus() == WorkflowStepStatus.BLOCKED -> "blocked"
-    request.finished && request.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds.last() ->
+    request.finished && request.phaseId in PhaseSlot.PULL_REQUEST.steps ->
       "completed"
     else -> "running"
   }

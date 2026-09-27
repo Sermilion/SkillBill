@@ -5,8 +5,8 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeSubtaskOutcome
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
@@ -18,7 +18,6 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Instant
 
 const val BRANCH_SETUP_AGENT_SENTINEL = "branch-setup"
@@ -30,16 +29,17 @@ private fun String.isRuntimeAgentId(): Boolean =
 fun completedGoalContinuationOutcome(
   recorder: FeatureTaskRuntimePhaseRecorder,
   gitOperations: WorkflowGitOperations,
-  request: FeatureTaskRuntimeRunRequest,
+  request: FeatureTaskRuntimeRunFacts,
   context: FeatureTaskRuntimeGoalContinuationContext,
+  commitStepId: String,
 ): FeatureTaskRuntimeSubtaskOutcome {
-  val payloadSha = commitShaFromPhaseRecords(recorder, request)
+  val payloadSha = commitShaFromPhaseRecords(recorder, request, commitStepId)
   if (!context.suppressPr) {
-    return completeSubtaskOutcome(request, context, payloadSha)
+    return completeSubtaskOutcome(request, context, payloadSha, commitStepId)
   }
   val resolvedSha = payloadSha ?: measuredHeadSha(gitOperations, request)
   return if (resolvedSha != null) {
-    completeSubtaskOutcome(request, context, resolvedSha)
+    completeSubtaskOutcome(request, context, resolvedSha, commitStepId)
   } else {
     FeatureTaskRuntimeSubtaskOutcome(
       issueKey = context.parentIssueKey,
@@ -51,15 +51,16 @@ fun completedGoalContinuationOutcome(
         "commit_push completed under suppress_pr but no commit SHA could be captured " +
           "from the phase payload or measured from git HEAD; the per-subtask commit invariant cannot " +
           "be satisfied.",
-      lastResumableStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
+      lastResumableStep = commitStepId,
     )
   }
 }
 
 fun completeSubtaskOutcome(
-  request: FeatureTaskRuntimeRunRequest,
+  request: FeatureTaskRuntimeRunFacts,
   context: FeatureTaskRuntimeGoalContinuationContext,
   commitSha: String?,
+  commitStepId: String,
 ): FeatureTaskRuntimeSubtaskOutcome =
   FeatureTaskRuntimeSubtaskOutcome(
     issueKey = context.parentIssueKey,
@@ -68,12 +69,12 @@ fun completeSubtaskOutcome(
     commitSha = commitSha,
     workflowId = request.workflowId,
     blockedReason = null,
-    lastResumableStep = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
+    lastResumableStep = commitStepId,
   )
 
 fun measuredHeadSha(
   gitOperations: WorkflowGitOperations,
-  request: FeatureTaskRuntimeRunRequest,
+  request: FeatureTaskRuntimeRunFacts,
 ): String? {
   val result = gitOperations.headCommitSha(request.repoRoot)
   return result.value.trim().takeIf { result is WorkflowGitOperationResult.Ok && it.isNotBlank() }
@@ -133,11 +134,12 @@ private fun terminalRecordAgentId(records: Map<String, FeatureTaskRuntimePhaseRe
 
 fun commitShaFromPhaseRecords(
   recorder: FeatureTaskRuntimePhaseRecorder,
-  request: FeatureTaskRuntimeRunRequest,
+  request: FeatureTaskRuntimeRunFacts,
+  commitStepId: String,
 ): String? {
   val commitOutput =
     recorder.loadPhaseRecords(request.workflowId)
-      .orEmpty()[FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH]
+      .orEmpty()[commitStepId]
       ?.outputArtifact
   val payload =
     commitOutput
@@ -167,14 +169,15 @@ fun Map<String, Any?>.commitShaFromPhasePayload(): String? {
 }
 
 fun remediationBaseCoherenceBlockedReport(
-  request: FeatureTaskRuntimeRunRequest,
+  request: FeatureTaskRuntimeRunFacts,
   operatorGuidance: String,
+  firstStepId: String,
 ): FeatureTaskRuntimeRunReport.Blocked =
   FeatureTaskRuntimeRunReport.Blocked(
     issueKey = request.issueKey,
     workflowId = request.workflowId,
     featureSize = request.runInvariants.featureSize.name,
-    lastIncompletePhase = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
+    lastIncompletePhase = firstStepId,
     blockedReason = operatorGuidance,
     completedPhaseIds = emptyList(),
     resolvedBranch = request.goalContinuation?.goalBranch,

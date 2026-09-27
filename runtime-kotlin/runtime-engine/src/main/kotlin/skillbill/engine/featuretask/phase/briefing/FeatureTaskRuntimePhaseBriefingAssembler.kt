@@ -14,10 +14,9 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhase
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeHandoffPromptVisibility
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReviewEvidenceReference
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 object FeatureTaskRuntimeRunInvariantPromptAllowlist {
-  private val IDENTITY_CEREMONY_AND_POLICY: Set<FeatureTaskRuntimeRunInvariantPromptField> =
+  val IDENTITY_CEREMONY_AND_POLICY: Set<FeatureTaskRuntimeRunInvariantPromptField> =
     setOf(
       FeatureTaskRuntimeRunInvariantPromptField.SPEC_REFERENCE,
       FeatureTaskRuntimeRunInvariantPromptField.FEATURE_SIZE,
@@ -25,26 +24,18 @@ object FeatureTaskRuntimeRunInvariantPromptAllowlist {
       FeatureTaskRuntimeRunInvariantPromptField.MANDATES_AND_OVERRIDES,
     )
 
-  private val ACCEPTANCE_CONTRACT_PHASES: Set<FeatureTaskRuntimeRunInvariantPromptField> =
+  val ACCEPTANCE_CONTRACT_PHASES: Set<FeatureTaskRuntimeRunInvariantPromptField> =
     IDENTITY_CEREMONY_AND_POLICY + FeatureTaskRuntimeRunInvariantPromptField.ACCEPTANCE_CRITERIA
 
-  private val FINALIZATION: Set<FeatureTaskRuntimeRunInvariantPromptField> =
+  val FINALIZATION: Set<FeatureTaskRuntimeRunInvariantPromptField> =
     IDENTITY_CEREMONY_AND_POLICY + FeatureTaskRuntimeRunInvariantPromptField.FINALIZATION_CONTEXT
-
-  private val FINALIZATION_PHASE_IDS: Set<String> =
-    setOf(
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
-    )
-
-  fun forPhase(phaseId: String): Set<FeatureTaskRuntimeRunInvariantPromptField> =
-    when (phaseId) {
-      in FINALIZATION_PHASE_IDS -> FINALIZATION
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> IDENTITY_CEREMONY_AND_POLICY
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR -> ACCEPTANCE_CONTRACT_PHASES
-      else -> ACCEPTANCE_CONTRACT_PHASES
-    }
 }
+
+data class FeatureTaskRuntimeBriefingScope(
+  val sharedReviewEvidence: FeatureTaskRuntimeSharedReviewEvidenceReference? = null,
+  val invariantFields: Set<FeatureTaskRuntimeRunInvariantPromptField> =
+    FeatureTaskRuntimeRunInvariantPromptAllowlist.ACCEPTANCE_CONTRACT_PHASES,
+)
 
 object FeatureTaskRuntimePhaseBriefingAssembler {
   fun assemble(
@@ -52,15 +43,16 @@ object FeatureTaskRuntimePhaseBriefingAssembler {
     workflowId: String? = null,
     planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidator,
     agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
-    sharedReviewEvidence: FeatureTaskRuntimeSharedReviewEvidenceReference? = null,
+    scope: FeatureTaskRuntimeBriefingScope = FeatureTaskRuntimeBriefingScope(),
   ): FeatureTaskRuntimePhaseLaunchBriefing {
+    val invariantFields = scope.invariantFields
     val boundedAddonSelection =
       FeatureTaskRuntimePhasePromptComposer.budgetedAddonsFor(
         agentAddonSelection,
       )
     val promptDeclarations =
       handoff.projectionDeclarations +
-        invariantDeclarations(handoff.phaseId) +
+        invariantDeclarations(handoff.phaseId, invariantFields) +
         boundedAddonSelection.entries.map { entry ->
           val slug = entry.persisted.slug
           PhaseHandoffProjectionDeclaration(
@@ -85,13 +77,13 @@ object FeatureTaskRuntimePhaseBriefingAssembler {
             declarations = promptDeclarations,
             workflowId = workflowId,
             planningProjectionValidator = planningProjectionValidator,
-            sharedReviewEvidence = sharedReviewEvidence,
+            sharedReviewEvidence = scope.sharedReviewEvidence,
             addonContentBySlug = boundedAddonSelection.entries.associate { it.persisted.slug to it.content },
           ),
         ),
       )
     val projectedHandoff = handoff.copy(projectionDeclarations = promptDeclarations)
-    val briefingText = renderFeatureTaskRuntimePhaseBriefing(projectedHandoff, envelope)
+    val briefingText = renderFeatureTaskRuntimePhaseBriefing(projectedHandoff, envelope, invariantFields)
     return FeatureTaskRuntimePhaseLaunchBriefing(
       phaseId = handoff.phaseId,
       specReference = handoff.runInvariants.specReference,
@@ -105,8 +97,11 @@ object FeatureTaskRuntimePhaseBriefingAssembler {
     )
   }
 
-  private fun invariantDeclarations(phaseId: String): List<PhaseHandoffProjectionDeclaration> =
-    FeatureTaskRuntimeRunInvariantPromptAllowlist.forPhase(phaseId).map { field ->
+  private fun invariantDeclarations(
+    phaseId: String,
+    invariantFields: Set<FeatureTaskRuntimeRunInvariantPromptField>,
+  ): List<PhaseHandoffProjectionDeclaration> =
+    invariantFields.map { field ->
       val source =
         if (field == FeatureTaskRuntimeRunInvariantPromptField.CEREMONY_SCALING) {
           FeatureTaskRuntimeHandoffSourceRef.DerivedCeremonyScaling

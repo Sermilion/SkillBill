@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.application.telemetry.model.FeatureTaskRuntimeCorrelation
 import skillbill.application.telemetry.model.FeatureTaskRuntimeStartedRequest
+import skillbill.application.telemetry.model.PrDescriptionGeneratedRequest
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFinishedTelemetryContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
@@ -70,6 +71,12 @@ class FeatureTaskRuntimeLifecycleTelemetry(
           }
           .getOrDefault(emptyMap())
       emitFeatureTaskRuntimeFinishedError(lifecycleTelemetryService, context, outcomes, error)
+    }
+  }
+
+  fun prDescriptionGenerated(request: PrDescriptionGeneratedRequest) {
+    isolate("prDescriptionGenerated", Unit) {
+      lifecycleTelemetryService.prDescriptionGenerated(request)
     }
   }
 

@@ -3,6 +3,7 @@ package skillbill.engine
 
 import skillbill.application.realPlanningProjectionValidator
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
@@ -470,8 +471,8 @@ class FeatureTaskRuntimePlanningProjectionEdgeTest {
           repositoryCheckpoint = fixture.checkpoint,
         ),
       ),
-      sharedReviewEvidence = fixture.sharedReviewEvidence,
       planningProjectionValidator = realPlanningProjectionValidator,
+      scope = FeatureTaskRuntimeBriefingScope(sharedReviewEvidence = fixture.sharedReviewEvidence),
     )
 
   private fun phaseOutput(

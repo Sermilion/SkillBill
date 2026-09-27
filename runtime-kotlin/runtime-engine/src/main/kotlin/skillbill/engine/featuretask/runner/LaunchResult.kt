@@ -4,6 +4,7 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManife
 import skillbill.engine.featuretask.runloop.core.CapturedPhaseOutput
 import skillbill.engine.featuretask.runloop.core.RecordRejection
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeChildOutput
+import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
 internal sealed interface LaunchResult {
@@ -14,6 +15,7 @@ internal sealed interface LaunchResult {
     val stdoutByteSize: Long,
     val stdoutSha256: String,
     override val fileManifest: FeatureTaskRuntimePhaseFileManifest,
+    val settledEnvelope: PhaseSettledEnvelopeRead = PhaseSettledEnvelopeRead.None,
   ) : LaunchResult
 
   data class InfraFailure(
@@ -43,6 +45,8 @@ internal sealed interface LaunchResult {
   val infraFailureChildOutput: FeatureTaskRuntimeChildOutput? get() = (this as? InfraFailure)?.childOutput
   val providerLimitReason: String? get() = (this as? ProviderLimited)?.reason
   val recordRejection: RecordRejection? get() = (this as? RecordRejected)?.rejection
+  val capturedSettledEnvelope: PhaseSettledEnvelopeRead
+    get() = (this as? Captured)?.settledEnvelope ?: PhaseSettledEnvelopeRead.None
 
   val childNeverLaunched: Boolean
     get() = (this as? InfraFailure)?.neverLaunched == true
@@ -58,6 +62,7 @@ internal sealed interface LaunchResult {
     fun captured(
       captured: CapturedPhaseOutput,
       fileManifest: FeatureTaskRuntimePhaseFileManifest,
+      settledEnvelope: PhaseSettledEnvelopeRead = PhaseSettledEnvelopeRead.None,
     ): LaunchResult =
       Captured(
         captured.text,
@@ -66,6 +71,7 @@ internal sealed interface LaunchResult {
         captured.byteSize,
         captured.sha256,
         fileManifest,
+        settledEnvelope,
       )
 
     fun infraFailure(

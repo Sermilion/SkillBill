@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.runner
 import skillbill.application.agentoutput.agentFailureExcerpt
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
-import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.continuation.GoalContinuationStateRecordRequest
 import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromPhaseState
 import skillbill.engine.featuretask.lifecycle.continuation.completedGoalContinuationOutcome
@@ -12,32 +11,29 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeSubtaskOutcome
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
-import skillbill.engine.goalrunner.status.completed
 import skillbill.goalrunner.model.FeatureTaskRuntimeGoalContinuationOutcome
 import skillbill.goalrunner.model.GoalRunnerLaunchFacts
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeProviderLimitSignal
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_STATUS_PAUSED
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 import skillbill.workflow.taskruntime.validation.FeatureTaskRuntimeProviderLimitDetector
 
 internal fun terminalBlockedReasonFrom(
   phaseId: String,
   outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  blockedDisposition: FeatureTaskRuntimeFailureDisposition,
 ): String? {
   val status = outputMap[SharedPayloadKeys.STATUS] as? String
   if (status.workflowStepStatus() != WorkflowStepStatus.BLOCKED &&
@@ -61,34 +57,29 @@ internal fun terminalBlockedReasonFrom(
     (listOf(summary) + blockingReasons)
       .filter(String::isNotBlank)
       .joinToString("; ")
-  val disposition = FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(phaseId, outputMap)
+  val disposition = FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(outputMap, blockedDisposition)
   val operatorTerminalQualityGate =
     disposition == FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION &&
-      (
-        phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE ||
-          phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
-      )
+      phaseId in PhaseSlot.QUALITY_GATE.steps
   val prefix =
     when {
       operatorTerminalQualityGate -> "Phase output reported status '$status'."
-      phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE ->
+      blockedDisposition == FeatureTaskRuntimeFailureDisposition.RETRYABLE ->
         "Validation phase reported status '$status'; retrying so the agent can fix failures."
       else -> "Phase output reported status '$status'."
     }
   return prefix + detail.takeIf(String::isNotBlank)?.let { " $it" }.orEmpty()
 }
 
-fun persistGoalContinuationOutcome(
-  goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
-  phaseRecorder: FeatureTaskRuntimePhaseRecorder,
-  gitOperations: WorkflowGitOperations,
+fun FeatureTaskRuntimeRunner.persistGoalContinuationOutcome(
   request: FeatureTaskRuntimeRunRequest,
   report: FeatureTaskRuntimeRunReport,
+  commitStepId: String,
 ): FeatureTaskRuntimeRunReport {
   val context = request.goalContinuation ?: return report
   val outcome =
-    goalContinuationOutcomeFor(phaseRecorder, gitOperations, request, context, report)?.let { base ->
-      val attribution = agentAttributionFromPhaseState(phaseRecorder.phaseQuery, request.workflowId)
+    goalContinuationOutcomeFor(request, context, report, commitStepId)?.let { base ->
+      val attribution = agentAttributionFromPhaseState(recorder.phaseQuery, request.workflowId)
       base.copy(
         finalizingAgentId = attribution.finalizingAgentId,
         participatingAgentIds = attribution.participatingAgentIds,
@@ -133,16 +124,15 @@ fun persistGoalContinuationOutcome(
   }
 }
 
-private fun goalContinuationOutcomeFor(
-  recorder: FeatureTaskRuntimePhaseRecorder,
-  gitOperations: WorkflowGitOperations,
+private fun FeatureTaskRuntimeRunner.goalContinuationOutcomeFor(
   request: FeatureTaskRuntimeRunRequest,
   context: FeatureTaskRuntimeGoalContinuationContext,
   report: FeatureTaskRuntimeRunReport,
+  commitStepId: String,
 ): FeatureTaskRuntimeSubtaskOutcome? =
   when (report) {
     is FeatureTaskRuntimeRunReport.Completed ->
-      completedGoalContinuationOutcome(recorder, gitOperations, request, context)
+      completedGoalContinuationOutcome(recorder, phaseGates.gitOperations, request, context, commitStepId)
     is FeatureTaskRuntimeRunReport.Blocked ->
       FeatureTaskRuntimeSubtaskOutcome(
         issueKey = context.parentIssueKey,
@@ -222,31 +212,12 @@ private val PROCESS_FAILURE_REASON_MARKERS: List<String> =
     "could not launch an agent",
   )
 
-fun invalidateLegacyPlanWithoutPreplan(completed: MutableSet<String>) {
-  val plan = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
-  val preplan = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN
-  if (plan in completed && preplan !in completed) {
-    completed.remove(plan)
-  }
-}
-
 fun phaseDeclaration(
   phaseId: String,
   featureSize: FeatureTaskRuntimeFeatureSize,
-  qualityGateSelection: FeatureTaskRuntimeQualityGateSelection = FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+  omittedStepIds: Set<String>,
 ): FeatureTaskRuntimePhaseDeclaration =
-  if (
-    phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY ||
-    phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH
-  ) {
-    FeatureTaskRuntimePhaseWorkflowQueries.phaseDeclarationForQualityGate(
-      phaseId,
-      featureSize,
-      qualityGateSelection,
-    )
-  } else {
-    FeatureTaskRuntimePhaseWorkflowQueries.phaseDeclaration(phaseId, featureSize)
-  }
+  FeatureTaskRuntimePhaseWorkflowQueries.phaseDeclarationWithoutSteps(phaseId, featureSize, omittedStepIds)
 
 fun missingUpstream(
   declaration: FeatureTaskRuntimePhaseDeclaration,

@@ -3,7 +3,6 @@ package skillbill.workflow.taskruntime.model.handoff.task
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedger
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 
 data class FeatureTaskRuntimeHandoffAssemblyRequest(
@@ -17,5 +16,5 @@ data class FeatureTaskRuntimeHandoffAssemblyRequest(
   val branchIdentity: String? = null,
   val baseBranch: String = "main",
   val validationDepth: ValidationDepth = ValidationDepth.DEFAULT,
-  val qualityGateSelection: FeatureTaskRuntimeQualityGateSelection = FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+  val unselectedStepIds: Set<String> = emptySet(),
 )

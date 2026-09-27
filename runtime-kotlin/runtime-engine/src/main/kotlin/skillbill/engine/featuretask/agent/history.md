@@ -1,5 +1,17 @@
 # featuretask runtime boundary history
 
+## [2026-09-26] SKILL-380 subtask 4 — Skeleton definitions and quality_gate strategies
+Areas: runtime-engine featuretask (slot, slot/qualitygate, runloop, runner, validation), runtime-domain taskruntime, runtime-core di, runtime-cli, runtime-mcp, orchestration/contracts
+- SkeletonDefinition (STANDALONE, GOAL_CHILD) names the slot traversal. The quality_gate slot resolves to PackBuildStrategy or AgentValidateStrategy through the registry. FeatureTaskRuntimeQualityGateRouting and RoutedQualityGateStrategy are deleted.
+- Each strategy lives in its own package under slot/qualitygate with its own gate cycle and step hooks. Only code under slot/qualitygate imports those packages.
+- Selection facts are generic. Unselected steps are left out of projections, and handoffs that reference them are rejected. The completed-upstream repair maps the selection to omitted step ids because it has no strategy lookup.
+- Gate progress goes through the PhaseRunState port. The build/validate progress stores are reached only through that port. reusable
+- Validate settles with the uniform output plus a progress/no_progress verdict. A missing or unknown verdict counts as no_progress. One no_progress session blocks. This replaces the 2026-09-20 "repair until true" loop. On resume, validate success comes from the step status.
+- A misspelled selection such as `biuld` is a CLI usage error. The MCP settlement tools accept validate, and feature_task_phase_block takes an optional verdict. The change is additive: contract_version stays 1.12.0 and phase-output stays 0.6.
+- Limitation: the legacy `?: VALIDATE` defaults remain in the goal-continuation patcher and the artifact-presence resolver. The status service applies the legacy selection in memory only.
+Feature flag: N/A
+Acceptance criteria: 15/15 tasks implemented (check pending in validate)
+
 ## [2026-09-20] Validate keeps repairing until true
 Areas: runtime-kotlin/runtime-engine/featuretask
 - Validate no longer treats `validation_passed: false` as a schema-gate exhaust. The agent keeps repairing until true.

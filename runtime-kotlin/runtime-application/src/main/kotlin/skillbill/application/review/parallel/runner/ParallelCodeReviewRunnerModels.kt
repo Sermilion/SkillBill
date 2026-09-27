@@ -2,6 +2,7 @@ package skillbill.application.review.parallel.runner
 
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ReviewDelegatedStageLaunch
+import skillbill.application.review.model.ReviewEvidenceReadCount
 import skillbill.application.review.model.ReviewSpecialistLaunchRequest
 import skillbill.application.reviewevidence.SharedReviewEvidenceCommits
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
@@ -94,6 +95,7 @@ internal fun ParallelCodeReviewInitialRun.delegatedStageLaunch(): ReviewDelegate
     repoRoot = request.repoRoot,
     timeout = request.timeout,
     promptSuffix = request.selectedAgentAddonsSection,
+    laneProgressIdleTimeout = request.laneProgressIdleTimeout,
   )
 
 internal data class ParallelCodeReviewCompiledLaunches(
@@ -128,6 +130,7 @@ internal sealed class ParallelCodeReviewGovernedEvidenceBind {
   class Bound(
     val broker: ReviewEvidenceBroker,
     val endpoint: GovernedReviewEvidenceEndpointHandle,
+    val evidenceReads: ReviewEvidenceReadCount,
   ) : ParallelCodeReviewGovernedEvidenceBind()
 
   class Unbound(

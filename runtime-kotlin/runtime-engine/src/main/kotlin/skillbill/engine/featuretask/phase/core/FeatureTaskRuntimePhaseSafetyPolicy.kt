@@ -39,20 +39,17 @@ object FeatureTaskRuntimePhaseSafetyPolicy {
       .sorted()
 
   internal fun dispositionForTerminalOutput(
-    phaseId: String,
     output: FeatureTaskRuntimeWorkflowArtifactMap,
+    blockedDisposition: FeatureTaskRuntimeFailureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
   ): FeatureTaskRuntimeFailureDisposition {
     val explicit =
       (output[SharedPayloadKeys.FAILURE_DISPOSITION] as? String)
         ?.let(FeatureTaskRuntimeFailureDisposition::fromWireValue)
     if (explicit != null) return explicit
-    return if (
-      (output[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() == WorkflowStepStatus.FAILED ||
-      phaseId == "validate"
-    ) {
+    return if ((output[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() == WorkflowStepStatus.FAILED) {
       FeatureTaskRuntimeFailureDisposition.RETRYABLE
     } else {
-      FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION
+      blockedDisposition
     }
   }
 

@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.validation.model
 
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.scaffold.model.ValidationGateDeclaration
@@ -116,11 +116,13 @@ data class ValidationGateProgressWrite(
 
 data class ValidationGateCycleRequest(
   val repoRoot: Path,
-  val request: FeatureTaskRuntimeRunRequest,
+  val request: FeatureTaskRuntimeRunFacts,
+  val phaseId: String,
   val validationDepth: ValidationDepth,
   val changedPaths: List<String>,
   val repositoryCheckpoint: String,
   val agentRepairLauncher: ValidationGateAgentRepairLauncher,
+  val progressStore: ValidationGateProgressStore,
   val agentTriageLauncher: ValidationGateAgentTriageLauncher =
     ValidationGateAgentTriageLauncher {
       ValidationGateTriageResult.Empty

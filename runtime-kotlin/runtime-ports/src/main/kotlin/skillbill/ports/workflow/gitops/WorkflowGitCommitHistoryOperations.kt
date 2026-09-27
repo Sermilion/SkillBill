@@ -12,6 +12,16 @@ interface WorkflowGitCommitHistoryOperations {
 
   fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult
 
+  fun commitCountAhead(
+    repoRoot: Path,
+    baseRevision: String,
+  ): WorkflowGitOperationResult
+
+  fun mergeBaseWithHead(
+    repoRoot: Path,
+    baseRevision: String,
+  ): WorkflowGitOperationResult
+
   fun resetSoftToCommit(
     repoRoot: Path,
     commitSha: String,

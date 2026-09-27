@@ -2,8 +2,6 @@ package skillbill.workflow.taskruntime.handoff
 
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection.BUILD
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection.VALIDATE
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeCompactReferenceKind
@@ -313,10 +311,10 @@ class FeatureTaskRuntimeHandoffProjectionValidatorFinalizationTest {
     val checkpoint = FeatureTaskRuntimeRepositoryCheckpoint("tree-1", workingTreeOwnedPaths = listOf("src/A.kt"))
     listOf(def.PHASE_WRITE_HISTORY, def.PHASE_COMMIT_PUSH, def.PHASE_PR).forEach { consumer ->
       val phaseDeclarations =
-        FeatureTaskRuntimePhaseWorkflowQueries.phaseDeclarationForQualityGate(
+        FeatureTaskRuntimePhaseWorkflowQueries.phaseDeclarationWithoutSteps(
           consumer,
           FeatureTaskRuntimeFeatureSize.MEDIUM,
-          VALIDATE,
+          setOf(def.PHASE_BUILD),
         ).projectionDeclarations
       val resolvedUpstreamOutputs =
         FeatureTaskRuntimeResolvedUpstreamOutputs(
@@ -383,17 +381,17 @@ class FeatureTaskRuntimeHandoffProjectionValidatorFinalizationTest {
     val expectedPaths = listOf("src/Owned.kt", "src/OwnedTest.kt")
 
     fun changedPathsFrom(consumer: String): List<String> {
-      val gateSelection =
+      val omittedStepIds =
         if (consumer == def.PHASE_BUILD) {
-          BUILD
+          setOf(def.PHASE_VALIDATE)
         } else {
-          VALIDATE
+          setOf(def.PHASE_BUILD)
         }
       val phaseDeclarations =
-        FeatureTaskRuntimePhaseWorkflowQueries.phaseDeclarationForQualityGate(
+        FeatureTaskRuntimePhaseWorkflowQueries.phaseDeclarationWithoutSteps(
           consumer,
           FeatureTaskRuntimeFeatureSize.MEDIUM,
-          gateSelection,
+          omittedStepIds,
         ).projectionDeclarations
       val resolvedUpstreamOutputs =
         FeatureTaskRuntimeResolvedUpstreamOutputs(
@@ -523,40 +521,44 @@ class FeatureTaskRuntimeHandoffProjectionValidatorContractTest {
   }
 
   @Test
-  fun `build-stamped write_history rejects settled validate output`() {
+  fun `write_history without the validate step rejects settled validate output`() {
     val consumer = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY
+    val unselected = setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE)
     val declaration =
-      FeatureTaskRuntimePhaseWorkflowQueries.phaseDeclarationForQualityGate(
+      FeatureTaskRuntimePhaseWorkflowQueries.phaseDeclarationWithoutSteps(
         consumer,
         FeatureTaskRuntimeFeatureSize.MEDIUM,
-        BUILD,
+        unselected,
       )
-    assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
-      FeatureTaskRuntimeHandoffProjectionValidator.validate(
-        handoffProjectionValidatorInputs {
-          consumerPhaseId = consumer
-          declarations = declaration.projectionDeclarations
-          resolvedUpstream =
-            FeatureTaskRuntimeResolvedUpstreamOutputs(
-              mapOf(
-                FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to
-                  FeatureTaskRuntimePhaseOutput(
-                    phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
-                    iteration = 1,
-                    payload = """{"produced_outputs":{}}""",
-                  ),
-                FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE to
-                  FeatureTaskRuntimePhaseOutput(
-                    phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
-                    iteration = 1,
-                    payload = """{"produced_outputs":{}}""",
-                  ),
-              ),
-            )
-          qualityGateSelection = BUILD
-        },
+    val upstream =
+      FeatureTaskRuntimeResolvedUpstreamOutputs(
+        mapOf(
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to
+            FeatureTaskRuntimePhaseOutput(
+              phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
+              iteration = 1,
+              payload = """{"produced_outputs":{}}""",
+            ),
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE to
+            FeatureTaskRuntimePhaseOutput(
+              phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
+              iteration = 1,
+              payload = """{"produced_outputs":{}}""",
+            ),
+        ),
       )
-    }
+    val error =
+      assertFailsWith<InvalidFeatureTaskRuntimeHandoffProjectionError> {
+        FeatureTaskRuntimeHandoffProjectionValidator.validate(
+          handoffProjectionValidatorInputs {
+            consumerPhaseId = consumer
+            declarations = declaration.projectionDeclarations
+            resolvedUpstream = upstream
+            unselectedStepIds = unselected
+          },
+        )
+      }
+    assertTrue(error.message.orEmpty().contains("did not select step 'validate'"), error.message)
   }
 
   @Test

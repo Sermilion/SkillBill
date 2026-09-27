@@ -49,7 +49,27 @@ class FeatureTaskAuditRemainingCriteriaPackIndependenceArchitectureTest {
     )
   }
 
+  @Test
+  fun `remaining-criteria settlement text has one owner under the acceptance-audit strategy`() {
+    val featureTaskRoot = runtimeRoot.resolve("runtime-engine/src/main/kotlin/skillbill/engine/featuretask")
+    val owners =
+      Files.walk(featureTaskRoot).use { paths ->
+        paths
+          .filter { path -> path.isRegularFile() && path.fileName.toString().endsWith(".kt") }
+          .filter { path -> Files.readString(path).contains(REMAINING_CRITERIA_SETTLEMENT_TEXT) }
+          .map { path -> featureTaskRoot.relativize(path).toString().replace('\\', '/') }
+          .sorted()
+          .toList()
+      }
+    assertTrue(
+      owners.size == 1 && owners.single().startsWith("slot/audit/"),
+      "remaining-criteria settlement text has one owner under slot/audit; phase/prompt and runloop must not " +
+        "restate it:\n" + owners.joinToString(separator = "\n"),
+    )
+  }
+
   private companion object {
+    const val REMAINING_CRITERIA_SETTLEMENT_TEXT = "remaining acceptance criteria"
     val packSourceSuffixes = listOf(".md", ".yaml")
     val remainingCriteriaSettlementPhrases =
       listOf(

@@ -1,0 +1,17 @@
+{
+    "completion": "operator_completed",
+    "detected_stack": "kotlin",
+    "duration_seconds": "__NORMALIZED_DURATION__",
+    "failing_check_names": [],
+    "fallback": false,
+    "final_failure_count": 0,
+    "final_failure_count_availability": "measured",
+    "initial_failure_count": 1,
+    "iterations": 2,
+    "orchestrated": false,
+    "result": "pass",
+    "routed_skill": "bill-code-check",
+    "scope_type": "branch_diff",
+    "session_id": "__NORMALIZED_SESSION_ID__",
+    "unsupported_reason": ""
+}

@@ -1,5 +1,8 @@
 package skillbill.engine.goalrunner.planning.model
 
+import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
+import skillbill.engine.featuretask.slot.PhaseRunner
+import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
@@ -12,6 +15,8 @@ import skillbill.workflow.model.goalreview.GoalProgressEventKind
 import skillbill.workflow.model.goalreview.GoalProgressOutcome
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
+import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 internal data class GoalPlanningAttemptScope(
   val shared: GoalPlanningSharedContext,
@@ -20,12 +25,21 @@ internal data class GoalPlanningAttemptScope(
   val attempt: Int,
 )
 
+internal data class GoalPlanningLaunch(
+  val runner: PhaseRunner,
+  val state: PhaseLaunchState,
+  val prompt: PhaseStepPromptSource,
+  val policy: PhaseStepPolicy,
+  val invariantFields: Set<FeatureTaskRuntimeRunInvariantPromptField>,
+)
+
 internal data class GoalPlanningPhaseContext(
   val shared: GoalPlanningSharedContext,
   val request: GoalRunnerRunRequest,
   val subtask: DecompositionSubtask?,
   val runInvariants: FeatureTaskRuntimeRunInvariants,
   val phaseId: String,
+  val launch: GoalPlanningLaunch,
   val outputSink: AgentRunOutputSink = request.outputSink,
 )
 
@@ -62,6 +76,7 @@ internal data class SharedPreplanSettlementArgs(
   val state: GoalRunnerManifestState,
   val request: GoalRunnerRunRequest,
   val identity: GoalPlanningIdentity,
+  val launch: GoalPlanningLaunch,
 )
 
 internal data class StaleSharedPreplanSettlementArgs(
@@ -72,6 +87,7 @@ internal data class StaleSharedPreplanSettlementArgs(
   val request: GoalRunnerRunRequest,
   val identity: GoalPlanningIdentity,
   val refreshedThisPrepare: Boolean,
+  val launch: GoalPlanningLaunch,
 )
 
 internal data class RefreshStaleSharedPreplanArgs(
@@ -81,4 +97,5 @@ internal data class RefreshStaleSharedPreplanArgs(
   val request: GoalRunnerRunRequest,
   val currentProvenance: GoalPlanningContractProvenance,
   val refreshedThisPrepare: Boolean,
+  val launch: GoalPlanningLaunch,
 )

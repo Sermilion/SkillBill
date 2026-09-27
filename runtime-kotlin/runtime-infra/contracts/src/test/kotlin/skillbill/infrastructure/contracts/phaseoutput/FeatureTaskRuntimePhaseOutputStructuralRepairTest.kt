@@ -1,6 +1,7 @@
 package skillbill.infrastructure.contracts.phaseoutput
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.infrastructure.contracts.FeatureTaskRuntimePhaseOutputSchemaValidator
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -14,11 +15,13 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
+private const val VERSION: String = FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+
 class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   private val adapter = FeatureTaskRuntimePhaseOutputSchemaValidator()
 
   private val validJson =
-    """{"contract_version":"0.6","phase_id":"plan","status":"completed","summary":"Plan output.",""" +
+    """{"contract_version":"$VERSION","phase_id":"plan","status":"completed","summary":"Plan output.",""" +
       """"produced_outputs":{"value":"Plan prose."}}"""
 
   @Test
@@ -33,7 +36,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   @Test
   fun `a reconciliation report placed beside produced_outputs is moved into it`() {
     val misplaced =
-      """{"contract_version":"0.6","phase_id":"implement","status":"completed",""" +
+      """{"contract_version":"$VERSION","phase_id":"implement","status":"completed",""" +
         """"summary":"Reconciled the repository to the intended state.",""" +
         """"produced_outputs":{"value":"Implement prose with former receipt stuffed inside.",""" +
         """"changed_paths":["a/B.kt"],""" +
@@ -75,7 +78,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
       |All 13 plan tasks are converged; no build, test, or lint invocation was made in this phase.
       |
       |```json
-      |{"contract_version":"0.6","phase_id":"implement","status":"completed",
+      |{"contract_version":"$VERSION","phase_id":"implement","status":"completed",
       |"produced_outputs":{"value":"Implement prose with former receipt stuffed inside.",
       |"changed_paths":["a/B.kt"]}}
       |```
@@ -98,7 +101,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   @Test
   fun `an absent summary with no prose to recover is marked rather than fabricated`() {
     val bare =
-      """{"contract_version":"0.6","phase_id":"implement","status":"completed",""" +
+      """{"contract_version":"$VERSION","phase_id":"implement","status":"completed",""" +
         """"produced_outputs":{"value":"Implement prose with former receipt stuffed inside."}}"""
 
     val result = adapter.validatePhaseOutput(bare, "implement")
@@ -118,14 +121,14 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
       |Discarded draft, missing its summary:
       |
       |```json
-      |{"contract_version":"0.6","phase_id":"plan","status":"completed",
+      |{"contract_version":"$VERSION","phase_id":"plan","status":"completed",
       |"produced_outputs":{"value":"Draft plan prose."}}
       |```
       |
       |Corrected final answer:
       |
       |```json
-      |{"contract_version":"0.6","phase_id":"plan","status":"completed","summary":"Plan output.",
+      |{"contract_version":"$VERSION","phase_id":"plan","status":"completed","summary":"Plan output.",
       |"produced_outputs":{"value":"Plan prose."}}
       |```
       """.trimMargin()
@@ -151,7 +154,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
       |Some narration that is not the summary.
       |
       |```json
-      |{"contract_version":"0.6","phase_id":"plan","status":"completed","summary":"Plan output.",
+      |{"contract_version":"$VERSION","phase_id":"plan","status":"completed","summary":"Plan output.",
       |"produced_outputs":{"value":"Plan prose."}}
       |```
       """.trimMargin()
@@ -171,7 +174,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   @Test
   fun `a stray root key does not overwrite a member produced_outputs already states`() {
     val collision =
-      """{"contract_version":"0.6","phase_id":"implement","status":"completed","summary":"Done.",""" +
+      """{"contract_version":"$VERSION","phase_id":"implement","status":"completed","summary":"Done.",""" +
         """"produced_outputs":{"value":"Implement prose.",""" +
         """"reconciled_state":{"reconciled":true,"evidence":"stated"}},""" +
         """"reconciled_state":{"reconciled":false}}"""
@@ -223,7 +226,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   @Test
   fun `one missing nested delimiter is inserted before the existing outer closer`() {
     val validNestedJson =
-      """{"contract_version":"0.6","phase_id":"plan","status":"completed","summary":"Plan output.",""" +
+      """{"contract_version":"$VERSION","phase_id":"plan","status":"completed","summary":"Plan output.",""" +
         """"produced_outputs":{"value":"Plan prose.","notes":[{"id":"task-1"}]}}"""
     val malformed = validNestedJson.replace("[{\"id\":\"task-1\"}]}}", "[{\"id\":\"task-1\"}}}")
 
@@ -294,7 +297,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   @Test
   fun `structural characters inside JSON strings remain unchanged`() {
     val payload =
-      """{"contract_version":"0.6","phase_id":"plan","status":"completed",""" +
+      """{"contract_version":"$VERSION","phase_id":"plan","status":"completed",""" +
         """"summary":"literal } ] and escaped \"quote\"","produced_outputs":{"value":"Plan prose."}}"""
 
     val result = adapter.validatePhaseOutput(payload, "plan")
@@ -318,7 +321,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   @Test
   fun `duplicate object keys merge contents and concatenate arrays`() {
     val payload =
-      """{"contract_version":"0.6","phase_id":"plan","status":"completed","summary":"Plan output.",""" +
+      """{"contract_version":"$VERSION","phase_id":"plan","status":"completed","summary":"Plan output.",""" +
         """"produced_outputs":{"value":"Plan prose A.","notes":["n-0"]},""" +
         """"produced_outputs":{"notes":["n-1"],"value":"Plan prose B."}}"""
 
@@ -352,7 +355,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
 
   @Test
   fun `repaired syntax that fails schema remains rejected`() {
-    val malformed = """{"contract_version":"0.6","phase_id":"plan","status":"completed"}""".dropLast(1)
+    val malformed = """{"contract_version":"$VERSION","phase_id":"plan","status":"completed"}""".dropLast(1)
 
     val result = adapter.validatePhaseOutput(malformed, "plan")
 
@@ -374,7 +377,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   @Test
   fun `conservative YAML flow repair preserves quoted scalar content`() {
     val malformed =
-      "{\"contract_version\": \"0.6\", phase_id: \"plan\", status: \"completed\", " +
+      "{\"contract_version\": \"$VERSION\", phase_id: \"plan\", status: \"completed\", " +
         "summary: \"brace } in a scalar\", produced_outputs: {value: \"Plan prose.\"}"
     val repairedText = "$malformed}"
 
@@ -481,7 +484,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   @Test
   fun `implement derived_notes array is flattened to one string instead of being rejected`() {
     val payload =
-      """{"contract_version":"0.6","phase_id":"implement","status":"completed","summary":"Implemented.",""" +
+      """{"contract_version":"$VERSION","phase_id":"implement","status":"completed","summary":"Implemented.",""" +
         """"produced_outputs":{"value":"done"},"derived_notes":["first note","second note"]}"""
 
     val result = adapter.validatePhaseOutput(payload, "implement")
@@ -497,7 +500,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   @Test
   fun `implement derived_notes empty array is dropped because the field is optional`() {
     val payload =
-      """{"contract_version":"0.6","phase_id":"implement","status":"completed","summary":"Implemented.",""" +
+      """{"contract_version":"$VERSION","phase_id":"implement","status":"completed","summary":"Implemented.",""" +
         """"produced_outputs":{"value":"done"},"derived_notes":[]}"""
 
     val result = adapter.validatePhaseOutput(payload, "implement")
@@ -509,7 +512,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   @Test
   fun `audit extra closer before trailing verdict is dropped and the envelope is kept`() {
     val payload =
-      """{"contract_version":"0.6","phase_id":"audit","status":"completed","summary":"Audited production.",""" +
+      """{"contract_version":"$VERSION","phase_id":"audit","status":"completed","summary":"Audited production.",""" +
         """"produced_outputs":{"value":"{\"gaps\":[]}"},"derived_notes":"no production gap"},"verdict":"satisfied"}"""
 
     val result = adapter.validatePhaseOutput(payload, "audit")
@@ -526,7 +529,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   @Test
   fun `audit nested verdict with a missing closer is closed then aligned to the expected shape`() {
     val malformed =
-      """{"contract_version":"0.6","phase_id":"audit","status":"completed","summary":"Audited production.",""" +
+      """{"contract_version":"$VERSION","phase_id":"audit","status":"completed","summary":"Audited production.",""" +
         """"produced_outputs":{"value":"{\"gaps\":[]}","verdict":"satisfied"}"""
 
     val result = adapter.validatePhaseOutput(malformed, "audit")
@@ -539,7 +542,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   @Test
   fun `audit nested verdict is hoisted onto the expected envelope shape`() {
     val nested =
-      """{"contract_version":"0.6","phase_id":"audit","status":"completed","summary":"Audited production.",""" +
+      """{"contract_version":"$VERSION","phase_id":"audit","status":"completed","summary":"Audited production.",""" +
         """"produced_outputs":{"value":"{\"gaps\":[]}","verdict":"satisfied"}}"""
 
     val result = adapter.validatePhaseOutput(nested, "audit")
@@ -559,7 +562,7 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   fun `unsupported block YAML is rejected without guessed structural edits`() {
     val blockYaml =
       """
-      contract_version: "0.6"
+      contract_version: "$VERSION"
       phase_id: "audit"
       status: "completed"
       summary: "SKILL187-UNSUPPORTED-YAML"

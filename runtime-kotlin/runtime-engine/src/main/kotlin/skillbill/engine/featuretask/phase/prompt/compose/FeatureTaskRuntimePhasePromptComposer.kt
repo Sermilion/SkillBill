@@ -7,6 +7,7 @@ object FeatureTaskRuntimePhasePromptComposer {
   fun compose(
     issueKey: String,
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
+    source: PhaseStepPromptSource,
     configure: FeatureTaskRuntimePhasePromptComposeInputs.() -> FeatureTaskRuntimePhasePromptComposeInputs = { this },
   ): String =
     compose(
@@ -16,9 +17,13 @@ object FeatureTaskRuntimePhasePromptComposer {
           briefing = briefing,
         ),
       ),
+      source,
     )
 
-  fun compose(inputs: FeatureTaskRuntimePhasePromptComposeInputs): String = composePhasePrompt(inputs)
+  fun compose(
+    inputs: FeatureTaskRuntimePhasePromptComposeInputs,
+    source: PhaseStepPromptSource,
+  ): String = composePhasePrompt(inputs, source)
 
   fun budgetedAddonsFor(selection: HydratedAgentAddonSelection): HydratedAgentAddonSelection = selection
 }

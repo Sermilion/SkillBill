@@ -14,6 +14,16 @@ internal object GitStandardWorkflowGitCommitHistoryOperations : WorkflowGitCommi
 
   override fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult = runGitCommand(repoRoot, "rev-parse", "HEAD")
 
+  override fun commitCountAhead(
+    repoRoot: Path,
+    baseRevision: String,
+  ): WorkflowGitOperationResult = runGitCommand(repoRoot, "rev-list", "--count", "$baseRevision..HEAD")
+
+  override fun mergeBaseWithHead(
+    repoRoot: Path,
+    baseRevision: String,
+  ): WorkflowGitOperationResult = runGitCommand(repoRoot, "merge-base", baseRevision, "HEAD")
+
   override fun resetSoftToCommit(
     repoRoot: Path,
     commitSha: String,

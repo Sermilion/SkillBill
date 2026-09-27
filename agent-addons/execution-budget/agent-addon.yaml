@@ -5,3 +5,4 @@ agent_ids:
   - codex
 consumers:
   - bill-feature
+  - skill-bill

@@ -22,6 +22,22 @@ abstract class WorkflowGitOperationsTestBase :
 
   override fun stageAll(repoRoot: Path): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "")
 
+  override fun commitCountAhead(
+    repoRoot: Path,
+    baseRevision: String,
+  ): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Failed(
+      error = "This git operations implementation cannot count commits ahead of '$baseRevision'.",
+    )
+
+  override fun mergeBaseWithHead(
+    repoRoot: Path,
+    baseRevision: String,
+  ): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Failed(
+      error = "This git operations implementation cannot find the merge base of '$baseRevision' and HEAD.",
+    )
+
   override fun resetSoftToCommit(
     repoRoot: Path,
     commitSha: String,

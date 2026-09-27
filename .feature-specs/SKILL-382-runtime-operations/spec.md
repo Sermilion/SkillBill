@@ -10,8 +10,8 @@ SKILL-380 (phase slot strategies) is merged to main. This bundle builds on its p
 the one `PhaseRunner`, the phase input and output shape, skeleton definitions run
 through `PhaseRunEntry` (including `review` and `validation`), and the `/skill-bill`
 dispatcher.
-Read [SKILL-380's spec](../SKILL-380-phase-slot-strategies/spec.md) and its
-[investigation](../SKILL-380-phase-slot-strategies/investigation.md) first.
+Read [SKILL-380's spec](../done/SKILL-380-phase-slot-strategies/spec.md) and its
+[investigation](../done/SKILL-380-phase-slot-strategies/investigation.md) first.
 
 ## Intended outcome
 

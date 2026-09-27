@@ -1,6 +1,5 @@
 package skillbill.workflow.taskruntime.phase.task
 
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeAuditCeremony
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeCeremonyScaling
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
@@ -53,34 +52,18 @@ object FeatureTaskRuntimePhaseWorkflowQueries {
     return base.copy(derivedContextKeys = listOf(reviewKey))
   }
 
-  fun phaseDeclarationForQualityGate(
+  fun phaseDeclarationWithoutSteps(
     phaseId: String,
     featureSize: FeatureTaskRuntimeFeatureSize,
-    qualityGateSelection: FeatureTaskRuntimeQualityGateSelection,
+    omittedStepIds: Set<String>,
   ): FeatureTaskRuntimePhaseDeclaration {
     val base = phaseDeclaration(phaseId, featureSize)
-    if (
-      phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY &&
-      phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH
-    ) {
-      return base
-    }
-    val selectedGatePhase =
-      when (qualityGateSelection) {
-        FeatureTaskRuntimeQualityGateSelection.BUILD -> FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
-        FeatureTaskRuntimeQualityGateSelection.VALIDATE -> FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
-      }
-    val omittedGatePhase =
-      if (selectedGatePhase == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD) {
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
-      } else {
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
-      }
+    if (omittedStepIds.isEmpty()) return base
     return base.copy(
       projectionDeclarations =
         base.projectionDeclarations.filter { declaration ->
           val source = declaration.sourceRef as? FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput
-          source?.producingPhaseId != omittedGatePhase
+          source?.producingPhaseId !in omittedStepIds
         },
     )
   }

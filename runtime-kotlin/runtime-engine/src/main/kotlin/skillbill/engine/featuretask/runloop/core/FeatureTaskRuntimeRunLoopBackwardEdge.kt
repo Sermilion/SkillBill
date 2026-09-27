@@ -2,18 +2,8 @@ package skillbill.engine.featuretask.runloop.core
 
 import skillbill.application.decomposition.specSource
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.featuretask.lifecycle.branch.Blocked
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePlanningStopDecision
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
-import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
-import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
-import skillbill.engine.featuretask.runloop.observability.blocked
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.runner.STATUS_BLOCKED
-import skillbill.engine.featuretask.runner.isFileMutating
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -23,21 +13,20 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCapExhaustionBehavior
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewFinding
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 object FeatureTaskRuntimeRunLoopBackwardEdge {
-  internal fun resumeInFlightReviewFix(
-    request: FeatureTaskRuntimeRunRequest,
-    state: FeatureTaskRuntimeRunState,
-    recorder: FeatureTaskRuntimePhaseRecorder,
-    session: FeatureTaskRuntimeRunLoopSession,
+  internal fun resumeInFlightReentry(
+    context: FeatureTaskRuntimeRunLoopContext,
     edge: FeatureTaskRuntimeBackwardEdge,
   ): String? {
-    if (
-      edge.loopId != FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID ||
-      state.isLoopLiveClaimed(edge.loopId) ||
-      state.isComplete(edge.destinationPhaseId)
-    ) {
+    val state = context.state
+    val resumes =
+      FeatureTaskRuntimeRunLoopPlanningBranch.decideByStep(context, edge.destinationPhaseId) { rules, _ ->
+        rules.resumesInFlightReentry(edge.loopId)
+      } == true
+    if (!resumes || state.isLoopLiveClaimed(edge.loopId) || state.isComplete(edge.destinationPhaseId)) {
       return null
     }
     val destinationRecord =
@@ -53,12 +42,19 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
         loopId = edge.loopId,
         edgeIteration = edgeIteration,
         drivingVerdict = edge.triggeringVerdict,
-        expectedRepositoryCheckpoint =
-          FeatureTaskRuntimeRunLoopPhaseBlocking.reviewedCheckpointFingerprint(request, recorder),
+        expectedRepositoryCheckpoint = reentryCheckpoint(context, edge),
       )
-    session.transitionReentryPair(pendingReentry, pendingReentry)
+    context.session.transitionReentryPair(pendingReentry, pendingReentry)
     return edge.destinationPhaseId
   }
+
+  private fun reentryCheckpoint(
+    context: FeatureTaskRuntimeRunLoopContext,
+    edge: FeatureTaskRuntimeBackwardEdge,
+  ): String? =
+    FeatureTaskRuntimeRunLoopPlanningBranch.decideByStep(context, edge.destinationPhaseId) { rules, stepState ->
+      rules.reentryCheckpoint(edge.loopId, stepState)
+    }
 
   internal fun recordBackwardEdge(
     context: FeatureTaskRuntimeRunLoopContext,
@@ -92,18 +88,13 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
         loopId = loopId,
         edgeIteration = edgeIteration,
         drivingVerdict = verdict,
-        expectedRepositoryCheckpoint =
-          if (loopId == FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID) {
-            FeatureTaskRuntimeRunLoopPhaseBlocking.reviewedCheckpointFingerprint(request, recorder)
-          } else {
-            null
-          },
+        expectedRepositoryCheckpoint = reentryCheckpoint(context, edge),
       )
     session.transitionReentryPair(pendingReentry, pendingReentry)
   }
 
   internal fun warnOnThresholdCrossing(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     diagnostics: RuntimeDiagnostics,
     edge: FeatureTaskRuntimeBackwardEdge,
     edgeIteration: Int,
@@ -117,7 +108,7 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
   }
 
   internal fun thresholdCrossingWarning(
-    request: FeatureTaskRuntimeRunRequest,
+    request: FeatureTaskRuntimeRunFacts,
     loopId: String,
     threshold: Int,
     edgeIteration: Int,
@@ -230,94 +221,30 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
         val completedOutput = requireNotNull(outcome.completedOutput)
         state.recordCompleted(completedOutput)
         session.consumeOperatorBlockRetryCompletion(phaseId)
-        applyPlanningStop(
-          context = context,
-          phaseId = phaseId,
-          planOutput = completedOutput,
-        )
+        afterCompletion(context, completedOutput)
       }
     }
 
-  internal fun applyPlanningStop(
+  internal fun afterCompletion(
     context: FeatureTaskRuntimeRunLoopContext,
-    phaseId: String,
-    planOutput: FeatureTaskRuntimePhaseOutput,
-  ): String? =
-    with(context) {
-      if (phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN) {
-        return null
-      }
-      return when (
-        val decision =
-          resolvePlanningStop(
-            context,
-            planOutput,
-          )
-      ) {
-        is FeatureTaskRuntimePlanningStopDecision.Proceed -> null
-        is FeatureTaskRuntimePlanningStopDecision.Decomposed -> {
-          session.transitionToDecomposed(decision.report)
-          null
-        }
-        is FeatureTaskRuntimePlanningStopDecision.Blocked -> {
-          persistPlanningStopBlock(request, recorder, observability, phaseId, decision.reason)
-          decision.reason
-        }
-      }
-    }
-
-  internal fun resolvePlanningStop(
-    context: FeatureTaskRuntimeRunLoopContext,
-    planOutput: FeatureTaskRuntimePhaseOutput,
-  ): FeatureTaskRuntimePlanningStopDecision =
-    context.phaseGates.planningStopper.resolve(
-      request = context.request,
-      completedOutput = planOutput,
-      completedPhaseIds = context.state.completedPhaseIds(),
-      resolvedBranch = context.session.resolvedBranch,
-      specSource = context.specSource,
-    )
-
-  internal fun persistPlanningStopBlock(
-    request: FeatureTaskRuntimeRunRequest,
-    recorder: FeatureTaskRuntimePhaseRecorder,
-    observability: FeatureTaskRuntimeRunObservability,
-    phaseId: String,
-    reason: String,
-  ) {
-    val resolvedAgentId =
-      FeatureTaskRuntimeAgentResolver.resolve(
-        phaseId = phaseId,
-        assignment = request.agentAssignment,
-        invokedAgentId = request.invokedAgentId,
-      ).resolvedAgentId
-    recorder.recordPhaseState(
-      FeatureTaskRuntimePhaseStateRequest(
-        workflowId = request.workflowId,
-        phaseId = phaseId,
-        status = STATUS_BLOCKED,
-        attemptCount = 1,
-        resolvedAgentId = resolvedAgentId,
-        finished = false,
-        outputArtifact = null,
-        blockedReason = reason,
-      ),
-    )
-    observability.blocked(phaseId, resolvedAgentId, 1, reason)
-  }
+    output: FeatureTaskRuntimePhaseOutput,
+  ): String? = context.strategyFor(output.phaseId).stepHooks(output.phaseId).afterCompletion(context, output)
 
   internal fun establishBranchIfNeeded(
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
   ): String? =
     with(context) {
-      if (!isFileMutating(phaseId)) {
+      if (!stepPolicy(phaseId).fileMutating) {
         return null
       }
       val setup =
-        phaseGates.branchSetupRunner.ensureFeatureBranch(
-          request,
-          observability,
+        runState.ensureFeatureBranch(
+          guardPhase =
+            strategies.selectedStrategies(strategySelectionFacts(request))
+              .firstOrNull { strategy -> strategy.slot == PhaseSlot.IMPLEMENTATION }
+              ?.entryStep
+              ?: phaseId,
         )
       return setup.blockedReason?.also { reason ->
         FeatureTaskRuntimeRunLoopPhaseBlocking.persistBranchSetupBlock(
@@ -328,7 +255,7 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
           reason,
         )
       } ?: run {
-        session.transitionResolvedBranch(requireNotNull(setup.establishedBranch))
+        setup.establishedBranch?.let(session::transitionResolvedBranch)
         FeatureTaskRuntimeRunLoopPhaseBlocking.clearRecoveredBranchSetupBlock(state, phaseId)
         null
       }

@@ -1,37 +1,29 @@
 package skillbill.engine.featuretask.runloop.core
 
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
-import skillbill.application.review.model.ParallelCodeReviewRequest
-import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.config.model.PhaseCompactionDirective
 import skillbill.config.model.PhaseModelDirective
-import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAgent
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
+import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runner.LaunchResult
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 internal data class RemediationCheckpointCommit(val commitSha: String, val parentSha: String?)
 
@@ -63,52 +55,8 @@ internal data class PendingReentry(
   val expectedRepositoryCheckpoint: String? = null,
 )
 
-internal data class CarriedForwardGoalReviewArgs(
-  val request: FeatureTaskRuntimeRunRequest,
-  val state: FeatureTaskRuntimeRunState,
-  val session: FeatureTaskRuntimeRunLoopSession,
-  val recorder: FeatureTaskRuntimePhaseRecorder,
-  val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
-)
-
-class MissingCarriedForwardGoalReviewResultException : SkillBillRuntimeException(
-  "Goal review result was not carried forward from the prior phase.",
-)
-
-internal sealed class RuntimeOwnedReviewPrep
-
-internal data class RuntimeOwnedReviewReady(
-  val run: PhaseRun,
-  val launch: RuntimeOwnedReviewLaunch,
-  val driverRequest: ParallelCodeReviewRequest,
-) : RuntimeOwnedReviewPrep()
-
-internal data class RuntimeOwnedReviewBlocked(val outcome: PhaseOutcome) : RuntimeOwnedReviewPrep()
-
-internal data class RuntimeOwnedReviewLaunch(
-  val iteration: Int,
-  val passNumber: Int,
-  val resolvedTier: CodeReviewExecutionMode,
-  val reviewRunId: String,
-  val checkpoint: String,
-)
-
-internal sealed class ReviewDriverAttempt
-
-internal data class ReviewDriverReady(val result: ParallelCodeReviewResult) : ReviewDriverAttempt()
-
-internal data class ReviewDriverFailed(
-  val reason: String,
-  val disposition: FeatureTaskRuntimeFailureDisposition =
-    FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
-) : ReviewDriverAttempt()
-
 internal data class PhaseAttemptLoopCarryForward(
   var priorCorrection: PriorAttemptCorrection? = null,
-  var priorUnaccountedFindings: Set<String>? = null,
-  var priorUnresolvedFindings: Set<String> = emptySet(),
-  var itemCoverageSegmentCount: Int = 0,
 )
 
 internal class PhaseAttemptLoopState(
@@ -117,28 +65,12 @@ internal class PhaseAttemptLoopState(
   var outputGateFailures: Int,
   var semanticIteration: Int,
   var continuationSegmentCount: Int,
-  var validationRemainingFingerprint: String? = null,
   private var carryForward: PhaseAttemptLoopCarryForward = PhaseAttemptLoopCarryForward(),
 ) {
   var priorCorrection: PriorAttemptCorrection?
     get() = carryForward.priorCorrection
     set(value) {
       carryForward.priorCorrection = value
-    }
-  var priorUnaccountedFindings: Set<String>?
-    get() = carryForward.priorUnaccountedFindings
-    set(value) {
-      carryForward.priorUnaccountedFindings = value
-    }
-  var priorUnresolvedFindings: Set<String>
-    get() = carryForward.priorUnresolvedFindings
-    set(value) {
-      carryForward.priorUnresolvedFindings = value
-    }
-  var itemCoverageSegmentCount: Int
-    get() = carryForward.itemCoverageSegmentCount
-    set(value) {
-      carryForward.itemCoverageSegmentCount = value
     }
 }
 
@@ -203,6 +135,7 @@ internal data class RejectedOutputTargeting(
   val model: String,
   val path: String,
   val repairTurn: Int,
+  val generationScoped: Boolean,
 )
 
 internal data class RecordRejectedOutputArgs(
@@ -231,32 +164,6 @@ internal data class CorrectiveRepairRejectionArgs(
   val rejection: CorrectiveRepairRejectionDetail,
 )
 
-internal class GateOutput(
-  val run: PhaseRun,
-  val iteration: Int,
-  val captured: CapturedPhaseOutput,
-  val fileManifest: FeatureTaskRuntimePhaseFileManifest,
-  val outputGateFailuresBefore: Int? = null,
-  val settlementContext: FeatureTaskRuntimeRunLoopContext,
-) {
-  val request get() = settlementContext.request
-  val state get() = settlementContext.state
-  val recorder get() = settlementContext.recorder
-  val outputValidator get() = settlementContext.outputValidator
-  val phaseGates get() = settlementContext.phaseGates
-  val clock get() = settlementContext.clock
-  val diagnostics get() = settlementContext.diagnostics
-  val goalContinuationRecorder get() = settlementContext.goalContinuationRecorder
-  val phaseSettlementService get() = settlementContext.phaseSettlementService
-  val observability get() = settlementContext.observability
-
-  val rejectionExhaustsFixLoop: Boolean?
-    get() =
-      outputGateFailuresBefore?.let {
-        FeatureTaskRuntimeAttemptBudgets.outputGateRejectionExhaustsBudget(run.phaseId, it)
-      }
-}
-
 internal data class SettledOutputContext(
   val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
   val repairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
@@ -269,7 +176,7 @@ internal class SettleValidatedOutput(
   val run: PhaseRun,
   val iteration: Int,
   val output: SettledOutputContext,
-  val settlementContext: FeatureTaskRuntimeRunLoopContext,
+  val settlementContext: PhaseAttemptEnvironment,
 ) {
   val request get() = settlementContext.request
   val state get() = settlementContext.state
@@ -303,7 +210,7 @@ internal data class PhaseStateRequestAttachments(
 internal data class PhaseStateRequestArgs(
   val write: PhaseStateWriteArgs,
   val extras: PhaseStateRequestAttachments = PhaseStateRequestAttachments(),
-  val context: FeatureTaskRuntimeRunLoopContext? = null,
+  val context: PhaseAttemptEnvironment? = null,
 )
 
 internal data class PersistPhaseArgs(
@@ -311,13 +218,6 @@ internal data class PersistPhaseArgs(
   val fileManifest: FeatureTaskRuntimePhaseFileManifest? = null,
   val launched: LaunchedModelDirective? = null,
   val reviewRunId: String? = null,
-)
-
-internal data class PhaseReviewCompletionOutcomeArgs(
-  val persistence: PhaseReviewPersistenceArgs,
-  val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
-  val acceptedOutput: AcceptedFeatureTaskRuntimePhaseOutput,
-  val outputText: String,
 )
 
 internal data class PhaseReviewPersistenceArgs(
@@ -341,22 +241,6 @@ internal data class CheckpointRevisions(
   val base: String?,
   val head: String,
 )
-
-internal sealed interface BoundaryBodyDeliveryDecision {
-  data object NotApplicable : BoundaryBodyDeliveryDecision
-
-  class ContinueDecision private constructor(val reason: String) : BoundaryBodyDeliveryDecision {
-    companion object {
-      fun of(reason: String) = ContinueDecision(reason)
-    }
-  }
-
-  class RejectDecision private constructor(val reason: String) : BoundaryBodyDeliveryDecision {
-    companion object {
-      fun of(reason: String) = RejectDecision(reason)
-    }
-  }
-}
 
 internal data class LaunchedModelDirective(
   val modelOverride: String?,
@@ -385,10 +269,12 @@ internal data class PhaseRun(
   val resolvedAgent: FeatureTaskRuntimeResolvedPhaseAgent,
   val modelDirective: PhaseModelDirective?,
   val compaction: PhaseCompactionDirective?,
-  val request: FeatureTaskRuntimeRunRequest,
+  val request: FeatureTaskRuntimeRunFacts,
   val specSource: SpecSource,
+  val policy: PhaseStepPolicy,
   val reentry: PendingReentry? = null,
   val goalReviewInput: GoalSubtaskReviewInput? = null,
+  val reviewTarget: ReviewTarget = ReviewTarget.LastCommit,
   val validationGateFindings: ValidationFindingSetProjection? = null,
   val validationGateTriagePlan: String? = null,
   val validationGateRepair: Boolean = false,
@@ -409,24 +295,3 @@ internal data class PreparedLaunch(
 )
 
 internal data class RecordRejection(val rejectionClass: String, val rejectionDetail: String)
-
-internal data class RepairReceiptAnchor(val baseSha: String, val roundNumber: Int)
-
-internal enum class FindingsOwedKind { OMITTED, UNRESOLVED }
-
-internal sealed interface RepairReceiptSettlement {
-  data class Rejected(val detail: String) : RepairReceiptSettlement
-
-  data class WriteFailed(val reason: String) : RepairReceiptSettlement
-
-  data object None : RepairReceiptSettlement
-
-  val rejectionDetail: String? get() = (this as? Rejected)?.detail
-  val writeFailureReason: String? get() = (this as? WriteFailed)?.reason
-
-  companion object {
-    fun rejected(detail: String): RepairReceiptSettlement = Rejected(detail)
-
-    fun writeFailed(reason: String): RepairReceiptSettlement = WriteFailed(reason)
-  }
-}

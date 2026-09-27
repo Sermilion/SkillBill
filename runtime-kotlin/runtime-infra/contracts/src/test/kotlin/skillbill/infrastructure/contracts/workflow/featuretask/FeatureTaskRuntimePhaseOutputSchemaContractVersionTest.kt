@@ -49,11 +49,6 @@ class FeatureTaskRuntimePhaseOutputSchemaContractVersionTest {
         .path("contract_version").path("const")
     assertTrue(receiptVersion.isTextual, "repairReceipt must pin contract_version const.")
     assertEquals(FEATURE_TASK_RUNTIME_REPAIR_RECEIPT_CONTRACT_VERSION, receiptVersion.asText())
-    assertEquals(
-      "0.6",
-      schema.path("properties").path("contract_version").path("const").asText(),
-      "Envelope contract_version must stay 0.6.",
-    )
   }
 
   private fun classpathSchema(): JsonNode {

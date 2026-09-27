@@ -1,19 +1,37 @@
 package skillbill.engine
 
-import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewDriver
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+import skillbill.engine.featuretask.slot.PhaseRunner
+import skillbill.engine.featuretask.slot.PhaseStepInput
+import skillbill.engine.featuretask.slot.PhaseStepOutput
+import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.review.model.ParallelReviewLaneResult
+import skillbill.review.parallel.ParallelReviewFindingParser
+import skillbill.review.parallel.ParallelReviewMerger
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+
+private const val VERSION: String = FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 
 internal const val REVIEW_FIX_BLOCKER_FINDING_ID = "F-001"
 
 internal var harnessPendingVerifyFindingIds: List<String> = emptyList()
 
-internal fun harnessReviewDriverSyncingPendingVerifyFindings(
-  delegate: FeatureTaskRuntimeReviewDriver,
-): FeatureTaskRuntimeReviewDriver =
-  FeatureTaskRuntimeReviewDriver { request ->
-    val result = delegate.run(request)
-    harnessPendingVerifyFindingIds = result.mergeResult.findings.map { it.fNumber }
-    result
+internal fun harnessReviewRunnerSyncingPendingVerifyFindings(delegate: PhaseRunner): PhaseRunner =
+  object : PhaseRunner {
+    override fun run(
+      input: PhaseStepInput,
+      state: PhaseLaunchState,
+    ): PhaseStepOutput {
+      val output = delegate.run(input, state)
+      val lane =
+        ParallelReviewLaneResult(
+          agentId = input.facts.invokedAgentId,
+          findings = ParallelReviewFindingParser.parse(output.stdout.text).findings,
+        )
+      harnessPendingVerifyFindingIds =
+        ParallelReviewMerger.merge(lane, lane.copy(findings = emptyList())).findings.map { it.fNumber }
+      return output
+    }
   }
 
 internal fun verifyFindingsPhaseOutput(
@@ -37,7 +55,7 @@ internal fun verifyFindingsOutput(verifiedFindingIds: List<String> = harnessPend
   val dispositionsJson = if (dispositions.isEmpty()) "[]" else "[$dispositions]"
   return """
     {
-      "contract_version": "0.6",
+      "contract_version": "$VERSION",
       "phase_id": "verify_findings",
       "status": "completed",
       "summary": "Phase produced a validated output.",
@@ -50,7 +68,7 @@ internal fun verifyFindingsOutput(verifiedFindingIds: List<String> = harnessPend
 internal val IMPLEMENT_NO_RECONCILE_OUTPUT: String =
   """
   {
-    "contract_version": "0.6",
+    "contract_version": "$VERSION",
     "phase_id": "implement",
     "status": "completed",
     "summary": "Phase produced a validated output.",
@@ -64,7 +82,7 @@ internal val IMPLEMENT_NO_RECONCILE_OUTPUT: String =
 internal fun verdictPlanOutput(verdict: String): String =
   """
   {
-    "contract_version": "0.6",
+    "contract_version": "$VERSION",
     "phase_id": "plan",
     "status": "completed",
     "summary": "Plan produced a validated output.",
@@ -76,7 +94,7 @@ internal fun verdictPlanOutput(verdict: String): String =
 internal val FINALISED_COMMIT_PUSH_OUTPUT: String =
   """
   {
-    "contract_version": "0.6",
+    "contract_version": "$VERSION",
     "phase_id": "commit_push",
     "status": "completed",
     "summary": "Phase produced a validated output.",
@@ -112,7 +130,7 @@ internal fun validJsonOutput(
   if (phaseId == "audit") {
     return """
       {
-        "contract_version": "0.6",
+        "contract_version": "$VERSION",
         "phase_id": "audit",
         "status": "completed",
         "summary": "Phase produced a validated output.",
@@ -123,7 +141,7 @@ internal fun validJsonOutput(
   }
   return """
     {
-      "contract_version": "0.6",
+      "contract_version": "$VERSION",
       "phase_id": "$phaseId",
       "status": "completed",
       "summary": "Phase produced a validated output.",
@@ -150,30 +168,35 @@ internal fun validProducedOutputs(
   phaseId: String,
   commitPushChangedPaths: List<String>? = null,
 ): String =
-  when (phaseId) {
-    "validate" -> VALIDATE_PRODUCED_OUTPUTS
-    "write_history" -> WRITE_HISTORY_PRODUCED_OUTPUTS
-    "commit_push" ->
-      commitPushProducedOutputs(
-        commitSha = null,
-        changedPaths = commitPushChangedPaths ?: listOf("src/Foo.kt"),
-      )
-    "preplan" -> preplanProducedOutputs()
-    "plan" -> planProducedOutputs()
-    "implement" -> implementProducedOutputs()
-    "simplify" -> PlanningProjectionFixtures.SIMPLIFY_PROSE
-    "implement_fix" -> implementFixProducedOutputs()
-    "review" -> """{"findings": []}"""
-    "audit" -> """{"value": "{\"gaps\":[],\"non_blocking_findings\":[]}"}"""
-    "verify_findings" -> """{"finding_dispositions": []}"""
-    else -> """{"tasks":["task-1"]}"""
+  if (phaseId == "commit_push") {
+    commitPushProducedOutputs(
+      commitSha = null,
+      changedPaths = commitPushChangedPaths ?: listOf("src/Foo.kt"),
+    )
+  } else {
+    STATIC_PRODUCED_OUTPUTS[phaseId] ?: """{"tasks":["task-1"]}"""
   }
+
+private val STATIC_PRODUCED_OUTPUTS: Map<String, String> =
+  mapOf(
+    "validate" to VALIDATE_PRODUCED_OUTPUTS,
+    "write_history" to WRITE_HISTORY_PRODUCED_OUTPUTS,
+    "preplan" to preplanProducedOutputs(),
+    "plan" to planProducedOutputs(),
+    "implement" to implementProducedOutputs(),
+    "simplify" to PlanningProjectionFixtures.SIMPLIFY_PROSE,
+    "implement_fix" to implementFixProducedOutputs(),
+    "review" to """{"findings": []}""",
+    "audit" to """{"value": "{\"gaps\":[],\"non_blocking_findings\":[]}"}""",
+    "verify_findings" to """{"finding_dispositions": []}""",
+    "pr" to """{"value": "Opened the pull request for the branch."}""",
+  )
 
 private const val VALIDATE_PRODUCED_OUTPUTS =
   """{"value":"Project checks passed.","validation_passed":true}"""
 
 private const val WRITE_HISTORY_PRODUCED_OUTPUTS =
-  """{"history_result":{"changed_paths":["agent/history.md"],"decisions_recorded":[]}}"""
+  """{"value":"Recorded the boundary history entry."}"""
 
 private fun preplanProducedOutputs(): String =
   """
@@ -240,28 +263,28 @@ internal object Skill187SyntheticAuditResponses {
   private const val AUDIT_VALUE_SATISFIED: String = """{\"gaps\":[],\"non_blocking_findings\":[]}"""
 
   fun nestedVerdictMissingDelimiter(): String =
-    """{"contract_version":"0.6","phase_id":"audit","status":"completed","summary":"$NESTED_VERDICT_SENTINEL",""" +
+    """{"contract_version":"$VERSION","phase_id":"audit","status":"completed","summary":"$NESTED_VERDICT_SENTINEL",""" +
       """"produced_outputs":{"value":"$AUDIT_VALUE_SATISFIED","verdict":"satisfied"}"""
 
   fun nestedVerdictComplete(): String = nestedVerdictMissingDelimiter() + "}"
 
   fun nestedVerdictConservativeYaml(): String =
-    "{contract_version: \"0.6\", phase_id: \"audit\", status: \"completed\", " +
+    "{contract_version: \"$VERSION\", phase_id: \"audit\", status: \"completed\", " +
       "summary: \"$YAML_NESTED_SENTINEL\", produced_outputs: {value: \"$AUDIT_VALUE_SATISFIED\", " +
       "verdict: \"satisfied\"}}"
 
   fun invalidCriterionShape(): String =
-    """{"contract_version":"0.6","phase_id":"audit","status":"completed","summary":"$OBSERVATION_SENTINEL",""" +
+    """{"contract_version":"$VERSION","phase_id":"audit","status":"completed","summary":"$OBSERVATION_SENTINEL",""" +
       """"verdict":"gaps_found","produced_outputs":{"value":"{\"gaps\":[{\"criterion\":\"AC-001\",""" +
       """\"note\":\"the behavior is absent\",\"severity\":\"blocker\"}]}"}}"""
 
   fun correctedSatisfied(): String =
-    """{"contract_version":"0.6","phase_id":"audit","status":"completed","summary":"criteria met",""" +
+    """{"contract_version":"$VERSION","phase_id":"audit","status":"completed","summary":"criteria met",""" +
       """"verdict":"satisfied","produced_outputs":{"value":"$AUDIT_VALUE_SATISFIED"}}"""
 
   fun unsupportedBlockYaml(): String =
     """
-    contract_version: "0.6"
+    contract_version: "$VERSION"
     phase_id: "audit"
     status: "completed"
     summary: "$UNSUPPORTED_YAML_SENTINEL"

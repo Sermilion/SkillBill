@@ -181,6 +181,17 @@ These are the user-facing entry points. Stack-specific review skills and the inl
 | `/bill-unit-test-value-check` | Identify tests that cannot catch a realistic regression |
 | `/bill-release` | Prepare a changelog, confirm the requested semver bump, and push an annotated tag |
 | `/bill-update-check` | Compare the installed runtime version with GitHub releases |
+| `/skill-bill` | Dispatch the full feature run with one confirmation gate, or one phase over the working tree |
+
+`/skill-bill` sits beside `/bill-feature`, which keeps working:
+
+```text
+/skill-bill APP-123 Add CSV export               # full run, same gate as /bill-feature
+/skill-bill APP-123 phase:plan                   # skill-bill phase plan APP-123
+/skill-bill phase:review mode:delegated target:HEAD
+```
+
+The phase names are `plan`, `implement`, `review`, `validation`, and `pr`. The full run forwards `code-review:inline|auto` as `--code-review-mode`; `phase:review` forwards `mode:` and `target:` unchanged. When preflight finds no spec, the full run calls `skill-bill phase plan`. `operation:` forms arrive with SKILL-382; until then `/skill-bill` refuses them.
 
 ## Platform packs
 

@@ -1,0 +1,167 @@
+{
+    "blocked_reason": null,
+    "blocked_step_id": null,
+    "completed_step_ids": [
+        "review",
+        "verify_findings",
+        "implement_fix"
+    ],
+    "invocation_id": "__NORMALIZED_INVOCATION_ID__",
+    "review_result": {
+        "accounting_summary": {
+            "aggregate_counters": {
+                "evidence_bytes": 0,
+                "expansions": 0,
+                "launch_bytes": 2686,
+                "model_turns": 1,
+                "result_bytes": 166,
+                "tool_calls": 0
+            },
+            "commit_routing_accounting": {
+                "commit_count": 1,
+                "commit_sequence_digest": "__NORMALIZED_SHA64__",
+                "focused_commit_count": 1,
+                "focused_pair_count": 1,
+                "incomplete_lanes": [],
+                "lane_count": 1,
+                "routing_digest": "__NORMALIZED_SHA64__",
+                "skipped_commit_count": 0,
+                "skipped_pair_count": 0
+            },
+            "contract_version": "2.4",
+            "integration": {
+                "commit_sequence_digest": "__NORMALIZED_SHA64__",
+                "counters": {
+                    "evidence_bytes": 0,
+                    "expansions": 0,
+                    "launch_bytes": 0,
+                    "model_turns": 0,
+                    "result_bytes": 0,
+                    "tool_calls": 0
+                },
+                "finding_count": 0,
+                "skip_reason": "the review scope resolved to a synthetic unit, so there is no commit sequence to integrate over",
+                "summarized_lane_count": 0,
+                "terminal_outcome": "skipped_not_applicable"
+            },
+            "kind": "accounting_summary",
+            "lanes": [
+                {
+                    "assignment_digest": "__NORMALIZED_SHA64__",
+                    "bundle_composition_digest": "__NORMALIZED_SHA64__",
+                    "evidence_bytes": 0,
+                    "expansions": 0,
+                    "inclusive_counters": {
+                        "evidence_bytes": 0,
+                        "expansions": 0,
+                        "launch_bytes": 2686,
+                        "model_turns": 1,
+                        "result_bytes": 166,
+                        "tool_calls": 0
+                    },
+                    "lane": "parallel-agent-1",
+                    "launch_bytes": 0,
+                    "model_turns": 0,
+                    "result_bytes": 0,
+                    "segment_accounting": [
+                        {
+                            "composition_digest": "__NORMALIZED_SHA64__",
+                            "entry_count": 1,
+                            "measured_bytes": 9811,
+                            "segment_id": "seg-000"
+                        }
+                    ],
+                    "terminal_outcome": "completed",
+                    "tool_calls": 0
+                },
+                {
+                    "assignment_digest": "__NORMALIZED_SHA64__",
+                    "bundle_composition_digest": "__NORMALIZED_SHA64__",
+                    "evidence_bytes": 0,
+                    "expansions": 0,
+                    "inclusive_counters": {
+                        "evidence_bytes": 0,
+                        "expansions": 0,
+                        "launch_bytes": 2686,
+                        "model_turns": 1,
+                        "result_bytes": 166,
+                        "tool_calls": 0
+                    },
+                    "lane": "claude",
+                    "launch_bytes": 2686,
+                    "model_turns": 1,
+                    "result_bytes": 166,
+                    "segment_accounting": [
+                        {
+                            "composition_digest": "__NORMALIZED_SHA64__",
+                            "entry_count": 1,
+                            "measured_bytes": 9811,
+                            "segment_id": "seg-000"
+                        }
+                    ],
+                    "terminal_outcome": "completed",
+                    "tool_calls": 0
+                }
+            ],
+            "packet_digest": "__NORMALIZED_SHA64__",
+            "parent": {
+                "assignment_digest": "__NORMALIZED_SHA64__",
+                "evidence_bytes": 0,
+                "expansions": 0,
+                "inclusive_counters": {
+                    "evidence_bytes": 0,
+                    "expansions": 0,
+                    "launch_bytes": 2686,
+                    "model_turns": 1,
+                    "result_bytes": 166,
+                    "tool_calls": 0
+                },
+                "lane": "parallel-review",
+                "launch_bytes": 0,
+                "model_turns": 0,
+                "result_bytes": 0,
+                "terminal_outcome": "completed",
+                "tool_calls": 0
+            },
+            "parent_analysis_consumption": {
+                "analyzed_bytes": 350,
+                "analyzed_pairs": 1,
+                "max_analysis_bytes": 33554432,
+                "max_analysis_pairs": 4096
+            },
+            "review_id": "__NORMALIZED_REVIEW_RUN_ID__"
+        },
+        "applied_learnings": "none",
+        "coverage": "Commit-focused sequencing: not applicable — the review scope resolved to a synthetic unit, so there is no commit sequence to integrate over. No integration pass was run.\nCoverage: clean — every selected lane reviewed its full assigned bundle.\n",
+        "lane1": {
+            "agent_id": "claude",
+            "dropped_candidate_diagnostic": null,
+            "failure_reason": null,
+            "success": true
+        },
+        "output": "- [F-001] Blocker | High | specialist=bill-kotlin-code-review-architecture | path=\"src/Foo.kt\" | line=1 | the delegated lane saw the connection leak on the error path",
+        "review_session_id": "__NORMALIZED_REVIEW_SESSION_ID__"
+    },
+    "status": "completed",
+    "value": {
+        "contract_version": "0.7",
+        "phase_id": "implement_fix",
+        "produced_outputs": {
+            "reconciled_state": {
+                "evidence": "Fixture tree at target state.",
+                "reconciled": true
+            },
+            "repair_receipt": {
+                "contract_version": "0.3",
+                "entries": [
+                    {
+                        "finding_id": "F-001",
+                        "outcome": "addressed"
+                    }
+                ]
+            }
+        },
+        "status": "completed",
+        "summary": "Phase produced a validated output."
+    }
+}

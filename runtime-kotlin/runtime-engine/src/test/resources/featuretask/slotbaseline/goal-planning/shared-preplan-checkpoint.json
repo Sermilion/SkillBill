@@ -1,0 +1,70 @@
+[
+    {
+        "contract_version": "0.2",
+        "created_at": "__NORMALIZED_TIMESTAMP__",
+        "decomposition_manifest_hash": "__NORMALIZED_SHA64__",
+        "normalized_issue_key": "SKILL-380",
+        "parent_goal_workflow_id": "wfl-skill-380-parent",
+        "parent_spec_hash": "__NORMALIZED_SHA64__",
+        "payload_sha256": "__NORMALIZED_SHA64__",
+        "phase_output_contract_id": "https://skill-bill.dev/contracts/feature-task-runtime-phase-output-schema.yaml",
+        "phase_output_contract_version": "0.7",
+        "planning_contract_id": "https://skill-bill.dev/contracts/goal-planning-preparation-schema.yaml",
+        "planning_contract_version": "0.2",
+        "preparation_status": "prepared",
+        "preplan_payload_json": {
+            "contract_version": "0.7",
+            "phase_id": "preplan",
+            "produced_outputs": {
+                "_goal_planning_shared_context": {
+                    "boundary_memory": {
+                        "catalog": [
+                            {
+                                "heading": "## [2026-08-01] fixture-entry",
+                                "heading_id": "runtime-kotlin/agent/history.md#0-000000000000",
+                                "kind": "history",
+                                "source_path": "runtime-kotlin/agent/history.md"
+                            }
+                        ],
+                        "truncated": false
+                    },
+                    "decomposition_manifest": "---\ncontract_version: \"0.5\"\nissue_key: \"SKILL-380\"\nfeature_name: \"phase-slot-strategies\"\nparent_spec_path: \".feature-specs/SKILL-380-phase-slot-strategies/spec.md\"\nstatus: \"pending\"\nexecution_model: \"same_branch_commit_per_subtask\"\nbase_branch: \"main\"\nfeature_branch: \"feat/SKILL-380-phase-slot-strategies\"\nstack_branches: []\ncurrent_subtask_intent:\n  subtask_id: 1\n  action: \"start\"\nsubtasks:\n- id: 1\n  name: \"slot baseline build child\"\n  spec_path: \".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_1.md\"\n  status: \"pending\"\n  branch: null\n  commit_sha: null\n  workflow_id: null\n  blocked_reason: null\n  last_resumable_step: null\n  linear_issue_id: null\n  finalizing_agent_id: null\n  participating_agent_ids: []\n  dependencies: []\n- id: 2\n  name: \"slot baseline validate child\"\n  spec_path: \".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_2.md\"\n  status: \"pending\"\n  branch: null\n  commit_sha: null\n  workflow_id: null\n  blocked_reason: null\n  last_resumable_step: null\n  linear_issue_id: null\n  finalizing_agent_id: null\n  participating_agent_ids: []\n  dependencies:\n  - subtask_id: 1\n    optional: false\n    skipped: false\n",
+                    "integrity_sha256": "__NORMALIZED_SHA64__",
+                    "normalized_issue_key": "SKILL-380",
+                    "ordered_subtasks": [
+                        {
+                            "dependencies": [],
+                            "id": 1,
+                            "name": "slot baseline build child",
+                            "planning_disposition": "included",
+                            "spec_path": ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_1.md"
+                        },
+                        {
+                            "dependencies": [
+                                {
+                                    "optional": false,
+                                    "skipped": false,
+                                    "subtask_id": 1
+                                }
+                            ],
+                            "id": 2,
+                            "name": "slot baseline validate child",
+                            "planning_disposition": "included",
+                            "spec_path": ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_2.md"
+                        }
+                    ],
+                    "packet_version": "0.4",
+                    "parent_spec": "# Harness spec intent\n\n## Intended Outcome\nExercise the feature-task runtime harness.\n\n## Acceptance Criteria\n\n1. AC-1\n2. AC-2",
+                    "parent_spec_path": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md",
+                    "repository_identity": "repo-root-realpath-v1:__NORMALIZED_REPO_ROOT__",
+                    "validation_guidance": "Run focused Gradle checks."
+                },
+                "value": "Fixture preplan prose for downstream plan."
+            },
+            "status": "completed",
+            "summary": "s"
+        },
+        "repair_evidence_json": null,
+        "repository_identity": "repo-root-realpath-v1:__NORMALIZED_REPO_ROOT__"
+    }
+]

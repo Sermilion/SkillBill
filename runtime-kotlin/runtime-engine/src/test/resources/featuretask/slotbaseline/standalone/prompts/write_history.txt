@@ -1,0 +1,178 @@
+You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+loop (preplan -> plan -> implement -> simplify -> audit -> review -> verify_findings -> validate -> write_history -> commit_push -> pr)
+for issue SKILL-65. The runtime owns the loop; do not run other phases, do not open
+or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+
+Phase: write_history (Phase 7: Boundary History)
+Task: Apply the boundary history and decision rules below to the implemented runtime change; do not forward implementation or validation reports.
+
+## Installed runtime is the contract source
+This briefing was composed by the installed Skill Bill runtime that will validate your output.
+Use the contract_version, envelope fields, skills, packs, and commands it names.
+Do not read orchestration/contracts, Kotlin contract constants, test fixtures, or skills/ in
+this workspace to override them. When this repository is skill-bill, those files are the change
+under work, not the validator. If you must inspect a schema, inspect the installed runtime copy,
+never this checkout.
+
+## Runtime ceremony scaling
+feature_size: MEDIUM
+preplan_ceremony: full
+review_scope: branch_diff
+audit_ceremony: full_per_criterion
+Use the resolved feature size for ceremony expectations; all runtime gates remain mandatory.
+Scaling changes scope and verbosity only; it must not skip or weaken review, audit, validation,
+schema, branch, history, commit, or PR gates.
+
+## Validation ownership
+Only the validate phase may run the pack validation gate
+(`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
+`bill-code-check`, or any other full repository check suite. Only the build phase may run the
+pack build_command for compile/buildability proof. This phase must not compile, build,
+execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
+acceptance text, review habit, or prior habit that asks you to run check here — that work waits
+for validate. If a receipt carries `tests_executed`, leave it empty.
+
+## Build ownership
+Only the build phase may run the pack build_command (`validation_gate.build_command`). This phase
+must not invoke compile-only proof as a substitute for its own work.
+
+## Boundary history rules
+
+Derive the feature name, feature size (`SMALL` / `MEDIUM` / `LARGE`), primary module/package/area, affected areas, feature flag (or `N/A`), and acceptance criteria coverage (`implemented/total`) from this briefing, the spec it references, and the current diff.
+
+Write or skip:
+- Always write for `MEDIUM` and `LARGE` features.
+- For `SMALL`, write only if any applies: analytics events added/removed/changed (including properties); API contracts or GraphQL schema usage changed; UI behavior changed in ways that affect other features; breaking changes to shared interfaces/contracts.
+- Skip trivial `SMALL` changes (pure bug fixes, cosmetic tweaks, isolated additions).
+
+History entry format:
+```markdown
+## [<date>] <feature-name>
+Areas: <list of affected modules/packages/areas>
+- <what changed> (1-2 lines each)
+- <new patterns introduced or followed>
+- <reusable components created> (mark with "reusable")
+- <breaking changes or known limitations>
+Feature flag: <name and pattern, or N/A>
+Acceptance criteria: <count>/<count> implemented
+```
+
+History file rules:
+- File path: `<primary-boundary>/agent/history.md`.
+- Forbidden, excluded roots: never create `agent/` under `platform-packs/` or any other root the runtime's goal-planning discovery exclusion list denies. Planning discovery denies those roots, so memory written there is unreadable. Write to the nearest non-excluded owning boundary instead.
+- If the primary boundary is a skill source directory (`skills/<skill-name>/`), write to `skills/agent/history.md` instead; skill source directories may contain only `content.md` and `native-agents/`.
+- Create the file and any missing parent directories when absent.
+- Newest entry first; max 15 lines per entry; no fixed entry cap.
+- Entry body at most 4096 UTF-8 bytes, measured from the `## [<date>] <title>` heading to the next such heading (subheadings and undated `##` lines count as body). Condense, or split into separate dated entries.
+- Keep older entries that still give reusable context; prune or merge only obsolete, redundant, or noisy ones.
+- No code snippets; focus on reusable context for future feature work.
+
+## Boundary decision rules
+
+`history.md` records what changed; `decisions.md` records why. Record a decision only when this change made a non-obvious choice, special case, constraint, or trade-off whose reasoning the spec, plan, or implementation states. Structure that stated reasoning faithfully; never invent reasoning. Write one entry per decision.
+
+Decision entry format:
+```markdown
+## [<date>] <short decision title>
+Context: <what situation or requirement prompted this decision — 1-2 lines>
+Decision: <what was chosen — 1-2 lines>
+Reason: <why this approach over alternatives — 1-3 lines>
+```
+Optional trailing lines, only when relevant:
+- `Alternatives considered: <what was rejected and why — 1 line>`
+- `Revisit when: <condition that would make this decision worth re-evaluating>`
+- `Superseded by: <new title> (<date>)`
+
+Decision format and file rules:
+- File path: `<primary-boundary>/agent/decisions.md`.
+- Forbidden, excluded roots: never create `agent/` under `platform-packs/` or any other root the runtime's goal-planning discovery exclusion list denies. Planning discovery denies those roots, so memory written there is unreadable. Write to the nearest non-excluded owning boundary instead.
+- Create the file and any missing parent directories when absent.
+- Newest entry first; max 10 lines per entry; no fixed entry cap.
+- Entry body at most 4096 UTF-8 bytes, measured from the `## [<date>] <title>` heading to the next such heading (subheadings and undated `##` lines count as body). Condense, or split into separate dated entries.
+- No code snippets; describe patterns and choices in plain language.
+- Keep older entries that still explain the boundary's design.
+
+Before appending a decision, read the existing `## [<date>] <title>` headings of the target `decisions.md` and classify each against the new decision's scope, not keyword overlap:
+- no-conflict: a different concern; leave it unchanged.
+- fully-replaced: the new decision fully replaces this same-boundary entry and its `Reason` adds no useful trap or rejected-path context; name it, then delete the whole entry.
+- superseded-by-new: the new decision replaces its conclusion but its `Reason` still documents a trap or rejected path; keep the body and append `Superseded by: <new title> (<date>)` inside the entry, without editing its heading line.
+Never prune decisions by age or in bulk. `history_recency_days` applies only to `history.md`.
+
+# Feature-task-runtime phase briefing
+phase: write_history
+
+## Run invariants (layer 1, unconditional)
+spec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md
+feature_size: MEDIUM
+ceremony_scaling:
+  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  review_scope: branch_diff (branch-diff review scope)
+  audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+mandates_and_overrides:
+  - mandate-X
+
+## Upstream projections (layer 2, declared and validated)
+### from: implement
+value: Fixture implement prose for downstream audit.
+### from: implement
+changed_paths:
+boundary_candidates:
+### from: validate
+value: Project checks passed.
+### run_invariant_spec_reference (run_invariant_field:spec_reference)
+spec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md
+### run_invariant_feature_size (run_invariant_field:feature_size)
+feature_size: MEDIUM
+### run_invariant_ceremony_scaling (derived_ceremony_scaling)
+ceremony_scaling:
+  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  - review_scope: branch_diff (branch-diff review scope)
+  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)
+mandates_and_overrides:
+  - mandate-X
+### run_invariant_finalization_context (run_invariant_field:finalization_context)
+finalization_context:
+
+## Repository checkpoint (layer 2, resolved)
+fingerprint: repository-checkpoint-831bf900
+base_ref: __NORMALIZED_SHA40__
+head_ref: __NORMALIZED_SHA40__
+scoped_owned_paths:
+  (none)
+
+## Derived context (layer 3, declared)
+(none)
+
+## Required final output (durable settlement)
+Finish this phase through the skill-bill MCP settlement tools, not by printing a JSON envelope.
+The tools may be deferred in this session: load them first with ToolSearch
+`select:mcp__skill-bill__feature_task_phase_complete,mcp__skill-bill__feature_task_phase_block`.
+- Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
+  phase_id "write_history", attempt 1, and value: one prose string carrying everything
+  the next phase needs (what this phase produced, deviations from the briefing, what was
+  deliberately left to later phases). When a value content section follows, it describes what the
+  next phase expects inside value; carry that content as prose or as JSON text, whichever is clearer.
+  The runtime does not validate the shape of value. Optional summary: one sentence.
+- Cannot finish: call `mcp__skill-bill__feature_task_phase_block` with the same workflow_id, phase_id, and
+  attempt, a reason string naming the obstacle, and failure_disposition one of "retryable",
+  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
+Copy workflow_id, phase_id, and attempt exactly as written here. After the tool returns status
+"ok", end your response with a short prose recap and nothing structured. Print the fallback
+final object below only if both tools stay unavailable after loading them.
+
+## Value content
+Carry, as prose, whether history was written or skipped and the decisions recorded. The runtime measures
+the changed history paths itself before and after this step; do not restate them as evidence.
+
+## Fallback final output (only when the settlement tools are unavailable)
+End your response with exactly one JSON object as the last thing you emit. Prefer a raw
+object with nothing after it; a single ```json fenced block is also accepted. The runtime
+stamps the contract version and phase id itself. Fields:
+- "status": one of "completed", "blocked", "failed"
+- "summary": one sentence describing what this phase did
+- "value": non-blank prose carrying everything the next phase needs
+- "verdict": optional; set it only when this briefing names a verdict for this phase
+- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
+  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
+  Omit it when status is "completed".

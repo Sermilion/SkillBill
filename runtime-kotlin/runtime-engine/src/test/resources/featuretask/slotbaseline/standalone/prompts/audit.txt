@@ -1,0 +1,131 @@
+You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+loop (preplan -> plan -> implement -> simplify -> audit -> review -> verify_findings -> validate -> write_history -> commit_push -> pr)
+for issue SKILL-65. The runtime owns the loop; do not run other phases, do not open
+or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+
+Phase: audit (Phase 4: Completeness Audit)
+Task: Verify every acceptance criterion in the briefing against the current repository: locate the implementation that provides the required behavior and test cases whose assertions verify that behavior. Missing implementation, missing tests, and tests that do not exercise the criterion are gaps. One meaningful test may cover several criteria; a test name, empty test, mock-only interaction, or tautological assertion is not coverage. Read the tree at the resolved checkpoint — the diff over its base_ref/head_ref plus its scoped_owned_paths. The upstream implement value is structured prose (implementation_receipt JSON stuffed inside value): read and interpret it as a producer CLAIM, not evidence. Never mark a criterion satisfied because that string lists a completed task id, a changed path, or reconciliation_evidence claiming reconciled. Repair every fixable gap in this same agent session, then re-check the entire in-scope criterion list from the beginning before you complete. Do not spawn subagents, invoke repair skills, or hand findings to another phase. End your final response with the remaining acceptance criteria only: emit an explicit empty list `[]` when every criterion has implementation and meaningful test coverage after repairs; otherwise emit the remaining criteria as plain text, bullets, or a numbered list without validating their structure. Use status blocked or failed with a concrete failure_disposition when the planning criterion list is missing or unreadable or an external dependency prevents repair. All evidence is read-only repository facts: never run a build, a test, or any other command as audit evidence; validation owns test execution and failures.
+
+## Installed runtime is the contract source
+This briefing was composed by the installed Skill Bill runtime that will validate your output.
+Use the contract_version, envelope fields, skills, packs, and commands it names.
+Do not read orchestration/contracts, Kotlin contract constants, test fixtures, or skills/ in
+this workspace to override them. When this repository is skill-bill, those files are the change
+under work, not the validator. If you must inspect a schema, inspect the installed runtime copy,
+never this checkout.
+
+## Runtime ceremony scaling
+feature_size: MEDIUM
+preplan_ceremony: full
+review_scope: branch_diff
+audit_ceremony: full_per_criterion
+Apply full per-criterion completeness audit. Keep the audit gate real: verify every acceptance criterion in scope for implementation and meaningful test coverage, repair fixable gaps in this same session, and re-check the in-scope list before completion.
+Scaling changes scope and verbosity only; it must not skip or weaken review, audit, validation,
+schema, branch, history, commit, or PR gates.
+
+## Validation ownership
+Only the validate phase may run the pack validation gate
+(`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
+`bill-code-check`, or any other full repository check suite. Only the build phase may run the
+pack build_command for compile/buildability proof. This phase must not compile, build,
+execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
+acceptance text, review habit, or prior habit that asks you to run check here — that work waits
+for validate. If a receipt carries `tests_executed`, leave it empty.
+
+## Build ownership
+Only the build phase may run the pack build_command (`validation_gate.build_command`). This phase
+must not invoke compile-only proof as a substitute for its own work.
+
+# Feature-task-runtime phase briefing
+phase: audit
+
+## Run invariants (layer 1, unconditional)
+spec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md
+feature_size: MEDIUM
+ceremony_scaling:
+  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  review_scope: branch_diff (branch-diff review scope)
+  audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+acceptance_criteria:
+  AC-001. AC-1
+  AC-002. AC-2
+mandates_and_overrides:
+  - mandate-X
+
+## Upstream projections (layer 2, declared and validated)
+### from: plan
+value: Fixture plan prose for downstream implement and audit.
+### from: implement
+value: Fixture implement prose for downstream audit.
+### from: simplify
+value: {"projection_kind":"simplification_receipt","contract_version":"0.1","changed_paths":[],"reductions":[],"unresolved_items":[],"reconciliation_evidence":{"reconciled":true,"evidence":"fixture"},"reconciled_state":{"reconciled":true,"evidence":"fixture"}}
+### run_invariant_spec_reference (run_invariant_field:spec_reference)
+spec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md
+### run_invariant_feature_size (run_invariant_field:feature_size)
+feature_size: MEDIUM
+### run_invariant_ceremony_scaling (derived_ceremony_scaling)
+ceremony_scaling:
+  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  - review_scope: branch_diff (branch-diff review scope)
+  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)
+mandates_and_overrides:
+  - mandate-X
+### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)
+acceptance_criteria:
+  - AC-1
+  - AC-2
+
+## Repository checkpoint (layer 2, resolved)
+fingerprint: repository-checkpoint-831bf900
+base_ref: __NORMALIZED_SHA40__
+head_ref: __NORMALIZED_SHA40__
+scoped_owned_paths:
+  (none)
+
+## Derived context (layer 3, declared)
+- scoped_repository_state: read the repository at the resolved checkpoint above — the diff over base_ref/head_ref plus the listed scoped_owned_paths — and treat that actual state, not any upstream receipt claim, as the evidence for every criterion. scoped_owned_paths is checkpoint evidence, not a write allowlist; remaining-criteria repair may edit any files those criteria require
+
+## Required final output (durable settlement)
+Finish this phase through the skill-bill MCP settlement tools, not by printing a JSON envelope.
+The tools may be deferred in this session: load them first with ToolSearch
+`select:mcp__skill-bill__feature_task_phase_complete,mcp__skill-bill__feature_task_phase_block`.
+- Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
+  phase_id "audit", attempt 1, and value: one prose string carrying everything
+  the next phase needs (what this phase produced, deviations from the briefing, what was
+  deliberately left to later phases). When a value content section follows, it describes what the
+  next phase expects inside value; carry that content as prose or as JSON text, whichever is clearer.
+  The runtime does not validate the shape of value. Optional summary: one sentence.
+- Cannot finish: call `mcp__skill-bill__feature_task_phase_block` with the same workflow_id, phase_id, and
+  attempt, a reason string naming the obstacle, and failure_disposition one of "retryable",
+  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
+Copy workflow_id, phase_id, and attempt exactly as written here. After the tool returns status
+"ok", end your response with a short prose recap and nothing structured. Print the fallback
+final object below only if both tools stay unavailable after loading them.
+
+## Value content
+value carries the remaining acceptance criteria only. Only an explicit empty list `[]` (ordinary whitespace
+or Markdown fencing allowed when the complete value is exactly that empty list) completes audit; any other
+non-blank text starts one fresh audit retry with that text forwarded verbatim as the only criterion scope
+for the next audit retry. A whitespace-only value, or a remaining-criteria list nested only inside summary,
+is rejected.
+Every audit invocation re-checks the complete in-scope criterion set from scratch against the
+current tree. Prior partial checks, provider sessions, and repair receipts do not skip checks.
+Repair fixable gaps in this same session before you settle. Use blocked or failed with a
+failure_disposition when the criterion list is missing or an external dependency prevents repair.
+Inspect code and test coverage only: do not run builds, tests, or other commands as audit evidence.
+Validation owns test execution and failures.
+verdict: omit it unless every criterion is met, then set satisfied; never invent review-style tokens
+(for example remediation_required or changes_requested).
+
+## Fallback final output (only when the settlement tools are unavailable)
+End your response with exactly one JSON object as the last thing you emit. Prefer a raw
+object with nothing after it; a single ```json fenced block is also accepted. The runtime
+stamps the contract version and phase id itself. Fields:
+- "status": one of "completed", "blocked", "failed"
+- "summary": one sentence describing what this phase did
+- "value": non-blank prose carrying everything the next phase needs
+- "verdict": optional; set it only when this briefing names a verdict for this phase
+- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
+  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
+  Omit it when status is "completed".

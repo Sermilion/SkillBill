@@ -2,10 +2,9 @@ package skillbill.engine.featuretask.lifecycle.continuation
 
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.runloop.observability.continuation
-import skillbill.engine.featuretask.runloop.state.selectedReviewMode
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
@@ -13,7 +12,7 @@ import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.Featur
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 fun goalContinuationConflict(
-  request: FeatureTaskRuntimeRunRequest,
+  request: FeatureTaskRuntimeRunFacts,
   durable: FeatureTaskRuntimeGoalContinuationArtifact,
   baseline: GoalSubtaskReviewBaseline,
 ): String? =
@@ -23,7 +22,7 @@ fun goalContinuationConflict(
   ).firstOrNull()
 
 private fun requestedReviewModeConflict(
-  request: FeatureTaskRuntimeRunRequest,
+  request: FeatureTaskRuntimeRunFacts,
   durable: FeatureTaskRuntimeGoalContinuationArtifact,
 ): String? =
   request.requestedCodeReviewMode
@@ -75,7 +74,7 @@ private fun suppliedIdentityMatchesDurable(
     supplied.parentWorkflowId == durable.parentWorkflowId
 
 fun newGoalContinuationConflict(
-  request: FeatureTaskRuntimeRunRequest,
+  request: FeatureTaskRuntimeRunFacts,
   selectedReviewMode: CodeReviewExecutionMode,
 ): String? {
   requireNotNull(request.goalContinuation)
@@ -85,7 +84,7 @@ fun newGoalContinuationConflict(
 }
 
 fun goalContinuationPolicyBlockedReport(
-  request: FeatureTaskRuntimeRunRequest,
+  request: FeatureTaskRuntimeRunFacts,
   runInvariants: FeatureTaskRuntimeRunInvariants,
   reason: String,
 ): FeatureTaskRuntimeRunReport.Blocked =

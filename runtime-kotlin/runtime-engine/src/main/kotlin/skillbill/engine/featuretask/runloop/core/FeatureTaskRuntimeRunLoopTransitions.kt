@@ -1,19 +1,35 @@
 package skillbill.engine.featuretask.runloop.core
 
-import skillbill.application.decomposition.specSource
-import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
 import skillbill.engine.featuretask.runloop.observability.loopEdge
+import skillbill.engine.featuretask.runner.skeletonDefinitionFor
+import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
-internal fun qualityGateSelection(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeQualityGateSelection =
-  request.goalContinuation?.qualityGateSelection ?: FeatureTaskRuntimeQualityGateSelection.VALIDATE
+internal fun strategySelectionFacts(request: FeatureTaskRuntimeRunFacts): PhaseStrategySelectionFacts =
+  PhaseStrategySelectionFacts(
+    skeletonDefinitionFor(request),
+    setOfNotNull(request.runInvariants.codeReviewMode, request.goalContinuation?.qualityGateSelection),
+  )
+
+internal fun slotStepVerdictRule(
+  strategies: PhaseStrategyLookup,
+  facts: PhaseStrategySelectionFacts,
+  diagnostics: RuntimeDiagnostics,
+): (String) -> FeatureTaskRuntimeStepVerdictRule? =
+  { stepId ->
+    stepId.takeIf { id -> PhaseSlot.entries.any { slot -> id in slot.steps } }
+      ?.let { id -> strategies.strategyOrNull(id, facts)?.verdictRule(id, diagnostics) }
+  }
 
 internal fun spanBetween(
   transitions: FeatureTaskRuntimeTransitionDeclaration,
@@ -33,19 +49,7 @@ object FeatureTaskRuntimeRunLoopTransitions {
       when (transition) {
         is FeatureTaskRuntimeNextPhase.TerminalAdvance -> null
         is FeatureTaskRuntimeNextPhase.TerminalBlock -> {
-          FeatureTaskRuntimeRunLoopPlanningBranch.blockOnCapExhaustion(
-            BlockOnCapExhaustionArgs(
-              request = request,
-              state = state,
-              recorder = recorder,
-              observability = observability,
-              session = session,
-              goalContinuationRecorder = goalContinuationRecorder,
-              specSource = specSource,
-              phaseId = phaseId,
-              transition = transition,
-            ),
-          )
+          FeatureTaskRuntimeRunLoopPlanningBranch.blockOnCapExhaustion(context, phaseId, transition)
           null
         }
         is FeatureTaskRuntimeNextPhase.Next ->
@@ -77,7 +81,7 @@ object FeatureTaskRuntimeRunLoopTransitions {
           )
         -> null
         loopId == null -> transition.phaseId
-        reentersMutatingPhase(transitions, requireNotNull(edge), transition.phaseId) &&
+        reentersMutatingPhase(context, requireNotNull(edge), transition.phaseId) &&
           !with(FeatureTaskRuntimeRunLoopCheckpointRemediation) {
             FeatureTaskRuntimeRunLoopCheckpointRemediation.establishRemediationCheckpoint(context, phaseId, loopId)
           } -> null
@@ -109,39 +113,30 @@ object FeatureTaskRuntimeRunLoopTransitions {
     }
 
   internal fun reentersMutatingPhase(
-    transitions: FeatureTaskRuntimeTransitionDeclaration,
+    context: PhaseAttemptEnvironment,
     edge: FeatureTaskRuntimeBackwardEdge,
     destinationPhaseId: String,
   ): Boolean =
     spanBetween(
-      transitions,
+      context.transitions,
       destinationPhaseId,
       edge.fromPhaseId,
-    ).any(FeatureTaskRuntimePhaseWorkflowDefinition::isMutatingPhase)
+    ).any { context.stepPolicy(it).mutating }
 
   internal fun establishForwardCheckpoint(
-    context: FeatureTaskRuntimeRunLoopContext,
+    context: PhaseAttemptEnvironment,
     precedingPhaseId: String,
     destinationPhaseId: String,
-  ): Boolean =
-    with(context) {
-      if (
-        precedingPhaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT &&
-        destinationPhaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
-      ) {
-        with(FeatureTaskRuntimeRunLoopCheckpointRemediation) {
-          FeatureTaskRuntimeRunLoopCheckpointRemediation.checkpointEstablished(
-            context,
-            precedingPhaseId = precedingPhaseId,
-            loopId = null,
-            intent = FeatureTaskRuntimeCheckpointMessage.INTENT_AUDITED_IMPLEMENTATION,
-            blockedReason = { branch, error ->
-              auditReviewCheckpointBlockedReason(branch, error)
-            },
-          )
-        }
-      } else {
-        true
-      }
-    }
+  ): Boolean {
+    val checkpoint =
+      context.strategyFor(precedingPhaseId).loopRules?.forwardCheckpoint(precedingPhaseId, destinationPhaseId)
+        ?: return true
+    return FeatureTaskRuntimeRunLoopCheckpointRemediation.checkpointEstablished(
+      context,
+      precedingPhaseId = precedingPhaseId,
+      loopId = null,
+      intent = checkpoint.intent,
+      blockedReason = checkpoint.blockedReason,
+    )
+  }
 }

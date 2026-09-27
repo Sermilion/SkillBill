@@ -8,9 +8,9 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimePhasePromptComposerSettlementTest {
   @Test
-  fun `prose phases with a settlement target are told to settle through the MCP tools`() {
+  fun `settling non-review steps with a settlement target are told to settle through the MCP tools`() {
     val target = FeatureTaskRuntimePhaseSettlementTarget(workflowId = "wftr-20260904-210526-r3x0", attempt = 2)
-    listOf("preplan", "plan", "implement").forEach { phaseId ->
+    listOf("preplan", "plan", "implement", "simplify", "audit", "validate", "write_history", "pr").forEach { phaseId ->
       val prompt =
         composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(phaseId)) {
           copy(phaseSettlement = target)
@@ -21,23 +21,19 @@ class FeatureTaskRuntimePhasePromptComposerSettlementTest {
       assertContains(prompt, "mcp__skill-bill__feature_task_phase_block", false, "block tool for $phaseId")
       assertContains(prompt, "workflow_id \"wftr-20260904-210526-r3x0\"", false, "pinned workflow id for $phaseId")
       assertContains(prompt, "phase_id \"$phaseId\", attempt 2", false, "pinned attempt for $phaseId")
-      assertContains(prompt, "## Fallback final output (validated schema gate", false, "envelope demoted for $phaseId")
-      assertFalse(
-        prompt.contains("## Required final output (validated schema gate)"),
-        "no required envelope for $phaseId",
-      )
+      assertContains(prompt, FALLBACK_HEADING, false, "minimal fallback for $phaseId")
+      assertFalse(prompt.contains("validated schema gate"), "no envelope for $phaseId")
       assertTrue(
-        prompt.indexOf("## Required final output (durable settlement)") <
-          prompt.indexOf("## Fallback final output (validated schema gate"),
-        "settlement precedes the fallback envelope for $phaseId",
+        prompt.indexOf("## Required final output (durable settlement)") < prompt.indexOf(FALLBACK_HEADING),
+        "settlement precedes the fallback final object for $phaseId",
       )
     }
   }
 
   @Test
-  fun `non-prose phases keep the printed envelope contract even with a settlement target`() {
+  fun `review steps keep the printed envelope contract even with a settlement target`() {
     val target = FeatureTaskRuntimePhaseSettlementTarget(workflowId = "wftr-20260904-210526-r3x0", attempt = 1)
-    listOf("review", "audit", "validate").forEach { phaseId ->
+    listOf("review", "verify_findings", "implement_fix").forEach { phaseId ->
       val prompt =
         composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(phaseId)) {
           copy(phaseSettlement = target)
@@ -54,10 +50,31 @@ class FeatureTaskRuntimePhasePromptComposerSettlementTest {
   }
 
   @Test
-  fun `a launch without a settlement target keeps the printed envelope contract`() {
+  fun `runtime-owned turns get no settlement directive`() {
+    val target = FeatureTaskRuntimePhaseSettlementTarget(workflowId = "wftr-20260904-210526-r3x0", attempt = 1)
+    listOf("build", "commit_push").forEach { phaseId ->
+      val prompt =
+        composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(phaseId)) {
+          copy(phaseSettlement = target)
+        }
+
+      assertFalse(prompt.contains("durable settlement"), "no settlement directive for $phaseId")
+      assertFalse(prompt.contains("validated schema gate"), "no envelope for $phaseId")
+    }
+  }
+
+  @Test
+  fun `a launch without a settlement target prints only the minimal final object`() {
     val prompt = composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor("implement"))
 
     assertFalse(prompt.contains("durable settlement"))
-    assertContains(prompt, "## Required final output (validated schema gate)")
+    assertFalse(prompt.contains(FALLBACK_HEADING))
+    assertFalse(prompt.contains("validated schema gate"))
+    assertContains(prompt, "## Required final output\n")
+    assertContains(prompt, "\"value\": non-blank prose")
+  }
+
+  private companion object {
+    const val FALLBACK_HEADING = "## Fallback final output (only when the settlement tools are unavailable)"
   }
 }

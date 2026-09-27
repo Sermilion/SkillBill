@@ -3,7 +3,6 @@ package skillbill.workflow.taskruntime.model.handoff.task
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedger
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactValidation
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
@@ -24,7 +23,7 @@ data class FeatureTaskRuntimeHandoffProjectionInputs(
   val addonContentBySlug: Map<String, String> = emptyMap(),
   val workflowId: String? = null,
   val validationDepth: ValidationDepth = ValidationDepth.DEFAULT,
-  val qualityGateSelection: FeatureTaskRuntimeQualityGateSelection = FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+  val unselectedStepIds: Set<String> = emptySet(),
   val planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidation,
 )
 

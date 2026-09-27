@@ -31,6 +31,7 @@ data class FeatureTaskRuntimePhaseStateRequest(
   val launchOutcomeKnown: Boolean = false,
   val reviewRunId: String? = null,
   val findingVerificationCheckpoint: List<FeatureTaskRuntimeFindingVerificationDisposition>? = null,
+  val mutating: Boolean = false,
 )
 
 data class FeatureTaskRuntimePhaseLedgerRequest(

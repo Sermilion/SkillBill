@@ -1,0 +1,218 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-380"
+feature_name: "phase-slot-strategies"
+parent_spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+status: "in_progress"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "main"
+feature_branch: "feat/SKILL-380-phase-slot-strategies"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 12
+  action: "resume"
+subtasks:
+- id: 1
+  name: "Pre-change behaviour fixtures"
+  spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_1_pre-change-fixtures.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260926-080801-0b3t"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 2
+  name: "Slot skeleton, strategy contract, runner, state port, selection, and dispatch"
+  spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_2_slot-skeleton-and-dispatch.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260926-090317-olzv"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false
+- id: 3
+  name: "code_review strategy inline (InlineReviewStrategy)"
+  spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_3_inline-review-strategy.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260926-105402-6js0"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 2
+    optional: false
+    skipped: false
+- id: 4
+  name: "Skeleton definitions, slot traversal, and the quality_gate strategies"
+  spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_4_skeleton-definitions-and-quality-gate.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260926-134601-tpia"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 2
+    optional: false
+    skipped: false
+- id: 5
+  name: "Remaining slots and the no-phase-id guard"
+  spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_5_remaining-slots-and-guard.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260927-060130-1hxx"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 3
+    optional: false
+    skipped: false
+  - subtask_id: 4
+    optional: false
+    skipped: false
+- id: 6
+  name: "code_review strategy delegated (DelegatedReviewStrategy)"
+  spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_6_delegated-review-strategy.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260927-084054-29iz"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 5
+    optional: false
+    skipped: false
+- id: 7
+  name: "Run loop runs over PhaseRunState"
+  spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_7_run-loop-over-run-state.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260927-093154-mb8z"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 5
+    optional: false
+    skipped: false
+- id: 8
+  name: "Short definitions, in-memory state, and phase review / validation"
+  spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_8_phase-review-and-validation.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260927-140405-hxva"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 6
+    optional: false
+    skipped: false
+  - subtask_id: 7
+    optional: false
+    skipped: false
+- id: 9
+  name: "The plan, implement, and pr definitions"
+  spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_9_phase-plan-implement-pr.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260927-155202-qiez"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 8
+    optional: false
+    skipped: false
+- id: 10
+  name: "Goal planning runs the goal-planning definition"
+  spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_10_goal-planning-definition.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260927-162833-9axg"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 7
+    optional: false
+    skipped: false
+  - subtask_id: 9
+    optional: false
+    skipped: false
+- id: 11
+  name: "pr-description and boundary-history own their rules"
+  spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_11_pr-and-history-rules.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260927-172410-h8lm"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 5
+    optional: false
+    skipped: false
+  - subtask_id: 9
+    optional: false
+    skipped: false
+- id: 12
+  name: "skill-bill dispatcher for the full run and phases"
+  spec_path: ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_12_skill-bill-dispatcher.md"
+  status: "in_progress"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260927-180034-xu34"
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 9
+    optional: false
+    skipped: false
+  - subtask_id: 11
+    optional: false
+    skipped: false

@@ -33,19 +33,17 @@ class FeatureTaskRuntimeBuildGateFullDiscoverTest {
           ),
         ),
         ScriptedGateRunner(listOf(failedWith(compilerFinding), passed(forced = true))),
-        FeatureTaskRuntimeBuildGateProgressStore(
-          persist = { _, progressSnapshot -> progress += progressSnapshot },
-          load = { _ -> progress.lastOrNull() },
-        ),
         repoLocalConfig(),
         NoopRuntimeDiagnostics,
       ).execute(
         ValidationGateCycleRequest(
+          phaseId = "build",
           repoRoot = validationGateTestRepoRoot,
           request = minimalRequest(),
           validationDepth = ValidationDepth.DEFAULT,
           changedPaths = listOf("runtime-kotlin/foo.kt"),
           repositoryCheckpoint = "checkpoint",
+          progressStore = RecordingProgressStore(progress, null),
           agentRepairLauncher =
             ValidationGateAgentRepairLauncher { findings, _, _ ->
               repairRuleIds += findings.findings.map { it.ruleOrTestId }

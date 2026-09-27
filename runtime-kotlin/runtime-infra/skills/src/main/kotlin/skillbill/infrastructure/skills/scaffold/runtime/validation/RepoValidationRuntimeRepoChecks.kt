@@ -10,6 +10,7 @@ import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.d
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.resolveSkillClass
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.supportingFileTargets
 import skillbill.infrastructure.skills.scaffold.runtime.service.support.requiredSupportingFilesForSkill
+import skillbill.install.model.ListedSkillNames
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.isDirectory
@@ -18,9 +19,14 @@ import kotlin.io.path.name
 import kotlin.io.path.relativeTo
 
 internal val repoValidationBoundaryLedgerDir: Path = Path.of("skills", "agent")
-internal val repoValidationSkillReferencePattern = Regex("""(?<![A-Za-z0-9.-])(bill-[a-z0-9-]+)(?![A-Za-z0-9-])""")
+internal val repoValidationSkillReferencePattern =
+  Regex(
+    """(?<![A-Za-z0-9.-])(bill-[a-z0-9-]+)(?![A-Za-z0-9-])""" +
+      """|(?<![A-Za-z0-9./-])/(${ListedSkillNames.DISPATCHER})(?![A-Za-z0-9-])""",
+  )
 internal val repoValidationOrchestrationPathPattern = Regex("""orchestration/[\w/.-]+""")
-internal val repoValidationReadmeSkillRowPattern = Regex("""^\| `/(bill-[a-z0-9-]+)` \|""")
+internal val repoValidationReadmeSkillRowPattern =
+  Regex("""^\| `/(bill-[a-z0-9-]+|${ListedSkillNames.DISPATCHER})` \|""")
 internal val repoValidationOverrideSectionPattern = Regex("""^## (bill-[a-z0-9-]+)$""")
 internal val repoValidationExternalPlaybookReferencePatterns =
   listOf(
@@ -109,7 +115,7 @@ internal fun validateSkillReferencesInFile(
 ) {
   val text = Files.readString(file)
   repoValidationSkillReferencePattern.findAll(text).forEach { match ->
-    val referenced = match.value
+    val referenced = match.groupValues[1].ifEmpty { match.groupValues[2] }
     if (referenced !in skillNames && !isDocumentedExampleReference(file, root, referenced)) {
       issues += "${file.relativeTo(root)}: references unknown skill '$referenced'"
     }

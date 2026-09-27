@@ -185,5 +185,5 @@ fun FeatureTaskRuntimeRunObservability.appendLedger(ledgerRequest: FeatureTaskRu
   observabilityRecorder.appendLedgerEntry(ledgerRequest)
 }
 
-val FeatureTaskRuntimeRunObservability.observabilityRecorder get() = recorder
+internal val FeatureTaskRuntimeRunObservability.observabilityRecorder get() = recorder
 val FeatureTaskRuntimeRunObservability.observabilityDiagnostics get() = diagnostics

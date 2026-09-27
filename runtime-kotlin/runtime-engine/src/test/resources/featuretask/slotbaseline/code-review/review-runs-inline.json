@@ -1,0 +1,57 @@
+{
+    "review_accounting": [],
+    "review_finding_outcomes": [],
+    "review_run_finding_lanes": [],
+    "review_run_finding_verdicts": [],
+    "review_run_lanes": [],
+    "review_run_pass_claims": [
+        {
+            "claims_json": {
+                "findings": [
+                    {
+                        "agent_ids": [
+                            "claude"
+                        ],
+                        "commit_shas": [],
+                        "confidence": "High",
+                        "description": "Foo.kt leaks a connection in the error path",
+                        "f_number": "F-001",
+                        "line": 1,
+                        "location": "src/Foo.kt:1",
+                        "origin_layer_chains": [],
+                        "repository_path": "src/Foo.kt",
+                        "severity": "BLOCKER",
+                        "specialist_skill_names": []
+                    }
+                ]
+            },
+            "recorded_at": "__NORMALIZED_TIMESTAMP__",
+            "review_run_id": "__NORMALIZED_REVIEW_RUN_ID__"
+        }
+    ],
+    "review_run_spec_projections": [],
+    "review_run_stage_boundaries": [],
+    "review_runs": [
+        {
+            "detected_scope": null,
+            "detected_scope_canonical": "unresolved",
+            "detected_scope_detail": null,
+            "detected_stack": null,
+            "detected_stack_canonical": "unresolved",
+            "execution_mode": null,
+            "imported_at": "__NORMALIZED_TIMESTAMP__",
+            "integration_commit_sequence_digest": null,
+            "integration_terminal_outcome": null,
+            "orchestrated_run": 0,
+            "raw_text": "",
+            "review_finished_at": null,
+            "review_finished_event_emitted_at": null,
+            "review_run_id": "__NORMALIZED_REVIEW_RUN_ID__",
+            "review_session_id": "__NORMALIZED_REVIEW_RUN_ID__",
+            "routed_skill": null,
+            "routed_skill_canonical": "unresolved",
+            "source_path": null,
+            "specialist_reviews": ""
+        }
+    ]
+}

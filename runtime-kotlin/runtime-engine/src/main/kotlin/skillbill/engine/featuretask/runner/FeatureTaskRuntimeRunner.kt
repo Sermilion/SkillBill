@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.runner
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeProbeWriters
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePreparation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
@@ -11,10 +10,10 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunInvariantsStore
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunPreparation
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
+import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -22,18 +21,20 @@ import java.time.Clock
 
 @Inject
 class FeatureTaskRuntimeRunner(
-  val subtaskLauncher: GoalRunnerSubtaskLauncher,
+  val strategies: PhaseStrategyLookup,
   val recorder: FeatureTaskRuntimePhaseRecorder,
   val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
-  val runInvariantsStore: FeatureTaskRuntimeRunInvariantsStore,
   val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   val phaseGates: FeatureTaskRuntimePhaseGates,
-  val crashReconciler: FeatureTaskRuntimeCrashReconciler,
+  val startup: FeatureTaskRuntimeRunStartup,
   val phaseSettlementService: FeatureTaskPhaseSettlementService,
   val diagnostics: RuntimeDiagnostics,
   val clock: Clock,
   val probeWriters: FeatureTaskRuntimeProbeWriters,
+  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) {
+  val crashReconciler get() = startup.crashReconciler
+  val runInvariantsStore get() = startup.runInvariantsStore
   val activityStampWriter get() = probeWriters.activityStampWriter
   val worktreeEditJournalWriter get() = probeWriters.worktreeEditJournalWriter
 
@@ -51,6 +52,7 @@ class FeatureTaskRuntimeRunner(
         recorder,
         goalContinuationRecorder,
         runInvariantsStore,
+        strategies,
       ).prepare(request)
 
   private fun foreignModeWorkflowBlock(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport.Blocked? {

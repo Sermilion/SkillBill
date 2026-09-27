@@ -1,3 +1,13 @@
+## [2026-09-27] SKILL-380 subtask 12 — skill-bill dispatcher for the full run and phases
+Areas: skills/skill-bill (new), orchestration/{skill-classes,contracts}, agent-addons/execution-budget, runtime-kotlin/runtime-domain/{install/model,agentaddon/model}, runtime-kotlin/runtime-infra/skills/{install,scaffold}, runtime-kotlin/runtime-cli (repoTest, test), README.md, AGENTS.md, runtime-kotlin/ARCHITECTURE.md
+- New `/skill-bill` entry skill. With no `phase:` it runs the full skeleton behind one confirmation gate, and a missing spec goes to `skill-bill phase plan`, not `bill-feature-spec`. `phase:<name>` routes to `skill-bill phase <name>` for plan/implement/review/validation/pr. `code-review:` and `mode:` tokens pass through unchanged. `phase:` with `operation:` is a dispatcher usage error.
+- `ListedSkillNames` (runtime-domain, `bill-` prefix plus the `skill-bill` dispatcher) is now the single owner of the "listed skill" rule. Install discovery, platform-from-path, README-row regexes and skill-reference regexes all use it. Add any new non-`bill-` listed skill there. reusable
+- `skill-bill` uses the `feature-launch-warning` class (`exact: skill-bill`), so it stages the same sidecars as `bill-feature`. `AgentAddonConsumer.SKILL_BILL` is added, and execution-budget consumers are `[bill-feature, skill-bill]`. Addon schema contract_version stays 1.0, and persisted `bill-feature` selections still verify.
+- `bill-feature` and every old listed skill are unchanged. The dispatcher sits beside them rather than replacing them. Uninstall is unchanged and removes the `skill-bill` link.
+- Limitation: `PhaseInvocationParser` still reads `operation:` as intake. Only the dispatcher skill refuses it; the phase CLI does not.
+Feature flag: N/A
+Acceptance criteria: 6/6 implemented (validate: ./gradlew check green)
+
 ## [2026-09-11] SKILL-233 — named standalone code-review targetsAreas: skills/bill-code-review
 - `/bill-code-review` accepted arguments now include `pr`, `last`, a commit SHA, and `uncommitted` (plus the narrower staged/unstaged packets).
 - The skill maps those tokens to the driver; it does not treat `pr` as a git revision.

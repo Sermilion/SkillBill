@@ -11,6 +11,7 @@ class FeatureTaskRuntimeBuildGateReceiptProjectionTest {
   fun `settled build gate coordinator output validates against build_receipt contract`() {
     val output =
       FeatureTaskRuntimeBuildGateCoordinator.runtimeOwnedBuildOutput(
+        phaseId = "build",
         repositoryCheckpoint = "checkpoint-fp",
         measurements =
           listOf(

@@ -5,6 +5,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeMeasuredFactKeys
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeCompactReferenceKind
@@ -99,8 +100,19 @@ internal object FeatureTaskRuntimeHandoffProjectionValueBuilder {
         )
       FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.PHASE_PROSE ->
         phaseProseProjectionValues(inputs, declaration, produced)
+      FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.HISTORY_RECEIPT ->
+        measuredHistoryFacts(produced)
       else -> FeatureTaskRuntimeHandoffProjectionFinalization.finalizationProjectionValues(inputs, declaration)
     }.filterValues { it != null }
+
+  private fun measuredHistoryFacts(produced: Map<String, Any?>): Map<String, Any?> {
+    val measured = JsonCodec.anyToStringAnyMap(produced[FeatureTaskRuntimeMeasuredFactKeys.MEASURED_FACTS]).orEmpty()
+    return listOf(
+      FeatureTaskRuntimeMeasuredFactKeys.CHANGED_PATHS,
+      FeatureTaskRuntimeMeasuredFactKeys.HISTORY_WRITTEN,
+      FeatureTaskRuntimeMeasuredFactKeys.DECISIONS_RECORDED,
+    ).associateWith { key -> measured[key] ?: FeatureTaskRuntimeMeasuredFactKeys.UNKNOWN }
+  }
 
   private fun checkpointFingerprint(inputs: FeatureTaskRuntimeHandoffProjectionInputs): Map<String, String>? =
     inputs.resolvedCheckpoint?.let {
@@ -213,9 +225,7 @@ internal object FeatureTaskRuntimeHandoffProjectionValueBuilder {
         "review_result",
         "validation_result",
         "build_receipt",
-        "history_result",
         "commit_push_result",
-        "pr_result",
       )
     val nested =
       resultContainers.firstNotNullOfOrNull { container ->

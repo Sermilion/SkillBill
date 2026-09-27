@@ -1,9 +1,7 @@
 package skillbill.engine.featuretask.phase.prompt.directives
 
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-
-fun mutatingPhaseIdempotencyDirective(phaseId: String): String {
-  if (!FeatureTaskRuntimePhaseWorkflowDefinition.isMutatingPhase(phaseId)) {
+fun mutatingPhaseIdempotencyDirective(mutating: Boolean): String {
+  if (!mutating) {
     return ""
   }
   return """
@@ -19,8 +17,8 @@ fun mutatingPhaseIdempotencyDirective(phaseId: String): String {
     """.trimIndent()
 }
 
-fun minimalismDisciplineDirective(phaseId: String): String {
-  if (!FeatureTaskRuntimePhaseWorkflowDefinition.isMutatingPhase(phaseId)) {
+fun minimalismDisciplineDirective(mutating: Boolean): String {
+  if (!mutating) {
     return ""
   }
   return """
@@ -64,21 +62,8 @@ fun minimalismDisciplineDirective(phaseId: String): String {
     """.trimIndent()
 }
 
-fun simplifyScopeBoundaryDirective(phaseId: String): String {
-  if (phaseId != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY) {
-    return ""
-  }
-  return """
-    ## Simplify scope boundary
-    The subtask_scope projection and repository checkpoint list the only owned paths and diff context
-    for this session. Work exclusively inside that boundary. Forbidden: repository-wide search for
-    complexity, edits outside listed paths, `./gradlew` build or check, test execution, bill-code-review,
-    review subagents, delegated review, or spawning other agents.
-    """.trimIndent()
-}
-
-fun testValueDisciplineDirective(phaseId: String): String {
-  if (phaseId !in TEST_VALUE_DISCIPLINE_PHASES) {
+fun testValueDisciplineDirective(applies: Boolean): String {
+  if (!applies) {
     return ""
   }
   return """
@@ -104,10 +89,3 @@ fun testValueDisciplineDirective(phaseId: String): String {
       apply to tests too.
     """.trimIndent()
 }
-
-private val TEST_VALUE_DISCIPLINE_PHASES: Set<String> =
-  setOf(
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
-  )
