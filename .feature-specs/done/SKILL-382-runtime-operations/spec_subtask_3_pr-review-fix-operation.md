@@ -41,11 +41,11 @@ dispatcher, including `select:` forwarding.
 2. Execution runs only on `confirm:<token>` with a selection, and touches only the selected threads.
 3. A token whose PR head or unresolved-thread set changed since analysis is refused.
 4. Unresolved/outdated thread flags come from GraphQL, not the flat comments list.
-5. `/skill-bill operation:pr-review-fix` routes to the CLI and forwards `select:`. Subtasks 1–2 operations still register, and SKILL-380 fixtures still match. `skills/bill-pr-review-fix` still works.
+5. `/skill-bill operation:pr-review-fix` routes to the CLI and forwards `select:`. Subtasks 1–2 operations still register, and SKILL-380 fixtures still match. `../../../skills/bill-pr-review-fix` still works.
 
 ## Non-goals
 
-- Deleting `skills/bill-pr-review-fix` (SKILL-383). `operation:verify`. Changing the
+- Deleting `../../../skills/bill-pr-review-fix` (SKILL-383). `operation:verify`. Changing the
   GitHub reply/learnings product.
 
 ## Dependency notes

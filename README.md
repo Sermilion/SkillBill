@@ -191,7 +191,7 @@ These are the user-facing entry points. Stack-specific review skills and the inl
 /skill-bill phase:review mode:delegated target:HEAD
 ```
 
-The phase names are `plan`, `implement`, `review`, `validation`, and `pr`. The full run forwards `code-review:inline|auto` as `--code-review-mode`; `phase:review` forwards `mode:` and `target:` unchanged. When preflight finds no spec, the full run calls `skill-bill phase plan`. `operation:` forms arrive with SKILL-382; until then `/skill-bill` refuses them.
+The phase names are `plan`, `implement`, `review`, `validation`, and `pr`. The full run forwards `code-review:inline|auto` as `--code-review-mode`; `phase:review` forwards `mode:` and `target:` unchanged. When preflight finds no spec, the full run calls `skill-bill phase plan`. `operation:update-check` and `operation:release bump:<patch|minor|major>` run `skill-bill operation <name>`. Release first prints the proposed version and changelog and exits `awaiting_confirmation`; confirming it with `confirm:<token>` creates and pushes the tag. `[<scope>] operation:unit-test-value-check` reviews unit tests without editing. `<intake> operation:feature-guard` and `<intake> operation:feature-guard-cleanup` print a plan and exit `awaiting_confirmation`. They edit only on `confirm:<token>`. `[<pr>] operation:pr-review-fix` prints a per-thread matrix for the PR's unresolved review threads and exits `awaiting_confirmation`; the dispatcher asks which threads to fix and re-runs it with `confirm:<token>` and `select:`. It pushes only with `push:on`.
 
 ## Platform packs
 

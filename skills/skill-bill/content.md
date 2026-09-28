@@ -1,13 +1,14 @@
 ---
 name: skill-bill
-description: "Dispatcher for the full governed feature run and single in-memory phases."
+description: "Dispatcher for the full governed feature run, single in-memory phases, and runtime operations."
 ---
 
 # Skill Bill Dispatcher
 
-`skill-bill` routes a full feature run, or one phase over the working tree, to the
-`skill-bill` CLI. The full run keeps the `bill-feature` ceremony and its single
-confirmation question. Phase forms run one command and relay its output.
+`skill-bill` routes a full feature run, one phase over the working tree, or one
+runtime operation to the `skill-bill` CLI. The full run keeps the `bill-feature`
+ceremony and its single confirmation question. Phase and operation forms run one
+command and relay its output.
 
 ## Update Check
 
@@ -37,9 +38,33 @@ intake. Forwarded `key:value` tokens follow the intake unchanged.
 | `/skill-bill [<intake>] phase:review` | `skill-bill phase review [<intake>] [mode:<value>] [target:<value>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<intake>] phase:validation` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<intake>] phase:pr` | `skill-bill phase pr [<intake>] --agent <currently-executing-agent>` | optional |
+| `/skill-bill operation:update-check` | `skill-bill operation update-check` | none |
+| `/skill-bill [<instructions>] operation:release bump:<patch\|minor\|major>` | `skill-bill operation release bump:<value> [<instructions>] --agent <currently-executing-agent>` | optional |
+| `/skill-bill [<scope>] operation:unit-test-value-check` | `skill-bill operation unit-test-value-check [scope:<value>] --agent <currently-executing-agent>` | optional |
+| `/skill-bill <intake> operation:feature-guard` | `skill-bill operation feature-guard <intake> --agent <currently-executing-agent>` | required |
+| `/skill-bill <intake> operation:feature-guard-cleanup` | `skill-bill operation feature-guard-cleanup <intake> --agent <currently-executing-agent>` | required |
+| `/skill-bill [<pr>] operation:pr-review-fix [scope:analyze-only] [push:on] [replies:draft]` | `skill-bill operation pr-review-fix [<pr>] [<tokens>] --agent <currently-executing-agent>` | optional |
+| `/skill-bill operation:verify spec:<path> target:<pr\|branch\|base..head> [mode:inline\|delegated]` | `skill-bill operation verify [spec:<value>] [target:<value>] [mode:inline\|delegated] --agent <currently-executing-agent>` | required |
 
 If `phase:plan` or `phase:implement` has no intake, stop and ask for it. For any
-other `phase:` name, stop and list the names in this table.
+other `phase:` name, stop and list the names in this table. If
+`operation:feature-guard` has no intake describing the change to guard, or
+`operation:feature-guard-cleanup` has no intake naming the flag, stop and ask for
+it. For `operation:unit-test-value-check`, forward a scope the caller gives (a test
+file, commit sha, or ref) verbatim as `scope:<value>`; without one, omit `scope:`
+and the runtime reviews the current staged and unstaged changes. For
+`operation:pr-review-fix`, forward a PR the caller gives first, before any
+token, as `#<number>` or its URL; without one, the runtime uses the current
+branch's PR.
+
+`operation:<name>` translates to `skill-bill operation <name>`, forwarding
+`bump:`, `confirm:`, `select:`, `mode:`, `scope:`, `push:`, `replies:`, `spec:`,
+and `target:` tokens verbatim and any other text as operator instructions. The
+runtime rejects an unknown operation name, a missing bump, a missing guard
+intake, a `push:` or `replies:` token outside `operation:pr-review-fix`, or a
+`spec:`, `target:`, or `mode:` token outside `operation:verify`; relay its usage
+error. For `operation:verify`, forward `mode:` verbatim; without it, the runtime
+reviews inline.
 
 ## Token Forwarding
 
@@ -58,11 +83,10 @@ Stop without running preflight or any CLI command when:
 
 - the caller passes `parallel-review:<agent>`: name the removed dual-agent
   parallel review capability.
-- the caller passes `operation:<name>` without `phase:`: say that operations
-  arrive with SKILL-382.
 - the caller passes `phase:` together with `operation:`: report a usage error.
 - a token reaches a form that does not accept it (`code-review:` or
-  `agent-addon:` with any `phase:`, `mode:` or `target:` outside `phase:review`):
+  `agent-addon:` with any `phase:`, `mode:` or `target:` outside `phase:review`
+  and `operation:verify`):
   report a usage error naming the token and the form that accepts it. Never drop
   the token or fold it into the intake.
 
@@ -132,3 +156,39 @@ For a `phase:` form, skip Intake, Preflight, Gate, Rehydrate, and Launch. Run th
 translated command from Forms and Routing once and relay its output verbatim,
 adding nothing. Do not add checklists, rubrics, or steps from other skills. Never
 ask the user to run the command manually.
+
+## Operation Forms
+
+For an `operation:` form, skip Intake, Preflight, Gate, Rehydrate, and Launch. Run
+the translated command once and relay its output verbatim.
+
+When the command exits with `awaiting_confirmation` (its last line reads
+`status: awaiting_confirmation confirm:<token>`), show the proposal and ask the
+operator once whether to proceed. On yes, run the same operation with
+`confirm:<token>`. If the operator asks for changes, run the same operation again
+with those changes as instructions and relay the new proposal and its new token.
+Never pass `confirm:` without an operator answer. This covers `operation:release`,
+`operation:feature-guard`, and `operation:feature-guard-cleanup`; a cleanup
+proposal's stabilization checklist is part of the proposal the operator answers,
+so never answer it yourself.
+
+For `operation:pr-review-fix` the proposal is a per-thread recommendation matrix
+with threads labelled `T1`, `T2`, and so on. Show it and ask the operator once
+which threads to fix and with which option. Map the answer to exactly one of
+`select:all-recommended`, `select:fix-all-unresolved`, or
+`select:<thread>=<option>,...` (for example `select:T1=1,T3=2`), and re-run the
+operation with the same `<pr>`, `push:`, and `replies:` tokens plus
+`confirm:<token>` and that `select:`. If the answer is ambiguous, ask again; do
+not infer a scope. Never pass `confirm:` or `select:` without an operator answer.
+The runtime owns the thread options and refuses a selection it does not
+recognise; relay that usage error and ask again.
+
+For `operation:verify` the proposal is the extracted acceptance criteria. Show
+them and ask the operator once to confirm or adjust them. On confirm, run the same
+operation with `confirm:<token>`. On an adjustment, run the same operation again
+with the same `spec:`, `target:`, and `mode:` tokens and the adjustment as
+instructions, then relay the new criteria and their new token; the new run
+supersedes the earlier one. The verify report is final: never offer a fix or a
+PR comment. When the command is blocked with a reason starting
+`rehydrate-needed:`, run Rehydrate for that spec path, then run the same
+operation once more.

@@ -10,6 +10,7 @@ import skillbill.infrastructure.sqlite.core.migration.addReviewRunLaneAttributio
 import skillbill.infrastructure.sqlite.core.migration.area.FeatureTaskPhaseSettlementsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.FeedbackEventMigration
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
+import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBackfillMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
@@ -694,5 +695,10 @@ internal val databaseMigrations: List<DatabaseMigration> =
       version = 46,
       name = "allow-goal-planning-phase-output-0-7",
       operation = ::rebuildGoalPlanningPlansForPhaseOutputVersion7,
+    ),
+    DatabaseMigration(
+      version = 47,
+      name = "add-operation-proposals",
+      operation = OperationProposalsMigration::apply,
     ),
   )

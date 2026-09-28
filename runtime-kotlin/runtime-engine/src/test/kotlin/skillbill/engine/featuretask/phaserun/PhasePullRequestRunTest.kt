@@ -79,6 +79,7 @@ class PhasePullRequestRunTest {
     git(root, "init", "--initial-branch=$MAIN", repoRoot.toString())
     git(repoRoot, "config", "user.email", "phase-pr@example.com")
     git(repoRoot, "config", "user.name", "Phase PR")
+    git(repoRoot, "config", "commit.gpgsign", "false")
     git(repoRoot, "remote", "add", "origin", origin.toString())
     commitFile("README.md", "readme\n")
     git(repoRoot, "push", "-u", "origin", MAIN)

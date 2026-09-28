@@ -10,7 +10,7 @@ Migrates `bill-feature-verify` (320 lines) to `operation:verify`.
 The operation keeps the **feature-verify** durable workflow family
 (`feature_verify_workflow_*` tools and tables). It must not write
 `feature_task_workflows` rows. Step ids, artifact names, and telemetry events stay as
-in today's `skills/bill-feature-verify/content.md`.
+in today's `../../../skills/bill-feature-verify/content.md`.
 
 **Step ownership.** Today one agent session runs all nine steps. After this subtask
 every agent step runs through `PhaseRunner`, and review is the `review`
@@ -39,7 +39,7 @@ and keep older workflows readable.
 **Report-only review.** The `code_review` step never edits. It reuses the inline
 review's target and diff composition and F-XXX register decoder with a findings-only
 directive, or, with `mode:delegated`, the multi-agent review step, which is already
-read-only. It does not run the `review` definition. Record in `agent/decisions.md` that
+read-only. It does not run the `review` definition. Record in `../../../agent/decisions.md` that
 verify reports and the operator decides what to fix.
 
 **Confirmation.** Today's "Confirm or adjust the criteria before I review the PR" uses
@@ -61,12 +61,12 @@ dispatcher, including `mode:` forwarding.
 2. The first invocation parks after `extract_criteria` with `awaiting_confirmation` and the workflow id as token, and `feature_verify_started` has not fired. `confirm:<workflow_id>` runs the remaining steps.
 3. The nine step ids and eight artifact names are unchanged, each step is owned as in the table, and unknown verify contract versions still loud-fail.
 4. `code_review` is a read-only review step (single-agent by default, multi-agent with `mode:delegated`) that changes no file and runs no verify_findings or implement_fix, `unit_test_value_check` runs the subtask 2 operation step, neither receives another step's receipt, and no verify step launches an agent outside `PhaseRunner`.
-5. A verify run leaves the worktree unchanged (git status and HEAD identical before and after), and `agent/decisions.md` records that verify is report-only.
-6. `/skill-bill operation:verify` routes to the CLI. Subtasks 1–3 operations still register, SKILL-380 fixtures still match, and `skills/bill-feature-verify` still works.
+5. A verify run leaves the worktree unchanged (git status and HEAD identical before and after), and `../../../agent/decisions.md` records that verify is report-only.
+6. `/skill-bill operation:verify` routes to the CLI. Subtasks 1–3 operations still register, SKILL-380 fixtures still match, and `../../../skills/bill-feature-verify` still works.
 
 ## Non-goals
 
-- Rewriting verify into a feature-task skeleton. Deleting `skills/bill-feature-verify`
+- Rewriting verify into a feature-task skeleton. Deleting `../../../skills/bill-feature-verify`
   (SKILL-383). Renaming the `bill-feature-verify` telemetry label or `workflow_name`
   default.
 

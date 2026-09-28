@@ -10,8 +10,8 @@ SKILL-380 (phase slot strategies) is merged to main. This bundle builds on its p
 the one `PhaseRunner`, the phase input and output shape, skeleton definitions run
 through `PhaseRunEntry` (including `review` and `validation`), and the `/skill-bill`
 dispatcher.
-Read [SKILL-380's spec](../done/SKILL-380-phase-slot-strategies/spec.md) and its
-[investigation](../done/SKILL-380-phase-slot-strategies/investigation.md) first.
+Read [SKILL-380's spec](../SKILL-380-phase-slot-strategies/spec.md) and its
+[investigation](../SKILL-380-phase-slot-strategies/investigation.md) first.
 
 ## Intended outcome
 
@@ -63,8 +63,8 @@ proposal state is its feature-verify workflow, not an `operation_proposals` row.
 4. No operation writes a `feature_task_workflows` or `feature_task_runtime_sessions` row. Operation telemetry uses `invocation_id`.
 5. An operation that mutates, posts, pushes, or tags on consent returns `awaiting_confirmation` with a token on its first invocation and changes nothing. `confirm:<token>` executes the stored proposal and refuses a token that is unknown, consumed, superseded, for another operation or repo, or whose anchors moved.
 6. `/skill-bill operation:<name>` reaches every operation, and the dispatcher relays `awaiting_confirmation` with one question and never sends `confirm:` without an operator answer.
-7. Every old listed skill this bundle replaces still works. No `skills/` tree is deleted.
-8. `runtime-kotlin/ARCHITECTURE.md` and `AGENTS.md` describe operations, the confirmation gate, and how to add an operation. `runtime-kotlin/agent/decisions.md` records the gate.
+7. Every old listed skill this bundle replaces still works. No `../../../skills` tree is deleted.
+8. `../../../runtime-kotlin/ARCHITECTURE.md` and `AGENTS.md` describe operations, the confirmation gate, and how to add an operation. `runtime-kotlin/agent/decisions.md` records the gate.
 
 ## Executable scope
 

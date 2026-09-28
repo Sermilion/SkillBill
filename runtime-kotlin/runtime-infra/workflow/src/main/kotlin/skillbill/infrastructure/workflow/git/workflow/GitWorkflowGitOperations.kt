@@ -16,6 +16,7 @@ import skillbill.ports.workflow.gitops.SuppressionEvidenceGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitBranchOperations
 import skillbill.ports.workflow.gitops.WorkflowGitCommitHistoryOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.WorkflowGitReleaseTagOperations
 import skillbill.ports.workflow.gitops.WorkflowGitRemoteOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -36,7 +37,8 @@ class GitWorkflowGitOperations :
   ReadinessTreeIdentityGitOperations by GitReadinessTreeIdentityOperations,
   RepositoryOwnedPathsGitOperations by GitRepositoryOwnedPathsOperations,
   RuntimePhaseFileManifestGitOperations by GitRuntimePhaseFileManifestOperations,
-  ScopedStagingGitOperations by GitScopedStagingOperations
+  ScopedStagingGitOperations by GitScopedStagingOperations,
+  WorkflowGitReleaseTagOperations by GitStandardWorkflowGitOperations
 
 internal object GitRepositoryOwnedPathsOperations : RepositoryOwnedPathsGitOperations {
   override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult {

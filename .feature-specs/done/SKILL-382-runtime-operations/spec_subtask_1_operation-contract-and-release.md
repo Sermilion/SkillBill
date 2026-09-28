@@ -49,7 +49,7 @@ tools.
   token, operation id, repo root, anchors (JSON), proposal value (the step's prose),
   created_at, superseded_at, consumed_at. Wire keys come from one
   `OperationProposalPayloadKeys` object, placed by the rule in force.
-- Record the gate in `agent/decisions.md`: why two invocations, why a stored proposal
+- Record the gate in `../../../agent/decisions.md`: why two invocations, why a stored proposal
   (agent-curated content cannot be recomputed identically), and that verify uses its
   own workflow family instead (subtask 4).
 
@@ -63,13 +63,13 @@ repo/runtime version sources. Post: emit telemetry. No agent step, no confirmati
 - Pre-flight: clean worktree, branch up to date with remote. Either failure stops in
   pre with a typed error.
 - Proposal: an agent step, run through `PhaseRunner`, curates the changelog from commits
-  since the last release, following today's `skills/bill-release/content.md` rules, and
+  since the last release, following today's `../../../skills/bill-release/content.md` rules, and
   computes the version. Anchors add the last release tag and the remote branch head.
 - Confirm: the runtime creates the annotated tag with the stored changelog and pushes
   it, in-process. No agent step. One confirmation covers tag and push, as today.
 
 **Dispatcher.** Replace SKILL-380's "operations arrive with SKILL-382" refusal in
-`skills/skill-bill/content.md` with `operation:<name>` parsing that translates into the
+`../../../skills/skill-bill/content.md` with `operation:<name>` parsing that translates into the
 `skill-bill operation <name> …` subcommand. A request carrying both `phase:` and
 `operation:` is refused by the dispatcher. Add `operation:update-check`
 and `operation:release` to the `/skill-bill` routing table, and the relay rule: when a call exits with
@@ -89,11 +89,11 @@ No listed-skill deletion.
 5. A token whose HEAD moved, a superseded token, and a token for another operation are each refused with a typed error, and none creates a tag.
 6. The `operation_proposals` migration is append-only and runs over a pre-change database.
 7. `/skill-bill operation:update-check` and `/skill-bill operation:release` route to the CLI, and the dispatcher content states the relay rule.
-8. SKILL-380 full-run and phase-run fixtures still match. `skills/bill-update-check` and `skills/bill-release` still work.
+8. SKILL-380 full-run and phase-run fixtures still match. `../../../skills/bill-update-check` and `skills/bill-release` still work.
 
 ## Non-goals
 
-- Other operations (subtasks 2–4). Deleting any `skills/` tree (SKILL-383).
+- Other operations (subtasks 2–4). Deleting any `../../../skills` tree (SKILL-383).
 - Changing CI that reacts to tags. Proposal expiry by time.
 
 ## Dependency notes

@@ -971,6 +971,72 @@ skillbill.workflow.verify
 - `skill-bill feature-task` and `feature-task-stats` are the CLI surfaces for
   this workflow family.
 
+## Runtime operations
+
+An operation (`skillbill.engine.operation`) is a runtime command outside the
+feature-task workflow family. Only `verify` opens a workflow row, in its own
+verify family. Every invocation id has the `opr-` prefix.
+
+- `Operation` runs `pre`, `run`, and `post`. Agent steps launch only through
+  `OperationStepRunner` over the generic `PhaseRunner`. The launch-port rule in
+  `FeatureTaskLaunchPortScan` covers `operation/`, so no operation reaches
+  `GoalRunnerSubtaskLauncher` directly.
+- `OperationRegistry` is the explicit list in `RuntimeOperationProvides`
+  (runtime-core). `OperationExecutor` is the inbound API. runtime-cli reaches
+  it through `RuntimeComponent.operationExecutor` for `skill-bill operation`.
+- `OperationConfirmationGate` owns the two-invocation confirmation. Proposals
+  persist through `OperationProposalRepository` (runtime-ports) in the
+  `operation_proposals` table. `SqliteOperationProposalStore` owns the
+  `anchors_json` wire keys (`OperationProposalPayloadKeys`).
+- Operations: `update-check` shares the text formatter with
+  `skill-bill update-check`. `release` tags through
+  `WorkflowGitReleaseTagOperations`.
+- Checklist operations carry their rules in runtime-owned prompt objects
+  (`*PromptRules`), copied from the skills they replace.
+  `ChecklistOperationRulesParityTest` keeps the copies equal to those skills
+  until SKILL-383 deletes them.
+  - `unit-test-value-check` is read-only and needs no confirmation. It reviews
+    the unit tests in the current staged, unstaged, and untracked changes, or
+    in `scope:<path|sha|ref>`. With no unit test in scope it says so and
+    launches no agent.
+  - `feature-guard` and `feature-guard-cleanup` confirm in two invocations. A
+    read-only step proposes the plan. Guard proposals anchor on HEAD and the
+    current branch only. On `confirm:<token>` an editing step gets the stored
+    proposal verbatim as its prior value.
+  - After the cleanup edits, `feature-guard-cleanup` runs the in-memory
+    `validation` definition through `PhaseRunEntry`. A blocked validation
+    leaves the edits in place and reports the verdict.
+- `OperationStepRunner.runReadOnly` compares the repository fingerprint before
+  and after each read-only step. A step that changes it fails, and the gate
+  stores no proposal. Only a confirmed `execute` calls `runEditing`.
+- `ConfirmableOperation.admit` checks a confirm invocation against the stored
+  proposal before the gate consumes the token, so a bad selection leaves the
+  token valid.
+- `pr-review-fix` (`operation.prreviewfix`) reads review threads through the
+  `PullRequestReviewThreadOperations` port (runtime-ports
+  `review.pullrequest`; adapter `GhPullRequestReviewThreads` over
+  `gh api graphql`, paged, never `gh pr view --comments`). The port has no
+  resolve member. Analysis is one read-only step over a runtime-rendered
+  thread digest. It proposes a matrix whose actionable (unresolved, not
+  outdated) threads carry runtime ordinals `T1..Tn`, anchored on the PR number,
+  PR head sha, and the actionable thread-id set. `scope:analyze-only` stores
+  nothing. `confirm:<token>` with `select:` runs one editing step per selected
+  thread, then `validation`, then posts (or, with `replies:draft`, prints) the
+  replies, and commits and pushes only with `push:on`. A failed step or gate
+  stops before any reply.
+- `verify` (`operation.verify`) is the one operation with a workflow row: a
+  `SelfConfirmingOperation` on the `bill-feature-verify` family. It is
+  report-only and never edits, fixes, or posts. The first invocation opens the
+  row, extracts the criteria read-only, and parks the row at
+  `extract_criteria`. The `confirm:` token is the workflow id, so no
+  `operation_proposals` row is written, and a newer run in the same repo root
+  abandons older parked rows. Confirm runs `gather_diff` through `finish` on
+  that row. Each evaluator's prior values are only its declared launch
+  projection. The rubrics are copied into `VerifyPromptSections` under
+  `ChecklistOperationRulesParityTest`. `mode:delegated` runs the multi-agent
+  review as the `code_review` step's `PhaseStepSession`. Confirming an
+  interrupted row resumes it at `continueWorkflow`'s step.
+
 ## Phase slots and strategies
 
 The feature-task runtime runs a fixed skeleton of slots. A slot is a stage of a

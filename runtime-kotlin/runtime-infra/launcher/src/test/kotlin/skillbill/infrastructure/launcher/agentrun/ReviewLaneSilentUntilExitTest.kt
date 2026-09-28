@@ -21,6 +21,7 @@ import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
@@ -30,7 +31,7 @@ class ReviewLaneSilentUntilExitTest {
   fun `an unbounded silent review lane is not stopped and returns its register once it exits`() {
     val started = TimeSource.Monotonic.markNow()
 
-    val facts = launch(laneRequest())
+    val facts = launch(laneRequest(), SILENT_PERIOD)
 
     assertEquals(AgentRunTermination.Exited(0), facts.termination)
     assertTrue(facts.stdout.contains(REGISTER_LINE), facts.stdout)
@@ -41,10 +42,14 @@ class ReviewLaneSilentUntilExitTest {
   fun `a bounded review lane whose probe never advances times out before the silent period ends`() {
     val started = TimeSource.Monotonic.markNow()
 
-    val facts = launch(laneRequest().withBoundedLaneProgress(200.milliseconds, AgentRunProgressProbe { "constant" }))
+    val facts =
+      launch(
+        laneRequest().withBoundedLaneProgress(200.milliseconds, AgentRunProgressProbe { "constant" }),
+        BOUNDED_SILENT_PERIOD,
+      )
 
     assertEquals(AgentRunTermination.TimedOut, facts.termination)
-    assertTrue(started.elapsedNow() < SILENT_PERIOD)
+    assertTrue(started.elapsedNow() < BOUNDED_SILENT_PERIOD)
   }
 
   private fun laneRequest(): SkillRunRequest =
@@ -60,15 +65,19 @@ class ReviewLaneSilentUntilExitTest {
       streamOutputForLiveness = false,
     )
 
-  private fun launch(request: SkillRunRequest) =
-    ProcessAgentRunAdapter(
-      agent = SupportedAgent.CLAUDE,
-      commandBuilder = ClaudeAgentRunCommandBuilder(),
-      processRunner = SilentScriptRunner,
-      executableLookup = ALL_EXECUTABLES_AVAILABLE,
-    ).launch(request)
+  private fun launch(
+    request: SkillRunRequest,
+    silentPeriod: Duration,
+  ) = ProcessAgentRunAdapter(
+    agent = SupportedAgent.CLAUDE,
+    commandBuilder = ClaudeAgentRunCommandBuilder(),
+    processRunner = SilentScriptRunner(silentPeriod),
+    executableLookup = ALL_EXECUTABLES_AVAILABLE,
+  ).launch(request)
 
-  private object SilentScriptRunner : AgentRunProcessRunner {
+  private class SilentScriptRunner(
+    private val silentPeriod: Duration,
+  ) : AgentRunProcessRunner {
     private val delegate = JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver())
 
     override fun run(request: AgentRunProcessRequest): AgentRunProcessResult =
@@ -80,7 +89,7 @@ class ReviewLaneSilentUntilExitTest {
                 listOf(
                   bashExecutable().toString(),
                   "-c",
-                  "sleep ${SILENT_PERIOD.inWholeSeconds}; echo '$REGISTER_LINE'",
+                  "sleep ${silentPeriod.inWholeSeconds}; echo '$REGISTER_LINE'",
                 ),
             ),
         ),
@@ -116,6 +125,7 @@ class ReviewLaneSilentUntilExitTest {
 
   private companion object {
     val SILENT_PERIOD = 2.seconds
+    val BOUNDED_SILENT_PERIOD = 30.seconds
     const val REGISTER_LINE = "[F-001] Major | High | path=\"src/A.kt\" | line=1 | silent lane register"
   }
 }

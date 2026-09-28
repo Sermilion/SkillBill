@@ -27,6 +27,10 @@ exclude = [
   # be done. They are not shipped to end users; agnix portability rules
   # do not apply.
   ".feature-specs/**",
+  # SKILL-382: golden renderings of operation terminal output and prompts.
+  # They quote runtime text such as `select:<thread>=<option>`, which agnix
+  # would read as unclosed XML tags; they are not agent config.
+  "runtime-kotlin/runtime-engine/src/test/resources/operation/**",
 ]
 
 # SKILL-21: skill-bill deliberately extends the Agent Skills frontmatter

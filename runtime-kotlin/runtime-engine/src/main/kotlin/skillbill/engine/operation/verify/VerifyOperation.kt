@@ -1,0 +1,419 @@
+package skillbill.engine.operation.verify
+
+import me.tatarka.inject.annotations.Inject
+import skillbill.application.telemetry.model.FeatureVerifyStartedRequest
+import skillbill.application.workflow.model.WorkflowContinueResult
+import skillbill.application.workflow.model.WorkflowFamilyKind
+import skillbill.application.workflow.model.WorkflowGetResult
+import skillbill.application.workflow.model.WorkflowOpenResult
+import skillbill.application.workflow.model.WorkflowServiceOpenArgs
+import skillbill.application.workflow.service.WorkflowService
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.operation.core.OperationContext
+import skillbill.engine.operation.core.OperationOutcome
+import skillbill.engine.operation.core.OperationRunResult
+import skillbill.engine.operation.core.OperationStepResult
+import skillbill.engine.operation.core.SelfConfirmingOperation
+import skillbill.engine.operation.core.requireGitValue
+import skillbill.error.operation.ClosedVerifyWorkflowError
+import skillbill.error.operation.ForeignVerifyWorkflowError
+import skillbill.error.operation.InvalidOperationArgumentError
+import skillbill.error.operation.MissingOperationIntakeError
+import skillbill.error.operation.OperationAnchorUnreadableError
+import skillbill.error.operation.PullRequestNotFoundError
+import skillbill.error.operation.UnknownVerifyWorkflowError
+import skillbill.error.operation.UnresolvableVerifyTargetError
+import skillbill.error.operation.VerifySpecRehydrateNeededError
+import skillbill.error.operation.VerifyTargetNotCheckedOutError
+import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
+import skillbill.ports.review.pullrequest.model.ReviewPullRequestResolution
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
+import skillbill.workflow.engine.model.WorkflowSnapshotView
+import skillbill.workflow.model.WorkflowContinueStatus
+import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.WorkflowStepStatus
+import java.time.Clock
+
+@Inject
+class VerifyOperation(
+  private val workflows: WorkflowService,
+  private val gitOperations: WorkflowGitOperations,
+  private val pullRequests: PullRequestReviewThreadOperations,
+  private val telemetry: VerifyTelemetry,
+  delegatedReviewer: VerifyDelegatedReviewer,
+  private val diagnostics: RuntimeDiagnostics,
+  private val clock: Clock,
+) : SelfConfirmingOperation {
+  override val id: String = "verify"
+
+  private val store = VerifyWorkflowStore(workflows)
+  private val budget = VerifyBudget(diagnostics)
+  private val sequence =
+    VerifyStepSequence(store, gitOperations, telemetry, VerifyCodeReviewStep(delegatedReviewer), budget, clock)
+
+  override fun pre(context: OperationContext) {
+    val arguments = context.arguments
+    arguments.mode?.let { mode ->
+      VerifyReviewMode.fromWire(mode) ?: throw InvalidOperationArgumentError("mode", mode, "inline|delegated")
+    }
+    if (!context.confirming && (arguments.spec.isNullOrBlank() || arguments.target.isNullOrBlank())) {
+      throw MissingOperationIntakeError(id, INTAKE)
+    }
+  }
+
+  override fun run(context: OperationContext): OperationRunResult {
+    val baseline = worktreeBaseline(context)
+    val outcome = context.arguments.confirm?.let { token -> confirm(context, token.trim()) } ?: propose(context)
+    val changed = worktreeBaseline(context) != baseline
+    return OperationRunResult.Finished(
+      if (changed) OperationOutcome.Failed(WORKTREE_CHANGED) else outcome,
+    )
+  }
+
+  private fun propose(context: OperationContext): OperationOutcome {
+    val specPath = requireNotNull(context.arguments.spec).trim()
+    requireSpec(context, specPath)
+    val target = resolveTarget(context, requireNotNull(context.arguments.target).trim())
+    val mode = VerifyReviewMode.fromWire(context.arguments.mode) ?: VerifyReviewMode.INLINE
+    val openArgs = WorkflowServiceOpenArgs(WorkflowFamilyKind.VERIFY, currentStepId = VerifyWorkflow.EXTRACT_CRITERIA)
+    val workflowId =
+      when (val opened = workflows.open(openArgs)) {
+        is WorkflowOpenResult.Ok -> opened.workflowId
+        is WorkflowOpenResult.Error -> return OperationOutcome.Failed("Verify workflow open failed: ${opened.error}")
+      }
+    val inputContext =
+      mapOf(
+        VerifyWorkflow.REPO_ROOT to repoRootOf(context),
+        VerifyWorkflow.SPEC_PATH to specPath,
+        VerifyWorkflow.TARGET to target.label,
+        VerifyWorkflow.BASE_REVISION to target.baseRevision,
+        VerifyWorkflow.HEAD_REVISION to target.headRevision,
+        VerifyWorkflow.COMPARISON_SCOPE to target.comparisonScope,
+        VerifyWorkflow.REVIEW_MODE to mode.wireValue,
+      )
+    val started =
+      store.write(
+        workflowId,
+        WorkflowStatus.RUNNING,
+        VerifyWorkflow.EXTRACT_CRITERIA,
+        listOf(
+          stepEntry(VerifyWorkflow.COLLECT_INPUTS, WorkflowStepStatus.COMPLETED, 1),
+          stepEntry(VerifyWorkflow.EXTRACT_CRITERIA, WorkflowStepStatus.RUNNING, 1),
+        ),
+        mapOf(VerifyWorkflow.INPUT_CONTEXT to inputContext),
+      )
+    if (started is VerifyWrite.Rejected) return OperationOutcome.Failed(started.error)
+    return extractAndPark(context, workflowId, specPath, target)
+  }
+
+  private fun extractAndPark(
+    context: OperationContext,
+    workflowId: String,
+    specPath: String,
+    target: VerifyTarget,
+  ): OperationOutcome {
+    val directive = VerifyPromptSections.extractCriteriaDirective(specPath, target.label)
+    val extracted =
+      when (val step = context.steps.runReadOnly(context, VerifyPromptSections.EXTRACT_CRITERIA_STEP, directive)) {
+        is OperationStepResult.Failed -> return failExtraction(workflowId, step.reason)
+        is OperationStepResult.Settled -> step.value
+      }
+    val criteria = VerifyCriteria.parse(extracted).bounded(budget, workflowId)
+    val parked =
+      store.write(
+        workflowId,
+        WorkflowStatus.PENDING,
+        VerifyWorkflow.EXTRACT_CRITERIA,
+        listOf(stepEntry(VerifyWorkflow.EXTRACT_CRITERIA, WorkflowStepStatus.PENDING, 1)),
+        mapOf(VerifyWorkflow.CRITERIA_SUMMARY to criteria.toArtifact()),
+      )
+    if (parked is VerifyWrite.Rejected) return failExtraction(workflowId, parked.error)
+    supersedeParked(context, workflowId)
+    return OperationOutcome.AwaitingConfirmation(
+      workflowId,
+      "Verify criteria for $specPath against ${target.label}:\n\n${criteria.summary()}\n\n" +
+        "Confirm or adjust the criteria before the review runs.",
+    )
+  }
+
+  private fun failExtraction(
+    workflowId: String,
+    reason: String,
+  ): OperationOutcome {
+    store.write(
+      workflowId,
+      WorkflowStatus.FAILED,
+      VerifyWorkflow.EXTRACT_CRITERIA,
+      listOf(stepEntry(VerifyWorkflow.EXTRACT_CRITERIA, WorkflowStepStatus.FAILED, 1)),
+    )
+    return OperationOutcome.Failed("Verify criteria extraction failed: $reason\nVerify workflow: $workflowId")
+  }
+
+  private fun confirm(
+    context: OperationContext,
+    workflowId: String,
+  ): OperationOutcome {
+    val snapshot = confirmableSnapshot(context, workflowId)
+    val inputContext = snapshot.artifacts[VerifyWorkflow.INPUT_CONTEXT]
+    val target =
+      context.arguments.target?.takeIf(String::isNotBlank)?.let { raw -> resolveTarget(context, raw.trim()) }
+        ?: storedTarget(inputContext)
+        ?: throw MissingOperationIntakeError(id, "target:<pr-number|branch|base..head> for this workflow")
+    val storedMode = VerifyWorkflow.string(inputContext, VerifyWorkflow.REVIEW_MODE)
+    val mode = VerifyReviewMode.fromWire(context.arguments.mode ?: storedMode) ?: VerifyReviewMode.INLINE
+    val criteriaArtifact = snapshot.artifacts[VerifyWorkflow.CRITERIA_SUMMARY]
+    val criteria = VerifyCriteria.fromArtifact(criteriaArtifact)
+    val specPath = VerifyWorkflow.string(inputContext, VerifyWorkflow.SPEC_PATH).orEmpty()
+    val attempts = snapshot.steps.associate { step -> step.stepId to step.attemptCount }
+    val run = VerifyRun(context, workflowId, snapshot.sessionId, specPath, target, mode, criteria, clock.instant())
+    if (snapshot.currentStepId in PARKED_STEPS) {
+      return if (criteriaArtifact == null) {
+        OperationOutcome.Failed(
+          "Verify workflow '$workflowId' has no extracted criteria to confirm; rerun operation verify.",
+        )
+      } else {
+        confirmParked(run, attempts)
+      }
+    }
+    refreshStaleCheckpoint(run, snapshot)?.let { failure -> return failure }
+    val start = resumeStep(workflowId) { failure -> return failure }
+    return sequence.run(run, start, attempts)
+  }
+
+  private fun confirmableSnapshot(
+    context: OperationContext,
+    workflowId: String,
+  ): WorkflowSnapshotView {
+    val snapshot = verifyWorkflow(workflowId)
+    val repoRoot = repoRootOf(context)
+    val storedRoot = VerifyWorkflow.string(snapshot.artifacts[VerifyWorkflow.INPUT_CONTEXT], VerifyWorkflow.REPO_ROOT)
+    if (storedRoot != null && storedRoot != repoRoot) throw ForeignVerifyWorkflowError(workflowId, repoRoot)
+    if (snapshot.workflowStatus in CLOSED_STATUSES) {
+      val notes = snapshot.artifacts[VerifyWorkflow.SESSION_NOTES]
+      val supersededBy = VerifyWorkflow.string(notes, VerifyWorkflow.SUPERSEDED_BY)
+      throw ClosedVerifyWorkflowError(workflowId, snapshot.workflowStatus.wireValue, supersededBy)
+    }
+    return snapshot
+  }
+
+  private fun verifyWorkflow(workflowId: String): WorkflowSnapshotView =
+    when (val found = workflows.get(WorkflowFamilyKind.VERIFY, workflowId)) {
+      is WorkflowGetResult.Ok -> found.snapshot
+      is WorkflowGetResult.Error -> throw UnknownVerifyWorkflowError(workflowId)
+    }
+
+  private fun confirmParked(
+    run: VerifyRun,
+    attempts: Map<String, Int>,
+  ): OperationOutcome {
+    val sessionId =
+      telemetry.started(
+        FeatureVerifyStartedRequest(
+          acceptanceCriteriaCount = run.criteria.acceptanceCriteriaCount,
+          rolloutRelevant = run.criteria.rolloutRelevant,
+          specSummary = run.specPath,
+          orchestrated = false,
+        ),
+      )
+    return sequence.run(
+      run.copy(sessionId = sessionId),
+      VerifyWorkflow.GATHER_DIFF,
+      attempts,
+      settledBefore =
+        PARKED_STEPS.map { step -> stepEntry(step, WorkflowStepStatus.COMPLETED, attempts[step] ?: 1) },
+    )
+  }
+
+  private fun refreshStaleCheckpoint(
+    run: VerifyRun,
+    snapshot: WorkflowSnapshotView,
+  ): OperationOutcome? {
+    val stored = snapshot.artifacts[VerifyWorkflow.DIFF_PROJECTION] ?: return null
+    val current = gitOperations.repositoryFingerprint(run.context.repoRoot) as? WorkflowGitOperationResult.Ok
+    if (current != null && VerifyWorkflow.string(stored, VerifyWorkflow.CHECKPOINT) == current.value.orEmpty()) {
+      return null
+    }
+    val projection =
+      when (val refreshed = sequence.diffProjection(run.context, run.target, run.workflowId)) {
+        is VerifyDiffProjection.Ready -> refreshed.artifact
+        is VerifyDiffProjection.Unavailable -> return OperationOutcome.Failed(refreshed.reason)
+      }
+    val written =
+      store.write(
+        run.workflowId,
+        snapshot.workflowStatus,
+        snapshot.currentStepId,
+        emptyList(),
+        mapOf(VerifyWorkflow.DIFF_PROJECTION to projection),
+      )
+    return (written as? VerifyWrite.Rejected)?.let { rejected -> OperationOutcome.Failed(rejected.error) }
+  }
+
+  private inline fun resumeStep(
+    workflowId: String,
+    onFailure: (OperationOutcome) -> Nothing,
+  ): String {
+    val view =
+      when (val continued = workflows.continueWorkflow(WorkflowFamilyKind.VERIFY, workflowId)) {
+        is WorkflowContinueResult.Standard -> continued.view
+        is WorkflowContinueResult.UnknownWorkflow -> throw UnknownVerifyWorkflowError(workflowId)
+        else -> onFailure(OperationOutcome.Failed("Verify workflow '$workflowId' cannot be continued."))
+      }
+    val step = view.continueStepId
+    return when (view.continueStatus) {
+      WorkflowContinueStatus.DONE ->
+        throw ClosedVerifyWorkflowError(workflowId, WorkflowStatus.COMPLETED.wireValue, supersededBy = null)
+      WorkflowContinueStatus.BLOCKED ->
+        onFailure(
+          OperationOutcome.Failed(
+            "Verify workflow '$workflowId' cannot resume at $step; missing " +
+              view.resume.missingArtifacts.joinToString(", ") + ".",
+          ),
+        )
+      else ->
+        step.takeIf { it in VerifyWorkflow.CONFIRMED_STEPS }
+          ?: onFailure(OperationOutcome.Failed("Verify workflow '$workflowId' cannot resume at '$step'."))
+    }
+  }
+
+  private fun supersedeParked(
+    context: OperationContext,
+    workflowId: String,
+  ) {
+    val repoRoot = repoRootOf(context)
+    val rows =
+      skipUnreadable(workflowId) { workflows.list(WorkflowFamilyKind.VERIFY, SUPERSEDE_SCAN_LIMIT).workflows }
+        ?: return
+    rows
+      .filter { row ->
+        row.workflowId != workflowId && row.currentStepId in PARKED_STEPS && row.workflowStatus !in CLOSED_STATUSES
+      }
+      .forEach { row ->
+        skipUnreadable(row.workflowId) {
+          val snapshot = (workflows.get(WorkflowFamilyKind.VERIFY, row.workflowId) as? WorkflowGetResult.Ok)?.snapshot
+          val inputContext = snapshot?.artifacts?.get(VerifyWorkflow.INPUT_CONTEXT)
+          val rowRoot = VerifyWorkflow.string(inputContext, VerifyWorkflow.REPO_ROOT)
+          if (rowRoot == repoRoot) {
+            store.write(
+              row.workflowId,
+              WorkflowStatus.ABANDONED,
+              row.currentStepId,
+              emptyList(),
+              mapOf(VerifyWorkflow.SESSION_NOTES to mapOf(VerifyWorkflow.SUPERSEDED_BY to workflowId)),
+            )
+          }
+        }
+      }
+  }
+
+  private inline fun <T> skipUnreadable(
+    workflowId: String,
+    read: () -> T,
+  ): T? =
+    try {
+      read()
+    } catch (error: InvalidWorkflowStateSchemaError) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "seam=verify_supersede value_expected=readable_verify_rows value_used=skipped workflow_id=$workflowId " +
+          "error=${error.message.orEmpty()}",
+        error,
+      )
+      null
+    }
+
+  private fun requireSpec(
+    context: OperationContext,
+    specPath: String,
+  ) {
+    val spec = specPath.trimEnd('/')
+    val parent = spec.substringBeforeLast('/', missingDelimiterValue = "")
+    val candidates =
+      listOf(spec, "$spec/spec.md", "$spec/$MANIFEST", if (parent.isEmpty()) MANIFEST else "$parent/$MANIFEST")
+    when (val present = gitOperations.pathContentIdentities(context.repoRoot, candidates)) {
+      is WorkflowPathContentIdentitiesResult.Resolved ->
+        if (present.identities.isEmpty()) throw VerifySpecRehydrateNeededError(specPath)
+      is WorkflowPathContentIdentitiesResult.Failed -> throw OperationAnchorUnreadableError(SPEC_ANCHOR, present.error)
+    }
+  }
+
+  private fun resolveTarget(
+    context: OperationContext,
+    raw: String,
+  ): VerifyTarget {
+    if (RANGE in raw) {
+      val (base, head) = raw.split(RANGE, limit = 2)
+      return VerifyTarget(raw, commit(context, raw, base), commit(context, raw, head))
+    }
+    val (head, baseRef) =
+      if (raw.all(Char::isDigit)) pullRequestHead(context, raw) else commit(context, raw, raw) to DEFAULT_BASE_REF
+    val current = gitOperations.runtimePhaseHeadCommit(context.repoRoot).requireGitValue(HEAD_ANCHOR)
+    if (head != current) throw VerifyTargetNotCheckedOutError(raw, head, current)
+    return VerifyTarget(raw, mergeBase(context, raw, baseRef), head)
+  }
+
+  private fun pullRequestHead(
+    context: OperationContext,
+    number: String,
+  ): Pair<String, String> =
+    when (val resolved = pullRequests.resolvePullRequest(context.repoRoot, number)) {
+      is ReviewPullRequestResolution.Found ->
+        resolved.pullRequest.headOid to "origin/${resolved.pullRequest.baseRefName}"
+      ReviewPullRequestResolution.Absent -> throw PullRequestNotFoundError(number)
+      is ReviewPullRequestResolution.Unavailable -> throw UnresolvableVerifyTargetError(number, resolved.reason)
+    }
+
+  private fun mergeBase(
+    context: OperationContext,
+    raw: String,
+    baseRef: String,
+  ): String =
+    (gitOperations.mergeBaseWithHead(context.repoRoot, baseRef) as? WorkflowGitOperationResult.Ok)
+      ?.value?.trim()?.takeIf(String::isNotEmpty)
+      ?: throw UnresolvableVerifyTargetError(raw, "no merge base with $baseRef.")
+
+  private fun commit(
+    context: OperationContext,
+    raw: String,
+    revision: String,
+  ): String =
+    (gitOperations.resolveCommit(context.repoRoot, revision) as? WorkflowGitOperationResult.Ok)
+      ?.value?.trim()?.takeIf(String::isNotEmpty)
+      ?: throw UnresolvableVerifyTargetError(raw, "'$revision' is not a commit.")
+
+  private fun storedTarget(inputContext: Any?): VerifyTarget? {
+    val base = VerifyWorkflow.string(inputContext, VerifyWorkflow.BASE_REVISION) ?: return null
+    val head = VerifyWorkflow.string(inputContext, VerifyWorkflow.HEAD_REVISION) ?: return null
+    return VerifyTarget(VerifyWorkflow.string(inputContext, VerifyWorkflow.TARGET) ?: "$base..$head", base, head)
+  }
+
+  private fun worktreeBaseline(context: OperationContext): Pair<String, String> {
+    val status =
+      when (val result = gitOperations.worktreeStatus(context.repoRoot)) {
+        is WorkflowGitOperationResult.Ok -> result.value.orEmpty()
+        else -> throw OperationAnchorUnreadableError(WORKTREE_ANCHOR, result.error)
+      }
+    return status to gitOperations.runtimePhaseHeadCommit(context.repoRoot).requireGitValue(HEAD_ANCHOR)
+  }
+
+  private fun repoRootOf(context: OperationContext): String = context.repoRoot.toAbsolutePath().normalize().toString()
+
+  private companion object {
+    const val INTAKE = "spec:<path> and target:<pr-number|branch|base..head>"
+    const val MANIFEST = "decomposition-manifest.yaml"
+    const val RANGE = ".."
+    const val DEFAULT_BASE_REF = "origin/HEAD"
+    const val SPEC_ANCHOR = "spec"
+    const val HEAD_ANCHOR = "HEAD"
+    const val WORKTREE_ANCHOR = "worktree status"
+    const val SUPERSEDE_SCAN_LIMIT = 100
+    const val WORKTREE_CHANGED = "operation verify is read-only, but the worktree or HEAD changed during the run."
+
+    val PARKED_STEPS = setOf(VerifyWorkflow.COLLECT_INPUTS, VerifyWorkflow.EXTRACT_CRITERIA)
+    val CLOSED_STATUSES = setOf(WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.ABANDONED)
+  }
+}

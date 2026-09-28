@@ -23,7 +23,7 @@ feature-verify workflow.
 Each has pre/run/post, and every agent step runs through `PhaseRunner` (subtask 1
 contract). Authored rules move into runtime-owned prompt fragments the operation loads.
 Guard proposals anchor on HEAD and the current branch. Add the three routes to the
-`/skill-bill` dispatcher. Do not delete `skills/` trees (SKILL-383).
+`/skill-bill` dispatcher. Do not delete `../../../skills` trees (SKILL-383).
 
 ## Acceptance Criteria
 
@@ -34,7 +34,7 @@ Guard proposals anchor on HEAD and the current branch. Add the three routes to t
 
 ## Non-goals
 
-- Deleting the `skills/bill-unit-test-value-check` and guard directories (SKILL-383).
+- Deleting the `../../../skills/bill-unit-test-value-check` and guard directories (SKILL-383).
 - Remote operations (subtasks 3 and 4).
 
 ## Dependency notes
