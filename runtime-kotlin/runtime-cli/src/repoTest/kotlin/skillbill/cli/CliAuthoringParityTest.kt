@@ -24,7 +24,7 @@ class CliAuthoringParityTest {
           "--repo-root",
           repoRoot.toString(),
           "--skill-name",
-          "bill-feature",
+          "skill-bill",
           "--format",
           "json",
         ),
@@ -34,7 +34,7 @@ class CliAuthoringParityTest {
       runJson(
         listOf(
           "show",
-          "bill-feature",
+          "skill-bill",
           "--repo-root",
           repoRoot.toString(),
           "--content",
@@ -48,7 +48,7 @@ class CliAuthoringParityTest {
       runJson(
         listOf(
           "explain",
-          "bill-feature",
+          "skill-bill",
           "--repo-root",
           repoRoot.toString(),
           "--format",
@@ -58,8 +58,8 @@ class CliAuthoringParityTest {
       )
 
     assertEquals(1, listed["skill_count"])
-    assertEquals("bill-feature", shown["skill_name"])
-    assertEquals("bill-feature", (explained["skill"] as Map<*, *>)["skill_name"])
+    assertEquals("skill-bill", shown["skill_name"])
+    assertEquals("skill-bill", (explained["skill"] as Map<*, *>)["skill_name"])
   }
 
   @Test
@@ -74,7 +74,7 @@ class CliAuthoringParityTest {
           "--repo-root",
           repoRoot.toString(),
           "--skill-name",
-          "bill-feature",
+          "skill-bill",
           "--format",
           "json",
         ),
@@ -187,17 +187,17 @@ class CliAuthoringParityTest {
         "skill-bill new-addon --platform <platform> --name <name>",
       listOf("create-and-fill", "--interactive", "--format", "json") to
         "skill-bill create-and-fill --payload <file> --body-file <file>",
-      listOf("edit", "bill-feature", "--repo-root", outerRepoRoot().toString(), "--format", "json") to
-        "skill-bill fill bill-feature --body-file <file>",
+      listOf("edit", "skill-bill", "--repo-root", outerRepoRoot().toString(), "--format", "json") to
+        "skill-bill fill skill-bill --body-file <file>",
       listOf(
         "edit",
-        "bill-feature",
+        "skill-bill",
         "--repo-root",
         outerRepoRoot().toString(),
         "--editor",
         "--format",
         "json",
-      ) to "skill-bill fill bill-feature --body-file <file>",
+      ) to "skill-bill fill skill-bill --body-file <file>",
     ).forEach { (arguments, replacement) ->
       val result = CliRuntime.run(arguments, context)
       val payload = decodeJsonObject(result.stdout)

@@ -1,7 +1,7 @@
 ---
 name: bill-typescript-code-review-security
 description: Use when reviewing TypeScript browser/server trust boundaries, authorization, injection sinks, secrets, build tooling, lockfiles, and dependency supply chain.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Security Review Specialist

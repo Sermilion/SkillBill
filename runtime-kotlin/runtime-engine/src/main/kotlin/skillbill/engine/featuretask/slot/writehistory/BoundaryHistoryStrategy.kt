@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.writehistory
 
+import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
@@ -54,7 +55,7 @@ class BoundaryHistoryStrategy(override val runner: PhaseRunner) : PhaseStrategy(
   ): PhaseStepPromptSections =
     PhaseStepPromptSections(
       taskDirective = directiveFor(stepId),
-      stepContext = BoundaryMemoryPromptRules.section,
+      stepContext = STEP_CONTEXT,
       valueContent = VALUE_CONTENT,
     )
 
@@ -82,6 +83,18 @@ class BoundaryHistoryStrategy(override val runner: PhaseRunner) : PhaseStrategy(
 
   companion object {
     const val ID = "boundary-history"
+    internal const val HISTORY_RULES_RESOURCE =
+      "/skillbill/engine/featuretask/slot/writehistory/boundary-history-directive.md"
+    internal const val DECISIONS_RULES_RESOURCE =
+      "/skillbill/engine/featuretask/slot/writehistory/boundary-decisions-directive.md"
+
+    private val STEP_CONTEXT: String by lazy {
+      listOf(
+        directiveResource(HISTORY_RULES_RESOURCE).trimEnd(),
+        directiveResource(DECISIONS_RULES_RESOURCE).trimEnd(),
+        BoundaryMemoryPromptRules.section,
+      ).joinToString("\n\n")
+    }
 
     private const val DIRECTIVE: String =
       "Apply the boundary history and decision rules below to the implemented runtime change; " +

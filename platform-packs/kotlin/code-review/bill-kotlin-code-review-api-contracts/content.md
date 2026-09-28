@@ -1,7 +1,7 @@
 ---
 name: bill-kotlin-code-review-api-contracts
 description: Review Kotlin serialization, null/default, enum, time, validation, error, pagination, idempotency, and compatibility contracts.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # API Contracts Review Specialist

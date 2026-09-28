@@ -27,6 +27,7 @@ internal fun discoverPlatformManifests(
   request: InstallPlanRequest,
   enforceContractVersion: Boolean = true,
   catalogLoader: PlatformPackCatalogLoader? = null,
+  enforceGovernedReviewStructure: Boolean = true,
 ): List<PlatformManifest> {
   val loader =
     catalogLoader ?: return discoverPlatformPackManifests(
@@ -40,6 +41,7 @@ internal fun discoverPlatformManifests(
       environment = request.environment,
       enforceContractVersion = enforceContractVersion,
       catalogLoader = loader,
+      enforceGovernedReviewStructure = enforceGovernedReviewStructure,
     ),
   )
 }
@@ -98,6 +100,7 @@ internal fun platformSkills(
   manifest: PlatformManifest,
   enforceContractVersion: Boolean = true,
   packRootsBySlug: Map<String, Path> = emptyMap(),
+  enforceGovernedReviewStructure: Boolean = true,
 ): List<InstallPlanSkill> {
   val contentFiles = listOfNotNull(manifest.declaredFiles.baseline) + manifest.declaredFiles.areas.values
   val skillDirs = contentFiles.map { contentFile -> platformSkillDir(manifest, contentFile.toPath()) }
@@ -105,8 +108,15 @@ internal fun platformSkills(
   require(duplicateSkillDir == null) {
     "Platform pack '${manifest.slug}' produces duplicate skill name '${duplicateSkillDir?.fileName}'."
   }
-  validatePlatformPack(manifest, SHELL_CONTRACT_VERSION, enforceContractVersion)
-  ReviewSkillStructureValidator.validate(manifest.packRoot.toPath(), packRootsBySlug)
+  validatePlatformPack(
+    manifest,
+    SHELL_CONTRACT_VERSION,
+    enforceContractVersion,
+    enforceGovernedReviewStructure,
+  )
+  if (enforceGovernedReviewStructure) {
+    ReviewSkillStructureValidator.validate(manifest.packRoot.toPath(), packRootsBySlug)
+  }
   return skillDirs
     .sortedBy { skillDir -> skillDir.fileName.toString() }
     .map { skillDir ->

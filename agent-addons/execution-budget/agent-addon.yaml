@@ -4,5 +4,4 @@ description: Keeps feature work within the stopping boundary explicitly set by t
 agent_ids:
   - codex
 consumers:
-  - bill-feature
   - skill-bill

@@ -187,7 +187,7 @@ class CliScaffoldRuntimeTest {
       CliRuntime.run(
         listOf("new", "--dry-run", "--format", "json"),
         CliRuntimeContext(
-          stdinText = listOf("4", "review-helper", "Review helper", "codex", "bill-feature").joinToString("\n"),
+          stdinText = listOf("4", "review-helper", "Review helper", "codex", "skill-bill").joinToString("\n"),
           userHome = tempDir,
           liveStdout = { liveStdout.append(it) },
         ),

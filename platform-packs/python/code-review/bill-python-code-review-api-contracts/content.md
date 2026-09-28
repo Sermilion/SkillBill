@@ -1,7 +1,7 @@
 ---
 name: bill-python-code-review-api-contracts
 description: Review Python API contracts, validation, status codes, schemas, OpenAPI compatibility, and serialization behavior.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Python API Contracts Review

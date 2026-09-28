@@ -1,7 +1,7 @@
 ---
 name: bill-kmp-code-review-persistence
 description: Use when reviewing Room, SQLDelight, or DataStore writes, schema migrations, and offline-first sync cursor and idempotency risks on Android and KMP.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # KMP Persistence Review Specialist

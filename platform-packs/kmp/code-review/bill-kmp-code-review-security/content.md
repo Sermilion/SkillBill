@@ -1,7 +1,7 @@
 ---
 name: bill-kmp-code-review-security
 description: Use when reviewing exported components and deeplinks, PendingIntent mutability, WebView bridges, cleartext traffic and pinning, Keystore and encrypted storage, backup and provider export, and PII in logs and clipboard on Android and KMP.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # KMP Security Review Specialist

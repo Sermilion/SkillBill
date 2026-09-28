@@ -12,12 +12,12 @@ class RepoValidationPlatformPackTest {
   fun `repo validation rejects generated wrapper boilerplate headings in content_md`() {
     val repoRoot = Files.createTempDirectory("skillbill-content-wrapper-boilerplate")
     createRepoValidationSkillFixture(repoRoot)
-    val contentFile = repoRoot.resolve("skills/bill-code-review/content.md")
+    val contentFile = repoRoot.resolve("skills/skill-bill/content.md")
     Files.writeString(
       contentFile,
       """
       ---
-      name: bill-code-review
+      name: skill-bill
       description: Review code.
       ---
 
@@ -100,8 +100,8 @@ class RepoValidationPlatformPackTest {
   fun `repo validation rejects checked-in generated cursor native agent artifact`() {
     val repoRoot = Files.createTempDirectory("skillbill-native-agent-cursor-checked-in")
     createRepoValidationSkillFixture(repoRoot)
-    writeNativeAgentFixture(repoRoot.resolve("skills/bill-code-review"), "bill-code-review-worker")
-    val generatedCursor = repoRoot.resolve("skills/bill-code-review/cursor-agents/bill-code-review-worker.md")
+    writeNativeAgentFixture(repoRoot.resolve("skills/skill-bill"), "bill-code-review-worker")
+    val generatedCursor = repoRoot.resolve("skills/skill-bill/cursor-agents/bill-code-review-worker.md")
     Files.createDirectories(generatedCursor.parent)
     Files.writeString(generatedCursor, "checked-in cursor file\n")
 
@@ -121,8 +121,8 @@ class RepoValidationPlatformPackTest {
   fun `repo validation rejects checked-in generated junie native agent artifact`() {
     val repoRoot = Files.createTempDirectory("skillbill-native-agent-junie-checked-in")
     createRepoValidationSkillFixture(repoRoot)
-    writeNativeAgentFixture(repoRoot.resolve("skills/bill-code-review"), "bill-code-review-worker")
-    val generatedJunie = repoRoot.resolve("skills/bill-code-review/junie-agents/bill-code-review-worker.md")
+    writeNativeAgentFixture(repoRoot.resolve("skills/skill-bill"), "bill-code-review-worker")
+    val generatedJunie = repoRoot.resolve("skills/skill-bill/junie-agents/bill-code-review-worker.md")
     Files.createDirectories(generatedJunie.parent)
     Files.writeString(generatedJunie, "checked-in junie file\n")
 
@@ -142,12 +142,12 @@ class RepoValidationPlatformPackTest {
   fun `repo validation rejects bare orchestration path token in skill content_md`() {
     val repoRoot = Files.createTempDirectory("skillbill-orchestration-path-in-skill")
     createRepoValidationSkillFixture(repoRoot)
-    val contentFile = repoRoot.resolve("skills/bill-code-review/content.md")
+    val contentFile = repoRoot.resolve("skills/skill-bill/content.md")
     Files.writeString(
       contentFile,
       """
       ---
-      name: bill-code-review
+      name: skill-bill
       description: Review code.
       ---
 
@@ -164,7 +164,7 @@ class RepoValidationPlatformPackTest {
     assertFalse(report.passed)
     assertTrue(
       report.issues.any {
-        it.contains("skills/bill-code-review/content.md") &&
+        it.contains("skills/skill-bill/content.md") &&
           it.contains("orchestration/contracts/some-schema.yaml")
       },
       report.issues.joinToString("\n"),
@@ -242,8 +242,7 @@ class RepoValidationPlatformPackTest {
   fun `repo validation accepts a valid internal-for declaration`() {
     val repoRoot = Files.createTempDirectory("skillbill-valid-internal")
     createRepoValidationSkillFixture(repoRoot)
-    seedInternalSkill(repoRoot, "bill-feature", null)
-    seedInternalSkill(repoRoot, "bill-feature-helper", "bill-feature")
+    seedInternalSkill(repoRoot, "bill-feature-helper", "skill-bill")
 
     val report = RepoValidationRuntime.validateRepo(repoRoot, testNativeAgentCompositionContext(repoRoot))
 

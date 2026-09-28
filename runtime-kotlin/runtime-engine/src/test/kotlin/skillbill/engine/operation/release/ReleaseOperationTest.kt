@@ -89,6 +89,7 @@ class ReleaseOperationTest {
     assertContains(proposal.proposalSummary, CHANGELOG)
     assertContains(runner.directives.single(), "feat: add runtime operations")
     assertContains(runner.directives.single(), "## What's New in v1.3.0")
+    assertContains(runner.directives.single(), "### 2. Find the previous release tag")
     assertEquals("", run(repo, "git", "tag", "--list", "v1.3.0"))
 
     runner.changelog = "## What's New in v1.3.0\n\n### Other\n- A recomputed changelog.\n"

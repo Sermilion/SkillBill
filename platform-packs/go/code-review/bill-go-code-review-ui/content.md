@@ -1,7 +1,7 @@
 ---
 name: bill-go-code-review-ui
 description: Use when reviewing Go-owned HTML template, component, form, fragment, CLI, TUI, progress, layout, and rendering correctness.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Go UI Review Specialist

@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.plan
 
+import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -54,8 +55,8 @@ class AgentPlanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
       stepContext =
         when {
           inputs.suppressDecomposition -> GOAL_CONTINUATION_CONSTRAINT
-          inputs.specBundleRequired -> SPEC_BUNDLE_REQUIREMENT
-          else -> ""
+          inputs.specBundleRequired -> "$featureSpecDirective\n\n$SPEC_BUNDLE_REQUIREMENT"
+          else -> featureSpecDirective
         },
       valueContent = VALUE_CONTENT,
     )
@@ -92,6 +93,11 @@ class AgentPlanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
   companion object {
     const val ID = "agent-plan"
 
+    private const val FEATURE_SPEC_DIRECTIVE =
+      "/skillbill/engine/featuretask/slot/plan/feature-spec-directive.md"
+
+    private val featureSpecDirective: String by lazy { directiveResource(FEATURE_SPEC_DIRECTIVE).trimEnd() }
+
     private const val DIRECTIVE: String =
       "Produce an ordered implementation plan that satisfies every acceptance criterion, using the upstream " +
         "preplan value as planning context (structured prose: interpret the stuffed digest JSON). Do not modify " +
@@ -122,8 +128,8 @@ class AgentPlanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
       No later phase consumes this plan: the runtime persists it as a governed spec bundle (parent spec,
       subtask specs, and decomposition manifest). Plan in mode "decompose" and emit, beside value,
       produced_outputs.decomposition_package with: "mode": "decompose", "reason", "feature_name",
-      "parent_spec_overview", "validation_strategy", "base_branch", "feature_branch", and "subtasks" (at
-      least two). Each subtask carries an integer "id", "name", "scope", "acceptance_criteria" (list),
+      "parent_spec_overview", "validation_strategy", "base_branch", "feature_branch", and "subtasks" (one
+      or more). Each subtask carries an integer "id", "name", "scope", "acceptance_criteria" (list),
       "non_goals" (list), "dependency_notes", "validation_strategy", "next_path", and "depends_on" (list of
       earlier subtask ids). Do not write the spec files yourself; the runtime writes them. A plan without a
       decomposition package blocks.

@@ -131,6 +131,11 @@ internal fun validateAgentAddonAgentId(id: String) {
 }
 
 internal fun validateAgentAddonConsumerId(id: String) {
+  if (id == AgentAddonConsumer.LEGACY_BILL_FEATURE_ID) {
+    throw InvalidScaffoldPayloadError(
+      "Agent add-on consumer '$id' is retired; declare '${AgentAddonConsumer.SKILL_BILL.id}' instead.",
+    )
+  }
   try {
     AgentAddonConsumer.fromId(id)
   } catch (error: IllegalArgumentException) {

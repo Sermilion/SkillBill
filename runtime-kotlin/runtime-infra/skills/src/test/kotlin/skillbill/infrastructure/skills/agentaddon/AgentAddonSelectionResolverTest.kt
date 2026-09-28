@@ -3,6 +3,7 @@ package skillbill.infrastructure.skills.agentaddon
 import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.error.shellcontent.AgentAddonSelectionDriftError
 import skillbill.error.shellcontent.InvalidAgentAddonSelectionError
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -18,10 +19,10 @@ class AgentAddonSelectionResolverTest {
     writeAddon(repo, "first", "First", "codex", "one\n")
 
     val selection =
-      AgentAddonSelectionResolver().resolveInitial(
+      AgentAddonSelectionResolver(NoopRuntimeDiagnostics).resolveInitial(
         repo,
         listOf("second", "first"),
-        AgentAddonConsumer.BILL_FEATURE,
+        AgentAddonConsumer.SKILL_BILL,
         listOf("codex"),
       )
 
@@ -34,16 +35,16 @@ class AgentAddonSelectionResolverTest {
   fun `duplicates and incompatible receiving agents fail loudly`() {
     val repo = Files.createTempDirectory("addon-selection-invalid")
     writeAddon(repo, "helper", "Helper", "codex", "content")
-    val resolver = AgentAddonSelectionResolver()
+    val resolver = AgentAddonSelectionResolver(NoopRuntimeDiagnostics)
 
     assertFailsWith<InvalidAgentAddonSelectionError> {
-      resolver.resolveInitial(repo, listOf("helper", "helper"), AgentAddonConsumer.BILL_FEATURE, listOf("codex"))
+      resolver.resolveInitial(repo, listOf("helper", "helper"), AgentAddonConsumer.SKILL_BILL, listOf("codex"))
     }
     assertFailsWith<InvalidAgentAddonSelectionError> {
-      resolver.resolveInitial(repo, listOf("helper"), AgentAddonConsumer.BILL_FEATURE, listOf("claude"))
+      resolver.resolveInitial(repo, listOf("helper"), AgentAddonConsumer.SKILL_BILL, listOf("claude"))
     }
     assertFailsWith<InvalidAgentAddonSelectionError> {
-      resolver.resolveInitial(repo, listOf("helper"), AgentAddonConsumer.BILL_FEATURE, emptyList())
+      resolver.resolveInitial(repo, listOf("helper"), AgentAddonConsumer.SKILL_BILL, emptyList())
     }
   }
 
@@ -54,10 +55,10 @@ class AgentAddonSelectionResolverTest {
     writeAddon(external, "external-helper", "External", "codex", "external content")
 
     val selection =
-      AgentAddonSelectionResolver().resolveInitial(
+      AgentAddonSelectionResolver(NoopRuntimeDiagnostics).resolveInitial(
         repo,
         listOf("external-helper"),
-        AgentAddonConsumer.BILL_FEATURE,
+        AgentAddonConsumer.SKILL_BILL,
         listOf("codex"),
         listOf(external.resolve("agent-addons")),
       )
@@ -70,37 +71,46 @@ class AgentAddonSelectionResolverTest {
   fun `resume loads recorded identity directly and rejects digest drift`() {
     val repo = Files.createTempDirectory("addon-selection-resume")
     val content = writeAddon(repo, "helper", "Helper", "codex", "original")
-    val resolver = AgentAddonSelectionResolver()
+    val resolver = AgentAddonSelectionResolver(NoopRuntimeDiagnostics)
     val initial =
       resolver.resolveInitial(
         repo,
         listOf("helper"),
-        AgentAddonConsumer.BILL_FEATURE,
+        AgentAddonConsumer.SKILL_BILL,
         listOf("codex"),
       )
     Files.writeString(content, "changed")
 
     assertFailsWith<AgentAddonSelectionDriftError> {
-      resolver.verifyPersisted(initial.persisted, AgentAddonConsumer.BILL_FEATURE, listOf("codex"))
+      resolver.verifyPersisted(initial.persisted, AgentAddonConsumer.SKILL_BILL, listOf("codex"))
     }
   }
 
   @Test
-  fun `selection persisted for bill-feature still verifies after the manifest adds the skill-bill consumer`() {
-    val repo = Files.createTempDirectory("addon-selection-added-consumer")
+  fun `legacy bill-feature manifest verifies a persisted selection as skill-bill with a migration record`() {
+    val repo = Files.createTempDirectory("addon-selection-legacy-consumer")
     writeAddon(repo, "helper", "Helper", "codex", "original")
-    val resolver = AgentAddonSelectionResolver()
-    val initial =
-      resolver.resolveInitial(repo, listOf("helper"), AgentAddonConsumer.BILL_FEATURE, listOf("codex"))
     val manifest = repo.resolve("agent-addons/helper/agent-addon.yaml")
     Files.writeString(
       manifest,
-      Files.readString(manifest).replace("consumers: [bill-feature]", "consumers: [bill-feature, skill-bill]"),
+      Files.readString(manifest).replace("consumers: [skill-bill]", "consumers: [bill-feature]"),
     )
+    val diagnostics = RecordingAgentAddonDiagnostics()
+    val resolver = AgentAddonSelectionResolver(diagnostics)
+    val initial =
+      resolver.resolveInitial(repo, listOf("helper"), AgentAddonConsumer.SKILL_BILL, listOf("codex"))
+    diagnostics.warnings.clear()
 
-    val verified = resolver.verifyPersisted(initial.persisted, AgentAddonConsumer.BILL_FEATURE, listOf("codex"))
+    val verified = resolver.verifyPersisted(initial.persisted, AgentAddonConsumer.SKILL_BILL, listOf("codex"))
 
     assertEquals(initial, verified)
+    assertEquals(
+      listOf(
+        "skillbill agent-addon: record_kind=migration; seam=$AGENT_ADDON_PERSISTED_CONSUMER_SEAM; " +
+          "value_used=skill-bill; value_expected=skill-bill; cause=legacy_consumer_bill-feature",
+      ),
+      diagnostics.migrationRecords,
+    )
   }
 
   private fun writeAddon(
@@ -118,7 +128,7 @@ class AgentAddonSelectionResolverTest {
       slug: $slug
       description: $description
       agent_ids: [$agent]
-      consumers: [bill-feature]
+      consumers: [skill-bill]
       """.trimIndent() + "\n",
     )
     return Files.write(root.resolve("content.md"), content.toByteArray())

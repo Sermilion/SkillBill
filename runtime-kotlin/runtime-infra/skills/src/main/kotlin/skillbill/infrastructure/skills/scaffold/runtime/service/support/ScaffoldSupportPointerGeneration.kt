@@ -14,7 +14,7 @@ internal fun featureAddonPointerSpecsFor(
   skillName: String,
   selectedPlatformManifests: List<PlatformManifest>,
 ): List<PointerSpec> {
-  if (skillName != "bill-feature") {
+  if (skillName != "skill-bill") {
     return emptyList()
   }
   return selectedPlatformManifests.flatMap(::featureAddonPointersForManifest).distinctBy { spec -> spec.name }

@@ -3,7 +3,7 @@ package skillbill.application.review.parallel.verification
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.agentoutput.agentFailureExcerpt
 import skillbill.application.review.model.ReviewSpecialistLaunchRequest
-import skillbill.application.review.parallel.runner.INLINE_FINDING_PARSE_SEAM
+import skillbill.application.review.parallel.runner.LANE_FINDING_PARSE_SEAM
 import skillbill.application.review.parallel.runner.NO_OP_RESUME_TERMINAL_STATUS
 import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_FIRST_SOURCE_LINE
 import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_REGISTER_ABSENCE_EXCERPT_MAX_LENGTH
@@ -35,7 +35,7 @@ class ParallelCodeReviewRunnerFailureAdmission(
     try {
       val parsed = parseLaneRegisterSeam(stdout, launch.assignment.lane, registerParse)
       ParallelCodeReviewSoftRegisterAdmission(
-        findings = attributeInlineFindings(parsed, launch.selected),
+        findings = attributeLaneFindings(parsed, launch.selected),
         droppedCandidateDiagnostic = rejectedCandidateDiagnostic(parsed),
         rejectedCandidateCount = parsed.rejections.size,
         citationDiagnostics = parsed.citationDiagnostics,
@@ -46,7 +46,7 @@ class ParallelCodeReviewRunnerFailureAdmission(
       ParallelCodeReviewSoftRegisterAdmission(emptyList(), null, 0, emptyList())
     }
 
-  private fun attributeInlineFindings(
+  private fun attributeLaneFindings(
     parsed: ParallelReviewParseResult,
     selected: List<ReviewSpecialistLaunchRequest>,
   ): List<ParallelReviewRawFinding> {
@@ -61,7 +61,7 @@ class ParallelCodeReviewRunnerFailureAdmission(
           findingPath != null && launch.assignment.assignedPaths.any { path -> path == findingPath }
         }.distinctBy { it.assignment.laneDecision.specialistSkillName }
       val owner =
-        resolveInlineFindingOwner(finding.specialistSkillName, pathOwners, selected)
+        resolveLaneFindingOwner(finding.specialistSkillName, pathOwners, selected)
           ?: fallbackLane
       val path =
         when {
@@ -82,7 +82,7 @@ class ParallelCodeReviewRunnerFailureAdmission(
     }
   }
 
-  private fun resolveInlineFindingOwner(
+  private fun resolveLaneFindingOwner(
     declaredSpecialist: String?,
     pathOwners: List<ReviewSpecialistLaunchRequest>,
     selected: List<ReviewSpecialistLaunchRequest>,
@@ -142,9 +142,9 @@ internal fun parseLaneRegisterSeam(
   try {
     parse(stdout)
   } catch (thrown: IllegalArgumentException) {
-    throw ReviewRegisterParseSeamException(seam = INLINE_FINDING_PARSE_SEAM, lane = lane, cause = thrown)
+    throw ReviewRegisterParseSeamException(seam = LANE_FINDING_PARSE_SEAM, lane = lane, cause = thrown)
   } catch (thrown: IllegalStateException) {
-    throw ReviewRegisterParseSeamException(seam = INLINE_FINDING_PARSE_SEAM, lane = lane, cause = thrown)
+    throw ReviewRegisterParseSeamException(seam = LANE_FINDING_PARSE_SEAM, lane = lane, cause = thrown)
   }
 
 internal fun parallelCodeReviewNoOpResumeOutcome(agentId: String) =

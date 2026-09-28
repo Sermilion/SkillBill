@@ -1,7 +1,7 @@
 ---
 name: bill-typescript-code-review
 description: Use when reviewing TypeScript libraries, applications, services, Node or browser runtimes, APIs, persistence, tests, and TSX UI surfaces.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Adaptive TypeScript PR Review

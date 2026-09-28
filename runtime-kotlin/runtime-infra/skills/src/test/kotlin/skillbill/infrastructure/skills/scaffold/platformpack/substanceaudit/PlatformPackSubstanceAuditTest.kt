@@ -94,7 +94,7 @@ class PlatformPackSubstanceAuditTest {
       |---
       |name: bill-alpha-code-review-architecture
       |description: Thin placeholder fixture.
-      |internal-for: bill-code-review
+      |internal-for: skill-bill
       |---
       |## Project-Specific Rules
       |### Review Rules

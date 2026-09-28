@@ -1,7 +1,7 @@
 ---
 name: bill-rust-code-review-performance
 description: Use when reviewing Rust allocation, cloning, locking, atomics, async scheduling, serialization, I/O, and hot-path regressions.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Performance Review Specialist

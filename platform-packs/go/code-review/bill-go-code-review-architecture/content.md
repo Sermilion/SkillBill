@@ -1,7 +1,7 @@
 ---
 name: bill-go-code-review-architecture
 description: Use when reviewing Go package and module boundaries, dependency direction, interface ownership, composition roots, component lifecycles, and goroutine scope ownership.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Go Architecture Review Specialist

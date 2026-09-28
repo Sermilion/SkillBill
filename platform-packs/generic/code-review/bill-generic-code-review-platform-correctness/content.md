@@ -1,7 +1,7 @@
 ---
 name: bill-generic-code-review-platform-correctness
 description: Technology-neutral correctness review for runtime semantics, lifecycle invariants, errors, and concurrency.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Generic Platform Correctness Review

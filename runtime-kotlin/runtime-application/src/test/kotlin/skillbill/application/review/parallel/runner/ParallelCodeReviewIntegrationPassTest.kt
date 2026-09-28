@@ -159,23 +159,6 @@ class ParallelCodeReviewIntegrationPassTest {
     assertNotNull(result.coverage?.integrationNotApplicableReason)
   }
 
-  @Test fun `an inline review reports commit-focused sequencing as not applicable`() {
-    val recorder = ReviewRecorder()
-
-    val result =
-      reviewHarness(delegatedConfig(sixCommitPaths), recorder)
-        .run(delegatedRequest(mode = CodeReviewExecutionMode.INLINE))
-
-    val integration = assertNotNull(result.integration)
-    assertEquals(ReviewIntegrationTerminalOutcome.SKIPPED_NOT_APPLICABLE, integration.terminalOutcome)
-    assertTrue(integration.skipReason.orEmpty().contains("inline"))
-    assertTrue(recorder.integrationLaunches.isEmpty())
-    assertTrue(
-      assertNotNull(result.coverage).render().contains("not applicable"),
-      "Inline runs must say commit-focused sequencing did not apply, not stay silent about it.",
-    )
-  }
-
   @Test fun `a crash between specialist completion and integration resumes into the integration pass alone`() {
     val recorder = ReviewRecorder()
 
@@ -249,10 +232,8 @@ class ParallelCodeReviewIntegrationPassTest {
     assertTrue(integration.findings.isEmpty())
   }
 
-  private fun delegatedRequest(
-    mode: CodeReviewExecutionMode = CodeReviewExecutionMode.DELEGATED,
-    reviewRunId: String? = null,
-  ) = harnessRequest(reviewRunId = reviewRunId, codeReviewMode = mode)
+  private fun delegatedRequest(reviewRunId: String? = null) =
+    harnessRequest(reviewRunId = reviewRunId, codeReviewMode = CodeReviewExecutionMode.DELEGATED)
 
   private fun delegatedConfig(
     paths: List<String>,

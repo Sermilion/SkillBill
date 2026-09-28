@@ -2,7 +2,6 @@ class: feature-launch-warning
 contract_version: "1.8"
 
 matchers:
-  - exact: bill-feature
   - exact: skill-bill
 
 pointers:

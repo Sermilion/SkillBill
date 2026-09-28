@@ -3,6 +3,7 @@ package skillbill.infrastructure.workflow.review.specialists
 import skillbill.error.shellcontent.MissingInstalledNativeAgentError
 import skillbill.infrastructure.contracts.install.InstallPlanSchemaValidator
 import skillbill.infrastructure.host.FileTelemetryConfigStore
+import skillbill.infrastructure.skills.install.FileSystemInstalledPlatformPackCatalog
 import skillbill.infrastructure.skills.install.apply.currentNativeAgentApplyCacheRoot
 import skillbill.infrastructure.skills.install.mcp.McpRegistrationOperations
 import skillbill.infrastructure.skills.install.runtime.InstallOperations
@@ -24,6 +25,7 @@ import skillbill.install.model.SupportedAgent
 import skillbill.install.model.WindowsSymlinkDecision
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.EnvironmentContext
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.mcp.model.InstallMcpRegistrationRequest
@@ -40,7 +42,10 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+
+private const val INLINE_WORKER = "bill-code-review-inline"
 
 class FileSystemReviewNativeAgentPreflightTest {
   private val tempDirs = mutableListOf<Path>()
@@ -119,6 +124,51 @@ class FileSystemReviewNativeAgentPreflightTest {
     preflight(fixture.home).verify(preflightRequest(reviewedRepo, "codex"))
   }
 
+  @Test
+  fun `review planning resolves installed rubrics and inline worker from skill-bill sidecars`() {
+    val fixture = setupInstallFixture()
+    val inlineWorkerDir = fixture.skillsRoot.resolve(INLINE_WORKER)
+    Files.createDirectories(inlineWorkerDir)
+    Files.writeString(
+      inlineWorkerDir.resolve("content.md"),
+      "---\ninternal-for: $PACK_SIDECAR_PARENT_SKILL\nname: $INLINE_WORKER\ndescription: Inline worker.\n---\n\n" +
+        "Review inline.\n",
+    )
+    seedNativeAgent(inlineWorkerDir, INLINE_WORKER)
+    Files.createDirectories(fixture.home.resolve(".codex"))
+    assertEquals(InstallApplyStatus.SUCCESS, install(fixture, SupportedAgent.CODEX).status)
+
+    val skillTargets = fixture.home.resolve("agent-skill-targets/codex")
+    val installedParent = skillTargets.resolve(PACK_SIDECAR_PARENT_SKILL)
+    val sidecars =
+      listOf("$INLINE_WORKER.md", "bill-kotlin-code-review.md", "bill-kotlin-code-review-architecture.md")
+    sidecars.forEach { sidecar ->
+      assertTrue(Files.isRegularFile(installedParent.resolve(sidecar)), "missing $sidecar under installed skill-bill")
+    }
+    val legacyParent = skillTargets.resolve("bill-code-review")
+    sidecars.forEach { sidecar ->
+      assertFalse(Files.exists(legacyParent.resolve(sidecar)), "$sidecar must not stage under bill-code-review")
+    }
+    Files.deleteIfExists(legacyParent)
+    Files.walk(fixture.repoRoot).use { paths ->
+      paths.sorted(Comparator.reverseOrder()).forEach(Files::deleteIfExists)
+    }
+
+    val environment = EnvironmentContext(userHome = fixture.home, environment = testEnvironment(fixture.home))
+    val kotlin = FileSystemInstalledPlatformPackCatalog(environment).manifests().single { it.slug == "kotlin" }
+    val rubric = FileSystemReviewRubricResolver().resolve(kotlin)
+    assertEquals("bill-kotlin-code-review", rubric.rubricId)
+    assertEquals(listOf("bill-kotlin-code-review-architecture"), rubric.specialists.map { it.rubricId })
+
+    preflight(fixture.home).verify(
+      ReviewNativeAgentPreflightRequest(
+        repoRoot = Files.createTempDirectory("skillbill-reviewed-repo").also(tempDirs::add),
+        agentIds = listOf("codex"),
+        logicalNames = listOf(INLINE_WORKER),
+      ),
+    )
+  }
+
   private data class InstallFixture(
     val repoRoot: Path,
     val home: Path,
@@ -130,6 +180,7 @@ class FileSystemReviewNativeAgentPreflightTest {
   private fun setupInstallFixture(): InstallFixture {
     val repoRoot = Files.createTempDirectory("skillbill-preflight-repo").also(tempDirs::add)
     val home = Files.createTempDirectory("skillbill-preflight-home").also(tempDirs::add)
+    seedBaseSkill(repoRoot, PACK_SIDECAR_PARENT_SKILL)
     seedBaseSkill(repoRoot, "bill-code-review", nativeAgentName = "bill-code-review-worker")
     seedBaseSkill(repoRoot, "bill-code-check")
     seedBaseSkill(repoRoot, "bill-update-check")

@@ -1,7 +1,7 @@
 ---
 name: bill-ios-code-review-performance
 description: Use when reviewing measurable iOS rendering, memory, I/O, and resource risks.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Performance Review Specialist

@@ -37,7 +37,7 @@ class ScaffoldReviewStructureAcceptanceTest {
           Files.readString(
             pack.resolve("code-review/bill-java-code-review-$area/content.md"),
           )
-        assertContains(content, "internal-for: bill-code-review")
+        assertContains(content, "internal-for: skill-bill")
         assertEquals(
           listOf("Focus", "Ignore", "Applicability", "Project-Specific Rules"),
           content.lineSequence().filter { it.startsWith("## ") }.map { it.removePrefix("## ") }.toList(),
@@ -84,7 +84,7 @@ class ScaffoldReviewStructureAcceptanceTest {
 
   private fun assertBaseline(pack: Path) {
     val content = Files.readString(pack.resolve("code-review/bill-java-code-review/content.md"))
-    assertContains(content, "internal-for: bill-code-review")
+    assertContains(content, "internal-for: skill-bill")
     assertEquals(
       listOf("Classification Rules", "Diff-Signal Routing Table", "Mixed Diffs", "Finding Discipline"),
       headings(content),

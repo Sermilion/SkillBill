@@ -1,7 +1,7 @@
 ---
 name: bill-kotlin-code-review-platform-correctness
 description: Review Kotlin type, interop, coroutine, synchronization, and Flow correctness. Use for Kotlin runtime and language-semantics failures.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Platform and Correctness Review Specialist

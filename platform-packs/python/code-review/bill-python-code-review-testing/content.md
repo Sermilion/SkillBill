@@ -1,7 +1,7 @@
 ---
 name: bill-python-code-review-testing
 description: Review Python pytest/unittest quality, fixtures, monkeypatching, parametrization, async/time tests, integration boundaries, and regression value.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Python Testing Review

@@ -1,7 +1,7 @@
 ---
 name: bill-go-code-review-reliability
 description: Use when reviewing Go service shutdown, deadlines, retries, backpressure, workers, external clients, observability, partial failure, and leak-free termination.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Go Reliability Review Specialist

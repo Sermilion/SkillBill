@@ -98,7 +98,10 @@ internal fun validateSkillReferences(
 
 internal fun isSkillReferenceScanTarget(relativePath: Path): Boolean {
   val parts = relativePath.map(Path::toString)
-  if (relativePath.startsWith(repoValidationBoundaryLedgerDir)) {
+  val inBoundaryLedger =
+    relativePath.parent?.fileName?.toString() == "agent" &&
+      relativePath.fileName.toString() in BOUNDARY_LEDGER_FILE_NAMES
+  if (relativePath.startsWith(repoValidationBoundaryLedgerDir) || inBoundaryLedger) {
     return false
   }
   if (NATIVE_AGENT_SOURCE_DIR in parts) {
@@ -162,7 +165,7 @@ internal fun validateFeatureAddonDeclarations(
   val staticTargets = supportingFileTargets(root).keys
   val classes = if (root.resolve(SKILL_CLASSES_DIR).isDirectory()) discoverSkillClasses(root) else emptyList()
   val featureClassPointers =
-    resolveSkillClass("bill-feature", classes)
+    resolveSkillClass("skill-bill", classes)
       ?.pointers
       ?.map { pointer -> "$pointer.md" }
       .orEmpty()
@@ -191,3 +194,5 @@ internal fun validateFeatureAddonDeclarations(
       }
   }
 }
+
+private val BOUNDARY_LEDGER_FILE_NAMES = setOf("history.md", "decisions.md")

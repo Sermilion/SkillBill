@@ -17,6 +17,7 @@ import skillbill.install.model.WindowsSymlinkDecision
 import skillbill.install.model.WindowsSymlinkFallbackState
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import java.nio.file.Files
@@ -48,6 +49,7 @@ class InstallApplyTest : InstallApplyTestSupport() {
     val skillsByName = result.skills.associateBy { skill -> skill.skillName }
     assertEquals(
       setOf(
+        PACK_SIDECAR_PARENT_SKILL,
         "bill-code-review",
         "bill-code-check",
         "bill-update-check",

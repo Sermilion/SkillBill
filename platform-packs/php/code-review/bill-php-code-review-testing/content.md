@@ -1,7 +1,7 @@
 ---
 name: bill-php-code-review-testing
 description: Use when reviewing PHP test evidence, isolation, static analysis, framework kernels, fixtures, and supported runtime matrices.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # PHP Testing Review Specialist

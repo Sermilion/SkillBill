@@ -32,15 +32,18 @@ properties:
     minItems: 1
     uniqueItems: true
     items:
+      description: >-
+        skill-bill is the only consumer. The retired bill-feature id is accepted
+        for existing manifests, decodes as skill-bill, and emits a migration record.
       enum:
-        - bill-feature
         - skill-bill
+        - bill-feature
 x-coherence-checks:
   - Kotlin contract version equals properties.contract_version.const.
   - Source directory name equals slug.
   - Description is trimmed, non-blank, and single-line.
   - agent-addon.yaml and content.md are regular files and the only authored entries.
   - Every agent id resolves through the existing InstallAgent registry.
-  - Every consumer is supported by AgentAddonConsumer for this contract version.
+  - Every consumer is supported by AgentAddonConsumer for this contract version; the legacy bill-feature id decodes as skill-bill.
   - Slugs are unique across the repository.
   - Canonical agent-addon.yaml source identities are unique across the repository.

@@ -53,7 +53,7 @@ class RepoValidationRepoStructureTest {
       |---
       |name: bill-invalid-review-shape-code-review-architecture
       |description: Malformed architecture specialist fixture.
-      |internal-for: bill-code-review
+      |internal-for: skill-bill
       |---
       |
       |# Malformed Architecture Specialist
@@ -163,14 +163,14 @@ class RepoValidationRepoStructureTest {
   fun `repo validation rejects extra authored files beside source skills`() {
     val repoRoot = Files.createTempDirectory("skillbill-extra-source-file")
     createRepoValidationSkillFixture(repoRoot)
-    Files.writeString(repoRoot.resolve("skills/bill-code-review/patterns.md"), "extra organization file\n")
+    Files.writeString(repoRoot.resolve("skills/skill-bill/patterns.md"), "extra organization file\n")
 
     val report = RepoValidationRuntime.validateRepo(repoRoot, testNativeAgentCompositionContext(repoRoot))
 
     assertFalse(report.passed)
     assertTrue(
       report.issues.any {
-        it.contains("skills/bill-code-review/patterns.md") &&
+        it.contains("skills/skill-bill/patterns.md") &&
           it.contains("skill source directories may contain only content.md and native-agents/")
       },
       report.issues.joinToString("\n"),
@@ -193,7 +193,7 @@ class RepoValidationRepoStructureTest {
 
     assertTrue(
       report.issues.any {
-        it.contains("skills/bill-code-review/shell-ceremony.md") &&
+        it.contains("skills/skill-bill/shell-ceremony.md") &&
           it.contains("committed generated supporting pointer file is not allowed")
       },
       report.issues.joinToString("\n"),
@@ -209,7 +209,7 @@ class RepoValidationRepoStructureTest {
 
     assertTrue(
       report.issues.any {
-        it.contains("skills/bill-code-review/shell-ceremony.md") &&
+        it.contains("skills/skill-bill/shell-ceremony.md") &&
           it.contains("committed generated supporting pointer file is not allowed")
       },
       report.issues.joinToString("\n"),
@@ -220,14 +220,14 @@ class RepoValidationRepoStructureTest {
   fun `repo validation rejects regular copied generated supporting pointer files beside non-platform skills`() {
     val repoRoot = Files.createTempDirectory("skillbill-regular-sidecar")
     createRepoValidationSkillFixture(repoRoot)
-    val sidecar = repoRoot.resolve("skills/bill-code-review/shell-ceremony.md")
+    val sidecar = repoRoot.resolve("skills/skill-bill/shell-ceremony.md")
     Files.writeString(sidecar, "copied markdown\n")
 
     val report = RepoValidationRuntime.validateRepo(repoRoot, testNativeAgentCompositionContext(repoRoot))
 
     assertTrue(
       report.issues.any {
-        it.contains("skills/bill-code-review/shell-ceremony.md") &&
+        it.contains("skills/skill-bill/shell-ceremony.md") &&
           it.contains("committed generated supporting pointer file is not allowed")
       },
       report.issues.joinToString("\n"),
@@ -238,7 +238,7 @@ class RepoValidationRepoStructureTest {
   fun `repo validation skips native agent markdown skill references`() {
     val repoRoot = Files.createTempDirectory("skillbill-native-agent-refs")
     createRepoValidationSkillFixture(repoRoot)
-    val nativeAgent = repoRoot.resolve("skills/bill-code-review/native-agents/bill-code-review-worker.md")
+    val nativeAgent = repoRoot.resolve("skills/skill-bill/native-agents/bill-code-review-worker.md")
     Files.createDirectories(nativeAgent.parent)
     Files.writeString(
       nativeAgent,

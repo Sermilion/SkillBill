@@ -46,7 +46,7 @@ class SkillBillDispatcherRoutingTest {
 
   @Test
   fun `review mode tokens reach the phase runtime unchanged`() {
-    val modes = tokenValues("mode")
+    val modes = tokenValues(tokenForwarding, "mode")
 
     assertEquals(setOf("inline", "delegated"), modes.toSet())
     modes.forEach { value ->
@@ -55,8 +55,20 @@ class SkillBillDispatcherRoutingTest {
   }
 
   @Test
+  fun `phase review forwards the pr staged and unstaged targets beside HEAD uncommitted and a sha`() {
+    val targets =
+      Regex("""`target:([^`]+)`""").findAll(tokenForwarding).single().groupValues[1].split('|').toSet()
+
+    assertEquals(setOf("pr", "staged", "unstaged", "HEAD", "last", "uncommitted", "<sha>"), targets)
+    assertContains(
+      section(dispatcher, "Phase Review"),
+      "The accepted targets are `pr`, `staged`, `unstaged`, `HEAD` or `last`, `uncommitted`, and a commit `<sha>`.",
+    )
+  }
+
+  @Test
   fun `full run forwards code-review tokens verbatim as the goal code review mode flag`() {
-    assertEquals(setOf("inline", "auto"), tokenValues("code-review").toSet())
+    assertEquals(setOf("inline", "auto"), tokenValues(dispatcher, "code-review").toSet())
     assertContains(dispatcher, "`${FeatureTaskRuntimeGoalContinuationLaunchTokens.CODE_REVIEW_MODE_FLAG} <value>`")
   }
 
@@ -68,18 +80,21 @@ class SkillBillDispatcherRoutingTest {
   }
 
   @Test
-  fun `full run keeps the bill-feature gate and routes a missing spec to phase plan`() {
-    val billFeature = Files.readString(repositoryRoot().resolve("skills/bill-feature/content.md"))
+  fun `full run keeps the feature gate and routes a missing spec to phase plan`() {
     val preflight = section(dispatcher, "Preflight")
 
-    listOf("Gate", "Rehydrate", "Launch", "Relay").forEach { heading ->
-      assertEquals(section(billFeature, heading), section(dispatcher, heading), heading)
-    }
+    assertContains(section(dispatcher, "Gate"), "Ask exactly one question: whether to proceed.")
+    assertContains(section(dispatcher, "Rehydrate"), "fetch the listed issue from Linear")
+    assertContains(
+      section(dispatcher, "Launch"),
+      "skill-bill goal <issue-key> --agent <currently-executing-agent> --no-live-output",
+    )
+    assertContains(section(dispatcher, "Relay"), "Relay its output verbatim, adding nothing.")
     assertContains(
       preflight,
       "reports new work, the spec is missing: run `skill-bill phase plan <intake> --agent <currently-executing-agent>`",
     )
-    assertFalse(dispatcher.contains("bill-feature-spec"))
+    assertFalse(dispatcher.contains("bill-feature"), "the dispatcher must not name the retired feature skill")
   }
 
   private fun section(
@@ -93,8 +108,12 @@ class SkillBillDispatcherRoutingTest {
       .joinToString(" ")
       .trim()
 
-  private fun tokenValues(key: String): List<String> =
-    Regex("""`$key:([a-z|]+)`""").findAll(dispatcher).single().groupValues[1].split('|')
+  private val tokenForwarding: String get() = section(dispatcher, "Token Forwarding")
+
+  private fun tokenValues(
+    text: String,
+    key: String,
+  ): List<String> = Regex("""`$key:([a-z|]+)`""").findAll(text).single().groupValues[1].split('|')
 
   private fun repositoryRoot(): Path =
     generateSequence(Path.of("").toAbsolutePath().normalize()) { it.parent }

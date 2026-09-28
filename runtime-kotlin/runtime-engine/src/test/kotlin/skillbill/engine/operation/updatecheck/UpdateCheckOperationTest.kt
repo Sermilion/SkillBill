@@ -3,6 +3,7 @@ package skillbill.engine.operation.updatecheck
 import skillbill.application.system.SystemService
 import skillbill.application.updatecheck.UpdateCheckService
 import skillbill.application.updatecheck.model.RECOMMENDED_INSTALL_COMMAND
+import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
@@ -11,6 +12,7 @@ import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationConfirmationGate
 import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.operation.core.OperationOutcome
+import skillbill.engine.operation.core.OperationOutputFormat
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationStepRunner
@@ -70,7 +72,35 @@ class UpdateCheckOperationTest {
     )
   }
 
-  private fun report(catalog: ReleaseCatalogResult): String {
+  @Test
+  fun `includePrereleases reports an only-prerelease catalogue as an update and json returns the payload`() {
+    val catalog = releases("v1.3.0-rc.1")
+
+    assertEquals(
+      "status: update_available\ninstalled_version: 1.2.3\nlatest_version: v1.3.0-rc.1\n" +
+        "release_url: ${releaseUrl("v1.3.0-rc.1")}\nrecommended_install_command: $RECOMMENDED_INSTALL_COMMAND\n",
+      report(catalog, OperationArguments(includePrereleases = true)),
+    )
+    assertEquals(
+      mapOf(
+        "status" to "update_available",
+        "installed_version" to "1.2.3",
+        "latest_version" to "v1.3.0-rc.1",
+        "release_url" to releaseUrl("v1.3.0-rc.1"),
+        "recommended_install_command" to RECOMMENDED_INSTALL_COMMAND,
+        "reason" to null,
+        "release_notes" to null,
+      ),
+      JsonCodec.parseValue(
+        report(catalog, OperationArguments(includePrereleases = true, format = OperationOutputFormat.JSON)),
+      ),
+    )
+  }
+
+  private fun report(
+    catalog: ReleaseCatalogResult,
+    arguments: OperationArguments = OperationArguments(),
+  ): String {
     val service =
       UpdateCheckService(
         SystemService(
@@ -99,7 +129,7 @@ class UpdateCheckOperationTest {
           operationId = "update-check",
           repoRoot = home,
           invokedAgentId = null,
-          arguments = OperationArguments(),
+          arguments = arguments,
           instructions = null,
         ),
       )

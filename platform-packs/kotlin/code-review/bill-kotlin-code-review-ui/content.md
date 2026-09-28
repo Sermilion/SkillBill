@@ -1,7 +1,7 @@
 ---
 name: bill-kotlin-code-review-ui
 description: Review standalone Kotlin Compose Desktop, Swing or JavaFX interop, server-rendered views, and CLI or TUI interface correctness.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # UI Review Specialist

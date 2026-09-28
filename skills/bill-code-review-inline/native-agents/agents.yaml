@@ -1,6 +1,0 @@
-contract_version: "0.1"
-agents:
-  - name: bill-code-review-inline
-    description: "bill-code-review mode:inline worker: one whole review at reduced judgment depth over parent-named rubrics; page the evidence broker to completion; return F-XXX Risk Register."
-    tools: [mcp__skill-bill-review-evidence__read_evidence, mcp__skill-bill-review-evidence__request_expansion]
-    compose: governed-content

@@ -1,7 +1,7 @@
 ---
 name: bill-generic-code-review-persistence
 description: Technology-neutral persistence review for atomicity, consistency, migrations, ownership, and recovery.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Generic Persistence Review

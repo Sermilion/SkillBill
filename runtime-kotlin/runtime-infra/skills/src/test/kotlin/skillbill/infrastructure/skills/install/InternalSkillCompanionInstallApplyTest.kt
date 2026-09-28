@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.install
 
 import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.SupportedAgent
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -29,7 +30,8 @@ class InternalSkillCompanionInstallApplyTest : InstallApplyTestSupport() {
         ),
       )
     val first = applyInstallForTest(plan)
-    val parentStaging = first.skills.single { skill -> skill.skillName == "bill-code-review" }.staging.stagingDir
+    val parentStaging =
+      first.skills.single { skill -> skill.skillName == PACK_SIDECAR_PARENT_SKILL }.staging.stagingDir
     val companion = assertNotNull(parentStaging).resolve("review-guidelines.md")
     assertTrue(Files.isRegularFile(companion.toPath(), LinkOption.NOFOLLOW_LINKS))
     Files.delete(companion.toPath())
@@ -56,14 +58,17 @@ class InternalSkillCompanionInstallApplyTest : InstallApplyTestSupport() {
         fixture.request(selectedPlatforms = setOf("kotlin"), agents = setOf(SupportedAgent.CODEX)),
       )
     assertEquals(InstallApplyStatus.SUCCESS, applyInstallForTest(plan).status)
-    Files.writeString(fixture.repoRoot.resolve("skills/bill-code-review/review-guidelines.md"), "parent content\n")
+    Files.writeString(
+      fixture.repoRoot.resolve("skills/$PACK_SIDECAR_PARENT_SKILL/review-guidelines.md"),
+      "parent content\n",
+    )
 
     val second = applyInstallForTest(plan)
 
     assertEquals(InstallApplyStatus.FAILURE, second.status)
     assertEquals(
       "skillbill.error.shellcontent.InternalSkillSidecarCollisionError",
-      second.failures.single { issue -> issue.skillName == "bill-code-review" }.causeClass,
+      second.failures.single { issue -> issue.skillName == PACK_SIDECAR_PARENT_SKILL }.causeClass,
     )
   }
 }

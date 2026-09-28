@@ -1,7 +1,7 @@
 ---
 name: bill-python-code-review-security
 description: Review Python security risks across dependencies, auth, secrets, unsafe parsing, path/subprocess use, SSRF, uploads, and sensitive logging.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Python Security Review

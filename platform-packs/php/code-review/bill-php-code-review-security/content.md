@@ -1,7 +1,7 @@
 ---
 name: bill-php-code-review-security
 description: Use when reviewing PHP trust boundaries, authorization, deserialization, rendering, uploads, process execution, and sensitive data.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # PHP Security Review Specialist

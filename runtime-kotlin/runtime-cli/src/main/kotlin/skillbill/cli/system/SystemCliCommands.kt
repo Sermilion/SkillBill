@@ -24,7 +24,7 @@ import skillbill.cli.model.CliExecutionResult
 import skillbill.cli.model.CliFormat
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.system.UpdateCheckContract
+import skillbill.engine.operation.updatecheck.updateCheckContract
 
 @Inject
 class VersionCommand(
@@ -175,13 +175,4 @@ private fun retiredSubjectResult(
   return CliExecutionResult(exitCode = 1, stdout = message)
 }
 
-private fun UpdateCheckResult.toPayload(): Map<String, Any?> =
-  UpdateCheckContract(
-    status = status.wireName,
-    installedVersion = installedVersion,
-    latestVersion = latestVersion,
-    releaseUrl = releaseUrl,
-    recommendedInstallCommand = recommendedInstallCommand,
-    reason = reason,
-    releaseNotes = releaseNotes,
-  ).toPayload()
+private fun UpdateCheckResult.toPayload(): Map<String, Any?> = updateCheckContract(this).toPayload()

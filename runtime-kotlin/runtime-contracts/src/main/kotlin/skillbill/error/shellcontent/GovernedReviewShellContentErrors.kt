@@ -14,6 +14,13 @@ class GovernedReviewEvidenceTransportError(
   cause: Throwable? = null,
 ) : ShellContentContractException(message, cause)
 
+class InlineParallelReviewUnsupportedError(
+  val requestedMode: String,
+) : ShellContentContractException(
+    "The parallel code-review runner runs only delegated reviews; requested mode '$requestedMode' " +
+      "resolves to inline, which the inline review strategy runs.",
+  )
+
 class GovernedReviewLaunchCapabilityError(
   val provider: String,
   val capability: String,

@@ -1,7 +1,7 @@
 ---
 name: bill-php-code-review-persistence
 description: Use when reviewing PHP database access, ORM lifecycles, transactions, locking, migrations, and tenant-safe data integrity.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # PHP Persistence Review Specialist

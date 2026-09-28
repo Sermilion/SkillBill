@@ -7,80 +7,84 @@ This is the architecture companion to the authored contract in
 [skill-source-generation.md](skill-source-generation.md) (Internal Skills
 section), which owns the normative rules.
 
-Two families are worked examples here: the feature-execution family (the
-SKILL-102 origin case, base-skill internals) and the code-review family
-(SKILL-104, the platform-pack extension).
+Two parts follow: the single listed skill (`skill-bill`, SKILL-383) and the
+code-review family (SKILL-104, the platform-pack extension, re-parented to
+`skill-bill` in SKILL-383).
 
-## Part 1 — The feature-execution family (base-skill internals, SKILL-102)
+## Part 1 — The single listed skill (SKILL-383)
 
 ### The idea in one paragraph
 
-The feature entry family has one listed skill: `bill-feature`. The runtime
-owns preparation, continuation, execution, and durable goal state, while
-`bill-feature-spec` remains the separate listed skill for preparing governed
-specification artifacts. There is no goal sidecar or hidden feature entry.
+The catalog has one listed skill: `skill-bill`. It is a dispatcher. Its
+full-run form owns intake, preflight, the single confirmation gate, and launch
+of the goal runtime. Its `phase:<name>` forms run `skill-bill phase <name>`,
+and its `operation:<name>` forms run `skill-bill operation <name>`. The
+runtime owns preparation, continuation, execution, and durable goal state. The
+text of the retired listed skills (`bill-feature`, `bill-feature-spec`,
+`bill-code-review`, `bill-code-check`, `bill-pr-description`,
+`bill-boundary-history`, `bill-boundary-decisions`, `bill-pr-review-fix`,
+`bill-unit-test-value-check`, `bill-update-check`, `bill-release`,
+`bill-feature-verify`, `bill-feature-guard`, `bill-feature-guard-cleanup`)
+lives in `skills/skill-bill/content.md` and in engine directive resources under
+`runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/`.
+`bill-monitor` and the `bill-code-review-inline` worker were deleted.
+`skill-bill goal status` stays CLI-only.
 
 ## What install produces
 
-The agent skill list shows `bill-feature` and `bill-feature-spec`. The symlink
-in the agent's skills directory points into the content-addressed staging
-cache:
+The agent skill list shows `skill-bill`. The symlink in the agent's skills
+directory points into the content-addressed staging cache:
 
 ```
-~/.claude/skills/bill-feature
-  → ~/.skill-bill/installed-skills/bill-feature-<content-hash>/
+~/.claude/skills/skill-bill
+  → ~/.skill-bill/installed-skills/skill-bill-<content-hash>/
       SKILL.md                            rendered governed wrapper — what the agent lists
       content.md                          authored source, copied verbatim
+      bill-<platform>-code-review*.md     pack review sidecars (selected packs only)
       platform-packs → …                  symlink for pack pointer resolution
 ```
 
-Feature-task and goal phase work runs inside the Kotlin runtime driver
-(`skill-bill feature-task` / `skill-bill goal`). Platform-pack review packs
-still install their own native subagents outside the skills directory.
+An install over a home that has the retired skills removes their links and
+installed copies (`InstallLegacySkillNames`). Feature-task, goal, phase, and
+operation work runs inside the Kotlin runtime (`skill-bill feature-task`,
+`skill-bill goal`, `skill-bill phase`, `skill-bill operation`). Platform-pack
+review packs still install their own native subagents outside the skills
+directory.
 
-## Where the source lives (nothing moved)
-
-The feature entry keeps its normal source path and has no internal feature
-skill:
+## Where the source lives
 
 ```
 skills/
-  bill-feature/content.md                     listed — the single entry point
-  bill-feature-spec/content.md                listed — spec preparation, still Skill-tool invoked
+  skill-bill/content.md                       listed — the single entry point
 ```
 
-The Kotlin runtime binds to retained workflow files by repo path, and
-`RepoValidationRuntime` asserts workflow-step markers inside retained workflow
-surfaces such as `bill-feature-verify/content.md`. Workflow rows, the database
-`workflow_name` constraint, telemetry constants, and MCP tool names retain
-their durable identities.
+Workflow rows, the database `workflow_name` constraint, telemetry `skill`
+values, the quality-check `routed_skill`, and MCP tool names keep their
+durable identities, including retired skill names such as
+`bill-feature-verify` and `bill-code-check`.
 
 ## How routing works, end to end
 
-Everything funnels through `bill-feature`, which gathers intake, performs one
-runtime preflight, presents the runtime-composed gate, rehydrates only listed
-spec files, launches the goal runtime, and relays its output.
-
 ```
-user: "implement feature …" / "goal status" / …
+user: "/skill-bill APP-1 …" / "/skill-bill phase:review" / "/skill-bill operation:release bump:patch"
   │
   ▼
-bill-feature                                     [listed]
-  │  intake → update check → goal preflight
-  │    new work → feature-spec preparation
-  │    runnable verdict → one confirmation gate
-  │    rehydrate_targets → listed Linear specs only
-  │    confirmed → goal runtime
-  │    runtime output → verbatim relay
+skill-bill                                       [listed]
+  │  update check
+  │  full run:  intake → goal preflight
+  │               new work → skill-bill phase plan
+  │               runnable verdict → one confirmation gate
+  │               rehydrate_targets → listed Linear specs only
+  │               confirmed → skill-bill goal
+  │  phase:<name>      → skill-bill phase <name>
+  │  operation:<name>  → skill-bill operation <name>
+  │                        awaiting_confirmation → one operator question → confirm:<token>
   ▼
-bill-feature-spec                                [listed, Skill tool]
-  │  produces governed artifacts
-  └── returns control to the single feature entry point
+runtime output → verbatim relay
 ```
 
-The entry forwards the issue key and caller-selected review,
-parallel-review, and agent add-on values to the runtime without resolving
-another skill or sidecar.
+The dispatcher forwards the issue key and caller-selected review, agent
+add-on, and `key:value` tokens to the runtime without resolving another skill.
 
 ## How the install pipeline produces this
 
@@ -122,7 +126,7 @@ consumed at three seams:
 
 - All classification rules above, as repo-validation issues.
 - **Collision guard:** an authored file in a parent's source dir occupying
-  a would-be sidecar name (e.g. an authored `bill-code-review/bill-kotlin-code-review.md`)
+  a would-be sidecar name (e.g. an authored `skill-bill/bill-kotlin-code-review.md`)
   fails validation and staging (`InternalSkillSidecarCollisionError`).
 - **Reference co-location:** every `` `<skill-name>.md` `` sidecar reference
   inside any skill's prose must resolve to an internal skill sharing the
@@ -147,9 +151,9 @@ consumed at three seams:
   constraint, telemetry history, and MCP dispatch all bind to the old names
   and paths; the blast radius stayed inside the install pipeline and the
   skill prose.
-- **`bill-feature-spec` stayed listed** — it is a different kind of skill
-  (preparation without implementation) with a legitimate standalone life, so
-  it keeps its Skill-tool contract.
+- **One listed skill** (SKILL-383) — every retired skill's capability already
+  existed as a phase, a strategy, or an operation, so a second listed entry
+  would only duplicate a route the dispatcher has.
 
 ## File map
 
@@ -164,7 +168,7 @@ consumed at three seams:
 | Direct link-skill guard | `…/install/plan/InstallPrimitives.kt` |
 | Validate-time rules incl. sidecar references | `…/scaffold/runtime/RepoValidationRuntime.kt` |
 | Typed errors | `runtime-kotlin/runtime-contracts/…/error/ShellContentContractErrors.kt` |
-| Routing prose (the actual dispatch sentences) | `skills/bill-feature/content.md` |
+| Routing prose (the actual dispatch sentences) | `skills/skill-bill/content.md` |
 | Authored contract (normative) | `docs/skill-source-generation.md` → Internal Skills |
 | Tests | `InternalSkillStagingTest`, `InternalSkillClassificationTest`, `InstallPlanInternalSkillDiscoveryTest`, `RepoValidationRuntimeTest` |
 
@@ -172,8 +176,10 @@ consumed at three seams:
 
 The same mechanism, extended to platform-pack skills. The code-review family
 had stack-specific review skills listed to users even though the supported
-entry point is `/bill-code-review`, which detects the dominant stack from
-`platform.yaml` routing signals and routes automatically. Hiding them removes
+entry point is the review phase (`/skill-bill phase:review`), which detects the
+dominant stack from `platform.yaml` routing signals and routes automatically.
+SKILL-104 hid them as sidecars of `bill-code-review`; SKILL-383 re-parented
+them to `skill-bill` and retired `bill-code-review`. Hiding them removes
 dozens of listed skills from every agent's skill list and makes the listed
 surface match the actual product surface.
 
@@ -190,9 +196,9 @@ only authored source change in the family.
 ### Flatten rule (PD2)
 
 All review-pack skills — the stack entries AND their specialists —
-declare `internal-for: bill-code-review`. Stack entry skills do **not** become
+declare `internal-for: skill-bill`. Stack entry skills do **not** become
 parents of their specialists. Nesting (specialists internal to their stack
-entry, entries internal to `bill-code-review`) would require depth-2 sidecars —
+entry, entries internal to `skill-bill`) would require depth-2 sidecars —
 a sidecar hosting sidecars — which the staging model cannot express (a sidecar
 is a file, not a directory). Flattening keeps depth at 1, and sibling
 co-location is what the review flow wants: the routed entry sidecar and the
@@ -207,13 +213,13 @@ the install plan's selected pack skills (each already carries `sourceDir` and
 parsed `internalFor`) rather than re-scanning `platform-packs/` independently
 of selection. The parent's content hash folds exactly the selected sidecars.
 
-After a scratch install with all packs selected, `bill-code-review`'s staged
+After a scratch install with all packs selected, `skill-bill`'s staged
 directory contains `SKILL.md` plus 84 sibling sidecars — and no agent
 `skills_dir` symlink exists for any manifest-discovered review sidecar:
 
 ```
-~/.claude/skills/bill-code-review
-  → ~/.skill-bill/installed-skills/bill-code-review-<content-hash>/
+~/.claude/skills/skill-bill
+  → ~/.skill-bill/installed-skills/skill-bill-<content-hash>/
       SKILL.md                              rendered governed wrapper — the listed entry
       content.md                            authored source, copied verbatim
       bill-ios-code-review.md               sidecar: iOS stack entry (selected)
@@ -237,13 +243,13 @@ directory contains `SKILL.md` plus 84 sibling sidecars — and no agent
 ```
 
 With only the Kotlin pack selected, its entry and ten review specialists stage; other packs contribute
-nothing. With no review packs selected, `bill-code-review` stages
+nothing. With no review packs selected, `skill-bill` stages
 byte-identically to a repo with no internal pack skills (inertness). `ALL`
 selection stages every opted-in review sidecar. SKILL-105 applies the same
 selection-aware review sidecar model. Quality checks do not use pack sidecars:
 the selected dominant pack declares its collect-all and
-cache-bypassing collect-all argv in `validation_gate`, and `bill-code-check`
-is the only quality-check entry point. KMP uses its own gate; review baseline
+cache-bypassing collect-all argv in `validation_gate`, and
+`skill-bill phase validation` is the only quality-check entry point. KMP uses its own gate; review baseline
 composition does not provide a quality-check fallback.
 
 ### Baseline co-presence guard (PD8)
@@ -260,10 +266,10 @@ there is no silent auto-include. `ALL` selection is trivially safe.
 ### Routing walkthrough
 
 ```
-user: "/bill-code-review" on a Kotlin diff
+user: "/skill-bill phase:review" on a Kotlin diff
   │
   ▼
-bill-code-review                                   [listed]
+skill-bill → skill-bill phase review               [listed dispatcher → runtime]
   │  reads platform.yaml routing signals from the diff
   │  (strong signals, then tie-breakers) → dominant pack
   ▼
@@ -290,13 +296,13 @@ standalone `skills_dir` path (PD5).
 
 ### Selection-shaped variance at a glance
 
-| Selection | Sidecars staged inside `bill-code-review/` |
+| Selection | Sidecars staged inside `skill-bill/` |
 |---|---|
 | `ALL` | 85 (8 stack entries + 77 specialists) |
 | Kotlin only | 11 (`bill-kotlin-code-review.md` + 10 specialists) |
 | KMP only | fails — Kotlin is a required baseline (PD8) |
 | KMP + Kotlin | 19 (`bill-kmp-code-review` + 7 KMP specialists, `bill-kotlin-code-review` + 10 Kotlin specialists) |
-| None | 0; `bill-code-review` stages inert (byte-identical to no pack internals) |
+| None | 0; `skill-bill` stages inert (byte-identical to no pack internals) |
 
 ### File map additions (platform-pack side)
 

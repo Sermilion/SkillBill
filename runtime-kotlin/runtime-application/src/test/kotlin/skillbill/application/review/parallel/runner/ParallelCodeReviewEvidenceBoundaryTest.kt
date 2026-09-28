@@ -51,7 +51,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
       ).run(
         harnessRequest(
           reviewRunId = "rvw-195-unbound",
-          codeReviewMode = CodeReviewExecutionMode.INLINE,
+          codeReviewMode = CodeReviewExecutionMode.DELEGATED,
         ),
       )
 
@@ -88,7 +88,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
       ).run(
         harnessRequest(
           reviewRunId = "rvw-195-endpoint-unbound",
-          codeReviewMode = CodeReviewExecutionMode.INLINE,
+          codeReviewMode = CodeReviewExecutionMode.DELEGATED,
         ),
       )
 
@@ -115,7 +115,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
     ).run(
       harnessRequest(
         reviewRunId = "rvw-195-unexercised",
-        codeReviewMode = CodeReviewExecutionMode.INLINE,
+        codeReviewMode = CodeReviewExecutionMode.DELEGATED,
       ),
     )
 
@@ -153,7 +153,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
       ).run(
         harnessRequest(
           reviewRunId = "rvw-195-zero-byte",
-          codeReviewMode = CodeReviewExecutionMode.INLINE,
+          codeReviewMode = CodeReviewExecutionMode.DELEGATED,
         ),
       )
 
@@ -182,7 +182,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
       ).run(
         harnessRequest(
           reviewRunId = "rvw-195-rejected",
-          codeReviewMode = CodeReviewExecutionMode.INLINE,
+          codeReviewMode = CodeReviewExecutionMode.DELEGATED,
         ),
       )
 
@@ -238,7 +238,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
       ).run(
         harnessRequest(
           reviewRunId = "rvw-195-unavailable-cli",
-          codeReviewMode = CodeReviewExecutionMode.INLINE,
+          codeReviewMode = CodeReviewExecutionMode.DELEGATED,
         ),
       )
 
@@ -266,7 +266,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
       ).run(
         harnessRequest(
           reviewRunId = "rvw-195-unsupported",
-          codeReviewMode = CodeReviewExecutionMode.INLINE,
+          codeReviewMode = CodeReviewExecutionMode.DELEGATED,
         ),
       )
 
@@ -304,7 +304,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
       ).run(
         harnessRequest(
           reviewRunId = "rvw-195-mixed-lanes",
-          codeReviewMode = CodeReviewExecutionMode.INLINE,
+          codeReviewMode = CodeReviewExecutionMode.DELEGATED,
         ),
       )
 
@@ -332,7 +332,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
       ).run(
         harnessRequest(
           reviewRunId = "rvw-198-unread-clean",
-          codeReviewMode = CodeReviewExecutionMode.INLINE,
+          codeReviewMode = CodeReviewExecutionMode.DELEGATED,
         ),
       )
 
@@ -343,7 +343,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
   }
 
   @Test
-  fun `inline parent binds one evidence surface covering every routed area it was selected for`() {
+  fun `the parent binds one evidence surface covering every routed area it was selected for`() {
     val recorder = ReviewRecorder()
     val bound = mutableListOf<Pair<ReviewEvidenceBrokerBinding, ReviewEvidenceBroker>>()
     val defaults =
@@ -371,14 +371,14 @@ class ParallelCodeReviewEvidenceBoundaryTest {
     ).run(
       harnessRequest(
         reviewRunId = "rvw-198-inline-union",
-        codeReviewMode = CodeReviewExecutionMode.INLINE,
+        codeReviewMode = CodeReviewExecutionMode.DELEGATED,
       ),
     )
 
     val (binding, broker) = bound.single()
     assertTrue(
       binding.assignment.assignedPaths.containsAll(listOf("src/core/Repo.kt", "src/secure/Auth.kt")),
-      "the inline parent reaches the broker through one endpoint that stamps one lane, so its " +
+      "the parent reaches the broker through one endpoint that stamps one lane, so its " +
         "surface must cover every routed area; it covered ${binding.assignment.assignedPaths}",
     )
 
@@ -394,7 +394,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
   }
 
   @Test
-  fun `inline parent evidence allowance equals sum of per-lane derived caps not base times lane count`() {
+  fun `the parent evidence allowance equals sum of per-lane derived caps not base times lane count`() {
     val recorder = ReviewRecorder()
     val bound = mutableListOf<ReviewEvidenceBrokerBinding>()
     val defaults =
@@ -426,7 +426,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
     ).run(
       harnessRequest(
         reviewRunId = "rvw-201-parent-derived-budget",
-        codeReviewMode = CodeReviewExecutionMode.INLINE,
+        codeReviewMode = CodeReviewExecutionMode.DELEGATED,
       ),
     )
 
@@ -454,7 +454,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
       ).run(
         harnessRequest(
           reviewRunId = "rvw-201-broker-refusal",
-          codeReviewMode = CodeReviewExecutionMode.INLINE,
+          codeReviewMode = CodeReviewExecutionMode.DELEGATED,
         ),
       )
 
@@ -482,7 +482,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
       ).run(
         harnessRequest(
           reviewRunId = "rvw-201-broker-clean",
-          codeReviewMode = CodeReviewExecutionMode.INLINE,
+          codeReviewMode = CodeReviewExecutionMode.DELEGATED,
         ),
       )
 

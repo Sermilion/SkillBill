@@ -2,7 +2,6 @@ package skillbill.application.review.parallel.runner
 
 import skillbill.application.review.model.ReviewSpecialistLaunchRequest
 import skillbill.application.review.model.ReviewWorkerKind
-import skillbill.review.context.model.execution.ResolvedReviewExecutionMode
 import skillbill.review.context.model.execution.structuredString
 import skillbill.scaffold.model.PlatformManifest
 
@@ -10,13 +9,11 @@ internal object ParallelCodeReviewRunnerParentPrompt {
   fun build(
     selected: List<ReviewSpecialistLaunchRequest>,
     routedManifests: List<PlatformManifest>,
-    resolvedMode: ResolvedReviewExecutionMode,
     agentId: String,
-  ): String {
-    val inline = resolvedMode == ResolvedReviewExecutionMode.INLINE
-    return buildString {
-      append(modeFraming(resolvedMode))
-      appendCursorDelegatedFanOut(selected, resolvedMode, agentId)
+  ): String =
+    buildString {
+      append(modeFraming())
+      appendCursorDelegatedFanOut(selected, agentId)
       appendLine("Detected stack: ${routedManifests.joinToString("+") { it.slug }.ifBlank { "generic" }}")
       val rubricLabel =
         selected.joinToString { launch ->
@@ -40,7 +37,7 @@ internal object ParallelCodeReviewRunnerParentPrompt {
           "'Owned paths'. The evidence_locator store_path and payload_file identify a hunk inside " +
           "the broker's own store; they are not read_evidence arguments and passing one is refused.",
       )
-      appendLine(if (inline) PARALLEL_REVIEW_INLINE_DEPTH_DIRECTIVE else PARALLEL_REVIEW_DELEGATED_DEPTH_DIRECTIVE)
+      appendLine(PARALLEL_REVIEW_DELEGATED_DEPTH_DIRECTIVE)
       appendLine(
         "Return free-form review prose and end with an explicit verdict line: " +
           "`verdict: approved` or `verdict: changes_requested` (needs_fix is accepted as changes_requested). " +
@@ -56,7 +53,7 @@ internal object ParallelCodeReviewRunnerParentPrompt {
           "annotation from the routed rubric catalog. Imperfect lines remain part of the prose result " +
           "and never block settlement; parsed lines are optional verification enrichment.",
       )
-      appendReviewLearnings(selected, inline)
+      appendReviewLearnings(selected)
       appendLine()
       selected.forEach { launch ->
         val decision = launch.assignment.laneDecision
@@ -65,12 +62,8 @@ internal object ParallelCodeReviewRunnerParentPrompt {
         appendAssignedBundleEvidence(launch)
       }
     }
-  }
 
-  private fun StringBuilder.appendReviewLearnings(
-    selected: List<ReviewSpecialistLaunchRequest>,
-    inline: Boolean,
-  ) {
+  private fun StringBuilder.appendReviewLearnings(selected: List<ReviewSpecialistLaunchRequest>) {
     val learnings =
       selected
         .flatMap { it.assignment.learnings }
@@ -80,7 +73,7 @@ internal object ParallelCodeReviewRunnerParentPrompt {
     appendLine()
     appendLine("## Review learnings")
     appendLine(PARALLEL_REVIEW_LEARNINGS_DIRECTIVE)
-    if (!inline) appendLine(PARALLEL_REVIEW_DELEGATED_LEARNINGS_DIRECTIVE)
+    appendLine(PARALLEL_REVIEW_DELEGATED_LEARNINGS_DIRECTIVE)
     learnings.forEach { learning ->
       appendLine("- ${learning.learningId} (${learning.source}): ${structuredString(learning.title)}")
       learning.ruleText.replace("\r\n", "\n").lineSequence().forEach { appendLine("  $it") }
@@ -89,10 +82,9 @@ internal object ParallelCodeReviewRunnerParentPrompt {
 
   private fun StringBuilder.appendCursorDelegatedFanOut(
     selected: List<ReviewSpecialistLaunchRequest>,
-    resolvedMode: ResolvedReviewExecutionMode,
     agentId: String,
   ) {
-    if (agentId != "cursor" || resolvedMode != ResolvedReviewExecutionMode.DELEGATED) return
+    if (agentId != "cursor") return
     val nativeLanes =
       selected
         .filter { it.workerKind == ReviewWorkerKind.PROVIDER_NATIVE }
@@ -108,27 +100,15 @@ internal object ParallelCodeReviewRunnerParentPrompt {
     nativeLanes.forEach { logicalName -> appendLine("/$logicalName") }
   }
 
-  private fun modeFraming(resolvedMode: ResolvedReviewExecutionMode): String =
+  private fun modeFraming(): String =
     buildString {
-      if (resolvedMode == ResolvedReviewExecutionMode.INLINE) {
-        appendLine("Run exactly one bill-code-review mode:inline review prompt in this context.")
-        appendLine("Resolved execution mode: inline")
-        appendLine(
-          "Depth: reduced. Merge the routed areas below into one combined checklist and traverse the " +
-            "diff exactly once against it, holding all areas in mind simultaneously, under a bounded " +
-            "budget. Never re-walk the diff once per area; coverage is accounted per area in your " +
-            "output, not by separate passes. This is not equivalent coverage to a full per-specialist " +
-            "review and must not be presented as one; state that specialist depth was not applied.",
-        )
-      } else {
-        appendLine("Run one bill-code-review mode:delegated review over the routed specialist fan-out.")
-        appendLine("Resolved execution mode: delegated")
-        appendLine(
-          "Depth: full. Launch one specialist worker per resolved rubric below. Pass each specialist's " +
-            "raw return through unchanged — do not require a register shape from them. You alone author " +
-            "the final review prose and verdict from whatever they returned.",
-        )
-      }
+      appendLine("Run a skill-bill phase review in delegated mode via the routed specialist fan-out.")
+      appendLine("Resolved execution mode: delegated")
+      appendLine(
+        "Depth: full. Launch one specialist worker per resolved rubric below. Pass each specialist's " +
+          "raw return through unchanged — do not require a register shape from them. You alone author " +
+          "the final review prose and verdict from whatever they returned.",
+      )
     }
 
   private fun StringBuilder.appendAssignedBundleEvidence(launch: ReviewSpecialistLaunchRequest) {

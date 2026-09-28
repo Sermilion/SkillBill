@@ -35,7 +35,7 @@ internal fun hydrateGoalRunAgentAddonSelection(args: GoalRunAgentAddonHydrationA
     args.agentAddonSelectionPort.resolveInitial(
       repoRoot = args.effectiveRepoRoot,
       requestedSlugs = args.agentAddonSlugs,
-      consumer = AgentAddonConsumer.BILL_FEATURE,
+      consumer = AgentAddonConsumer.SKILL_BILL,
       receivingAgentIds = args.receivingAgents,
       externalSourceRoots =
         args.externalAgentAddonSourceConfigPort.readExternalAgentAddonSources(
@@ -47,7 +47,7 @@ internal fun hydrateGoalRunAgentAddonSelection(args: GoalRunAgentAddonHydrationA
   } else {
     args.agentAddonSelectionPort.verifyPersisted(
       persistedSelection,
-      AgentAddonConsumer.BILL_FEATURE,
+      AgentAddonConsumer.SKILL_BILL,
       args.receivingAgents,
     )
   }

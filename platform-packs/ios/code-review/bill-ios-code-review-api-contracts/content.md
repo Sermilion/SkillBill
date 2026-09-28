@@ -1,7 +1,7 @@
 ---
 name: bill-ios-code-review-api-contracts
 description: Use when reviewing iOS HTTP, Codable, and detected GraphQL contract risks.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # API Contracts Review Specialist

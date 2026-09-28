@@ -27,7 +27,12 @@ files, and provider-specific agent artifacts are the system's responsibility.
 
 ## Source Layout
 
-Canonical skills under `skills/` are source-only directories.
+Canonical skills under `skills/` are source-only directories. The shipped tree
+is `skills/skill-bill/`, the only listed skill. Phases and operations are forms
+of it (`phase:<name>`, `operation:<name>`), not separate skills; the text of the
+retired listed skills lives in `skills/skill-bill/content.md` and in engine
+directive resources under
+`runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/`.
 
 Allowed files under each `skills/<skill>/` directory:
 
@@ -107,8 +112,9 @@ This section is the normative contract; for the end-to-end architecture and
 routing walkthrough see
 [internal-skills-architecture.md](internal-skills-architecture.md).
 
-Most governed skills are **listed**: they install as a `SKILL.md` entry in each
-agent's `skills_dir` and are invocable by users via the Skill tool. A skill can
+A **listed** skill installs as a `SKILL.md` entry in each agent's `skills_dir`
+and is invocable by users via the Skill tool. The shipped catalog lists exactly
+one, `skill-bill`. A skill can
 instead be classified **internal**: its governed content still installs, but as
 a markdown sidecar inside another (parent) skill's installed directory, and it
 is never listed or directly invocable. Internal skills exist because some
@@ -151,7 +157,7 @@ The pipeline loud-fails with a typed, actionable error
 
 A separate collision guard (`InternalSkillSidecarCollisionError`) fails staging
 when an authored file in the parent's source directory already occupies a
-would-be sidecar name (e.g. an authored `bill-code-review/bill-kotlin-code-review.md`);
+would-be sidecar name (e.g. an authored `skill-bill/bill-kotlin-code-review.md`);
 `skill-bill validate` surfaces the same collision before install. Validation
 also checks every `` `<skill-name>.md` `` sidecar reference inside a skill's
 content.md: the referenced skill must be internal and share the referencing
@@ -190,8 +196,8 @@ router flow needs: the parent's installed directory holds the routed entry
 sidecar and the specialist sidecars it reads as siblings, all resolvable as
 "a file next to this `SKILL.md`" with no per-agent path knowledge. The
 code-review family is the worked example: 84 review-pack skills — eight stack
-entries plus their 77 specialists — all carry `internal-for: bill-code-review`
-and all install as siblings inside `bill-code-review/`. The stack entry skills
+entries plus their 77 specialists — all carry `internal-for: skill-bill`
+and all install as siblings inside `skill-bill/`. The stack entry skills
 do **not** become parents of their specialists.
 
 The maintained manifest-derived totals are 85 review sidecars and 77
@@ -251,13 +257,18 @@ receiving rendered runtime instructions and rubric content/paths from the parent
 orchestrator — no worker ever resolves a hidden skill via the Skill tool or a
 standalone `skills_dir` path.
 
-### Worked example: the feature entry family
+### Worked example: the single listed skill
 
-The feature entry family has one listed skill, `bill-feature`, and a separate
-listed `bill-feature-spec` skill for specification preparation. The feature
-entry calls the goal runtime directly after its preflight gate; there is no
-feature goal sidecar. The runtime workflow identity, database constraint,
-telemetry constants, and MCP tool names remain durable contracts.
+The catalog has one listed skill, `skill-bill`. Its full-run form calls the goal
+runtime directly after its preflight gate, and a missing spec runs
+`skill-bill phase plan`. Its `phase:<name>` forms run `skill-bill phase <name>`
+and its `operation:<name>` forms run `skill-bill operation <name>`; there is no
+feature goal sidecar and no other listed entry. `skill-bill goal status` stays
+CLI-only. An install over an old home removes the retired skills' links and
+installed copies (`InstallLegacySkillNames`). The runtime workflow identity,
+database constraint, telemetry `skill` values, the verify `workflow_name`, the
+quality-check `routed_skill`, and MCP tool names remain durable contracts and
+keep retired names such as `bill-feature-verify` and `bill-code-check`.
 
 ### Worked example: the code-review family
 
@@ -267,20 +278,21 @@ review-pack skill is internal — all entries under
 (`bill-ios-code-review`, `bill-kotlin-code-review`, `bill-kmp-code-review`,
 `bill-go-code-review`, `bill-php-code-review`, `bill-python-code-review`, `bill-rust-code-review`,
 `bill-typescript-code-review`) plus their area specialists. Go, iOS, Kotlin, PHP, Python, Rust, and TypeScript declare all ten areas; KMP covers Android and Kotlin Multiplatform, declaring seven areas (`architecture`, `platform-correctness`, `security`, `persistence`, `reliability`, `ui`, `ux-accessibility`) and composing the remaining three (`performance`, `testing`, `api-contracts`) from Kotlin. All carry
-`internal-for: bill-code-review` and install as siblings inside
-`bill-code-review/`'s staged directory; the eight stack entries do **not** become
+`internal-for: skill-bill` and install as siblings inside
+`skill-bill/`'s staged directory; the eight stack entries do **not** become
 parents of their specialists (PD2 flatten rule). After install with all packs
-selected, the agent skill list shows `bill-code-review` (plus the listed
-`bill-code-check`) but none of those internal sidecars.
-`bill-code-review` reads the dominant pack's entry sidecar, which reads its
+selected, the agent skill list shows only `skill-bill` and none of those
+internal sidecars. The review phase (`/skill-bill phase:review`) reads the
+dominant pack's entry sidecar, which reads its
 specialist rubric sidecars as siblings. With only the Kotlin pack selected,
 the Kotlin entry plus its ten specialists stage; other packs contribute nothing (PD3). The KMP pack declares
 `bill-kotlin-code-review` as a required baseline layer, so selecting KMP without
 Kotlin fails install planning with the typed baseline-co-presence error (PD8).
 Quality checks use the same manifest-discovered pack selection, but they do not
 have pack skill sidecars. A dominant pack's `validation_gate` owns the
-collect-all and cache-bypassing collect-all argv; `bill-code-check` remains the
-single listed entry point and telemetry identity.
+collect-all and cache-bypassing collect-all argv; `skill-bill phase validation`
+is the entry point, and `bill-code-check` remains only the `routed_skill`
+telemetry identity.
 
 `content.md` must not contain generated wrapper headings:
 
@@ -356,7 +368,7 @@ Worked example: `orchestration/skill-classes/feature-task.yaml` matches
 `^bill-[a-z0-9-]*feature-task$` and injects ceremony lines for
 `peak-hours-warner.md`, `shell-ceremony.md`, and `telemetry-contract.md`.
 `orchestration/skill-classes/feature-launch-warning.yaml` exactly matches
-`bill-feature`; it injects the `peak-hours-warner.md`
+`skill-bill`; it injects the `peak-hours-warner.md`
 ceremony line. `peak-hours-warner.md` is an operator launch warning/config
 pointer, so warning behavior comes from the operator-facing configuration
 surface rather than hard-coded product-specific wording in each skill.
@@ -661,7 +673,7 @@ use `kind: "platform-pack"`.
 The manifest is strict: `contract_version: "1.0"`, a canonical `slug`, a
 single-line `description`, one or more `agent_ids`, and one or more supported
 `consumers`. Invocation is explicit, for example
-`/bill-feature SKILL-122 agent-addon:execution-budget`. The receiving agent must
+`/skill-bill SKILL-122 agent-addon:execution-budget`. The receiving agent must
 be declared; `execution-budget` supports Codex only. With no `agent-addon:`
 token the feature workflow is unchanged.
 

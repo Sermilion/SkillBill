@@ -1,7 +1,7 @@
 ---
 name: bill-typescript-code-review-persistence
 description: Use when reviewing TypeScript ORM and query clients, transactions, migrations, connection lifecycles, durable serialization, and consistency.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Persistence Review Specialist

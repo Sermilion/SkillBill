@@ -1,7 +1,7 @@
 ---
 name: bill-python-code-review-persistence
 description: Review Python persistence code including SQLAlchemy, Django ORM, raw SQL, migrations, transactions, locking, sessions, and consistency.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Python Persistence Review

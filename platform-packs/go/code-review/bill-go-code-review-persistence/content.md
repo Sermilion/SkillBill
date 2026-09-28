@@ -1,7 +1,7 @@
 ---
 name: bill-go-code-review-persistence
 description: Use when reviewing Go database/sql lifecycles, queries, transactions, isolation, pools, migrations, mapping, and applicable data libraries.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Go Persistence Review Specialist

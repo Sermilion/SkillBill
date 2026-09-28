@@ -390,6 +390,32 @@ declare -a RENAMED_SKILL_PAIRS=(
   'bill-gcheck:bill-code-check'
 )
 
+# Mirrors retiredSkillNames in InstallLegacySkillNames.kt: skills removed from
+# the catalog with no successor, whose old links still need cleanup by name.
+declare -a RETIRED_SKILL_NAMES=(
+  'bill-create-skill'
+  'bill-grill-plan'
+  'bill-skill-remove'
+  'bill-skill-scaffold'
+  'bill-new-skill-all-agents'
+  'bill-feature'
+  'bill-feature-spec'
+  'bill-code-review'
+  'bill-code-review-inline'
+  'bill-code-check'
+  'bill-pr-description'
+  'bill-boundary-history'
+  'bill-boundary-decisions'
+  'bill-pr-review-fix'
+  'bill-unit-test-value-check'
+  'bill-update-check'
+  'bill-release'
+  'bill-feature-verify'
+  'bill-feature-guard'
+  'bill-feature-guard-cleanup'
+  'bill-monitor'
+)
+
 declare -a SKILL_NAMES=()
 declare -a LEGACY_SKILL_NAMES=()
 declare -a REMOVED_TARGETS=()
@@ -455,6 +481,11 @@ build_legacy_skill_names() {
 
   for pair in "${RENAMED_SKILL_PAIRS[@]}"; do
     old_name="${pair%%:*}"
+    add_legacy_name "$old_name"
+    add_legacy_name "mdp-${old_name#bill-}"
+  done
+
+  for old_name in "${RETIRED_SKILL_NAMES[@]}"; do
     add_legacy_name "$old_name"
     add_legacy_name "mdp-${old_name#bill-}"
   done

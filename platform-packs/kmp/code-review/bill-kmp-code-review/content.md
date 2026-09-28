@@ -1,7 +1,7 @@
 ---
 name: bill-kmp-code-review
 description: Use when conducting a thorough Android/KMP PR code review. Preserve mobile review depth by flattening the manifest-declared Kotlin baseline into direct specialist lanes alongside KMP-specific specialists. Produces a structured review with risk register and prioritized action items. Use when user mentions Android review, KMP review, mobile review, or asks to review Android/KMP changes.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Android/KMP PR Review
@@ -40,4 +40,4 @@ Treat the generated flattened Review Composition plan as authoritative. Launch i
 
 - Report only reachable failures with a concrete precondition and observed consequence.
 - Assign severity from impact, keep every finding attributed to its baseline, specialist, or add-on lane, and deduplicate without erasing ownership.
-- Read selected specialist sidecars from the installed `bill-code-review` directory; do not invoke internal specialists through a skill command.
+- Read selected specialist sidecars from the installed `skill-bill` directory; do not invoke internal specialists through a skill command.

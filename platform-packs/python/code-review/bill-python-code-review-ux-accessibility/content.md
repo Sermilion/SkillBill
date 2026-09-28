@@ -1,7 +1,7 @@
 ---
 name: bill-python-code-review-ux-accessibility
 description: Review accessibility and UX of Python-rendered forms, templates, dashboards, validation feedback, keyboard flow, and localization-sensitive copy.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Python UX Accessibility Review

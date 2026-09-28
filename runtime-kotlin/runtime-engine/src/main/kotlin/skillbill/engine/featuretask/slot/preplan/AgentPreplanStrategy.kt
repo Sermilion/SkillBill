@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.preplan
 
+import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
@@ -50,6 +51,7 @@ class AgentPreplanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
       ceremonyLine =
         "Apply ${ceremonyScalingOf(inputs.briefing).preplanCeremony.promptLabel}. Keep the gate real: identify " +
           "concrete scope, affected boundaries, risks, and unknowns at the requested depth.",
+      stepContext = if (inputs.suppressDecomposition) "" else featureSpecIntake,
       valueContent = VALUE_CONTENT,
     )
 
@@ -60,6 +62,11 @@ class AgentPreplanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
 
   companion object {
     const val ID = "agent-preplan"
+
+    private const val FEATURE_SPEC_INTAKE =
+      "/skillbill/engine/featuretask/slot/preplan/feature-spec-intake.md"
+
+    private val featureSpecIntake: String by lazy { directiveResource(FEATURE_SPEC_INTAKE).trimEnd() }
 
     private const val DIRECTIVE: String =
       "Produce the scaled pre-planning digest for the resolved feature size. Do not modify repository files " +

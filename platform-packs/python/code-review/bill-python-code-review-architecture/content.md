@@ -1,7 +1,7 @@
 ---
 name: bill-python-code-review-architecture
 description: Review Python architecture, package boundaries, dependency direction, configuration ownership, and application/library seams.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Python Architecture Review

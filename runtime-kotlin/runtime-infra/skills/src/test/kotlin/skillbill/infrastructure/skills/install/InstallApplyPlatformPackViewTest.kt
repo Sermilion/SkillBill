@@ -3,6 +3,7 @@ package skillbill.infrastructure.skills.install
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.SupportedAgent
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import kotlin.test.Test
@@ -33,7 +34,7 @@ class InstallApplyPlatformPackViewTest : InstallApplyTestSupport() {
     assertEquals("kotlin", loadPlatformManifest(packRoot).slug)
     assertFalse(Files.exists(agentRoot.resolve("bill-kotlin-code-review"), LinkOption.NOFOLLOW_LINKS))
     assertFalse(Files.exists(packRoot.resolve("code-review/bill-kotlin-code-review"), LinkOption.NOFOLLOW_LINKS))
-    assertTrue(Files.isRegularFile(agentRoot.resolve("bill-code-review/bill-kotlin-code-review.md")))
+    assertTrue(Files.isRegularFile(agentRoot.resolve("$PACK_SIDECAR_PARENT_SKILL/bill-kotlin-code-review.md")))
     assertFalse(Files.exists(packRoot.resolve("quality-check"), LinkOption.NOFOLLOW_LINKS))
     assertFalse(
       Files.exists(agentRoot.resolve("platform-packs/kmp/platform.yaml"), LinkOption.NOFOLLOW_LINKS),
@@ -42,7 +43,7 @@ class InstallApplyPlatformPackViewTest : InstallApplyTestSupport() {
   }
 
   @Test
-  fun `apply does not stage leftover pack quality-check files under bill-code-check`() {
+  fun `apply does not stage leftover pack quality-check files under skill-bill`() {
     val fixture = setupApplyFixture()
     val qualityCheckDir = fixture.repoRoot.resolve("platform-packs/kotlin/quality-check/bill-kotlin-code-check")
     Files.createDirectories(qualityCheckDir)
@@ -51,7 +52,7 @@ class InstallApplyPlatformPackViewTest : InstallApplyTestSupport() {
       """
       ---
       name: bill-kotlin-code-check
-      internal-for: bill-code-check
+      internal-for: skill-bill
       ---
       # leftover
       """.trimIndent(),
@@ -77,8 +78,11 @@ class InstallApplyPlatformPackViewTest : InstallApplyTestSupport() {
     assertEquals(InstallApplyStatus.SUCCESS, result.status)
     val agentRoot = fixture.home.resolve("agent-skill-targets/codex")
     assertFalse(
-      Files.exists(agentRoot.resolve("bill-code-check/bill-kotlin-code-check.md"), LinkOption.NOFOLLOW_LINKS),
-      "leftover pack checker must not install as bill-code-check sidecar",
+      Files.exists(
+        agentRoot.resolve("$PACK_SIDECAR_PARENT_SKILL/bill-kotlin-code-check.md"),
+        LinkOption.NOFOLLOW_LINKS,
+      ),
+      "leftover pack checker must not install as $PACK_SIDECAR_PARENT_SKILL sidecar",
     )
   }
 
@@ -140,7 +144,7 @@ class InstallApplyPlatformPackViewTest : InstallApplyTestSupport() {
       "internal pack skill must not materialize a standalone platform-packs symlink",
     )
     assertTrue(
-      Files.isRegularFile(agentRoot.resolve("bill-code-review/bill-kotlin-code-review.md")),
+      Files.isRegularFile(agentRoot.resolve("$PACK_SIDECAR_PARENT_SKILL/bill-kotlin-code-review.md")),
       "internal pack skill must stage as a sibling sidecar of its parent's installed directory",
     )
   }

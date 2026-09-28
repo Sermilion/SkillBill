@@ -66,8 +66,8 @@ class GoalPlanningPhaseGatesUnsupportedError :
 class UnknownPhaseReviewTargetError(
   val target: String,
 ) : ShellContentContractException(
-    "Review target '$target' does not name a commit in this repository; expected HEAD, uncommitted, or a commit " +
-      "sha, branch, or tag.",
+    "Review target '$target' does not name a commit in this repository; expected HEAD, uncommitted, pr, staged, " +
+      "unstaged, or a commit sha, branch, or tag.",
   )
 
 class PhaseIntakeRequiredError(

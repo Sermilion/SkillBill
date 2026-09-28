@@ -1,7 +1,7 @@
 ---
 name: bill-typescript-code-review-ux-accessibility
 description: Use when reviewing TypeScript UI semantics, names, focus, keyboard input, live feedback, localization, motion, zoom, and assistive-technology behavior.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # UX and Accessibility Review Specialist

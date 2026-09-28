@@ -10,7 +10,7 @@ description: Single source of truth for shared stack-specific code-review orches
 `delegated` is the experimental full-depth review, reached only by explicit selection: the reviewing agent fans the routed areas out
 to specialist subagents inside its own harness, and this specialist contract is
 what each of those subagents is held to. `inline` is the single-prompt review —
-the declared `bill-code-review-inline` native agent in one worker session with
+one session that follows the runtime's inline review directive, with
 no per-area fan-out — and it is held to
 the same finding bar, severity vocabulary, and report structure stated below.
 `auto` resolves to `inline` under each of its named rules: a first pass, any scope
@@ -65,11 +65,11 @@ Do not reference this repo-relative path directly from installable skills — us
 
 ## Shared Execution Mode Contract
 
-- `bill-code-review` accepts exactly one canonical caller argument: `mode:auto`, `mode:inline`, or `mode:delegated`. Omission is `mode:inline`.
+- `skill-bill phase review` accepts exactly one canonical caller argument: `mode:auto`, `mode:inline`, or `mode:delegated`. Omission is `mode:inline`.
 - It also accepts at most one governed caller context, `context:feature-remediation`. This context is valid only with `mode:inline` for a bounded feature-task re-review of the supplied remediation delta. Reject it with any other mode or scope.
 - Reject malformed, unknown, repeated, or conflicting `mode:` arguments before scope resolution or review launch. The requested mode is review-run metadata and is forwarded unchanged to parallel lanes and review re-runs.
 - `auto` resolves to `inline` everywhere: a first review pass, every follow-up or remediation pass, and a scope with no pass number. Preserve its named deciding rule in metadata; size, risk, and layering never change the resolution, and `auto` never reaches the delegated fan-out.
-- `inline` is authoritative as the light judgment-depth tier: one `bill-code-review-inline` native agent session, no per-area specialist workers, walking every manifest-declared area and required baseline area as an explicit checklist once each at reduced depth. Large evidence is broker-paged to completion inside that session — reduced depth does not authorize sampling or early stop. Diff signals focus an area's inspection but never drop that area. It is not equivalent depth to delegated, and the inline result says so. Do not spawn specialists, invent lane totals, refuse the request, or silently change it to another mode.
+- `inline` is authoritative as the light judgment-depth tier: one inline review session, no per-area specialist workers, walking every manifest-declared area and required baseline area as an explicit checklist once each at reduced depth. Large evidence is broker-paged to completion inside that session — reduced depth does not authorize sampling or early stop. Diff signals focus an area's inspection but never drop that area. It is not equivalent depth to delegated, and the inline result says so. Do not spawn specialists, invent lane totals, refuse the request, or silently change it to another mode.
 - Inline and delegated workers use only `read_evidence` and `request_expansion`. Discover assigned evidence with `read_evidence` `operation: discover` and continue with `next_cursor`. Read the returned exact `path` and `selector` using `operation: read` and `requests`. Whole-file reads require a discovered or newly issued `expansion_id`. Rubrics and required companion guidance arrive in the launch. Discovery and authorization do not count as delivered evidence. A recoverable refusal can be corrected; any remaining required evidence blocks approval. Never use backing-store paths or shell reads.
 - `context:feature-remediation` bounds pass two to the supplied remediation delta — all findings addressed in that round union the pre-fix-to-post-fix diff — rather than the full base-to-current delta. The immutable `review_base_sha` and baseline untracked inventory remain the authority for pass one only. The pass emits an evidenced `resolved`, `unresolved`, or `superseded` disposition for every prior Blocker under the durable `blocker_dispositions` key. This context lowers depth and scope only; it does not weaken finding severity, evidence, admission, or approval rules.
 - Only an explicit `delegated` selection performs normal specialist selection and launch. Launch the required delegated workers using `review-delegation.md`; if a worker cannot start, stop loudly. Never fall back to inline.
@@ -121,8 +121,8 @@ Accounting preserves direct and inclusive ownership. Direct usage belongs to one
 
 ## Shared Caller Integration Notes
 
-- If a review is invoked from a feature workflow, `bill-feature-verify`, or another orchestration skill, do not pause for user selection. Return prioritized findings so the caller can auto-fix P0/P1 items and decide whether to carry Minor items forward.
-- After all P0 and P1 items are resolved, run `bill-code-check` as final verification when the project uses a routed quality-check path and the review is being run standalone.
+- If a review is invoked from a feature workflow, `operation:verify`, or another orchestration skill, do not pause for user selection. Return prioritized findings so the caller can auto-fix P0/P1 items and decide whether to carry Minor items forward.
+- After all P0 and P1 items are resolved, run `skill-bill phase validation` as final verification when the project uses a routed quality-check path and the review is being run standalone.
 
 ## Shared Report Structure
 

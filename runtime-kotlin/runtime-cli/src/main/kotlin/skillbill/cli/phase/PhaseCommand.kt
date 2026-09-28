@@ -7,6 +7,7 @@ import com.github.ajalt.clikt.parameters.options.option
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.config.ConfigResolutionService
 import skillbill.application.review.service.RequestedReviewMode
+import skillbill.cli.codereview.namedStandaloneScope
 import skillbill.cli.codereview.usageError
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
@@ -45,7 +46,8 @@ class PhaseCommand(
     name = "args",
     help =
       "Optional intake text, then key:value pairs: ${PhaseCommandKeys.MODE}:inline|delegated|auto " +
-        "and ${PhaseCommandKeys.TARGET}:HEAD|uncommitted|<commit-sha|branch|tag>. An omitted target reviews " +
+        "and ${PhaseCommandKeys.TARGET}:HEAD|uncommitted|${PhaseInvocationParser.SCOPED_TARGETS.joinToString("|")}|" +
+        "<commit-sha|branch|tag>. An omitted target reviews " +
         "uncommitted changes when the worktree is dirty and HEAD otherwise.",
   ).multiple()
   private val agent by option(
@@ -110,8 +112,10 @@ data class PhaseInvocation(
 object PhaseInvocationParser {
   private const val KEY_SEPARATOR = ':'
   private const val HEAD_TARGET = "HEAD"
+  private const val LAST_TARGET = "last"
   private const val UNCOMMITTED_TARGET = "uncommitted"
   private const val COMMIT_PUSH = "commit_push"
+  val SCOPED_TARGETS: List<String> = listOf("pr", "staged", "unstaged")
   private val KEYS = setOf(PhaseCommandKeys.MODE, PhaseCommandKeys.TARGET)
 
   fun phaseNames(): List<String> =
@@ -163,16 +167,17 @@ object PhaseInvocationParser {
           "${RequestedReviewMode.delegatedWireValue} (${RequestedReviewMode.autoWireValue} resolves inline).",
       )
 
-  private fun target(value: String): ReviewTarget =
-    when {
-      value.isBlank() || value.any(Char::isWhitespace) ->
-        throw UsageError(
-          "Unknown ${PhaseCommandKeys.TARGET} '$value'; expected $HEAD_TARGET, $UNCOMMITTED_TARGET, or a commit " +
-            "sha, branch, or tag.",
-        )
-      value == UNCOMMITTED_TARGET -> ReviewTarget.Uncommitted
-      else -> ReviewTarget.Commit(value)
+  private fun target(value: String): ReviewTarget {
+    if (value.isBlank() || value.any(Char::isWhitespace)) {
+      throw UsageError(
+        "Unknown ${PhaseCommandKeys.TARGET} '$value'; expected $HEAD_TARGET, $UNCOMMITTED_TARGET, " +
+          "${SCOPED_TARGETS.joinToString(", ")}, or a commit sha, branch, or tag.",
+      )
     }
+    if (value == UNCOMMITTED_TARGET) return ReviewTarget.Uncommitted
+    if (value.equals(LAST_TARGET, ignoreCase = true)) return ReviewTarget.Commit(HEAD_TARGET)
+    return namedStandaloneScope(value)?.let { scope -> ReviewTarget.Scoped(scope) } ?: ReviewTarget.Commit(value)
+  }
 }
 
 private fun writePhaseResult(

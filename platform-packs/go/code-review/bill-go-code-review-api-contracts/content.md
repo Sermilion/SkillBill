@@ -1,7 +1,7 @@
 ---
 name: bill-go-code-review-api-contracts
 description: Use when reviewing Go net/http, RPC, request validation, serialization, response ordering, idempotency, and compatibility contracts.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Go API Contract Review Specialist

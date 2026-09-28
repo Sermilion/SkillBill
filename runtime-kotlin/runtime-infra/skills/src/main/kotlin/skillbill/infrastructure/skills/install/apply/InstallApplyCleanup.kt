@@ -2,6 +2,7 @@ package skillbill.infrastructure.skills.install.apply
 
 import skillbill.infrastructure.skills.install.plan.platformSkills
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
+import skillbill.infrastructure.skills.install.staging.pruneLegacySkillCacheDirs
 import skillbill.install.model.InstallApplyIssue
 import skillbill.install.model.InstallApplyIssueKind
 import skillbill.install.model.InstallPlan
@@ -39,6 +40,11 @@ internal fun cleanupExistingSkillBillLinks(
       cleanupOneTarget(agentTarget.agent, legacyDir, cleanupContext, failures)
     }
   }
+  pruneLegacySkillCacheDirs(
+    home = plan.request.home.toPath(),
+    legacySkillNames = legacySkillBillCacheNames(cleanupSkillNames),
+    liveSkillNames = cleanupSkillNames,
+  )
 }
 
 private data class InstallCleanupContext(

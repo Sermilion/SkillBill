@@ -1,7 +1,7 @@
 ---
 name: bill-go-code-review-security
 description: Use when reviewing Go authentication, authorization, templates, input limits, paths, processes, SSRF, uploads, secrets, dependencies, and security middleware.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Go Security Review Specialist

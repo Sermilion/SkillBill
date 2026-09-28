@@ -3,11 +3,11 @@ package skillbill.infrastructure.skills.agentaddon
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.agentaddon.model.AgentAddonCatalogueEntry
 import skillbill.agentaddon.model.AgentAddonCatalogueInspection
-import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.agentaddon.model.AgentAddonDeclaration
 import skillbill.contracts.JsonCodec
 import skillbill.error.shellcontent.MissingAgentAddonDeclarationError
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.repository.toFileLocation
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -25,6 +25,7 @@ fun discoverAgentAddons(
   repoRoot: Path,
   externalSourceRoots: List<Path> = emptyList(),
   schemaValidator: AgentAddonSchemaValidator = AgentAddonSchemaValidator(),
+  diagnostics: RuntimeDiagnostics? = null,
 ): List<AgentAddonDeclaration> {
   val repoAddonRoot = repoRoot.toAbsolutePath().normalize().resolve(AGENT_ADDONS_DIRECTORY)
   val sourceRoots =
@@ -32,7 +33,7 @@ fun discoverAgentAddons(
       externalSourceRoots.map { root -> AgentAddonSourceRoot(root.toAbsolutePath().normalize(), required = true) }
   val candidates =
     sourceRoots.flatMap { sourceRoot ->
-      discoverAgentAddonRoot(sourceRoot, schemaValidator)
+      discoverAgentAddonRoot(sourceRoot, schemaValidator, diagnostics)
     }
   validateSourceCoherence(candidates)
   return candidates.sortedBy { it.slug }
@@ -70,6 +71,7 @@ fun requireAgentAddon(
 private fun discoverAgentAddonRoot(
   sourceRoot: AgentAddonSourceRoot,
   schemaValidator: AgentAddonSchemaValidator,
+  diagnostics: RuntimeDiagnostics?,
 ): List<AgentAddonDeclaration> {
   val rootLabel = sourceRoot.path.toString()
   return sourceOperation(rootLabel, "agent add-on root cannot be read") {
@@ -91,13 +93,14 @@ private fun discoverAgentAddonRoot(
       Files.list(sourceRoot.path).use { stream ->
         stream.filter { !it.name.startsWith(".") }.sorted().toList()
       }
-    sourceDirectories.map { parseSource(it, schemaValidator) }
+    sourceDirectories.map { parseSource(it, schemaValidator, diagnostics) }
   }
 }
 
 internal fun parseSource(
   sourceRoot: Path,
   validator: AgentAddonSchemaValidator,
+  diagnostics: RuntimeDiagnostics? = null,
 ): AgentAddonDeclaration {
   val manifest = sourceRoot.resolve(MANIFEST_FILE)
   val content = sourceRoot.resolve(CONTENT_FILE)
@@ -134,11 +137,11 @@ internal fun parseSource(
     val consumerIds = values.stringList("consumers", sourceLabel)
     val consumers =
       consumerIds.map { id ->
-        runCatching { AgentAddonConsumer.fromId(id) }.getOrElse {
+        runCatching { decodeAgentAddonConsumer(id, AGENT_ADDON_DECLARED_CONSUMER_SEAM, diagnostics) }.getOrElse {
           violations += it.message ?: "unknown consumer '$id'"
           null
         }
-      }.filterNotNull()
+      }.filterNotNull().distinct()
     if (violations.isNotEmpty()) invalid(sourceLabel, violations.joinToString("; "))
     AgentAddonDeclaration(
       contractVersion = values.string("contract_version", sourceLabel),

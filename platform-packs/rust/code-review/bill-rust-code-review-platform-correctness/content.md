@@ -1,7 +1,7 @@
 ---
 name: bill-rust-code-review-platform-correctness
 description: Use when reviewing Rust ownership, borrowing, lifetimes, error semantics, panic behavior, concurrency, and async runtime correctness.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Platform Correctness Review Specialist

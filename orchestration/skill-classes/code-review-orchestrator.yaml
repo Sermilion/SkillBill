@@ -3,8 +3,6 @@ contract_version: "1.8"
 
 matchers:
   - pattern: "^bill-[a-z0-9-]+-code-review$"
-    exclude_exact:
-      - bill-code-review
 
 pointers:
   - shell-ceremony

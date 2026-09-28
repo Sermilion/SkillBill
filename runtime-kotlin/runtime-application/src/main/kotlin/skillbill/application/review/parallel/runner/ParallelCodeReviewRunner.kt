@@ -11,9 +11,11 @@ import skillbill.application.review.parallel.planning.resolveReviewRevisions
 import skillbill.application.review.parallel.verification.ParallelCodeReviewRunnerVerificationStages
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
+import skillbill.error.shellcontent.InlineParallelReviewUnsupportedError
 import skillbill.ports.review.launch.ReviewNativeAgentPreflightPort
 import skillbill.ports.review.model.ReviewAccountingRecord
 import skillbill.ports.review.model.ReviewNativeAgentPreflightRequest
+import skillbill.review.context.ReviewExecutionModePolicy
 import skillbill.review.context.model.execution.ResolvedReviewExecutionMode
 import skillbill.review.parallel.ParallelReviewMerger
 
@@ -27,6 +29,7 @@ class ParallelCodeReviewRunner(
   private val nativeAgentPreflight: ReviewNativeAgentPreflightPort,
 ) {
   fun run(originalRequest: ParallelCodeReviewRequest): ParallelCodeReviewResult {
+    requireDelegatedMode(originalRequest)
     earlyEmptyDelta(originalRequest)?.let { return it }
     val initial = planning.prepareInitialRun(originalRequest)
     verifyNativeWorkers(initial)
@@ -118,18 +121,19 @@ class ParallelCodeReviewRunner(
     return null
   }
 
+  private fun requireDelegatedMode(request: ParallelCodeReviewRequest) {
+    val requested = request.resolvedTier ?: request.codeReviewMode
+    if (ReviewExecutionModePolicy.resolve(requested) == ResolvedReviewExecutionMode.INLINE) {
+      throw InlineParallelReviewUnsupportedError(requested.wireValue)
+    }
+  }
+
   private fun verifyNativeWorkers(initial: ParallelCodeReviewInitialRun) {
-    val nativeNames =
+    val logicalNames =
       initial.compiledLaunchRequests
         .filter { it.workerKind == ReviewWorkerKind.PROVIDER_NATIVE }
         .mapNotNull { it.logicalWorkerName }
-    val logicalNames =
-      buildList {
-        addAll(nativeNames)
-        if (initial.resolvedMode == ResolvedReviewExecutionMode.INLINE) {
-          add(PARALLEL_REVIEW_INLINE_NATIVE_WORKER)
-        }
-      }.distinct()
+        .distinct()
     if (logicalNames.isEmpty()) return
     nativeAgentPreflight.verify(
       ReviewNativeAgentPreflightRequest(

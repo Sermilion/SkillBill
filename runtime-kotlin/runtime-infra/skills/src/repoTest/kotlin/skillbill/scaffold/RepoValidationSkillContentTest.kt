@@ -15,7 +15,7 @@ class RepoValidationSkillContentTest {
   fun `repo validation preserves native agent source files`() {
     val repoRoot = Files.createTempDirectory("skillbill-native-agent-source-preservation")
     createRepoValidationSkillFixture(repoRoot)
-    val nativeAgent = repoRoot.resolve("skills/bill-code-review/native-agents/bill-code-review-worker.md")
+    val nativeAgent = repoRoot.resolve("skills/skill-bill/native-agents/bill-code-review-worker.md")
     Files.createDirectories(nativeAgent.parent)
     val sourceText =
       renderNativeAgentSource(
@@ -41,8 +41,8 @@ class RepoValidationSkillContentTest {
   fun `repo validation rejects checked-in generated native agent artifact with source`() {
     val repoRoot = Files.createTempDirectory("skillbill-native-agent-checked-in-artifact")
     createRepoValidationSkillFixture(repoRoot)
-    writeNativeAgentFixture(repoRoot.resolve("skills/bill-code-review"), "bill-code-review-worker")
-    val generatedArtifact = repoRoot.resolve("skills/bill-code-review/cursor-agents/bill-code-review-worker.md")
+    writeNativeAgentFixture(repoRoot.resolve("skills/skill-bill"), "bill-code-review-worker")
+    val generatedArtifact = repoRoot.resolve("skills/skill-bill/cursor-agents/bill-code-review-worker.md")
     Files.createDirectories(generatedArtifact.parent)
     Files.writeString(generatedArtifact, "checked-in generated file\n")
 
@@ -62,7 +62,7 @@ class RepoValidationSkillContentTest {
   fun `repo validation rejects checked-in generated native agent artifact without source`() {
     val repoRoot = Files.createTempDirectory("skillbill-native-agent-orphan")
     createRepoValidationSkillFixture(repoRoot)
-    val orphan = repoRoot.resolve("skills/bill-code-review/codex-agents/orphan.toml")
+    val orphan = repoRoot.resolve("skills/skill-bill/codex-agents/orphan.toml")
     Files.createDirectories(orphan.parent)
     Files.writeString(orphan, "name = \"orphan\"\n")
 
@@ -193,7 +193,7 @@ class RepoValidationSkillContentTest {
   fun `repo validation reports content_md frontmatter name mismatch`() {
     val repoRoot = Files.createTempDirectory("skillbill-content-name-mismatch")
     createRepoValidationSkillFixture(repoRoot)
-    val contentFile = repoRoot.resolve("skills/bill-code-review/content.md")
+    val contentFile = repoRoot.resolve("skills/skill-bill/content.md")
     Files.writeString(
       contentFile,
       """
@@ -215,7 +215,7 @@ class RepoValidationSkillContentTest {
       report.issues.any {
         it.contains(contentFile.toString()) &&
           it.contains("bill-wrong-name") &&
-          it.contains("bill-code-review")
+          it.contains("skill-bill")
       },
       report.issues.joinToString("\n"),
     )
@@ -256,12 +256,12 @@ class RepoValidationSkillContentTest {
   fun `repo validation rejects unresolved placeholders in content_md`() {
     val repoRoot = Files.createTempDirectory("skillbill-content-placeholder")
     createRepoValidationSkillFixture(repoRoot)
-    val contentFile = repoRoot.resolve("skills/bill-code-review/content.md")
+    val contentFile = repoRoot.resolve("skills/skill-bill/content.md")
     Files.writeString(
       contentFile,
       """
       ---
-      name: bill-code-review
+      name: skill-bill
       description: Review code.
       ---
 
@@ -287,12 +287,12 @@ class RepoValidationSkillContentTest {
   fun `repo validation rejects generated support pointer links in content_md`() {
     val repoRoot = Files.createTempDirectory("skillbill-content-ceremony-pointer")
     createRepoValidationSkillFixture(repoRoot)
-    val contentFile = repoRoot.resolve("skills/bill-code-review/content.md")
+    val contentFile = repoRoot.resolve("skills/skill-bill/content.md")
     Files.writeString(
       contentFile,
       """
       ---
-      name: bill-code-review
+      name: skill-bill
       description: Review code.
       ---
 
@@ -320,12 +320,12 @@ class RepoValidationSkillContentTest {
   fun `repo validation rejects subagent runtime notes heading in content_md`() {
     val repoRoot = Files.createTempDirectory("skillbill-content-subagent-notes")
     createRepoValidationSkillFixture(repoRoot)
-    val contentFile = repoRoot.resolve("skills/bill-code-review/content.md")
+    val contentFile = repoRoot.resolve("skills/skill-bill/content.md")
     Files.writeString(
       contentFile,
       """
       ---
-      name: bill-code-review
+      name: skill-bill
       description: Review code.
       ---
 

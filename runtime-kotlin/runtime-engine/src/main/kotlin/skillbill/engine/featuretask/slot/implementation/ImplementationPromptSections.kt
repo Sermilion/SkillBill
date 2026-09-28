@@ -37,8 +37,8 @@ internal object ImplementationPromptSections {
     ## Simplify scope boundary
     The subtask_scope projection and repository checkpoint list the only owned paths and diff context
     for this session. Work exclusively inside that boundary. Forbidden: repository-wide search for
-    complexity, edits outside listed paths, `./gradlew` build or check, test execution, bill-code-review,
-    review subagents, delegated review, or spawning other agents.
+    complexity, edits outside listed paths, `./gradlew` build or check, test execution,
+    `skill-bill phase review`, review subagents, delegated review, or spawning other agents.
     """.trimIndent()
 
   private val IMPLEMENT_VALUE_CONTENT: String =

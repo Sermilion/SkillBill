@@ -1,7 +1,7 @@
 ---
 name: bill-rust-code-review-testing
 description: Use when reviewing Rust unit, integration, doc, property, fuzz, compile-fail, concurrency, and Cargo feature-matrix tests.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Testing Review Specialist

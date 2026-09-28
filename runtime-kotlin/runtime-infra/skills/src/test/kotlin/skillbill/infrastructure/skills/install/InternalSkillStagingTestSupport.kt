@@ -3,6 +3,7 @@ package skillbill.infrastructure.skills.install
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.supportingFileTargets
 import skillbill.install.model.InstallPlanSkill
 import skillbill.install.model.InstallPlanSkillKind
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.ports.repository.toFileLocation
 import skillbill.testsupport.SkillClassFixtures
 import java.nio.file.Files
@@ -51,8 +52,8 @@ open class InternalSkillStagingTestSupport {
     SkillClassFixtures.seedShippedSkillClasses(repoRoot)
     seedSkill(
       repoRoot,
-      "bill-code-check",
-      "bill-code-check",
+      PACK_SIDECAR_PARENT_SKILL,
+      PACK_SIDECAR_PARENT_SKILL,
       "Routes quality checks and dispatches to pack sidecars.",
     )
 
@@ -153,7 +154,7 @@ open class InternalSkillStagingTestSupport {
 
   protected fun setupParentWithInternalPackChild(): ParentWithInternalPackChildFixture {
     val (repoRoot, home) = setupRepoBase()
-    val parentName = "bill-code-review"
+    val parentName = PACK_SIDECAR_PARENT_SKILL
     val parentDir =
       seedSkill(
         repoRoot,
@@ -242,7 +243,7 @@ open class InternalSkillStagingTestSupport {
       |---
       |name: $qualityCheckName
       |description: Test quality-check skill.
-      |internal-for: bill-code-check
+      |internal-for: skill-bill
       |---
       |Body.
       """.trimMargin(),
@@ -291,7 +292,7 @@ open class InternalSkillStagingTestSupport {
       |---
       |name: $qualityCheckName
       |description: Test quality-check skill.
-      |internal-for: bill-code-check
+      |internal-for: skill-bill
       |---
       |Body.
       """.trimMargin(),

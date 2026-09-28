@@ -1,7 +1,7 @@
 ---
 name: bill-typescript-code-review-performance
 description: Use when reviewing TypeScript event-loop work, promise fan-out, streams, browser bundles, rendering, hydration, allocation, and retained resources.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Performance Review Specialist

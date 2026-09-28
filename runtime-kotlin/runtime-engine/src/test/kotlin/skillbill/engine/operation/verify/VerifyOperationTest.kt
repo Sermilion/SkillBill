@@ -146,6 +146,8 @@ class VerifyOperationTest {
       ).forEach { (step, keys) ->
         assertEquals(keys, harness.runner.input(step).priorValues.keys, step)
       }
+      val completenessRubric = harness.runner.input(VerifyPromptSections.COMPLETENESS_AUDIT_STEP).priorValues
+      assertTrue("## Completeness Audit" in completenessRubric.getValue("completeness_rubric"))
     }
   }
 

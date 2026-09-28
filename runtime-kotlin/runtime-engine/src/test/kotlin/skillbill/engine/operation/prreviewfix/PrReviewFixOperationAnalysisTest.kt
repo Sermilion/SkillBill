@@ -21,6 +21,7 @@ class PrReviewFixOperationAnalysisTest {
       val directive = harness.runner.inputs.single().directive
       assertContains(directive, "### T1 — a.kt:9 (thread PRRT_a)")
       assertContains(directive, "- PRRT_outdated — c.kt:2 (outdated)")
+      assertContains(directive, "### Classify threads")
       assertEquals(emptyList(), harness.github.replies)
       assertEquals(emptyList(), harness.pushes)
       assertEquals("", harness.status())

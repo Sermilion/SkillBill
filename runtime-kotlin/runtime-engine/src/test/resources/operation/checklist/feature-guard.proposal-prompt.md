@@ -14,6 +14,8 @@ Report, as plain prose the operator can confirm:
 
 Apply these feature-guard rules:
 
+# Feature Guard Mode Content
+
 ## Core Principles
 
 North Star Goal: Single feature flag check to switch between old and new execution paths. Minimize flag usage by structuring code cohesively.
@@ -58,6 +60,16 @@ Code examples and anti-patterns are included below.
 1. Feature flag name: What should this feature flag be called?
 2. Scope clarification: If changes span many files, confirm the Legacy pattern approach.
 3. Existing flags: Is there an existing flag that should be reused?
+
+## Session Behavior
+
+For the remainder of this session:
+
+1. Every code change proposal MUST include feature flag strategy.
+2. Show where the feature flag check(s) will be placed.
+3. Identify what becomes Legacy vs New.
+4. Confirm rollback safety before implementing.
+5. Create/update feature flag definition in the codebase.
 
 ## Patterns
 
@@ -183,3 +195,17 @@ fun render() {
   newFooter()  // This breaks rollback!
 }
 ```
+
+## Example Session Flow
+
+User: "Add a new checkout flow with Apple Pay support"
+
+Response should include:
+1. "I'll implement this with feature flag `feature-apple-pay-checkout`"
+2. "Current `CheckoutScreen` will be renamed to `CheckoutScreenLegacy` (no modifications)"
+3. "New `CheckoutScreen` will be created with Apple Pay support"
+4. "Single feature flag check will be in the navigation router"
+5. "When flag is OFF: Users see exact same checkout as today"
+6. "When flag is ON: Users see new checkout with Apple Pay"
+
+Then proceed with implementation following this plan.

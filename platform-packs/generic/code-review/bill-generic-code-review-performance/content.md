@@ -1,7 +1,7 @@
 ---
 name: bill-generic-code-review-performance
 description: Technology-neutral performance review for amplification, blocking, resource lifetime, and scale.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Generic Performance Review

@@ -1,7 +1,7 @@
 ---
 name: bill-kmp-code-review-reliability
 description: Use when reviewing WorkManager and CoroutineWorker scheduling, process-death and foreground-service recovery, collector supervision, and connectivity-aware retry on Android and KMP.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # KMP Reliability Review Specialist

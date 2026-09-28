@@ -42,6 +42,8 @@ internal fun resolveManualTargets(input: InstallPolicyInput): List<InstallAgentT
     }
 }
 
+const val PACK_SIDECAR_PARENT_SKILL = "skill-bill"
+
 fun selectedPlatformSlugs(input: InstallPolicyInput): List<String> {
   val explicitlySelected =
     selectedPlatformSlugs(
@@ -49,7 +51,7 @@ fun selectedPlatformSlugs(input: InstallPolicyInput): List<String> {
       discoveredSlugs = input.platformPacks.map(InstallPlatformPackSnapshot::slug),
     )
   val selected = explicitlySelected.toMutableSet()
-  if (input.baseSkills.any { it.name == "bill-code-review" }) {
+  if (input.baseSkills.any { it.name == PACK_SIDECAR_PARENT_SKILL }) {
     input.resolvedReviewFallbackSlug?.let(selected::add)
   }
   var changed: Boolean

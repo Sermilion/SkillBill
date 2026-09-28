@@ -112,7 +112,7 @@ case "$cmd" in
       fi
       echo "reconcile_summary: applied=true baseline_refreshed=true installed_count=1 pruned_count=0"
     else
-      echo "reconcile_outcome: kind=adopt upstream_hash=aaa path=skills/bill-code-review"
+      echo "reconcile_outcome: kind=adopt upstream_hash=aaa path=skills/skill-bill"
       echo "reconcile_summary: applied=false baseline_refreshed=false installed_count=0 pruned_count=0"
     fi
     ;;
@@ -543,7 +543,7 @@ fi
 echo ""
 echo "--- scenario 6: a local edit is overwritten by upstream (AC#3) ---"
 
-TARGET_SKILL="$FAKE_HOME/.skill-bill/skills/bill-code-review"
+TARGET_SKILL="$FAKE_HOME/.skill-bill/skills/skill-bill"
 if [[ ! -d "$TARGET_SKILL" ]]; then
   TARGET_SKILL="$(find "$FAKE_HOME/.skill-bill/skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1 || true)"
 fi

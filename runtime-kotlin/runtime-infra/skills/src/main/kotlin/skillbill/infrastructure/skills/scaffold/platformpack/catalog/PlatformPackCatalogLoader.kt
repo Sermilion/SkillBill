@@ -36,6 +36,7 @@ data class PlatformPackDiscoveryContext(
   val environment: Map<String, String> = emptyMap(),
   val enforceContractVersion: Boolean = true,
   val catalogLoader: PlatformPackCatalogLoader? = null,
+  val enforceGovernedReviewStructure: Boolean = true,
 )
 
 @Inject
@@ -75,7 +76,12 @@ class PlatformPackCatalogLoader(
     validatePlatformPackCompositions(manifests, catalog.manifestsBySlug)
     validatePlatformPackFallbacks(manifests)
     manifests.forEach { pack ->
-      validatePlatformPack(pack, SHELL_CONTRACT_VERSION, context.enforceContractVersion)
+      validatePlatformPack(
+        pack,
+        SHELL_CONTRACT_VERSION,
+        context.enforceContractVersion,
+        context.enforceGovernedReviewStructure,
+      )
     }
     return catalog
   }

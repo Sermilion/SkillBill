@@ -1,7 +1,7 @@
 ---
 name: bill-ios-code-review-security
 description: Use when reviewing iOS secrets, privacy, entitlements, links, sharing, and sensitive output.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Security Review Specialist

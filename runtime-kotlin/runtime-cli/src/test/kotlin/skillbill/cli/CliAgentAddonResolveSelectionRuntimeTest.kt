@@ -59,7 +59,7 @@ class CliAgentAddonResolveSelectionRuntimeTest {
       slug: $slug
       description: Codex policy.
       agent_ids: [codex]
-      consumers: [bill-feature]
+      consumers: [skill-bill]
       """.trimIndent() + "\n",
     )
     Files.writeString(source.resolve("content.md"), "# Codex policy\n")

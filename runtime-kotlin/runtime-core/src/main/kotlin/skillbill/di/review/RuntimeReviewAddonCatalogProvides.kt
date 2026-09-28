@@ -6,6 +6,7 @@ import skillbill.infrastructure.skills.file.FileExternalAgentAddonSourceConfigSt
 import skillbill.infrastructure.skills.install.FileSystemInstalledPlatformPackCatalog
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 
 internal interface RuntimeReviewAddonCatalogProvides {
@@ -15,7 +16,8 @@ internal interface RuntimeReviewAddonCatalogProvides {
   ): InstalledPlatformPackCatalogPort = adapter
 
   @Provides
-  fun agentAddonSelectionPort(): AgentAddonSelectionPort = AgentAddonSelectionResolver()
+  fun agentAddonSelectionPort(diagnostics: RuntimeDiagnostics): AgentAddonSelectionPort =
+    AgentAddonSelectionResolver(diagnostics)
 
   @Provides
   fun externalAgentAddonSourceConfigPort(

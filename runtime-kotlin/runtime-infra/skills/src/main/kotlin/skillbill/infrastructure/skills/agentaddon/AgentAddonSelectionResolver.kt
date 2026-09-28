@@ -11,11 +11,14 @@ import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.install.model.SupportedAgent
 import skillbill.model.toPath
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.nio.file.Files
 import java.nio.file.Path
 
 @Inject
-class AgentAddonSelectionResolver : AgentAddonSelectionPort {
+class AgentAddonSelectionResolver(
+  private val diagnostics: RuntimeDiagnostics,
+) : AgentAddonSelectionPort {
   override fun resolveInitial(
     repoRoot: Path,
     requestedSlugs: List<String>,
@@ -30,7 +33,8 @@ class AgentAddonSelectionResolver : AgentAddonSelectionPort {
       )
     }
     val receivingAgents = receivingAgentIds.map(::parseAgent)
-    val catalogue = discoverAgentAddons(repoRoot, externalSourceRoots).associateBy { it.slug }
+    val catalogue =
+      discoverAgentAddons(repoRoot, externalSourceRoots, diagnostics = diagnostics).associateBy { it.slug }
     return HydratedAgentAddonSelection(
       requestedSlugs.map { slug ->
         val declaration =
@@ -60,6 +64,7 @@ class AgentAddonSelectionResolver : AgentAddonSelectionPort {
         parseAgent = ::parseAgent,
         validateCompatibility = ::validateCompatibility,
         stringList = ::stringList,
+        decodeConsumer = { id -> decodeAgentAddonConsumer(id, AGENT_ADDON_PERSISTED_CONSUMER_SEAM, diagnostics) },
       ),
     )
 

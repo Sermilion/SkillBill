@@ -1,7 +1,7 @@
 ---
 name: bill-kotlin-code-review-reliability
 description: Review Kotlin retries, timeouts, supervision, replay, shutdown, cleanup, ordering, and operational evidence.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Reliability Review Specialist

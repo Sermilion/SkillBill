@@ -1,5 +1,6 @@
 package skillbill.engine.operation.release
 
+import skillbill.engine.directive.directiveResource
 import skillbill.engine.operation.core.ConfirmableOperation
 import skillbill.engine.operation.core.ConfirmedOperationProposal
 import skillbill.engine.operation.core.OperationContext
@@ -36,7 +37,7 @@ class ReleaseOperation(
     val version = nextReleaseVersion(lastTag, bump)
     val commits = gitOperations.commitLogSince(context.repoRoot, lastTag).requireGitValue("commit log")
     val directive =
-      changelogDirective()
+      releaseDirective()
         .replace("{{version}}", version)
         .replace("{{previous_tag}}", lastTag ?: "none (first release; commits since the root commit)")
         .replace("{{commit_log}}", commits.ifBlank { "(no commits)" })
@@ -93,14 +94,11 @@ class ReleaseOperation(
   private fun branch(context: OperationContext): String =
     gitOperations.currentBranch(context.repoRoot).requireGitValue("branch")
 
-  private fun changelogDirective(): String =
-    requireNotNull(ReleaseOperation::class.java.getResourceAsStream(CHANGELOG_DIRECTIVE_RESOURCE)) {
-      "Missing release changelog directive resource $CHANGELOG_DIRECTIVE_RESOURCE."
-    }.use { stream -> stream.readBytes().decodeToString() }
+  private fun releaseDirective(): String = directiveResource(RELEASE_DIRECTIVE_RESOURCE)
 }
 
 private const val CHANGELOG_STEP = "operation.release.changelog"
-private const val CHANGELOG_DIRECTIVE_RESOURCE = "/skillbill/engine/operation/release/changelog-directive.md"
+private const val RELEASE_DIRECTIVE_RESOURCE = "/skillbill/engine/operation/release/release-directive.md"
 private const val LAST_RELEASE_TAG = "last_release_tag"
 private const val REMOTE_HEAD = "remote_head"
 private const val RELEASE_VERSION = "release_version"

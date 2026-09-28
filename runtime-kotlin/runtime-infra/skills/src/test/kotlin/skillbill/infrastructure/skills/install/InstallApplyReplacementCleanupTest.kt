@@ -4,6 +4,7 @@ import skillbill.install.model.InstallAgentLinkStatus
 import skillbill.install.model.InstallApplyIssueKind
 import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.SupportedAgent
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -26,14 +27,14 @@ class InstallApplyReplacementCleanupTest : InstallApplyTestSupport() {
       )
     applyInstallForTest(selectedPlatformPlan)
     val targetDir = fixture.home.resolve("agent-skill-targets/codex")
-    val codeReviewStaging = readSymlinkTarget(targetDir.resolve("bill-code-review"))
+    val sidecarParentStaging = readSymlinkTarget(targetDir.resolve(PACK_SIDECAR_PARENT_SKILL))
     assertTrue(
-      Files.isRegularFile(codeReviewStaging.resolve("bill-kotlin-code-review.md")),
+      Files.isRegularFile(sidecarParentStaging.resolve("bill-kotlin-code-review.md")),
     )
     assertFalse(Files.exists(targetDir.resolve("bill-kotlin-code-check"), LinkOption.NOFOLLOW_LINKS))
     assertFalse(
       Files.exists(
-        readSymlinkTarget(targetDir.resolve("bill-code-check")).resolve("bill-kotlin-code-check.md"),
+        sidecarParentStaging.resolve("bill-kotlin-code-check.md"),
         LinkOption.NOFOLLOW_LINKS,
       ),
     )
@@ -54,7 +55,10 @@ class InstallApplyReplacementCleanupTest : InstallApplyTestSupport() {
     assertFalse(Files.exists(targetDir.resolve("bill-kotlin-code-review"), LinkOption.NOFOLLOW_LINKS))
     assertFalse(Files.exists(targetDir.resolve("bill-kotlin-code-check"), LinkOption.NOFOLLOW_LINKS))
     assertFalse(
-      Files.exists(targetDir.resolve("bill-code-review/bill-kotlin-code-review.md"), LinkOption.NOFOLLOW_LINKS),
+      Files.exists(
+        targetDir.resolve("$PACK_SIDECAR_PARENT_SKILL/bill-kotlin-code-review.md"),
+        LinkOption.NOFOLLOW_LINKS,
+      ),
     )
   }
 

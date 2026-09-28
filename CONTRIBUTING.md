@@ -50,7 +50,7 @@ The documented extension surface is **platform packs** under
 - `validation_gate` — pack quality-check commands and findings contract
 
 Adding a new language pack is additive: drop in `platform-packs/<lang>/` and
-the generic `/bill-code-review` and `/bill-code-check` skills start routing to
+`/skill-bill phase:review` and `/skill-bill phase:validation` start routing to
 it automatically — no changes to generic skill files required. See
 [Skill Source and Generation Model](docs/skill-source-generation.md) for the
 source layout and render contract.

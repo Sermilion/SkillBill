@@ -9,7 +9,6 @@ import skillbill.error.core.ExternalPlatformPackPublishError
 import skillbill.error.shellcontent.ContractVersionMismatchError
 import skillbill.error.shellcontent.InvalidManifestSchemaError
 import skillbill.error.shellcontent.MissingContentFileError
-import skillbill.error.shellcontent.MissingValidationGateError
 import skillbill.infrastructure.skills.install.nativeagent.installNativeAgentCompositionContext
 import skillbill.infrastructure.skills.install.nativeagent.link.InstallNativeAgentOperations
 import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkOverrides
@@ -36,7 +35,6 @@ import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPac
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackDiscoveryContext
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadCompositionClosure
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
-import skillbill.infrastructure.skills.scaffold.platformpack.manifest.routeQualityCheck
 import skillbill.infrastructure.skills.scaffold.rendering.renderContentBody
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.TemplateContext
@@ -103,12 +101,6 @@ class ExternalPlatformPackCatalogIntegrationTest {
     )
     assertEquals(PlatformPackSourceKind.EXTERNAL, catalog.entryForSlug("acme")?.loaded?.sourceKind)
     assertEquals(null, catalog.entryForSlug("acme")?.shadowedBundledSlug)
-
-    val kotlinRoute = routeQualityCheck(repo, listOf("src/Foo.kt"), home, loader(), context.environment)
-    assertEquals("kotlin", kotlinRoute?.detectedStack)
-    assertEquals(listOf("external-gate-collect"), kotlin?.loaded?.manifest?.validationGate?.collectAllFullGateCommand)
-    val nodeRoute = routeQualityCheck(repo, listOf("package.json"), home, loader(), context.environment)
-    assertEquals("node", nodeRoute?.detectedStack)
 
     val discovered = discoverPlatformManifests(installRequest(repo, home, config), catalogLoader = loader())
     assertEquals(
@@ -383,17 +375,9 @@ class ExternalPlatformPackCatalogIntegrationTest {
     writePack(root.resolve("external/kotlin"), "kotlin", "EXTERNAL_BASELINE_MARKER", listOf(".kt"), gate = null)
     writeSources(config, root.resolve("external/kotlin"))
 
-    val error =
-      assertFailsWith<MissingValidationGateError> {
-        routeQualityCheck(
-          repo,
-          listOf("src/Foo.kt"),
-          home,
-          loader(),
-          mapOf(CONFIG_ENVIRONMENT_KEY to config.toString()),
-        )
-      }
-    assertFalse(error.message.orEmpty().contains("bundled-gate-collect"))
+    val kotlin = loader().loadEffectiveCatalog(context(repo, home, config)).entryForSlug("kotlin")
+    assertEquals(PlatformPackSourceKind.EXTERNAL, kotlin?.loaded?.sourceKind)
+    assertEquals(null, kotlin?.loaded?.manifest?.validationGate)
   }
 
   @Test

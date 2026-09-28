@@ -1,7 +1,7 @@
 ---
 name: bill-typescript-code-review-testing
 description: Use when reviewing TypeScript type assertions, unit and integration behavior, browser or worker evidence, package entry points, async races, and regressions.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Testing Review Specialist
