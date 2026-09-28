@@ -68,8 +68,7 @@ object InstallOperations {
     hostPlatform: HostPlatformPort = JdkHostPlatformPort,
   ): Path {
     val resolvedHome = resolveInstallHome(home, hostPlatform)
-    val resolvedEnvironment = resolveInstallEnvironment(environment, hostPlatform)
-    return planCodexAgentsPath(resolvedHome, resolvedEnvironment)
+    return planCodexAgentsPath(resolvedHome, environment)
   }
 
   fun codexRoots(

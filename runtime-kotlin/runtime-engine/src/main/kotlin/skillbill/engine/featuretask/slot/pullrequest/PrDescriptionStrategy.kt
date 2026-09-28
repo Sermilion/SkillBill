@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.pullrequest
 
 import skillbill.engine.directive.directiveResource
+import skillbill.engine.featuretask.lifecycle.branch.requirePublishableBranch
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -15,16 +16,15 @@ import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.engine.featuretask.slot.withMeasuredFacts
-import skillbill.error.featuretask.PullRequestBranchRefusedError
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.PullRequestTemplateFiles
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
-import skillbill.workflow.gitops.ProtectedBranches
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
@@ -94,11 +94,11 @@ class PrDescriptionStrategy(
   ): PhaseOutcome {
     val context = PhaseAttemptScope(run.request, state)
     val resolved = context.recorder.loadResolvedBranch(context.request.workflowId)
-    val branch = resolved?.branch
+    val branch = requirePublishableBranch(resolved?.branch, resolved?.baseBranch ?: DEFAULT_BASE_BRANCH)
     val baseBranch = resolved?.baseBranch ?: DEFAULT_BASE_BRANCH
-    refusal(branch, baseBranch)?.let { reason -> throw PullRequestBranchRefusedError(branch, reason) }
-    requireNotNull(branch)
-    if (FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH in context.transitions.forwardPhaseIds) {
+    if (context.request.skeletonDefinition?.runStateKind != SkeletonRunStateKind.IN_MEMORY &&
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH in context.transitions.forwardPhaseIds
+    ) {
       readinessGate.blockedReason(
         workflowId = context.request.workflowId,
         repoRoot = context.request.repoRoot,
@@ -143,17 +143,6 @@ class PrDescriptionStrategy(
 
   private fun branch(context: PhaseAttemptEnvironment): String? =
     context.recorder.loadResolvedBranch(context.request.workflowId)?.branch
-
-  private fun refusal(
-    branch: String?,
-    baseBranch: String,
-  ): String? =
-    when {
-      branch == null -> "the checkout is on no branch."
-      ProtectedBranches.protectedName(branch) != null -> "'$branch' is a protected branch."
-      branch == baseBranch -> "'$branch' is the base branch."
-      else -> null
-    }
 
   private fun pushIfAhead(
     context: PhaseAttemptEnvironment,

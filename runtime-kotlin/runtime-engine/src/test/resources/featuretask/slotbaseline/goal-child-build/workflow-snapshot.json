@@ -445,7 +445,7 @@
                 ],
                 "workflow_id": "wftr-20260602-test-0001"
             },
-            "wftr-20260602-test-0001|review|1|review#1|repository-checkpoint-831bf900": {
+            "wftr-20260602-test-0001|review|1|review#1|repository-checkpoint-32cbcf3c": {
                 "consumer_delivery_iteration": 1,
                 "consumer_phase_id": "review",
                 "contract_version": "0.2",
@@ -534,13 +534,16 @@
                     ],
                     "repository_checkpoint": {
                         "base_ref": "__NORMALIZED_SHA40__",
-                        "fingerprint": "repository-checkpoint-831bf900",
-                        "head_ref": "__NORMALIZED_SHA40__"
+                        "fingerprint": "repository-checkpoint-32cbcf3c",
+                        "head_ref": "__NORMALIZED_SHA40__",
+                        "working_tree_owned_paths": [
+                            "src/Foo.kt"
+                        ]
                     }
                 },
                 "record_kind": "delivered_projection",
                 "repository_checkpoint": {
-                    "fingerprint": "repository-checkpoint-831bf900"
+                    "fingerprint": "repository-checkpoint-32cbcf3c"
                 },
                 "source_producer_iterations": [
                     {
@@ -550,7 +553,7 @@
                 ],
                 "workflow_id": "wftr-20260602-test-0001"
             },
-            "wftr-20260602-test-0001|verify_findings|1|review#1,verify_findings#1|repository-checkpoint-831bf900": {
+            "wftr-20260602-test-0001|verify_findings|1|review#1,verify_findings#1|repository-checkpoint-32cbcf3c": {
                 "consumer_delivery_iteration": 1,
                 "consumer_phase_id": "verify_findings",
                 "contract_version": "0.2",
@@ -569,7 +572,7 @@
                                     "kind": "compact_reference",
                                     "name": "repository_checkpoint",
                                     "reference_kind": "repository_checkpoint",
-                                    "reference_value": "repository-checkpoint-831bf900+producer-claimed:repository-checkpoint-831bf900"
+                                    "reference_value": "repository-checkpoint-32cbcf3c+producer-claimed:repository-checkpoint-32cbcf3c"
                                 }
                             ],
                             "producer_iteration": {
@@ -684,13 +687,16 @@
                     ],
                     "repository_checkpoint": {
                         "base_ref": "__NORMALIZED_SHA40__",
-                        "fingerprint": "repository-checkpoint-831bf900",
-                        "head_ref": "__NORMALIZED_SHA40__"
+                        "fingerprint": "repository-checkpoint-32cbcf3c",
+                        "head_ref": "__NORMALIZED_SHA40__",
+                        "working_tree_owned_paths": [
+                            "src/Foo.kt"
+                        ]
                     }
                 },
                 "record_kind": "delivered_projection",
                 "repository_checkpoint": {
-                    "fingerprint": "repository-checkpoint-831bf900"
+                    "fingerprint": "repository-checkpoint-32cbcf3c"
                 },
                 "source_producer_iterations": [
                     {
@@ -704,7 +710,7 @@
                 ],
                 "workflow_id": "wftr-20260602-test-0001"
             },
-            "wftr-20260602-test-0001|write_history|1|build#1,implement#1,write_history#1|repository-checkpoint-831bf900": {
+            "wftr-20260602-test-0001|write_history|1|build#1,implement#1,write_history#1|repository-checkpoint-32cbcf3c": {
                 "consumer_delivery_iteration": 1,
                 "consumer_phase_id": "write_history",
                 "contract_version": "0.2",
@@ -733,12 +739,16 @@
                         {
                             "fields": [
                                 {
-                                    "items": [],
+                                    "items": [
+                                        "src/Foo.kt"
+                                    ],
                                     "kind": "text_list",
                                     "name": "changed_paths"
                                 },
                                 {
-                                    "items": [],
+                                    "items": [
+                                        "src"
+                                    ],
                                     "kind": "text_list",
                                     "name": "boundary_candidates"
                                 }
@@ -769,7 +779,7 @@
                                     "kind": "compact_reference",
                                     "name": "repository_checkpoint",
                                     "reference_kind": "repository_checkpoint",
-                                    "reference_value": "repository-checkpoint-831bf900+producer-claimed:repository-fingerprint-6"
+                                    "reference_value": "repository-checkpoint-32cbcf3c+producer-claimed:repository-fingerprint-6"
                                 },
                                 {
                                     "kind": "text",
@@ -893,13 +903,16 @@
                     ],
                     "repository_checkpoint": {
                         "base_ref": "__NORMALIZED_SHA40__",
-                        "fingerprint": "repository-checkpoint-831bf900",
-                        "head_ref": "__NORMALIZED_SHA40__"
+                        "fingerprint": "repository-checkpoint-32cbcf3c",
+                        "head_ref": "__NORMALIZED_SHA40__",
+                        "working_tree_owned_paths": [
+                            "src/Foo.kt"
+                        ]
                     }
                 },
                 "record_kind": "delivered_projection",
                 "repository_checkpoint": {
-                    "fingerprint": "repository-checkpoint-831bf900"
+                    "fingerprint": "repository-checkpoint-32cbcf3c"
                 },
                 "source_producer_iterations": [
                     {
@@ -1345,7 +1358,7 @@
                     "AC-1",
                     "AC-2"
                 ],
-                "briefing_text": "# Feature-task-runtime phase briefing\nphase: review\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: repository-checkpoint-831bf900\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n- diff: read the branch diff yourself; it is not delivered in this briefing",
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: review\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: repository-checkpoint-32cbcf3c\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  - src/Foo.kt\n\n## Derived context (layer 3, declared)\n- diff: read the branch diff yourself; it is not delivered in this briefing",
                 "contract_version": "0.2",
                 "derived_context_keys": [
                     "diff"
@@ -1436,8 +1449,11 @@
                     ],
                     "repository_checkpoint": {
                         "base_ref": "__NORMALIZED_SHA40__",
-                        "fingerprint": "repository-checkpoint-831bf900",
-                        "head_ref": "__NORMALIZED_SHA40__"
+                        "fingerprint": "repository-checkpoint-32cbcf3c",
+                        "head_ref": "__NORMALIZED_SHA40__",
+                        "working_tree_owned_paths": [
+                            "src/Foo.kt"
+                        ]
                     }
                 },
                 "mandates_and_overrides": [
@@ -1451,7 +1467,7 @@
                     "AC-1",
                     "AC-2"
                 ],
-                "briefing_text": "# Feature-task-runtime phase briefing\nphase: verify_findings\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nacceptance_criteria:\n  AC-001. AC-1\n  AC-002. AC-2\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: review\nfindings:\nrepository_checkpoint: repository_checkpoint=repository-checkpoint-831bf900+producer-claimed:repository-checkpoint-831bf900\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)\nacceptance_criteria:\n  - AC-1\n  - AC-2\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: repository-checkpoint-831bf900\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n(none)",
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: verify_findings\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nacceptance_criteria:\n  AC-001. AC-1\n  AC-002. AC-2\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: review\nfindings:\nrepository_checkpoint: repository_checkpoint=repository-checkpoint-32cbcf3c+producer-claimed:repository-checkpoint-32cbcf3c\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)\nacceptance_criteria:\n  - AC-1\n  - AC-2\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: repository-checkpoint-32cbcf3c\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  - src/Foo.kt\n\n## Derived context (layer 3, declared)\n(none)",
                 "contract_version": "0.2",
                 "derived_context_keys": [],
                 "feature_size": "MEDIUM",
@@ -1470,7 +1486,7 @@
                                     "kind": "compact_reference",
                                     "name": "repository_checkpoint",
                                     "reference_kind": "repository_checkpoint",
-                                    "reference_value": "repository-checkpoint-831bf900+producer-claimed:repository-checkpoint-831bf900"
+                                    "reference_value": "repository-checkpoint-32cbcf3c+producer-claimed:repository-checkpoint-32cbcf3c"
                                 }
                             ],
                             "producer_iteration": {
@@ -1585,8 +1601,11 @@
                     ],
                     "repository_checkpoint": {
                         "base_ref": "__NORMALIZED_SHA40__",
-                        "fingerprint": "repository-checkpoint-831bf900",
-                        "head_ref": "__NORMALIZED_SHA40__"
+                        "fingerprint": "repository-checkpoint-32cbcf3c",
+                        "head_ref": "__NORMALIZED_SHA40__",
+                        "working_tree_owned_paths": [
+                            "src/Foo.kt"
+                        ]
                     }
                 },
                 "mandates_and_overrides": [
@@ -1600,7 +1619,7 @@
                     "AC-1",
                     "AC-2"
                 ],
-                "briefing_text": "# Feature-task-runtime phase briefing\nphase: write_history\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: implement\nvalue: Fixture implement prose for downstream audit.\n### from: implement\nchanged_paths:\nboundary_candidates:\n### from: build\nvalidation_status: passed\nchecks:\nrepository_checkpoint: repository_checkpoint=repository-checkpoint-831bf900+producer-claimed:repository-fingerprint-6\ngate_run_count: 1\ngate_runs:\n  - {\"duration_ms\":1,\"outcome\":\"passed\",\"cache_mode\":\"cache_eligible\",\"executed_work_units\":1,\"executed_checks\":[]}\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_finalization_context (run_invariant_field:finalization_context)\nfinalization_context:\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: repository-checkpoint-831bf900\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n(none)",
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: write_history\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: implement\nvalue: Fixture implement prose for downstream audit.\n### from: implement\nchanged_paths:\n  - src/Foo.kt\nboundary_candidates:\n  - src\n### from: build\nvalidation_status: passed\nchecks:\nrepository_checkpoint: repository_checkpoint=repository-checkpoint-32cbcf3c+producer-claimed:repository-fingerprint-6\ngate_run_count: 1\ngate_runs:\n  - {\"duration_ms\":1,\"outcome\":\"passed\",\"cache_mode\":\"cache_eligible\",\"executed_work_units\":1,\"executed_checks\":[]}\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_finalization_context (run_invariant_field:finalization_context)\nfinalization_context:\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: repository-checkpoint-32cbcf3c\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  - src/Foo.kt\n\n## Derived context (layer 3, declared)\n(none)",
                 "contract_version": "0.2",
                 "derived_context_keys": [],
                 "feature_size": "MEDIUM",
@@ -1629,12 +1648,16 @@
                         {
                             "fields": [
                                 {
-                                    "items": [],
+                                    "items": [
+                                        "src/Foo.kt"
+                                    ],
                                     "kind": "text_list",
                                     "name": "changed_paths"
                                 },
                                 {
-                                    "items": [],
+                                    "items": [
+                                        "src"
+                                    ],
                                     "kind": "text_list",
                                     "name": "boundary_candidates"
                                 }
@@ -1665,7 +1688,7 @@
                                     "kind": "compact_reference",
                                     "name": "repository_checkpoint",
                                     "reference_kind": "repository_checkpoint",
-                                    "reference_value": "repository-checkpoint-831bf900+producer-claimed:repository-fingerprint-6"
+                                    "reference_value": "repository-checkpoint-32cbcf3c+producer-claimed:repository-fingerprint-6"
                                 },
                                 {
                                     "kind": "text",
@@ -1789,8 +1812,11 @@
                     ],
                     "repository_checkpoint": {
                         "base_ref": "__NORMALIZED_SHA40__",
-                        "fingerprint": "repository-checkpoint-831bf900",
-                        "head_ref": "__NORMALIZED_SHA40__"
+                        "fingerprint": "repository-checkpoint-32cbcf3c",
+                        "head_ref": "__NORMALIZED_SHA40__",
+                        "working_tree_owned_paths": [
+                            "src/Foo.kt"
+                        ]
                     }
                 },
                 "mandates_and_overrides": [
@@ -2216,7 +2242,9 @@
             "branch": "feat/SKILL-380-phase-slot-strategies",
             "created": false,
             "review_base_sha": "__NORMALIZED_SHA40__",
-            "workflow_owned_paths": []
+            "workflow_owned_paths": [
+                "src/Foo.kt"
+            ]
         },
         "feature_task_runtime_run_invariants": {
             "acceptance_criteria": [

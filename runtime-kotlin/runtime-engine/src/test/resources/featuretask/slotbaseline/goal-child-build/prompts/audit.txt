@@ -77,11 +77,11 @@ acceptance_criteria:
   - AC-2
 
 ## Repository checkpoint (layer 2, resolved)
-fingerprint: repository-checkpoint-831bf900
+fingerprint: repository-checkpoint-32cbcf3c
 base_ref: __NORMALIZED_SHA40__
 head_ref: __NORMALIZED_SHA40__
 scoped_owned_paths:
-  (none)
+  - src/Foo.kt
 
 ## Derived context (layer 3, declared)
 - scoped_repository_state: read the repository at the resolved checkpoint above — the diff over base_ref/head_ref plus the listed scoped_owned_paths — and treat that actual state, not any upstream receipt claim, as the evidence for every criterion. scoped_owned_paths is checkpoint evidence, not a write allowlist; remaining-criteria repair may edit any files those criteria require

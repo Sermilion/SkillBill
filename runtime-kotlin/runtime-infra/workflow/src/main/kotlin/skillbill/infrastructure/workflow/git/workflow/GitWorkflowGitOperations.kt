@@ -45,7 +45,8 @@ internal object GitRepositoryOwnedPathsOperations : RepositoryOwnedPathsGitOpera
     val untracked = runGitCommand(repoRoot, "ls-files", "--others", "--exclude-standard", "-z")
     if (untracked !is WorkflowGitOperationResult.Ok) return WorkflowGitNameListResult.Failed(untracked.error)
     val tracked = runGitCommand(repoRoot, "diff", "--name-only", "-z", "HEAD")
-    val trackedValue = tracked.value.takeIf { tracked is WorkflowGitOperationResult.Ok }.orEmpty()
+    if (tracked !is WorkflowGitOperationResult.Ok) return WorkflowGitNameListResult.Failed(tracked.error)
+    val trackedValue = tracked.value
     return WorkflowGitNameListResult.Listed(
       (untracked.value.orEmpty() + trackedValue).split(GIT_NUL).filter(String::isNotEmpty),
     )

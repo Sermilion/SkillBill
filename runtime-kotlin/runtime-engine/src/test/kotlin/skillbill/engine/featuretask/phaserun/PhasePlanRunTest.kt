@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.DECOMPOSE_PLAN_OUTPUT
 import skillbill.engine.RuntimeHarnessConfig
@@ -9,6 +11,7 @@ import skillbill.engine.facts
 import skillbill.engine.phaseIdFromPrompt
 import skillbill.engine.telemetryRunnerHarness
 import skillbill.engine.validJsonOutput
+import skillbill.infrastructure.contracts.FeatureTaskRuntimePhaseOutputSchemaValidator
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
@@ -47,7 +50,7 @@ class PhasePlanRunTest {
 
   @Test
   fun `a decompose plan writes a governed spec bundle and completes with its paths`() {
-    val launcher = launcher { phaseId -> if (phaseId == PLAN) DECOMPOSE_PLAN_OUTPUT else validJsonOutput(phaseId) }
+    val launcher = launcher { phaseId -> if (phaseId == PLAN) bundleOutput() else validJsonOutput(phaseId) }
 
     val result = entry(launcher).run(planRequest())
 
@@ -73,8 +76,39 @@ class PhasePlanRunTest {
 
     assertIs<PhaseRunResult.Blocked>(result, result.toString())
     assertEquals(PLAN, result.stepId)
+    assertEquals(listOf(PREPLAN), result.completedStepIds, "a plan without a package must not complete")
     assertEquals(emptyList(), planBundleDirectories(), "a direct plan must write no spec files")
     database.assertNoDurableWorkflowState()
+  }
+
+  @Test
+  fun `an empty decomposition is rejected before plan completion instead of crashing the writer`() {
+    val output = bundleOutput().replace(Regex("\"subtasks\":\\[.*]"), "\"subtasks\":[]")
+    val launcher = launcher { phaseId -> if (phaseId == PLAN) output else validJsonOutput(phaseId) }
+
+    val result = entry(launcher).run(planRequest())
+
+    assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    assertEquals(PLAN, result.stepId)
+    assertEquals(listOf(PREPLAN), result.completedStepIds)
+    assertTrue(result.reason.contains("output-verification"), result.reason)
+    assertEquals(emptyList(), planBundleDirectories())
+    database.assertNoDurableWorkflowState()
+  }
+
+  private fun bundleOutput(): String {
+    val envelope =
+      requireNotNull(
+        JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(DECOMPOSE_PLAN_OUTPUT)),
+      ).toMutableMap()
+    envelope[SharedPayloadKeys.CONTRACT_VERSION] = FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+    val produced =
+      requireNotNull(
+        JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]),
+      ).toMutableMap()
+    produced[SharedPayloadKeys.VALUE] = "Split the runtime work into ordered subtasks."
+    envelope[SharedPayloadKeys.PRODUCED_OUTPUTS] = produced
+    return JsonCodec.mapToJsonString(envelope)
   }
 
   private fun planRequest(): PhaseRunRequest =
@@ -100,7 +134,12 @@ class PhasePlanRunTest {
     val runner =
       telemetryRunnerHarness(
         runtimeConfig =
-          RuntimeHarnessConfig(branchSetup = committedRepoBranchSetup(), repoRoot = repoRoot, launcher = launcher),
+          RuntimeHarnessConfig(
+            branchSetup = committedRepoBranchSetup(),
+            repoRoot = repoRoot,
+            launcher = launcher,
+            validator = FeatureTaskRuntimePhaseOutputSchemaValidator(),
+          ),
         databaseFactory = { database },
       ).runner
     return phaseRunEntry(runner, database, clock)

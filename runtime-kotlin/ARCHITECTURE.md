@@ -1150,7 +1150,7 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   A phase run adds no telemetry event of its own and runs through
   `FeatureTaskRuntimeRunEventSink.NONE`. It returns an invocation id (the
   review session id when one is given, else `phr-<uuid>`) that the CLI prints.
-  `skill-bill phase <review|validation|plan|implement|pr> [intake] [mode:..] [target:..]` takes
+  `skill-bill phase <review|validation|plan|pr> [intake] [mode:..] [target:..]` takes
   `mode:inline|delegated|auto` (`auto` resolves inline) and
   `target:HEAD|uncommitted|pr|staged|unstaged|<commit-sha|branch|tag>`. An omitted target reviews
   uncommitted changes when the worktree is dirty and `HEAD` when it is clean.
@@ -1163,18 +1163,15 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   invariants as the definition's intake requirement says. An optional-intake
   run takes its issue key from the intake, else the current branch, else the
   definition id, so a `phase pr` title names the real issue. A missing issue key
-  raises `PhaseIntakeRequiredError`, and an `implement` intake that names no
-  readable governed spec (a bare issue key resolved through
-  `FeatureSpecPathResolverPort`, or a `.md` path) raises
-  `PhaseSpecRequiredError`. The CLI rejects an empty intake for either as a
+  raises `PhaseIntakeRequiredError`. The CLI rejects an empty plan intake as a
   usage error. `skill-bill phase plan <KEY> [description]` sets
   `specBundleRequired`: the plan prompt asks for a decomposition package, the
   planning stopper writes the parent spec, subtask specs and decomposition
   manifest through `FeatureSpecPreparationWriter` (spec type from
   `ConfigResolutionService`), and a direct plan blocks. The result carries a
   `PhaseRunSpecBundle` whose paths the CLI prints, so `skill-bill goal` can
-  run the bundle. `skill-bill phase implement <KEY|spec.md>` edits the tree
-  and commits nothing. `skill-bill phase pr` refuses a detached, protected, or
+  run the bundle. Implementation and simplification run inside workflows and
+  consume their plan output. `skill-bill phase pr` refuses a detached, protected, or
   base branch with `PullRequestBranchRefusedError`, pushes the branch when it
   has unpushed commits, and runs the pull-request readiness gate only when the
   run's forward steps include `commit_push`.

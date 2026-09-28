@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.plan
 import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.phase.prompt.directives.envelopeContract
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseRunner
@@ -14,6 +15,7 @@ import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.jsonValueContent
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -48,9 +50,11 @@ class AgentPlanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
   override fun promptSections(
     stepId: String,
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
-  ): PhaseStepPromptSections =
-    PhaseStepPromptSections(
-      taskDirective = directiveFor(stepId),
+  ): PhaseStepPromptSections {
+    policies.policyOf(stepId)
+    val bundleRequired = inputs.specBundleRequired && !inputs.suppressDecomposition
+    return PhaseStepPromptSections(
+      taskDirective = if (bundleRequired) BUNDLE_DIRECTIVE else directiveFor(stepId),
       testValueDiscipline = true,
       stepContext =
         when {
@@ -58,8 +62,22 @@ class AgentPlanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
           inputs.specBundleRequired -> "$featureSpecDirective\n\n$SPEC_BUNDLE_REQUIREMENT"
           else -> featureSpecDirective
         },
-      valueContent = VALUE_CONTENT,
+      valueContent = if (bundleRequired) "" else VALUE_CONTENT,
+      outputContract =
+        if (bundleRequired) {
+          envelopeContract(
+            stepName = stepId,
+            producedOutputsAddendum =
+              ". For completed output, include a non-blank value summarizing the plan and the complete " +
+                "decomposition_package described in the spec bundle planning requirement. " +
+                "Both fields belong inside produced_outputs.",
+            verdictContractLine = "",
+          )
+        } else {
+          null
+        },
     )
+  }
 
   override fun runStep(
     run: PhaseRun,
@@ -77,6 +95,13 @@ class AgentPlanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
   }
 
   private object PlanStepHooks : PhaseStepHooks {
+    override fun completionRejection(
+      run: PhaseRun,
+      context: PhaseAttemptEnvironment,
+      state: PhaseStepState,
+      outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+    ): String? = PlanDecompositionStop.completionRejection(context, outputMap)
+
     override fun afterCompletion(
       context: PhaseAttemptEnvironment,
       output: FeatureTaskRuntimePhaseOutput,
@@ -97,6 +122,12 @@ class AgentPlanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
       "/skillbill/engine/featuretask/slot/plan/feature-spec-directive.md"
 
     private val featureSpecDirective: String by lazy { directiveResource(FEATURE_SPEC_DIRECTIVE).trimEnd() }
+
+    private const val BUNDLE_DIRECTIVE: String =
+      "Produce a governed spec bundle that satisfies every acceptance criterion, using the upstream preplan " +
+        "value as planning context. Return the complete phase-output envelope with produced_outputs.value " +
+        "and produced_outputs.decomposition_package. Do not modify repository files; the runtime writes " +
+        "the bundle from the decomposition package."
 
     private const val DIRECTIVE: String =
       "Produce an ordered implementation plan that satisfies every acceptance criterion, using the upstream " +

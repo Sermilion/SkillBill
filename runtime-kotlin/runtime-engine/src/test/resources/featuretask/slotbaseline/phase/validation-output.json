@@ -2,43 +2,19 @@
     "blocked_reason": null,
     "blocked_step_id": null,
     "completed_step_ids": [
-        "build"
+        "validate"
     ],
     "invocation_id": "__NORMALIZED_INVOCATION_ID__",
     "review_result": null,
     "status": "completed",
     "value": {
         "contract_version": "0.7",
-        "phase_id": "build",
+        "phase_id": "validate",
         "produced_outputs": {
-            "build_receipt": {
-                "checks": [],
-                "contract_version": "0.1",
-                "gate_run_count": 2,
-                "gate_runs": [
-                    {
-                        "cache_mode": "cache_eligible",
-                        "duration_ms": "__NORMALIZED_DURATION__",
-                        "executed_checks": [],
-                        "executed_work_units": 1,
-                        "outcome": "failed"
-                    },
-                    {
-                        "cache_mode": "forced_full",
-                        "duration_ms": "__NORMALIZED_DURATION__",
-                        "executed_checks": [],
-                        "executed_work_units": 1,
-                        "outcome": "passed"
-                    }
-                ],
-                "repository_checkpoint": {
-                    "fingerprint": "before-fix"
-                },
-                "validation_status": "passed"
-            }
+            "validation_passed": true,
+            "value": "Project checks passed."
         },
         "status": "completed",
-        "summary": "Build satisfied by runtime-owned gate execution.",
-        "verdict": "satisfied"
+        "summary": "Phase produced a validated output."
     }
 }

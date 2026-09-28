@@ -2,6 +2,7 @@
     "blocked_reason": null,
     "blocked_step_id": null,
     "completed_step_ids": [
+        "commit_push",
         "pr"
     ],
     "invocation_id": "__NORMALIZED_INVOCATION_ID__",

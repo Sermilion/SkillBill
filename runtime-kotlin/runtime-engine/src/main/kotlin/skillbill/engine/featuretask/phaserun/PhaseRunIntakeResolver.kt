@@ -4,7 +4,6 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
 import skillbill.contracts.issuekey.issueAndFeature
 import skillbill.error.featuretask.PhaseIntakeRequiredError
-import skillbill.error.featuretask.PhaseSpecRequiredError
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
@@ -56,12 +55,6 @@ class PhaseRunIntakeResolver(
               mandatesAndOverrides = emptyList(),
             )
         PhaseRunIntake(key, invariants.copy(codeReviewMode = reviewMode))
-      }
-      PhaseIntakeRequirement.SPEC -> {
-        val invariants =
-          specInvariants(issueKey, specPath, bareKey = true, repoRoot = request.repoRoot)
-            ?: throw PhaseSpecRequiredError(definition.id, intake)
-        PhaseRunIntake(issueKey ?: request.definitionId, invariants.copy(codeReviewMode = reviewMode))
       }
     }
   }

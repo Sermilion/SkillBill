@@ -34,7 +34,6 @@ intake. Forwarded `key:value` tokens follow the intake unchanged.
 | --- | --- | --- |
 | `/skill-bill <intake>` | full run: Intake, Preflight, Gate, Rehydrate, Launch, Relay | required |
 | `/skill-bill <intake> phase:plan` | `skill-bill phase plan <intake> --agent <currently-executing-agent>` | required |
-| `/skill-bill <intake> phase:implement` | `skill-bill phase implement <intake> --agent <currently-executing-agent>` | required |
 | `/skill-bill [<intake>] phase:review` | `skill-bill phase review [<intake>] [mode:<value>] [target:<value>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<intake>] phase:validation` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill <standalone quality check: run checks, lint, format, or quality validation>` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
@@ -47,7 +46,7 @@ intake. Forwarded `key:value` tokens follow the intake unchanged.
 | `/skill-bill [<pr>] operation:pr-review-fix [scope:analyze-only] [push:on] [replies:draft]` | `skill-bill operation pr-review-fix [<pr>] [<tokens>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill operation:verify spec:<path> target:<pr\|branch\|base..head> [mode:inline\|delegated]` | `skill-bill operation verify [spec:<value>] [target:<value>] [mode:inline\|delegated] --agent <currently-executing-agent>` | required |
 
-If `phase:plan` or `phase:implement` has no intake, stop and ask for it. For any
+If `phase:plan` has no intake, stop and ask for it. For any
 other `phase:` name, stop and list the names in this table. If
 `operation:feature-guard` has no intake describing the change to guard, or
 `operation:feature-guard-cleanup` has no intake naming the flag, stop and ask for
@@ -160,6 +159,9 @@ translated command from Forms and Routing once and relay its output verbatim,
 adding nothing. Do not add checklists, rubrics, or steps from other skills. Never
 ask the user to run the command manually.
 
+Implementation and simplification run inside workflows and consume their plan
+output. There is no standalone implementation phase.
+
 ## Phase Review
 
 `phase:review` runs `skill-bill phase review` from Forms and Routing. The
@@ -239,6 +241,14 @@ Blocker and Major findings in the working tree before it reports the rest. Do
 not apply those fixes again. A `# Review phase blocked` line means the phase
 stopped before it finished; report it and exit non-zero.
 
+## Phase PR
+
+`phase:pr` composes `commit_push` followed by `pr`. The runtime refuses a detached,
+protected, or base branch before staging. It commits staged, unstaged, and untracked
+changes, excluding ignored and runtime-private files, then pushes. The PR step
+creates or updates the branch's open PR. A clean retry reuses the existing commit.
+The phase creates no workflow row, branch, or checkpoint commit.
+
 ## Phase Validation
 
 `phase:validation` runs `skill-bill phase validation` from Forms and Routing. A
@@ -249,7 +259,10 @@ once and relay its output as a phase form.
 
 ## Routing
 
-Auto-route to the dominant pack for the current unit of work. Honor this shell's Repair Window and fix strategy in-session; stack-specific argv live only in the pack manifest gate.
+Review routes to the dominant pack for the current unit of work. Validation uses
+the same full project validation strategy as goal validate. Its agent discovers
+required checks from the repository instructions, build configuration, scripts,
+and CI, then runs and repairs those checks. Compilation alone is insufficient.
 
 ## Operation Forms
 

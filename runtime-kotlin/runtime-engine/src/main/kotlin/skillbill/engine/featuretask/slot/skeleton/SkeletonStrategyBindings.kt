@@ -51,7 +51,7 @@ object SkeletonStrategyBindings {
             ),
         ),
       SkeletonDefinition.VALIDATION to
-        mapOf(PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(PackBuildStrategy.ID)),
+        mapOf(PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID)),
       SkeletonDefinition.PLAN to
         mapOf(
           PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID),
@@ -62,10 +62,11 @@ object SkeletonStrategyBindings {
           PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID),
           PhaseSlot.PLAN to PhaseStrategyBinding.Fixed(GoalPlanFanOutStrategy.ID),
         ),
-      SkeletonDefinition.IMPLEMENT to
-        mapOf(PhaseSlot.IMPLEMENTATION to PhaseStrategyBinding.Fixed(ImplementThenSimplifyStrategy.ID)),
       SkeletonDefinition.PR to
-        mapOf(PhaseSlot.PULL_REQUEST to PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID)),
+        mapOf(
+          PhaseSlot.COMMIT_PUSH to PhaseStrategyBinding.Fixed(RuntimeCommitStrategy.ID),
+          PhaseSlot.PULL_REQUEST to PhaseStrategyBinding.Fixed(PrDescriptionStrategy.ID),
+        ),
     )
 
   private fun sharedBindings(): Map<PhaseSlot, PhaseStrategyBinding> =

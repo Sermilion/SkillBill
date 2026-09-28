@@ -249,7 +249,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
   }
 
   @Test
-  fun `validate discovers project checks and returns a boolean result`() {
+  fun `validate requires full project checks and returns their results`() {
     val prompt =
       composePhasePrompt(
         PROMPT_COMPOSER_ISSUE_KEY,
@@ -257,7 +257,10 @@ class FeatureTaskRuntimePhasePromptComposerTest {
       )
 
     assertContains(prompt, "Discover the validation checks required by this project")
-    assertContains(prompt, "Do not run pack validation_gate argv")
+    assertContains(prompt, "Run the full project validation")
+    assertContains(prompt, "Compilation alone is insufficient")
+    assertContains(prompt, "Do not recursively invoke `skill-bill phase validation`")
+    assertFalse(prompt.contains("Do not run pack validation_gate argv"))
     assertContains(prompt, "Keep repairing in this same session")
     assertContains(prompt, "Settle completed only when every required check passes")
     assertContains(prompt, "verdict progress")

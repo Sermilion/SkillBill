@@ -223,6 +223,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertTrue(!prompt.contains("return a blocked plan"))
     assertFalse(prompt.contains("## Subtask Sizing"), "goal-child plan omits the spec directive")
     assertFalse(prompt.contains("## Spec Format Contract"), "goal-child plan omits the spec directive")
+    assertContains(prompt, "stamps the contract version and phase id itself")
   }
 
   @Test
@@ -236,6 +237,11 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(prompt, "## Subtask Sizing")
     assertContains(prompt, "## Spec Format Contract")
     assertContains(prompt, "Spec bundle planning requirement")
+    assertContains(prompt, "\"phase_id\": must be \"plan\"")
+    assertContains(prompt, "Both fields belong inside produced_outputs")
+    assertFalse(prompt.contains("stamps the contract version and phase id itself"))
+    assertFalse(prompt.contains("\"mode\": \"direct\""))
+    assertFalse(prompt.contains("Do not forward the complete plan envelope"))
     assertFalse(prompt.contains("at least two"), "a spec bundle may hold one subtask")
   }
 

@@ -182,7 +182,7 @@ object FeatureTaskRuntimeRunLoopDrive {
     var phaseId: String? =
       explicitResume?.phaseId
         ?: session.pendingReentry?.phaseId
-        ?: transitions.forwardPhaseIds.first()
+        ?: traversal(this).forwardPhaseIds.first()
     while (phaseId != null) {
       val settled = advance(phaseId)
       val completedPhaseId = settled.completedPhaseId

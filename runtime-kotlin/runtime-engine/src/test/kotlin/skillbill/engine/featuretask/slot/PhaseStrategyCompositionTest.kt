@@ -18,13 +18,16 @@ import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.engine.promptComposerBriefingFor
 import skillbill.infrastructure.contracts.FeatureTaskRuntimePhaseOutputSchemaValidator
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.ProsePhaseOutputSynthesizer
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
@@ -102,6 +105,29 @@ class PhaseStrategyCompositionTest {
         else -> assertEquals(PhaseSlot.CODE_REVIEW, strategy.slot, "$step carries a structured output contract")
       }
     }
+  }
+
+  @Test
+  fun `standalone validation shares goal validate while goal build remains compile only`() {
+    fun selected(
+      definition: SkeletonDefinition,
+      gate: FeatureTaskRuntimeQualityGateSelection,
+    ): String? =
+      SkeletonStrategyBindings.bindings.getValue(definition).getValue(PhaseSlot.QUALITY_GATE)
+        .resolve(PhaseStrategySelectionFacts(definition, setOf(gate)))
+
+    assertEquals(
+      AgentValidateStrategy.ID,
+      selected(SkeletonDefinition.VALIDATION, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
+    )
+    assertEquals(
+      AgentValidateStrategy.ID,
+      selected(SkeletonDefinition.GOAL_CHILD, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
+    )
+    assertEquals(
+      PackBuildStrategy.ID,
+      selected(SkeletonDefinition.GOAL_CHILD, FeatureTaskRuntimeQualityGateSelection.BUILD),
+    )
   }
 
   private companion object {

@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.pullrequest
 
+import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
@@ -59,14 +60,30 @@ class PrDescriptionTelemetryParityTest {
     val run = phasePrRun(repository.repoRoot, database, reused, clock)
 
     assertIs<PhaseRunResult.Completed>(run.result, run.result.toString())
-    assertSingleFixturePayload()
+    assertSingleFixturePayload(committedPendingChanges = true)
   }
 
-  private fun assertSingleFixturePayload() {
+  private fun assertSingleFixturePayload(committedPendingChanges: Boolean = false) {
     val payloads = database.outboxPayloads(TelemetryOutboxEvent.PR_DESCRIPTION_GENERATED.wireValue)
     assertEquals(1, payloads.size, payloads.toString())
+    val fixture =
+      requireNotNull(
+        JsonCodec.anyToStringAnyMap(
+          JsonCodec.parseValue(Files.readString(SlotBaselineTestResources.resolve(FIXTURE))),
+        ),
+      )
+    val expected =
+      if (committedPendingChanges) {
+        fixture +
+          mapOf(
+            "commit_count" to 4,
+            "files_changed_count" to 9,
+          )
+      } else {
+        fixture
+      }
     assertEquals(
-      Files.readString(SlotBaselineTestResources.resolve(FIXTURE)),
+      SlotBaselineJson.encode(expected),
       SlotBaselineJson.encode(payloads.single()),
     )
   }

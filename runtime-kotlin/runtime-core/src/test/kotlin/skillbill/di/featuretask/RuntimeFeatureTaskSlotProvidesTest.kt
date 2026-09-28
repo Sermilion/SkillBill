@@ -9,7 +9,7 @@ import skillbill.di.core.create
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
-import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
+import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutStrategy
 import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
@@ -64,7 +64,6 @@ class RuntimeFeatureTaskSlotProvidesTest {
           SkeletonDefinition.GOAL_CHILD,
           SkeletonDefinition.PLAN,
           SkeletonDefinition.GOAL_PLANNING,
-          SkeletonDefinition.IMPLEMENT,
           SkeletonDefinition.PR,
         ).forEach { definition ->
           val facts = PhaseStrategySelectionFacts(definition, setOf(mode, gate))
@@ -77,12 +76,11 @@ class RuntimeFeatureTaskSlotProvidesTest {
   }
 
   @Test
-  fun `plan, implement, and pr select the existing preplan, plan, implement, and pr strategies`() {
+  fun `plan and pr select the existing planning and publishing strategies`() {
     val expected =
       mapOf(
         SkeletonDefinition.PLAN to setOf(AgentPreplanStrategy.ID, AgentPlanStrategy.ID),
-        SkeletonDefinition.IMPLEMENT to setOf(ImplementThenSimplifyStrategy.ID),
-        SkeletonDefinition.PR to setOf(PrDescriptionStrategy.ID),
+        SkeletonDefinition.PR to setOf(RuntimeCommitStrategy.ID, PrDescriptionStrategy.ID),
       )
     expected.forEach { (definition, strategyIds) ->
       val facts = PhaseStrategySelectionFacts(definition, emptySet())
@@ -123,7 +121,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
   }
 
   @Test
-  fun `the review definition selects delegated only for delegated mode and validation runs pack-build`() {
+  fun `the review definition selects delegated only for delegated mode and validation runs agent validation`() {
     val expected =
       mapOf(
         CodeReviewExecutionMode.AUTO to InlineReviewStrategy.ID,
@@ -135,8 +133,15 @@ class RuntimeFeatureTaskSlotProvidesTest {
       assertEquals(strategyId, strategies.strategyFor(PHASE_REVIEW, facts).strategyId, "$mode")
     }
     assertEquals(
-      setOf(PHASE_BUILD),
+      setOf(PHASE_VALIDATE),
       strategies.selectedStepIds(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet())),
+    )
+    assertEquals(
+      AgentValidateStrategy.ID,
+      strategies.strategyFor(
+        PHASE_VALIDATE,
+        PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()),
+      ).strategyId,
     )
   }
 

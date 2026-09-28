@@ -1,32 +1,29 @@
 package skillbill.engine.featuretask.phaserun
 
-import skillbill.contracts.JsonCodec
-import skillbill.contracts.telemetry.TelemetryOutboxEvent
+import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.RuntimeHarnessConfig
+import skillbill.engine.RuntimeRecordingLauncher
 import skillbill.engine.committedRepoBranchSetup
-import skillbill.engine.failThenPassValidationGateRunner
-import skillbill.engine.featuretask.validation.passed
+import skillbill.engine.facts
 import skillbill.engine.kotlinPackWithBuildGate
+import skillbill.engine.phaseIdFromPrompt
 import skillbill.engine.telemetryRunnerHarness
-import skillbill.error.shellcontent.MissingValidationGateError
+import skillbill.engine.validJsonOutput
 import skillbill.ports.validation.ValidationGateRunner
-import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
-import skillbill.scaffold.model.PlatformManifest
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
-import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
-import kotlin.test.assertTrue
 
 class PhaseValidationRunTest {
   private val repoRoot: Path = Files.createTempDirectory("skillbill-phase-validation-repo")
@@ -41,64 +38,58 @@ class PhaseValidationRunTest {
   }
 
   @Test
-  fun `phase validation runs the pack gate, reports the quality check, and writes no workflow state`() {
-    val gateRuns = mutableListOf<ValidationGateRunRequest>()
-    val entry = entryFor(kotlinPackWithBuildGate(), gate { request -> passed().also { gateRuns += request } })
+  fun `standalone validation runs full agent validation without build dispatch or durable workflow state`() {
+    val launcher = launcher { validJsonOutput(PHASE_VALIDATE) }
 
-    val result = entry.run(validationRequest())
+    val result = entry(launcher).run(validationRequest())
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertEquals(listOf(PHASE_BUILD), result.completedStepIds)
-    assertTrue(gateRuns.isNotEmpty(), "the dominant pack gate must run")
-    val started = outboxPayload(TelemetryOutboxEvent.QUALITY_CHECK_STARTED)
-    val finished = outboxPayload(TelemetryOutboxEvent.QUALITY_CHECK_FINISHED)
-    assertEquals(fixture(QUALITY_CHECK_STARTED_FIXTURE).keys, started.keys)
-    assertEquals(fixture(QUALITY_CHECK_FINISHED_FIXTURE).keys, finished.keys)
-    assertEquals(QUALITY_CHECK_SKILL, started["routed_skill"])
-    assertEquals(QUALITY_CHECK_SKILL, finished["routed_skill"])
-    assertEquals(0, (started["initial_failure_count"] as Number).toInt())
-    assertEquals("pass", finished["result"])
-    assertEquals(started["session_id"], finished["session_id"])
-    database.assertOnlyOutboxEvents(QUALITY_CHECK_EVENTS)
+    assertEquals(listOf(PHASE_VALIDATE), result.completedStepIds)
+    assertEquals(listOf(PHASE_VALIDATE), prompts(launcher).map(::phaseIdFromPrompt))
+    assertContains(prompts(launcher).single(), "Run the full project validation")
+    assertContains(prompts(launcher).single(), "Compilation alone is insufficient")
     database.assertNoDurableWorkflowState()
   }
 
   @Test
-  fun `phase validation that fails, repairs, and passes reports the fixture's quality check payloads`() {
-    val gateCalls = AtomicInteger()
-    val entry = entryFor(kotlinPackWithBuildGate(), failThenPassValidationGateRunner(gateCalls))
+  fun `standalone validation preserves remaining failures across progress and completes after repair`() {
+    val remaining = "WidgetTest failed: expected 2 but got 3."
+    val launcher =
+      launcher { attempt ->
+        if (attempt == 1) blockedOutput(remaining, "progress") else validJsonOutput(PHASE_VALIDATE)
+      }
 
-    val result = entry.run(validationRequest())
+    val result = entry(launcher).run(validationRequest())
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertEquals(2, gateCalls.get(), "the gate runs once to discover the failure and once to verify the repair")
-    val started = outboxPayload(TelemetryOutboxEvent.QUALITY_CHECK_STARTED)
-    val finished = outboxPayload(TelemetryOutboxEvent.QUALITY_CHECK_FINISHED)
-    assertMatchesFixture(fixture(QUALITY_CHECK_STARTED_FIXTURE), started)
-    assertMatchesFixture(fixture(QUALITY_CHECK_FINISHED_FIXTURE), finished)
-    assertEquals(started["session_id"], finished["session_id"])
-    database.assertOnlyOutboxEvents(QUALITY_CHECK_EVENTS)
+    assertEquals(listOf(PHASE_VALIDATE), result.completedStepIds)
+    assertEquals(2, launcher.requests.size)
+    assertContains(prompts(launcher).last(), remaining)
     database.assertNoDurableWorkflowState()
   }
 
   @Test
-  fun `phase validation whose gate still fails after the repair cap reports the last run's failures`() {
-    val entry = entryFor(kotlinPackWithBuildGate(), failingGate())
+  fun `standalone validation blocks when failures stop shrinking`() {
+    val launcher = launcher { blockedOutput("WidgetTest still fails.", "no_progress") }
 
-    val result = entry.run(validationRequest())
+    val result = assertIs<PhaseRunResult.Blocked>(entry(launcher).run(validationRequest()))
 
-    assertIs<PhaseRunResult.Blocked>(result, result.toString())
-    val finished = outboxPayload(TelemetryOutboxEvent.QUALITY_CHECK_FINISHED)
-    assertEquals("fail", finished["result"])
-    assertEquals(1, (finished["final_failure_count"] as Number).toInt())
-    assertEquals(listOf(FAILING_CHECK), finished["failing_check_names"])
+    assertEquals(PHASE_VALIDATE, result.stepId)
+    assertEquals(emptyList(), result.completedStepIds)
+    assertEquals(1, launcher.requests.size)
+    assertContains(result.reason, "leftover set did not shrink")
+    database.assertNoDurableWorkflowState()
   }
 
   @Test
-  fun `phase validation on a dominant pack with no validation gate fails with the missing-gate error`() {
-    val entry = entryFor(kotlinPackWithBuildGate().copy(validationGate = null), gate { error("no gate is declared") })
+  fun `standalone validation rejects unparseable completion instead of accepting build success`() {
+    val launcher = launcher { "finished" }
 
-    assertFailsWith<MissingValidationGateError> { entry.run(validationRequest()) }
+    val result = assertIs<PhaseRunResult.Blocked>(entry(launcher).run(validationRequest()))
+
+    assertEquals(PHASE_VALIDATE, result.stepId)
+    assertEquals(emptyList(), result.completedStepIds)
+    assertEquals(2, launcher.requests.size)
     database.assertNoDurableWorkflowState()
   }
 
@@ -109,70 +100,46 @@ class PhaseValidationRunTest {
       invokedAgentId = "claude",
     )
 
-  private fun failingGate(): ValidationGateRunner =
-    gate { request ->
-      ValidationGateRunResult(
-        exitCode = 1,
-        durationMs = 1,
-        outcome = ValidationGateRunOutcome.FAILED,
-        cacheMode = request.cacheMode,
-        executedWorkUnits = 1,
-        executedCheckIdentities = emptyList(),
-        findings = listOf(ValidationGateFinding("app", FAILING_CHECK, "broken", "A.kt")),
-      )
-    }
+  private fun launcher(output: (Int) -> String): RuntimeRecordingLauncher {
+    var attempt = 0
+    return RuntimeRecordingLauncher { facts(output(++attempt)) }
+  }
 
-  private fun gate(result: (ValidationGateRunRequest) -> ValidationGateRunResult): ValidationGateRunner =
-    object : ValidationGateRunner {
-      override fun run(request: ValidationGateRunRequest) = result(request)
-    }
+  private fun prompts(launcher: RuntimeRecordingLauncher): List<String> =
+    launcher.requests.map { requireNotNull(it.skillRunRequest.promptOverride) }
 
-  private fun entryFor(
-    pack: PlatformManifest,
-    gate: ValidationGateRunner,
-  ): PhaseRunEntry {
+  private fun blockedOutput(
+    remaining: String,
+    verdict: String,
+  ): String =
+    """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"$PHASE_VALIDATE",""" +
+      """"status":"blocked","failure_disposition":"needs_user_action","summary":"Project checks still fail.",""" +
+      """"produced_outputs":{"value":"$remaining"},"verdict":"$verdict"}"""
+
+  private fun entry(launcher: RuntimeRecordingLauncher): PhaseRunEntry {
     val runner =
       telemetryRunnerHarness(
         runtimeConfig =
           RuntimeHarnessConfig(
-            branchSetup = committedRepoBranchSetup(),
+            branchSetup =
+              committedRepoBranchSetup().also {
+                it.gitOperations.ownedPathsResult =
+                  WorkflowGitNameListResult.Failed(
+                    "Standalone validation must not collect durable readiness evidence.",
+                  )
+              },
             repoRoot = repoRoot,
-            validationGatePlatformManifests = listOf(pack),
-            validationGateRunner = gate,
+            launcher = launcher,
+            validator = realFeatureTaskRuntimePhaseOutputValidator,
+            validationGatePlatformManifests = listOf(kotlinPackWithBuildGate()),
+            validationGateRunner =
+              object : ValidationGateRunner {
+                override fun run(request: ValidationGateRunRequest): ValidationGateRunResult =
+                  error("Standalone validation must use the goal validation agent, not build argv: ${request.argv}")
+              },
           ),
         databaseFactory = { database },
       ).runner
     return phaseRunEntry(runner, database, clock)
-  }
-
-  private fun assertMatchesFixture(
-    expected: Map<String, Any?>,
-    actual: Map<String, Any?>,
-  ) {
-    assertEquals(expected.keys, actual.keys)
-    expected.filterKeys { it !in RUN_SPECIFIC_KEYS }.forEach { (key, value) ->
-      assertEquals(normalized(value), normalized(actual[key]), key)
-    }
-    assertEquals(QUALITY_CHECK_SCOPE_TYPE, actual["scope_type"])
-    assertTrue((actual["session_id"] as String).isNotBlank())
-  }
-
-  private fun normalized(value: Any?): Any? = if (value is Number) value.toLong() else value
-
-  private fun outboxPayload(event: TelemetryOutboxEvent): Map<String, Any?> =
-    database.outboxPayloads(event.wireValue).last()
-
-  private fun fixture(relativePath: String): Map<String, Any?> =
-    requireNotNull(JsonCodec.anyToStringAnyMap(slotBaselineFixture(relativePath)))
-
-  private companion object {
-    const val QUALITY_CHECK_SKILL = "bill-code-check"
-    const val QUALITY_CHECK_SCOPE_TYPE = "working_tree"
-    const val QUALITY_CHECK_STARTED_FIXTURE = "featuretask/slotbaseline/mcp-lifecycle/quality-check-started.json"
-    const val QUALITY_CHECK_FINISHED_FIXTURE = "featuretask/slotbaseline/mcp-lifecycle/quality-check-finished.json"
-    const val FAILING_CHECK = "detekt:LongMethod"
-    val RUN_SPECIFIC_KEYS = setOf("session_id", "duration_seconds", "scope_type")
-    val QUALITY_CHECK_EVENTS =
-      setOf(TelemetryOutboxEvent.QUALITY_CHECK_STARTED.wireValue, TelemetryOutboxEvent.QUALITY_CHECK_FINISHED.wireValue)
   }
 }

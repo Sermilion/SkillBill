@@ -19,12 +19,32 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.artifact.decomposePlanOutcomeFromPhaseOutput
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDecomposePlanOutcome
 import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
 import java.io.IOException
 
 internal object PlanDecompositionStop {
+  const val SPEC_BUNDLE_MISSING_REASON =
+    "Plan must persist as a governed spec bundle but emitted a direct plan with no decomposition package; " +
+      "the runtime blocks rather than completing without a spec."
+
+  fun completionRejection(
+    context: PhaseAttemptEnvironment,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): String? {
+    if (!context.request.specBundleRequired || isGoalContinuationRun(context.request)) return null
+    return try {
+      val outcome = decomposePlanOutcomeFromPhaseOutput(outputMap, context.specSource)
+      if (outcome == null) SPEC_BUNDLE_MISSING_REASON else null
+    } catch (error: SkillBillRuntimeException) {
+      "Plan emitted a malformed decomposition package: ${error.message}"
+    } catch (error: IllegalArgumentException) {
+      "Plan emitted a malformed decomposition package: ${error.message}"
+    }
+  }
+
   fun apply(
     context: PhaseAttemptEnvironment,
     planOutput: FeatureTaskRuntimePhaseOutput,
@@ -145,7 +165,7 @@ internal class FeatureTaskRuntimePlanningStopper(
     val outcome =
       decomposePlanOutcomeFromPhaseOutput(parsed, specSource)
         ?: return if (request.specBundleRequired) {
-          FeatureTaskRuntimePlanningStopDecision.Blocked(SPEC_BUNDLE_MISSING_REASON)
+          FeatureTaskRuntimePlanningStopDecision.Blocked(PlanDecompositionStop.SPEC_BUNDLE_MISSING_REASON)
         } else {
           FeatureTaskRuntimePlanningStopDecision.Proceed
         }
@@ -230,8 +250,5 @@ internal class FeatureTaskRuntimePlanningStopper(
 
   private companion object {
     const val MALFORMED_DETAIL_MAX_CHARS = 500
-    const val SPEC_BUNDLE_MISSING_REASON =
-      "Plan must persist as a governed spec bundle but emitted a direct plan with no decomposition package; " +
-        "the runtime blocks rather than completing without a spec."
   }
 }

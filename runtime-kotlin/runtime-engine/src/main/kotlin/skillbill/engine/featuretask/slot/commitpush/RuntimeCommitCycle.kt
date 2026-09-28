@@ -8,6 +8,7 @@ import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeCommitPushPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.lifecycle.branch.requirePublishableBranch
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMetadata
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinalisation
@@ -40,10 +41,12 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.engine.featuretask.validation.ReadinessCommitPushSettleRequest
 import skillbill.engine.featuretask.validation.ReadinessCommitPushSettleResult
 import skillbill.engine.featuretask.validation.ReadinessCommittedHeadBindRequest
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 private data class FinaliseSubtaskArgs(
@@ -105,6 +108,9 @@ object RuntimeCommitCycle {
     run: PhaseRun,
     iteration: Int,
   ): PhaseOutcome {
+    if (request.skeletonDefinition?.runStateKind == SkeletonRunStateKind.IN_MEMORY) {
+      return settleInMemory(run, iteration)
+    }
     val branch =
       FeatureTaskRuntimeRunLoopSubtaskCommit.finalisationBranch(request, session, phaseGates)
         ?: return settleUnownedHead(run, iteration)
@@ -121,6 +127,24 @@ object RuntimeCommitCycle {
       )
     }
     return finaliseAndBindCommitPush(this, run, iteration, branch, baseBranch)
+  }
+
+  private fun PhaseAttemptEnvironment.settleInMemory(
+    run: PhaseRun,
+    iteration: Int,
+  ): PhaseOutcome {
+    val resolved = recorder.loadResolvedBranch(request.workflowId)
+    val baseBranch = resolved?.baseBranch ?: "main"
+    val branch = requirePublishableBranch(resolved?.branch, baseBranch)
+    val result = InMemoryCommitPush(phaseGates.gitOperations, request.repoRoot).run(branch, request.issueKey)
+    if (result !is WorkflowGitOperationResult.Ok) return block(run, iteration, result.error)
+    return complete(
+      run,
+      iteration,
+      runtimeOwnedCommitPushOutput(
+        FeatureTaskRuntimeCommitPushReceipt(result.value, branch, baseBranch, pushed = true),
+      ),
+    )
   }
 
   private fun commitPushReadiness(

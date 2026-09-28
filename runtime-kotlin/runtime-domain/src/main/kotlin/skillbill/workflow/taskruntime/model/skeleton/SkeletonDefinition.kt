@@ -12,7 +12,6 @@ enum class SkeletonRunStateKind(val wireValue: String) {
 enum class PhaseIntakeRequirement(val wireValue: String) {
   OPTIONAL("optional"),
   ISSUE_KEY("issue_key"),
-  SPEC("spec"),
 }
 
 data class SkeletonDefinition(
@@ -45,15 +44,8 @@ data class SkeletonDefinition(
         SkeletonRunStateKind.IN_MEMORY,
         PhaseIntakeRequirement.ISSUE_KEY,
       )
-    val IMPLEMENT: SkeletonDefinition =
-      SkeletonDefinition(
-        "implement",
-        listOf(PhaseSlot.IMPLEMENTATION),
-        SkeletonRunStateKind.IN_MEMORY,
-        PhaseIntakeRequirement.SPEC,
-      )
     val PR: SkeletonDefinition =
-      SkeletonDefinition("pr", listOf(PhaseSlot.PULL_REQUEST), SkeletonRunStateKind.IN_MEMORY)
+      SkeletonDefinition("pr", listOf(PhaseSlot.COMMIT_PUSH, PhaseSlot.PULL_REQUEST), SkeletonRunStateKind.IN_MEMORY)
     val GOAL_PLANNING: SkeletonDefinition =
       SkeletonDefinition(
         "goal-planning",
@@ -62,7 +54,7 @@ data class SkeletonDefinition(
       )
 
     val entries: List<SkeletonDefinition>
-      get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, PLAN, IMPLEMENT, PR, GOAL_PLANNING)
+      get() = listOf(STANDALONE, GOAL_CHILD, REVIEW, VALIDATION, PLAN, PR, GOAL_PLANNING)
 
     fun forRun(goalContinuation: Boolean): SkeletonDefinition = if (goalContinuation) GOAL_CHILD else STANDALONE
 

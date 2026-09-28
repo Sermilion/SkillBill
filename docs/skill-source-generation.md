@@ -288,11 +288,11 @@ specialist rubric sidecars as siblings. With only the Kotlin pack selected,
 the Kotlin entry plus its ten specialists stage; other packs contribute nothing (PD3). The KMP pack declares
 `bill-kotlin-code-review` as a required baseline layer, so selecting KMP without
 Kotlin fails install planning with the typed baseline-co-presence error (PD8).
-Quality checks use the same manifest-discovered pack selection, but they do not
-have pack skill sidecars. A dominant pack's `validation_gate` owns the
-collect-all and cache-bypassing collect-all argv; `skill-bill phase validation`
-is the entry point, and `bill-code-check` remains only the `routed_skill`
-telemetry identity.
+Quality checks have no pack skill sidecars. A dominant pack's `validation_gate`
+owns its build and collect-all argv. `skill-bill phase validation` uses the same
+agent validation strategy as goal validate and discovers all required project
+checks from repository configuration. `bill-code-check` remains the pack gate
+`routed_skill` telemetry identity.
 
 `content.md` must not contain generated wrapper headings:
 

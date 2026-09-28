@@ -225,13 +225,14 @@ reports a zero failure count, so it cannot land in a clean-gate numerator or den
 clean rate only over rows that are both `operator_completed` and `final_failure_count_availability:
 measured`.
 
-An in-memory phase run (`skill-bill phase validation`) emits `_started` after the first pack build
-gate run and `_finished` when the gate settles, with `routed_skill: bill-code-check`,
-`scope_type: working_tree`, the dominant pack slug as `detected_stack`, the first run's failure
-count as `initial_failure_count`, and the gate run count as `iterations`. `final_failure_count` is
-the last gate run's finding count, and `failing_check_names` (full level only) holds that run's
-distinct rule or test ids, sorted; `result` is `pass` exactly when the count is zero. The fields are the ones
-above; a phase run adds no workflow id or phase invocation id to the payload.
+The pack build strategy emits `_started` after the first gate run and `_finished`
+when the gate settles, with `routed_skill: bill-code-check`. Failure counts and
+iterations come from the runtime's command results.
+
+`skill-bill phase validation` uses the same agent validation strategy as goal
+validate. It does not emit these pack-build quality-check events or infer measured
+failure counts from the agent's prose. Its result reports the validate step and
+the checks the agent ran.
 
 ### `skillbill_feature_verify_started` / `skillbill_feature_verify_finished`
 

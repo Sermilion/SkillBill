@@ -100,7 +100,7 @@ The quality phases have different purposes:
 | --- | --- |
 | `validate` | An agent discovers and runs the project's required checks from repository instructions, build configuration, scripts, and CI. The runtime advances only when the agent reports that those checks passed. |
 | `build` | Goal children selected for build run the dominant pack's declared build command and cache-bypassing confirmation. This proves buildability and does not run the full test suite. |
-| Standalone quality check | `/skill-bill phase:validation` runs the dominant pack's `validation_gate` and repairs findings. |
+| Standalone quality check | `/skill-bill phase:validation` runs the same full project checks and repair loop as goal validation. |
 
 Specs live under `.feature-specs/`, with a parent spec, executable subtask specs, and a decomposition manifest. Local specs are the default; optional Linear-backed preparation records issues and supports spec rehydration. The default commit model leaves one commit per completed subtask on the feature branch.
 
@@ -151,13 +151,13 @@ Review also accepts `target:unstaged` or a commit sha. Without `target:`, it rev
 
 `inline` is the default. It runs one review worker over the routed areas at reduced depth. `auto` also resolves to inline. `delegated` is the experimental full-depth mode, with separate specialist workers, and requires explicit `mode:delegated` on a standalone review. Feature and goal workflows accept `code-review:auto|inline` and use inline review. A required worker that cannot launch blocks the review rather than silently reducing its depth.
 
-For the pack's full quality gate:
+For full project validation:
 
 ```text
 /skill-bill phase:validation
 ```
 
-The phase selects the dominant platform pack, runs its `validation_gate`, and repairs the reported findings. A missing gate is an error; it does not substitute another pack's commands.
+The phase uses the same agent strategy as goal validate. It discovers required checks from repository instructions, build configuration, scripts, and CI, then runs those checks and repairs failures.
 
 ## Skills
 
@@ -167,10 +167,9 @@ The phase selects the dominant platform pack, runs its `validation_gate`, and re
 |------|---------|------|
 | `/skill-bill` | Prepare or resume feature work from an `<intake>`, confirm the plan, and launch the goal runtime | `skill-bill goal` |
 | `/skill-bill <intake> phase:plan` | Prepare a parent spec, executable subtask specs, and a manifest without implementing | `skill-bill phase plan` |
-| `/skill-bill <intake> phase:implement` | Implement an existing spec and leave the edits uncommitted | `skill-bill phase implement` |
 | `/skill-bill phase:review` | Review a PR, commit, or working-tree change with inline or delegated depth | `skill-bill phase review` |
-| `/skill-bill phase:validation` | Run the dominant pack's quality gate and repair findings | `skill-bill phase validation` |
-| `/skill-bill phase:pr` | Push the branch and open a PR with a generated title, description, and QA steps | `skill-bill phase pr` |
+| `/skill-bill phase:validation` | Run full project validation and repair findings, using the goal validation strategy | `skill-bill phase validation` |
+| `/skill-bill phase:pr` | Commit pending changes, push the branch, and create or update a PR | `skill-bill phase pr` |
 | `/skill-bill <intake> operation:feature-guard` | Guard an implementation with a feature flag | `skill-bill operation feature-guard` |
 | `/skill-bill <intake> operation:feature-guard-cleanup` | Remove a rolled-out feature flag and its legacy path | `skill-bill operation feature-guard-cleanup` |
 | `/skill-bill operation:verify spec:<path> target:<pr\|branch\|base..head>` | Verify a PR against a task spec or design doc | `skill-bill operation verify` |

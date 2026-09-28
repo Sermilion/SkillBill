@@ -19,9 +19,9 @@ private const val BUILD_PHASE_FORBIDDEN_EXTRAS: String =
 internal fun runtimeOwnedValidateAgentPhaseTask(): String {
   return "Discover the validation checks required by this project from its repository instructions, " +
     "build and test configuration, scripts, and CI workflows. Use the project's commands and environment. " +
-    "Do not run pack validation_gate argv, `skill-bill phase validation`, or any other pack-declared " +
-    "full-suite command. " +
-    VALIDATE_PHASE_FORBIDDEN_EXTRAS +
+    "Run the full project validation, including required tests, static analysis, formatting checks, and " +
+    "repository checks. Compilation alone is insufficient. Project commands remain allowed when a pack " +
+    "also declares them. Do not recursively invoke `skill-bill phase validation`. " +
     "Keep repairing in this same session until every required project check passes. Do not spawn delegated " +
     "subagents. Settle completed only when every required check passes, with the checks run as the value. " +
     "When checks still fail, settle blocked with the remaining failure details as the value and verdict " +

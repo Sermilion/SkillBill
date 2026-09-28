@@ -86,7 +86,11 @@ internal object SlotBaselineFullRunCapture {
     val repoRoot = seededRepoRoot()
     val databaseHome = SlotBaselineNormalizer.newTempHome()
     try {
-      val git = committedRepoBranchSetup().gitOperations.also { it.currentBranchValue = GOAL_BRANCH }
+      val git =
+        committedRepoBranchSetup().gitOperations.also {
+          it.currentBranchValue = GOAL_BRANCH
+          if (useBuildPack) it.changedPathsBetweenCommitsValue = listOf("src/Foo.kt")
+        }
       val phaseLauncher = satisfiedAuditLauncher()
       val reviewLauncher = RuntimeRecordingLauncher { facts(VALID_REVIEW_OUTPUT) }
       val config =

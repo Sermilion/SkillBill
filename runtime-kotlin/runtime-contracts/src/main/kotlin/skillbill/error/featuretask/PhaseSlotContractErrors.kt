@@ -2,6 +2,9 @@ package skillbill.error.featuretask
 
 import skillbill.error.core.ShellContentContractException
 
+class PhaseValidationScopeError(detail: String) :
+  ShellContentContractException("Cannot read the working-tree scope for validation: $detail")
+
 class UnknownPhaseStepError(
   val stepId: String,
 ) : ShellContentContractException("Phase step '$stepId' does not belong to any phase slot.")
@@ -74,13 +77,6 @@ class PhaseIntakeRequiredError(
   val definitionId: String,
   val detail: String,
 ) : ShellContentContractException("Phase '$definitionId' requires an intake: $detail")
-
-class PhaseSpecRequiredError(
-  val definitionId: String,
-  val intake: String,
-) : ShellContentContractException(
-    "Phase '$definitionId' requires an existing governed spec; intake '$intake' resolves to none.",
-  )
 
 class PullRequestBranchRefusedError(
   val branch: String?,

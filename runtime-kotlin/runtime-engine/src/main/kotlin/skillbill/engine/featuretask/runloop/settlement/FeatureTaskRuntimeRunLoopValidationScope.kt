@@ -8,6 +8,9 @@ import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutp
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
+import skillbill.error.featuretask.PhaseValidationScopeError
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 
 object FeatureTaskRuntimeRunLoopValidationScope {
   internal fun validationChangedPaths(
@@ -16,8 +19,14 @@ object FeatureTaskRuntimeRunLoopValidationScope {
     goalContinuationRecorder: PhaseRunGoal,
     session: FeatureTaskRuntimeRunLoopSession,
     run: PhaseRun,
-  ): List<String>? =
-    with(FeatureTaskRuntimeRunLoopOutputVerification) {
+  ): List<String>? {
+    if (run.request.skeletonDefinition?.runStateKind == SkeletonRunStateKind.IN_MEMORY) {
+      return when (val paths = phaseGates.gitOperations.repositoryOwnedPaths(run.request.repoRoot)) {
+        is WorkflowGitNameListResult.Listed -> paths.names.distinct().sorted()
+        is WorkflowGitNameListResult.Failed -> throw PhaseValidationScopeError(paths.error)
+      }
+    }
+    return with(FeatureTaskRuntimeRunLoopOutputVerification) {
       resolveRepositoryCheckpoint(
         RepositoryCheckpointResolutionArgs(
           recorder = recorder,
@@ -31,6 +40,7 @@ object FeatureTaskRuntimeRunLoopValidationScope {
         ?.distinct()
         ?.sorted()
     }
+  }
 
   internal fun packBuildCommand(
     phaseGates: FeatureTaskRuntimePhaseGates,

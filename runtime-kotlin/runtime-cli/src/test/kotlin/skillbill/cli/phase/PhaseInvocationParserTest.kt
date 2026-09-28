@@ -89,18 +89,16 @@ class PhaseInvocationParserTest {
     val error = assertFailsWith<UsageError> { PhaseInvocationParser.parse("standalone", emptyList()) }
 
     assertEquals(
-      "Phase 'standalone' runs over durable workflow state; expected review, validation, plan, implement, or pr.",
+      "Phase 'standalone' runs over durable workflow state; expected review, validation, plan, or pr.",
       error.message,
     )
   }
 
   @Test
-  fun `plan and implement require an intake while pr runs without one`() {
-    listOf("plan", "implement").forEach { name ->
-      val error = assertFailsWith<UsageError>(name) { PhaseInvocationParser.parse(name, listOf("mode:inline")) }
+  fun `plan requires an intake while pr runs without one`() {
+    val error = assertFailsWith<UsageError> { PhaseInvocationParser.parse("plan", listOf("mode:inline")) }
 
-      assertTrue(error.message.orEmpty().startsWith("Phase '$name' requires an intake"), error.message)
-    }
+    assertTrue(error.message.orEmpty().startsWith("Phase 'plan' requires an intake"), error.message)
     assertEquals(PhaseInvocation("pr", null, null, null), PhaseInvocationParser.parse("pr", emptyList()))
   }
 }

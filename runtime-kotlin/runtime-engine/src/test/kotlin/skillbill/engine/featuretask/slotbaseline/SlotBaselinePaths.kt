@@ -48,7 +48,6 @@ internal object SlotBaselinePaths {
   const val PHASE_VALIDATION_TELEMETRY = "validation-telemetry.json"
 
   const val PHASE_PLAN = "$PHASE/plan"
-  const val PHASE_IMPLEMENT = "$PHASE/implement"
   const val PHASE_PR = "$PHASE/pr"
   const val PHASE_RUN_OUTPUT = "output.json"
   const val PHASE_RUN_TELEMETRY = "telemetry.json"

@@ -11,7 +11,6 @@ import skillbill.engine.RuntimeRecordingLauncher
 import skillbill.engine.committedRepoBranchSetup
 import skillbill.engine.defaultPhaseOutput
 import skillbill.engine.facts
-import skillbill.engine.failThenPassValidationGateRunner
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
@@ -35,7 +34,6 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicInteger
 
 internal object SlotBaselinePhaseRunCapture {
   fun encodedFiles(): Map<String, String> {
@@ -53,8 +51,6 @@ internal object SlotBaselinePhaseRunCapture {
       "${SlotBaselinePaths.PHASE}/$fileName" to SlotBaselineJson.encode(value)
     } +
       captureAgentPhase(SkeletonDefinition.PLAN.id, PLAN_INTAKE).encodedFiles(SlotBaselinePaths.PHASE_PLAN) +
-      captureAgentPhase(SkeletonDefinition.IMPLEMENT.id, IMPLEMENT_INTAKE)
-        .encodedFiles(SlotBaselinePaths.PHASE_IMPLEMENT) +
       captureAgentPhase(SkeletonDefinition.PR.id, intake = null).encodedFiles(SlotBaselinePaths.PHASE_PR)
   }
 
@@ -63,7 +59,6 @@ internal object SlotBaselinePhaseRunCapture {
     intake: String?,
   ): AgentPhaseRunCapture =
     SlotBaselinePhaseRunHarness.use { harness ->
-      if (definitionId == SkeletonDefinition.IMPLEMENT.id) harness.writeImplementSpec()
       val launcher =
         RuntimeRecordingLauncher { request ->
           val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
@@ -102,7 +97,6 @@ internal object SlotBaselinePhaseRunCapture {
 
   private const val PHASE_PLAN = "plan"
   private const val PLAN_INTAKE = "SKILL-380 slot baseline phase plan"
-  private const val IMPLEMENT_INTAKE = SlotBaselinePhaseRunHarness.IMPLEMENT_SPEC
   private const val PROMPT_ATTEMPT_SEPARATOR = "\n---\n"
 
   private fun captureReview(mode: CodeReviewExecutionMode): PhaseRunCapture =
@@ -199,15 +193,18 @@ internal class SlotBaselinePhaseRunHarness private constructor(
     )
   }
 
-  fun validationEntry(): PhaseRunEntry =
-    entryFor(
+  fun validationEntry(): PhaseRunEntry {
+    git.ownedPathsValue = listOf(DELEGATED_REVIEWED_PATH)
+    return entryFor(
       RuntimeHarnessConfig(
         branchSetup = BranchSetupTestConfig(gitOperations = git),
         repoRoot = repoRoot,
         validationGatePlatformManifests = listOf(kotlinPackWithBuildGate()),
-        validationGateRunner = failThenPassValidationGateRunner(AtomicInteger()),
+        launcher = RuntimeRecordingLauncher { request -> facts(defaultPhaseOutput(request)) },
+        validator = realFeatureTaskRuntimePhaseOutputValidator,
       ),
     )
+  }
 
   fun agentEntry(launcher: RuntimeRecordingLauncher): PhaseRunEntry =
     entryFor(
@@ -217,12 +214,6 @@ internal class SlotBaselinePhaseRunHarness private constructor(
         launcher = launcher,
       ),
     )
-
-  fun writeImplementSpec() {
-    val spec = repoRoot.resolve(IMPLEMENT_SPEC)
-    Files.createDirectories(spec.parent)
-    Files.writeString(spec, IMPLEMENT_SPEC_TEXT)
-  }
 
   fun specBundleFiles(bundle: PhaseRunSpecBundle): Map<String, String> =
     (listOf(bundle.parentSpecPath, bundle.decompositionManifestPath) + bundle.subtaskSpecPaths)
@@ -264,9 +255,6 @@ internal class SlotBaselinePhaseRunHarness private constructor(
     const val BLOCKER_REVIEW =
       "- [F-001] Blocker | High | $DELEGATED_REVIEWED_PATH:1 | $REVIEW_BLOCKER_MESSAGE\nverdict: changes_requested"
     const val APPROVED_REVIEW = "verdict: approved"
-    const val IMPLEMENT_SPEC = ".feature-specs/SKILL-380-phase-implement/spec.md"
-    const val IMPLEMENT_SPEC_TEXT =
-      "# SKILL-380 - phase implement\n\n## Acceptance Criteria\n\n1. The phase implement run edits the tree.\n"
 
     fun <T> use(block: (SlotBaselinePhaseRunHarness) -> T): T {
       val repoRoot = SlotBaselineFullRunCapture.seededRepoRoot()

@@ -249,8 +249,10 @@ selection stages every opted-in review sidecar. SKILL-105 applies the same
 selection-aware review sidecar model. Quality checks do not use pack sidecars:
 the selected dominant pack declares its collect-all and
 cache-bypassing collect-all argv in `validation_gate`, and
-`skill-bill phase validation` is the only quality-check entry point. KMP uses its own gate; review baseline
-composition does not provide a quality-check fallback.
+`skill-bill phase validation` is the standalone quality-check entry point. It uses
+the same agent validation strategy as goal validate and runs all required project
+checks. Goal build uses the dominant pack's build argv. KMP owns its gate; review
+baseline composition does not provide a quality-check fallback.
 
 ### Baseline co-presence guard (PD8)
 

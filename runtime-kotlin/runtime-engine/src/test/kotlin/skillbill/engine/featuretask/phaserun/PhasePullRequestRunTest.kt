@@ -40,24 +40,42 @@ class PhasePullRequestRunTest {
   }
 
   @Test
-  fun `pr pushes a feature branch that is ahead of origin and leaves the dirty worktree uncommitted`() {
+  fun `pr commits the whole worktree before pushing and launching and a retry adds no empty commit`() {
     initRepoWithOrigin()
     git(repoRoot, "checkout", "-b", FEATURE_BRANCH)
     commitFile("Feature.kt", "class Feature\n")
     git(repoRoot, "push", "-u", "origin", FEATURE_BRANCH)
     commitFile("Feature.kt", "class Feature(val ready: Boolean)\n")
     Files.writeString(repoRoot.resolve(DIRTY_FILE), "scratch\n")
+    Files.writeString(repoRoot.resolve("Feature.kt"), "staged\n")
+    git(repoRoot, "add", "Feature.kt")
+    Files.writeString(repoRoot.resolve("Feature.kt"), "final contents\n")
+    Files.delete(repoRoot.resolve("README.md"))
+    Files.writeString(repoRoot.resolve(".gitignore"), "ignored.txt\n")
+    Files.writeString(repoRoot.resolve("ignored.txt"), "ignored\n")
+    Files.createDirectories(repoRoot.resolve(".skill-bill"))
+    Files.writeString(repoRoot.resolve(".skill-bill/private.txt"), "runtime private\n")
     val headBefore = git(repoRoot, "rev-parse", "HEAD")
 
     val result = entry().run(prRequest())
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(listOf("commit_push", PR), result.completedStepIds)
     assertEquals(listOf(PR), launchedPhaseIds())
     val prompt = requireNotNull(launcher.requests.single().skillRunRequest.promptOverride)
     assertTrue("for issue SKILL-903." in prompt, "the pr prompt must carry the branch's issue key")
-    assertEquals(headBefore, git(repoRoot, "rev-parse", "HEAD"), "HEAD must not move")
-    assertEquals(headBefore, git(origin, "rev-parse", FEATURE_BRANCH), "origin must hold the local HEAD")
-    assertTrue("?? $DIRTY_FILE" in git(repoRoot, "status", "--porcelain"), "the dirty file must stay uncommitted")
+    val committed = git(repoRoot, "rev-parse", "HEAD")
+    assertEquals(headBefore, git(repoRoot, "rev-parse", "HEAD^"), "one normal commit must be added")
+    assertEquals(committed, git(origin, "rev-parse", FEATURE_BRANCH))
+    assertEquals("scratch", git(origin, "show", "$FEATURE_BRANCH:$DIRTY_FILE"))
+    assertEquals("final contents", git(origin, "show", "$FEATURE_BRANCH:Feature.kt"))
+    assertEquals("?? .skill-bill/", git(repoRoot, "status", "--porcelain"))
+    assertEquals(
+      emptyList(),
+      git(repoRoot, "for-each-ref", "refs/skill-bill/checkpoints").lines().filter(String::isNotBlank),
+    )
+    assertIs<PhaseRunResult.Completed>(entry().run(prRequest()))
+    assertEquals(committed, git(repoRoot, "rev-parse", "HEAD"), "retry must not add an empty commit")
     database.assertNoDurableWorkflowState()
   }
 
@@ -65,12 +83,40 @@ class PhasePullRequestRunTest {
   fun `pr on main is refused before pushing or launching`() {
     initRepoWithOrigin()
     val originMainBefore = git(origin, "rev-parse", MAIN)
-    commitFile("Feature.kt", "class Feature\n")
+    Files.writeString(repoRoot.resolve(DIRTY_FILE), "pending\n")
+    val headBefore = git(repoRoot, "rev-parse", "HEAD")
 
-    assertFailsWith<PullRequestBranchRefusedError> { entry().run(prRequest()) }
+    val phaseEntry = entry()
+    val statusBefore = git(repoRoot, "status", "--porcelain")
 
+    assertFailsWith<PullRequestBranchRefusedError> { phaseEntry.run(prRequest()) }
+
+    assertEquals(headBefore, git(repoRoot, "rev-parse", "HEAD"), "nothing may be committed")
+    assertEquals(statusBefore, git(repoRoot, "status", "--porcelain"))
     assertEquals(originMainBefore, git(origin, "rev-parse", MAIN), "nothing may be pushed")
     assertEquals(emptyList(), launcher.requests)
+    database.assertNoDurableWorkflowState()
+  }
+
+  @Test
+  fun `failed push blocks before pr and retry publishes the existing commit`() {
+    initRepoWithOrigin()
+    git(repoRoot, "checkout", "-b", FEATURE_BRANCH)
+    Files.writeString(repoRoot.resolve(DIRTY_FILE), "pending\n")
+    val hook = origin.resolve("hooks/pre-receive")
+    Files.writeString(hook, "#!/bin/sh\nexit 1\n")
+    hook.toFile().setExecutable(true)
+
+    val result = assertIs<PhaseRunResult.Blocked>(entry().run(prRequest()))
+
+    assertEquals("commit_push", result.stepId)
+    assertTrue(result.reason.contains("Could not push"), result.reason)
+    assertEquals(emptyList(), launcher.requests)
+    val committed = git(repoRoot, "rev-parse", "HEAD")
+    Files.delete(hook)
+    assertIs<PhaseRunResult.Completed>(entry().run(prRequest()))
+    assertEquals(committed, git(repoRoot, "rev-parse", "HEAD"))
+    assertEquals(committed, git(origin, "rev-parse", FEATURE_BRANCH))
     database.assertNoDurableWorkflowState()
   }
 

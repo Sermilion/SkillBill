@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairRe
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 
 private const val DEFAULT_BASE_BRANCH = "main"
 
@@ -93,6 +94,7 @@ internal class AgentValidateGateCycle(
     context.recorder.loadPhaseRecords(run.request.workflowId)?.get(run.phaseId)?.failureDisposition
 
   private fun captureReadinessFragment(run: PhaseRun) {
+    if (context.request.skeletonDefinition?.runStateKind == SkeletonRunStateKind.IN_MEMORY) return
     context.phaseGates.readinessGateCoordinator.capturePostValidateFragment(
       ReadinessPostValidateCaptureRequest(
         workflowId = context.request.workflowId,

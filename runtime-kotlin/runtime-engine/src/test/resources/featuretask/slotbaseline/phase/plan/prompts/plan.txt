@@ -4,7 +4,7 @@ for issue SKILL-380. The runtime owns the loop; do not run other phases, do not 
 or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
 
 Phase: plan (Phase 2: Plan)
-Task: Produce an ordered implementation plan that satisfies every acceptance criterion, using the upstream preplan value as planning context (structured prose: interpret the stuffed digest JSON). Do not modify repository files during this phase. Emit produced_outputs with a non-blank value string carrying the executable_plan JSON (same fields as before, stuffed inside value); optional prompt may add a short directive when non-blank. Do not forward the complete plan envelope, a generic summary, or progress diagnostics.
+Task: Produce a governed spec bundle that satisfies every acceptance criterion, using the upstream preplan value as planning context. Return the complete phase-output envelope with produced_outputs.value and produced_outputs.decomposition_package. Do not modify repository files; the runtime writes the bundle from the decomposition package.
 
 ## Installed runtime is the contract source
 This briefing was composed by the installed Skill Bill runtime that will validate your output.
@@ -253,28 +253,20 @@ acceptance_criteria:
 ## Derived context (layer 3, declared)
 (none)
 
-## Value content
-Carry this JSON object as the value text; the runtime does not validate its shape and the next phase reads
-it as structured prose:
-```json
-{ "projection_kind": "executable_plan",
-  "contract_version": "0.2",
-  "mode": "direct",
-  "tasks": [ { "task_id": "task-1", "depends_on": [], "description": "<imperative task>",
-    "criterion_refs": ["AC-001"], "target_paths_or_symbols": ["path/or/Symbol"],
-    "test_obligations": ["<test to add or run>"], "constraints": [] } ],
-  "validation_strategy": ["<how the plan is validated>"] }
-```
-Upstream preplan value is structured prose carrying the digest JSON; read and interpret it. task_id MUST match ^[a-z][a-z0-9-]*$ (lowercase kebab; "T1" is wrong — use "task-1"); criterion_refs use the AC-### form.
-
-## Required final output
+## Required final output (validated schema gate)
 End your response with exactly one JSON object as the last thing you emit. Prefer a raw
 object with nothing after it; a single ```json fenced block is also accepted. The runtime
-stamps the contract version and phase id itself. Fields:
+extracts that object and blocks the run if it does not validate against the phase-output
+contract. Copy these field values from this briefing; do not look them up in this checkout:
+- "contract_version": must be exactly "0.7"
+- "phase_id": must be "plan"
 - "status": one of "completed", "blocked", "failed"
-- "summary": one sentence describing what this phase did
-- "value": non-blank prose carrying everything the next phase needs
-- "verdict": optional; set it only when this briefing names a verdict for this phase
-- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
-  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
-  Omit it when status is "completed".
+- "failure_disposition": required by the runtime when status is "blocked" or "failed"; one of
+  "retryable", "non_retryable_policy_conflict", "needs_user_action", "process_failure", or
+  "invalid_output". Omit it when status is "completed".
+- "summary": non-empty string describing what this phase did
+- "produced_outputs": object. Empty {} is valid when this phase has no structured
+  payload. When this briefing names a required shape below, that shape is required. For completed output, include a non-blank value summarizing the plan and the complete decomposition_package described in the spec bundle planning requirement. Both fields belong inside produced_outputs.
+- "derived_notes": optional; when present, a non-empty string of notes for downstream
+  phases
+No top-level fields other than the ones listed above are allowed.
