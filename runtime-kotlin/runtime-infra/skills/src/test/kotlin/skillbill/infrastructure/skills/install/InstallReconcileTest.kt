@@ -37,6 +37,7 @@ class InstallReconcileTest : InstallApplyTestSupport() {
     val repoRoot = Files.createTempDirectory(name).also(tempDirs::add)
     seedBaseSkill(repoRoot, "bill-code-review")
     seedBaseSkill(repoRoot, "bill-code-check")
+    seedBaseSkill(repoRoot, "skill-bill")
     Files.createDirectories(repoRoot.resolve("platform-packs"))
     return repoRoot
   }
@@ -287,7 +288,7 @@ class InstallReconcileTest : InstallApplyTestSupport() {
       agent_ids:
         - codex
       consumers:
-        - bill-feature
+        - skill-bill
       """.trimIndent() + "\n",
     )
     Files.writeString(root.resolve("content.md"), body)

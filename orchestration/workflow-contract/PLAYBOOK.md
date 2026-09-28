@@ -21,7 +21,7 @@ The current workflow contract version is **`0.1`**.
 
 - `0.x` means the shape is piloted and may still tighten before a stable `1.0`.
 - The first pilot scope is the feature-task runtime.
-- `bill-feature-verify` is the next intended adopter.
+- The feature-verify workflow (`skill-bill operation verify`) is the next intended adopter.
 
 ## When To Use A Workflow
 
@@ -159,7 +159,7 @@ produce one authoritative completion event.
 ## Runtime Pilot Surface
 
 The runtime-facing pilot uses dedicated MCP tools per top-level workflow.
-`bill-feature-verify` is the remaining MCP-facing adopter; feature-task and
+The feature-verify workflow is the remaining MCP-facing adopter; feature-task and
 goal execution drive their workflow state from the Kotlin runtime driver and
 the CLI instead:
 
@@ -297,7 +297,7 @@ ids are:
 12. `finish`
 
 For this pilot, the authored workflow entry source stays in
-`skills/bill-feature/content.md`. Install and render flows generate the
+`skills/skill-bill/content.md`. Install and render flows generate the
 runtime `SKILL.md` wrapper from that source plus the shared shell contract.
 Generated wrappers are not committed under `skills/`.
 The rendered `SKILL.md` remains the runtime-facing source of truth for:

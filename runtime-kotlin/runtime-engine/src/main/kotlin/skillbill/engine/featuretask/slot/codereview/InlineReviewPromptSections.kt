@@ -14,9 +14,9 @@ internal object InlineReviewPromptSections {
   const val REVIEW_DIRECTIVE: String =
     "Review the last commit against its first parent in this repository. Fix every Blocker and Major " +
       "finding in this same session before you emit. Emit remaining findings and a verdict of approved or " +
-      "changes_requested. Do not run bill-code-review or launch review subagents. Criterion-gap detection " +
-      "remains exclusive to the audit phase. Do not run `./gradlew check`, the pack collect-all gate, or " +
-      "`bill-code-check`; validate owns those."
+      "changes_requested. Do not run `skill-bill phase review` or launch review subagents. Criterion-gap " +
+      "detection remains exclusive to the audit phase. Do not run `./gradlew check`, the pack collect-all " +
+      "gate, or `skill-bill phase validation`; validate owns those."
 
   val VERIFY_FINDINGS_DIRECTIVE: String =
     "Verify every finding from the single preceding review pass against the subtask spec intent " +
@@ -159,7 +159,7 @@ internal object InlineReviewPromptSections {
       "      recorded as other.\n" +
       "    - produced_outputs MUST also carry \"${FeatureTaskRuntimeVerificationSignalKeys.REVIEW_RUN_ID}\": the " +
       "Review run ID your\n" +
-      "      `bill-code-review` invocation reported for this pass, verbatim. It is the key that joins each\n" +
+      "      `skill-bill phase review` invocation reported for this pass, verbatim. It is the key that joins each\n" +
       "      finding here to the imported review run, so a finding's \"id\" plus this run id must be the same\n" +
       "      pair that review recorded. Omit it ONLY if the review genuinely reported no run id; never\n" +
       "      invent, reuse an older, or guess one." + commitFocusedAccountingAddendum()

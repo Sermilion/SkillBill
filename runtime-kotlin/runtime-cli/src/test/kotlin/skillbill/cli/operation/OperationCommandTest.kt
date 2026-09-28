@@ -10,6 +10,7 @@ import skillbill.cli.model.CliRuntimeContext
 import skillbill.cli.updateCheckRequester
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationOutcome
+import skillbill.engine.operation.core.OperationOutputFormat
 import skillbill.engine.operation.core.OperationResult
 import skillbill.ports.telemetry.model.RemoteTransportResponse
 import skillbill.ports.telemetry.transport.RemoteTransportPort
@@ -186,6 +187,19 @@ class OperationCommandTest {
     assertEquals("42", invocation.instructions)
     listOf("push:on", "replies:draft").forEach { token ->
       assertFailsWith<UsageError> { OperationInvocationParser.parse("release", listOf("bump:minor", token)) }
+    }
+  }
+
+  @Test
+  fun `include-prereleases and format reach update-check and are usage errors on any other operation`() {
+    val flags = OperationFlags(includePrereleases = true, format = OperationOutputFormat.JSON)
+
+    assertEquals(
+      OperationArguments(includePrereleases = true, format = OperationOutputFormat.JSON),
+      OperationInvocationParser.parse("update-check", emptyList(), flags).arguments,
+    )
+    listOf(OperationFlags(includePrereleases = true), OperationFlags(format = OperationOutputFormat.TEXT)).forEach {
+      assertFailsWith<UsageError> { OperationInvocationParser.parse("release", listOf("bump:minor"), it) }
     }
   }
 

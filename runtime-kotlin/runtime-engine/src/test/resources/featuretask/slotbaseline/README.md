@@ -174,3 +174,9 @@ ledger expects must be regenerated in the subtask that the ledger names.
   tree still held the subtask 4 files and `SlotBaselineFixtureTest` failed. Those subtasks' drift
   (the phase prompt output-contract text, `code-review/` routed through `PhaseRunEntry`, and the
   new `phase/` bundle) is committed here. Subtask 12's own diff changes no captured behaviour.
+- SKILL-383 subtask 2 (retire listed skills): prompt, spec-writer and operation fixtures
+  carry the retired-skill name replacements (`skill-bill phase review`,
+  `skill-bill phase validation`, `operation:<name>`) and the skill text moved verbatim
+  into directive resources. Goal-child plan and preplan prompts do not load the
+  feature-spec directive and carry only the name replacements. Telemetry, lifecycle,
+  ledger and workflow JSON files are unchanged.

@@ -3,7 +3,6 @@ package skillbill.engine
 
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditPromptSections
 import skillbill.engine.featuretask.slot.pullrequest.PullRequestTemplateSearch
-import skillbill.engine.featuretask.slot.writehistory.BoundaryMemoryPromptRules
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
@@ -50,18 +49,19 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
       "non-mutating write_history phase must not carry the idempotency directive",
     )
     mapOf("write_history" to historyPrompt, "pr" to prPrompt).forEach { (phaseId, prompt) ->
-      listOf("Invoke ", "bill-boundary-history", "bill-boundary-decisions", "bill-pr-description").forEach { skill ->
-        assertFalse(prompt.contains(skill), "the $phaseId prompt must not name '$skill'")
-      }
+      assertFalse(prompt.contains("Invoke "), "the $phaseId prompt must invoke no skill")
     }
     assertContains(historyPrompt, "Always write for `MEDIUM` and `LARGE` features.")
-    assertContains(historyPrompt, BoundaryMemoryPromptRules.HISTORY_ENTRY_FORMAT)
-    assertContains(historyPrompt, BoundaryMemoryPromptRules.DECISION_ENTRY_FORMAT)
+    assertContains(historyPrompt, "## Write/Skip Rules")
+    assertContains(historyPrompt, "### Supersession and delete")
+    assertContains(historyPrompt, "Acceptance criteria: <count>/<count> implemented")
+    assertContains(historyPrompt, "Reason: <why this approach over alternatives — 1-3 lines>")
     assertFalse(historyPrompt.contains("history_result"), "write_history must not ask the agent for history_result")
     assertContains(commitPrompt, "does not launch an agent")
     assertContains(commitPrompt, "records commit_sha")
     assertContains(prPrompt, PullRequestTemplateSearch.SEARCH_ORDER.joinToString(", ") { "`$it`" })
-    assertContains(prPrompt, "`[<issue key>] <descriptive title>`")
+    assertContains(prPrompt, "## Repo-Native PR Template Search (mandatory)")
+    assertContains(prPrompt, "`[<ISSUE_KEY>] <descriptive title>`")
     assertContains(prPrompt, "# How Has This Been Tested?")
     assertContains(prPrompt, "create or reuse the open")
     assertFalse(prPrompt.contains("pr_result"), "pr must not ask the agent for pr_result")
@@ -221,6 +221,22 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(prompt, "Never block planning merely because a later implementation or validation action")
     assertContains(prompt, "genuinely missing input or an irreconcilable constraint")
     assertTrue(!prompt.contains("return a blocked plan"))
+    assertFalse(prompt.contains("## Subtask Sizing"), "goal-child plan omits the spec directive")
+    assertFalse(prompt.contains("## Spec Format Contract"), "goal-child plan omits the spec directive")
+  }
+
+  @Test
+  fun `spec bundle plan carries the feature-spec directive and allows a single subtask`() {
+    val prompt =
+      composePhasePrompt(
+        PROMPT_COMPOSER_ISSUE_KEY,
+        promptComposerBriefingFor("plan"),
+      ) { copy(specBundleRequired = true) }
+
+    assertContains(prompt, "## Subtask Sizing")
+    assertContains(prompt, "## Spec Format Contract")
+    assertContains(prompt, "Spec bundle planning requirement")
+    assertFalse(prompt.contains("at least two"), "a spec bundle may hold one subtask")
   }
 
   @Test

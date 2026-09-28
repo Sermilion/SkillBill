@@ -58,7 +58,7 @@ class ParallelCodeReviewRegisterSeamTest {
 
     val result =
       runner.run(
-        baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = CodeReviewExecutionMode.INLINE),
+        baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
     assertTrue(result.lane1.success)
@@ -78,7 +78,7 @@ class ParallelCodeReviewRegisterSeamTest {
 
     val result =
       runner.run(
-        baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = CodeReviewExecutionMode.INLINE),
+        baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
     assertTrue(result.lane1.success)
@@ -100,7 +100,7 @@ class ParallelCodeReviewRegisterSeamTest {
 
     val result =
       runner.run(
-        baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = CodeReviewExecutionMode.INLINE),
+        baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
     assertTrue(result.lane1.success)
@@ -117,7 +117,7 @@ class ParallelCodeReviewRegisterSeamTest {
         parseLaneRegisterSeam(laneBody, lane = "lane-1") { error(laneBody) }
       }
 
-    assertEquals("attributeInlineFindings", thrown.seam)
+    assertEquals("attributeLaneFindings", thrown.seam)
     assertEquals("lane-1", thrown.lane)
     val message = thrown.message.orEmpty()
     assertFalse(message.contains(laneBody), "the seam error must not carry the full lane output body")
@@ -141,7 +141,7 @@ class ParallelCodeReviewRegisterSeamTest {
 
     val result =
       runner.run(
-        baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = CodeReviewExecutionMode.INLINE),
+        baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
     assertTrue(result.lane1.success)
@@ -160,7 +160,7 @@ class ParallelCodeReviewRegisterSeamTest {
 
     val result =
       runner.run(
-        baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = CodeReviewExecutionMode.INLINE),
+        baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
     assertTrue(result.lane1.success)
@@ -180,7 +180,7 @@ class ParallelCodeReviewRegisterSeamTest {
 
     val result =
       runner.run(
-        baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = CodeReviewExecutionMode.INLINE),
+        baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
     assertTrue(result.lane1.success)
@@ -201,7 +201,7 @@ class ParallelCodeReviewRegisterSeamTest {
 
     val result =
       runner.run(
-        baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = CodeReviewExecutionMode.INLINE),
+        baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
     assertTrue(result.mergeResult.findings.isEmpty())
@@ -222,7 +222,7 @@ class ParallelCodeReviewRegisterSeamTest {
 
     val result =
       runner.run(
-        baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = CodeReviewExecutionMode.INLINE),
+        baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
     assertTrue(result.lane1.success)

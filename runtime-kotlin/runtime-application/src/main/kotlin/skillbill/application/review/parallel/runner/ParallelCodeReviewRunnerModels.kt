@@ -38,7 +38,6 @@ internal data class LaunchParentLaneArgs(
   val budget: ReviewContextBudgetPolicy,
   val request: ParallelCodeReviewRequest,
   val modelOverride: String?,
-  val resolvedMode: ResolvedReviewExecutionMode,
 )
 
 internal data class LaunchedBoundParentArgs(
@@ -47,7 +46,6 @@ internal data class LaunchedBoundParentArgs(
   val budget: ReviewContextBudgetPolicy,
   val request: ParallelCodeReviewRequest,
   val modelOverride: String?,
-  val resolvedMode: ResolvedReviewExecutionMode,
 )
 
 internal data class ParallelResultArgs(
@@ -234,19 +232,12 @@ internal const val PARALLEL_REVIEW_MAX_SUPPLIED_DIFF_BYTES = 1_000_000L
 internal const val PARALLEL_REVIEW_FIRST_SOURCE_LINE = 1
 internal const val PARALLEL_REVIEW_HEAD_REVISION = "HEAD"
 internal const val PARALLEL_REVIEW_SHARED_EVIDENCE_WORKFLOW_ID = "code-review"
-internal const val PARALLEL_REVIEW_INLINE_NATIVE_WORKER = "bill-code-review-inline"
 internal const val PARALLEL_REVIEW_NO_SEQUENCE_DIGEST = "no-commit-sequence"
 internal const val PARALLEL_REVIEW_NO_FINDINGS_TOKEN = "NO_FINDINGS"
 
 internal val NO_OP_RESUME_TERMINAL_STATUS = ReviewAccountingTerminalOutcome.NO_OP_RESUME
 internal val UNSUPPORTED_PROVIDER_TERMINAL_STATUS = ReviewAccountingTerminalOutcome.UNSUPPORTED_PROVIDER
-internal const val INLINE_FINDING_PARSE_SEAM: String = "attributeInlineFindings"
-
-internal const val PARALLEL_REVIEW_INLINE_DEPTH_DIRECTIVE: String =
-  "Merge every routed rubric above into one combined checklist, then traverse the diff exactly " +
-    "once against it at reduced depth in this agent context, holding all rubrics in mind " +
-    "simultaneously, and do not launch specialists. Never re-walk the diff once per rubric. " +
-    "Write free-form prose findings. Optional register lines are best-effort verification hints."
+internal const val LANE_FINDING_PARSE_SEAM: String = "attributeLaneFindings"
 
 internal const val PARALLEL_REVIEW_DELEGATED_DEPTH_DIRECTIVE: String =
   "Assign each routed rubric above to its own specialist worker over that rubric's owned paths. " +

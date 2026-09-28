@@ -118,6 +118,7 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.featuretask.phaserun.PhaseRunResult",
         "skillbill.engine.featuretask.phaserun.PhaseRunSpecBundle",
         "skillbill.engine.operation.core.OperationArguments",
+        "skillbill.engine.operation.core.OperationOutputFormat",
         "skillbill.engine.operation.core.OperationExecutor",
         "skillbill.engine.operation.core.OperationOutcome",
         "skillbill.engine.operation.core.OperationRegistry",
@@ -169,6 +170,7 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.work.model.IdeStatusResult",
         "skillbill.engine.work.model.IdeStatusSnapshot",
         "skillbill.engine.work.model.IdeStatusProblemCode",
+        "skillbill.engine.operation.updatecheck.updateCheckContract",
       )
   }
 }

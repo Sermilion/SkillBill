@@ -37,6 +37,6 @@ class AgentAddonSchemaValidatorTest {
       "slug" to "review-helper",
       "description" to "Provides review guidance.",
       "agent_ids" to listOf("codex"),
-      "consumers" to listOf("bill-feature"),
+      "consumers" to listOf("skill-bill"),
     )
 }

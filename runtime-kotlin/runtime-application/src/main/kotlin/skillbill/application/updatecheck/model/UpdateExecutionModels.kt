@@ -31,6 +31,7 @@ data class UpdateRunRequest(
   val dryRun: Boolean,
   val userHome: Path,
   val environment: Map<String, String>,
+  val includePrereleases: Boolean = false,
 )
 
 data class UpdateRunPlan(

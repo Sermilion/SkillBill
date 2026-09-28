@@ -1,5 +1,6 @@
 package skillbill.engine.operation.verify
 
+import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.model.review.ReviewTarget
 
 internal object VerifyPromptSections {
@@ -11,131 +12,24 @@ internal object VerifyPromptSections {
 
   const val SKIPPED_PREFIX: String = "SKIPPED:"
 
-  val CRITERIA_EXTRACTION: String =
-    """
-    After reading the spec, produce in one pass:
+  private const val VERIFY_DIRECTIVE_RESOURCE: String = "/skillbill/engine/operation/verify/verify-directive.md"
 
-    1. **Acceptance criteria** — numbered list
-    2. **Non-goals** — things explicitly out of scope
-    3. **Rollout expectation** — does the spec require guarded rollout?
-    4. **Key technical constraints** — specific patterns, APIs, or architectural requirements
-    """.trimIndent()
+  private val directive: List<String> by lazy { directiveResource(VERIFY_DIRECTIVE_RESOURCE).lines() }
 
-  val FEATURE_FLAG_AUDIT: String =
-    """
-    ## Feature Flag Audit
+  val CRITERIA_EXTRACTION: String by lazy {
+    span(
+      "After reading the spec, produce in one pass:",
+      "Then ask: **Confirm or adjust the criteria before I review the PR.**",
+    )
+  }
 
-    **Skip if:** the spec does not require feature-flagged rollout, no feature flag appears in the diff, and repo policy does not require one.
+  val FEATURE_FLAG_AUDIT: String by lazy { section("## Feature Flag Audit") }
 
-    **Run if:** the spec requires a feature flag, a feature flag appears in the diff, or the repo has explicit feature-flag policy for this change.
+  val COMPLETENESS_AUDIT: String by lazy { section("## Completeness Audit") }
 
-    Verify against the repo's rollout requirements. If the repo does not define its own rollout rubric, use `bill-feature-guard` as a narrow checklist rather than assuming every repo follows it by default:
+  val CONSOLIDATED_VERDICT: String by lazy { span("## Consolidated Verdict", "After presenting the verdict, ask:") }
 
-    1. **Flag exists** — is the flag defined in the codebase?
-    2. **Rollback safety** — when flag is OFF, behavior is identical to before the PR
-    3. **Minimal checks** — feature flag checks are at the highest practical level (not scattered)
-    4. **Legacy preserved** — if Legacy pattern used, legacy code is untouched
-    5. **No hybrid states** — no mixing of old/new behavior paths
-    6. **Default value** — if a new flag is introduced, it defaults to `false` (disabled)
-
-    Output:
-
-    ```
-    FEATURE FLAG AUDIT
-    Flag name: <name>
-    Pattern: Legacy / DI Switch / Simple Conditional / N/A
-
-    [ PASS | FAIL ] Flag defined in codebase
-    [ PASS | FAIL ] Rollback safe (flag OFF = identical old behavior)
-    [ PASS | FAIL ] Minimal flag checks (not scattered)
-    [ PASS | FAIL ] Legacy code untouched (if applicable)
-    [ PASS | FAIL ] No hybrid states
-    [ PASS | FAIL ] Default value is false
-
-    Issues: <list, or "None">
-    ```
-    """.trimIndent()
-
-  val COMPLETENESS_AUDIT: String =
-    """
-    ## Completeness Audit
-
-    For each numbered acceptance criterion, search the actual code changes to verify implementation:
-
-    ```
-    COMPLETENESS AUDIT
-
-    Acceptance criteria: <total>
-    Implemented:         <count>
-    Missing:             <count>
-    Partial:             <count>
-
-    ---
-
-    [PASS] #1: <criterion text>
-      Evidence: FileA.kt:42, FileB.kt:88
-
-    [FAIL] #6: <criterion text>
-      Not found — <reason>
-
-    [PARTIAL] #8: <criterion text>
-      Missing — <what's missing>
-    ```
-
-    **Rules:**
-    - Every criterion must have concrete file:line evidence or be marked FAIL
-    - "Partial" means some but not all aspects of the criterion are covered
-    - Check both positive (feature works) and negative (edge cases, error states) aspects
-    - If the spec mentions tests, verify test coverage exists for the criterion
-    """.trimIndent()
-
-  val CONSOLIDATED_VERDICT: String =
-    """
-    ## Consolidated Verdict
-
-    Merge all findings into a single report:
-
-    ```
-    FEATURE VERIFY: <feature name>
-
-    --- ACCEPTANCE CRITERIA ---
-    <completeness audit>
-
-    --- FEATURE FLAG ---
-    <audit, or "N/A — no flag required">
-
-    --- CODE REVIEW ---
-    <risk register and action items>
-
-    --- UNIT TEST VALUE ---
-    <unit test value result, or "N/A — no unit tests changed">
-
-    --- VERDICT ---
-    <one of:>
-      APPROVE — all criteria met, no blockers
-      APPROVE WITH FIXES — all criteria met, but code issues need fixing [list P0/P1]
-      REQUEST CHANGES — missing criteria or blockers [list what's missing/blocking]
-    ```
-    """.trimIndent()
-
-  val VERIFICATION_INPUT_BOUNDARY: String =
-    """
-    ## Verification Input Boundary
-
-    Each verifier receives only its declared criteria and authoritative bounded
-    repository projection. Private workflow evidence, unrelated evaluator outputs,
-    telemetry, and complete upstream artifact maps are not prompt inputs. The
-    consolidated verdict consumes compact typed evaluator receipts, while repository
-    checkpoint state remains authoritative over receipt claims.
-
-    Durable least-context records are versioned boundaries. A legacy workflow,
-    briefing, handoff, private-evidence, or delivered-projection record must fail
-    through the typed workflow-contract hierarchy; it is never defaulted or decoded
-    as the current shape. The actionable operator guidance is to restart the active
-    run or use the documented out-of-band migration procedure. Error and
-    continuation surfaces identify the incompatible record and consumer projection
-    without copying private content.
-    """.trimIndent()
+  val VERIFICATION_INPUT_BOUNDARY: String by lazy { section("## Verification Input Boundary") }
 
   val REVIEW_RUBRIC: String =
     """
@@ -186,10 +80,12 @@ internal object VerifyPromptSections {
   ): String =
     buildString {
       target.openingLines(baseRevision, headRevision).forEach(::appendLine)
-      appendLine("Do not launch bill-code-review, delegated review subagents, or an isolated review process.")
+      appendLine(
+        "Do not launch skill-bill phase review, delegated review subagents, or an isolated review process.",
+      )
       appendLine(READ_ONLY)
       appendLine("Apply the review rubric in the prior values to the change, against the confirmed criteria.")
-      appendLine("Do not run `./gradlew check`, the pack collect-all gate, or `bill-code-check`.")
+      appendLine("Do not run `./gradlew check`, the pack collect-all gate, or `skill-bill phase validation`.")
     }.trimEnd()
 
   fun completenessAuditDirective(comparisonScope: String): String =
@@ -212,4 +108,21 @@ internal object VerifyPromptSections {
       CONSOLIDATED_VERDICT,
       VERIFICATION_INPUT_BOUNDARY,
     ).joinToString("\n\n")
+
+  private fun section(heading: String): String {
+    val level = heading.takeWhile { it == '#' }.length
+    val next = Regex("^#{1,$level} ")
+    val lines = from(heading)
+    return (listOf(lines.first()) + lines.drop(1).takeWhile { !next.containsMatchIn(it) }).joinToString("\n").trim()
+  }
+
+  private fun span(
+    start: String,
+    until: String,
+  ): String = from(start).takeWhile { it != until }.joinToString("\n").trim()
+
+  private fun from(start: String): List<String> =
+    directive.dropWhile { it != start }.also { lines ->
+      check(lines.isNotEmpty()) { "Verify directive $VERIFY_DIRECTIVE_RESOURCE has no line '$start'." }
+    }
 }

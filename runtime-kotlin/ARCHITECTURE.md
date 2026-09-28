@@ -971,6 +971,26 @@ skillbill.workflow.verify
 - `skill-bill feature-task` and `feature-task-stats` are the CLI surfaces for
   this workflow family.
 
+## Listed skill catalog
+
+- `skill-bill` is the only listed skill (SKILL-383). Its full-run form
+  launches `skill-bill goal` after one confirmation gate. `phase:<name>`
+  translates to `skill-bill phase <name>` and `operation:<name>` to
+  `skill-bill operation <name>`; the dispatcher relays one operator
+  confirmation for operations that exit `awaiting_confirmation`.
+  `skill-bill goal status` stays CLI-only.
+- The text of the retired listed skills moved verbatim into
+  `skills/skill-bill/content.md` and into directive resources under
+  `runtime-engine/src/main/resources/skillbill/engine/<owner package path>/`,
+  each loaded by its owning strategy or operation.
+- Pack specialists install as unlisted `internal-for: skill-bill` sidecars in
+  the installed `skill-bill` directory. `InstallLegacySkillNames` lists every
+  retired name, so an install over an old home removes their links and copies.
+- Wire labels keep retired names: telemetry `skill` values, the verify
+  `workflow_name` default (`bill-feature-verify`) and its migration, the
+  workflow skill label `WorkflowStateWrites` writes, and the quality-check
+  `routed_skill` (`bill-code-check`). See `agent/decisions.md`.
+
 ## Runtime operations
 
 An operation (`skillbill.engine.operation`) is a runtime command outside the
@@ -991,10 +1011,9 @@ verify family. Every invocation id has the `opr-` prefix.
 - Operations: `update-check` shares the text formatter with
   `skill-bill update-check`. `release` tags through
   `WorkflowGitReleaseTagOperations`.
-- Checklist operations carry their rules in runtime-owned prompt objects
-  (`*PromptRules`), copied from the skills they replace.
-  `ChecklistOperationRulesParityTest` keeps the copies equal to those skills
-  until SKILL-383 deletes them.
+- Checklist operations load the text of the skills they replace from their
+  directive resources (SKILL-383). Kotlin prompt objects keep only the
+  runtime output-contract text.
   - `unit-test-value-check` is read-only and needs no confirmation. It reviews
     the unit tests in the current staged, unstaged, and untracked changes, or
     in `scope:<path|sha|ref>`. With no unit test in scope it says so and
@@ -1032,8 +1051,8 @@ verify family. Every invocation id has the `opr-` prefix.
   `operation_proposals` row is written, and a newer run in the same repo root
   abandons older parked rows. Confirm runs `gather_diff` through `finish` on
   that row. Each evaluator's prior values are only its declared launch
-  projection. The rubrics are copied into `VerifyPromptSections` under
-  `ChecklistOperationRulesParityTest`. `mode:delegated` runs the multi-agent
+  projection. The rubrics come from the `operation/verify` directive
+  resource. `mode:delegated` runs the multi-agent
   review as the `code_review` step's `PhaseStepSession`. Confirming an
   interrupted row resumes it at `continueWorkflow`'s step.
 
@@ -1133,7 +1152,7 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   review session id when one is given, else `phr-<uuid>`) that the CLI prints.
   `skill-bill phase <review|validation|plan|implement|pr> [intake] [mode:..] [target:..]` takes
   `mode:inline|delegated|auto` (`auto` resolves inline) and
-  `target:HEAD|uncommitted|<commit-sha|branch|tag>`. An omitted target reviews
+  `target:HEAD|uncommitted|pr|staged|unstaged|<commit-sha|branch|tag>`. An omitted target reviews
   uncommitted changes when the worktree is dirty and `HEAD` when it is clean.
   A target that names no commit is a usage error, and a worktree status that
   cannot be read blocks the review step. `skill-bill code-review` routes
@@ -1159,8 +1178,8 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   base branch with `PullRequestBranchRefusedError`, pushes the branch when it
   has unpushed commits, and runs the pull-request readiness gate only when the
   run's forward steps include `commit_push`.
-  The listed `skill-bill` dispatcher skill translates `phase:<name>` into this
-  subcommand; `ListedSkillNames` admits it beside the `bill-` prefix.
+  The `skill-bill` dispatcher, the only listed skill, translates
+  `phase:<name>` into this subcommand.
   `FeatureTaskPhaseRunDefinitionScan` keeps the package off named definitions,
   and the durable-store scan covers it.
 - `PhaseStrategyRegistry` holds the registered strategies. `PhaseStrategySelection`
@@ -1249,9 +1268,9 @@ Composition:
   | `delegated` | `slot.codereview` | The same `CodeReviewSlot` steps, with a review step that runs `ParallelCodeReviewRunner` lanes (bounded by `withBoundedLaneProgress`) inside its `PhaseRunner` session and edits no files; the `REVIEW` definition selects it for `delegated`, standalone and goal-child runs do not |
   | `pack-build` | `slot.qualitygate.packbuild` | Runtime-owned build gate, triage and repair sessions |
   | `agent-validate` | `slot.qualitygate.agentvalidate` | Agent validate step, its repair session, retryable blocked disposition |
-  | `boundary-history` | `slot.writehistory` | write_history directive, the boundary history and decision rules (`BoundaryMemoryPromptRules`, owned by the runtime; the prompt invokes no skill), finalization briefing field set, changed paths and history and decision writes measured by `WriteHistoryMeasurement` under `FeatureTaskRuntimeMeasuredFactKeys`; a fact it cannot measure is recorded as unknown with a diagnostics record |
+  | `boundary-history` | `slot.writehistory` | write_history directive, the boundary history and decision rules (the `boundary-history-directive.md` and `boundary-decisions-directive.md` resources, with runtime inputs in `BoundaryMemoryPromptRules`; the prompt invokes no skill), finalization briefing field set, changed paths and history and decision writes measured by `WriteHistoryMeasurement` under `FeatureTaskRuntimeMeasuredFactKeys`; a fact it cannot measure is recorded as unknown with a diagnostics record |
   | `runtime-commit` | `slot.commitpush` | Commit push cycle, upstream-head fallback, finalization briefing field set |
-  | `pr-description` | `slot.pullrequest` | PR directive, the pull request description rules (`PrDescriptionPromptRules`, owned by the runtime; the prompt invokes no skill), the repo template search (`PullRequestTemplateSearch` over the `PullRequestTemplateFiles` port: a found template keeps its headings and drops its checklist, none falls back to the coded template, several with no default block the step), PR readiness gate (`PullRequestReadinessGate`), PR identity measured before and after the step through `PullRequestIdentityLookup`, and `pr_description_generated` emitted after a completed step through the lifecycle telemetry gate |
+  | `pr-description` | `slot.pullrequest` | PR directive, the pull request description rules (the `pr-description-directive.md` resource, with the template search result in `PrDescriptionPromptRules`; the prompt invokes no skill), the repo template search (`PullRequestTemplateSearch` over the `PullRequestTemplateFiles` port: a found template keeps its headings and drops its checklist, none falls back to the coded template, several with no default block the step), PR readiness gate (`PullRequestReadinessGate`), PR identity measured before and after the step through `PullRequestIdentityLookup`, and `pr_description_generated` emitted after a completed step through the lifecycle telemetry gate |
 
 - A strategy reaches shared code through hooks, never the other way round.
   `PhaseStrategy.stepHooks` returns the step's `PhaseStepHooks` (launch,

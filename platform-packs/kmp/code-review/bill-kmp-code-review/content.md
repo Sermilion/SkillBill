@@ -40,4 +40,4 @@ Treat the generated flattened Review Composition plan as authoritative. Launch i
 
 - Report only reachable failures with a concrete precondition and observed consequence.
 - Assign severity from impact, keep every finding attributed to its baseline, specialist, or add-on lane, and deduplicate without erasing ownership.
-- Read selected specialist sidecars from the installed `bill-code-review` directory; do not invoke internal specialists through a skill command.
+- Read selected specialist sidecars from the installed `skill-bill` directory; do not invoke internal specialists through a skill command.

@@ -41,6 +41,22 @@ private val retiredSkillNames: List<String> =
     "bill-skill-remove",
     "bill-skill-scaffold",
     "bill-new-skill-all-agents",
+    "bill-feature",
+    "bill-feature-spec",
+    "bill-code-review",
+    "bill-code-review-inline",
+    "bill-code-check",
+    "bill-pr-description",
+    "bill-boundary-history",
+    "bill-boundary-decisions",
+    "bill-pr-review-fix",
+    "bill-unit-test-value-check",
+    "bill-update-check",
+    "bill-release",
+    "bill-feature-verify",
+    "bill-feature-guard",
+    "bill-feature-guard-cleanup",
+    "bill-monitor",
   )
 
 internal fun legacySkillBillCleanupNames(currentSkillNames: List<String>): List<String> =
@@ -58,3 +74,8 @@ internal fun legacySkillBillCleanupNames(currentSkillNames: List<String>): List<
       add("mdp-${name.removePrefix("bill-")}")
     }
   }.distinct()
+
+internal fun legacySkillBillCacheNames(currentSkillNames: List<String>): List<String> =
+  (renamedSkillPairs.map { (oldName, _) -> oldName } + retiredSkillNames)
+    .filter { name -> name !in currentSkillNames }
+    .distinct()

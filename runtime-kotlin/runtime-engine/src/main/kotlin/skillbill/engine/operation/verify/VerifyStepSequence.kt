@@ -145,7 +145,7 @@ internal class VerifyStepSequence(
             VerifyWorkflow.DIFF_PROJECTION to projection.artifact,
             VerifyWorkflow.FEATURE_FLAG_POLICY to VerifyWorkflow.policy(VerifyPromptSections.FEATURE_FLAG_AUDIT),
             VerifyWorkflow.REVIEW_RUBRIC to VerifyWorkflow.policy(VerifyPromptSections.REVIEW_RUBRIC),
-            VerifyWorkflow.UNIT_TEST_VALUE_RUBRIC to VerifyWorkflow.policy(UnitTestValueCheckPromptRules.RUBRIC),
+            VerifyWorkflow.UNIT_TEST_VALUE_RUBRIC to VerifyWorkflow.policy(UnitTestValueCheckPromptRules.RULES),
             VerifyWorkflow.COMPLETENESS_RUBRIC to VerifyWorkflow.policy(VerifyPromptSections.COMPLETENESS_AUDIT),
           ),
         )

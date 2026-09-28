@@ -1,5 +1,6 @@
 package skillbill.engine.operation.prreviewfix
 
+import skillbill.engine.directive.directiveResource
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.review.pullrequest.model.ReviewThread
 
@@ -32,7 +33,7 @@ internal fun analysisDirective(
   val digest =
     "${pullRequest.describe()}: head `${pullRequest.headRefName}` at ${pullRequest.headOid}, base " +
       "`${pullRequest.baseRefName}`.\n\n## Actionable\n\n$actionable\n\n## Already handled\n\n$handled"
-  return directive(ANALYSIS_DIRECTIVE)
+  return directiveResource(ANALYSIS_DIRECTIVE)
     .replace("{{pull_request}}", pullRequest.describe())
     .replace("{{thread_digest}}", digest)
 }
@@ -42,7 +43,7 @@ internal fun threadDirective(
   selected: PrReviewFixSelectedThread,
   thread: ReviewThread,
 ): String =
-  directive(THREAD_DIRECTIVE)
+  directiveResource(THREAD_DIRECTIVE)
     .replace("{{pull_request}}", pullRequest.describe())
     .replace("{{ordinal}}", selected.ordinal)
     .replace("{{thread_id}}", selected.threadId)
@@ -68,11 +69,6 @@ private fun ReviewThread.renderComments(): String =
   comments.joinToString("\n\n") { comment ->
     "@${comment.author} (${comment.createdAt}):\n" + comment.body.trimEnd().lines().joinToString("\n") { "> $it" }
   }.ifBlank { "(no comments)" }
-
-private fun directive(resource: String): String =
-  requireNotNull(PrReviewFixTarget::class.java.getResourceAsStream(resource)) {
-    "Missing pr-review-fix directive resource $resource."
-  }.use { stream -> stream.readBytes().decodeToString() }
 
 private val PULL_REQUEST_REFERENCE = Regex("""#\d+|https?://\S+/pull/\d+\S*""")
 private val BARE_PULL_REQUEST_NUMBER = Regex("""\d+""")

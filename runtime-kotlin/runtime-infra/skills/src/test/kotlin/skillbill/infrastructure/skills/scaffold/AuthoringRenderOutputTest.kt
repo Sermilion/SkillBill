@@ -91,20 +91,13 @@ class AuthoringRenderOutputTest {
   }
 
   @Test
-  fun `bill feature render includes dynamically discovered agent addon pointers without writing source`() {
+  fun `legacy bill-feature consumer delivers no pointer to a skill named bill-feature`() {
     val repoRoot = tempRoot.resolve("agent-addon-render-repo")
     val featureDir = repoRoot.resolve("skills/bill-feature")
-    val internalDir = repoRoot.resolve("skills/bill-feature-helper")
     Files.createDirectories(featureDir)
-    Files.createDirectories(internalDir)
     Files.writeString(
       featureDir.resolve("content.md"),
       "---\nname: bill-feature\ndescription: Feature router.\n---\n\nRun feature work.\n",
-    )
-    Files.writeString(
-      internalDir.resolve("content.md"),
-      "---\nname: bill-feature-helper\ninternal-for: bill-feature\n" +
-        "description: Feature helper.\n---\n\nRun feature helper work.\n",
     )
     val addonDir = repoRoot.resolve("agent-addons/review-helper")
     Files.createDirectories(addonDir)
@@ -122,17 +115,12 @@ class AuthoringRenderOutputTest {
     )
     Files.writeString(addonDir.resolve("content.md"), "Use the helper.\n")
 
-    val parentRender = renderAuthoringTarget(repoRoot, "bill-feature")
-    val sidecarRender = renderAuthoringTarget(repoRoot, "bill-feature-helper")
+    val render = renderAuthoringTarget(repoRoot, "bill-feature")
 
-    val pointerHeader = "===== pointer: skills/bill-feature/agent-addon-review-helper.md ====="
-    assertEquals(pointerHeader, parentRender.blocks.last().header)
-    assertEquals("Use the helper.\n", parentRender.blocks.last().content)
     assertEquals(
-      listOf("===== SKILL.md: skills/bill-feature-helper/SKILL.md ====="),
-      sidecarRender.blocks.map { block -> block.header },
+      listOf("===== SKILL.md: skills/bill-feature/SKILL.md ====="),
+      render.blocks.map { block -> block.header },
     )
-    assertFalse(Files.exists(featureDir.resolve("agent-addon-review-helper.md")))
   }
 
   @Test

@@ -31,27 +31,19 @@ class ParallelCodeReviewClaimVerificationTest {
     )
 
   @Test
-  fun `every merged finding at every severity is verified in inline and delegated`() {
-    val modes =
-      listOf(
-        CodeReviewExecutionMode.INLINE to inlineConfig(),
-        CodeReviewExecutionMode.DELEGATED to delegatedConfig(),
-      )
-    modes.forEach { (mode, config) ->
-      val recorder = ReviewRecorder()
-      reviewHarness(config, recorder).run(harnessRequest(reviewRunId = "verify-$mode", codeReviewMode = mode))
-      val findings = recorder.durableFindingVerdicts.filter { it.stage == ReviewStage.VERIFICATION }
-      assertEquals(2, findings.size, "mode=$mode")
-      assertEquals(setOf("F-001", "F-002"), findings.map { it.findingRef }.toSet())
-      assertTrue(findings.all { it.claimVerdict == ReviewClaimVerdict.CONFIRMED }, "mode=$mode")
-      assertEquals(2, recorder.verificationLaunches.size, "mode=$mode")
-      assertTrue(
-        recorder.durableStageBoundaries.any {
-          it.stage == ReviewStage.VERIFICATION && it.reached == ReviewStageReached.REACHED
-        },
-        "mode=$mode",
-      )
-    }
+  fun `every merged finding at every severity is verified`() {
+    val recorder = ReviewRecorder()
+    reviewHarness(delegatedConfig(), recorder).run(delegatedRequest())
+    val findings = recorder.durableFindingVerdicts.filter { it.stage == ReviewStage.VERIFICATION }
+    assertEquals(2, findings.size)
+    assertEquals(setOf("F-001", "F-002"), findings.map { it.findingRef }.toSet())
+    assertTrue(findings.all { it.claimVerdict == ReviewClaimVerdict.CONFIRMED })
+    assertEquals(2, recorder.verificationLaunches.size)
+    assertTrue(
+      recorder.durableStageBoundaries.any {
+        it.stage == ReviewStage.VERIFICATION && it.reached == ReviewStageReached.REACHED
+      },
+    )
   }
 
   @Test
@@ -175,8 +167,6 @@ class ParallelCodeReviewClaimVerificationTest {
     )
 
   private fun delegatedConfig(): ReviewHarnessConfig = verificationConfig()
-
-  private fun inlineConfig(): ReviewHarnessConfig = verificationConfig()
 
   private fun architectureOnlyConfig(): ReviewHarnessConfig =
     verificationConfig(

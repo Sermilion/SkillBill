@@ -20,8 +20,8 @@ class PhaseRunErrorMappingTest {
       }
 
     assertEquals(
-      "Review target 'no-such-branch' does not name a commit in this repository; expected HEAD, uncommitted, or a " +
-        "commit sha, branch, or tag.",
+      "Review target 'no-such-branch' does not name a commit in this repository; expected HEAD, uncommitted, pr, " +
+        "staged, unstaged, or a commit sha, branch, or tag.",
       error.message,
     )
     assertNull(state.result, "a usage error writes no phase result")

@@ -362,10 +362,10 @@ class McpScaffoldCommandRequestParserTest {
           "slug" to "review-helper",
           "description" to "Review helper",
           "agent_ids" to listOf("codex"),
-          "consumers" to listOf("bill-feature"),
+          "consumers" to listOf("skill-bill"),
         ),
       ) as ScaffoldCommandRequest.AgentAddon
     assertEquals("review-helper", request.slug)
-    assertEquals(listOf("bill-feature"), request.consumers)
+    assertEquals(listOf("skill-bill"), request.consumers)
   }
 }

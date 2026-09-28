@@ -36,6 +36,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
       )
 
     assertContains(prompt, "non-blank value")
+    assertContains(prompt, "## Intake Contract", false, "undecomposed preplan carries the feature-spec intake")
     assertContains(prompt, "produced_outputs", false, "preplan warns about produced_outputs shape")
     assertContains(prompt, "\"projection_kind\": \"preplanning_digest\"", false, "preplan teaches stuffed digest JSON")
     assertFalse(prompt.contains("bill-code-review mode:"), "review execution mode must not reach preplan")
@@ -281,7 +282,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     assertContains(prompt, "./gradlew compileKotlin")
     assertContains(prompt, "collect_all_full_gate_command")
     assertContains(prompt, "skill-bill validate")
-    assertContains(prompt, "bill-code-check")
+    assertContains(prompt, "skill-bill phase validation")
     assertContains(prompt, "check --continue")
     assertContains(prompt, "do not emit build_receipt")
     assertContains(prompt, "up to three repair turns")
@@ -305,6 +306,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
           packBuildCommand = "./gradlew compileKotlin",
         )
       }
+    assertContains(prompt, "## Repair Window")
     assertContains(prompt, "## Runtime build gate findings")
     assertContains(prompt, "A prior gate run parsed these items")
     assertContains(prompt, "full open set for this repair turn")

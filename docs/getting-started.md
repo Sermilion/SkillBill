@@ -1,6 +1,6 @@
 # Getting Started
 
-Skill Bill installs governed agent workflows plus a local runtime. The fastest way to understand the product is to run `/bill-feature` on a small feature spec: it prepares the spec, then routes to implementation, which plans the work, implements it, reviews it, validates it, records history when relevant, and prepares the PR handoff.
+Skill Bill installs governed agent workflows plus a local runtime. The fastest way to understand the product is to run `/skill-bill` on a small feature spec: it prepares the spec, then routes to implementation, which plans the work, implements it, reviews it, validates it, records history when relevant, and prepares the PR handoff.
 
 The runtime is packaged Kotlin: normal `skill-bill` and `skill-bill-mcp` use distribution scripts built by `./install.sh`, not Gradle `run` tasks and not a legacy runtime selector.
 
@@ -10,7 +10,7 @@ Use this guide when you want to install Skill Bill, understand the runtime model
 
 Skill Bill has three operator surfaces:
 
-- installed slash-command workflows such as `/bill-feature`, `/bill-code-review`, and `/bill-code-check`
+- the one installed slash command, `/skill-bill`, which runs the full feature workflow, one phase (`phase:review`, `phase:validation`, ...), or one runtime operation (`operation:verify`, `operation:release`, ...)
 - the local `skill-bill` CLI
 - the local `skill-bill-mcp` stdio MCP server
 
@@ -18,7 +18,7 @@ The bundled skills are reference workflows and reusable workflow components. The
 
 Those surfaces use the same governed repo structure:
 
-- `skills/` contains canonical user-facing skill sources. A source skill directory contains `content.md` and, only when needed, `native-agents/`.
+- `skills/` contains the canonical user-facing skill source, `skills/skill-bill/`. A source skill directory contains `content.md` and, only when needed, `native-agents/`.
 - `platform-packs/` contains manifest-declared platform packs
 - `orchestration/` contains shared contracts and playbooks
 - `runtime-kotlin/` contains the packaged CLI and MCP runtime
@@ -91,7 +91,7 @@ review skills after manifest validation; dominant packs provide quality-check
 commands through their `validation_gate`. All installed
 content-managed skills are rendered into `~/.skill-bill/installed-skills/` and
 agent entries link to that staging cache, not directly to source directories.
-When `bill-code-review` is present, install planning also selects the unique
+When `skill-bill` is present, install planning also selects the unique
 pack declaring `fallback_capabilities: [code-review]`. The shipped declaration
 belongs to `generic`, but teams may move it to a custom conforming pack. No
 declaration leaves horizontal base behavior; multiple declarations fail.
@@ -137,7 +137,7 @@ Feature-task model and effort preferences also belong in this machine-wide JSON 
 
 The pre-install cleanup still wipes the rest of `~/.skill-bill/`, preserving `skills/`, `platform-packs/`, `orchestration/`, `baseline-manifest.json`, and durable `*.db` state (goal/workflow stores, `review-metrics.db`). Only the config was ever at risk, and it now lives outside that tree. See [External Addon Sources](external-addons.md#persisting-config-across-installs) for details. For a one-off install that must not wipe any state, `SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1 ./install.sh …` skips the cleanup entirely (intended for dev iteration).
 
-On Claude, Codex, and Junie, orchestrators that delegate review work also install native subagent definitions for supported runtime surfaces. The stack-specific code-review skills (e.g. `bill-go-code-review-security`, `bill-kotlin-code-review`, `bill-php-code-review-security`, `bill-python-code-review-security`) are **internal sidecars** of `/bill-code-review` — they are not listed slash commands; `/bill-code-review` detects the dominant stack and routes to the matching sidecar. Invoke quality checks through `/bill-code-check`; it selects the dominant pack and runs that pack's `validation_gate` collect-all argv (`routed_skill` telemetry stays `bill-code-check`). Each declared platform-pack bundle registers its baseline reviewer and specialist reviewers as native subagents. Native subagent sources live as provider-neutral `native-agents/agents.yaml` bundles or standalone `native-agents/<name>.md` files. New and rendered neutral sources include `contract_version: "0.1"`; the parser still accepts older unpinned sources so existing repos can migrate gradually. Install renders those sources into `~/.skill-bill/native-agents/` before linking Claude markdown into `~/.claude/agents/`, Codex TOMLs into `~/.codex/agents/`, and Junie markdown into `~/.junie/agents/`; generated provider files are not checked into the repo. `~/.agents/agents/` is only a Skill Bill compatibility path for Codex homes without a `.codex` root, not the primary documented Codex custom-agent location. Claude and Junie use Markdown/YAML custom-subagent frontmatter; Codex resolves spawn instructions by TOML `name`. Today this covers shipped platform-pack baseline and specialist reviewers selected by manifest. Feature-task execution uses the Kotlin runtime driver (`skill-bill feature-task` / `skill-bill goal`); `bill-feature-verify` has no verify-specific native subagents and delegates review through `bill-code-review` while keeping feature-flag, completeness, and verdict audits inline.
+On Claude, Codex, and Junie, orchestrators that delegate review work also install native subagent definitions for supported runtime surfaces. The stack-specific code-review skills (e.g. `bill-go-code-review-security`, `bill-kotlin-code-review`, `bill-php-code-review-security`, `bill-python-code-review-security`) are **internal sidecars** of `/skill-bill` — they are not listed slash commands; `/skill-bill phase:review` detects the dominant stack and routes to the matching sidecar. Invoke quality checks through `/skill-bill phase:validation`; it selects the dominant pack and runs that pack's `validation_gate` (`routed_skill` telemetry stays `bill-code-check`). Each declared platform-pack bundle registers its baseline reviewer and specialist reviewers as native subagents. Native subagent sources live as provider-neutral `native-agents/agents.yaml` bundles or standalone `native-agents/<name>.md` files. New and rendered neutral sources include `contract_version: "0.1"`; the parser still accepts older unpinned sources so existing repos can migrate gradually. Install renders those sources into `~/.skill-bill/native-agents/` before linking Claude markdown into `~/.claude/agents/`, Codex TOMLs into `~/.codex/agents/`, and Junie markdown into `~/.junie/agents/`; generated provider files are not checked into the repo. `~/.agents/agents/` is only a Skill Bill compatibility path for Codex homes without a `.codex` root, not the primary documented Codex custom-agent location. Claude and Junie use Markdown/YAML custom-subagent frontmatter; Codex resolves spawn instructions by TOML `name`. Today this covers shipped platform-pack baseline and specialist reviewers selected by manifest. Feature-task execution uses the Kotlin runtime driver (`skill-bill feature-task` / `skill-bill goal`); `operation:verify` has no verify-specific native subagents and runs its review through the review phase while keeping feature-flag, completeness, and verdict audits inline.
 
 ## Runtime Model
 
@@ -161,24 +161,24 @@ skill-bill doctor
 skill-bill telemetry status --format json
 ```
 
-Then try the stable skill entry points in your agent, in this order:
+Then try the `/skill-bill` forms in your agent, in this order:
 
-- `/bill-feature-spec` (optional prep-first path for spec-only sessions)
-- `/bill-feature`
-- `/bill-code-review`
-- `/bill-code-check`
-- `/bill-feature-verify`
+- `/skill-bill <KEY> phase:plan` (optional prep-first path for spec-only sessions)
+- `/skill-bill <KEY> <description>`
+- `/skill-bill phase:review`
+- `/skill-bill phase:validation`
+- `/skill-bill operation:verify spec:<path> target:<pr>`
 
-Use `/bill-feature` first because it exercises the full governed path: feature spec, planning, implementation, routed review, validation, history, and PR handoff. Use `/bill-feature-spec` when you need standalone spec/decomposition preparation before implementation. Use `/bill-code-review` directly when you only need the review phase.
+Use the full run first because it exercises the full governed path: feature spec, planning, implementation, routed review, validation, history, and PR handoff. Use `phase:plan` when you need standalone spec/decomposition preparation before implementation. Use `phase:review` directly when you only need the review phase. `/skill-bill` is the only listed skill; each form runs `skill-bill phase <name>` or `skill-bill operation <name>`.
 
 Choose standalone review execution explicitly with:
 
 ```text
-/bill-code-review mode:inline
-/bill-code-review mode:delegated
+/skill-bill phase:review mode:inline
+/skill-bill phase:review mode:delegated
 ```
 
-Omitting `mode:` is equivalent to `mode:inline`, the default reduced-depth review in one `bill-code-review-inline` session; `mode:delegated` is the experimental full-depth specialist subagent fan-out, reached only by that explicit selection on `/bill-code-review`. `mode:auto` resolves to `inline` everywhere. Feature workflows review inline (`/bill-feature <issue-key> code-review:auto|inline`); delegated review is a standalone launch.
+Omitting `mode:` is equivalent to `mode:inline`, the default reduced-depth review in one review session; `mode:delegated` is the experimental full-depth specialist subagent fan-out, reached only by that explicit selection on `phase:review`. `mode:auto` resolves to `inline` everywhere. Feature workflows review inline (`/skill-bill <issue-key> code-review:auto|inline`); delegated review is a standalone launch.
 
 ## Runtime Fallback Boundary
 
@@ -228,7 +228,7 @@ Use strict guarantees for compatibility and safety boundaries. Use model-mediate
 Skill Bill has two layers:
 
 - the governed workflow framework: authoring rules, render/install staging, shell contracts, manifests, validators, CLI/MCP runtime, workflow state, telemetry, and cross-agent installation
-- bundled reference workflows: `bill-feature`, `bill-code-review`, `bill-code-check`, `bill-feature-verify`, `bill-pr-description`, and supporting skills
+- bundled reference workflows: the `/skill-bill` dispatcher, the phases and operations it reaches, and the platform-pack review skills
 
 The bundled workflows are production-usable defaults, not a lock-in boundary. A team can delete or replace them and still use the framework to build its own governed workflow system.
 
@@ -265,7 +265,7 @@ Review and telemetry:
 | `skill-bill stats`            | Show review acceptance metrics                      |
 | `skill-bill feature-task-stats` | Show local feature-task runtime metrics           |
 | `skill-bill goal-stats`       | Show local decomposed-goal run metrics              |
-| `skill-bill verify-stats`     | Show local `bill-feature-verify` metrics            |
+| `skill-bill verify-stats`     | Show local `operation:verify` metrics               |
 | `skill-bill telemetry status` | Show telemetry configuration and pending sync state |
 | `skill-bill telemetry sync`   | Reconcile stale sessions, then flush queued telemetry |
 | `skill-bill telemetry capabilities` | Show configured proxy capabilities            |
@@ -349,7 +349,7 @@ directory.
 
 ## Goal Observability
 
-`bill-feature` hands confirmed goals to the foreground
+`/skill-bill` hands confirmed goals to the foreground
 `skill-bill goal` runtime. The runtime owns a flat worker model: one runnable
 subtask, one durable child workflow, one fresh child process. Native or nested
 subagents may help the child session stay focused, but workflow-store state is
@@ -372,7 +372,7 @@ goal SKILL-901: heartbeat subtask=1 step=implement liveness=durable_progress
 goal_observability: issue_key=SKILL-901 subtask_id=1 workflow_phase=implement worker_role=foreground liveness_class=durable_progress sequence_number=1
 ```
 
-Use read-only status or watch commands when checking an in-flight run:
+Use read-only status or watch commands when checking an in-flight run. Goal status is CLI-only; no skill wraps it:
 
 ```bash
 skill-bill goal status SKILL-901
@@ -408,7 +408,7 @@ selected_diff_line: hunk_index=1 line_index=1 path=runtime-kotlin/runtime-cli/sr
 ### Resuming, inspecting state, and accounting
 
 Feature-task continuation is database-first. Before preparing a feature spec,
-`bill-feature` performs a read-only lookup using the normalized issue key and
+`/skill-bill` performs a read-only lookup using the normalized issue key and
 the canonical repository identity (`repo-root-realpath-v1:` plus the resolved
 Git top-level path). A unique resumable result keeps its persisted workflow ID,
 mode, governed spec path, and completed phase artifacts. Ambiguous, running,
@@ -519,6 +519,6 @@ Do not fold IntelliJ Platform tasks into `runtime-kotlin`. Plugin local setup, C
 
 Agent add-ons are explicit, agent-compatible extensions. For Codex, invoke the
 execution boundary guidance with
-`/bill-feature <ISSUE_KEY> agent-addon:execution-budget`; omit the token for the
+`/skill-bill <ISSUE_KEY> agent-addon:execution-budget`; omit the token for the
 unchanged baseline workflow. See [Agent add-on authored sources](skill-source-generation.md#agent-add-on-authored-sources)
 for precedence, source shape, staging, and resume guarantees.

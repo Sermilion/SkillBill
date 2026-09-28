@@ -31,7 +31,7 @@
 
     <g font-family="JetBrains Mono, SFMono-Regular, Consolas, monospace" font-size="18">
       <text x="34" y="96" fill="#60d394">$</text>
-      <text x="58" y="96" fill="#f6f3e7">/bill-feature spec.md</text>
+      <text x="58" y="96" fill="#f6f3e7">/skill-bill spec.md</text>
       <text x="34" y="138" fill="#8a8a94">▸ assess → branch → pre-plan → plan</text>
       <text x="34" y="170" fill="#8a8a94">▸ implement → review → audit → check</text>
       <text x="34" y="202" fill="#f4c430">✓ durable workflow state persisted</text>

@@ -42,7 +42,7 @@ class GoalStatusCommand(
   private val issueKey by argument(help = "Parent issue key for the decomposed goal.")
   private val monitorOnly by option(
     "--monitor",
-    help = "Render one bounded read-only snapshot for bill-monitor; never launches or polls a goal.",
+    help = "Render one bounded read-only snapshot; never launches or polls a goal.",
   ).flag(default = false)
   private val agent by option(
     "--agent",

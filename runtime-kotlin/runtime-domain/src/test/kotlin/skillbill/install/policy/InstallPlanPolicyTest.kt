@@ -166,8 +166,7 @@ class InstallPlanPolicyTest {
                     manualAgents = setOf(SupportedAgent.CODEX),
                   ),
               ),
-            defaultAgentTargets = emptyList(),
-          ),
+          ).copy(defaultAgentTargets = emptyList()),
         )
       }
     assertContains(
@@ -514,7 +513,6 @@ class InstallPlanPolicyTest {
     platformPacks: List<InstallPlatformPackSnapshot> = listOf(platformPack()),
     resolvedReviewFallbackSlug: String? = null,
     detectedAgentTargets: List<InstallAgentTarget> = emptyList(),
-    defaultAgentTargets: List<InstallAgentDefaultTarget> = defaultAgentTargets(),
   ): InstallPolicyInput =
     InstallPolicyInput(
       request = request,
@@ -522,7 +520,7 @@ class InstallPlanPolicyTest {
       platformPacks = platformPacks,
       resolvedReviewFallbackSlug = resolvedReviewFallbackSlug,
       detectedAgentTargets = detectedAgentTargets,
-      defaultAgentTargets = defaultAgentTargets,
+      defaultAgentTargets = defaultAgentTargets(),
     )
 
   private fun defaultAgentTargets(): List<InstallAgentDefaultTarget> =

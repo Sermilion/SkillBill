@@ -37,7 +37,7 @@ Always keep the `architecture` and `platform-correctness` specialists as the bas
 - Exclude generated, vendored, build-output, and non-stack files from specialist scope and dominance scoring. Common non-owning paths include `.venv/`, `venv/`, `site-packages/`, `build/`, `dist/`, generated protobuf/OpenAPI clients, and vendored dependency trees.
 - Let other stack packs own non-Python product files; a nearby Python helper, virtual-environment marker, or CI script does not transfer ownership.
 - Re-check the two-specialist minimum after scoping; if only architecture remains, give all Python-owned files to platform-correctness as the default second lane.
-- Load each selected specialist's governed rubric so every selected lane produces an attributed result. When tests appear tautological or coverage-padding, also apply the `bill-unit-test-value-check` lens.
+- Load each selected specialist's governed rubric so every selected lane produces an attributed result. When tests appear tautological or coverage-padding, also apply the `operation:unit-test-value-check` lens.
 - Launch selected specialists as subagents in this harness in a deterministic order and retain every selected specialist result.
 
 ## Finding Discipline

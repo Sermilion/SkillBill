@@ -1,6 +1,7 @@
 package skillbill.cli.phase
 
 import com.github.ajalt.clikt.core.UsageError
+import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import kotlin.test.Test
@@ -43,6 +44,14 @@ class PhaseInvocationParserTest {
   }
 
   @Test
+  fun `last is an alias for HEAD rather than a revision named last`() {
+    fun target(value: String) = PhaseInvocationParser.parse("review", listOf("target:$value")).target
+
+    assertEquals(ReviewTarget.Commit("HEAD"), target("last"))
+    assertEquals(ReviewTarget.Commit("HEAD"), target("LAST"))
+  }
+
+  @Test
   fun `commit_push is a usage error`() {
     val error = assertFailsWith<UsageError> { PhaseInvocationParser.parse("commit_push", emptyList()) }
 
@@ -60,7 +69,19 @@ class PhaseInvocationParserTest {
   fun `a blank target is a usage error`() {
     val error = assertFailsWith<UsageError> { PhaseInvocationParser.parse("review", listOf("target:")) }
 
-    assertEquals("Unknown target ''; expected HEAD, uncommitted, or a commit sha, branch, or tag.", error.message)
+    assertEquals(
+      "Unknown target ''; expected HEAD, uncommitted, pr, staged, unstaged, or a commit sha, branch, or tag.",
+      error.message,
+    )
+  }
+
+  @Test
+  fun `pr, staged, and unstaged targets parse to a scoped target with no revisions`() {
+    fun target(value: String) = PhaseInvocationParser.parse("review", listOf("target:$value")).target
+
+    assertEquals(ReviewTarget.Scoped(ParallelReviewScope.PR), target("pr"))
+    assertEquals(ReviewTarget.Scoped(ParallelReviewScope.STAGED), target("staged"))
+    assertEquals(ReviewTarget.Scoped(ParallelReviewScope.UNSTAGED), target("unstaged"))
   }
 
   @Test

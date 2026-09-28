@@ -137,7 +137,9 @@ object InlineReviewDirective {
             "Do not use `origin/main...HEAD`, a merge base, the full feature branch, or a pre-baked diff blob.",
           )
         }
-        appendLine("Do not launch bill-code-review, delegated review subagents, or an isolated review process.")
+        appendLine(
+          "Do not launch `skill-bill phase review`, delegated review subagents, or an isolated review process.",
+        )
         appendLine("Fix every Blocker and Major finding in this same session before you emit.")
         appendLine("You may edit files. Leave Minor and Nit unfixed unless the edit is local and obvious.")
         appendLine("Do not commit, amend, reset, or stage changes; the runtime owns the review checkpoint.")
@@ -145,9 +147,15 @@ object InlineReviewDirective {
           "Criterion-gap detection remains exclusive to audit. Do not report unsatisfied acceptance criteria.",
         )
         appendLine(
-          "Do not run `./gradlew check`, the pack collect-all gate, or `bill-code-check`; validate owns those.",
+          "Do not run `./gradlew check`, the pack collect-all gate, or `skill-bill phase validation`; " +
+            "validate owns those.",
         )
         specPath?.let { path -> appendLine("Subtask spec path: `$path`.") }
+        appendLine()
+        append(CodeReviewDirectives.review)
+        appendLine()
+        append(CodeReviewDirectives.inlineReview)
+        appendLine()
         appendLine("After fixes, emit remaining findings in this register shape, one per line:")
         appendLine("- [F-001] Blocker | High | path/File.kt:12 | remaining defect after your edits")
         appendLine("End with exactly one line: `verdict: approved` or `verdict: changes_requested`.")

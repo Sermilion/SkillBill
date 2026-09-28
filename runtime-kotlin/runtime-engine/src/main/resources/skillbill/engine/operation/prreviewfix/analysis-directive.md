@@ -9,6 +9,73 @@ This step is read-only. Do not edit, create, or delete files. Do not run `gh`
 mutations, post replies, resolve threads, commit, or push. The runtime refuses
 the analysis if the worktree changes.
 
+## Phase 1 — Analysis
+
+### Resolve PR context
+
+1. If the user passed a PR number/URL, use it. Otherwise resolve from the current branch via `gh pr view --json number,url,headRefName,baseRefName,title`.
+2. Stop and ask if no PR is associated with the current branch.
+
+### Fetch thread-aware comments (GraphQL only)
+
+Plain `gh pr view --comments` returns a flat list and loses `isResolved` / `isOutdated` flags. Use the GraphQL endpoint instead:
+
+```bash
+gh api graphql -F owner=<owner> -F repo=<repo> -F number=<n> -f query='
+  query($owner:String!,$repo:String!,$number:Int!) {
+    repository(owner:$owner,name:$repo){
+      pullRequest(number:$number){
+        reviewThreads(first:100){
+          nodes{
+            id isResolved isOutdated path line originalLine diffSide
+            comments(first:50){
+              nodes{ id databaseId author{login} body createdAt url }
+            }
+          }
+        }
+      }
+    }
+  }'
+```
+
+Capture per thread: `id`, `isResolved`, `isOutdated`, `path`, `line`, ordered comments with author + body.
+
+### Classify threads
+
+- **Actionable** — `isResolved == false` and `isOutdated == false`.
+- **Informational** — actionable threads where the reviewer asked a question or made an observation but no code change is implied.
+- **Already-handled** — `isResolved == true` or `isOutdated == true`. List but do not recommend changes.
+
+### Produce the recommendation matrix
+
+For each actionable thread, render:
+
+```
+Thread <thread-id> — <path>:<line>
+Summary: <one-line summary of what the reviewer said>
+Verdict: agree | partial | disagree
+Rationale: <why this verdict, citing the code or constraint>
+Hidden/special context: <anything the reviewer may not know, or "—">
+Options:
+  1. (recommended) <description>
+  2. <description>
+  3. <description, optional>
+Proposed reply:
+  <reply text — see Reply Style below>
+```
+
+Group already-handled and informational threads at the end in a separate section.
+
+### Approval gate (mandatory)
+
+After printing the matrix, stop. Ask the user to select threads + option per thread. Do not edit code or post replies until they reply. Acceptable formats:
+
+- "1a, 2, 3c" → apply option a for thread 1, recommended for thread 2, option c for thread 3.
+- "all recommended" → apply the recommended option for every actionable thread.
+- "skip 4, recommended for the rest" → skip thread 4, apply recommended elsewhere.
+
+Treat any ambiguity as "ask again." Do not infer scope.
+
 ## Recommendation matrix
 
 For each actionable thread, in ordinal order, render:

@@ -79,7 +79,14 @@ data class OperationArguments(
   val replies: String? = null,
   val spec: String? = null,
   val target: String? = null,
+  val includePrereleases: Boolean = false,
+  val format: OperationOutputFormat = OperationOutputFormat.TEXT,
 )
+
+enum class OperationOutputFormat(val wireValue: String) {
+  TEXT("text"),
+  JSON("json"),
+}
 
 sealed interface OperationRunResult {
   data class Finished(val outcome: OperationOutcome) : OperationRunResult

@@ -24,21 +24,6 @@ import kotlin.test.assertTrue
 
 private val LEGACY_POINTER_GOLDEN: Map<String, Set<String>> =
   mapOf(
-    "bill-code-review" to
-      setOf(
-        "telemetry-contract.md",
-        "shell-content-contract.md",
-        "shell-ceremony.md",
-      ),
-    "bill-code-check" to setOf("stack-routing.md", "telemetry-contract.md", "shell-ceremony.md"),
-    "bill-pr-description" to setOf("shell-ceremony.md", "telemetry-contract.md"),
-    "bill-feature" to
-      setOf(
-        "peak-hours-warner.md",
-        "shell-ceremony.md",
-        "telemetry-contract.md",
-      ),
-    "bill-feature-verify" to setOf("shell-ceremony.md", "telemetry-contract.md"),
     "skill-bill" to
       setOf(
         "peak-hours-warner.md",
@@ -252,7 +237,7 @@ class SkillClassLoaderTest {
     val repoRoot = currentRepoRootForClassLoader()
     val kmpManifest = loadPlatformManifest(repoRoot.resolve("platform-packs/kmp"))
 
-    val pointers = requiredSupportingFilesForSkill("bill-feature", repoRoot, listOf(kmpManifest))
+    val pointers = requiredSupportingFilesForSkill("skill-bill", repoRoot, listOf(kmpManifest))
 
     assertEquals(
       listOf(
@@ -287,7 +272,7 @@ class SkillClassLoaderTest {
   fun `feature entry class owns merged ceremony`() {
     val repoRoot = currentRepoRootForClassLoader()
     val classes = discoverSkillClasses(repoRoot)
-    val manifest = resolveSkillClass("bill-feature", classes)
+    val manifest = resolveSkillClass("skill-bill", classes)
 
     assertEquals("feature-launch-warning", manifest?.classId)
     assertTrue(Files.isRegularFile(repoRoot.resolve("$SKILL_CLASSES_DIR/feature-launch-warning.yaml")))
@@ -299,25 +284,6 @@ class SkillClassLoaderTest {
   fun `leftover pack checker names do not match a quality-check leaf class`() {
     val classes = discoverSkillClasses(currentRepoRootForClassLoader())
     assertNull(resolveSkillClass("bill-kotlin-code-check", classes))
-  }
-
-  @Test
-  fun `code-review-shell is an entry over skill-bill code-review and keeps detected_scope labels`() {
-    val yaml =
-      Files.readString(
-        currentRepoRootForClassLoader().resolve("orchestration/skill-classes/code-review-shell.yaml"),
-      )
-    assertTrue(yaml.contains("skill-bill code-review"), yaml)
-    listOf(
-      "staged changes",
-      "unstaged changes",
-      "working tree",
-      "commit range",
-      "PR diff",
-      "files",
-    ).forEach { label ->
-      assertTrue(yaml.contains(label), "missing detected_scope label '$label'")
-    }
   }
 
   private fun manifest(

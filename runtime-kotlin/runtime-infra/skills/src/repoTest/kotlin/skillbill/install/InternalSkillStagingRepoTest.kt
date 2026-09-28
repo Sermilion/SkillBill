@@ -66,7 +66,7 @@ class InternalSkillStagingRepoTest {
   }
 
   @Test
-  fun `every shipped pack specialist and the inline worker stage as sidecars of skill-bill only`() {
+  fun `every shipped pack specialist stages as a sidecar of skill-bill only`() {
     val repoRoot = repoRootFromTest()
     val home = Files.createTempDirectory("skillbill-sidecar-parent-home").also(tempDirs::add)
     val packSkills = shippedCodeReviewSkills(repoRoot)
@@ -84,39 +84,18 @@ class InternalSkillStagingRepoTest {
         ),
       )
 
-    val inlineWorkerDir = repoRoot.resolve("skills/bill-code-review-inline")
-    assertEquals(PACK_SIDECAR_PARENT_SKILL, parseInternalForFrontmatter(inlineWorkerDir.resolve("content.md")))
-    val expectedWrappers = (packSkills.map { it.name } + "bill-code-review-inline").map { "$it.md" }.toSet()
-    val expectedCompanions =
-      (packSkills.map { it.sourceDir.toPath() } + listOf(inlineWorkerDir)).flatMap(::authoredCompanionNames).toSet()
+    val expectedWrappers = packSkills.map { "${it.name}.md" }.toSet()
+    val expectedCompanions = packSkills.map { it.sourceDir.toPath() }.flatMap(::authoredCompanionNames).toSet()
     assertEquals(
       expectedWrappers + expectedCompanions,
       rendered.renderedSidecarFiles.map { it.fileName }.toSet(),
-      "skill-bill must stage exactly the shipped pack specialists plus the inline worker as sidecars",
+      "skill-bill must stage exactly the shipped pack specialists as sidecars",
     )
     expectedWrappers.forEach { name ->
       assertTrue(
         Files.isRegularFile(rendered.stagingDir.resolve(name).toPath(), LinkOption.NOFOLLOW_LINKS),
         "missing staged sidecar $name under the installed $PACK_SIDECAR_PARENT_SKILL dir",
       )
-    }
-
-    val legacyParent = repoRoot.resolve("skills/bill-code-review")
-    if (Files.isDirectory(legacyParent)) {
-      val legacy =
-        stageInstalledSkill(
-          StageInstalledSkillInput(
-            repoRoot = repoRoot,
-            sourceSkillDir = legacyParent,
-            home = home,
-            selectedPackSkills = packSkills,
-          ),
-        )
-      val leaked =
-        expectedWrappers.filter { name ->
-          Files.exists(legacy.stagingDir.resolve(name).toPath(), LinkOption.NOFOLLOW_LINKS)
-        }
-      assertTrue(leaked.isEmpty(), "bill-code-review staging must not hold skill-bill sidecars; found $leaked")
     }
   }
 

@@ -349,7 +349,7 @@ internal object InstallerShellFixtures {
       agent_ids:
         - codex
       consumers:
-        - bill-feature
+        - skill-bill
       """.trimIndent() + "\n",
     )
     Files.writeString(agentAddon.resolve("content.md"), "Review helper.\n")

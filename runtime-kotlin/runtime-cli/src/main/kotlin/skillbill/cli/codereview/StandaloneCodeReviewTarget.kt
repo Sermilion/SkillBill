@@ -46,7 +46,7 @@ internal fun parsedReviewScope(scope: String): ParallelReviewScope =
     else -> throw UsageError("Invalid scope: $scope")
   }
 
-private fun namedStandaloneScope(token: String): ParallelReviewScope? =
+internal fun namedStandaloneScope(token: String): ParallelReviewScope? =
   when (token.lowercase()) {
     "pr" -> ParallelReviewScope.PR
     "uncommitted" -> ParallelReviewScope.UNCOMMITTED

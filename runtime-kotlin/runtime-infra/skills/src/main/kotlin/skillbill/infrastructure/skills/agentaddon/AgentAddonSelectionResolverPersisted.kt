@@ -1,7 +1,6 @@
 package skillbill.infrastructure.skills.agentaddon
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
-import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.agentaddon.model.HydratedAgentAddonSelectionEntry
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
@@ -21,30 +20,17 @@ internal fun verifyPersistedAgentAddonSelection(
   val receivingAgents = request.receivingAgentIds.map(request.parseAgent)
   return HydratedAgentAddonSelection(
     request.selection.entries.map { recorded ->
-      hydratePersistedAgentAddonEntry(
-        recorded,
-        request.consumer,
-        receivingAgents,
-        request.validateCompatibility,
-        request.stringList,
-      )
+      hydratePersistedAgentAddonEntry(recorded, request, receivingAgents)
     },
   )
 }
 
 private fun hydratePersistedAgentAddonEntry(
   recorded: PersistedAgentAddonSelectionEntry,
-  consumer: AgentAddonConsumer,
+  request: PersistedAgentAddonSelectionVerifyRequest,
   receivingAgents: List<String>,
-  validateCompatibility: (
-    slug: String,
-    consumers: List<AgentAddonConsumer>,
-    agents: List<String>,
-    consumer: AgentAddonConsumer,
-    receivingAgents: List<String>,
-  ) -> Unit,
-  stringList: (Map<*, *>, String) -> List<String>,
 ): HydratedAgentAddonSelectionEntry {
+  val stringList = request.stringList
   val manifest = Path.of(recorded.sourceIdentity)
   if (!Files.isRegularFile(manifest)) {
     invalidAgentAddonSelection(
@@ -58,9 +44,9 @@ private fun hydratePersistedAgentAddonEntry(
       "Selected source '${recorded.sourceIdentity}' declares '$slug', expected '${recorded.slug}'.",
     )
   }
-  val consumers = stringList(values, "consumers").map(AgentAddonConsumer::fromId)
+  val consumers = stringList(values, "consumers").map(request.decodeConsumer).distinct()
   val agents = stringList(values, "agent_ids").map { id -> SupportedAgent.parseAgentAddonId(id).wireValue }
-  validateCompatibility(recorded.slug, consumers, agents, consumer, receivingAgents)
+  request.validateCompatibility(recorded.slug, consumers, agents, request.consumer, receivingAgents)
   val contentPath = manifest.resolveSibling("content.md")
   if (!Files.isRegularFile(contentPath)) {
     invalidAgentAddonSelection("Selected agent add-on '${recorded.slug}' content.md is missing.")

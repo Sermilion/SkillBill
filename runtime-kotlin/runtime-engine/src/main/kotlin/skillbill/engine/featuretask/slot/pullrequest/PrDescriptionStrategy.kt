@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.pullrequest
 
+import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -83,7 +84,7 @@ class PrDescriptionStrategy(
   ): PhaseStepPromptSections =
     PhaseStepPromptSections(
       taskDirective = directiveFor(stepId),
-      stepContext = PrDescriptionPromptRules.section(template(inputs.repoRoot)),
+      stepContext = listOf(RULES, PrDescriptionPromptRules.section(template(inputs.repoRoot))).joinToString("\n\n"),
       valueContent = VALUE_CONTENT,
     )
 
@@ -175,6 +176,9 @@ class PrDescriptionStrategy(
   companion object {
     const val ID = "pr-description"
     private const val DEFAULT_BASE_BRANCH = "main"
+    private const val RULES_RESOURCE = "/skillbill/engine/featuretask/slot/pullrequest/pr-description-directive.md"
+
+    private val RULES: String by lazy { directiveResource(RULES_RESOURCE).trimEnd() }
 
     private const val DIRECTIVE: String =
       "Write the pull request title and description by the pull request description rules below, then create " +

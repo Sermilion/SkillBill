@@ -57,7 +57,7 @@ class GoalPreflightGateBlockBuilder(
       return agentAddonSelectionPort.resolveInitial(
         repoRoot = root,
         requestedSlugs = request.requestedAgentAddonSlugs,
-        consumer = AgentAddonConsumer.BILL_FEATURE,
+        consumer = AgentAddonConsumer.SKILL_BILL,
         receivingAgentIds = receivingAgents,
         externalSourceRoots =
           externalAgentAddonSourceConfigPort.readExternalAgentAddonSources(
@@ -70,7 +70,7 @@ class GoalPreflightGateBlockBuilder(
     } else {
       agentAddonSelectionPort.verifyPersisted(
         persisted,
-        AgentAddonConsumer.BILL_FEATURE,
+        AgentAddonConsumer.SKILL_BILL,
         receivingAgents,
       )
     }

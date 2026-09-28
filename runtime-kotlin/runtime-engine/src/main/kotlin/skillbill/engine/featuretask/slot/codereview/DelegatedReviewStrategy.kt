@@ -98,7 +98,7 @@ internal class DelegatedReviewPass(
       generationScoped = true,
     )
 
-  override val directive: String = DELEGATED_REVIEW_DIRECTIVE
+  override val directive: String = DelegatedReviewDirective.text
 
   override val recordsLaneTelemetry: Boolean = true
 
@@ -167,14 +167,17 @@ internal class DelegatedReviewPass(
         laneProgressIdleTimeout = launch.progressIdleTimeout ?: READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES.minutes,
       )
   }
+}
 
-  private companion object {
-    const val DELEGATED_REVIEW_DIRECTIVE: String =
-      "Review the change through the delegated specialist review: the runtime launches the dominant pack's " +
-        "specialist lanes in parallel and merges their findings. Do not edit files. Emit the merged findings and " +
-        "a verdict of approved or changes_requested. Criterion-gap detection remains exclusive to the audit " +
-        "phase. Do not run `./gradlew check`, the pack collect-all gate, or `bill-code-check`; validate owns those."
-  }
+internal object DelegatedReviewDirective {
+  private const val RUNTIME_DIRECTIVE: String =
+    "Review the change through the delegated specialist review: the runtime launches the dominant pack's " +
+      "specialist lanes in parallel and merges their findings. Do not edit files. Emit the merged findings and " +
+      "a verdict of approved or changes_requested. Criterion-gap detection remains exclusive to the audit " +
+      "phase. Do not run `./gradlew check`, the pack collect-all gate, or `skill-bill phase validation`; " +
+      "validate owns those."
+
+  val text: String by lazy { RUNTIME_DIRECTIVE + "\n\n" + CodeReviewDirectives.review.trimEnd() }
 }
 
 internal fun delegatedReviewRequest(

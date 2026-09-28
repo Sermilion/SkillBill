@@ -101,7 +101,7 @@ class FileSystemScaffoldGateway(
         editableSurface = listOf("agent-addon.yaml", "content.md"),
         generatedSurface = listOf("agent-addon-<slug>.md install pointers"),
         governedSidecars = emptyList(),
-        normalWorkflow = listOf("skill-bill show $skillName", "skill-bill validate", "skill-bill render bill-feature"),
+        normalWorkflow = listOf("skill-bill show $skillName", "skill-bill validate", "skill-bill render skill-bill"),
         notes =
           listOf(
             "Supported agents: ${addon.agentIds.joinToString()}",
@@ -111,8 +111,8 @@ class FileSystemScaffoldGateway(
           ScaffoldExplainSkill(
             skillName = addon.identity,
             contentFile = addon.contentPath.toString(),
-            renderCommand = "skill-bill render bill-feature --repo-root ${repoRoot.toAbsolutePath().normalize()}",
-            recommendedCommands = listOf("skill-bill validate", "skill-bill render bill-feature"),
+            renderCommand = "skill-bill render skill-bill --repo-root ${repoRoot.toAbsolutePath().normalize()}",
+            recommendedCommands = listOf("skill-bill validate", "skill-bill render skill-bill"),
           ),
       )
     }
@@ -275,11 +275,11 @@ private fun AgentAddonCatalogueEntry.toSkillStatus(
     family = "agent-addon",
     area = "",
     contentFile = contentPath.toString(),
-    renderCommand = "skill-bill render bill-feature --repo-root ${repoRoot.toAbsolutePath().normalize()}",
+    renderCommand = "skill-bill render skill-bill --repo-root ${repoRoot.toAbsolutePath().normalize()}",
     completionStatus = ScaffoldCompletionStatus.AUTHORED,
     sectionCount = 0,
     sections = emptyList(),
-    recommendedCommands = listOf("skill-bill validate", "skill-bill render bill-feature"),
+    recommendedCommands = listOf("skill-bill validate", "skill-bill render skill-bill"),
     contentPreview = if (contentMode == "preview") contentText.take(CONTENT_PREVIEW_MAX_CHARS) else null,
     content = if (contentMode == "full") contentText else null,
     category = "agent-addon",

@@ -16,4 +16,5 @@ internal data class PersistedAgentAddonSelectionVerifyRequest(
     receivingAgents: List<String>,
   ) -> Unit,
   val stringList: (Map<*, *>, String) -> List<String>,
+  val decodeConsumer: (String) -> AgentAddonConsumer,
 )

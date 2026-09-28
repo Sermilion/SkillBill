@@ -1,3 +1,13 @@
+## [2026-09-28] SKILL-383 subtask 2 — single-skill catalog
+Areas: runtime-kotlin/{engine,application,cli,contracts,core,domain,infra}, skills, orchestration, platform-packs, docs, scripts
+- `/skill-bill` is now the only listed skill. Legacy `bill-*` trees, including `bill-monitor`, are removed; phases and operations use dispatcher routes.
+- Deleted skill bodies moved verbatim into owner directive resources or `skills/skill-bill`, with census-backed mechanical drops and prompt re-baselines. reusable
+- Install reconciliation removes legacy links/copies and migrates persisted `bill-feature` add-on consumers to `skill-bill`; pack specialists remain unlisted sidecars.
+- Stable telemetry and workflow labels retain retired wire values; standalone review/validation/update-check routing uses dispatcher-owned phase/operation commands.
+- Breaking changes or known limitations: direct invocations of retired skill names have no compatibility shim; `bill-code-review-inline` was removed because no production caller remained.
+Feature flag: N/A
+Acceptance criteria: 10/10 implemented
+
 ## [2026-09-28] SKILL-382 subtask 4 — verify operation
 Areas: runtime-kotlin/runtime-engine/operation/{core,verify (new)} (main, test), runtime-kotlin/runtime-contracts/error/operation, runtime-kotlin/runtime-core/di/operation, runtime-kotlin/runtime-cli/operation, runtime-kotlin/runtime-infra/skills (repoTest), runtime-kotlin/{ARCHITECTURE.md,agent/decisions.md}, skills/skill-bill, AGENTS.md
 - New `verify` operation: `skill-bill operation verify spec:<path> target:<ref> [mode:delegated]`. It runs on the feature-verify workflow family (`wfv-` ids), not `feature_task_workflows` or `operation_proposals`. It keeps the nine step ids, the eight artifact names, and workflow contract 0.3. An unknown contract version still loud-fails with `InvalidWorkflowStateSchemaError`.

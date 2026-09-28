@@ -32,47 +32,6 @@ internal fun loadFeatureAddonValidationPacks(root: Path): List<PlatformManifest>
   return packs
 }
 
-internal fun validateWorkflowContracts(
-  root: Path,
-  issues: MutableList<String>,
-) {
-  val checks =
-    mapOf(
-      "skills/bill-feature-verify/content.md" to
-        listOf(
-          "Step id: `collect_inputs`",
-          "Step id: `code_review`",
-          "Step id: `unit_test_value_check`",
-          "Step id: `verdict`",
-          "feature_verify_workflow_open",
-          "feature_verify_workflow_update",
-          "feature_verify_workflow_get",
-          "feature_verify_workflow_continue",
-          "`input_context`",
-          "`criteria_summary`",
-          "`diff_projection`",
-          "`feature_flag_audit_receipt`",
-          "`code_review_receipt`",
-          "`unit_test_value_receipt`",
-          "`completeness_audit_receipt`",
-          "`verdict_result`",
-        ),
-    )
-  checks.forEach { (relativePath, markers) ->
-    val file = root.resolve(relativePath)
-    if (!file.isRegularFile()) {
-      issues += "$relativePath is missing"
-      return@forEach
-    }
-    val text = Files.readString(file)
-    markers.forEach { marker ->
-      if (marker !in text) {
-        issues += "$relativePath: missing workflow contract marker '$marker'"
-      }
-    }
-  }
-}
-
 internal fun validateOrchestrationPlaybooks(
   root: Path,
   issues: MutableList<String>,

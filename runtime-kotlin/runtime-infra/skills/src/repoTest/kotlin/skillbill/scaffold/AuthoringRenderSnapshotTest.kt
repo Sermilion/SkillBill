@@ -13,20 +13,6 @@ import kotlin.test.assertTrue
 
 class AuthoringRenderSnapshotTest {
   @Test
-  fun `standalone governed skill render matches snapshot`() {
-    val repoRoot = currentRepoRootForSnapshotTest()
-
-    val first = renderAuthoringTarget(repoRoot, "bill-pr-description").stdout
-    val second = renderAuthoringTarget(repoRoot, "bill-pr-description").stdout
-
-    assertEquals(first, second, "render output must be deterministic across repeated in-memory renders")
-    SnapshotAssertions.assertMatchesSnapshot(
-      "snapshots/scaffold/bill-pr-description.render.txt",
-      first,
-    )
-  }
-
-  @Test
   fun `kotlin code-review render matches snapshot with manifest ordered pointers`() {
     val repoRoot = currentRepoRootForSnapshotTest()
     val rendered = renderAuthoringTarget(repoRoot, "bill-kotlin-code-review")

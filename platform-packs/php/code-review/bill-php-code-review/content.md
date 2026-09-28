@@ -41,7 +41,7 @@ Add other specialists only when the changed files justify them.
 - Laravel queues/Horizon, Symfony Messenger, acknowledgement, retry/backoff, schedulers, cache keys, locks, timeouts, signals, shutdown handlers, or persistent workers -> `reliability` specialist.
 - `unserialize()`, hydration hooks, Blade `{!! !!}`, Twig `|raw`, uploads, paths, `exec()`, `system()`, `shell_exec()`, Symfony Process, `Process::fromShellCommandline()`, Laravel Process APIs, SSRF, policies/voters, CSRF, trusted proxies, secrets, or sensitive logs -> `security` specialist.
 - PHPUnit/Pest tests, data providers, framework kernels, database fixtures, queue/cache fakes, worker isolation, PHPStan/Psalm configuration, or PHP runtime matrices -> `testing` specialist.
-- Changed tests look suspiciously weak, tautological, or coverage-padding -> `bill-unit-test-value-check`.
+- Changed tests look suspiciously weak, tautological, or coverage-padding -> `operation:unit-test-value-check`.
 - PDO/ORM query volume, hydration, serializer/template loops, batching, `yield`, streamed responses, OPcache, Composer class maps, cache cardinality, worker memory, or blocking fibers -> `performance` specialist.
 - Blade, Twig, Livewire, Inertia, Filament, Symfony Forms, old input, error bags, component identity, redirects, pagination, or server/client state handoff -> `ui` specialist.
 - PHP-owned Blade or Twig templates, Symfony Forms, Livewire, Inertia, Filament, rendered components, labels/errors, keyboard controls, focus restoration, headings, landmarks, live regions, localization, directionality, or progressive enhancement, even when the diff contains no pre-existing accessibility keywords -> `ux-accessibility` specialist.

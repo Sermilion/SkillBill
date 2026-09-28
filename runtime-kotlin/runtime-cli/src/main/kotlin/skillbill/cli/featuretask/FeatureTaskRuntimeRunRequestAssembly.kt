@@ -67,7 +67,7 @@ internal fun FeatureTaskRuntimePhaseAgentCommand.prepareRuntimeRun(
     } else {
       deps.agentAddonSelectionPort.verifyPersisted(
         persistedSelection,
-        AgentAddonConsumer.BILL_FEATURE,
+        AgentAddonConsumer.SKILL_BILL,
         receivingAgents,
       )
     }

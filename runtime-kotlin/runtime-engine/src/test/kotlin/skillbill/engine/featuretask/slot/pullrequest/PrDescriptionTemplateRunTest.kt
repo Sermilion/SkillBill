@@ -116,12 +116,13 @@ class PrDescriptionTemplateRunTest {
     listOf("# Summary", "# Feature Flags", "# Media", "# How Has This Been Tested?").forEach { heading ->
       assertTrue(heading in prompt, "the fallback template must carry '$heading': $prompt")
     }
+    assertTrue("found no repo-native template. Use the built-in fallback template." in prompt, prompt)
   }
 
   private fun assertRuntimeOwnedRules(prompt: String) {
-    assertTrue("## Pull request description rules" in prompt, prompt)
+    assertTrue("## Repo-Native PR Template Search (mandatory)" in prompt, prompt)
+    assertTrue("## Pull request template search result" in prompt, prompt)
     assertFalse("Invoke " in prompt, "the pr prompt must invoke no skill: $prompt")
-    assertFalse("bill-pr-description" in prompt, "the pr prompt must not name the skill: $prompt")
   }
 
   private fun assertNamesBothTemplates(reason: String) {

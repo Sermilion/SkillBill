@@ -12,7 +12,6 @@ import skillbill.infrastructure.skills.scaffold.authoring.AuthoringTarget
 import skillbill.infrastructure.skills.scaffold.authoring.renderAuthoringTarget
 import skillbill.infrastructure.skills.scaffold.authoring.renderWrapper
 import skillbill.infrastructure.skills.scaffold.authoring.resolveTarget
-import skillbill.infrastructure.skills.scaffold.authoring.validateTarget
 import skillbill.infrastructure.skills.scaffold.manifest.appendCodeReviewArea
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
 import skillbill.infrastructure.skills.scaffold.rendering.baselineReviewContent
@@ -557,20 +556,20 @@ class ScaffoldAuthoringParityTest {
           skillFile = packSkill,
           contentFile = packSkill.resolveSibling("content.md"),
         )
-      val baseSkill = repo.resolve("skills/bill-code-review")
+      val baseSkill = repo.resolve("skills/skill-bill")
       Files.createDirectories(baseSkill)
       Files.writeString(
         baseSkill.resolve("content.md"),
-        "---\nname: bill-code-review\ndescription: Base shell content.\n---\n\n" +
+        "---\nname: skill-bill\ndescription: Base shell content.\n---\n\n" +
           baselineReviewContent("Base shell content."),
       )
       val baseTarget =
         AuthoringTarget(
-          skillName = "bill-code-review",
+          skillName = "skill-bill",
           packageName = "base",
           platform = "",
-          displayName = "code review",
-          family = "code-review",
+          displayName = "skill bill",
+          family = "skill-bill",
           area = "",
           skillFile = baseSkill.resolve("SKILL.md"),
           contentFile = baseSkill.resolve("content.md"),
@@ -579,7 +578,7 @@ class ScaffoldAuthoringParityTest {
       assertContains(renderWrapper(packTarget), "Platform pack: `kotlin` (Kotlin)")
       val renderedBase = renderWrapper(baseTarget)
 
-      assertContains(renderedBase, "[shell-content-contract.md](shell-content-contract.md)")
+      assertContains(renderedBase, "[shell-ceremony.md](shell-ceremony.md)")
       assertFalse("[review-orchestrator.md](review-orchestrator.md)" in renderedBase)
     }
 
@@ -598,26 +597,6 @@ class ScaffoldAuthoringParityTest {
       assertEquals("platform-pack", result.kind)
       assertContains(rendered, "Platform pack: `foo-bar` (Foo Bar)")
       loadPlatformPack(repo.resolve("platform-packs/foo-bar"))
-    }
-
-  @Test
-  fun `feature verify render validates inline audit rubric content without source sidecars`() =
-    withIsolatedUserHome {
-      val repo = seedRepo()
-      val skillDir = repo.resolve("skills/bill-feature-verify")
-      Files.createDirectories(skillDir)
-      val context = TemplateContext("bill-feature-verify", "feature-verify", "", "", "feature verify")
-      Files.writeString(
-        skillDir.resolve("content.md"),
-        "---\nname: bill-feature-verify\ndescription: Feature verify content.\n---\n\n" +
-          baselineReviewContent("Feature verify content."),
-      )
-      val target = resolveTarget(repo, "bill-feature-verify")
-      val rendered = renderWrapper(target)
-
-      assertFalse("audit-rubrics.md" in rendered)
-      assertNoGeneratedWrapperOrSupportingFiles(skillDir, "bill-feature-verify")
-      assertEquals(emptyList(), validateTarget(target, repo))
     }
 
   @Test
@@ -773,7 +752,7 @@ class ScaffoldAuthoringParityTest {
   fun `agent addon dry run plans two files and execute creates only governed sources`() =
     withIsolatedUserHome {
       val repo = seedRepo()
-      seedBaseSkill(repo, "bill-feature")
+      seedBaseSkill(repo, "skill-bill")
       val request =
         payload(
           repo,
@@ -781,7 +760,7 @@ class ScaffoldAuthoringParityTest {
           "slug" to "review-helper",
           "description" to "Review helper",
           "agent_ids" to listOf("codex"),
-          "consumers" to listOf("bill-feature"),
+          "consumers" to listOf("skill-bill"),
           "content_body" to "Use the review helper.\n",
         )
 
@@ -804,7 +783,7 @@ class ScaffoldAuthoringParityTest {
   fun `agent addon rejects path traversal slug before filesystem mutation`() =
     withIsolatedUserHome {
       val repo = seedRepo()
-      seedBaseSkill(repo, "bill-feature")
+      seedBaseSkill(repo, "skill-bill")
       val before = snapshotTree(repo)
 
       assertFailsWith<InvalidAgentAddonSchemaError> {
@@ -815,7 +794,7 @@ class ScaffoldAuthoringParityTest {
             "slug" to "../escaped",
             "description" to "Review helper",
             "agent_ids" to listOf("codex"),
-            "consumers" to listOf("bill-feature"),
+            "consumers" to listOf("skill-bill"),
           ),
         )
       }

@@ -7,6 +7,8 @@ Scope reviewed: current staged, unstaged, and untracked changes
 Unit tests in scope:
 - src/test/kotlin/CheckoutTest.kt
 
+# Unit Test Value Check Content
+
 Stance: tests are not free. Every test costs review attention, maintenance, and AI
 reasoning tokens on every future change to the code it touches. A test earns its place
 only by being able to catch a realistic regression in behavior someone depends on. The

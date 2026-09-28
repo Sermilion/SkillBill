@@ -4,19 +4,6 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.REQUIRED_GOVERNED_SECTIONS
 import java.nio.file.Files
 
-private val horizontalSkillFamilies: Map<String, String> =
-  mapOf(
-    "bill-feature-verify" to "workflow",
-    "bill-boundary-decisions" to "advisor",
-    "bill-boundary-history" to "advisor",
-    "bill-pr-description" to "advisor",
-    "bill-feature-guard" to "advisor",
-    "bill-feature-guard-cleanup" to "advisor",
-    "bill-unit-test-value-check" to "advisor",
-    "bill-code-review" to "advisor",
-    "bill-code-check" to "advisor",
-  )
-
 internal fun replaceSectionBody(
   text: String,
   sectionName: String,
@@ -81,7 +68,6 @@ internal fun sectionHeadingLabel(sectionName: String): String =
   normalizeSectionHeading(sectionName).removePrefix("## ").trim()
 
 internal fun inferFamily(skillName: String): String {
-  horizontalSkillFamilies[skillName]?.let { family -> return family }
   val slug = skillName.removePrefix("bill-")
   return when {
     "-code-review-" in skillName || slug.endsWith("code-review") -> "code-review"

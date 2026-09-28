@@ -6,9 +6,9 @@ description: "Dispatcher for the full governed feature run, single in-memory pha
 # Skill Bill Dispatcher
 
 `skill-bill` routes a full feature run, one phase over the working tree, or one
-runtime operation to the `skill-bill` CLI. The full run keeps the `bill-feature`
-ceremony and its single confirmation question. Phase and operation forms run one
-command and relay its output.
+runtime operation to the `skill-bill` CLI. The full run is the only feature entry
+point and keeps the governed feature ceremony and its single confirmation
+question. Phase and operation forms run one command and relay its output.
 
 ## Update Check
 
@@ -37,8 +37,9 @@ intake. Forwarded `key:value` tokens follow the intake unchanged.
 | `/skill-bill <intake> phase:implement` | `skill-bill phase implement <intake> --agent <currently-executing-agent>` | required |
 | `/skill-bill [<intake>] phase:review` | `skill-bill phase review [<intake>] [mode:<value>] [target:<value>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<intake>] phase:validation` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
+| `/skill-bill <standalone quality check: run checks, lint, format, or quality validation>` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<intake>] phase:pr` | `skill-bill phase pr [<intake>] --agent <currently-executing-agent>` | optional |
-| `/skill-bill operation:update-check` | `skill-bill operation update-check` | none |
+| `/skill-bill operation:update-check [--include-prereleases] [--format json]` | `skill-bill operation update-check [--include-prereleases] [--format json]` | none |
 | `/skill-bill [<instructions>] operation:release bump:<patch\|minor\|major>` | `skill-bill operation release bump:<value> [<instructions>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<scope>] operation:unit-test-value-check` | `skill-bill operation unit-test-value-check [scope:<value>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill <intake> operation:feature-guard` | `skill-bill operation feature-guard <intake> --agent <currently-executing-agent>` | required |
@@ -55,7 +56,8 @@ file, commit sha, or ref) verbatim as `scope:<value>`; without one, omit `scope:
 and the runtime reviews the current staged and unstaged changes. For
 `operation:pr-review-fix`, forward a PR the caller gives first, before any
 token, as `#<number>` or its URL; without one, the runtime uses the current
-branch's PR.
+branch's PR. For `operation:update-check`, forward `--include-prereleases` and
+`--format json` verbatim when the caller gives them; without them, omit them.
 
 `operation:<name>` translates to `skill-bill operation <name>`, forwarding
 `bump:`, `confirm:`, `select:`, `mode:`, `scope:`, `push:`, `replies:`, `spec:`,
@@ -73,8 +75,9 @@ The full run accepts at most one `code-review:inline|auto`, forwarded verbatim a
 tokens, each forwarded as `--agent-addon <slug>` in the given order. Omitted
 values remain omitted.
 
-`phase:review` forwards `mode:inline|delegated` and `target:HEAD|uncommitted|<sha>`
-verbatim as `key:value` tokens. Without `mode:`, the runtime reviews inline.
+`phase:review` forwards `mode:inline|delegated` and
+`target:pr|staged|unstaged|HEAD|last|uncommitted|<sha>` verbatim as `key:value`
+tokens. Without `mode:`, the runtime reviews inline.
 
 The dispatcher never resolves a review mode, a target, or an add-on catalogue, and
 never constructs JSON; the runtime selects.
@@ -157,6 +160,97 @@ translated command from Forms and Routing once and relay its output verbatim,
 adding nothing. Do not add checklists, rubrics, or steps from other skills. Never
 ask the user to run the command manually.
 
+## Phase Review
+
+`phase:review` runs `skill-bill phase review` from Forms and Routing. The
+sections from Review mode argument through Present the register govern its
+arguments and its output. An omitted target reviews uncommitted changes when
+the worktree is dirty and HEAD otherwise. Where they say to invoke the driver, run the
+`phase:review` command instead of `skill-bill code-review`: forward the review
+target as `target:<value>` and the review mode as `mode:<value>`. The accepted
+targets are `pr`, `staged`, `unstaged`, `HEAD` or `last`, `uncommitted`, and a
+commit `<sha>`.
+
+## Review mode argument
+
+Recognize at most one `mode:auto|inline|delegated` argument.
+Omission means `mode:inline`.
+Reject malformed, unknown, duplicate, or conflicting values before invoking the
+driver.
+
+## Review target argument
+
+Recognize at most one non-blank positional review target:
+
+- `pr` reviews the current pull request against its base.
+- `last` or `HEAD` reviews HEAD against its first parent.
+- a commit SHA or other git revision reviews that commit against its first parent.
+- `uncommitted` reviews staged, unstaged, and untracked work.
+- `staged` and `unstaged` keep those narrower packets.
+
+A positional review target cannot be combined with `--diff-file`,
+`--base-revision`, `--head-revision`, or a conflicting `--scope`.
+When the positional target already names the packet (`pr`, `last`,
+`uncommitted`, `staged`, `unstaged`), omit `--scope`. A commit SHA uses the
+default branch scope so the driver diffs that commit against its first parent.
+Without a positional target, pass the caller's `--scope` normally.
+
+## Invoke the driver
+
+Do not invent a scope from git, classify diff signals, name rubrics, sequence
+commits, account budgets, merge lanes, or launch workers in this session. Map
+the caller's named target, invoke the runtime driver once, and present what it
+returns:
+
+```bash
+skill-bill code-review \
+  [<target>] \
+  --execution-mode inline \
+  [--scope <caller-scope>] \
+  --repo-root <repo-root>
+```
+
+Pass the caller's named target as the positional argument (`pr`, `last`,
+`<commit>`, `uncommitted`, `staged`, or `unstaged`). Do not pass `pr`,
+`last`, or `uncommitted` as a git revision unless the caller supplied a real SHA.
+When the positional target already names the packet, omit `--scope`.
+
+When the caller supplied an explicit `mode:delegated`, pass `--execution-mode delegated`
+instead. Omission and `mode:auto` always pass `--execution-mode inline`.
+
+Pass `--diff-file` with paired `--base-revision` and
+`--head-revision` when the caller already materialized an exact diff. With
+`--execution-mode delegated`, pass `--baseline-untracked-include` /
+`--baseline-untracked-exclude` when the caller supplied that inventory; inline
+mode rejects them.
+
+When a governed feature caller supplies a labelled `Selected agent add-ons`
+section, treat that section as an immutable compact-context field. The driver
+forwards it; do not rediscover add-ons.
+
+## Present the register
+
+Display the driver's stdout as the review result. It already includes the risk
+register with provenance labels and any recorded stage verdicts. Do not rewrite
+findings, invent a second merge, or re-run the review in this session.
+
+The driver runs the in-memory review phase: it verifies the findings and fixes
+Blocker and Major findings in the working tree before it reports the rest. Do
+not apply those fixes again. A `# Review phase blocked` line means the phase
+stopped before it finished; report it and exit non-zero.
+
+## Phase Validation
+
+`phase:validation` runs `skill-bill phase validation` from Forms and Routing. A
+standalone quality check (a request to run checks, lint, format, or quality
+validation) routes to `phase:validation`: run
+`skill-bill phase validation [<intake>] --agent <currently-executing-agent>`
+once and relay its output as a phase form.
+
+## Routing
+
+Auto-route to the dominant pack for the current unit of work. Honor this shell's Repair Window and fix strategy in-session; stack-specific argv live only in the pack manifest gate.
+
 ## Operation Forms
 
 For an `operation:` form, skip Intake, Preflight, Gate, Rehydrate, and Launch. Run
@@ -192,3 +286,28 @@ supersedes the earlier one. The verify report is final: never offer a fix or a
 PR comment. When the command is blocked with a reason starting
 `rehydrate-needed:`, run Rehydrate for that spec path, then run the same
 operation once more.
+
+## Update Check Operation
+
+For `operation:update-check`, run the runtime command:
+
+```bash
+skill-bill operation update-check
+```
+
+Use JSON output when the caller needs machine-readable output:
+
+```bash
+skill-bill operation update-check --format json
+```
+
+To compare against prerelease tags as well as stable releases, pass:
+
+```bash
+skill-bill operation update-check --include-prereleases
+```
+
+Do not inspect GitHub releases directly in this skill content, run `install.sh`,
+rewrite installed skill links, or mutate workflow state. The runtime command owns
+release selection, version comparison, output formatting, and soft failure
+handling.

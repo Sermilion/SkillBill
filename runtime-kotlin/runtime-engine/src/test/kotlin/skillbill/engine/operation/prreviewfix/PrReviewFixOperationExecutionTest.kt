@@ -24,6 +24,7 @@ class PrReviewFixOperationExecutionTest {
 
       assertEquals(listOf(ANALYSIS_STEP, THREAD_STEP), harness.runner.inputs.map { input -> input.stepName })
       assertContains(harness.runner.inputs.last().directive, "Selected thread: T2 (PRRT_b) at b.kt:4")
+      assertContains(harness.runner.inputs.last().directive, "## Phase 2 — Execution")
       assertEquals(listOf("PRRT_b" to "Renamed as asked in T2."), harness.github.replies)
       assertEquals(1, harness.validations.size)
       assertEquals(emptyList(), harness.pushes)

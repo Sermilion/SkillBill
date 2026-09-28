@@ -22,10 +22,12 @@ class ExcludedRootAgentTreeAbsenceTest {
   }
 
   @Test
-  fun `boundary writer skills forbid agent trees under excluded roots`() {
+  fun `boundary writer directives forbid agent trees under excluded roots`() {
     val repoRoot = repoRootFromTest()
-    listOf("skills/bill-boundary-history/content.md", "skills/bill-boundary-decisions/content.md").forEach { path ->
-
+    val directiveDir =
+      "runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/featuretask/slot/writehistory"
+    listOf("boundary-history-directive.md", "boundary-decisions-directive.md").forEach { fileName ->
+      val path = "$directiveDir/$fileName"
       val content = Files.readString(repoRoot.resolve(path))
       assertTrue(
         content.contains("never create `agent/` under `platform-packs/`"),

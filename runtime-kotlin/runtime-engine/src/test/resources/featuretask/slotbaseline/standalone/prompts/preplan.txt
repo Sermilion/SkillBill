@@ -26,7 +26,7 @@ schema, branch, history, commit, or PR gates.
 ## Validation ownership
 Only the validate phase may run the pack validation gate
 (`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
-`bill-code-check`, or any other full repository check suite. Only the build phase may run the
+`skill-bill phase validation`, or any other full repository check suite. Only the build phase may run the
 pack build_command for compile/buildability proof. This phase must not compile, build,
 execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
 acceptance text, review habit, or prior habit that asks you to run check here — that work waits
@@ -35,6 +35,26 @@ for validate. If a receipt carries `tests_executed`, leave it empty.
 ## Build ownership
 Only the build phase may run the pack build_command (`validation_gate.build_command`). This phase
 must not invoke compile-only proof as a substitute for its own work.
+
+## Intake Contract
+
+Collect and confirm:
+
+- issue key
+- intended outcome
+- acceptance criteria
+- known constraints and non-goals
+
+If the issue key is missing, stop and ask for it. Do not invent one.
+
+## Mode Selection
+
+Classify into one of two modes:
+
+- `single_spec`: one normal implementation pass is appropriate
+- `decomposed`: multiple independently resumable subtasks are required
+
+Use `single_spec` by default unless the work clearly needs multiple dependency-ordered subtasks. Mode is sizing and planning metadata only; it never changes the artifact shape or executor.
 
 # Feature-task-runtime phase briefing
 phase: preplan

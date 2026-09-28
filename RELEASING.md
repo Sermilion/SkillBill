@@ -98,10 +98,10 @@ Skill Bill should stay on pre-1.0 SemVer until the install surface, taxonomy, an
 - bump `minor` for new skills, new platform coverage, new routing behavior, or other user-visible capability additions
 - reserve `major` for intentional breaking changes to taxonomy, install behavior, or stable entry points
 
-## Cutting a release with `/bill-release`
+## Cutting a release with `/skill-bill operation:release`
 
-The `/bill-release` skill automates the changelog-and-tag path of the checklist
-below. Pass the bump type and it will:
+The `/skill-bill operation:release` operation automates the changelog-and-tag path
+of the checklist below. Pass the bump type and it will:
 
 1. verify the working tree is clean and the branch is up to date with its remote
 2. find the previous stable tag and gather every commit since it
@@ -112,18 +112,18 @@ below. Pass the bump type and it will:
    triggering the `Release` workflow
 
 ```text
-/bill-release bump:minor
+/skill-bill operation:release bump:minor
 ```
 
 The bump type is required — `bump:patch`, `bump:minor`, or `bump:major`, per the
-versioning policy above. The skill never creates a tag with a dirty tree, never
+versioning policy above. The operation never creates a tag with a dirty tree, never
 skips changelog review, and never pushes without confirmation. It does not run
 the local validation gate, so run the checks in the checklist below first (or let
 the `Release` workflow re-run them on the pushed tag).
 
 ## Release checklist
 
-Use this when cutting a release by hand, or to know what `/bill-release` does
+Use this when cutting a release by hand, or to know what `/skill-bill operation:release` does
 under the hood.
 
 1. Make sure the release commit is on `main`.

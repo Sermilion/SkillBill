@@ -82,7 +82,7 @@ class RepoValidationInternalSkillTest {
       """
       | Skill | Purpose |
       |-------|---------|
-      | `/bill-code-review` | Review code |
+      | `/skill-bill` | Run governed work |
       | `/bill-feature` | Feature entry |
       """.trimIndent() + "\n",
     )

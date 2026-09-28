@@ -32,7 +32,6 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPo
 import skillbill.review.context.model.accounting.ReviewAccountingTerminalOutcome
 import skillbill.review.context.model.bundle.ReviewLaneBundle
 import skillbill.review.context.model.bundle.ReviewLaneBundleEntry
-import skillbill.review.context.model.execution.ResolvedReviewExecutionMode
 import skillbill.review.context.model.hunk.ReviewBudgetEvaluator
 import skillbill.review.context.model.hunk.ReviewContextBudgetExceededException
 import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
@@ -67,7 +66,6 @@ class ParallelCodeReviewRunnerLaneLaunch(
             budget = initial.budget,
             request = request,
             modelOverride = null,
-            resolvedMode = initial.resolvedMode,
           ),
         )
       }
@@ -86,7 +84,6 @@ class ParallelCodeReviewRunnerLaneLaunch(
           ParallelCodeReviewRunnerParentPrompt.build(
             selected,
             args.routedManifests,
-            args.resolvedMode,
             args.agentId,
           ),
         bundleState = parallelCodeReviewAggregateBundleCompletion(bundleStates),
@@ -101,7 +98,6 @@ class ParallelCodeReviewRunnerLaneLaunch(
             budget = args.budget,
             request = args.request,
             modelOverride = args.modelOverride,
-            resolvedMode = args.resolvedMode,
           ),
         )
     }
@@ -109,7 +105,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
 
   private fun launchedBoundParent(args: LaunchedBoundParentArgs): ParallelReviewLaneOutcome =
     args.bound.endpoint.use {
-      if (args.launch.agentId == "cursor" && args.resolvedMode == ResolvedReviewExecutionMode.DELEGATED) {
+      if (args.launch.agentId == "cursor") {
         reviewLaunchAgentStaging.stage(
           ReviewLaunchAgentStagingRequest(
             agentId = args.launch.agentId,
@@ -136,10 +132,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
                 modelOverride = args.modelOverride,
                 reviewEvidenceBroker = args.bound.broker,
                 reviewEvidenceEndpoint = args.bound.endpoint,
-                nativeReviewWorkerName =
-                  PARALLEL_REVIEW_INLINE_NATIVE_WORKER
-                    .takeIf { args.resolvedMode == ResolvedReviewExecutionMode.INLINE },
-                reviewFanOut = args.resolvedMode == ResolvedReviewExecutionMode.DELEGATED,
+                reviewFanOut = true,
               ).boundedReviewLane(args.request.laneProgressIdleTimeout, args.bound.evidenceReads),
           ),
         )

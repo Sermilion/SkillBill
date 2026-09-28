@@ -64,7 +64,6 @@ internal fun collectRepoValidationIssues(
   validateSupportingTargets(root, skillFiles.keys + platformSkillFiles.keys, issues)
   validateFeatureAddonDeclarations(root, issues)
   validateAgentAddons(root, issues)
-  validateWorkflowContracts(root, issues)
   validateOrchestrationPlaybooks(root, issues)
   validateNoInlineTelemetryContractDrift(root, issues)
   validateSpecialistContractParity(root, issues)

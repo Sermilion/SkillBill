@@ -19,8 +19,10 @@ internal fun isContentManagedSkill(sourceSkillDir: Path): Boolean {
     Files.isRegularFile(contentMd, LinkOption.NOFOLLOW_LINKS)
 }
 
-internal fun installedSkillSlug(sourceSkillDir: Path): String {
-  val raw = sourceSkillDir.fileName?.toString().orEmpty()
+internal fun installedSkillSlug(sourceSkillDir: Path): String =
+  installedSkillNameSlug(sourceSkillDir.fileName?.toString().orEmpty())
+
+internal fun installedSkillNameSlug(raw: String): String {
   if (raw.isEmpty()) {
     return ""
   }

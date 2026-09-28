@@ -4,7 +4,6 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeMeasuredFactKeys
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
-import skillbill.engine.featuretask.slot.writehistory.BoundaryMemoryPromptRules
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
@@ -20,7 +19,7 @@ class FeatureTaskRuntimeWriteHistorySettlementTest {
     val settled = settleWriteHistory(FeatureTaskRuntimeFeatureSize.SMALL, changedPaths = emptyList())
 
     assertTrue("feature_size: SMALL" in settled.prompt, settled.prompt)
-    assertTrue("Skip trivial `SMALL` changes" in settled.prompt, settled.prompt)
+    assertTrue("Skip only for trivial `SMALL` changes" in settled.prompt, settled.prompt)
     assertEquals(false, settled.facts[FeatureTaskRuntimeMeasuredFactKeys.HISTORY_WRITTEN], settled.facts.toString())
     assertEquals(WorkflowStepStatus.COMPLETED, settled.commitPushStatus)
   }
@@ -31,7 +30,9 @@ class FeatureTaskRuntimeWriteHistorySettlementTest {
 
     assertTrue("feature_size: MEDIUM" in settled.prompt, settled.prompt)
     assertTrue("Always write for `MEDIUM` and `LARGE` features." in settled.prompt, settled.prompt)
-    assertTrue(BoundaryMemoryPromptRules.HISTORY_ENTRY_FORMAT in settled.prompt, settled.prompt)
+    assertTrue("## Write/Skip Rules" in settled.prompt, settled.prompt)
+    assertTrue("### Supersession and delete" in settled.prompt, settled.prompt)
+    assertTrue("## [<date>] <feature-name>\nAreas: <list of affected modules/packages/areas>" in settled.prompt)
     assertEquals(listOf(HISTORY_PATH), settled.facts[FeatureTaskRuntimeMeasuredFactKeys.CHANGED_PATHS])
     assertEquals(true, settled.facts[FeatureTaskRuntimeMeasuredFactKeys.HISTORY_WRITTEN], settled.facts.toString())
     assertEquals(WorkflowStepStatus.COMPLETED, settled.commitPushStatus)

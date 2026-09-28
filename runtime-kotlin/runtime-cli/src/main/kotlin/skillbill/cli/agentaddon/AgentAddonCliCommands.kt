@@ -55,13 +55,14 @@ class AgentAddonResolveSelectionCommand(
     complete {
       val selection =
         resolver.resolveInitial(
-          resolveCliRepositoryRoot(repoRoot, inputs),
-          slugs,
-          AgentAddonConsumer.BILL_FEATURE,
-          receivingAgents,
-          externalSourceConfig.readExternalAgentAddonSources(
-            ExternalAgentAddonSourceConfigRequest(inputs.userHome, inputs.environment),
-          ).sources.map { source -> source.path.toPath() },
+          repoRoot = resolveCliRepositoryRoot(repoRoot, inputs),
+          requestedSlugs = slugs,
+          consumer = AgentAddonConsumer.SKILL_BILL,
+          receivingAgentIds = receivingAgents,
+          externalSourceRoots =
+            externalSourceConfig.readExternalAgentAddonSources(
+              ExternalAgentAddonSourceConfigRequest(inputs.userHome, inputs.environment),
+            ).sources.map { source -> source.path.toPath() },
         )
       linkedMapOf(
         SharedPayloadKeys.CONTRACT_VERSION to "0.1",
@@ -111,7 +112,7 @@ class AgentAddonVerifySelectionCommand(
       val hydrated =
         resolver.verifyPersisted(
           parseAgentAddonSelection(selectionJson),
-          AgentAddonConsumer.BILL_FEATURE,
+          AgentAddonConsumer.SKILL_BILL,
           receivingAgents,
         )
       state.complete(

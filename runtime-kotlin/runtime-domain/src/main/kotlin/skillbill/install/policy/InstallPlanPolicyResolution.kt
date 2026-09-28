@@ -42,7 +42,6 @@ internal fun resolveManualTargets(input: InstallPolicyInput): List<InstallAgentT
     }
 }
 
-/** Parent skill every platform-pack sidecar declares in `internal-for` and installs under. */
 const val PACK_SIDECAR_PARENT_SKILL = "skill-bill"
 
 fun selectedPlatformSlugs(input: InstallPolicyInput): List<String> {

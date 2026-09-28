@@ -31,6 +31,7 @@ class ChecklistOperationsTest {
 
       assertEquals("", harness.status(), "${guard.id} changed the worktree before confirm")
       assertEquals(listOf(guard.proposalStep), harness.runner.inputs.map { it.stepName }, guard.id)
+      assertContains(harness.runner.inputs.single().directive, guard.directiveHeading)
       val stored = harness.runner.proposalValue
 
       harness.runner.proposalValue = "A recomputed plan.\n"
@@ -106,6 +107,7 @@ class ChecklistOperationsTest {
     val review = harness.runner.inputs.single()
     assertEquals(UnitTestValueCheckPromptRules.REVIEW_STEP, review.stepName)
     assertContains(review.directive, "Unit tests in scope:\n- src/test/kotlin/CheckoutTest.kt\n\n")
+    assertContains(review.directive, "## Criticality Weighting")
     assertFalse("UnchangedTest" in review.directive, review.directive)
   }
 
@@ -116,6 +118,7 @@ class ChecklistOperationsTest {
     val proposalStep: String,
     val applyStep: String,
     val validations: List<String>,
+    val directiveHeading: String,
   )
 
   private companion object {
@@ -128,12 +131,14 @@ class ChecklistOperationsTest {
           FeatureGuardPromptRules.PROPOSAL_STEP,
           FeatureGuardPromptRules.APPLY_STEP,
           validations = emptyList(),
+          directiveHeading = "## DON'T: Scatter Flag Checks",
         ),
         Guard(
           "feature-guard-cleanup",
           FeatureGuardCleanupPromptRules.PROPOSAL_STEP,
           FeatureGuardCleanupPromptRules.APPLY_STEP,
           validations = listOf("validation"),
+          directiveHeading = "### Step 2: Verify Safety",
         ),
       )
   }

@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.qualitygate.packbuild
 
+import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
@@ -56,7 +57,12 @@ class PackBuildStrategy(override val runner: PhaseRunner) : PhaseStrategyStatusP
         },
       runsValidationGate = true,
       runsBuildGate = true,
-      stepContext = buildGateFindingsDirective(inputs.validationGateFindings, inputs.validationGateTriagePlan),
+      stepContext =
+        listOfNotNull(
+          directiveResource(QUALITY_CHECK_DIRECTIVE_RESOURCE).trim()
+            .takeIf { inputs.validationGateRepair && !inputs.validationGateTriage },
+          buildGateFindingsDirective(inputs.validationGateFindings, inputs.validationGateTriagePlan),
+        ).filter(String::isNotBlank).joinToString("\n\n"),
       valueContent = BUILD_VALUE_CONTENT,
       settles = false,
       outputContract = gateRepairNoOutputSchemaDirective(stepId, inputs.validationGateTriage).takeIf { repairTurn },
@@ -82,3 +88,6 @@ class PackBuildStrategy(override val runner: PhaseRunner) : PhaseStrategyStatusP
     const val ID = "pack-build"
   }
 }
+
+private const val QUALITY_CHECK_DIRECTIVE_RESOURCE =
+  "/skillbill/engine/featuretask/slot/qualitygate/packbuild/quality-check-directive.md"

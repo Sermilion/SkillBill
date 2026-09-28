@@ -3,7 +3,9 @@ package skillbill.cli.operation
 import com.github.ajalt.clikt.core.UsageError
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.multiple
+import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.types.choice
 import me.tatarka.inject.annotations.Inject
 import skillbill.cli.codereview.usageError
 import skillbill.cli.kernel.agent.detectInvokingAgentId
@@ -16,6 +18,7 @@ import skillbill.cli.model.CliRunInputs
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.operation.core.OperationOutcome
+import skillbill.engine.operation.core.OperationOutputFormat
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationResult
@@ -47,9 +50,17 @@ class OperationCommand(
     "--agent",
     help = "Agent an operation's agent step launches. " + invokingAgentResolutionHelp("--agent"),
   )
+  private val includePrereleases by option(
+    OperationInvocationParser.INCLUDE_PRERELEASES_OPTION,
+    help = "update-check only: include prerelease GitHub releases in the comparison.",
+  ).flag(default = false)
+  private val format by option(
+    OperationInvocationParser.FORMAT_OPTION,
+    help = "update-check only: report format, text (default) or json.",
+  ).choice(OperationOutputFormat.entries.associateBy(OperationOutputFormat::wireValue))
 
   override fun run() {
-    val invocation = OperationInvocationParser.parse(name, rest)
+    val invocation = OperationInvocationParser.parse(name, rest, OperationFlags(includePrereleases, format))
     val request =
       OperationRequest(
         operationId = invocation.operationId,
@@ -77,6 +88,11 @@ data class OperationInvocation(
   val instructions: String?,
 )
 
+data class OperationFlags(
+  val includePrereleases: Boolean = false,
+  val format: OperationOutputFormat? = null,
+)
+
 object OperationInvocationParser {
   const val BUMP: String = "bump"
   const val CONFIRM: String = "confirm"
@@ -88,6 +104,9 @@ object OperationInvocationParser {
   const val SPEC: String = "spec"
   const val TARGET: String = "target"
   val KEYS: List<String> = listOf(BUMP, CONFIRM, SELECT, MODE, SCOPE, PUSH, REPLIES, SPEC, TARGET)
+  const val INCLUDE_PRERELEASES_OPTION: String = "--include-prereleases"
+  const val FORMAT_OPTION: String = "--format"
+  private const val UPDATE_CHECK = "update-check"
   private const val KEY_SEPARATOR = ':'
 
   private val OPERATION_ONLY_KEYS: Map<String, String> =
@@ -102,6 +121,7 @@ object OperationInvocationParser {
   fun parse(
     name: String,
     rest: List<String>,
+    flags: OperationFlags = OperationFlags(),
   ): OperationInvocation {
     val pairs = rest.filter(::isKeyValue)
     val values = pairs.associate { pair -> pair.substringBefore(KEY_SEPARATOR) to pair.substringAfter(KEY_SEPARATOR) }
@@ -111,6 +131,7 @@ object OperationInvocationParser {
     OPERATION_ONLY_KEYS.forEach { (key, owner) ->
       if (key in values && name != owner) throw UsageError("$key: is accepted only by operation $owner.")
     }
+    requireUpdateCheckFlagsOwner(name, flags)
     return OperationInvocation(
       operationId = name,
       arguments =
@@ -124,9 +145,24 @@ object OperationInvocationParser {
           replies = values[REPLIES],
           spec = values[SPEC],
           target = values[TARGET],
+          includePrereleases = flags.includePrereleases,
+          format = flags.format ?: OperationOutputFormat.TEXT,
         ),
       instructions = rest.filterNot(::isKeyValue).joinToString(" ").takeIf(String::isNotBlank),
     )
+  }
+
+  private fun requireUpdateCheckFlagsOwner(
+    name: String,
+    flags: OperationFlags,
+  ) {
+    if (name == UPDATE_CHECK) return
+    val given =
+      listOfNotNull(
+        INCLUDE_PRERELEASES_OPTION.takeIf { flags.includePrereleases },
+        FORMAT_OPTION.takeIf { flags.format != null },
+      )
+    given.firstOrNull()?.let { option -> throw UsageError("$option is accepted only by operation $UPDATE_CHECK.") }
   }
 
   private fun isKeyValue(value: String): Boolean =

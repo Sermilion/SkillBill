@@ -16,11 +16,15 @@ Report, as plain prose the operator can confirm:
 
 Apply these feature-guard cleanup rules:
 
+# Feature Guard Cleanup Content
+
 ## When To Use
 
 - Feature flag has been enabled for 100% of users.
 - No rollback has been needed for an agreed stabilization period.
 - Product/team has confirmed the feature is permanent.
+
+## Cleanup Workflow
 
 ### Step 1: Identify Scope
 
@@ -48,6 +52,14 @@ Before deleting anything:
 5. Remove flag definition — delete the flag from the feature flag registry/enum/config.
 6. Remove unused dependencies — if legacy code pulled in dependencies the new code doesn't need.
 
+### Step 4: Verify
+
+Run `skill-bill phase validation` to ensure nothing is broken.
+
+## Patterns
+
+Code examples for each cleanup pattern (conditional, DI/factory, navigation/router) are included below.
+
 ## Checklist
 
 - [ ] Flag is ON for 100% of users.
@@ -56,7 +68,7 @@ Before deleting anything:
 - [ ] All Legacy files deleted.
 - [ ] All Legacy tests deleted.
 - [ ] Flag definition removed from registry.
-- [ ] `bill-code-check` passes.
+- [ ] `skill-bill phase validation` passes.
 - [ ] No orphaned imports or dependencies.
 
 ## When to Ask User

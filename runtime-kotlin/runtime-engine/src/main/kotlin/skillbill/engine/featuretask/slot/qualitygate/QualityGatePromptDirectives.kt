@@ -7,19 +7,20 @@ private const val VALIDATE_PHASE_FORBIDDEN_EXTRAS: String =
     "repo-root checklist. Those commands are not this phase. "
 
 private const val VALIDATE_TRIAGE_FORBIDDEN_PACK_GATE: String =
-  "Do not run `bill-code-check`, the pack validation_gate collect_all_full_gate_command, " +
+  "Do not run `skill-bill phase validation`, the pack validation_gate collect_all_full_gate_command, " +
     "cache_bypassing_collect_all_full_gate_command, or any other pack-declared full-suite argv " +
     "during this triage turn. "
 
 private const val BUILD_PHASE_FORBIDDEN_EXTRAS: String =
-  "Do not run `skill-bill validate`, `npx agnix`, `scripts/validate_agent_configs`, `bill-code-check`, " +
-    "`./gradlew check`, `check " + "--" + "continue`, or the pack collect_all_full_gate_command. Those are not " +
-    "this phase. "
+  "Do not run `skill-bill validate`, `npx agnix`, `scripts/validate_agent_configs`, " +
+    "`skill-bill phase validation`, `./gradlew check`, `check " + "--" + "continue`, or the pack " +
+    "collect_all_full_gate_command. Those are not this phase. "
 
 internal fun runtimeOwnedValidateAgentPhaseTask(): String {
   return "Discover the validation checks required by this project from its repository instructions, " +
     "build and test configuration, scripts, and CI workflows. Use the project's commands and environment. " +
-    "Do not run pack validation_gate argv, `bill-code-check`, or any other pack-declared full-suite command. " +
+    "Do not run pack validation_gate argv, `skill-bill phase validation`, or any other pack-declared " +
+    "full-suite command. " +
     VALIDATE_PHASE_FORBIDDEN_EXTRAS +
     "Keep repairing in this same session until every required project check passes. Do not spawn delegated " +
     "subagents. Settle completed only when every required check passes, with the checks run as the value. " +
@@ -98,7 +99,7 @@ internal fun gateRepairNoOutputSchemaDirective(
 
     The runtime already ran the pack command and parsed the failures listed in this briefing. It will
     re-run that command after you stop, and it may give you up to three repair turns against whatever
-    remains. Address every open finding in this turn — all at once, not one finding per turn.
+    remains.
 
     Before editing, do brief reasoned planning in prose for each finding (or for a shared root cause
     that covers several). Scale the plan to the finding:
@@ -125,8 +126,9 @@ internal fun buildGateFindingsDirective(
       add(
         "A prior gate run parsed these items. They are the full open set for this repair turn — fix every one in " +
           "this session (shared root causes may collapse several into one change). Run only the pack-declared " +
-          "build command when you need console detail. Do not run `skill-bill validate`, `bill-code-check`, or the " +
-          "pack collect_all_full_gate_command. Do not spawn delegated subagents.",
+          "build command when you need console detail. Do not run `skill-bill validate`, " +
+          "`skill-bill phase validation`, or the pack collect_all_full_gate_command. Do not spawn delegated " +
+          "subagents.",
       )
       findings.findings.forEachIndexed { index, finding ->
         add(
@@ -151,4 +153,4 @@ internal const val VALIDATE_VALUE_CONTENT: String =
 
 internal const val BUILD_VALUE_CONTENT: String =
   "Run only the pack build_command. Do not run collect_all_full_gate_command, check " + "--" + "continue,\n" +
-    "skill-bill validate, or bill-code-check. gate_run_count and gate_runs are runtime-measured."
+    "skill-bill validate, or skill-bill phase validation. gate_run_count and gate_runs are runtime-measured."
