@@ -20,7 +20,16 @@ abstract class PhaseStrategy {
 
   abstract val strategyId: String
 
+  open val semanticRevision: Int = 1
+
+  open fun stepPolicyIdentity(stepId: String): String =
+    policyFor(stepId).semanticIdentity(strategyId, semanticRevision, stepId)
+
+  open fun resumeInterpretationIdentity(stepId: String): String = "$strategyId/$semanticRevision:$stepId"
+
   abstract val steps: List<String>
+
+  open val optionalSteps: Set<String> = emptySet()
 
   abstract val entryStep: String
 

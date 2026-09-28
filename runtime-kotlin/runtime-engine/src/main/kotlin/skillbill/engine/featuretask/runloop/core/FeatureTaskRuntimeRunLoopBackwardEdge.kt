@@ -4,6 +4,8 @@ import skillbill.application.decomposition.specSource
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
+import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -71,16 +73,20 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
         destinationPhaseId,
         edge.fromPhaseId,
       )
-    reopenedSpan.forEach(state::reopenForReentry)
     if (FeatureTaskRuntimePhaseWorkflowDefinition.isRegenerationLoopId(loopId)) {
+      val invalidated =
+        recorder.invalidateQuarantinedProducerRecord(
+          request.workflowId,
+          destinationPhaseId,
+          loopId,
+          edgeIteration,
+        )
+      if (!invalidated) {
+        throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.MISSING_WORKFLOW)
+      }
       state.invalidateProducerOutput(destinationPhaseId)
-      recorder.invalidateQuarantinedProducerRecord(
-        request.workflowId,
-        destinationPhaseId,
-        loopId,
-        edgeIteration,
-      )
     }
+    reopenedSpan.forEach(state::reopenForReentry)
     state.recordEdgeIteration(loopId, edgeIteration)
     val pendingReentry =
       PendingReentry(
@@ -240,11 +246,7 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
       }
       val setup =
         runState.ensureFeatureBranch(
-          guardPhase =
-            strategies.selectedStrategies(strategySelectionFacts(request))
-              .firstOrNull { strategy -> strategy.slot == PhaseSlot.IMPLEMENTATION }
-              ?.entryStep
-              ?: phaseId,
+          guardPhase = runState.selectedOwnerOf(PhaseSlot.IMPLEMENTATION.steps.first())?.entryStep ?: phaseId,
         )
       return setup.blockedReason?.also { reason ->
         FeatureTaskRuntimeRunLoopPhaseBlocking.persistBranchSetupBlock(

@@ -24,6 +24,12 @@ import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATU
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import skillbill.workflow.model.FeatureTaskRouteScope
+import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.workflow.taskruntime.phaseartifacts.asPendingForOperatorResume
 import java.time.Clock
 import java.time.ZoneOffset
@@ -100,9 +106,25 @@ internal class WorkflowGoalRunnerBlockWrites(
     workflowId: String,
     preferredPhaseId: String,
     reason: String,
+    expectedIdentity: FeatureTaskExecutionIdentity,
+    expectedExecutionPlan: Map<String, Any?>,
   ): Boolean {
     val family = WorkflowFamily.TASK_RUNTIME
     val existing = unitOfWork.workflowStates.get(family, workflowId) ?: return false
+    val identity = unitOfWork.workflowStates.getFeatureTaskExecutionIdentity(workflowId)
+      ?: throw MissingFeatureTaskRuntimeExecutionPlanError()
+    FeatureTaskExecutionIdentityPolicy.validate(identity)
+    if (identity != expectedIdentity || identity.mode != FeatureTaskWorkflowMode.RUNTIME || identity.routeScope != FeatureTaskRouteScope.GOAL_CHILD) {
+      throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+    }
+    val storedPlan = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(existing.artifacts)
+      ?: throw MissingFeatureTaskRuntimeExecutionPlanError()
+    if (storedPlan != expectedExecutionPlan) {
+      throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+    }
+    if (unitOfWork.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId) != null) {
+      throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+    }
     if (family.definition.isTerminalStatus(existing.workflowStatus)) {
       return false
     }

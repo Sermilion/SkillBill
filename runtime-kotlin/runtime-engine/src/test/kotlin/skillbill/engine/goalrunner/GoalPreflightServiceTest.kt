@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner
 
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
@@ -14,6 +15,7 @@ import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.specSource
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.engine.ExecutionPlanAdmissionFixture
 import skillbill.engine.decomposition.encodeDecompositionManifestYaml
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.goalrunner.model.GoalPreflightRequest
@@ -291,6 +293,8 @@ class GoalPreflightServiceTest {
         FeatureTaskContinuationLookupService(
           database,
           testWorkflowSnapshotValidator,
+          ExecutionPlanAdmissionFixture().compatibility,
+          NoopRuntimeDiagnostics,
         ),
       manifestStore = TestManifestStore(manifestState, persistedReviewPolicy),
       agentAddonSelectionPort = TestAgentAddonSelectionPort,

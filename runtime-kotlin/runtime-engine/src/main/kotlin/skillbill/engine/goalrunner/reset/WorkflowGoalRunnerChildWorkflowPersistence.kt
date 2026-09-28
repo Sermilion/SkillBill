@@ -4,6 +4,11 @@ import skillbill.application.workflow.decomposition.requireRuntimeModeForEngineW
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.goalrunner.manifest.mergeConcurrentGoalProgress
+import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionPlanCompatibility
+import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
+import skillbill.contracts.JsonCodec
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
+import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.ports.goalrunner.GoalParentProjectionWriter
@@ -31,6 +36,7 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuationArtifact
 import java.nio.file.Path
+import java.time.Clock
 
 internal data class SavedGoalChildWorkflow(
   internal val state: GoalRunnerManifestState,
@@ -41,7 +47,11 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
   private val engine: WorkflowEngine,
   private val planningHydrator: GoalChildPlanningHydratorPort,
   private val parentProjection: GoalParentProjectionWriter,
+  private val executionPlanCompatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
+  private val clock: Clock,
 ) {
+  private val blockWrites = WorkflowGoalRunnerBlockWrites(engine, clock)
+
   fun saveInTransaction(
     unitOfWork: UnitOfWork,
     state: GoalRunnerManifestState,
@@ -49,9 +59,18 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
   ): SavedGoalChildWorkflow {
     requireConsistentChildSetup(state, setup)
     val expectedIdentity = expectedChildIdentity(setup)
-    val parentUpdated = updateParentForChildWorkflow(unitOfWork, state)
     val existingChild = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, setup.workflowId)
+    if (existingChild == null && setup.executionPlan == null) {
+      throw MissingFeatureTaskRuntimeExecutionPlanError()
+    }
     if (existingChild != null) {
+      if (setup.executionPlan == null) throw FeatureTaskRuntimeExecutionPlanConflictError()
+      val storedPlan = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(existingChild.artifacts)
+      if (storedPlan == null) throw MissingFeatureTaskRuntimeExecutionPlanError()
+      executionPlanCompatibility.requireCompatibleExecution(
+        JsonCodec.valueToJsonString(storedPlan).toByteArray(Charsets.UTF_8),
+        setup.executionPlan?.artifactValue,
+      )
       val persistedIdentity = unitOfWork.workflowStates.getFeatureTaskExecutionIdentity(setup.workflowId)
       if (persistedIdentity != expectedIdentity) {
         throw IncompatibleGoalPlanningPreparationRecoveryError(
@@ -62,7 +81,20 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
       }
       requireMatchingGoalContinuation(existingChild, state, setup)
       planningHydrator.requireMatchingImport(unitOfWork, existingChild, setup)
+      setup.operatorResumePhaseId?.let { phaseId ->
+        check(
+          blockWrites.reopenBlockedPhaseForOperatorResume(
+            unitOfWork,
+            setup.workflowId,
+            phaseId,
+            requireNotNull(setup.operatorResumeReason),
+            expectedIdentity,
+            requireNotNull(setup.executionPlan).artifactValue,
+          ),
+        ) { "Goal child '${setup.workflowId}' could not be reopened for operator resume." }
+      }
     }
+    val parentUpdated = updateParentForChildWorkflow(unitOfWork, state)
     val childUpdated =
       if (existingChild == null) {
         openGoalChildWorkflow(unitOfWork, state, setup, parentUpdated.workflowId)
@@ -251,6 +283,9 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
     parentWorkflowId: String,
   ): Map<String, Any?> =
     linkedMapOf<String, Any?>().apply {
+      setup.executionPlan?.let { descriptor ->
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.putInto(this, descriptor.artifactValue)
+      }
       putAll(
         FeatureTaskRuntimeGoalContinuationArtifact(
           issueKey = state.manifest.issueKey,

@@ -88,7 +88,7 @@ class ImplementThenSimplifyStrategy(override val runner: PhaseRunner) : PhaseStr
     }
   }
 
-  private object ImplementResumeRules : PhaseResumeRules {
+  internal object ImplementResumeRules : PhaseResumeRules {
     override fun resumedRecord(
       record: FeatureTaskRuntimePhaseRecord,
       stripped: FeatureTaskRuntimePhaseRecord,

@@ -1,12 +1,16 @@
 package skillbill.engine.featuretask.review.core
 
+import skillbill.engine.featuretask.slot.execution.model.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.persist.WorkflowRowAdvance
 import skillbill.engine.featuretask.persist.stepUpdatesFrom
+import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.reviewGenerationFrom
 import skillbill.engine.featuretask.runloop.state.REVIEW_INVALIDATION_AGENT_ID
+import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
+import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.reviewRunIdOf
@@ -14,12 +18,15 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.artifact.decodeCheckpointIdentitiesFromArtifact
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
 class FeatureTaskRuntimeReviewGenerationRecorder(
   private val database: DatabaseSessionFactory,
@@ -109,14 +116,37 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
     producerPhaseId: String,
     loopId: String,
     edgeIteration: Int,
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
   ): Boolean =
     database.transaction { unitOfWork ->
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
           ?: return@transaction false
+      if (record.workflowStatus in WorkflowStatus.terminalStatuses) {
+        throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.TERMINAL_WORKFLOW)
+      }
+      if (producerPhaseId in PhaseSlot.QUALITY_GATE.steps && admitted == null) {
+        throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS)
+      }
+      admitted?.requireCurrent(unitOfWork.workflowStates, workflowId)
       val artifacts = record.artifacts
       val existingRecords = decodePhaseRecords(artifacts)
-      val previous = existingRecords[producerPhaseId] ?: return@transaction true
+      val irreversibleSteps = PhaseSlot.COMMIT_PUSH.steps + PhaseSlot.PULL_REQUEST.steps
+      val checkpointIdentities = decodeCheckpointIdentitiesFromArtifact(
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(artifacts),
+      )
+      if (
+        existingRecords.keys.any { it in irreversibleSteps } ||
+        decodePhaseLedger(artifacts).any { it.phaseId in irreversibleSteps } ||
+        checkpointIdentities.any { it.phaseId in irreversibleSteps }
+      ) {
+        throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.IRREVERSIBLE_WORK_RECORDED)
+      }
+      val previous = existingRecords[producerPhaseId]
+        ?: throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.MISSING_PRODUCER_EVIDENCE)
+      if (producerPhaseId in PhaseSlot.QUALITY_GATE.steps) {
+        requireAdmittedGateRegenerationBoundary(record, existingRecords, producerPhaseId, requireNotNull(admitted))
+      }
       if (previous.status.workflowStepStatus() != WorkflowStepStatus.COMPLETED) {
         return@transaction true
       }

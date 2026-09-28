@@ -9,18 +9,18 @@ base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feature/SKILL-384-workflow-skeleton-execution-contracts"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 1
+  subtask_id: 2
   action: "resume"
 subtasks:
 - id: 1
   name: "Require truthful gate evidence and persistence before execution"
   spec_path: "/home/sermilion/StudioProjects/skill-bill/.feature-specs/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership/spec_subtask_1_require-truthful-gate-evidence-and-persistence-before-execution.md"
-  status: "in_progress"
+  status: "complete"
   branch: null
   commit_sha: null
   workflow_id: "wftr-20260928-112314-pd9q"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "Resolve composition once and preserve its semantics on durable resume"
   spec_path: "/home/sermilion/StudioProjects/skill-bill/.feature-specs/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership/spec_subtask_2_resolve-composition-once-and-preserve-its-semantics-on-durable-resume.md"
-  status: "pending"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20260928-125330-rqcb"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "audit"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

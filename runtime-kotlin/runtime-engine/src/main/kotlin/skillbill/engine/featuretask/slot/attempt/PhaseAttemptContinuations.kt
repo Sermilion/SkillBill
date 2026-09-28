@@ -502,13 +502,13 @@ object PhaseAttemptContinuations {
     } else if (producer == null) {
       "Feature-task-runtime phase '$consumerPhaseId' rejected an upstream durable record " +
         "(${rejection.rejectionClass}) it cannot attribute to a producing phase, so no regeneration edge " +
-        "applies; the run blocks durably. Recover the record out of band by deleting or migrating the " +
-        "offending row. Detail: $detail"
+        "applies; the run blocks durably. Retain the workflow and its evidence. Inspect status and diagnostics " +
+        "with a compatible runtime or use a separately reviewed semantic mapping. Detail: $detail"
     } else {
       "Feature-task-runtime phase '$consumerPhaseId' rejected the durable record produced by '$producer', but " +
         "'$producer' is absent from this run's resolved pipeline (a goal-continuation truncation dropped it), " +
-        "so it cannot be regenerated in-band; the run blocks durably. Recover the record out of band by " +
-        "deleting or migrating the offending row. Detail: $detail"
+        "so it cannot be regenerated in-band; the run blocks durably. Retain the workflow and its evidence. " +
+        "Inspect status and diagnostics with a compatible runtime or use a separately reviewed semantic mapping. Detail: $detail"
     }
 
   internal fun PhaseAttemptEnvironment.settleRecordRejection(args: SettleRecordRejectionArgs): PhaseOutcome {

@@ -3,7 +3,8 @@ package skillbill.engine
 import skillbill.engine.featuretask.lifecycle.core.AlwaysValidValidator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditVerdictRule
-import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
+import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
 import skillbill.engine.goalrunner.execution.support.GoalRunnerChildProgressRead
@@ -22,7 +23,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-private val RESUME_RULES = statusProjectionPhaseStrategies().resumeRules()
+private val RESUME_RULES = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)::resumeRules
 
 class AmbientInputsAndLoudFailSeamsTest {
   @Test

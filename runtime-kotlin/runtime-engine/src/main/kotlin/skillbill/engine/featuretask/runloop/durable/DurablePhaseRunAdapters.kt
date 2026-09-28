@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.runloop.durable
 
+import skillbill.engine.featuretask.slot.execution.model.AdmittedFeatureTaskRuntimeExecution
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.continuation.GoalContinuationStateRecordRequest
@@ -53,6 +54,7 @@ import java.nio.file.Path
 internal class DurablePhaseRunRecords(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
+  private val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
 ) : PhaseRunRecords {
   override fun recordRejectedOutput(
     request: RejectedOutputDiagnosticRequest,
@@ -95,7 +97,7 @@ internal class DurablePhaseRunRecords(
     producerPhaseId: String,
     loopId: String,
     edgeIteration: Int,
-  ): Boolean = recorder.invalidateQuarantinedProducerRecord(workflowId, producerPhaseId, loopId, edgeIteration)
+  ): Boolean = recorder.invalidateQuarantinedProducerRecord(workflowId, producerPhaseId, loopId, edgeIteration, admitted)
 
   override fun recordedFindingVerdicts(output: Map<String, Any?>): List<ReviewFindingVerdict> =
     recorder.recordedFindingVerdicts(output)

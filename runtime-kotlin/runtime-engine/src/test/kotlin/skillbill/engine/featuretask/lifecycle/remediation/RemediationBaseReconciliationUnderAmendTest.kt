@@ -1,14 +1,18 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
 import skillbill.contracts.JsonCodec
+import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.continuation.reconcileRemediationBaseCoherence
 import skillbill.engine.featuretask.lifecycle.continuation.reviewState
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskGitIntegrationDatabase
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskGitIntegrationWorkflowRepository
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStepWireUpdate
 import skillbill.engine.featuretask.model.subtask.RemediationBaseBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationBaseCoherent
+import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
@@ -23,6 +27,7 @@ import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
+import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
@@ -374,35 +379,57 @@ class RemediationBaseReconciliationUnderAmendTest {
     )
 
   @Test
-  fun `a checkpoint-identity store on a superseded contract is quarantined instead of killing the run`() {
-    val repository = FeatureTaskGitIntegrationWorkflowRepository()
-    val recorder =
-      recorderWith(
-        state = remediationState(remediationBaseSha = null),
-        checkpointIdentities = emptyList(),
-        repository = repository,
-        legacyCheckpointRecord =
-          mapOf(
-            "contract_version" to "0.1",
-            "checkpoints" to listOf<Map<String, Any?>>(),
-          ),
-      )
+  fun `legacy checkpoint and terminal recovery refusals retain attempts outputs and finalization evidence`() {
+    val cases = listOf(WorkflowStatus.RUNNING to true) + WorkflowStatus.terminalStatuses.flatMap {
+      listOf(it to true, it to false)
+    }
+    cases.forEach { (status, legacy) ->
+      listOf("pending", "running", "completed").forEach { finalizationStatus ->
+        val home = Files.createTempDirectory("remediation-refusal")
+        try {
+          val database = phaseRunDatabase(home, Clock.systemUTC())
+          val recorder = recorderWith(
+            state = remediationState(remediationBaseSha = null),
+            checkpointIdentities = listOf(reviewFixIdentity(1, "a".repeat(40), "b".repeat(40))),
+            legacyCheckpointRecord = if (legacy) {
+              assertNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(
+                """{"contract_version":"0.1","checkpoints":[{"commit_sha":"retained-legacy-evidence"}]}""",
+              )))
+            } else {
+              null
+            },
+            database = database,
+            workflowStatus = status,
+            stepUpdates = listOf(
+              FeatureTaskRuntimePhaseStepWireUpdate("review", "completed", 3),
+              FeatureTaskRuntimePhaseStepWireUpdate("commit_push", finalizationStatus, 2),
+            ),
+          )
+          val before = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
+          val git = RecordingWorkflowGitOperations().also { it.headCommitShaValue = "a".repeat(40) }
+          val result = recorder.remediationReconciler.reconcileRemediationBaseCoherence(workflowId, git, home)
 
-    val result =
-      recorder.remediationReconciler.reconcileRemediationBaseCoherence(
-        workflowId,
-        realGitOps(),
-        Path.of("."),
-      )
-
-    assertIs<RemediationBaseCoherent>(result)
-    val artifacts = assertNotNull(repository.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)).artifactsJson
-    assertFalse(
-      artifacts.contains("\"contract_version\":\"0.1\"") &&
-        !artifacts.contains("feature_task_runtime_checkpoint_identities_quarantine"),
-      "the rejected store must be preserved as quarantine evidence, not silently dropped",
-    )
-    assertContains(artifacts, "feature_task_runtime_checkpoint_identities_quarantine")
+          assertIs<RemediationBaseBlocked>(result)
+          assertFalse(result.operatorGuidance.contains("retained-legacy-evidence"))
+          database.read { assertEquals(before, it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
+          assertEquals("a".repeat(40), git.headCommitShaValue)
+          assertTrue(git.createCommitMessages.isEmpty())
+          assertTrue(git.amendCommitMessages.isEmpty())
+          assertTrue(git.pushedBranches.isEmpty())
+          assertTrue(git.updateCheckpointRefCalls.isEmpty())
+          assertTrue(git.resetSoftToCommitCalls.isEmpty())
+          assertTrue(git.resetHardToCommitCalls.isEmpty())
+          assertEquals(0, git.goalReviewRecoverCalls)
+          if (status == WorkflowStatus.RUNNING) {
+            assertContains(result.operatorGuidance, "Checkpoint identity semantics are unsupported")
+          } else {
+            assertContains(result.operatorGuidance, "Terminal workflows")
+          }
+        } finally {
+          home.toFile().deleteRecursively()
+        }
+      }
+    }
   }
 
   private fun recorderWith(
@@ -410,6 +437,9 @@ class RemediationBaseReconciliationUnderAmendTest {
     checkpointIdentities: List<FeatureTaskRuntimeCheckpointIdentity>,
     repository: FeatureTaskGitIntegrationWorkflowRepository = FeatureTaskGitIntegrationWorkflowRepository(),
     legacyCheckpointRecord: Map<String, Any?>? = null,
+    database: DatabaseSessionFactory = FeatureTaskGitIntegrationDatabase(repository),
+    workflowStatus: WorkflowStatus = WorkflowStatus.RUNNING,
+    stepUpdates: List<FeatureTaskRuntimePhaseStepWireUpdate>? = null,
   ): FeatureTaskRuntimeGoalContinuationRecorder {
     val engine = WorkflowEngine()
     val definition = WorkflowFamily.TASK_RUNTIME.definition
@@ -441,16 +471,16 @@ class RemediationBaseReconciliationUnderAmendTest {
         opened,
         WorkflowUpdateInput(
           terminalInstant = Instant.EPOCH,
-          workflowStatus = WorkflowStatus.RUNNING,
+          workflowStatus = workflowStatus,
           currentStepId = "review",
-          stepUpdates = null,
+          stepUpdates = WorkflowStepUpdates.from(stepUpdates?.map(FeatureTaskRuntimePhaseStepWireUpdate::toWireMap)),
           artifactsPatch = WorkflowArtifactPatch.from(artifactsPatch),
           sessionId = "fis-001",
         ),
       ).toRecord()
-    repository.saveFeatureTaskWorkflow(seeded, RUNTIME)
+    database.transaction { it.workflowStates.saveFeatureTaskWorkflow(seeded, RUNTIME) }
     return FeatureTaskRuntimeGoalContinuationRecorder(
-      FeatureTaskGitIntegrationDatabase(repository),
+      database,
       NoopRuntimeDiagnostics,
       Clock.systemUTC(),
     )

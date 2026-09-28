@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.execution.core
 
+import skillbill.engine.ExecutionPlanAdmissionFixture
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.realPlanningProjectionValidator
@@ -220,6 +221,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
       TestRepositoryEnclosingRoot,
       wiring.runBoundaries.clock,
       Random(GOAL_RUNNER_TEST_WORKFLOW_ID_SEED),
+      ExecutionPlanAdmissionFixture().creationResolver(),
     )
   val perRunLoopAssembler =
     GoalRunnerPerRunLoopAssembler(

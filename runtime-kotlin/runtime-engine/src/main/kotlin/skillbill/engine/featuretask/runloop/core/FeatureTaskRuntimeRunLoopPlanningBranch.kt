@@ -120,7 +120,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     phaseDeclaration(
       phaseId,
       request.runInvariants.featureSize,
-      context.strategies.unselectedStepIds(strategySelectionFacts(request)),
+      context.runState.unselectedStepIds(),
     )
 
   internal fun buildPhaseRun(
@@ -222,8 +222,8 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       val recordId = latest?.recordIdentifier() ?: producer?.let { "$it#<unknown-iteration>" } ?: "<unknown>"
       return "Quarantine-and-regenerate loop '$loopId' exhausted its regeneration cap after $edgeIteration " +
         "attempt(s): the quarantined record '$recordId' produced by phase '${producer ?: "<unknown>"}' still " +
-        "fails projection validation. The run blocks durably rather than regenerating past the cap; recover the " +
-        "record out of band by deleting or migrating the offending row."
+        "fails projection validation. Retain the workflow and its evidence. Inspect status and diagnostics " +
+        "with a compatible runtime or use a separately reviewed semantic mapping."
     }
     val findingsSuffix =
       if (unresolvedFindings.isEmpty()) {

@@ -13,16 +13,13 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusProjection
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionDeriver
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runloop.durable.LEGACY_QUALITY_GATE_SELECTION
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunStateReconstruction
 import skillbill.engine.featuretask.slot.PhaseReportedGate
-import skillbill.engine.featuretask.slot.PhaseStrategyLookup
-import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
+import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
@@ -30,7 +27,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerm
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
-import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 
 @Inject
@@ -38,9 +34,8 @@ class FeatureTaskRuntimeStatusService(
   val recorder: FeatureTaskRuntimePhaseRecorder,
   val runInvariantsStore: FeatureTaskRuntimeRunInvariantsStore,
   private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
-  internal val strategies: PhaseStrategyLookup,
 ) {
-  val currentPhaseExecutionDeriver = FeatureTaskRuntimeCurrentPhaseExecutionDeriver(strategies)
+  internal val history = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)
 
   fun status(request: FeatureTaskRuntimeStatusRequest): FeatureTaskRuntimeStatusProjection? {
     val records = recorder.loadPhaseRecords(request.workflowId) ?: return null
@@ -68,12 +63,10 @@ fun FeatureTaskRuntimeStatusService.buildStatusProjection(
   decomposeTerminal: FeatureTaskRuntimeDecomposeTerminal?,
   ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
 ): FeatureTaskRuntimeStatusProjection {
-  val selectionFacts = statusSelectionFacts(request)
   val statelessAuditInputs =
-    FeatureTaskRuntimeRunStateReconstruction.normalizeForStatelessAudit(
+    history.normalize(
       records,
       ledger,
-      strategies.resumeRules(selectionFacts),
     )
   val normalizedRecords = statelessAuditInputs.records
   val normalizedLedger = statelessAuditInputs.ledger
@@ -96,7 +89,9 @@ fun FeatureTaskRuntimeStatusService.buildStatusProjection(
       normalizedRecords,
       phases,
       normalizedLedger,
-      currentPhaseExecutionDeriver.loopOnlyStepIds(selectionFacts),
+      history.loopOnlyStepIds(
+        recorder.loadGoalContinuation(request.workflowId)?.qualityGateSelection ?: LEGACY_QUALITY_GATE_SELECTION,
+      ),
     )
   val gateRunCount = gateRunCountFor(request, currentPhaseId)
   return statusProjectionFrom(
@@ -109,20 +104,6 @@ fun FeatureTaskRuntimeStatusService.buildStatusProjection(
       records = normalizedRecords,
       ledger = normalizedLedger,
       decomposeTerminal = decomposeTerminal,
-      selectionFacts = selectionFacts,
-    ),
-  )
-}
-
-private fun FeatureTaskRuntimeStatusService.statusSelectionFacts(
-  request: FeatureTaskRuntimeStatusRequest,
-): PhaseStrategySelectionFacts {
-  val continuation = recorder.loadGoalContinuation(request.workflowId)
-  return PhaseStrategySelectionFacts(
-    SkeletonDefinition.forRun(goalContinuation = continuation != null),
-    setOfNotNull(
-      runInvariantsStore.resolve(request.workflowId)?.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT,
-      continuation?.let { it.qualityGateSelection ?: LEGACY_QUALITY_GATE_SELECTION },
     ),
   )
 }
@@ -136,7 +117,6 @@ private data class StatusProjectionParts(
   val records: Map<String, FeatureTaskRuntimePhaseRecord>,
   val ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
   val decomposeTerminal: FeatureTaskRuntimeDecomposeTerminal?,
-  val selectionFacts: PhaseStrategySelectionFacts,
 )
 
 private fun FeatureTaskRuntimeStatusService.statusProjectionFrom(
@@ -174,11 +154,11 @@ private fun FeatureTaskRuntimeStatusService.statusProjectionFrom(
     decomposeTerminal = decomposeTerminalStatus(parts.decomposeTerminal),
     gateRunCount = parts.gateRunCount,
     validationGateExecutionEvidence =
-      strategies.stepReporting(PhaseReportedGate.VALIDATION)
-        ?.let(parts.records::get)
+      history.stepReporting(PhaseReportedGate.VALIDATION)
+        .let(parts.records::get)
         ?.let(::validationGateExecutionEvidence),
     currentPhaseExecution =
-      currentPhaseExecutionDeriver.derive(
+      history.currentExecution(
         FeatureTaskRuntimeCurrentPhaseExecutionContext(
           currentPhaseId = parts.currentPhaseId,
           records = parts.records,
@@ -186,7 +166,6 @@ private fun FeatureTaskRuntimeStatusService.statusProjectionFrom(
           ledger = parts.ledger,
           gateRunCount = parts.gateRunCount,
         ),
-        parts.selectionFacts,
       ),
     degradedDiagnostic = degradedDiagnosticStatus(request.workflowId),
     operatorDecisionPause = operatorDecisionPause(parts.records),
@@ -225,7 +204,7 @@ private fun FeatureTaskRuntimeStatusService.gateRunCountFor(
   val buildGateRunCount =
     recorder.loadBuildGateProgress(request.workflowId)
       ?.gateRunCount
-  return when (strategies.gateReportedBy(currentPhaseId)) {
+  return when (history.gateReportedBy(currentPhaseId)) {
     PhaseReportedGate.BUILD -> buildGateRunCount
     PhaseReportedGate.VALIDATION -> validationGateRunCount
     null -> validationGateRunCount ?: buildGateRunCount

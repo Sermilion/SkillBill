@@ -137,7 +137,7 @@ object FeatureTaskRuntimeRunLoopDrive {
   }
 
   private fun traversal(context: FeatureTaskRuntimeRunLoopContext): FeatureTaskRuntimeTransitionDeclaration =
-    context.request.transitionsOverride ?: context.strategies.traversal(strategySelectionFacts(context.request))
+    context.runState.transitions
 
   private fun resolveNextTransition(
     context: FeatureTaskRuntimeRunLoopContext,

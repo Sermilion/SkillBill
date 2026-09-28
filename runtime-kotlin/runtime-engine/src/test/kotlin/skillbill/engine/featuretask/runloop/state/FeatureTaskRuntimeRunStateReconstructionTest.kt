@@ -17,7 +17,8 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.core.ReconstructFixLoopBudgetBasesArgs
 import skillbill.engine.featuretask.runner.serializeTokenData
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditResumeRules
-import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
+import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.engine.goalrunner.status.completed
 import skillbill.engine.runnerHarness
 import skillbill.engine.satisfiedAuditLauncher
@@ -45,7 +46,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-private val RESUME_RULES = statusProjectionPhaseStrategies().resumeRules()
+private val RESUME_RULES = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)::resumeRules
 
 class FeatureTaskRuntimeRunStateReconstructionTest {
   @Test

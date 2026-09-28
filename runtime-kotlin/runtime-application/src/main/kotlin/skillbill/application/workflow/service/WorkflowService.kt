@@ -133,6 +133,7 @@ class WorkflowService(
           stepId = stepId,
           issueKey = args.issueKey,
           executionIdentity = executionIdentity,
+          executionPlan = args.executionPlan,
           engine = engine,
           workflowSnapshotValidator = workflowSnapshotValidator,
           repositoryCheckpointIdentity = ::repositoryCheckpointIdentity,

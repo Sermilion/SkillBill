@@ -108,7 +108,7 @@ class AgentPlanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
     ): String? = PlanDecompositionStop.apply(context, output)
   }
 
-  private object PlanResumeRules : PhaseResumeRules {
+  internal object PlanResumeRules : PhaseResumeRules {
     override val buffersIncompleteOutput: Boolean = false
 
     override fun dropsResumedCompletion(completedStepIds: Set<String>): Boolean =

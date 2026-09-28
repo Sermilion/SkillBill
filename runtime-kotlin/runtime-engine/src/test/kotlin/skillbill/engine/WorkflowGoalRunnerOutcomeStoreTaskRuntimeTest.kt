@@ -366,6 +366,8 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
   fun `operator resume reopens a running review phase left on a blocked child`() {
     val workflows = InMemoryWorkflowStates()
     workflows.saveFeatureTaskWorkflow(tornBlockedReviewRecord("wftr-torn-review"), RUNTIME)
+    val execution = ExecutionPlanAdmissionFixture(skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition.GOAL_CHILD)
+    execution.seed(workflows, "wftr-torn-review")
     val store =
       testWorkflowGoalRunnerOutcomeStore(
         FakeDatabaseSessionFactory(workflows),
@@ -377,6 +379,8 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
         workflowId = "wftr-torn-review",
         preferredPhaseId = "review",
         reason = "Operator resumed the goal after a blocked stop at subtask 9.",
+        expectedIdentity = execution.identity("wftr-torn-review"),
+        expectedExecutionPlan = execution.descriptor(),
       ),
     )
 

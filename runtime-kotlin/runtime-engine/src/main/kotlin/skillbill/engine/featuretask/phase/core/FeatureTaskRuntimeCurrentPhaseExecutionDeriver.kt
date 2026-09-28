@@ -1,17 +1,12 @@
 package skillbill.engine.featuretask.phase.core
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
-import skillbill.engine.featuretask.slot.PhaseStrategyLookup
-import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
-import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
-import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
-import skillbill.workflow.taskruntime.phase.task.declaration
 
 internal data class FeatureTaskRuntimeCurrentPhaseExecutionContext(
   val currentPhaseId: String?,
@@ -20,31 +15,6 @@ internal data class FeatureTaskRuntimeCurrentPhaseExecutionContext(
   val ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
   val gateRunCount: Int?,
 )
-
-class FeatureTaskRuntimeCurrentPhaseExecutionDeriver(
-  private val strategies: PhaseStrategyLookup,
-) {
-  internal fun derive(
-    context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
-    facts: PhaseStrategySelectionFacts,
-  ): IdeStatusCurrentPhaseExecution? {
-    val phaseId = context.currentPhaseId?.takeIf(String::isNotBlank) ?: return null
-    if (context.phases.none { it.phaseId == phaseId }) return null
-    if (PhaseSlot.entries.none { phaseId in it.steps }) return defaultPhaseExecution(phaseId, context)
-    val projection = strategies.strategyOrNull(phaseId, facts) as? PhaseStrategyStatusProjection
-    return if (projection == null) {
-      defaultPhaseExecution(phaseId, context)
-    } else {
-      projection.currentExecution(phaseId, context)
-    }
-  }
-
-  internal fun loopOnlyStepIds(facts: PhaseStrategySelectionFacts): Set<String> {
-    val traversal = strategies.traversal(facts)
-    val unselectedLoopOnly = facts.definition.declaration().loopOnlyPhaseIds - traversal.forwardPhaseIds.toSet()
-    return traversal.loopOnlyPhaseIds + unselectedLoopOnly
-  }
-}
 
 internal fun defaultPhaseExecution(
   phaseId: String,

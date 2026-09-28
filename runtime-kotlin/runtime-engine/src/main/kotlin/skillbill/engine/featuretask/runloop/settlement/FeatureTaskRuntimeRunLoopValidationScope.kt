@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutp
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
+import skillbill.engine.featuretask.validation.model.ValidationGateCyclePhase
 import skillbill.error.featuretask.PhaseValidationScopeError
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
@@ -49,6 +50,9 @@ object FeatureTaskRuntimeRunLoopValidationScope {
     session: FeatureTaskRuntimeRunLoopSession,
     run: PhaseRun,
   ): String? {
+    run.request.admittedExecution?.let {
+      return it.effectiveInputs.commandArgv(ValidationGateCyclePhase.INITIAL_DISCOVERY)?.joinToString(" ")
+    }
     val validationChangedPaths =
       validationChangedPaths(
         phaseGates,
@@ -73,6 +77,9 @@ object FeatureTaskRuntimeRunLoopValidationScope {
     session: FeatureTaskRuntimeRunLoopSession,
     run: PhaseRun,
   ): String? {
+    run.request.admittedExecution?.let {
+      return it.effectiveInputs.commandArgv(ValidationGateCyclePhase.INITIAL_DISCOVERY)?.joinToString(" ")
+    }
     val paths = validationChangedPaths(phaseGates, recorder, goalContinuationRecorder, session, run)
     return (phaseGates.validationGateResolver.resolve(paths.orEmpty()) as? ValidationGateResolution.Declared)
       ?.declaration

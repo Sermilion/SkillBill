@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.manifest
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerChildWorkflowPersistence
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerScopedReplanPersistence
+import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.goalrunner.reset.afterIncompatibleChildDeletion
 import skillbill.engine.goalrunner.status.GoalRunnerControlCoordinator
 import skillbill.engine.goalrunner.status.acquireExecutionLease
@@ -63,6 +64,7 @@ class WorkflowGoalRunnerManifestStore
     private val repositoryRoot: RepositoryRoot,
     private val planningHydrator: GoalChildPlanningHydratorPort,
     private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+    private val executionPlanCompatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   ) : GoalRunnerManifestStore {
     private val engine: WorkflowEngine = WorkflowEngine()
     private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
@@ -88,6 +90,8 @@ class WorkflowGoalRunnerManifestStore
         engine,
         planningHydrator,
         parentProjection,
+        executionPlanCompatibility,
+        clock,
       )
     private val scopedReplanPersistence = WorkflowGoalRunnerScopedReplanPersistence(projectionPersistence)
     private val controls =

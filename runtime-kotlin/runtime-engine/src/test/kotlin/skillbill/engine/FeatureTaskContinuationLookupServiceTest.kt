@@ -46,7 +46,8 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -125,13 +126,21 @@ class FeatureTaskContinuationLookupServiceTest {
         sessionId = "",
       ),
     )
+    val row = requireNotNull(fixture.states.getFeatureTaskWorkflow(opened.workflowId))
+    val artifacts = requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(row.artifactsJson)))
+    fixture.states.saveFeatureTaskWorkflow(
+      row.copy(artifactsJson = JsonCodec.mapToJsonString(artifacts + mapOf(
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(ExecutionPlanAdmissionFixture().descriptor()),
+      ))),
+      RUNTIME,
+    )
     val candidate =
       assertIs<FeatureTaskContinuationLookupResult.Resumable>(
         fixture.lookup.lookup("SKILL-120", REPOSITORY_A),
       ).candidate
 
-    assertTrue(fixture.lookup.claim(candidate))
-    assertFalse(fixture.lookup.claim(candidate))
+    assertNotNull(fixture.lookup.claim(candidate, ExecutionPlanAdmissionFixture().inputs))
+    assertNull(fixture.lookup.claim(candidate, ExecutionPlanAdmissionFixture().inputs))
     val running =
       assertIs<FeatureTaskContinuationLookupResult.AlreadyRunning>(
         fixture.lookup.lookup("SKILL-120", REPOSITORY_A, candidate.workflowId),
@@ -360,6 +369,8 @@ class FeatureTaskContinuationLookupServiceTest {
         FeatureTaskContinuationLookupService(
           database,
           testWorkflowSnapshotValidator,
+          ExecutionPlanAdmissionFixture().compatibility,
+          NoopRuntimeDiagnostics,
         ),
     )
   }

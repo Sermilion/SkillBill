@@ -42,12 +42,15 @@ fun FeatureTaskRuntimeRunner.executePreparedRun(
   val telemetrySessionId = lifecycleTelemetry.started(runRequest)
   val observability =
     FeatureTaskRuntimeRunObservability(
-      DurablePhaseRunRecords(recorder, phaseGates.decomposeTerminalRecorder),
+      DurablePhaseRunRecords(recorder, phaseGates.decomposeTerminalRecorder, runRequest.admittedExecution),
       runRequest,
       diagnostics,
     )
-  val transitions = transitionsFor(runRequest)
-  val state = createExecutePreparedRunState(runRequest, transitions)
+  val executionPlan = requireNotNull(runRequest.admittedExecution).let { admitted ->
+    check(admitted.identity.workflowId == runRequest.workflowId) { "Execution admission belongs to another workflow." }
+    admitted.plan
+  }
+  val state = createExecutePreparedRunState(runRequest, executionPlan)
   val telemetryContext =
     buildExecutePreparedRunTelemetryContext(
       runRequest,
@@ -57,14 +60,14 @@ fun FeatureTaskRuntimeRunner.executePreparedRun(
     )
   val report =
     runCatching {
-      driveExecutePreparedRunLoop(runRequest, specSource, transitions, observability, state)
+      driveExecutePreparedRunLoop(runRequest, specSource, executionPlan, observability, state)
     }.onFailure { error ->
       lifecycleTelemetry.finishedError(
         telemetryContext,
         error,
       )
     }.getOrThrow()
-  val terminalReport = finalizeExecutePreparedRunReport(runRequest, report, specSource)
+  val terminalReport = finalizeExecutePreparedRunReport(runRequest, report, specSource, executionPlan)
   lifecycleTelemetry.finished(terminalReport, telemetryContext)
   return terminalReport
 }

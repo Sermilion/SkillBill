@@ -16,7 +16,6 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContex
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopDrive
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
-import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDurableState
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
@@ -24,8 +23,8 @@ import skillbill.error.shellcontent.FeatureTaskRuntimeOperatorDecisionRejectedEr
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 
 internal fun FeatureTaskRuntimeRunner.buildExecutePreparedRunTelemetryContext(
   runRequest: FeatureTaskRuntimeRunRequest,
@@ -51,7 +50,7 @@ internal fun FeatureTaskRuntimeRunner.buildExecutePreparedRunTelemetryContext(
 fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
   runRequest: FeatureTaskRuntimeRunRequest,
   specSource: SpecSource,
-  transitions: FeatureTaskRuntimeTransitionDeclaration,
+  executionPlan: ResolvedPhaseExecutionPlan,
   observability: FeatureTaskRuntimeRunObservability,
   state: FeatureTaskRuntimeRunState,
 ): FeatureTaskRuntimeRunReport {
@@ -68,9 +67,16 @@ fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
       initialPendingReentry = null,
     )
   val runState =
-    FeatureTaskRuntimeRunLoopDurableState(runRequest, state, session, observability, specSource, transitions, this)
+    FeatureTaskRuntimeRunLoopDurableState(
+      runRequest,
+      state,
+      session,
+      observability,
+      specSource,
+      executionPlan,
+      this,
+    )
   val context = FeatureTaskRuntimeRunLoopContext(runRequest, runState, strategies)
-  FeatureTaskRuntimeRunLoopDrive.reopenStaleSettledSteps(context)
   if (isGoalContinuationRun(runRequest)) {
     when (
       val remediation =
@@ -84,11 +90,12 @@ fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
         return remediationBaseCoherenceBlockedReport(
           runRequest,
           remediation.operatorGuidance,
-          transitions.forwardPhaseIds.first(),
+          executionPlan.traversal.forwardPhaseIds.first(),
         )
       is RemediationBaseCoherent -> Unit
     }
   }
+  FeatureTaskRuntimeRunLoopDrive.reopenStaleSettledSteps(context)
   return runLoopEntry.run(context) { loop ->
     runRequest.operatorDecision?.let { decision ->
       loop.applyOperatorDecision()?.let { rejection ->
@@ -100,17 +107,16 @@ fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
 
 internal fun FeatureTaskRuntimeRunner.createExecutePreparedRunState(
   runRequest: FeatureTaskRuntimeRunRequest,
-  transitions: FeatureTaskRuntimeTransitionDeclaration,
+  executionPlan: ResolvedPhaseExecutionPlan,
 ): FeatureTaskRuntimeRunState {
-  val facts = strategySelectionFacts(runRequest)
   return FeatureTaskRuntimeRunState(
     initialRecords = recorder.loadPhaseRecords(runRequest.workflowId).orEmpty(),
-    transitions = transitions,
+    transitions = executionPlan.traversal,
     durableInitialLedger = recorder.loadPhaseLedger(runRequest.workflowId).orEmpty(),
     outputValidator = outputValidator,
     initialReviewGeneration = recorder.reconcileReviewGeneration(runRequest.workflowId),
-    stepVerdictRule = slotStepVerdictRule(strategies, facts, diagnostics),
-    resumeRules = strategies.resumeRules(facts),
+    stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
+    resumeRules = strategies.resumeRules(executionPlan),
   )
 }
 
@@ -118,9 +124,10 @@ fun FeatureTaskRuntimeRunner.finalizeExecutePreparedRunReport(
   runRequest: FeatureTaskRuntimeRunRequest,
   report: FeatureTaskRuntimeRunReport,
   specSource: SpecSource,
+  executionPlan: ResolvedPhaseExecutionPlan,
 ): FeatureTaskRuntimeRunReport {
   val commitStepId =
-    strategies.selectedStrategies(strategySelectionFacts(runRequest))
+    executionPlan.selectedStrategies
       .first { strategy -> strategy.slot == PhaseSlot.COMMIT_PUSH }
       .entryStep
   val terminalReport =

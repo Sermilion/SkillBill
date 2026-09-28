@@ -23,6 +23,10 @@ import skillbill.engine.goalrunner.review.effectiveAgentAddonSelection
 import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.status.supervisionEvent
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
+import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
+import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.goalrunner.runner.model.GoalRunnerChildWorkflowSetup
@@ -48,6 +52,7 @@ class GoalRunnerSubtaskLaunchPrepare(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val clock: Clock,
   private val random: Random,
+  private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
 ) {
   private val manifestStore get() = launchBoundaries.manifestStore
   private val outcomeStore get() = launchBoundaries.outcomeStore
@@ -194,9 +199,14 @@ class GoalRunnerSubtaskLaunchPrepare(
       requireNotNull(state.manifest.subtasks.firstOrNull { it.id == subtaskId }) {
         "Goal subtask '$subtaskId' is missing from the decomposition manifest."
       }
-    if (subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && priorWorkflowId != null) {
-      reopenBlockedChildForOperatorResume(subtaskId, priorWorkflowId, subtask)
-    }
+    val executionPlan = executionPlans.resolveCreation(
+      repoRoot = request.repoRoot,
+      definition = SkeletonDefinition.GOAL_CHILD,
+      reviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT,
+      qualityGate = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, subtaskId),
+      validationDepth = ValidationDepth.FULL,
+      timeout = request.timeout,
+    )
     val firstRun = priorWorkflowId == null
     val assignedWorkflowId = priorWorkflowId ?: generateWorkflowId(RUNTIME_WORKFLOW_ID_PREFIX, clock, random)
     val rawSpecPath =
@@ -238,6 +248,13 @@ class GoalRunnerSubtaskLaunchPrepare(
                 agentAddonSelection = manifestStore.effectiveAgentAddonSelection(state.parentWorkflowId, request),
               ),
             planningHydration = planning.hydrationFor(subtaskId),
+            executionPlan = executionPlan,
+            operatorResumePhaseId =
+              (subtask.lastResumableStep?.takeIf(String::isNotBlank)
+                ?: FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT)
+                .takeIf { subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && priorWorkflowId != null },
+            operatorResumeReason = "Operator resumed the goal after a blocked stop at subtask $subtaskId."
+              .takeIf { subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && priorWorkflowId != null },
           ),
         )
       }
@@ -268,25 +285,6 @@ class GoalRunnerSubtaskLaunchPrepare(
       }
     return setupError.takeIf(String::isNotBlank)?.let { error ->
       blockedBranchSetupIteration(state, subtaskId, error, request)
-    }
-  }
-
-  private fun reopenBlockedChildForOperatorResume(
-    subtaskId: Int,
-    workflowId: String,
-    subtask: DecompositionSubtask,
-  ) {
-    val phaseId =
-      subtask.lastResumableStep?.takeIf(String::isNotBlank)
-        ?: FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
-    check(
-      outcomeStore.reopenBlockedPhaseForOperatorResume(
-        workflowId = workflowId,
-        preferredPhaseId = phaseId,
-        reason = "Operator resumed the goal after a blocked stop at subtask $subtaskId.",
-      ),
-    ) {
-      "Goal subtask '$subtaskId' is blocked but child workflow '$workflowId' could not be reopened for resume."
     }
   }
 

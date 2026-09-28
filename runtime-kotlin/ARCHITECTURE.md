@@ -1095,14 +1095,61 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `PhaseAttemptScope` (the run request and the run state) from the
   `PhaseRun` and `PhaseStepState` it receives. Hooks and loop rules take a
   `PhaseAttemptEnvironment`.
-- Shared code never names a step. It asks
-  `PhaseStrategyLookup.resumeRules(facts)` for the owning strategy's
-  `PhaseResumeRules` (tracks review passes, resumes past completion,
-  persisted-block retry). It asks a status projection's `reportedGate(stepId)`
-  (`BUILD` or `VALIDATION`) which step reports a gate. It reads entry and
-  loop steps from the transition declaration. The validation and readiness
-  gates and the review-generation writes take the step id from the calling
-  strategy.
+- Execution lookup requires membership in `ResolvedPhaseExecutionPlan` and
+  checks the selected strategy revision, step policy identity, and resume
+  interpretation identity before returning a strategy. Durable run state reads
+  traversal from that same plan. `PhaseStrategyLookup.resumeRules(plan)` uses
+  selected strategy rules for execution and the explicit revision-one history
+  policy for unselected records.
+- `FeatureTaskRuntimeExecutionPlanCodec` maps resolved plans to the bounded
+  artifact through `FeatureTaskRuntimeExecutionPlanValidator`. Decoding restores
+  immutable domain data and checks policy digests. It does not select strategies
+  or launch runners. `FeatureTaskRuntimeExecutionPlanCompatibility` compares
+  recorded composition with supported definitions, registrations, and policies.
+  It returns the recorded plan and reports distinct missing, corrupt,
+  unsupported, and incompatible failures with payload-free recovery guidance.
+  This composition check does not establish durable execution admission.
+  `encodeExecution` adds revision-one descriptors for gate commands, receipt
+  interpretation, retry and resume budgets, audit behavior, review invalidation,
+  checkpoint ownership, and finalization. `requireSupportedExecution` requires
+  the complete supported policy set and compares its effective inputs. Command
+  identity uses argv after wrapper resolution, command family and role, cache
+  mode, findings settings, validation depth, pack identity, and phase timeout.
+  It preserves argv order and absent values. Artifact bodies contain digests,
+  not command payloads. Policy input encoding and the artifact each have a
+  65536-byte limit. The combined policy families have a 256-descriptor limit.
+  Semantic changes require a revision bump; cosmetic source changes do not.
+  Durable traversal compatibility currently accepts the definition's exact
+  traversal. There are no cross-revision or traversal-override mappings.
+  In-memory override validation does not grant durable compatibility.
+  The execution encoder rejects traversal overrides before producing a durable
+  descriptor. `FeatureTaskContinuationLookupService.claim` re-reads the row,
+  route identity, worker ownership, and descriptor in its claim transaction.
+  It checks effective policies before changing status and returns the immutable
+  recorded plan. Refusal diagnostics contain a bounded workflow id and reason
+  code. Diagnostic failure does not replace the refusal.
+  `FeatureTaskRuntimeExecutionPlanResolver` resolves the repository-owned path
+  inventory through installed pack routing, reads the repository wrapper setting,
+  and encodes the chosen command family, validation depth, and phase timeout.
+  Standalone CLI creation and goal-child launch preparation supply this descriptor
+  to their existing creation transactions. Build selection refuses a missing
+  discovery or verification build command before child creation.
+  `FeatureTaskRuntimeExecutionAdmission` checks the authoritative identity and
+  descriptor inside worker acquisition, takeover reservation, and ownership
+  transfer transactions. Transfer checks the identity admitted at reservation.
+  Admission failure retains workflow and lease evidence and emits a bounded
+  diagnostic. The worker hands the admitted immutable plan to the CLI's runner
+  request. Preparation and execution use that plan when supplied.
+  Direct runner entry still permits requests without admission. Creation adapters
+  still accept omitted descriptors, goal-child reuse still compares raw values,
+  and crash recovery and receipt regeneration still need transactional admission.
+  Gate execution must also consume the checked effective inputs rather than
+  resolving commands again from current configuration.
+- `PhaseHistoricalInterpreter` owns revision-one record interpretation and
+  status metadata. It has no strategy registry, runner, or persistence port.
+  Unknown steps retain their raw records during status inspection and cannot
+  acquire resume rules. Recognizing a historical build step never selects its
+  build strategy. History inspection does not grant durable resume admission.
 - `ReviewTarget` is a per-call fact on `PhaseRun`: `LastCommit` (the full-run
   default), `Uncommitted`, `Commit(revision)` (a sha, branch, or tag), or
   `Scoped` (the base and head `skill-bill code-review` resolves). It composes
@@ -1125,7 +1172,7 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `FeatureTaskRuntimeRunLoopEntry` over an in-memory
   `GoalPlanningPhaseRunState`, whose attempt loop keeps the planning attempt
   gate, budget, and checkpoints, and writes no feature-task workflow row.
-  `PhaseStrategyLookup.unselectedStepIds` counts every canonical step a run
+  `ResolvedPhaseExecutionPlan.unselectedStepIds` counts every canonical step a run
   does not select, including steps outside a short definition, so a step
   drops its projections from producers the definition never runs.
 - A phase run (`skillbill.engine.featuretask.phaserun`) drives one in-memory

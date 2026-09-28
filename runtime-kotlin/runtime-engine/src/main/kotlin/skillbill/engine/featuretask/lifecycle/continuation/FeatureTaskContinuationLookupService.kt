@@ -1,34 +1,93 @@
 package skillbill.engine.featuretask.lifecycle.continuation
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.JsonCodec
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationCandidate
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLiveness
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupQuery
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
+import skillbill.engine.featuretask.slot.execution.EffectiveGatePolicyInputs
+import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionPlanCompatibility
+import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
+import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.error.shellcontent.LegacyProseWorkflowError
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.FeatureTaskWorkflowCandidate
 import skillbill.ports.workflow.model.toSnapshot
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.workflowStatus
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 @Inject
 class FeatureTaskContinuationLookupService(
   private val database: DatabaseSessionFactory,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
+  private val executionCompatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun claim(candidate: FeatureTaskContinuationCandidate): Boolean =
-    database.transaction { unitOfWork ->
-      unitOfWork.workflowStates.claimFeatureTaskContinuation(candidate.workflowId, candidate.updatedAt)
+  fun claim(
+    candidate: FeatureTaskContinuationCandidate,
+    effectiveInputs: EffectiveGatePolicyInputs,
+    expectedOwnership: FeatureTaskRuntimeWorkerOwnership? = null,
+  ): ResolvedPhaseExecutionPlan? =
+    try {
+      database.transaction { unitOfWork ->
+        val states = unitOfWork.workflowStates
+        val row = states.getFeatureTaskWorkflowAsMode(candidate.workflowId, candidate.mode)
+          ?: return@transaction null
+        if (row.updatedAt != candidate.updatedAt || row.workflowStatus != candidate.status ||
+          row.currentStepId != candidate.currentStep ||
+          row.workflowStatus.workflowStatus() in TERMINAL_STATUSES + WorkflowStatus.RUNNING
+        ) return@transaction null
+        val ownership = states.getFeatureTaskRuntimeWorkerOwnership(candidate.workflowId)
+        if (ownership != expectedOwnership) return@transaction null
+        if (ownership != null && ownership.leaseState != FeatureTaskRuntimeWorkerLeaseState.ACTIVE) return@transaction null
+        val identity = states.getFeatureTaskExecutionIdentity(candidate.workflowId)
+          ?: throw InvalidFeatureTaskExecutionIdentitySchemaError(candidate.workflowId, "missing immutable execution identity")
+        FeatureTaskExecutionIdentityPolicy.validate(identity)
+        if (identity != candidate.executionIdentity ||
+          identity.workflowId != row.workflowId || identity.mode != candidate.mode ||
+          identity.governedSpecPath != candidate.governedSpecPath ||
+          identity.normalizedIssueKey != row.issueKey?.trim()?.uppercase()
+        ) throw InvalidFeatureTaskExecutionIdentitySchemaError(candidate.workflowId, "identity changed before claim")
+        val snapshot = row.toSnapshot()
+        workflowSnapshotValidator.validate(snapshot, snapshot.workflowName)
+        val descriptor = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(snapshot.artifacts)
+        val plan = executionCompatibility.requireSupportedExecution(
+          descriptor?.let { JsonCodec.valueToJsonString(it).toByteArray(Charsets.UTF_8) },
+          effectiveInputs,
+        )
+        if (plan.definitionId != SkeletonDefinition.forRun(identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD).id) {
+          throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+        }
+        if (states.claimFeatureTaskContinuation(candidate.workflowId, candidate.updatedAt)) plan else null
+      }
+    } catch (error: FeatureTaskRuntimeExecutionPlanAdmissionError) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Execution admission refused workflow=${candidate.workflowId.take(128)} reason=${error.reasonCode}",
+      )
+      throw error
+    } catch (error: InvalidFeatureTaskExecutionIdentitySchemaError) {
+      RuntimeDiagnosticsBestEffortWarning.record(
+        diagnostics,
+        "Execution admission refused workflow=${candidate.workflowId.take(128)} reason=invalid_route_identity",
+      )
+      throw error
     }
 
   fun lookup(
@@ -118,6 +177,7 @@ class FeatureTaskContinuationLookupService(
     val status = candidate.workflow.workflowStatus
     val typedStatus = status.workflowStatus()
     return FeatureTaskContinuationCandidate(
+      executionIdentity = identity,
       workflowId = candidate.workflow.workflowId,
       mode = identity.mode,
       status = status,

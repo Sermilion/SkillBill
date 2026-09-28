@@ -21,6 +21,10 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
 import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
+import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -123,8 +127,10 @@ abstract class FeatureTaskRuntimePhaseAgentCommand(
     help = "Already-resolved ordered agent add-on selection JSON. Raw agent-addon tokens are not accepted here.",
   )
 
-  protected fun resolveRunWorkflowId(
+  internal fun resolveRunWorkflowId(
     workflowService: WorkflowService,
+    deps: FeatureTaskRuntimeRunDependencies,
+    prepared: PreparedRuntimeRun,
     issueKey: String,
     specPath: String,
     repoRoot: Path,
@@ -137,6 +143,15 @@ abstract class FeatureTaskRuntimePhaseAgentCommand(
         repoRoot,
         if (goalParentIssueKey != null) FeatureTaskRouteScope.GOAL_CHILD else FeatureTaskRouteScope.STANDALONE,
         repositoryEnclosingRootPort,
+        deps.executionPlans.resolveCreation(
+          repoRoot = repoRoot,
+          definition = SkeletonDefinition.forRun(prepared.goalContinuation != null),
+          reviewMode = prepared.goalContinuation?.codeReviewMode ?: requestedCodeReviewMode()
+            ?: deps.runInvariantsSource.read(Path.of(specPath)).codeReviewMode,
+          qualityGate = prepared.goalContinuation?.qualityGateSelection,
+          validationDepth = prepared.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
+          timeout = maxWallClockMinutes.takeIf { it > 0 }?.minutes,
+        ),
       )
 
   internal fun executeRuntimeRun(
@@ -149,11 +164,27 @@ abstract class FeatureTaskRuntimePhaseAgentCommand(
     val state = deps.state
     val resolvedWorkflowId = workflowId()
     val report =
-      deps.workerCoordinator.runOwned(resolvedWorkflowId) {
+      deps.workerCoordinator.runOwned(
+        resolvedWorkflowId,
+        deps.executionPlans.resolveInputs(
+          prepared.repoRoot, prepared.goalContinuation?.qualityGateSelection,
+          prepared.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
+          maxWallClockMinutes.takeIf { it > 0 }?.minutes,
+        ),
+        FeatureTaskExecutionIdentity(
+          workflowId = resolvedWorkflowId,
+          normalizedIssueKey = issueKey.trim().uppercase(),
+          repositoryIdentity = deps.inputs.repositoryEnclosingRootPort.repositoryIdentity(prepared.repoRoot),
+          governedSpecPath = deps.inputs.repositoryEnclosingRootPort.governedSpecPathForCli(prepared.repoRoot, Path.of(specPath)),
+          mode = FeatureTaskWorkflowMode.RUNTIME,
+          routeScope = if (prepared.goalContinuation != null) FeatureTaskRouteScope.GOAL_CHILD else FeatureTaskRouteScope.STANDALONE,
+        ),
+      ) { admittedExecution ->
         val request =
           FeatureTaskRuntimeRunRequest(
             issueKey = issueKey,
             workflowId = resolvedWorkflowId,
+            admittedExecution = admittedExecution,
             sessionId =
               "${FeatureTaskRuntimePhaseWorkflowDefinition.definition.defaultSessionPrefix}-$resolvedWorkflowId",
             runInvariants =
@@ -255,6 +286,8 @@ class FeatureTaskRuntimeRunCommand(
       workflowId = {
         resolveRunWorkflowId(
           workflowService,
+          deps,
+          prepared,
           runIssueKey,
           runSpecPath,
           prepared.repoRoot,
@@ -288,6 +321,8 @@ class FeatureTaskRuntimeExplicitRunCommand(
       workflowId = {
         resolveRunWorkflowId(
           workflowService,
+          deps,
+          prepared,
           issueKey,
           runSpecPath,
           prepared.repoRoot,

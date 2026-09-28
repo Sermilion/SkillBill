@@ -3,6 +3,7 @@ package skillbill.application.workflow.persist
 import skillbill.application.decomposition.mergedArtifacts
 import skillbill.application.telemetry.lifecycle.random
 import skillbill.application.workflow.model.PersistOpenedWorkflowArgs
+import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenArgs
@@ -22,12 +23,14 @@ import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.model.GoalObservabilityProgressInput
 import skillbill.goalrunner.model.GoalObservabilityWorktreeActivity
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.taskruntime.validateGoalObservabilityEvent
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowContinueDecision
 import skillbill.workflow.engine.model.WorkflowDefinition
@@ -36,10 +39,10 @@ import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStatus
+import kotlin.random.Random
 import java.nio.file.Path
 import java.time.Clock
 import java.time.ZoneOffset
-import kotlin.random.Random
 
 internal data class WorkflowPersistenceContext(
   val dbPath: String,
@@ -78,6 +81,9 @@ internal fun persistOpenedWorkflow(args: PersistOpenedWorkflowArgs): WorkflowOpe
     val family = args.family
     val workflowId = args.workflowId
     val stepId = args.stepId
+    if (family == WorkflowFamily.TASK_RUNTIME && args.executionIdentity != null && args.executionPlan == null) {
+      throw MissingFeatureTaskRuntimeExecutionPlanError()
+    }
     val record =
       engine.openRecord(
         family.definition,
@@ -85,16 +91,21 @@ internal fun persistOpenedWorkflow(args: PersistOpenedWorkflowArgs): WorkflowOpe
         args.effectiveSessionId,
         stepId,
       )
-    args.workflowSnapshotValidator.validate(record, family.definition.workflowName)
+    val withExecutionPlan = args.executionPlan?.let { descriptor ->
+      record.copy(artifacts = DurableWorkflowArtifacts.fromMap(
+        record.artifacts + DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(descriptor.artifactValue),
+      ))
+    } ?: record
+    args.workflowSnapshotValidator.validate(withExecutionPlan, family.definition.workflowName)
     unitOfWork.workflowStates.saveRecord(
       family,
-      record.toRecord().copy(
+      withExecutionPlan.toRecord().copy(
         startedAt = null,
         issueKey = normalizeIssueKey(args.issueKey),
       ),
     )
     args.executionIdentity?.let(unitOfWork.workflowStates::saveFeatureTaskExecutionIdentity)
-    val saved = unitOfWork.workflowStates.get(family, workflowId) ?: record
+    val saved = unitOfWork.workflowStates.get(family, workflowId) ?: withExecutionPlan
     val currentStep =
       engine.snapshotView(family.definition, saved).steps
         .firstOrNull { it.stepId == stepId }
@@ -264,6 +275,7 @@ fun WorkflowService.openFeatureTask(args: WorkflowServiceOpenFeatureTaskArgs): W
       repositoryIdentity = args.repositoryIdentity,
       governedSpecPath = args.governedSpecPath,
       routeScope = args.routeScope,
+      executionPlan = args.executionPlan,
     ),
   )
 }

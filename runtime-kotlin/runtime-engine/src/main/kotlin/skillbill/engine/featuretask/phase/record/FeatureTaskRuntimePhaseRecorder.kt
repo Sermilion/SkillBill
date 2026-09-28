@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.phase.record
 
+import skillbill.engine.featuretask.slot.execution.model.AdmittedFeatureTaskRuntimeExecution
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeRejectedOutputRecorder
@@ -25,6 +26,7 @@ import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -110,7 +112,8 @@ class FeatureTaskRuntimePhaseRecorder
       workflowId: String,
       sessionId: String,
       issueKey: String? = null,
-    ): Boolean = workflowPersistence.ensureWorkflowOpen(workflowId, sessionId, issueKey)
+      executionPlan: ValidatedFeatureTaskRuntimeExecutionPlan? = null,
+    ): Boolean = workflowPersistence.ensureWorkflowOpen(workflowId, sessionId, issueKey, executionPlan)
 
     internal fun recordRejectedOutput(
       request: RejectedOutputDiagnosticRequest,
@@ -168,12 +171,14 @@ class FeatureTaskRuntimePhaseRecorder
       producerPhaseId: String,
       loopId: String,
       edgeIteration: Int,
+      admitted: AdmittedFeatureTaskRuntimeExecution? = null,
     ): Boolean =
       reviewCheckpoint.invalidateQuarantinedProducerRecord(
         workflowId,
         producerPhaseId,
         loopId,
         edgeIteration,
+        admitted,
       )
 
     fun recordedFindingVerdicts(output: Map<String, Any?>): List<ReviewFindingVerdict> =
@@ -289,8 +294,6 @@ private interface FeatureTaskRuntimePhaseEvidenceApi {
 
   fun loadCheckpointIdentities(workflowId: String): List<FeatureTaskRuntimeCheckpointIdentity>?
 
-  fun quarantineCheckpointIdentities(workflowId: String): Boolean
-
   fun recordWorkflowOwnedPaths(
     workflowId: String,
     ownedPaths: List<String>,
@@ -338,9 +341,6 @@ private class FeatureTaskRuntimePhaseEvidenceApiDelegate(
 
   override fun loadCheckpointIdentities(workflowId: String): List<FeatureTaskRuntimeCheckpointIdentity>? =
     evidence.loadCheckpointIdentities(workflowId)
-
-  override fun quarantineCheckpointIdentities(workflowId: String): Boolean =
-    evidence.quarantineCheckpointIdentities(workflowId)
 
   override fun recordWorkflowOwnedPaths(
     workflowId: String,

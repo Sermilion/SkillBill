@@ -25,6 +25,7 @@ import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATU
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_BOUNDARY_SELECTION_ARTIFACT_KEY
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_CHECKPOINT_ARTIFACT_KEY
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_DISPOSITIONS_ARTIFACT_KEY
+import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_ARTIFACT_KEY
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION_ARTIFACT_KEY
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_OUTCOME_ARTIFACT_KEY
@@ -73,6 +74,7 @@ enum class DurableWorkflowArtifactFamily(
   FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_DISPOSITIONS(
     FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_DISPOSITIONS_ARTIFACT_KEY,
   ),
+  FEATURE_TASK_RUNTIME_EXECUTION_PLAN(FEATURE_TASK_RUNTIME_EXECUTION_PLAN_ARTIFACT_KEY),
   FEATURE_TASK_RUNTIME_GOAL_CONTINUATION(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY),
   FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION(
     FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_FIELD_ADOPTION_ARTIFACT_KEY,

@@ -14,6 +14,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 
 internal fun strategySelectionFacts(request: FeatureTaskRuntimeRunFacts): PhaseStrategySelectionFacts =
   PhaseStrategySelectionFacts(
@@ -23,13 +24,10 @@ internal fun strategySelectionFacts(request: FeatureTaskRuntimeRunFacts): PhaseS
 
 internal fun slotStepVerdictRule(
   strategies: PhaseStrategyLookup,
-  facts: PhaseStrategySelectionFacts,
+  plan: ResolvedPhaseExecutionPlan,
   diagnostics: RuntimeDiagnostics,
 ): (String) -> FeatureTaskRuntimeStepVerdictRule? =
-  { stepId ->
-    stepId.takeIf { id -> PhaseSlot.entries.any { slot -> id in slot.steps } }
-      ?.let { id -> strategies.strategyOrNull(id, facts)?.verdictRule(id, diagnostics) }
-  }
+  { stepId -> strategies.verdictRule(stepId, plan, diagnostics) }
 
 internal fun spanBetween(
   transitions: FeatureTaskRuntimeTransitionDeclaration,

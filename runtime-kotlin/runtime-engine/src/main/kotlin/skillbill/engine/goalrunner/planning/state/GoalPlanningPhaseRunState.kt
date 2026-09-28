@@ -10,7 +10,6 @@ import skillbill.engine.featuretask.phaserun.InMemoryPhaseRunSettlements
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepState
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
@@ -36,12 +35,14 @@ import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 
 internal class GoalPlanningPhaseRunState(
   private val facts: GoalPlanningRunFacts,
   override val progress: FeatureTaskRuntimeRunState,
   private val planning: GoalPlanningRunProgress,
   private val strategies: PhaseStrategyLookup,
+  private val executionPlan: ResolvedPhaseExecutionPlan,
   override val collaborators: PhaseAttemptCollaborators,
   override val specSource: SpecSource,
 ) : PhaseRunState {
@@ -63,12 +64,12 @@ internal class GoalPlanningPhaseRunState(
   override fun fanOut(stepId: String): PhaseRunFanOut = planFanOut
 
   override fun strategyFor(stepId: String): PhaseStrategy =
-    strategies.strategyFor(stepId, strategySelectionFacts(facts))
+    strategies.strategyFor(stepId, executionPlan)
 
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? =
-    strategies.selectedOwnerOf(stepId, strategySelectionFacts(facts))
+    strategies.selectedOwnerOf(stepId, executionPlan)
 
-  override fun unselectedStepIds(): Set<String> = strategies.unselectedStepIds(strategySelectionFacts(facts))
+  override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 
   override fun step(run: PhaseRun): PhaseStepState =
     FeatureTaskRuntimeRunLoopStepState(

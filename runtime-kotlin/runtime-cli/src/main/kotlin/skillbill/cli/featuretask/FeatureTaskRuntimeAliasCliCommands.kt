@@ -61,6 +61,8 @@ class FeatureTaskRuntimeDeprecatedRunCommand(
       workflowId = {
         resolveRunWorkflowId(
           workflowService,
+          deps,
+          prepared,
           runIssueKey,
           runSpecPath,
           prepared.repoRoot,
@@ -94,6 +96,8 @@ class FeatureTaskRuntimeDeprecatedExplicitRunCommand(
       workflowId = {
         resolveRunWorkflowId(
           workflowService,
+          deps,
+          prepared,
           issueKey,
           runSpecPath,
           prepared.repoRoot,

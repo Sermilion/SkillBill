@@ -55,6 +55,8 @@ class FeatureTaskRouterContinuationTest {
       FeatureTaskContinuationLookupService(
         database,
         testWorkflowSnapshotValidator,
+        ExecutionPlanAdmissionFixture().compatibility,
+        NoopRuntimeDiagnostics,
       )
     val opened =
       assertIs<WorkflowOpenResult.Ok>(

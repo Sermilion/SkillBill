@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
-import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationArtifactPatcher
 import skillbill.engine.featuretask.lifecycle.continuation.continuationFromArtifacts
 import skillbill.engine.featuretask.lifecycle.continuation.reviewStateFromArtifacts
@@ -20,14 +19,18 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.artifact.decodeCheckpointIdentitiesFromArtifact
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
 
-private const val CHECKPOINT_IDENTITY_QUARANTINE_ARTIFACT_KEY: String =
-  "feature_task_runtime_checkpoint_identities_quarantine"
+private sealed interface RemediationSnapshotRead {
+  data class Available(val snapshot: RemediationReconcileSnapshot) : RemediationSnapshotRead
+  data class Refused(val reason: String) : RemediationSnapshotRead
+  data object Absent : RemediationSnapshotRead
+}
 
 class FeatureTaskRuntimeRemediationBaseReconciler(
   val database: DatabaseSessionFactory,
@@ -39,13 +42,11 @@ class FeatureTaskRuntimeRemediationBaseReconciler(
     gitOperations: WorkflowGitOperations,
     repoRoot: Path,
   ): RemediationBaseCoherenceResult {
-    val snapshot =
-      try {
-        readRemediationSnapshot(workflowId)
-      } catch (error: InvalidFeatureTaskRuntimeCheckpointIdentityVersionError) {
-        quarantineLegacyCheckpointIdentities(workflowId, error)
-        return RemediationBaseCoherent(null)
-      } ?: return RemediationBaseCoherent(null)
+    val snapshot = when (val read = readRemediationSnapshot(workflowId)) {
+      is RemediationSnapshotRead.Available -> read.snapshot
+      is RemediationSnapshotRead.Refused -> return RemediationBaseBlocked(read.reason)
+      RemediationSnapshotRead.Absent -> return RemediationBaseCoherent(null)
+    }
     return reconcileFromSnapshot(
       snapshot = snapshot,
       workflowId = workflowId,
@@ -54,52 +55,28 @@ class FeatureTaskRuntimeRemediationBaseReconciler(
     )
   }
 
-  private fun quarantineLegacyCheckpointIdentities(
-    workflowId: String,
-    error: InvalidFeatureTaskRuntimeCheckpointIdentityVersionError,
-  ) {
-    database.transaction { unitOfWork ->
-      val record =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-          ?: return@transaction
-      val artifacts = record.artifacts
-      val rejected =
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(artifacts)
-          ?: return@transaction
-      val existing = (artifacts[CHECKPOINT_IDENTITY_QUARANTINE_ARTIFACT_KEY] as? List<*>).orEmpty()
-      patcher.save(
-        record,
-        unitOfWork.workflowStates,
-        mapOf(
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.entry(null),
-          CHECKPOINT_IDENTITY_QUARANTINE_ARTIFACT_KEY to existing +
-            listOf(
-              linkedMapOf(
-                SharedPayloadKeys.WORKFLOW_ID to workflowId,
-                "rejection_detail" to error.message.orEmpty(),
-                "quarantined_at" to clock.instant().toString(),
-                "rejected_record" to rejected,
-              ),
-            ),
-        ),
-      )
-    }
-  }
-
-  private fun readRemediationSnapshot(workflowId: String): RemediationReconcileSnapshot? =
+  private fun readRemediationSnapshot(workflowId: String): RemediationSnapshotRead =
     database.read { unitOfWork ->
-      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) ?: return@read null
+      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+        ?: return@read RemediationSnapshotRead.Absent
+      if (record.workflowStatus in WorkflowStatus.terminalStatuses) {
+        return@read RemediationSnapshotRead.Refused("Terminal workflows cannot enter remediation recovery.")
+      }
       val artifacts = record.artifacts
-      runCatching {
-        val state = reviewStateFromArtifacts(artifacts) ?: return@read null
-        val continuation = continuationFromArtifacts(artifacts) ?: return@read null
-        val checkpoints =
-          decodeCheckpointIdentitiesFromArtifact(
-            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(artifacts),
-          )
-        RemediationReconcileSnapshot(state, continuation, checkpoints)
-      }.getOrElse { error ->
-        if (error is InvalidGoalSubtaskReviewStateSchemaError) return@read null else throw error
+      try {
+        val state = reviewStateFromArtifacts(artifacts) ?: return@read RemediationSnapshotRead.Absent
+        val continuation = continuationFromArtifacts(artifacts) ?: return@read RemediationSnapshotRead.Absent
+        val checkpoints = decodeCheckpointIdentitiesFromArtifact(
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(artifacts),
+        )
+        RemediationSnapshotRead.Available(RemediationReconcileSnapshot(state, continuation, checkpoints))
+      } catch (_: InvalidFeatureTaskRuntimeCheckpointIdentityVersionError) {
+        RemediationSnapshotRead.Refused(
+          "Checkpoint identity semantics are unsupported. Retain the workflow and its checkpoint evidence; " +
+            "inspect status with a compatible runtime or a separately reviewed semantic mapping before recovery.",
+        )
+      } catch (_: InvalidGoalSubtaskReviewStateSchemaError) {
+        RemediationSnapshotRead.Absent
       }
     }
 

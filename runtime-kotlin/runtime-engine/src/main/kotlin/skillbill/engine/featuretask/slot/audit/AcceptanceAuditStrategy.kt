@@ -15,7 +15,6 @@ import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -110,16 +109,7 @@ class AcceptanceAuditStrategy(
     stepId: String,
     context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
   ): IdeStatusCurrentPhaseExecution? {
-    val attempts = context.phases.firstOrNull { it.phaseId == stepId }?.attemptCount ?: 0
-    return if (attempts >= 1 || context.records[stepId] != null) {
-      IdeStatusCurrentPhaseExecution(
-        phaseId = stepId,
-        kind = IdeStatusCurrentPhaseExecutionKind.PASS,
-        count = 1,
-      )
-    } else {
-      null
-    }
+    return auditCurrentExecution(stepId, context)
   }
 
   companion object {

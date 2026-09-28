@@ -62,7 +62,11 @@ class FeatureTaskRuntimeBuildGateCoordinator(
     cycle: ValidationGateCycleRequest,
     onGateRunCount: (Int) -> Unit = {},
   ): ValidationGateCycleResult =
-    when (val resolution = resolver.resolve(cycle.changedPaths)) {
+    when (val resolution = cycle.request.admittedExecution?.effectiveInputs?.let { inputs ->
+      check(inputs.commandFamily == cycle.commandFamily) { "Gate command family differs from admission." }
+      inputs.declaration?.let { ValidationGateResolution.Declared(requireNotNull(inputs.packSlug), it) }
+        ?: ValidationGateResolution.Absent(inputs.packSlug)
+    } ?: resolver.resolve(cycle.changedPaths)) {
       is ValidationGateResolution.Absent ->
         terminalBlockedResult(
           "Required ${cycle.commandFamily.name.lowercase()} gate declaration is absent" +
@@ -264,6 +268,13 @@ class FeatureTaskRuntimeBuildGateCoordinator(
       FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN
     }
 
+  private fun wrapperFor(cycle: ValidationGateCycleRequest): String? {
+    val admitted = cycle.request.admittedExecution
+    return if (admitted != null) admitted.effectiveInputs.gradleWrapper else {
+      repoLocalConfig.readRepoLocalConfig(ReadRepoLocalConfigRequest(cycle.repoRoot)).config.validationGate.gradleWrapper
+    }
+  }
+
   private fun runGate(
     cycle: ValidationGateCycleRequest,
     declaration: ValidationGateDeclaration,
@@ -275,12 +286,7 @@ class FeatureTaskRuntimeBuildGateCoordinator(
         ValidationGateCyclePhase.INITIAL_DISCOVERY -> ValidationGateCacheMode.CACHE_ELIGIBLE
         ValidationGateCyclePhase.POST_REPAIR_VERIFY -> ValidationGateCacheMode.FORCED_FULL
       }
-    val gradleWrapper =
-      repoLocalConfig
-        .readRepoLocalConfig(ReadRepoLocalConfigRequest(cycle.repoRoot))
-        .config
-        .validationGate
-        .gradleWrapper
+    val gradleWrapper = wrapperFor(cycle)
     return runner.run(
       ValidationGateRunRequest(
         repoRoot = cycle.repoRoot,
@@ -311,9 +317,7 @@ class FeatureTaskRuntimeBuildGateCoordinator(
       } else {
         ValidationGateCyclePhase.INITIAL_DISCOVERY
       }
-    val wrapper =
-      repoLocalConfig.readRepoLocalConfig(ReadRepoLocalConfigRequest(cycle.repoRoot))
-        .config.validationGate.gradleWrapper
+    val wrapper = wrapperFor(cycle)
     val requiredCommand =
       applyValidationGateGradleWrapper(
         gateArgv(declaration, cycle.commandFamily, terminalPhase),

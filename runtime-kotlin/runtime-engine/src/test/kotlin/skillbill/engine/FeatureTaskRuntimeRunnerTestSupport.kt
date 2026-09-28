@@ -52,6 +52,7 @@ import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVeri
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunStartup
+import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionEntry
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.slot.ApprovingReviewPhaseRunner
 import skillbill.engine.featuretask.slot.PhaseRunner
@@ -81,6 +82,7 @@ import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
@@ -887,13 +889,17 @@ private fun harnessWorkflowParts(database: DatabaseSessionFactory): RunnerHarnes
 private fun harnessCrashReconciler(
   database: DatabaseSessionFactory,
   supervisor: FeatureTaskRuntimeWorkerSupervisor,
-): FeatureTaskRuntimeCrashReconciler =
-  FeatureTaskRuntimeCrashReconciler(
+): FeatureTaskRuntimeCrashReconciler {
+  val execution = ExecutionPlanAdmissionFixture()
+  return FeatureTaskRuntimeCrashReconciler(
     database,
     supervisor,
     NoopRuntimeDiagnostics,
     testHarnessClock,
+    execution.compatibility,
+    execution.recoveryResolver(),
   )
+}
 
 private fun harnessPhaseSettlement(): FeatureTaskPhaseSettlementService =
   FeatureTaskPhaseSettlementService(
@@ -1007,6 +1013,7 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
     startup =
       FeatureTaskRuntimeRunStartup(
         crashReconciler = harnessCrashReconciler(deps.database, deps.crashSupervisor),
+        executionEntry = runnerExecutionEntry(deps.database, deps.runtimeConfig),
         runInvariantsStore = deps.runInvariantsStore,
       ),
     phaseSettlementService = harnessPhaseSettlement(),
@@ -1141,6 +1148,7 @@ private fun telemetryHarnessRunner(
     startup =
       FeatureTaskRuntimeRunStartup(
         crashReconciler = harnessCrashReconciler(database, NoopFeatureTaskRuntimeWorkerSupervisor),
+        executionEntry = runnerExecutionEntry(database, runtimeConfig),
         runInvariantsStore = workflow.runInvariantsStore,
       ),
     phaseSettlementService = harnessPhaseSettlement(),
@@ -1158,6 +1166,27 @@ private fun harnessReviewRunner(
   harnessReviewRunnerSyncingPendingVerifyFindings(
     runtimeConfig.reviewRunner ?: DefaultPhaseRunner(launcher, runtimeConfig.harnessGitOperations),
   )
+
+private fun runnerExecutionEntry(
+  database: DatabaseSessionFactory,
+  config: RuntimeHarnessConfig,
+): FeatureTaskRuntimeExecutionEntry {
+  val repositoryIdentity = "repo-root-realpath-v1:/tmp/admission-repository"
+  val fixture = ExecutionPlanAdmissionFixture(
+    repository = repositoryIdentity,
+    specPath = config.branchSetup.specReference,
+  )
+  val repositories = object : RepositoryEnclosingRootPort {
+    override fun enclosingRepositoryRoot(start: Path): Path = canonicalPath(start)
+
+    override fun canonicalPath(path: Path): Path = path.toAbsolutePath().normalize()
+
+    override fun optionalRealPath(path: Path): Path? = null
+
+    override fun repositoryIdentity(repoRoot: Path): String = repositoryIdentity
+  }
+  return FeatureTaskRuntimeExecutionEntry(database, fixture.admission, fixture.creationResolver(), repositories)
+}
 
 private fun telemetryRunnerPhaseGates(
   runtimeConfig: RuntimeHarnessConfig,

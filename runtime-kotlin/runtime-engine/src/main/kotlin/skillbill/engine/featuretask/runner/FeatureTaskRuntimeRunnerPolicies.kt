@@ -7,10 +7,8 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.ProsePhaseOutputSynthesizer
-import skillbill.workflow.taskruntime.phase.task.declaration
 
 const val STATUS_RUNNING = "running"
 const val STATUS_COMPLETED = "completed"
@@ -34,9 +32,6 @@ fun serializeTokenData(accumulator: Map<String, Pair<Int, Int>>): Pair<String?, 
 
 fun skeletonDefinitionFor(request: FeatureTaskRuntimeRunFacts): SkeletonDefinition =
   request.skeletonDefinition ?: SkeletonDefinition.forRun(isGoalContinuationRun(request))
-
-fun transitionsFor(request: FeatureTaskRuntimeRunFacts): FeatureTaskRuntimeTransitionDeclaration =
-  request.transitionsOverride ?: skeletonDefinitionFor(request).declaration()
 
 internal fun mutatingReconciliationGateReason(
   phaseId: String,

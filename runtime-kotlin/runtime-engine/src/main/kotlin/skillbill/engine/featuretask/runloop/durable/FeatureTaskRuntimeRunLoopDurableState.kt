@@ -6,7 +6,6 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlemen
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepState
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
@@ -27,6 +26,7 @@ import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 
 internal class FeatureTaskRuntimeRunLoopDurableState(
   private val facts: FeatureTaskRuntimeRunFacts,
@@ -34,14 +34,15 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   override val session: FeatureTaskRuntimeRunLoopSession,
   override val telemetry: FeatureTaskRuntimeRunObservability,
   override val specSource: SpecSource,
-  override val transitions: FeatureTaskRuntimeTransitionDeclaration,
+  private val executionPlan: ResolvedPhaseExecutionPlan,
   private val runner: FeatureTaskRuntimeRunner,
 ) : PhaseRunState {
+  override val transitions: FeatureTaskRuntimeTransitionDeclaration = executionPlan.traversal
   private val workflowId = facts.workflowId
   private val repoRoot = facts.repoRoot
 
   override val records: PhaseRunRecords =
-    DurablePhaseRunRecords(runner.recorder, runner.phaseGates.decomposeTerminalRecorder)
+    DurablePhaseRunRecords(runner.recorder, runner.phaseGates.decomposeTerminalRecorder, facts.admittedExecution)
   override val goal: PhaseRunGoal = DurablePhaseRunGoal(runner.goalContinuationRecorder)
   override val settlements: PhaseRunSettlements = DurablePhaseRunSettlements(runner.phaseSettlementService)
   override val checkpoints: PhaseRunCheckpoints = DurablePhaseRunCheckpoints(runner.phaseGates.gitOperations)
@@ -51,12 +52,12 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   override val phaseGates: FeatureTaskRuntimePhaseGates = runner.phaseGates
 
   override fun strategyFor(stepId: String): PhaseStrategy =
-    runner.strategies.strategyFor(stepId, strategySelectionFacts(facts))
+    runner.strategies.strategyFor(stepId, executionPlan)
 
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? =
-    runner.strategies.selectedOwnerOf(stepId, strategySelectionFacts(facts))
+    runner.strategies.selectedOwnerOf(stepId, executionPlan)
 
-  override fun unselectedStepIds(): Set<String> = runner.strategies.unselectedStepIds(strategySelectionFacts(facts))
+  override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 
   override fun step(run: PhaseRun): PhaseStepState =
     FeatureTaskRuntimeRunLoopStepState(

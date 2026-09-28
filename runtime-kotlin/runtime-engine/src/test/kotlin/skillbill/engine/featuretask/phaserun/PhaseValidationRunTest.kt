@@ -44,6 +44,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class PhaseValidationRunTest {
@@ -63,16 +64,20 @@ class PhaseValidationRunTest {
   }
 
   @Test
-  fun `standalone validation dispatches the pack command without a workflow row`() {
+  fun `repeated standalone validation starts fresh without a workflow row or durable identity`() {
     val gateRequests = mutableListOf<ValidationGateRunRequest>()
     val launcher = launcher { validJsonOutput(PHASE_VALIDATE) }
 
-    val result = entry(launcher, gateRequests, emptyList()).run(validationRequest())
+    val entry = entry(launcher, gateRequests, emptyList())
+    val first = assertIs<PhaseRunResult.Completed>(entry.run(validationRequest()))
+    database.assertNoDurableWorkflowState()
+    val second = assertIs<PhaseRunResult.Completed>(entry.run(validationRequest()))
 
-    assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertEquals(listOf(PHASE_VALIDATE), result.completedStepIds)
+    assertNotEquals(first.invocationId, second.invocationId)
+    assertEquals(listOf(PHASE_VALIDATE), first.completedStepIds)
+    assertEquals(listOf(PHASE_VALIDATE), second.completedStepIds)
     assertEquals(emptyList(), launcher.requests)
-    assertEquals(listOf(listOf("./tools/gradlew", "-p", "./tools", "validation-discovery")), gateRequests.map { it.argv })
+    assertEquals(List(2) { listOf("./tools/gradlew", "-p", "./tools", "validation-discovery") }, gateRequests.map { it.argv })
     database.assertNoDurableWorkflowState()
     branchSetup.gitOperations.assertNoCommitOrCheckpointRef(headBefore)
   }

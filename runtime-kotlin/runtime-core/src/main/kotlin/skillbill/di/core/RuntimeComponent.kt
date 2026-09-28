@@ -47,6 +47,7 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoord
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
+import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.goalrunner.GoalOperatorDecisionService
 import skillbill.engine.goalrunner.GoalRunner
@@ -174,6 +175,7 @@ abstract class RuntimeComponent(
   abstract val externalPlatformPackResolutionService: ExternalPlatformPackResolutionService
   abstract val agentRunService: AgentRunService
   abstract val featureTaskRuntimeRunner: FeatureTaskRuntimeRunner
+  abstract val featureTaskRuntimeExecutionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver
   abstract val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService
   abstract val featureTaskRuntimeWorkerCoordinator: FeatureTaskRuntimeWorkerCoordinator
   abstract val featureTaskRuntimeRunInvariantsSource: FeatureTaskRuntimeRunInvariantsSource

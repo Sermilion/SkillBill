@@ -12,6 +12,7 @@ import skillbill.cli.model.CliRunInputs
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.workflow.model.FeatureTaskRouteScope
 import java.nio.file.Path
@@ -36,6 +37,7 @@ internal fun WorkflowService.openRuntimeWorkflowId(
   repoRoot: Path,
   routeScope: FeatureTaskRouteScope,
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  executionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
 ): String =
   when (
     val opened =
@@ -49,6 +51,7 @@ internal fun WorkflowService.openRuntimeWorkflowId(
           governedSpecPath =
             repositoryEnclosingRootPort.governedSpecPathForCli(repoRoot, Path.of(specPath)),
           routeScope = routeScope,
+          executionPlan = executionPlan,
         ),
       )
   ) {

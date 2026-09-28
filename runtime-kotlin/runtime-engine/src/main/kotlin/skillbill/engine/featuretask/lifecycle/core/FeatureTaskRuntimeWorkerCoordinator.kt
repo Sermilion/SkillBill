@@ -2,6 +2,9 @@ package skillbill.engine.featuretask.lifecycle.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.runtime.RuntimeSingleton
+import skillbill.engine.featuretask.slot.execution.model.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.slot.execution.EffectiveGatePolicyInputs
+import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionAdmission
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
@@ -10,6 +13,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatPlan
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatTick
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.workflowStatus
@@ -23,16 +27,20 @@ class FeatureTaskRuntimeWorkerCoordinator(
   private val database: DatabaseSessionFactory,
   private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val clock: Clock,
+  private val executionAdmission: FeatureTaskRuntimeExecutionAdmission,
 ) {
   fun <T> runOwned(
     workflowId: String,
-    block: () -> T,
+    effectiveInputs: EffectiveGatePolicyInputs,
+    expectedIdentity: FeatureTaskExecutionIdentity,
+    block: (AdmittedFeatureTaskRuntimeExecution) -> T,
   ): T {
-    val ownership = acquireOrRecover(workflowId)
+    val acquired = acquireOrRecover(workflowId, effectiveInputs, expectedIdentity)
+    val ownership = acquired.ownership
     val heartbeats = supervisor.startHeartbeat(heartbeatPlan(workflowId)) { heartbeat(ownership) }
     val result =
       try {
-        block()
+        block(acquired.execution)
       } finally {
         heartbeats.stop()
         database.transaction {
@@ -53,26 +61,38 @@ class FeatureTaskRuntimeWorkerCoordinator(
       leaseSeconds = LEASE_DURATION.seconds,
     )
 
-  private fun acquireOrRecover(workflowId: String): FeatureTaskRuntimeWorkerOwnership {
+  private fun acquireOrRecover(
+    workflowId: String,
+    inputs: EffectiveGatePolicyInputs,
+    identity: FeatureTaskExecutionIdentity,
+  ): AcquiredWorker {
     val existing = database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId) }
-    return if (existing == null) acquireUnowned(workflowId) else recoverOwned(existing)
+    return if (existing == null) acquireUnowned(workflowId, inputs, identity) else recoverOwned(existing, inputs, identity)
   }
 
-  private fun acquireUnowned(workflowId: String): FeatureTaskRuntimeWorkerOwnership {
+  private fun acquireUnowned(
+    workflowId: String,
+    inputs: EffectiveGatePolicyInputs,
+    identity: FeatureTaskExecutionIdentity,
+  ): AcquiredWorker {
     repeat(UNOWNED_ACQUIRE_ATTEMPTS) {
-      when (val claim = claimUnowned(workflowId)) {
-        is UnownedClaim.Owned -> return claim.ownership
-        is UnownedClaim.Recover -> return recoverOwned(claim.existing)
+      when (val claim = claimUnowned(workflowId, inputs, identity)) {
+        is UnownedClaim.Owned -> return claim.acquired
+        is UnownedClaim.Recover -> return recoverOwned(claim.existing, inputs, identity)
         UnownedClaim.Lost -> Unit
       }
     }
     error("Workflow '$workflowId' changed before worker ownership could be acquired.")
   }
 
-  private fun claimUnowned(workflowId: String): UnownedClaim =
-    database.selfManagedWrite { unitOfWork ->
+  private fun claimUnowned(
+    workflowId: String,
+    inputs: EffectiveGatePolicyInputs,
+    identity: FeatureTaskExecutionIdentity,
+  ): UnownedClaim =
+    database.transaction { unitOfWork ->
       val existing = unitOfWork.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId)
-      if (existing != null) return@selfManagedWrite UnownedClaim.Recover(existing)
+      if (existing != null) return@transaction UnownedClaim.Recover(existing)
       val row =
         unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
           ?: throw InvalidWorkflowStateSchemaError("Feature-task runtime worker workflow '$workflowId' is missing.")
@@ -81,6 +101,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
           "Cannot acquire worker ownership for terminal workflow '$workflowId' (${row.workflowStatus}).",
         )
       }
+      val execution = executionAdmission.admit(unitOfWork.workflowStates, workflowId, inputs, identity)
       val ownership =
         newOwnership(
           workflowId,
@@ -89,30 +110,38 @@ class FeatureTaskRuntimeWorkerCoordinator(
           phaseAttempt = 1,
         )
       if (unitOfWork.workflowStates.acquireFeatureTaskRuntimeWorker(ownership, row.updatedAt)) {
-        UnownedClaim.Owned(ownership)
+        UnownedClaim.Owned(AcquiredWorker(ownership, execution))
       } else {
         UnownedClaim.Lost
       }
     }
 
-  private fun recoverOwned(existing: FeatureTaskRuntimeWorkerOwnership): FeatureTaskRuntimeWorkerOwnership {
-    when (val inspection = supervisor.inspect(existing)) {
-      FeatureTaskRuntimeProcessInspection.ExactLive -> stopExactWorker(existing)
+  private fun recoverOwned(
+    existing: FeatureTaskRuntimeWorkerOwnership,
+    inputs: EffectiveGatePolicyInputs,
+    identity: FeatureTaskExecutionIdentity,
+  ): AcquiredWorker {
+    val inspection = supervisor.inspect(existing)
+    when (inspection) {
+      FeatureTaskRuntimeProcessInspection.ExactLive -> Unit
       FeatureTaskRuntimeProcessInspection.NotRunning -> Unit
       is FeatureTaskRuntimeProcessInspection.OwnershipMismatch ->
         if (leaseIsActive(existing)) error(inspection.reason)
       is FeatureTaskRuntimeProcessInspection.Unsupported ->
         if (leaseIsActive(existing)) error(inspection.reason)
     }
-    val reserved =
+    val admitted =
       database.transaction {
-        it.workflowStates.reserveFeatureTaskRuntimeWorkerTakeover(
+        val execution = executionAdmission.admit(it.workflowStates, existing.workflowId, inputs, identity)
+        val reserved = it.workflowStates.reserveFeatureTaskRuntimeWorkerTakeover(
           existing.workflowId,
           existing.ownerToken,
           existing.generation,
         )
+        if (!reserved) error("Concurrent continuation already claimed workflow '${existing.workflowId}'.")
+        execution
       }
-    if (!reserved) error("Concurrent continuation already claimed workflow '${existing.workflowId}'.")
+    if (inspection == FeatureTaskRuntimeProcessInspection.ExactLive) stopExactWorker(existing)
     val replacement =
       newOwnership(
         existing.workflowId,
@@ -122,10 +151,13 @@ class FeatureTaskRuntimeWorkerCoordinator(
       )
     val transferred =
       database.transaction {
-        it.workflowStates.transferFeatureTaskRuntimeWorker(replacement, existing.ownerToken, existing.generation)
+        val execution = executionAdmission.admit(it.workflowStates, existing.workflowId, inputs, admitted.identity)
+        if (!it.workflowStates.transferFeatureTaskRuntimeWorker(replacement, existing.ownerToken, existing.generation)) {
+          error("Worker takeover fencing changed for workflow '${existing.workflowId}'.")
+        }
+        execution
       }
-    if (!transferred) error("Worker takeover fencing changed for workflow '${existing.workflowId}'.")
-    return replacement
+    return AcquiredWorker(replacement, transferred)
   }
 
   private fun leaseIsActive(ownership: FeatureTaskRuntimeWorkerOwnership): Boolean =
@@ -194,8 +226,13 @@ class FeatureTaskRuntimeWorkerCoordinator(
     val TERMINAL_WORKFLOW_STATUSES = setOf(WorkflowStatus.COMPLETED, WorkflowStatus.FAILED, WorkflowStatus.ABANDONED)
   }
 
+  private data class AcquiredWorker(
+    val ownership: FeatureTaskRuntimeWorkerOwnership,
+    val execution: AdmittedFeatureTaskRuntimeExecution,
+  )
+
   private sealed class UnownedClaim {
-    class Owned(val ownership: FeatureTaskRuntimeWorkerOwnership) : UnownedClaim()
+    class Owned(val acquired: AcquiredWorker) : UnownedClaim()
 
     class Recover(val existing: FeatureTaskRuntimeWorkerOwnership) : UnownedClaim()
 

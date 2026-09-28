@@ -129,7 +129,7 @@ internal class PackBuildGateCycle(
       repoRoot = run.request.repoRoot,
       request = run.request,
       phaseId = run.phaseId,
-      validationDepth = ValidationDepth.DEFAULT,
+      validationDepth = run.request.admittedExecution?.effectiveInputs?.validationDepth ?: ValidationDepth.DEFAULT,
       commandFamily = commandFamily,
       changedPaths = changedPaths,
       repositoryCheckpoint = checkpoint,
@@ -160,10 +160,13 @@ internal class PackBuildGateCycle(
       lastFindings = progress.completeFindings
       if (reported) return
       reported = true
-      val resolution = context.phaseGates.validationGateResolver.resolve(changedPaths)
+      val admitted = run.request.admittedExecution
+      val packSlug = if (admitted != null) admitted.effectiveInputs.packSlug else {
+        (context.phaseGates.validationGateResolver.resolve(changedPaths) as? ValidationGateResolution.Declared)?.packSlug
+      }
       context.runState.qualityCheckStarted(
         run.phaseId,
-        detectedStack = (resolution as? ValidationGateResolution.Declared)?.packSlug.orEmpty(),
+        detectedStack = packSlug.orEmpty(),
         initialFailureCount = progress.completeFindings.size,
       )
     }

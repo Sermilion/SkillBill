@@ -298,6 +298,39 @@ object PrincipleEnforcementInventory {
     listOf(
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
+          "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/execution/" +
+            "FeatureTaskRuntimeExecutionPlanCodec.kt",
+        functionNames = setOf("decode"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/execution/" +
+            "FeatureTaskRuntimeExecutionPlanDecode.kt",
+        functionNames = setOf(
+          "decodeExecutionPlan", "decodePolicies", "planSlot", "planRevision", "planString",
+          "planObject", "planObjects", "planStrings", "invalidPlanValue",
+        ),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/execution/" +
+            "FeatureTaskRuntimeExecutionPlanTraversalCodec.kt",
+        functionNames = setOf("decodeExecutionPlanTraversal"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
+            "workflow/featuretask/FeatureTaskRuntimeExecutionPlanSchemaValidator.kt",
+        functionNames = setOf("read", "write", "validate", "validateInstance", "requireBoundedBytes"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
+            "workflow/featuretask/FeatureTaskRuntimeExecutionPlanCoherence.kt",
+        functionNames = setOf("validateExecutionPlanCoherence", "validateExecutionPlanTraversal", "incoherentPlan"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
           "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:sqlite")}/src/main/kotlin/" +
             "skillbill/infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStore.kt",
         functionNames =

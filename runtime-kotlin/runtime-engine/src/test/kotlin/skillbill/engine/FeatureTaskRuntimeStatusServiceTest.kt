@@ -4,6 +4,7 @@ import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.testHarnessClock
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromPhaseState
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
@@ -18,7 +19,6 @@ import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvaria
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.runner.operatorDecisionPause
-import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
@@ -75,6 +75,34 @@ private val FEATURE_TASK_RUNTIME_DIAGNOSTIC_SIGNALS_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DIAGNOSTIC_SIGNALS.label()
 
 class FeatureTaskRuntimeStatusServiceTest {
+  @Test
+  fun `status reads incompatible execution history without admitting or changing the workflow`() {
+    val harness = statusHarness()
+    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recordRunInvariants(FeatureTaskRuntimeFeatureSize.MEDIUM)
+    harness.recordRunning("implement", attemptCount = 4)
+    val execution = ExecutionPlanAdmissionFixture()
+    val descriptor = execution.descriptor().toMutableMap().apply {
+      put(FeatureTaskRuntimeExecutionPlanKeys.DEFINITION, mapOf(
+        FeatureTaskRuntimeExecutionPlanKeys.ID to execution.plan.definitionId,
+        FeatureTaskRuntimeExecutionPlanKeys.SEMANTIC_REVISION to 99,
+      ))
+    }
+    val original = requireNotNull(harness.repository.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME))
+    val incompatible = original.copy(artifactsJson = JsonCodec.mapToJsonString(
+      original.toSnapshot().artifacts + DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(descriptor),
+    ))
+    harness.repository.saveFeatureTaskWorkflow(incompatible, RUNTIME)
+    val records = harness.recorder.loadPhaseRecords(WORKFLOW_ID)
+    val projection = requireNotNull(harness.service.status(FeatureTaskRuntimeStatusRequest(WORKFLOW_ID)))
+
+    assertEquals(4, projection.phases.single { it.phaseId == "implement" }.attemptCount)
+    assertEquals("running", projection.phases.single { it.phaseId == "implement" }.status)
+    assertEquals(incompatible, harness.repository.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME))
+    assertEquals(records, harness.recorder.loadPhaseRecords(WORKFLOW_ID))
+    assertEquals(0, execution.launches)
+  }
+
   @Test
   fun `corrupt artifacts fail at status projection and preserve the stored bytes`() {
     val harness = statusHarness()
@@ -1173,7 +1201,6 @@ internal fun statusHarness(): StatusHarness {
       recorder,
       runInvariantsStore,
       decomposeTerminalRecorder,
-      statusProjectionPhaseStrategies(),
     ),
     repository,
   )

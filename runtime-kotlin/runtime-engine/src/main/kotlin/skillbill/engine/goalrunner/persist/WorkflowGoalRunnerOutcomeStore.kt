@@ -37,6 +37,7 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.goalreview.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import java.nio.file.Path
 import java.time.Clock
 
@@ -171,7 +172,11 @@ class WorkflowGoalRunnerOutcomeStore
       workflowId: String,
       preferredPhaseId: String,
       reason: String,
-    ): Boolean = blocks.reopenBlockedPhaseForOperatorResume(workflowId, preferredPhaseId, reason)
+      expectedIdentity: FeatureTaskExecutionIdentity,
+      expectedExecutionPlan: Map<String, Any?>,
+    ): Boolean = blocks.reopenBlockedPhaseForOperatorResume(
+      workflowId, preferredPhaseId, reason, expectedIdentity, expectedExecutionPlan,
+    )
 
     override fun readAttemptLedgerSummary(issueKey: String): GoalRunnerAttemptLedgerSummary =
       progressRecording.readAttemptLedgerSummary(issueKey)
@@ -376,8 +381,12 @@ internal class WorkflowGoalRunnerBlockBridge(
     workflowId: String,
     preferredPhaseId: String,
     reason: String,
+    expectedIdentity: FeatureTaskExecutionIdentity,
+    expectedExecutionPlan: Map<String, Any?>,
   ): Boolean =
     database.transaction { unitOfWork ->
-      blockWrites.reopenBlockedPhaseForOperatorResume(unitOfWork, workflowId, preferredPhaseId, reason)
+      blockWrites.reopenBlockedPhaseForOperatorResume(
+        unitOfWork, workflowId, preferredPhaseId, reason, expectedIdentity, expectedExecutionPlan,
+      )
     }
 }

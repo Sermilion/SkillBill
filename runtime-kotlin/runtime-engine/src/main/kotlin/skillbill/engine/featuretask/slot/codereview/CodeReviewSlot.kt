@@ -3,8 +3,6 @@ package skillbill.engine.featuretask.slot.codereview
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
-import skillbill.engine.featuretask.phase.core.attemptPhaseExecution
-import skillbill.engine.featuretask.phase.core.defaultPhaseExecution
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
@@ -20,21 +18,16 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.promptSource
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
+import skillbill.engine.featuretask.slot.codereview.history.CodeReviewHistory
 import skillbill.engine.featuretask.slot.codereview.verify.VerifyFindingsStep
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.engine.featuretask.slot.stepFacts
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.error.featuretask.UnknownPhaseStepError
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
@@ -162,43 +155,8 @@ internal class CodeReviewSlot(
   fun currentExecution(
     stepId: String,
     context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
-  ): IdeStatusCurrentPhaseExecution? =
-    when (stepId) {
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW ->
-        activeReviewPassNumber(context.records[stepId], context.ledger)?.let { pass ->
-          IdeStatusCurrentPhaseExecution(
-            phaseId = stepId,
-            kind = IdeStatusCurrentPhaseExecutionKind.PASS,
-            count = pass,
-          )
-        } ?: attemptPhaseExecution(stepId, context)
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> attemptPhaseExecution(stepId, context)
-      else -> defaultPhaseExecution(stepId, context)
-    }
+  ): IdeStatusCurrentPhaseExecution? = CodeReviewHistory.currentExecution(stepId, context)
 
-  private fun activeReviewPassNumber(
-    record: FeatureTaskRuntimePhaseRecord?,
-    ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
-  ): Int? {
-    val pass = record?.reviewPassNumber ?: return null
-    if (record.status.workflowStepStatus() != WorkflowStepStatus.COMPLETED) return pass
-    val latestReviewFixEdge =
-      ledger
-        .filter {
-          it.action == FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE &&
-            it.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID &&
-            it.edgeIteration != null
-        }
-        .maxByOrNull { it.sequenceNumber }
-    val ledgerEdge = latestReviewFixEdge?.edgeIteration
-    val reenteredReview =
-      record.takeIf {
-        it.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID
-      }?.edgeIteration
-    return ledgerEdge?.let { edge ->
-      reenteredReview?.takeIf { it >= edge }
-    }?.let { pass }
-  }
 }
 
 internal fun reviewStepInput(

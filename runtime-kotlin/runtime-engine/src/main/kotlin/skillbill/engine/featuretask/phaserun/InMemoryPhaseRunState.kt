@@ -11,7 +11,6 @@ import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepState
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
@@ -35,10 +34,12 @@ import skillbill.ports.review.model.ParallelReviewLaneOutcome
 import skillbill.ports.review.model.ParallelReviewLaneRunResult
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import java.time.Instant
 
 internal class InMemoryPhaseRunState(
   private val facts: InMemoryPhaseRunFacts,
+  private val executionPlan: ResolvedPhaseExecutionPlan,
   override val progress: FeatureTaskRuntimeRunState,
   override val records: PhaseRunRecords,
   override val telemetry: FeatureTaskRuntimeRunObservability,
@@ -65,12 +66,12 @@ internal class InMemoryPhaseRunState(
   private var reviewTarget: ReviewTarget? = null
 
   override fun strategyFor(stepId: String): PhaseStrategy =
-    entry.strategies.strategyFor(stepId, strategySelectionFacts(facts))
+    entry.strategies.strategyFor(stepId, executionPlan)
 
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? =
-    entry.strategies.selectedOwnerOf(stepId, strategySelectionFacts(facts))
+    entry.strategies.selectedOwnerOf(stepId, executionPlan)
 
-  override fun unselectedStepIds(): Set<String> = entry.strategies.unselectedStepIds(strategySelectionFacts(facts))
+  override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 
   override fun step(run: PhaseRun): PhaseStepState =
     FeatureTaskRuntimeRunLoopStepState(

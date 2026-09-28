@@ -4,13 +4,10 @@ import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
-import skillbill.engine.featuretask.persist.sha256Hex
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMaps
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.resolvedBranchFromWorkflowArtifacts
-import skillbill.engine.featuretask.runloop.observability.fixLoopIteration
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeCheckpointIdentityVersionError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -25,7 +22,6 @@ import skillbill.workflow.taskruntime.artifact.decodeCheckpointIdentitiesFromArt
 import skillbill.workflow.taskruntime.artifact.decodeQuarantineEntriesFromArtifact
 import skillbill.workflow.taskruntime.artifact.resolvedBranchFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
-import skillbill.workflow.taskruntime.model.audit.QUARANTINE_REJECTION_CLASS_CHECKPOINT_IDENTITY_VERSION
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FeatureTaskRuntimeCheckpointIdentity
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.featureTaskRuntimeAppendCheckpointIdentity
@@ -157,10 +153,44 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
         }
     }
 
-  fun appendCheckpointIdentity(args: AppendCheckpointIdentityArgs): Boolean {
-    quarantineCheckpointIdentitiesOnVersionDrift(args.workflowId, args.phaseId, args.generation)
-    return appendCheckpointIdentityAtCurrentVersion(args)
-  }
+  fun appendCheckpointIdentity(
+    args: AppendCheckpointIdentityArgs,
+  ): Boolean =
+    database.transaction { unitOfWork ->
+      val record =
+        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, args.workflowId)
+          ?: return@transaction false
+      val artifacts = record.artifacts
+      val existing = checkpointIdentitiesFrom(artifacts)
+      val sequenceNumber = (existing.maxOfOrNull { it.sequenceNumber } ?: -1) + 1
+      val entry =
+        FeatureTaskRuntimeCheckpointIdentity(
+          sequenceNumber = sequenceNumber,
+          issueKey = args.issueKey,
+          subtaskId = args.subtaskId,
+          checkpointRef = featureTaskRuntimeCheckpointRefName(args.issueKey, args.subtaskId, sequenceNumber),
+          branch = args.branch,
+          phaseId = args.phaseId,
+          generation = args.generation,
+          ownedPathDigest = featureTaskRuntimeOwnedPathDigest(args.ownedPaths),
+          ownedPathCount = args.ownedPaths.filter(String::isNotBlank).distinct().size,
+          commitSha = args.commitSha,
+          recordedAt = clock.instant().toString(),
+          loopId = args.loopId,
+          parentSha = args.parentSha,
+        )
+      val updated = featureTaskRuntimeAppendCheckpointIdentity(existing, entry)
+      workflowPersistence.persistArtifactsPatch(
+        unitOfWork.workflowStates,
+        record,
+        mapOf(
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.entry(
+            updated.asCheckpointIdentitiesArtifactEntry(),
+          ),
+        ),
+      )
+      true
+    }
 
   fun loadCheckpointIdentities(workflowId: String): List<FeatureTaskRuntimeCheckpointIdentity>? =
     database.read { unitOfWork ->
@@ -168,23 +198,6 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
           ?: return@read null
       checkpointIdentitiesFrom(record.artifacts)
-    }
-
-  fun quarantineCheckpointIdentities(workflowId: String): Boolean =
-    database.transaction { unitOfWork ->
-      val record =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-          ?: return@transaction false
-      workflowPersistence.persistArtifactsPatch(
-        unitOfWork.workflowStates,
-        record,
-        mapOf(
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.entry(
-            emptyList<FeatureTaskRuntimeCheckpointIdentity>().asCheckpointIdentitiesArtifactEntry(),
-          ),
-        ),
-      )
-      true
     }
 
   fun recordWorkflowOwnedPaths(
@@ -230,84 +243,3 @@ fun FeatureTaskRuntimePhaseEvidenceRecorder.checkpointIdentitiesFrom(
   decodeCheckpointIdentitiesFromArtifact(
     DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(artifacts),
   )
-
-fun FeatureTaskRuntimePhaseEvidenceRecorder.appendCheckpointIdentityAtCurrentVersion(
-  args: AppendCheckpointIdentityArgs,
-): Boolean =
-  database.transaction { unitOfWork ->
-    val record =
-      unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, args.workflowId)
-        ?: return@transaction false
-    val artifacts = record.artifacts
-    val existing = checkpointIdentitiesFrom(artifacts)
-    val sequenceNumber = (existing.maxOfOrNull { it.sequenceNumber } ?: -1) + 1
-    val entry =
-      FeatureTaskRuntimeCheckpointIdentity(
-        sequenceNumber = sequenceNumber,
-        issueKey = args.issueKey,
-        subtaskId = args.subtaskId,
-        checkpointRef = featureTaskRuntimeCheckpointRefName(args.issueKey, args.subtaskId, sequenceNumber),
-        branch = args.branch,
-        phaseId = args.phaseId,
-        generation = args.generation,
-        ownedPathDigest = featureTaskRuntimeOwnedPathDigest(args.ownedPaths),
-        ownedPathCount = args.ownedPaths.filter(String::isNotBlank).distinct().size,
-        commitSha = args.commitSha,
-        recordedAt = clock.instant().toString(),
-        loopId = args.loopId,
-        parentSha = args.parentSha,
-      )
-    val updated = featureTaskRuntimeAppendCheckpointIdentity(existing, entry)
-    workflowPersistence.persistArtifactsPatch(
-      unitOfWork.workflowStates,
-      record,
-      mapOf(
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.entry(
-          updated.asCheckpointIdentitiesArtifactEntry(),
-        ),
-      ),
-    )
-    true
-  }
-
-fun FeatureTaskRuntimePhaseEvidenceRecorder.quarantineCheckpointIdentitiesOnVersionDrift(
-  workflowId: String,
-  phaseId: String,
-  generation: Int,
-) {
-  val rejected =
-    database.read { unitOfWork ->
-      val record =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-          ?: return@read null
-      val artifacts = record.artifacts
-      try {
-        checkpointIdentitiesFrom(artifacts)
-        null
-      } catch (error: InvalidFeatureTaskRuntimeCheckpointIdentityVersionError) {
-        error to DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(artifacts).toString()
-      }
-    } ?: return
-  val (error, rejectedPayload) = rejected
-  val iteration = (generation + 1).coerceAtLeast(1)
-  appendQuarantineEntry(
-    workflowId,
-    FeatureTaskRuntimeQuarantineEntry(
-      producingPhaseId = phaseId,
-      consumingPhaseId = phaseId,
-      producingIteration = iteration,
-      rejectionClass = QUARANTINE_REJECTION_CLASS_CHECKPOINT_IDENTITY_VERSION,
-      rejectionDetail =
-        "seam=FeatureTaskRuntimePhaseRecorder.appendCheckpointIdentity " +
-          "expected=${error.expectedContractVersion} actual=${error.actualContractVersion} " +
-          "cause=checkpoint-identity store predates the current contract; reset and regenerated forward",
-      regenerationAttempt = 1,
-      quarantinedAtIteration = iteration,
-      diagnosticIdentity = null,
-      rejectedRecordByteSize = rejectedPayload.toByteArray().size.toLong(),
-      rejectedRecordSha256 = sha256Hex(rejectedPayload),
-      diagnosticDegraded = true,
-    ),
-  )
-  quarantineCheckpointIdentities(workflowId)
-}

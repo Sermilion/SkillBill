@@ -4666,6 +4666,8 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     workflowId: String,
     preferredPhaseId: String,
     reason: String,
+    expectedIdentity: skillbill.workflow.model.FeatureTaskExecutionIdentity,
+    expectedExecutionPlan: Map<String, Any?>,
   ): Boolean {
     reopenBlockedPhaseCalls += ReopenBlockedPhaseCall(workflowId, preferredPhaseId, reason)
     return true
