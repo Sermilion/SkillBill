@@ -3,14 +3,14 @@ contract_version: "0.5"
 issue_key: "SKILL-382"
 feature_name: "runtime-operations"
 parent_spec_path: ".feature-specs/SKILL-382-runtime-operations/spec.md"
-status: "in_progress"
+status: "complete"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feat/SKILL-382-runtime-operations"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 4
-  action: "resume"
+  subtask_id: 0
+  action: "complete"
 subtasks:
 - id: 1
   name: "Operation contract, confirmation gate, update-check, and release"
@@ -60,12 +60,12 @@ subtasks:
 - id: 4
   name: "operation:verify"
   spec_path: ".feature-specs/SKILL-382-runtime-operations/spec_subtask_4_verify-operation.md"
-  status: "in_progress"
+  status: "complete"
   branch: null
   commit_sha: null
   workflow_id: "wftr-20260927-215321-taz7"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
