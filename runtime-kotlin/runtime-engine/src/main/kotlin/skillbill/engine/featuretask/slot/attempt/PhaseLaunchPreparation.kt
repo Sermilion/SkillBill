@@ -310,6 +310,7 @@ object PhaseLaunchPreparation {
           run.request.workflowId,
           briefing,
           sharedEvidence?.measurement,
+          iteration ?: 1,
         )
       }
       val inputs =
@@ -399,6 +400,18 @@ object PhaseLaunchPreparation {
         packBuildCommand =
           if (stepHooks(run).carriesPackBuildCommand) {
             FeatureTaskRuntimeRunLoopValidationScope.packBuildCommand(
+              phaseGates,
+              recorder,
+              goalContinuationRecorder,
+              session,
+              run,
+            )
+          } else {
+            null
+          },
+        packCollectAllCommand =
+          if (stepHooks(run).carriesPackValidationCommand) {
+            FeatureTaskRuntimeRunLoopValidationScope.packCollectAllCommand(
               phaseGates,
               recorder,
               goalContinuationRecorder,

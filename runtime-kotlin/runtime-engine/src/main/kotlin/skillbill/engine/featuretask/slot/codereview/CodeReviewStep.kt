@@ -17,7 +17,9 @@ import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptOnce
 import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.error.shellcontent.InvalidReviewContextSchemaError
 import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
@@ -42,6 +44,21 @@ internal class CodeReviewStep(
   private val reviewPass: CodeReviewPass,
 ) : PhaseStepHooks {
   fun run(
+    requestedRun: PhaseRun,
+    context: PhaseAttemptEnvironment,
+    state: PhaseStepState,
+    prompt: PhaseStepPromptSource,
+  ): PhaseOutcome {
+    val iteration = state.nextStepIteration()
+    return try {
+      PhaseAttemptOnce.persistRequiredStart(context, requestedRun, iteration)
+      runAfterStart(requestedRun, context, state, prompt)
+    } catch (rejection: RequiredPhaseWriteRejected) {
+      PhaseAttemptOnce.blockRequiredWriteRejection(context, requestedRun, rejection)
+    }
+  }
+
+  private fun runAfterStart(
     requestedRun: PhaseRun,
     context: PhaseAttemptEnvironment,
     state: PhaseStepState,
@@ -72,7 +89,7 @@ internal class CodeReviewStep(
     val fingerprint =
       repositoryFingerprint(run, context)
         ?: return PhaseOutcome.blocked("Runtime-owned review could not resolve a repository checkpoint fingerprint.")
-    state.prepareReviewBriefing(prompt, input)
+    state.prepareReviewBriefing(iteration, prompt, input)
     state.reviewLaunched(iteration)
     val pass =
       ReviewPassRun(
@@ -388,7 +405,7 @@ internal fun failedLaneReason(result: ParallelCodeReviewResult): String? {
 private fun launchFailure(error: Throwable): ReviewPassLaunch.Failed? {
   val message = error.message.orEmpty()
   return when (error) {
-    is CancellationException -> null
+    is CancellationException, is RequiredPhaseWriteRejected -> null
     is DiffResolutionException ->
       ReviewPassLaunch.Failed("Runtime-owned review could not resolve the child-owned diff: $message")
     is UsageValidationException, is StackDetectionException ->

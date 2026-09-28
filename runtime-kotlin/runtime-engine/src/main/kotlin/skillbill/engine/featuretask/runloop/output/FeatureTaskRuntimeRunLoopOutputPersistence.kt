@@ -52,7 +52,7 @@ object FeatureTaskRuntimeRunLoopOutputPersistence {
         ),
       )
     state.reserveReviewPass(phaseState.reviewPassNumber)
-    recorder.recordPhaseState(
+    recorder.recordRequiredPhaseStart(
       phaseState,
     )
   }

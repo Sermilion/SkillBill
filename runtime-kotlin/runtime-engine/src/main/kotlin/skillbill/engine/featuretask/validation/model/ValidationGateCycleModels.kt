@@ -17,6 +17,11 @@ enum class ValidationGateCyclePhase {
   POST_REPAIR_VERIFY,
 }
 
+enum class ValidationGateCommandFamily {
+  BUILD,
+  VALIDATION,
+}
+
 sealed interface ValidationGateResolution {
   data class Declared(
     val packSlug: String,
@@ -39,6 +44,8 @@ fun interface ValidationGateAgentTriageLauncher {
 
 sealed interface ValidationGateTriageResult {
   data class Captured(val validationRepairPlan: String) : ValidationGateTriageResult
+
+  data class Stopped(val outcome: ValidationGateCycleTerminalOutcome) : ValidationGateTriageResult
 
   data object Empty : ValidationGateTriageResult
 }
@@ -63,8 +70,6 @@ sealed interface ValidationGateAgentRepairResult {
 }
 
 sealed interface ValidationGateCycleResult {
-  data object AbsentFallback : ValidationGateCycleResult
-
   data class Terminal(val outcome: ValidationGateCycleTerminalOutcome) : ValidationGateCycleResult
 }
 
@@ -127,4 +132,6 @@ data class ValidationGateCycleRequest(
     ValidationGateAgentTriageLauncher {
       ValidationGateTriageResult.Empty
     },
+  val commandFamily: ValidationGateCommandFamily = ValidationGateCommandFamily.BUILD,
+  val repositoryCheckpointProvider: () -> String? = { repositoryCheckpoint },
 )

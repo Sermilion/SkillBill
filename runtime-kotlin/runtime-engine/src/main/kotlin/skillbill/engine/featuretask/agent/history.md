@@ -1,5 +1,17 @@
 # featuretask runtime boundary history
 
+## [2026-09-28] SKILL-384 subtask 1 - Truthful gate evidence and persistence before execution
+Areas: runtime-engine featuretask and goalrunner planning, runtime-domain validation, runtime-ports validation, runtime-infra contracts/workflow/sqlite, runtime-contracts, runtime-core DI, runtime-cli, orchestration/contracts, docs
+- Standalone validation selects PackValidationStrategy with the dominant pack's full-validation command pair and wrapper overrides. Goal-child build keeps its build-only commands and build receipt.
+- Gate records retain effective argv, exit status, and checkpoint. Successful settlement requires an actual successful terminal command; cached invocations may report zero work, but zero runs cannot prove success.
+- Required start persistence precedes launches, gate commands, and runtime side effects. Required briefing persistence precedes child launch; audit briefings stay in memory and in-memory runs acknowledge ephemeral writes.
+- Typed RequiredPhaseWriteRejected preserves write kind, phase, and attempt through blocking. Secondary storage failures retain the original reason, and cancellation propagates. reusable
+- Shared command-cycle mechanics and evidence coherence enforce command-family policy without another run loop. reusable
+- Receipt contracts reject missing or incoherent execution evidence. Recovery preserves outputs, checkpoints, and finalization records instead of regenerating gates or replaying commit/push.
+- Limitation: uncertain legacy recovery blocks pending the compatible execution identity planned in subtask 2. Existing agent-validation alternatives remain available.
+Feature flag: N/A
+Acceptance criteria: 10/10 implemented; execution verification belongs to validate.
+
 ## [2026-09-26] SKILL-380 subtask 4 — Skeleton definitions and quality_gate strategies
 Areas: runtime-engine featuretask (slot, slot/qualitygate, runloop, runner, validation), runtime-domain taskruntime, runtime-core di, runtime-cli, runtime-mcp, orchestration/contracts
 - SkeletonDefinition (STANDALONE, GOAL_CHILD) names the slot traversal. The quality_gate slot resolves to PackBuildStrategy or AgentValidateStrategy through the registry. FeatureTaskRuntimeQualityGateRouting and RoutedQualityGateStrategy are deleted.

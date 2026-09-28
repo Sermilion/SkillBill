@@ -82,6 +82,10 @@ internal class InMemoryPhaseRunRecords(
     return true
   }
 
+  override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest) {
+    recordPhaseState(request)
+  }
+
   override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean = recordPhaseState(request)
 
   override fun recordIncompleteImplementationAttempt(request: FeatureTaskRuntimePhaseStateRequest): Boolean = true
@@ -146,7 +150,8 @@ internal class InMemoryPhaseRunRecords(
     workflowId: String,
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
-  ): Boolean = true
+    attempt: Int,
+  ) = Unit
 
   override fun recordProjectionRejection(
     workflowId: String,

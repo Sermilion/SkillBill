@@ -62,5 +62,8 @@ class FeatureTaskRuntimeBuildGateProgressStoreIsolationTest {
       outcome = outcome,
       cacheMode = "warm",
       executedWorkUnits = 1,
+      command = "./gradlew check",
+      exitCode = if (outcome == "passed") 0 else 1,
+      repositoryCheckpoint = "checkpoint",
     )
 }

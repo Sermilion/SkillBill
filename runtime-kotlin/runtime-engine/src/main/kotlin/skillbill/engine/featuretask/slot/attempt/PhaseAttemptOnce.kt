@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.attempt
 
+import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.runloop.core.AttemptResult
@@ -10,6 +11,8 @@ import skillbill.engine.featuretask.runloop.core.LaunchMeasurementContextReady
 import skillbill.engine.featuretask.runloop.core.LaunchPreparationRejected
 import skillbill.engine.featuretask.runloop.core.PauseAndPersistInPhaseArgs
 import skillbill.engine.featuretask.runloop.core.PersistPhaseArgs
+import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
+import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
 import skillbill.engine.featuretask.runloop.core.PreparedLaunchReady
@@ -26,10 +29,30 @@ import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.engine.featuretask.slot.stepFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import java.util.concurrent.CancellationException
 
 object PhaseAttemptOnce {
+  internal fun persistRequiredStart(
+    context: PhaseAttemptEnvironment,
+    run: PhaseRun,
+    iteration: Int,
+  ) {
+    FeatureTaskRuntimeRunLoopOutputPersistence.persistPhase(
+      context.request,
+      context.state,
+      context.recorder,
+      context.goalContinuationRecorder,
+      PersistPhaseArgs(
+        write = PhaseStateWriteArgs(run, iteration, STATUS_RUNNING, false, context.state.outputFor(run.phaseId)?.payload),
+        launched = FeatureTaskRuntimeRunLoopLaunch.launchedModelDirective(run),
+      ),
+    )
+  }
+
   internal fun attemptOnce(
     context: PhaseAttemptEnvironment,
     args: RecordRejectionAttemptArgs,
@@ -38,25 +61,49 @@ object PhaseAttemptOnce {
       val run = args.context.run
       val iteration = args.context.iteration
       val priorCorrection = args.priorCorrection
-      FeatureTaskRuntimeRunLoopOutputPersistence.persistPhase(
-        request,
-        state,
-        recorder,
-        goalContinuationRecorder,
-        PersistPhaseArgs(
-          write =
-            PhaseStateWriteArgs(
-              run = run,
-              iteration = iteration,
-              status = STATUS_RUNNING,
-              finished = false,
-              outputArtifact = state.outputFor(run.phaseId)?.payload,
-            ),
-          launched = FeatureTaskRuntimeRunLoopLaunch.launchedModelDirective(run),
+      return try {
+        persistRequiredStart(context, run, iteration)
+        val launch = PhaseAttemptOnce.launchAndCapture(context, run, iteration, priorCorrection, args.call)
+        PhaseAttemptOnce.settleRecordRejectionLaunchOutcome(context, args, launch)
+      } catch (rejection: RequiredPhaseWriteRejected) {
+        AttemptResult.settled(blockRequiredWriteRejection(context, run, rejection))
+      }
+    }
+  }
+
+  internal fun blockRequiredWriteRejection(
+    context: PhaseAttemptEnvironment,
+    run: PhaseRun,
+    rejection: RequiredPhaseWriteRejected,
+  ): PhaseOutcome {
+    val reason = rejection.message.orEmpty()
+    return try {
+      FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+        context.request,
+        context.state,
+        context.recorder,
+        context.observability,
+        PhaseBlockRequest(
+          run = run,
+          attemptCount = rejection.attempt,
+          reason = reason,
+          observability = context.observability,
+          failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
+          payload = BlockAndPersistPayload(childNeverLaunched = true),
         ),
       )
-      val launch = PhaseAttemptOnce.launchAndCapture(context, run, iteration, priorCorrection, args.call)
-      return PhaseAttemptOnce.settleRecordRejectionLaunchOutcome(context, args, launch)
+    } catch (secondary: CancellationException) {
+      rejection.addSuppressed(secondary)
+      throw secondary
+    } catch (secondary: Throwable) {
+      rejection.addSuppressed(secondary)
+      RuntimeDiagnosticsBestEffortWarning.record(
+        context.diagnostics,
+        "Required phase write rejection for '${run.phaseId}' could not be persisted; " +
+          "the original ${rejection.writeKind.wireValue} rejection remains primary.",
+        secondary,
+      )
+      PhaseOutcome.blocked(reason)
     }
   }
 

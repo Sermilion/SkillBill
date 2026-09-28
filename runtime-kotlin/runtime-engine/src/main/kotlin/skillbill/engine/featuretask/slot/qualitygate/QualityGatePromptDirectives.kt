@@ -62,6 +62,25 @@ internal fun runtimeOwnedBuildPhaseTask(packBuildCommand: String?): String {
     "or any phase-output JSON."
 }
 
+internal fun runtimeOwnedPackValidationPhaseTask(packCommand: String?): String {
+  val gateLine =
+    if (packCommand.isNullOrBlank()) {
+      "The runtime runs the dominant pack's collect_all_full_gate_command and reads its output."
+    } else {
+      "The runtime runs the dominant pack's collect_all_full_gate_command: `$packCommand`."
+    }
+  return "Repair every finding from the runtime-owned full validation gate in this session. $gateLine " +
+    "Do not run another project-wide validation command and do not emit a validation receipt or gate evidence. " +
+    "Do not spawn delegated subagents. After repair, the runtime runs the cache-bypassing full validation command " +
+    "once to verify the repository. Never silence findings with suppressions, baselines, disabled rules, or skipped tests."
+}
+
+internal fun packValidationGateTriagePhaseTask(packCommand: String?): String =
+  "Triage the unparseable runtime-owned validation gate failure before repair. Read the captured output and " +
+    "repository files as needed, but do not run the pack gate or mutate files. The dominant pack's discovery " +
+    "command is ${packCommand?.let { "`$it`" } ?: "collect_all_full_gate_command"}. Emit a concise " +
+    "validation_repair_plan in produced_outputs.value. Do not emit validation evidence or spawn subagents."
+
 internal fun buildGateTriagePhaseTask(packBuildCommand: String?): String {
   val gateLine =
     if (packBuildCommand.isNullOrBlank()) {
@@ -120,15 +139,20 @@ internal fun gateRepairNoOutputSchemaDirective(
 internal fun buildGateFindingsDirective(
   findings: ValidationFindingSetProjection?,
   triagePlan: String?,
+  gateLabel: String = "build",
+  commandLabel: String? = "build",
 ): String {
   if (findings == null) return ""
+  val commandGuidance = commandLabel?.let {
+    "Run only the pack-declared $it command when you need console detail. "
+  }.orEmpty()
   val lines =
     buildList {
-      add("## Runtime build gate findings")
+      add("## Runtime $gateLabel gate findings")
       add(
         "A prior gate run parsed these items. They are the full open set for this repair turn — fix every one in " +
-          "this session (shared root causes may collapse several into one change). Run only the pack-declared " +
-          "build command when you need console detail. Do not run `skill-bill validate`, " +
+          "this session (shared root causes may collapse several into one change). " +
+          commandGuidance + "Do not run `skill-bill validate`, " +
           "`skill-bill phase validation`, or the pack collect_all_full_gate_command. Do not spawn delegated " +
           "subagents.",
       )

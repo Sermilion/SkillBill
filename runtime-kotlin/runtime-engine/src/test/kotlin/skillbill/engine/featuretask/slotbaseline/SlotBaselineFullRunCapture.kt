@@ -103,7 +103,7 @@ internal object SlotBaselineFullRunCapture {
             listOf(if (useBuildPack) kotlinPackWithBuildGate() else kotlinPackWithValidationGate()),
           validationGateRunner =
             object : ValidationGateRunner {
-              override fun run(request: ValidationGateRunRequest) = passed()
+              override fun run(request: ValidationGateRunRequest) = passed().copy(command = request.argv.joinToString(" "))
             },
           validator = realFeatureTaskRuntimePhaseOutputValidator,
           launcher = phaseLauncher,

@@ -6,6 +6,27 @@ The audit directive regression and prompt snapshots cover this exception. The 25
 
 # featuretask runtime boundary decisions
 
+## [2026-09-28] Bind standalone validation to its own command family
+Context: Standalone validation could dispatch build commands while reporting validation. Goal-child build and agent-driven workflow validation have different execution contracts.
+Decision: Bind SkeletonDefinition.VALIDATION to PackValidationStrategy, PHASE_VALIDATE, and validation evidence. Resolve the dominant pack's full-validation command pair with wrapper overrides; keep goal-child build on its build command pair and build receipt.
+Reason: Dispatch, telemetry, and receipts must describe the same gate. Strategy binding preserves the shared run loop and existing agent-validation alternatives without definition-specific dispatch in PhaseRunEntry.
+
+## [2026-09-28] Require command evidence while allowing cached zero-work success
+Context: Empty measurements could become successful gate evidence, while a real cached command may execute no work units or new checks.
+Decision: Require effective command identity, zero exit status, and checkpoint evidence for a successful terminal applicable command. Retain discovery and repair verification separately, reconcile counts and checks, and block missing required gate declarations.
+Reason: Command execution and executed work are different facts. Zero work can be valid evidence; zero command records cannot prove success, and earlier success cannot hide failed verification.
+
+## [2026-09-28] Acknowledge required phase writes before execution
+Context: Required start and briefing writes returned false while child launches or runtime side effects could continue.
+Decision: Raise RequiredPhaseWriteRejected at the persistence owner and handle it at the shared attempt boundary before execution. Preserve write kind, phase, and attempt through terminal recording and secondary failures. Keep cancellation propagation, ephemeral in-memory acknowledgements, and audit's in-memory briefing exception.
+Reason: Execution needs an acknowledged prerequisite record. Treating rejected persistence as child failure loses attribution; moving transaction or lease ownership is unnecessary to enforce the prerequisite.
+
+## [2026-09-28] Block uncertain receipt recovery without replaying finalization
+Context: Unsupported or empty successful receipts cannot establish current gate semantics, and historical downstream effects may already include commit or push.
+Decision: Preserve original evidence and finalization records when gate evidence fails validation. Block uncertain recovery, keep completed runs terminal, and do not regenerate a producer or replay commit/push to repair its receipt.
+Reason: Safe regeneration requires compatible execution identity and proof that downstream effects have not occurred. Subtask 2 supplies that identity prerequisite; inventing missing evidence or deleting completion records could repeat effects.
+Revisit when: Compatible execution identity and absence of downstream effects can be proven at an existing safe gate boundary.
+
 ## [2026-09-27] Scoped replan prunes the cleared child's checkpoint refs
 Context: `goal replan` deleted the child workflow but left its `refs/skill-bill/checkpoints/<issue>/<subtask>/<n>` refs. The next child restarts its checkpoint sequence at 0, so its first remediation amend that reached an old number found a foreign occupant. It refused, because overwriting would drop the only reachability that commit had. SKILL-380 subtask 5 blocked at `verify_findings` this way.
 Decision: scoped replan prunes the checkpoint refs of every subtask whose child workflow it cleared, the same way reset and scoped child recovery already do (`pruneResetSubtaskCheckpointRefs`).

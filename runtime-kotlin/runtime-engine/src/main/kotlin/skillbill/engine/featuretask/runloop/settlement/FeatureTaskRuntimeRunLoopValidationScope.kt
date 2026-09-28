@@ -65,4 +65,18 @@ object FeatureTaskRuntimeRunLoopValidationScope {
       is ValidationGateResolution.Incompatible -> null
     }
   }
+
+  internal fun packCollectAllCommand(
+    phaseGates: FeatureTaskRuntimePhaseGates,
+    recorder: PhaseRunRecords,
+    goalContinuationRecorder: PhaseRunGoal,
+    session: FeatureTaskRuntimeRunLoopSession,
+    run: PhaseRun,
+  ): String? {
+    val paths = validationChangedPaths(phaseGates, recorder, goalContinuationRecorder, session, run)
+    return (phaseGates.validationGateResolver.resolve(paths.orEmpty()) as? ValidationGateResolution.Declared)
+      ?.declaration
+      ?.collectAllFullGateCommand
+      ?.joinToString(" ")
+  }
 }

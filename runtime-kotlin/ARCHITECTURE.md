@@ -1613,6 +1613,19 @@ compile/buildability proof and never invokes the collect-all validation gate.
 Default standalone runs skip `build` (`review -> validate`); goal continuation
 stamps which quality gate a child runs (subtask 2).
 
+`SkeletonDefinition.VALIDATION` binds `PackValidationStrategy` to `PHASE_VALIDATE`.
+It runs the dominant pack's `collect_all_full_gate_command`, repairs parsed
+findings in the same agent session, then runs
+`cache_bypassing_collect_all_full_gate_command` to verify. Goal-child `BUILD`
+stays on `PackBuildStrategy`, which uses only the two build commands. Each gate
+run records its effective argv, exit code, and repository checkpoint. A passed
+receipt requires a non-empty run list and a successful terminal required command;
+an earlier pass cannot cover a failed verification. Missing required declarations
+or command members block both durable and in-memory routes. Historical receipts
+without command semantics block recovery and remain available for inspection. The
+build receipt and validation evidence contracts are versioned independently; a
+reader rejects legacy evidence when it cannot prove current command semantics.
+
 **4. Phase-local instructions.** Run identity remains durable state on every
 briefing, but prompt rendering is selected per phase by
 `FeatureTaskRuntimeRunInvariantPromptAllowlist`.

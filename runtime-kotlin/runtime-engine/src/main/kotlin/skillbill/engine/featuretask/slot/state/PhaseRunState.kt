@@ -101,8 +101,7 @@ internal interface PhaseRunState :
 /** The quality-gate lifecycle a run reports while its quality gate step runs. */
 internal interface PhaseQualityGateReporting {
   /**
-   * Called when the quality gate of [stepName] finds no declared pack gate. A durable run falls back to the
-   * runtime-owned build and keeps this a no-op; a state with no fallback fails the run here.
+   * Reports an optional gate absence. Required pack gates block before this hook.
    */
   fun qualityGateAbsent(stepName: String) = Unit
 

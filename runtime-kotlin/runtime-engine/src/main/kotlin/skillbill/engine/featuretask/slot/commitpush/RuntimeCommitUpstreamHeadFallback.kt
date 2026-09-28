@@ -9,13 +9,11 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runner.missingUpstream
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
-import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 private const val HEAD_SETTLED_HISTORY_SUMMARY = "Boundary history settled from repository HEAD."
@@ -72,7 +70,7 @@ internal object RuntimeCommitUpstreamHeadFallback : PhaseStepHooks {
         ?.takeIf {
           record == null || record.status.workflowStepStatus() == WorkflowStepStatus.COMPLETED
         }
-        ?.let { syntheticOutput(it, headSha, attemptCount) }
+        ?.let { syntheticOutput(it, attemptCount) }
     val accepted =
       output?.let {
         runCatching {
@@ -100,36 +98,13 @@ internal object RuntimeCommitUpstreamHeadFallback : PhaseStepHooks {
   }
 
   private fun supportsHeadFallback(phaseId: String): Boolean =
-    phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD ||
-      phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY
+    phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY
 
   private fun syntheticOutput(
     phaseId: String,
-    headSha: String,
     attemptCount: Int,
   ): FeatureTaskRuntimePhaseOutput? =
     when (phaseId) {
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD ->
-        FeatureTaskRuntimeBuildGateCoordinator.runtimeOwnedBuildOutput(
-          phaseId = phaseId,
-          repositoryCheckpoint = headSha,
-          measurements =
-            listOf(
-              FeatureTaskRuntimeValidationGateRunRecord(
-                durationMs = 0,
-                outcome = "passed",
-                cacheMode = "cache_eligible",
-                executedWorkUnits = 0,
-                executedChecks = emptyList(),
-              ),
-            ),
-        ).let { built ->
-          FeatureTaskRuntimePhaseOutput(
-            phaseId = built.phaseId,
-            iteration = attemptCount.coerceAtLeast(1),
-            payload = built.payload,
-          )
-        }
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY -> {
         val payload =
           JsonCodec.mapToJsonString(

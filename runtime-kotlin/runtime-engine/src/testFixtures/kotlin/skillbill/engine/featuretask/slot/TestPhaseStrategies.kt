@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
@@ -60,6 +61,7 @@ fun testPhaseStrategies(
         InlineReviewStrategy(codeReviewRunner),
         delegatedReviewRunner?.let { DelegatedReviewStrategy(runner(), it) },
         PackBuildStrategy(runner()),
+        PackValidationStrategy(runner()),
         AgentValidateStrategy(runner()),
         BoundaryHistoryStrategy(runner()),
         RuntimeCommitStrategy(runner()),

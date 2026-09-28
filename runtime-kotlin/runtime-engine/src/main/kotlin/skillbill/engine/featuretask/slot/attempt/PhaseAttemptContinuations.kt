@@ -492,7 +492,14 @@ object PhaseAttemptContinuations {
     producer: String?,
     detail: String,
   ): String =
-    if (producer == null) {
+    if (producer == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD ||
+      producer == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
+    ) {
+      "Feature-task-runtime phase '$consumerPhaseId' rejected gate evidence produced by '$producer'. " +
+        "Preserve the run and inspect its bounded diagnostics with a compatible runtime or a separately reviewed " +
+        "recovery mapping. Automatic regeneration is blocked because retained command semantics are unproven. " +
+        "Detail: $detail"
+    } else if (producer == null) {
       "Feature-task-runtime phase '$consumerPhaseId' rejected an upstream durable record " +
         "(${rejection.rejectionClass}) it cannot attribute to a producing phase, so no regeneration edge " +
         "applies; the run blocks durably. Recover the record out of band by deleting or migrating the " +
@@ -519,6 +526,21 @@ object PhaseAttemptContinuations {
           context = PhaseAttemptContext(run, state, iteration, observability),
           rejection = rejection,
           producer = FeatureTaskRuntimePhaseWorkflowDefinition.REGENERATION_PRODUCER_BY_CONSUMER[run.phaseId],
+        ),
+        generationScoped = { stepPolicy(it).generationScoped },
+      )
+    }
+    if (
+      regeneration.producer == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD ||
+      regeneration.producer == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
+    ) {
+      return PhaseAttemptContinuations.blockUnattributableRecordRejection(
+        request,
+        recorder,
+        UnattributableRecordRejectionArgs(
+          context = PhaseAttemptContext(run, state, iteration, observability),
+          rejection = rejection,
+          producer = regeneration.producer,
         ),
         generationScoped = { stepPolicy(it).generationScoped },
       )

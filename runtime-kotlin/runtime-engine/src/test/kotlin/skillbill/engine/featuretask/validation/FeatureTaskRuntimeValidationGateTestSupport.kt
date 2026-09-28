@@ -150,6 +150,7 @@ internal fun passed(forced: Boolean = false): ValidationGateRunResult =
     executedWorkUnits = 1,
     executedCheckIdentities = emptyList(),
     findings = emptyList(),
+    command = "./gradlew check",
   )
 
 internal fun failedEmptyFindings(stdout: String = ""): ValidationGateRunResult =
@@ -162,6 +163,7 @@ internal fun failedEmptyFindings(stdout: String = ""): ValidationGateRunResult =
     executedCheckIdentities = emptyList(),
     findings = emptyList(),
     stdout = stdout,
+    command = "./gradlew check",
   )
 
 internal fun failedWith(vararg findings: ValidationGateFinding): ValidationGateRunResult =
@@ -173,6 +175,7 @@ internal fun failedWith(vararg findings: ValidationGateFinding): ValidationGateR
     executedWorkUnits = 1,
     executedCheckIdentities = emptyList(),
     findings = findings.toList(),
+    command = "./gradlew check",
   )
 
 internal fun completedRepair(): ValidationGateAgentRepairResult {
@@ -240,6 +243,6 @@ internal class ScriptedGateRunner(
     requests += request
     return results.getOrElse(index) {
       error("ScriptedGateRunner exhausted after ${results.size} results; call=$index")
-    }
+    }.copy(command = request.argv.joinToString(" "))
   }
 }

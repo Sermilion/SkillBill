@@ -90,6 +90,8 @@ internal interface PhaseStepRecords {
   /** Records a step state. Returns false when the write did not apply. */
   fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean
 
+  fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest)
+
   /** Records a completed step atomically with its output. Returns false when the write did not apply. */
   fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean
 
@@ -163,7 +165,8 @@ internal interface PhaseLaunchRecords {
     workflowId: String,
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement? = null,
-  ): Boolean
+    attempt: Int = 1,
+  )
 
   /** Records a handoff projection the consumer step rejected. */
   fun recordProjectionRejection(

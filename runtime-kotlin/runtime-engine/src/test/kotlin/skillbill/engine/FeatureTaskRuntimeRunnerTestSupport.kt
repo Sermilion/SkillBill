@@ -641,6 +641,7 @@ internal data class RuntimeHarnessConfig(
       ): String? = null
     },
   val validationGateRunner: ValidationGateRunner? = null,
+  val gateRepoLocalConfig: RepoLocalConfigPort = defaultRepoLocalConfigPort(),
   val validationGatePlatformManifests: List<PlatformManifest> = listOf(kotlinPackWithValidationGate()),
   val reviewRunner: PhaseRunner? = ApprovingReviewPhaseRunner,
   val launcher: RuntimeRecordingLauncher? = null,
@@ -678,6 +679,7 @@ private data class RuntimePhaseGatesDeps(
     },
   val recorder: FeatureTaskRuntimePhaseRecorder,
   val validationGateRunnerOverride: ValidationGateRunner? = null,
+  val gateRepoLocalConfig: RepoLocalConfigPort = defaultRepoLocalConfigPort(),
   val validationGatePlatformManifests: List<PlatformManifest> = listOf(kotlinPackWithValidationGate()),
 )
 
@@ -696,6 +698,7 @@ private fun runtimePhaseGates(deps: RuntimePhaseGatesDeps): FeatureTaskRuntimePh
             executedWorkUnits = 1,
             executedCheckIdentities = emptyList(),
             findings = emptyList(),
+            command = request.argv.joinToString(" "),
           )
       }
   return FeatureTaskRuntimePhaseGates(
@@ -740,7 +743,7 @@ private fun validationGateBoundaries(
       FeatureTaskRuntimeBuildGateCoordinator(
         validationGateResolver,
         validationGateRunner,
-        defaultRepoLocalConfigPort(),
+        deps.gateRepoLocalConfig,
         NoopRuntimeDiagnostics,
       ),
     sharedEvidenceResolver = deps.sharedEvidenceResolver,
@@ -998,6 +1001,7 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
           recorder = deps.recorder,
           validationGateRunnerOverride = deps.runtimeConfig.validationGateRunner,
           validationGatePlatformManifests = deps.runtimeConfig.validationGatePlatformManifests,
+          gateRepoLocalConfig = deps.runtimeConfig.gateRepoLocalConfig,
         ),
       ),
     startup =
@@ -1181,6 +1185,7 @@ private fun telemetryRunnerPhaseGates(
       recorder = workflow.recorder,
       validationGateRunnerOverride = runtimeConfig.validationGateRunner,
       validationGatePlatformManifests = runtimeConfig.validationGatePlatformManifests,
+      gateRepoLocalConfig = runtimeConfig.gateRepoLocalConfig,
     ),
   )
 
@@ -1436,6 +1441,7 @@ internal fun failThenPassValidationGateRunner(gateCalls: AtomicInteger): Validat
           } else {
             emptyList()
           },
+        command = request.argv.joinToString(" "),
       )
     }
   }

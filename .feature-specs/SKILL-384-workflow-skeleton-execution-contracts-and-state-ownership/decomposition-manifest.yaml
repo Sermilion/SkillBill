@@ -3,22 +3,22 @@ contract_version: "0.5"
 issue_key: "SKILL-384"
 feature_name: "workflow-skeleton-execution-contracts-and-state-ownership"
 parent_spec_path: ".feature-specs/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership/spec.md"
-status: "pending"
+status: "in_progress"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feature/SKILL-384-workflow-skeleton-execution-contracts"
 stack_branches: []
 current_subtask_intent:
   subtask_id: 1
-  action: "start"
+  action: "resume"
 subtasks:
 - id: 1
   name: "Require truthful gate evidence and persistence before execution"
   spec_path: "/home/sermilion/StudioProjects/skill-bill/.feature-specs/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership/spec_subtask_1_require-truthful-gate-evidence-and-persistence-before-execution.md"
-  status: "pending"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20260928-112314-pd9q"
   blocked_reason: null
   last_resumable_step: null
   linear_issue_id: null

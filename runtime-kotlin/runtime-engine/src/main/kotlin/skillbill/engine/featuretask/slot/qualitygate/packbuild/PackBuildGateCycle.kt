@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.slot.qualitygate.packbuild
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptContext
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -20,10 +21,12 @@ import skillbill.engine.featuretask.slot.qualitygate.blockGateStep
 import skillbill.engine.featuretask.slot.qualitygate.buildGateProgressStore
 import skillbill.engine.featuretask.slot.qualitygate.gateChangedPaths
 import skillbill.engine.featuretask.slot.qualitygate.gateCheckpoint
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentTriageLauncher
+import skillbill.engine.featuretask.validation.model.ValidationGateCommandFamily
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleRequest
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
@@ -37,13 +40,15 @@ import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhas
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 
-private const val BUILD_RECEIPT_KEY = "build_receipt"
 private const val RULE_OR_TEST_ID_KEY = "rule_or_test_id"
 
 internal class PackBuildGateCycle(
   private val context: PhaseAttemptEnvironment,
   private val call: PhaseStepCall,
+  private val commandFamily: ValidationGateCommandFamily = ValidationGateCommandFamily.BUILD,
 ) {
+  private var stoppedAttempt: PhaseOutcome? = null
+
   internal fun run(run: PhaseRun): PhaseOutcome {
     val checkpoint =
       context.gateCheckpoint(run)
@@ -52,7 +57,12 @@ internal class PackBuildGateCycle(
     persistRunning(run, iteration)?.let { return it }
     var gateRuns = 0
     val changedPaths = context.gateChangedPaths(run)
-    val reporting = QualityCheckReportingStore(run, changedPaths, call.state.records.buildGateProgressStore())
+    val reporting =
+      QualityCheckReportingStore(
+        run,
+        changedPaths,
+        call.state.records.buildGateProgressStore(commandFamily),
+      )
     val cycle =
       context.phaseGates.buildGateCoordinator.execute(
         cycle = cycleRequest(run, iteration, checkpoint, changedPaths, reporting),
@@ -61,14 +71,14 @@ internal class PackBuildGateCycle(
           context.observability.validationGateProgress()
         },
       )
-    val outcome = settle(run, iteration, checkpoint, cycle)
+    val outcome = stoppedAttempt ?: settle(run, iteration, cycle)
     val finalFindings = reporting.lastFindings
     context.runState.qualityCheckFinished(
-      run.phaseId,
-      finalFailureCount = finalFindings.size,
-      failingCheckNames = finalFindings.mapNotNull { it[RULE_OR_TEST_ID_KEY] }.distinct().sorted(),
-      iterations = gateRuns,
-    )
+        run.phaseId,
+        finalFailureCount = if (outcome.completedOutput != null) 0 else finalFindings.size.coerceAtLeast(1),
+        failingCheckNames = finalFindings.mapNotNull { it[RULE_OR_TEST_ID_KEY] }.distinct().sorted(),
+        iterations = gateRuns,
+      )
     return outcome
   }
 
@@ -93,14 +103,10 @@ internal class PackBuildGateCycle(
         ),
       )
     context.state.reserveReviewPass(runningPhaseState.reviewPassNumber)
-    if (!context.recorder.recordPhaseState(runningPhaseState)) {
-      return context.blockGateStep(
-        run,
-        iteration,
-        "Build gate cycle could not persist running build phase before gate execution.",
-        FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
-        context.observability,
-      )
+    try {
+      context.recorder.recordRequiredPhaseStart(runningPhaseState)
+    } catch (rejection: RequiredPhaseWriteRejected) {
+      return PhaseAttemptOnce.blockRequiredWriteRejection(context, run, rejection)
     }
     context.observability.started(
       run.phaseId,
@@ -124,8 +130,10 @@ internal class PackBuildGateCycle(
       request = run.request,
       phaseId = run.phaseId,
       validationDepth = ValidationDepth.DEFAULT,
+      commandFamily = commandFamily,
       changedPaths = changedPaths,
       repositoryCheckpoint = checkpoint,
+      repositoryCheckpointProvider = { context.gateCheckpoint(run) },
       agentRepairLauncher =
         ValidationGateAgentRepairLauncher { findings, repairTurn, triagePlan ->
           launchRepair(run, iteration, PackBuildRepairTurn(findings, repairTurn, triagePlan))
@@ -169,8 +177,15 @@ internal class PackBuildGateCycle(
     findings: ValidationFindingSetProjection,
   ): ValidationGateTriageResult {
     val triageRun = run.copy(validationGateFindings = findings, validationGateTriage = true)
-    return attemptOnce(triageRun, iteration)?.completedOutput?.let(PackBuildTriagePlan::extract)
-      ?: ValidationGateTriageResult.Empty
+    val outcome = attemptOnce(triageRun, iteration) ?: return ValidationGateTriageResult.Empty
+    outcome.completedOutput?.let { return PackBuildTriagePlan.extract(it) }
+    stoppedAttempt = outcome
+    return ValidationGateTriageResult.Stopped(
+      outcome.pausedReason?.let { ValidationGateCycleTerminalOutcome.Paused(it) }
+        ?: ValidationGateCycleTerminalOutcome.Blocked(
+          outcome.blockedReason ?: "Gate triage did not complete.",
+        ),
+    )
   }
 
   private fun attemptOnce(
@@ -196,6 +211,7 @@ internal class PackBuildGateCycle(
       )
     val settled = attemptOnce(repairRun, iteration)
     val completed = settled?.completedOutput
+    if (settled != null && completed == null) stoppedAttempt = settled
     return when {
       completed != null -> ValidationGateAgentRepairResult.Completed(completed)
       settled != null ->
@@ -203,10 +219,6 @@ internal class PackBuildGateCycle(
           settled.blockedReason
             ?: settled.pausedReason
             ?: "Validation repair attempt persistence.session.blocked.",
-          failureDisposition =
-            context.recorder.loadPhaseRecords(run.request.workflowId)
-              ?.get(run.phaseId)
-              ?.failureDisposition,
         )
       else -> ValidationGateAgentRepairResult.Completed(PackBuildStepHooks.repairSegmentOutput(run, iteration))
     }
@@ -215,26 +227,13 @@ internal class PackBuildGateCycle(
   private fun settle(
     run: PhaseRun,
     iteration: Int,
-    checkpoint: String,
     cycle: ValidationGateCycleResult,
   ): PhaseOutcome =
     when (cycle) {
-      ValidationGateCycleResult.AbsentFallback -> {
-        context.runState.qualityGateAbsent(run.phaseId)
-        runtimeOwnedBuild(
-          run,
-          iteration,
-          FeatureTaskRuntimeBuildGateCoordinator.runtimeOwnedBuildOutput(
-            phaseId = run.phaseId,
-            repositoryCheckpoint = checkpoint,
-            measurements = emptyList(),
-          ).payload,
-        )
-      }
       is ValidationGateCycleResult.Terminal ->
         when (val terminal = cycle.outcome) {
           is ValidationGateCycleTerminalOutcome.Paused -> PhaseOutcome.paused(terminal.reason)
-          is ValidationGateCycleTerminalOutcome.Completed -> runtimeOwnedBuild(run, iteration, terminal.output.payload)
+          is ValidationGateCycleTerminalOutcome.Completed -> runtimeOwnedGate(run, iteration, terminal.output.payload)
           is ValidationGateCycleTerminalOutcome.Blocked ->
             context.blockGateStep(
               run,
@@ -246,12 +245,16 @@ internal class PackBuildGateCycle(
         }
     }
 
-  private fun runtimeOwnedBuild(
+  private fun runtimeOwnedGate(
     run: PhaseRun,
     iteration: Int,
     outputText: String,
   ): PhaseOutcome =
-    RuntimeOwnedGateSettlement(context, label = "build", acceptance = ::requireBuildReceipt)
+    RuntimeOwnedGateSettlement(
+      context,
+      label = commandFamily.name.lowercase(),
+      acceptance = if (commandFamily == ValidationGateCommandFamily.BUILD) ::requireBuildReceipt else { _, _ -> },
+    )
       .settle(run, iteration, outputText, context.observability)
 
   private fun requireBuildReceipt(
@@ -262,7 +265,7 @@ internal class PackBuildGateCycle(
       JsonCodec.anyToStringAnyMap(
         JsonCodec.anyToStringAnyMap(
           accepted.normalizedOutput.envelopeWireMap()[SharedPayloadKeys.PRODUCED_OUTPUTS],
-        )?.get(BUILD_RECEIPT_KEY),
+        )?.get(ValidationEvidencePayloadKeys.BUILD_RECEIPT),
       )
     context.phaseGates.buildReceiptValidator.validateBuildReceipt(
       buildReceipt ?: emptyMap<String, Any?>(),

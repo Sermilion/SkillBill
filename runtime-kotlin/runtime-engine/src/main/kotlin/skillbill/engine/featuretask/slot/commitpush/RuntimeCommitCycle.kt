@@ -38,6 +38,8 @@ import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhase
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptOnce
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.engine.featuretask.validation.ReadinessCommitPushSettleRequest
 import skillbill.engine.featuretask.validation.ReadinessCommitPushSettleResult
 import skillbill.engine.featuretask.validation.ReadinessCommittedHeadBindRequest
@@ -383,20 +385,10 @@ object RuntimeCommitCycle {
         ),
       )
     state.reserveReviewPass(runningPhaseState.reviewPassNumber)
-    if (!recorder.recordPhaseState(runningPhaseState)) {
-      return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-        request,
-        state,
-        recorder,
-        observability,
-        PhaseBlockRequest(
-          run = run,
-          attemptCount = iteration,
-          reason = "Commit-push cycle could not persist running phase before finalisation.",
-          observability = observability,
-          failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
-        ),
-      )
+    try {
+      recorder.recordRequiredPhaseStart(runningPhaseState)
+    } catch (rejection: RequiredPhaseWriteRejected) {
+      return PhaseAttemptOnce.blockRequiredWriteRejection(this, run, rejection)
     }
     return null
   }

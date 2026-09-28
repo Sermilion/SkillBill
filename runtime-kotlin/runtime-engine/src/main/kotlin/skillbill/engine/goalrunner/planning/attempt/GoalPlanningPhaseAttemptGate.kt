@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.planning.attempt
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseProduction
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProduceAttemptArgs
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProducePhaseArgs
@@ -20,6 +21,7 @@ import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
+import java.util.concurrent.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.ZERO
 
@@ -39,7 +41,7 @@ internal fun DefaultGoalPlanningSweep.producePhase(args: GoalPlanningProducePhas
     val step =
       advancePlanningProduceAttempt(
         PlanningProduceAdvanceArgs(
-          attemptArgs = attemptArgs.copy(priorSchemaFailure = priorSchemaFailure),
+          attemptArgs = attemptArgs.copy(priorSchemaFailure = priorSchemaFailure, attempt = attempt),
           scope = scope,
           retryableDeclines = retryableDeclines,
           phaseId = phaseId,
@@ -91,6 +93,7 @@ internal fun DefaultGoalPlanningSweep.produceAttemptOrStop(
   runCatching {
     produceAttempt(args)
   }.getOrElse { error ->
+    if (error is RequiredPhaseWriteRejected || error is CancellationException) throw error
     val phase = args.phase
     GoalPlanningPhaseProduction.Stopped(
       stopped(

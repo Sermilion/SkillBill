@@ -3,13 +3,11 @@ package skillbill.engine.featuretask.slot.qualitygate.agentvalidate
 import skillbill.application.decomposition.baseBranch
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
 import skillbill.engine.featuretask.slot.qualitygate.RuntimeOwnedGateSettlement
 import skillbill.engine.featuretask.slot.qualitygate.blockGateStep
 import skillbill.engine.featuretask.slot.qualitygate.gateChangedPaths
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
 import skillbill.engine.featuretask.validation.ReadinessPostValidateCaptureRequest
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
@@ -24,6 +22,8 @@ internal class AgentValidateGateCycle(
   private val context: PhaseAttemptEnvironment,
   private val call: PhaseStepCall,
 ) {
+  private var stoppedAttempt: PhaseOutcome? = null
+
   internal fun run(run: PhaseRun): PhaseOutcome {
     val iteration = call.state.nextStepIteration()
     val cycle =
@@ -32,20 +32,20 @@ internal class AgentValidateGateCycle(
           repair(run.copy(validationGateFindings = findings))
         },
       )
-    return settle(run, iteration, cycle)
+    return stoppedAttempt ?: settle(run, iteration, cycle)
   }
 
   private fun repair(run: PhaseRun): ValidationGateAgentRepairResult {
     val settled = call.state.attemptLoop.run(run, call)
     val completed = settled.completedOutput
     val paused = settled.pausedReason
+    if (completed == null) stoppedAttempt = settled
     return when {
       completed != null -> ValidationGateAgentRepairResult.Completed(completed)
       paused != null -> ValidationGateAgentRepairResult.Paused(paused)
       else ->
         ValidationGateAgentRepairResult.Blocked(
           settled.blockedReason ?: "Validation phase did not complete.",
-          failureDisposition = recordedFailureDisposition(run),
         )
     }
   }
@@ -56,22 +56,6 @@ internal class AgentValidateGateCycle(
     cycle: ValidationGateCycleResult,
   ): PhaseOutcome =
     when (cycle) {
-      ValidationGateCycleResult.AbsentFallback -> {
-        context.observability.started(
-          run.phaseId,
-          run.resolvedAgent.resolvedAgentId,
-          iteration,
-          run.modelDirective,
-          FeatureTaskRuntimePhaseStartReentry.FIRST_VISIT,
-        )
-        context.blockGateStep(
-          run,
-          iteration,
-          FeatureTaskRuntimeValidationGateCoordinator.ABSENT_VALIDATION_GATE_REASON,
-          FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
-          context.observability,
-        )
-      }
       is ValidationGateCycleResult.Terminal ->
         when (val terminal = cycle.outcome) {
           is ValidationGateCycleTerminalOutcome.Paused -> PhaseOutcome.paused(terminal.reason)
@@ -89,9 +73,6 @@ internal class AgentValidateGateCycle(
             )
         }
     }
-
-  private fun recordedFailureDisposition(run: PhaseRun): FeatureTaskRuntimeFailureDisposition? =
-    context.recorder.loadPhaseRecords(run.request.workflowId)?.get(run.phaseId)?.failureDisposition
 
   private fun captureReadinessFragment(run: PhaseRun) {
     if (context.request.skeletonDefinition?.runStateKind == SkeletonRunStateKind.IN_MEMORY) return

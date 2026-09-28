@@ -297,6 +297,7 @@ internal fun testDefaultGoalPlanningSweep(
   DefaultGoalPlanningSweep(checkpointBoundaries, launchBoundaries, repositoryEnclosingRootPort)
 
 internal data class GoalPlanningSweepPortsParams(
+  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
   val checkpoint: GoalPlanningPreparationCheckpoint,
   val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   val subtaskLauncher: GoalRunnerSubtaskLauncher,
@@ -341,7 +342,7 @@ internal fun testGoalPlanningSweepPorts(params: GoalPlanningSweepPortsParams): D
         goalPlanningPhaseStrategies(params.subtaskLauncher, params.fanOutPort, params.burstSchedule.planFanOutCap),
       clock = Clock.systemUTC(),
       diagnostics = NoopRuntimeDiagnostics,
-      runLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+      runLoopEntry = params.runLoopEntry,
     ),
     repositoryEnclosingRootPort = params.repositoryEnclosingRootPort,
   )

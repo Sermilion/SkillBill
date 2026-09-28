@@ -77,6 +77,7 @@ internal interface PhaseReviewPassState {
 
   /** Records the review briefing for [input] and the resolved review tier ahead of the launch. */
   fun prepareReviewBriefing(
+    iteration: Int,
     prompt: PhaseStepPromptSource,
     input: GoalSubtaskReviewInput,
   )

@@ -19,6 +19,7 @@ import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
@@ -76,6 +77,7 @@ internal interface RuntimeFeatureTaskSlotProvides {
         InlineReviewStrategy(runner()),
         DelegatedReviewStrategy(runner(), reviewRunner),
         PackBuildStrategy(runner()),
+        PackValidationStrategy(runner()),
         AgentValidateStrategy(runner()),
         BoundaryHistoryStrategy(runner()),
         RuntimeCommitStrategy(runner()),

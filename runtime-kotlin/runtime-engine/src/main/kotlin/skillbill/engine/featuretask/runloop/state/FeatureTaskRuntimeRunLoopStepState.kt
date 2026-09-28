@@ -130,13 +130,14 @@ internal class FeatureTaskRuntimeRunLoopStepState(
   }
 
   override fun prepareReviewBriefing(
+    iteration: Int,
     prompt: PhaseStepPromptSource,
     input: GoalSubtaskReviewInput,
   ) {
     PhaseLaunchPreparation.prepareLaunchForCapture(
       environment,
       run.copy(goalReviewInput = input),
-      null,
+      iteration,
       null,
       prompt,
     )

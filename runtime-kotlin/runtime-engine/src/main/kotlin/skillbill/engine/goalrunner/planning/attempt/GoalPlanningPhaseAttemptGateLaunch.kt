@@ -75,6 +75,12 @@ internal fun DefaultGoalPlanningSweep.composePlanningPrompt(args: GoalPlanningPr
       agentAddonSelection = phase.request.agentAddonSelection,
       scope = FeatureTaskRuntimeBriefingScope(invariantFields = phase.launch.invariantFields),
     )
+  phase.launch.state.records.recordPhaseBriefing(
+    phase.shared.parentWorkflowId,
+    briefing,
+    null,
+    args.attempt,
+  )
   val basePrompt =
     FeatureTaskRuntimePhasePromptComposer.compose(
       FeatureTaskRuntimePhasePromptComposeInputs(

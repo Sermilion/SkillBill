@@ -15,6 +15,7 @@ import skillbill.engine.featuretask.runloop.settlement.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.engine.featuretask.validation.model.ValidationGateCommandFamily
 import skillbill.engine.featuretask.validation.model.ValidationGateProgressStore
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
@@ -59,14 +60,25 @@ internal fun PhaseAttemptEnvironment.gateChangedPaths(run: PhaseRun): List<Strin
     run,
   ).orEmpty()
 
-internal fun PhaseRunRecords.buildGateProgressStore(): ValidationGateProgressStore =
+internal fun PhaseRunRecords.buildGateProgressStore(
+  family: ValidationGateCommandFamily = ValidationGateCommandFamily.BUILD,
+): ValidationGateProgressStore =
   object : ValidationGateProgressStore {
     override fun persist(
       workflowId: String,
       progress: FeatureTaskRuntimeValidationGateProgress,
-    ) = persistBuildGateProgress(workflowId, progress)
+    ) {
+      when (family) {
+        ValidationGateCommandFamily.BUILD -> persistBuildGateProgress(workflowId, progress)
+        ValidationGateCommandFamily.VALIDATION -> persistValidationGateProgress(workflowId, progress)
+      }
+    }
 
-    override fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress? = loadBuildGateProgress(workflowId)
+    override fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
+      when (family) {
+        ValidationGateCommandFamily.BUILD -> loadBuildGateProgress(workflowId)
+        ValidationGateCommandFamily.VALIDATION -> loadValidationGateProgress(workflowId)
+      }
   }
 
 internal class RuntimeOwnedGateSettlement(

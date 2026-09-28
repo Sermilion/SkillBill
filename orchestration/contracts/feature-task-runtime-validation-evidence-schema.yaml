@@ -6,7 +6,7 @@ additionalProperties: false
 required: [contract_version, results]
 properties:
   contract_version:
-    const: "0.1"
+    const: "0.2"
   results:
     type: array
     minItems: 1

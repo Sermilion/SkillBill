@@ -3,9 +3,11 @@ package skillbill.infrastructure.contracts
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeBuildReceiptSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
 import skillbill.infrastructure.contracts.phaseoutput.FeatureTaskRuntimePhaseOutputStructuralRepair
 import skillbill.infrastructure.contracts.phaseoutput.FeatureTaskRuntimePhaseOutputStructuralRepairDecision
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeBuildReceiptSchemaValidator
@@ -50,6 +52,7 @@ class FeatureTaskRuntimePhaseOutputSchemaValidator : FeatureTaskRuntimePhaseOutp
               )
             }
           validateNestedBuildReceipt(normalized, sourceLabel)
+          validateNestedGateEvidence(normalized, sourceLabel)
           if (decision.evidence == null) {
             FeatureTaskRuntimePhaseOutputValidationResult.AcceptedUnchanged(normalized)
           } else {
@@ -64,6 +67,12 @@ class FeatureTaskRuntimePhaseOutputSchemaValidator : FeatureTaskRuntimePhaseOutp
               payloadFreeReason = error.payloadFreeReason,
               structuralRepairEvidence = decision.evidence,
             )
+        } catch (error: InvalidFeatureTaskRuntimeValidationEvidenceSchemaError) {
+          FeatureTaskRuntimePhaseOutputValidationResult.Rejected(
+            code = FeatureTaskRuntimePhaseOutputFailureCode.SCHEMA_INVALID,
+            reason = "Validation receipt failed its execution evidence contract.",
+            payloadFreeReason = "Validation receipt failed its execution evidence contract.",
+          )
         } catch (error: InvalidFeatureTaskRuntimeBuildReceiptSchemaError) {
           FeatureTaskRuntimePhaseOutputValidationResult.Rejected(
             code = FeatureTaskRuntimePhaseOutputFailureCode.fromWire(error.failureCode),
@@ -141,7 +150,7 @@ class FeatureTaskRuntimePhaseOutputSchemaValidator : FeatureTaskRuntimePhaseOutp
           payloadFreeReason = "produced_outputs must be present for the build phase envelope.",
         )
     val buildReceipt =
-      JsonCodec.anyToStringAnyMap(produced["build_receipt"])
+      JsonCodec.anyToStringAnyMap(produced[ValidationEvidencePayloadKeys.BUILD_RECEIPT])
         ?: throw InvalidFeatureTaskRuntimeBuildReceiptSchemaError(
           sourceLabel = sourceLabel,
           reason = "produced_outputs.build_receipt is required for the build phase envelope.",

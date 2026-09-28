@@ -127,6 +127,9 @@ class FeatureTaskRuntimePhaseRecorder
 
     fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean = phaseState.recordPhaseState(request)
 
+    fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest) =
+      phaseState.recordRequiredPhaseStart(request)
+
     fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
       phaseState.recordCompletedPhase(request)
 
@@ -215,7 +218,8 @@ class FeatureTaskRuntimePhaseRecorder
       workflowId: String,
       briefing: FeatureTaskRuntimePhaseLaunchBriefing,
       sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement? = null,
-    ): Boolean = briefingRecorder.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement)
+      attempt: Int = 1,
+    ) = briefingRecorder.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement, attempt)
 
     fun recordProjectionRejection(
       workflowId: String,

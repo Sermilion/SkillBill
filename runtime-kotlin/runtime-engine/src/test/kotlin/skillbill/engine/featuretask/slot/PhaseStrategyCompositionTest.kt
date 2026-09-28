@@ -18,6 +18,7 @@ import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
@@ -64,6 +65,7 @@ class PhaseStrategyCompositionTest {
       AcceptanceAuditStrategy(runner),
       InlineReviewStrategy(runner),
       PackBuildStrategy(runner),
+      PackValidationStrategy(runner),
       AgentValidateStrategy(runner),
       BoundaryHistoryStrategy(runner),
       RuntimeCommitStrategy(runner),
@@ -110,7 +112,7 @@ class PhaseStrategyCompositionTest {
   }
 
   @Test
-  fun `standalone validation shares goal validate while goal build remains compile only`() {
+  fun `standalone validation selects pack validation while goal gate selections remain distinct`() {
     fun selected(
       definition: SkeletonDefinition,
       gate: FeatureTaskRuntimeQualityGateSelection,
@@ -121,7 +123,7 @@ class PhaseStrategyCompositionTest {
         .resolve(PhaseStrategySelectionFacts(definition, setOf(gate)))
 
     assertEquals(
-      AgentValidateStrategy.ID,
+      PackValidationStrategy.ID,
       selected(SkeletonDefinition.VALIDATION, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
     )
     assertEquals(

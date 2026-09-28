@@ -67,6 +67,9 @@ internal class DurablePhaseRunRecords(
   override fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
     recorder.recordPhaseState(request)
 
+  override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest) =
+    recorder.recordRequiredPhaseStart(request)
+
   override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
     recorder.recordCompletedPhase(request)
 
@@ -129,7 +132,8 @@ internal class DurablePhaseRunRecords(
     workflowId: String,
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
-  ): Boolean = recorder.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement)
+    attempt: Int,
+  ) = recorder.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement, attempt)
 
   override fun recordProjectionRejection(
     workflowId: String,

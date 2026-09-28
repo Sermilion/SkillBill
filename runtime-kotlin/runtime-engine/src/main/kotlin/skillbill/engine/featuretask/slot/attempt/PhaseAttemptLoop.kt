@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.runloop.observability.featureTaskRuntimeStar
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeNonOutputAttempt
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -53,6 +54,11 @@ internal object PhaseAttemptSteps {
       FeatureTaskRuntimeRunLoopPhaseBlocking
         .durableContinuationSegmentCount(recorder, run)
     val nonOutputAttempts = FeatureTaskRuntimeRunLoopPhaseBlocking.durableNonOutputAttempts(state, run)
+    try {
+      PhaseAttemptOnce.persistRequiredStart(this, run, iteration)
+    } catch (rejection: RequiredPhaseWriteRejected) {
+      return PhaseAttemptOnce.blockRequiredWriteRejection(this, run, rejection)
+    }
     prepareFixLoopState(run)?.let { return it }
     val semanticIteration =
       (
