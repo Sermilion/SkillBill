@@ -38,66 +38,50 @@ object PrincipleEnforcementInventory {
       packagePrefix = packagePrefixForModule(moduleName),
       packageCycleBaseline = packageCycleBaselineForModule(moduleName, baselineStem),
       packageCycleGranularity =
-        if (moduleName == "runtime-domain" || moduleName == "runtime-contracts") {
-          ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC
-        } else {
-          ArchitectureScanSupport.PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR
-        },
+      if (moduleName == "runtime-domain" || moduleName == "runtime-contracts") {
+        ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC
+      } else {
+        ArchitectureScanSupport.PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR
+      },
       ambientClockBaseline = ambientClockBaselineForModule(moduleName, baselineStem),
       ambientEnvironmentBaseline = ambientEnvironmentBaselineForModule(moduleName, baselineStem),
       injectDefaultsBaseline = injectDefaultsBaselineForModule(moduleName, baselineStem),
     )
   }
 
-  private fun packagePrefixForModule(moduleName: String): String =
-    when (moduleName) {
-      "runtime-application" -> APPLICATION_PACKAGE_PREFIX
-      "runtime-engine" -> "skillbill.engine."
-      "runtime-cli" -> CLI_PACKAGE_PREFIX
-      "runtime-ports" -> "skillbill.ports."
-      "runtime-mcp" -> "skillbill.mcp."
-      "runtime-core" -> "skillbill.di."
-      else -> RuntimeModuleCatalog.moduleMainPackageRoots[moduleName]?.let { "$it." } ?: "skillbill."
-    }
+  private fun packagePrefixForModule(moduleName: String): String = when (moduleName) {
+    "runtime-application" -> APPLICATION_PACKAGE_PREFIX
+    "runtime-engine" -> "skillbill.engine."
+    "runtime-cli" -> CLI_PACKAGE_PREFIX
+    "runtime-ports" -> "skillbill.ports."
+    "runtime-mcp" -> "skillbill.mcp."
+    "runtime-core" -> "skillbill.di."
+    else -> RuntimeModuleCatalog.moduleMainPackageRoots[moduleName]?.let { "$it." } ?: "skillbill."
+  }
 
-  private fun packageCycleBaselineForModule(
-    moduleName: String,
-    baselineStem: String,
-  ): String =
-    when (moduleName) {
-      "runtime-application" -> "application-package-cycle-baseline.txt"
-      "runtime-cli" -> "runtime-cli-package-cycle-baseline.txt"
-      else -> "$baselineStem-package-cycle-baseline.txt"
-    }
+  private fun packageCycleBaselineForModule(moduleName: String, baselineStem: String): String = when (moduleName) {
+    "runtime-application" -> "application-package-cycle-baseline.txt"
+    "runtime-cli" -> "runtime-cli-package-cycle-baseline.txt"
+    else -> "$baselineStem-package-cycle-baseline.txt"
+  }
 
-  private fun ambientClockBaselineForModule(
-    moduleName: String,
-    baselineStem: String,
-  ): String =
-    when (moduleName) {
-      "runtime-application" -> "runtime-application-ambient-clock-baseline.txt"
-      "runtime-cli" -> "runtime-cli-ambient-clock-baseline.txt"
-      else -> "$baselineStem-ambient-clock-baseline.txt"
-    }
+  private fun ambientClockBaselineForModule(moduleName: String, baselineStem: String): String = when (moduleName) {
+    "runtime-application" -> "runtime-application-ambient-clock-baseline.txt"
+    "runtime-cli" -> "runtime-cli-ambient-clock-baseline.txt"
+    else -> "$baselineStem-ambient-clock-baseline.txt"
+  }
 
-  private fun ambientEnvironmentBaselineForModule(
-    moduleName: String,
-    baselineStem: String,
-  ): String =
+  private fun ambientEnvironmentBaselineForModule(moduleName: String, baselineStem: String): String =
     when (moduleName) {
       "runtime-cli" -> "runtime-cli-ambient-environment-baseline.txt"
       else -> "$baselineStem-ambient-environment-baseline.txt"
     }
 
-  private fun injectDefaultsBaselineForModule(
-    moduleName: String,
-    baselineStem: String,
-  ): String =
-    when (moduleName) {
-      "runtime-application" -> "inject-constructor-defaults-baseline.txt"
-      "runtime-cli" -> "runtime-cli-inject-constructor-defaults-baseline.txt"
-      else -> "$baselineStem-inject-constructor-defaults-baseline.txt"
-    }
+  private fun injectDefaultsBaselineForModule(moduleName: String, baselineStem: String): String = when (moduleName) {
+    "runtime-application" -> "inject-constructor-defaults-baseline.txt"
+    "runtime-cli" -> "runtime-cli-inject-constructor-defaults-baseline.txt"
+    else -> "$baselineStem-inject-constructor-defaults-baseline.txt"
+  }
 
   val cliSharedLeafAreas: Set<String> = setOf("codereview", "kernel", "model")
 
@@ -298,276 +282,277 @@ object PrincipleEnforcementInventory {
     listOf(
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/execution/" +
-            "FeatureTaskRuntimeExecutionPlanCodec.kt",
+        "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/execution/" +
+          "FeatureTaskRuntimeExecutionPlanCodec.kt",
         functionNames = setOf("decode"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/execution/" +
-            "FeatureTaskRuntimeExecutionPlanDecode.kt",
-        functionNames = setOf(
+        "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/execution/" +
+          "FeatureTaskRuntimeExecutionPlanDecode.kt",
+        functionNames =
+        setOf(
           "decodeExecutionPlan", "decodePolicies", "planSlot", "planRevision", "planString",
           "planObject", "planObjects", "planStrings", "invalidPlanValue",
         ),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/slot/execution/" +
-            "FeatureTaskRuntimeExecutionPlanTraversalCodec.kt",
+        "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/execution/" +
+          "FeatureTaskRuntimeExecutionPlanTraversalCodec.kt",
         functionNames = setOf("decodeExecutionPlanTraversal"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
-            "workflow/featuretask/FeatureTaskRuntimeExecutionPlanSchemaValidator.kt",
+        "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
+          "workflow/featuretask/FeatureTaskRuntimeExecutionPlanSchemaValidator.kt",
         functionNames = setOf("read", "write", "validate", "validateInstance", "requireBoundedBytes"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
-            "workflow/featuretask/FeatureTaskRuntimeExecutionPlanCoherence.kt",
+        "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
+          "workflow/featuretask/FeatureTaskRuntimeExecutionPlanCoherence.kt",
         functionNames = setOf("validateExecutionPlanCoherence", "validateExecutionPlanTraversal", "incoherentPlan"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:sqlite")}/src/main/kotlin/" +
-            "skillbill/infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStore.kt",
+        "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:sqlite")}/src/main/kotlin/" +
+          "skillbill/infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStore.kt",
         functionNames =
-          setOf(
-            "decodeControlState",
-            "decodeReviewPolicy",
-            "decodeAcceptances",
-            "decodeExecutionLease",
-            "legacyPausedAt",
-            "booleanOrDefault",
-            "nullableString",
-            "requiredString",
-            "toPositiveLong",
-            "toPositiveIntOrNull",
-            "nonNegativeLongOrDefault",
-          ),
+        setOf(
+          "decodeControlState",
+          "decodeReviewPolicy",
+          "decodeAcceptances",
+          "decodeExecutionLease",
+          "legacyPausedAt",
+          "booleanOrDefault",
+          "nullableString",
+          "requiredString",
+          "toPositiveLong",
+          "toPositiveIntOrNull",
+          "nonNegativeLongOrDefault",
+        ),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/phase/" +
-            "FeatureTaskRuntimePhaseOutputValidationModels.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/phase/" +
+          "FeatureTaskRuntimePhaseOutputValidationModels.kt",
         functionNames =
-          setOf(
-            "fromWire",
-            "fromArtifactMap",
-            "requireRepairEvidenceExactFields",
-            "requireRepairEvidenceLocation",
-            "phaseOutputRepairEvidenceSchemaError",
-          ),
+        setOf(
+          "fromWire",
+          "fromArtifactMap",
+          "requireRepairEvidenceExactFields",
+          "requireRepairEvidenceLocation",
+          "phaseOutputRepairEvidenceSchemaError",
+        ),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/handoff/task/" +
-            "FeatureTaskRuntimeHandoffSourceRef.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/handoff/task/" +
+          "FeatureTaskRuntimeHandoffSourceRef.kt",
         functionNames = setOf("fromWire"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/handoff/task/" +
-            "FeatureTaskRuntimeHandoffProjectionValue.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/handoff/task/" +
+          "FeatureTaskRuntimeHandoffProjectionValue.kt",
         functionNames = setOf("fromWire"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/handoff/task/" +
-            "FeatureTaskRuntimeHandoffModels.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/handoff/task/" +
+          "FeatureTaskRuntimeHandoffModels.kt",
         functionNames = setOf("fromWire"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "task/runtime/run/" +
-            "FeatureTaskRuntimeRunInvariantPromptFields.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
+          "task/runtime/run/" +
+          "FeatureTaskRuntimeRunInvariantPromptFields.kt",
         functionNames = setOf("fromWire"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/core/" +
-            "FeatureTaskRuntimeRepositoryCheckpoint.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/core/" +
+          "FeatureTaskRuntimeRepositoryCheckpoint.kt",
         functionNames = setOf("fromWire"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:skills")}/src/main/kotlin/" +
-            "skillbill/infrastructure/skills/scaffold/platformpack/loader/ShellContentLoaderValidationGate.kt",
+        "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:skills")}/src/main/kotlin/" +
+          "skillbill/infrastructure/skills/scaffold/platformpack/loader/ShellContentLoaderValidationGate.kt",
         functionNames =
-          setOf(
-            "parseValidationGate",
-            "parseValidationGateFindings",
-            "parseCompilerDiagnosticsLocator",
-            "parseExecutedWorkSignal",
-            "requireGateArgv",
-            "optionalGateArgv",
-            "parseSuppressionMarkers",
-          ),
+        setOf(
+          "parseValidationGate",
+          "parseValidationGateFindings",
+          "parseCompilerDiagnosticsLocator",
+          "parseExecutedWorkSignal",
+          "requireGateArgv",
+          "optionalGateArgv",
+          "parseSuppressionMarkers",
+        ),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/review/model/ReviewStageState.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/review/model/ReviewStageState.kt",
         functionNames =
-          setOf(
-            "fromWire",
-            "decodeList",
-          ),
+        setOf(
+          "fromWire",
+          "decodeList",
+        ),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/review/context/model/packet/" +
-            "ReviewRunLaneSegmentAccountingJson.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/review/context/model/packet/" +
+          "ReviewRunLaneSegmentAccountingJson.kt",
         functionNames = setOf("decode", "decodeSegment", "encode"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/persistence/artifact/" +
-            "DurableArtifactMapReader.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/persistence/artifact/" +
+          "DurableArtifactMapReader.kt",
         functionNames = setOf("durableArtifactMapReader"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "task/runtime/goal/" +
-            "FeatureTaskRuntimeGoalContinuationArtifact.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
+          "task/runtime/goal/" +
+          "FeatureTaskRuntimeGoalContinuationArtifact.kt",
         functionNames = setOf("fromArtifactMap"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/phase/" +
-            "FeatureTaskRuntimePhaseLedgerPersistenceModels.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/phase/" +
+          "FeatureTaskRuntimePhaseLedgerPersistenceModels.kt",
         functionNames = setOf("fromArtifactMap", "fromWire", "fromWireValue"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/decomposition/" +
-            "DecompositionManifestWireCodec.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/decomposition/" +
+          "DecompositionManifestWireCodec.kt",
         functionNames =
-          setOf(
-            "decode",
-            "toDecompositionManifest",
-            "toDecompositionSubtask",
-            "decompositionReader",
-          ),
+        setOf(
+          "decode",
+          "toDecompositionManifest",
+          "toDecompositionSubtask",
+          "decompositionReader",
+        ),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/core/" +
-            "FeatureTaskRuntimeResolvedBranch.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/core/" +
+          "FeatureTaskRuntimeResolvedBranch.kt",
         functionNames = setOf("fromArtifactMap"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/handoff/task/" +
-            "FeatureTaskRuntimeHandoffEnvelope.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/handoff/task/" +
+          "FeatureTaskRuntimeHandoffEnvelope.kt",
         functionNames = setOf("fromEnvelopeMap", "projectionFromWire", "fieldFromWire", "handoffReader"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "task/runtime/implementation/" +
-            "FeatureTaskRuntimeImplementationAttemptModels.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
+          "task/runtime/implementation/" +
+          "FeatureTaskRuntimeImplementationAttemptModels.kt",
         functionNames = setOf("fromArtifactMap", "featureTaskRuntimeImplementationAttemptsFromWire"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "task/runtime/goal/" +
-            "FeatureTaskRuntimeGoalContinuationPersistenceModels.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
+          "task/runtime/goal/" +
+          "FeatureTaskRuntimeGoalContinuationPersistenceModels.kt",
         functionNames = setOf("fromArtifactMap"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/core/" +
-            "FeatureTaskRuntimeDecomposeTerminal.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/core/" +
+          "FeatureTaskRuntimeDecomposeTerminal.kt",
         functionNames = setOf("fromArtifactMap"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/phase/" +
-            "FeatureTaskRuntimePhaseRecord.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/phase/" +
+          "FeatureTaskRuntimePhaseRecord.kt",
         functionNames = setOf("fromArtifactMap"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/" +
-            "goalreview/GoalObservabilityModels.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/" +
+          "goalreview/GoalObservabilityModels.kt",
         functionNames = setOf("fromWire"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/goalrunner/model/GoalRunnerAccountingModels.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/goalrunner/model/GoalRunnerAccountingModels.kt",
         functionNames = setOf("fromWire"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/" +
-            "goalreview/GoalObservabilityParsing.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/" +
+          "goalreview/GoalObservabilityParsing.kt",
         functionNames =
-          setOf(
-            "goalObservabilityHistoryFromArtifacts",
-            "goalObservabilityEventFromArtifact",
-            "asGoalWorkflowArtifactMap",
-          ),
+        setOf(
+          "goalObservabilityHistoryFromArtifacts",
+          "goalObservabilityEventFromArtifact",
+          "asGoalWorkflowArtifactMap",
+        ),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/goalreview/" +
-            "GoalSubtaskReviewFindingArtifacts.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/goalreview/" +
+          "GoalSubtaskReviewFindingArtifacts.kt",
         functionNames =
-          setOf(
-            "fromArtifactMap",
-            "decodeWire",
-            "decodeContinuationOnlyWire",
-            "decodeContinuationDirect",
-          ),
+        setOf(
+          "fromArtifactMap",
+          "decodeWire",
+          "decodeContinuationOnlyWire",
+          "decodeContinuationDirect",
+        ),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/goalreview/" +
-            "GoalSubtaskReviewStateDecoding.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/goalreview/" +
+          "GoalSubtaskReviewStateDecoding.kt",
         functionNames =
-          setOf(
-            "reviewStateReader",
-            "toReviewStateMap",
-            "requireOnlyReviewStateKeys",
-          ),
+        setOf(
+          "reviewStateReader",
+          "toReviewStateMap",
+          "requireOnlyReviewStateKeys",
+        ),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/goalreview/" +
-            "GoalObservabilityParsing.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/goalreview/" +
+          "GoalObservabilityParsing.kt",
         functionNames = setOf("goalObservabilityReader", "requireGoalObservabilityContractVersion"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/goalrunner/AttemptLedgerDecoding.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/goalrunner/AttemptLedgerDecoding.kt",
         functionNames =
-          setOf(
-            "decodeDeclaredGoalProgressEvent",
-            "requiredProgressEventKind",
-            "optionalProgressOutcome",
-          ),
+        setOf(
+          "decodeDeclaredGoalProgressEvent",
+          "requiredProgressEventKind",
+          "optionalProgressOutcome",
+        ),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/engine/" +
-            "AttemptLedgerWorkflowDecoding.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/engine/" +
+          "AttemptLedgerWorkflowDecoding.kt",
         functionNames = setOf("decodeWorkflowSteps", "parseWorkflowStepsArray", "decodeWorkflowStepAt"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/engine/" +
-            "WorkflowEngineSnapshotCodec.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/engine/" +
+          "WorkflowEngineSnapshotCodec.kt",
         functionNames = setOf("snapshotViewFrom", "mergeStepUpdates"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/engine/" +
-            "WorkflowEngineSnapshotCodec.kt",
+        "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/engine/" +
+          "WorkflowEngineSnapshotCodec.kt",
         functionNames = setOf("decodeSteps", "decodeObject"),
       ),
     )
@@ -617,6 +602,7 @@ object PrincipleEnforcementInventory {
       "featureTaskPhaseSettlementService",
       "featureTaskRuntimeRunInvariantsSource",
       "featureTaskRuntimeRunner",
+      "featureTaskRuntimeExecutionPlanResolver",
       "featureTaskRuntimeStatusService",
       "featureTaskRuntimeWorkerCoordinator",
       "goalOperatorDecisionService",

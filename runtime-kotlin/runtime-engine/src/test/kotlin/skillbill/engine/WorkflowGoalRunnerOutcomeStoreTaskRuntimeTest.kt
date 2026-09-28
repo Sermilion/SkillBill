@@ -1,5 +1,7 @@
 package skillbill.engine
 
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.testWorkflowSnapshotValidator
@@ -65,11 +67,11 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
           workflowId = "wftr-task-runtime",
           issueKey = "SKILL-64",
           draft =
-            GoalAttemptLedgerEntryDraft(
-              action = GoalAttemptLedgerAction.FINAL_RECONCILED_OUTCOME,
-              timestamp = Instant.parse("2026-06-11T18:28:09Z"),
-              finalReconciledResult = "blocked",
-            ),
+          GoalAttemptLedgerEntryDraft(
+            action = GoalAttemptLedgerAction.FINAL_RECONCILED_OUTCOME,
+            timestamp = Instant.parse("2026-06-11T18:28:09Z"),
+            finalReconciledResult = "blocked",
+          ),
         ),
       )
 
@@ -97,13 +99,13 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
       store.recordWorkerSubtaskRequestOutcomes(
         workflowId = "wftr-task-runtime",
         outcomes =
-          listOf(
-            GoalRunnerWorkerSubtaskRequestOutcome.Rejected(
-              sourceStream = "stdout",
-              reason = GoalRunnerWorkerSubtaskRequestRejectionReason.UNSAFE_PATH,
-              message = "unsafe path",
-            ),
+        listOf(
+          GoalRunnerWorkerSubtaskRequestOutcome.Rejected(
+            sourceStream = "stdout",
+            reason = GoalRunnerWorkerSubtaskRequestRejectionReason.UNSAFE_PATH,
+            message = "unsafe path",
           ),
+        ),
       )
 
     assertTrue(recorded)
@@ -134,9 +136,9 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
         workflowId = "wftr-goal-review",
         state = state,
         rawReviewResult =
-          """
+        """
           {"verdict":"changes_requested","produced_outputs":{}}
-          """.trimIndent(),
+        """.trimIndent(),
       ),
       RUNTIME,
     )
@@ -145,9 +147,9 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
         database = FakeDatabaseSessionFactory(workflows),
         workflowSnapshotValidator = testWorkflowSnapshotValidator,
         artifactPorts =
-          OutcomeStoreTestArtifactPorts(
-            phaseOutputValidator = AlwaysValidValidator,
-          ),
+        OutcomeStoreTestArtifactPorts(
+          phaseOutputValidator = AlwaysValidValidator,
+        ),
       )
 
     assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
@@ -176,9 +178,9 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
         workflowId = "wftr-goal-review-prose",
         state = state,
         rawReviewResult =
-          """
+        """
           [F-001] Major | path="runtime-kotlin/Example.kt" | line=10 | description=example finding in prose.
-          """.trimIndent(),
+        """.trimIndent(),
       ),
       RUNTIME,
     )
@@ -366,7 +368,8 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
   fun `operator resume reopens a running review phase left on a blocked child`() {
     val workflows = InMemoryWorkflowStates()
     workflows.saveFeatureTaskWorkflow(tornBlockedReviewRecord("wftr-torn-review"), RUNTIME)
-    val execution = ExecutionPlanAdmissionFixture(skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition.GOAL_CHILD)
+    val execution =
+      ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD)
     execution.seed(workflows, "wftr-torn-review")
     val store =
       testWorkflowGoalRunnerOutcomeStore(
@@ -380,7 +383,7 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
         preferredPhaseId = "review",
         reason = "Operator resumed the goal after a blocked stop at subtask 9.",
         expectedIdentity = execution.identity("wftr-torn-review"),
-        expectedExecutionPlan = execution.descriptor(),
+        expectedExecutionPlan = ValidatedFeatureTaskRuntimeExecutionPlan.read(execution.encoded, execution.validator),
       ),
     )
 

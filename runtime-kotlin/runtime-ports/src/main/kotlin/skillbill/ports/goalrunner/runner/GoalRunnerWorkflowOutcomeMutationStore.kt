@@ -1,5 +1,6 @@
 package skillbill.ports.goalrunner.runner
 
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReconcileGate
@@ -28,6 +29,6 @@ interface GoalRunnerWorkflowOutcomeMutationStore {
     preferredPhaseId: String,
     reason: String,
     expectedIdentity: FeatureTaskExecutionIdentity,
-    expectedExecutionPlan: Map<String, Any?>,
+    expectedExecutionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
   ): Boolean
 }

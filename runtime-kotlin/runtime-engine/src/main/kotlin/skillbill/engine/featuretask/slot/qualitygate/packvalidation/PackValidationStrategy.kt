@@ -23,7 +23,7 @@ import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildGateCycl
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStepHooks
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedPackValidationPhaseTask
 import skillbill.engine.featuretask.slot.state.PhaseStepState
-import skillbill.engine.featuretask.validation.model.ValidationGateCommandFamily
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -54,34 +54,30 @@ class PackValidationStrategy(override val runner: PhaseRunner) : PhaseStrategySt
     val repair = inputs.validationGateRepair || triage
     return PhaseStepPromptSections(
       taskDirective =
-        if (triage) {
-          packValidationGateTriagePhaseTask(inputs.packCollectAllCommand)
-        } else {
-          runtimeOwnedPackValidationPhaseTask(inputs.packCollectAllCommand)
-        },
+      if (triage) {
+        packValidationGateTriagePhaseTask(inputs.packCollectAllCommand)
+      } else {
+        runtimeOwnedPackValidationPhaseTask(inputs.packCollectAllCommand)
+      },
       runsValidationGate = true,
       stepContext =
-        buildGateFindingsDirective(
-          inputs.validationGateFindings,
-          inputs.validationGateTriagePlan,
-          gateLabel = "validation",
-          commandLabel = null,
-        ),
+      buildGateFindingsDirective(
+        inputs.validationGateFindings,
+        inputs.validationGateTriagePlan,
+        gateLabel = "validation",
+        commandLabel = null,
+      ),
       valueContent = VALIDATE_VALUE_CONTENT,
       settles = false,
       outputContract = gateRepairNoOutputSchemaDirective(stepId, triage).takeIf { repair },
     )
   }
 
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseStepState,
-  ): PhaseOutcome =
-    PackBuildGateCycle(
-      PhaseAttemptScope(run.request, state),
-      stepCall(run, state),
-      ValidationGateCommandFamily.VALIDATION,
-    ).run(run)
+  override fun runStep(run: PhaseRun, state: PhaseStepState): PhaseOutcome = PackBuildGateCycle(
+    PhaseAttemptScope(run.request, state),
+    stepCall(run, state),
+    ValidationGateCommandFamily.VALIDATION,
+  ).run(run)
 
   override fun stepHooks(stepId: String): PhaseStepHooks =
     if (stepId in policies) PackValidationStepHooks else PhaseStepHooks.None

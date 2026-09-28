@@ -2,28 +2,31 @@ package skillbill.engine.goalrunner.execution.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.AgentAddonSelection
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.review.effectiveGoalRunnerReviewPolicy
 import skillbill.engine.goalrunner.review.goalRunnerReviewPolicyMismatch
 import skillbill.engine.goalrunner.status.stopped
+import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
+import skillbill.ports.goalrunner.runner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 @Inject
 class GoalRunnerRunPreparation(
   private val manifestStore: GoalRunnerManifestStore,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
 ) {
-  fun prepareRun(
-    state: GoalRunnerManifestState,
-    request: GoalRunnerRunRequest,
-  ): GoalRunPreparation {
+  fun prepareRun(state: GoalRunnerManifestState, request: GoalRunnerRunRequest): GoalRunPreparation {
     val persistedControl =
       manifestStore.bindRepositoryIdentity(
         state.parentWorkflowId,
@@ -46,6 +49,26 @@ class GoalRunnerRunPreparation(
     )
   }
 
+  fun existingChildExecutionPlanAdmission(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ): GoalRunnerChildExecutionPlanAdmission? {
+    val subtaskId = state.manifest.currentSubtaskIntent.subtaskId
+    val workflowId = state.manifest.workflowIdFor(subtaskId)?.takeIf(String::isNotBlank) ?: return null
+    val reviewMode = manifestStore.reviewPolicy(state.parentWorkflowId)?.codeReviewMode
+      ?: effectiveGoalRunnerReviewPolicy(request.codeReviewMode, null).codeReviewMode
+    val plan = executionPlans.resolveCreation(
+      repoRoot = request.repoRoot,
+      definition = SkeletonDefinition.GOAL_CHILD,
+      reviewMode = reviewMode,
+      qualityGate = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, subtaskId),
+      validationDepth = ValidationDepth.FULL,
+      timeout = request.timeout,
+      workflowId = workflowId,
+    )
+    return GoalRunnerChildExecutionPlanAdmission(workflowId, plan)
+  }
+
   private fun stopAfterPolicyMismatch(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
@@ -62,8 +85,8 @@ class GoalRunnerRunPreparation(
           subtaskId = state.manifest.currentSubtaskIntent.subtaskId,
           reason = GoalRunnerStopReason.BLOCKED,
           blockedReason =
-            "Cannot change stop-after subtask policy on goal resume: parent workflow " +
-              "'${state.parentWorkflowId}' is pinned to subtask $persisted.",
+          "Cannot change stop-after subtask policy on goal resume: parent workflow " +
+            "'${state.parentWorkflowId}' is pinned to subtask $persisted.",
           workflowId = state.parentWorkflowId,
           lastResumableStep = "preplan",
         ),
@@ -102,15 +125,14 @@ class GoalRunnerRunPreparation(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
     persistedControl: GoalRunnerControlState,
-  ): GoalRunnerControlState =
-    if (request.stopAfterSubtaskId != null && persistedControl.stopAfterSubtaskId == null) {
-      manifestStore.persistStopAfterSubtask(
-        state.parentWorkflowId,
-        request.stopAfterSubtaskId,
-      )
-    } else {
-      persistedControl
-    }
+  ): GoalRunnerControlState = if (request.stopAfterSubtaskId != null && persistedControl.stopAfterSubtaskId == null) {
+    manifestStore.persistStopAfterSubtask(
+      state.parentWorkflowId,
+      request.stopAfterSubtaskId,
+    )
+  } else {
+    persistedControl
+  }
 
   private fun resumeForRun(
     state: GoalRunnerManifestState,
@@ -125,11 +147,11 @@ class GoalRunnerRunPreparation(
       }
     return resumedState.copy(
       controlState =
-        if (clearsPause) {
-          manifestStore.controlState(state.parentWorkflowId)
-        } else {
-          effectiveControl
-        },
+      if (clearsPause) {
+        manifestStore.controlState(state.parentWorkflowId)
+      } else {
+        effectiveControl
+      },
     )
   }
 

@@ -1,21 +1,15 @@
 package skillbill.engine.featuretask.slot
 
-import kotlin.test.Test
-import kotlin.test.assertContentEquals
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
 import skillbill.contracts.JsonCodec
 import skillbill.engine.ExecutionPlanAdmissionFixture
-import skillbill.engine.featuretask.slot.execution.EffectiveGatePolicyInputs
-import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeEffectivePolicies
-import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionPlanCodec
-import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionPlanCompatibility
-import skillbill.engine.featuretask.slot.execution.effectivePolicyDigest
+import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeEffectivePolicies
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
+import skillbill.engine.featuretask.lifecycle.execution.effectivePolicyDigest
 import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
-import skillbill.engine.featuretask.validation.model.ValidationGateCommandFamily
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
@@ -31,6 +25,12 @@ import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedExecutionPolicy
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import kotlin.test.Test
+import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 class FeatureTaskRuntimeEffectivePoliciesTest {
@@ -38,18 +38,22 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
   fun `durable producer refuses coherent traversal overrides without a supported semantic mapping`() {
     val fixture = ExecutionPlanAdmissionFixture()
     val plan = fixture.plan
-    val changed = plan.withTraversal(plan.traversal.copy(
-      backwardEdges = plan.traversal.backwardEdges.mapIndexed { index, edge ->
-        if (index == 0) edge.copy(perEdgeCap = (edge.perEdgeCap ?: 1) + 1) else edge
-      },
-    ))
+    val changed = plan.withTraversal(
+      plan.traversal.copy(
+        backwardEdges = plan.traversal.backwardEdges.mapIndexed { index, edge ->
+          if (index == 0) edge.copy(perEdgeCap = (edge.perEdgeCap ?: 1) + 1) else edge
+        },
+      ),
+    )
     assertNotEquals(plan.traversal, changed.traversal)
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
       fixture.codec.encodeExecution(changed, fixture.inputs)
     }
-    val encoded = fixture.codec.encode(changed.withEffectivePolicies(
-      FeatureTaskRuntimeEffectivePolicies.resolve(changed, fixture.inputs),
-    ))
+    val encoded = fixture.codec.encode(
+      changed.withEffectivePolicies(
+        FeatureTaskRuntimeEffectivePolicies.resolve(changed, fixture.inputs),
+      ),
+    )
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
       fixture.compatibility.requireSupportedExecution(encoded, fixture.inputs)
     }
@@ -60,7 +64,10 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
   fun `supported execution preserves every effective policy and rejects omitted changed or unsupported policies`() {
     val original = codec.encodeExecution(plan, inputs)
     val restored = compatibility.requireSupportedExecution(original, inputs)
-    assertEquals(FeatureTaskRuntimeEffectivePolicies.resolve(plan, inputs).sortedBy { it.id }, restored.effectivePolicies)
+    assertEquals(
+      FeatureTaskRuntimeEffectivePolicies.resolve(plan, inputs).sortedBy { it.id },
+      restored.effectivePolicies,
+    )
     assertEquals(plan.traversal, restored.traversal)
     assertEquals(plan.dispatchStrategyByStep, restored.dispatchStrategyByStep)
     assertContentEquals(original, codec.encode(restored))
@@ -68,12 +75,25 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
       compatibility.requireSupportedExecution(codec.encode(plan), inputs)
     }
     assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
-      compatibility.requireSupportedExecution(codec.encode(restored.withEffectivePolicies(
-        restored.effectivePolicies + ResolvedExecutionPolicy("unknown-policy", 1, "a".repeat(64)),
-      )), inputs)
+      compatibility.requireSupportedExecution(
+        codec.encode(
+          restored.withEffectivePolicies(
+            restored.effectivePolicies + ResolvedExecutionPolicy("unknown-policy", 1, "a".repeat(64)),
+          ),
+        ),
+        inputs,
+      )
     }
     restored.effectivePolicies.forEach { selected ->
-      val changed = restored.effectivePolicies.map { if (it == selected) it.copy(semanticDigest = "0".repeat(64)) else it }
+      val changed = restored.effectivePolicies.map {
+        if (it == selected) {
+          it.copy(
+            semanticDigest = "0".repeat(64),
+          )
+        } else {
+          it
+        }
+      }
       assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
         compatibility.requireSupportedExecution(codec.encode(restored.withEffectivePolicies(changed)), inputs)
       }
@@ -82,9 +102,14 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
         compatibility.requireSupportedExecution(codec.encode(restored.withEffectivePolicies(revised)), inputs)
       }
       assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
-        compatibility.requireSupportedExecution(codec.encode(restored.withEffectivePolicies(
-          restored.effectivePolicies - selected,
-        )), inputs)
+        compatibility.requireSupportedExecution(
+          codec.encode(
+            restored.withEffectivePolicies(
+              restored.effectivePolicies - selected,
+            ),
+          ),
+          inputs,
+        )
       }
     }
     assertContentEquals(original, codec.encode(restored))
@@ -97,7 +122,14 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
       gradleWrapper = null,
       declaration = declaration.copy(
         collectAllFullGateCommand = listOf("runtime/gradlew", "-p", "runtime", "check", "--continue"),
-        cacheBypassingCollectAllFullGateCommand = listOf("runtime/gradlew", "-p", "runtime", "check", "--continue", "--rerun-tasks"),
+        cacheBypassingCollectAllFullGateCommand = listOf(
+          "runtime/gradlew",
+          "-p",
+          "runtime",
+          "check",
+          "--continue",
+          "--rerun-tasks",
+        ),
         suppressionMarkers = declaration.suppressionMarkers.reversed(),
         findings = declaration.findings.copy(artifactGlobs = declaration.findings.artifactGlobs.reversed()),
       ),
@@ -111,8 +143,12 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
       inputs.copy(phaseTimeoutMillis = 0),
       inputs.copy(commandFamily = ValidationGateCommandFamily.BUILD),
       inputs.copy(declaration = null),
-      inputs.copy(declaration = declaration.copy(collectAllFullGateCommand = listOf("./gradlew", "--continue", "check"))),
-      inputs.copy(declaration = declaration.copy(cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "check"))),
+      inputs.copy(
+        declaration = declaration.copy(collectAllFullGateCommand = listOf("./gradlew", "--continue", "check")),
+      ),
+      inputs.copy(
+        declaration = declaration.copy(cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "check")),
+      ),
       inputs.copy(declaration = declaration.copy(findings = declaration.findings.copy(executedWork = null))),
       inputs.copy(declaration = declaration.copy(suppressionMarkers = emptyList())),
     )
@@ -146,9 +182,13 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
     assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> {
       validator.write(duplicate, "duplicate policy")
     }
-    val maximum = resolved.withEffectivePolicies((1..254).map { ResolvedExecutionPolicy("policy-$it", 1, "a".repeat(64)) })
+    val maximum = resolved.withEffectivePolicies(
+      (1..254).map { ResolvedExecutionPolicy("policy-$it", 1, "a".repeat(64)) },
+    )
     assertEquals(254, codec.decode(codec.encode(maximum)).effectivePolicies.size)
-    val excessive = maximum.withEffectivePolicies(maximum.effectivePolicies + ResolvedExecutionPolicy("policy-255", 1, "a".repeat(64)))
+    val excessive = maximum.withEffectivePolicies(
+      maximum.effectivePolicies + ResolvedExecutionPolicy("policy-255", 1, "a".repeat(64)),
+    )
     assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> { codec.encode(excessive) }
     val oversized = inputs.copy(declaration = declaration.copy(suppressionMarkers = listOf("x".repeat(65536))))
     assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> { codec.encodeExecution(plan, oversized) }
@@ -165,9 +205,17 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
       error("Descriptor admission cannot launch execution")
   })
   private val registry = PhaseStrategyRegistry(listOf(strategy))
-  private val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, mapOf(
-    SkeletonDefinition.VALIDATION to mapOf(PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(strategy.strategyId)),
-  )))
+  private val lookup = PhaseStrategyLookup(
+    registry,
+    PhaseStrategySelection(
+      registry,
+      mapOf(
+        SkeletonDefinition.VALIDATION to mapOf(
+          PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(strategy.strategyId),
+        ),
+      ),
+    ),
+  )
   private val plan = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()))
   private val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
   private val declaration = ValidationGateDeclaration(
@@ -184,6 +232,11 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
     suppressionMarkers = listOf("@Suppress", "noinspection"),
   )
   private val inputs = EffectiveGatePolicyInputs(
-    ValidationGateCommandFamily.VALIDATION, "kotlin", declaration, "runtime/gradlew", ValidationDepth.FULL, 60000,
+    ValidationGateCommandFamily.VALIDATION,
+    "kotlin",
+    declaration,
+    "runtime/gradlew",
+    ValidationDepth.FULL,
+    60000,
   )
 }

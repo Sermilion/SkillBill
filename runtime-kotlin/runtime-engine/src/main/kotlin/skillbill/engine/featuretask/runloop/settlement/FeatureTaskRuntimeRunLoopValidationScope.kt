@@ -7,8 +7,8 @@ import skillbill.engine.featuretask.runloop.core.RepositoryCheckpointResolutionA
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutputVerification
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
-import skillbill.engine.featuretask.validation.model.ValidationGateCyclePhase
 import skillbill.error.featuretask.PhaseValidationScopeError
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind

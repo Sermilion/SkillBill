@@ -17,6 +17,16 @@ class PlanningProjectionNoopValidatorGuardTest {
 
   private val permittedConsumers: Map<String, String> =
     mapOf(
+      "WorkerTakeoverFencingTest.kt" to
+        "Worker lease fencing uses real execution-plan validation; planning payload shape is outside this test.",
+      "CheckpointHistoryRefusalTest.kt" to
+        "Tests retained checkpoint history without accepting or executing planning outputs.",
+      "QuarantinedProducerRecoveryRefusalTest.kt" to
+        "Tests immutable receipt evidence and recovery boundaries with real execution-plan validation.",
+      "FeatureTaskContinuationAdmissionTest.kt" to
+        "Tests transactional continuation admission with real execution-plan validation.",
+      "FeatureTaskExecutionPlanCreationTest.kt" to
+        "Tests atomic descriptor and planning import persistence; descriptor validation uses the real schema.",
       "FeatureTaskRuntimeRunnerTestSupport.kt" to
         "Shared run-loop harness default; runner-behavior tests do not assert schema-projection " +
         "enforcement (covered by the RealValidator* integration suites).",

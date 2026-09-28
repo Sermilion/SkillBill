@@ -72,7 +72,8 @@ internal fun runtimeOwnedPackValidationPhaseTask(packCommand: String?): String {
   return "Repair every finding from the runtime-owned full validation gate in this session. $gateLine " +
     "Do not run another project-wide validation command and do not emit a validation receipt or gate evidence. " +
     "Do not spawn delegated subagents. After repair, the runtime runs the cache-bypassing full validation command " +
-    "once to verify the repository. Never silence findings with suppressions, baselines, disabled rules, or skipped tests."
+    "once to verify the repository. Never silence findings with suppressions, baselines, disabled rules, " +
+      "or skipped tests."
 }
 
 internal fun packValidationGateTriagePhaseTask(packCommand: String?): String =
@@ -97,10 +98,7 @@ internal fun buildGateTriagePhaseTask(packBuildCommand: String?): String {
     "Return prose guidance only; do not fix code or emit build_receipt, gate_run_count, or gate evidence."
 }
 
-internal fun gateRepairNoOutputSchemaDirective(
-  stepName: String,
-  triage: Boolean = false,
-): String {
+internal fun gateRepairNoOutputSchemaDirective(stepName: String, triage: Boolean = false): String {
   if (triage) {
     return """
       ## Gate triage — optional capture surface, no phase-output schema
@@ -110,7 +108,7 @@ internal fun gateRepairNoOutputSchemaDirective(
       When you can recommend a repair shape, you may emit produced_outputs.value (a JSON string) carrying
       validation_repair_plan prose with suggested fields per item: item_id, module, rule_or_task, location,
       failure_summary, fix_intent. Malformed or missing capture is fine; repair still runs without it.
-      """.trimIndent()
+    """.trimIndent()
   }
   return """
     ## Gate repair — prose only, no phase-output schema
@@ -133,7 +131,7 @@ internal fun gateRepairNoOutputSchemaDirective(
     the finding). Stop when done; the runtime re-runs the pack gate.
     Never silence findings with @Suppress, @file:Suppress, baselines, disabled rules, weakened
     configuration, or skipped tests — fix the root cause instead.
-    """.trimIndent()
+  """.trimIndent()
 }
 
 internal fun buildGateFindingsDirective(

@@ -42,7 +42,7 @@ class FeatureTaskRuntimeMeasuredFactsTest {
           ),
           core = RunnerHarnessCore(launcher = forgingLauncher(), agentAssignment = phasePerAgentAssignment()),
         )
-      harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+      harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
       harness.seedPhase("preplan", "completed", 1, phaseAgent("preplan"), PREPLAN_OUTPUT)
       harness.seedPhase("plan", "completed", 1, phaseAgent("plan"), PLAN_OUTPUT)
       harness.seedPhase("implement", "completed", 1, phaseAgent("implement"), IMPLEMENT_OUTPUT)
@@ -93,8 +93,8 @@ class FeatureTaskRuntimeMeasuredFactsTest {
         telemetryRunnerHarness(
           launcher = launcher,
           runtimeConfig =
-            sqliteRunConfig(git, repoRoot, launcher, goalContinuation = null)
-              .copy(pullRequestIdentityLookup = lookup),
+          sqliteRunConfig(git, repoRoot, launcher, goalContinuation = null)
+            .copy(pullRequestIdentityLookup = lookup),
           databaseFactory = { SlotBaselineFullRunCapture.sqliteDatabase(databaseHome) },
         )
 
@@ -158,45 +158,42 @@ class FeatureTaskRuntimeMeasuredFactsTest {
     }
   }
 
-  private fun goalChild(): FeatureTaskRuntimeGoalContinuationContext =
-    FeatureTaskRuntimeGoalContinuationContext(
-      parentIssueKey = RUNNER_TEST_ISSUE_KEY,
-      subtaskId = 5,
-      subtaskName = "measured write_history and pr facts",
-      goalBranch = GOAL_BRANCH,
-      suppressPr = true,
-      parentWorkflowId = "wfl-parent",
-      reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
-    )
+  private fun goalChild(): FeatureTaskRuntimeGoalContinuationContext = FeatureTaskRuntimeGoalContinuationContext(
+    parentIssueKey = RUNNER_TEST_ISSUE_KEY,
+    subtaskId = 5,
+    subtaskName = "measured write_history and pr facts",
+    goalBranch = GOAL_BRANCH,
+    suppressPr = true,
+    parentWorkflowId = "wfl-parent",
+    reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
+  )
 
   private fun sqliteRunConfig(
     git: RecordingWorkflowGitOperations,
     repoRoot: Path,
     launcher: RuntimeRecordingLauncher,
     goalContinuation: FeatureTaskRuntimeGoalContinuationContext?,
-  ): RuntimeHarnessConfig =
-    RuntimeHarnessConfig(
-      branchSetup =
-        BranchSetupTestConfig(gitOperations = git, specReference = SlotBaselineFullRunCapture.SPEC_REFERENCE),
-      repoRoot = repoRoot,
-      goalContinuation = goalContinuation,
-      agentAssignment = phasePerAgentAssignment(),
-      validationGateRunner =
-        object : ValidationGateRunner {
-          override fun run(request: ValidationGateRunRequest) = passed()
-        },
-      launcher = launcher,
-    )
+  ): RuntimeHarnessConfig = RuntimeHarnessConfig(
+    branchSetup =
+    BranchSetupTestConfig(gitOperations = git, specReference = SlotBaselineFullRunCapture.SPEC_REFERENCE),
+    repoRoot = repoRoot,
+    goalContinuation = goalContinuation,
+    agentAssignment = phasePerAgentAssignment(),
+    validationGateRunner =
+    object : ValidationGateRunner {
+      override fun run(request: ValidationGateRunRequest) = passed()
+    },
+    launcher = launcher,
+  )
 
-  private fun forgingLauncher(): RuntimeRecordingLauncher =
-    RuntimeRecordingLauncher { request ->
-      when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
-        "audit" -> facts(auditSatisfiedOutput())
-        "write_history" -> facts(FORGED_WRITE_HISTORY_OUTPUT)
-        "pr" -> facts(FORGED_PR_OUTPUT)
-        else -> facts(defaultPhaseOutput(request))
-      }
+  private fun forgingLauncher(): RuntimeRecordingLauncher = RuntimeRecordingLauncher { request ->
+    when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
+      "audit" -> facts(auditSatisfiedOutput())
+      "write_history" -> facts(FORGED_WRITE_HISTORY_OUTPUT)
+      "pr" -> facts(FORGED_PR_OUTPUT)
+      else -> facts(defaultPhaseOutput(request))
     }
+  }
 
   private fun measuredFacts(outputArtifact: String): Map<String, Any?> {
     val envelope = JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(outputArtifact))

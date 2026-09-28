@@ -6,13 +6,14 @@ import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
+import java.math.BigInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 class FeatureTaskRuntimeExecutionPlanCoherenceTest {
   @Test
@@ -27,7 +28,7 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
       "duplicate selected ownership" to { plan ->
         plan.rows(Keys.SELECTED_STRATEGIES).objectAt(1).rows(Keys.SELECTED_STEPS).add("implement")
       },
-      "missing dispatch" to { plan -> plan.rows(Keys.DISPATCH_OWNERSHIP).remove(0); Unit },
+      "missing dispatch" to { plan -> plan.rows(Keys.DISPATCH_OWNERSHIP).remove(0) },
       "duplicate dispatch" to { plan ->
         plan.rows(Keys.DISPATCH_OWNERSHIP).add(plan.rows(Keys.DISPATCH_OWNERSHIP)[0].deepCopy<JsonNode>())
       },
@@ -37,7 +38,7 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
       "wrong dispatch owner" to { plan ->
         plan.rows(Keys.DISPATCH_OWNERSHIP).objectAt(0).put(Keys.STRATEGY_ID, "private-payload")
       },
-      "missing policy" to { plan -> plan.rows(Keys.STEP_POLICIES).remove(0); Unit },
+      "missing policy" to { plan -> plan.rows(Keys.STEP_POLICIES).remove(0) },
       "duplicate resume policy" to { plan ->
         plan.rows(Keys.RESUME_INTERPRETATIONS).add(plan.rows(Keys.RESUME_INTERPRETATIONS)[0].deepCopy<JsonNode>())
       },
@@ -118,7 +119,10 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
   @Test
   fun `canonicalization preserves edge order and distinguishes absent from empty and null`() {
     val first = mapper.createObjectNode().put(Keys.FROM_STEP, "review").put(Keys.DESTINATION_STEP, "implement_fix")
-    val second = mapper.createObjectNode().put(Keys.FROM_STEP, "verify_findings").put(Keys.DESTINATION_STEP, "implement")
+    val second = mapper.createObjectNode().put(
+      Keys.FROM_STEP,
+      "verify_findings",
+    ).put(Keys.DESTINATION_STEP, "implement")
     val ordered = descriptor().apply { traversal().rows(Keys.BACKWARD_EDGES).removeAll().add(first).add(second) }
     val reversed = ordered.deepCopy().apply { traversal().reverseRows(Keys.BACKWARD_EDGES) }
     assertNotEquals(canonicalExecutionPlan(ordered), canonicalExecutionPlan(reversed))
@@ -136,18 +140,50 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
   fun `production reader and producer enforce collection identifier revision and digest limits`() {
     val cases = linkedMapOf<String, (ObjectNode) -> Unit>(
       "unknown governed field" to { it.put("unrecognized", true) },
-      "unknown effective setting" to { it.path(Keys.EFFECTIVE_POLICY_SETTINGS).put("unrecognized", true) },
-      "missing validation depth" to { it.path(Keys.EFFECTIVE_POLICY_SETTINGS).remove(Keys.VALIDATION_DEPTH) },
-      "unsupported validation depth" to { it.path(Keys.EFFECTIVE_POLICY_SETTINGS).put(Keys.VALIDATION_DEPTH, "shallow") },
-      "negative phase timeout" to { it.path(Keys.EFFECTIVE_POLICY_SETTINGS).put(Keys.PHASE_TIMEOUT_MILLIS, -1) },
-      "phase timeout overflow" to { it.path(Keys.EFFECTIVE_POLICY_SETTINGS).put(Keys.PHASE_TIMEOUT_MILLIS, Long.MAX_VALUE.toBigInteger().add(java.math.BigInteger.ONE)) },
-      "fractional phase timeout" to { it.path(Keys.EFFECTIVE_POLICY_SETTINGS).put(Keys.PHASE_TIMEOUT_MILLIS, 1.5) },
-      "identifier exceeds 128 ASCII characters" to { it.rows(Keys.SELECTED_STRATEGIES).objectAt(0).put(Keys.STRATEGY_ID, "a".repeat(129)) },
+      "unknown effective setting" to {
+        (
+          it.path(
+            Keys.EFFECTIVE_POLICY_SETTINGS,
+          ) as ObjectNode
+          ).put("unrecognized", true)
+      },
+      "missing validation depth" to {
+        (
+          it.path(
+            Keys.EFFECTIVE_POLICY_SETTINGS,
+          ) as ObjectNode
+          ).remove(Keys.VALIDATION_DEPTH)
+      },
+      "unsupported validation depth" to {
+        (it.path(Keys.EFFECTIVE_POLICY_SETTINGS) as ObjectNode).put(Keys.VALIDATION_DEPTH, "shallow")
+      },
+      "negative phase timeout" to {
+        (it.path(Keys.EFFECTIVE_POLICY_SETTINGS) as ObjectNode).put(Keys.PHASE_TIMEOUT_MILLIS, -1)
+      },
+      "phase timeout overflow" to {
+        (
+          it.path(
+            Keys.EFFECTIVE_POLICY_SETTINGS,
+          ) as ObjectNode
+          ).put(Keys.PHASE_TIMEOUT_MILLIS, Long.MAX_VALUE.toBigInteger().add(BigInteger.ONE))
+      },
+      "fractional phase timeout" to {
+        (it.path(Keys.EFFECTIVE_POLICY_SETTINGS) as ObjectNode).put(Keys.PHASE_TIMEOUT_MILLIS, 1.5)
+      },
+      "identifier exceeds 128 ASCII characters" to {
+        it.rows(Keys.SELECTED_STRATEGIES).objectAt(0).put(Keys.STRATEGY_ID, "a".repeat(129))
+      },
       "non ASCII identifier" to { it.rows(Keys.SELECTED_STRATEGIES).objectAt(0).put(Keys.STRATEGY_ID, "stratégie") },
       "zero revision" to { (it.path(Keys.DEFINITION) as ObjectNode).put(Keys.SEMANTIC_REVISION, 0) },
       "overflow revision" to { (it.path(Keys.DEFINITION) as ObjectNode).put(Keys.SEMANTIC_REVISION, 2147483648L) },
-      "overflow attempt cap" to { it.traversal().rows(Keys.BACKWARD_EDGES).objectAt(0).put(Keys.PER_EDGE_CAP, 2147483648L) },
-      "overflow warning threshold" to { it.traversal().rows(Keys.BACKWARD_EDGES).objectAt(0).put(Keys.WARN_AFTER_ITERATIONS, 2147483648L) },
+      "overflow attempt cap" to {
+        it.traversal().rows(
+          Keys.BACKWARD_EDGES,
+        ).objectAt(0).put(Keys.PER_EDGE_CAP, 2147483648L)
+      },
+      "overflow warning threshold" to {
+        it.traversal().rows(Keys.BACKWARD_EDGES).objectAt(0).put(Keys.WARN_AFTER_ITERATIONS, 2147483648L)
+      },
       "uppercase digest" to { it.rows(Keys.STEP_POLICIES).objectAt(0).put(Keys.SEMANTIC_DIGEST, "A".repeat(64)) },
       "short digest" to { it.rows(Keys.STEP_POLICIES).objectAt(0).put(Keys.SEMANTIC_DIGEST, "a".repeat(63)) },
       "too many strategies" to { it.repeatRow(Keys.SELECTED_STRATEGIES, 33) },
@@ -197,7 +233,7 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
         .put(Keys.SEMANTIC_REVISION, Int.MAX_VALUE)
       traversal().rows(Keys.BACKWARD_EDGES).objectAt(0)
         .put(Keys.PER_EDGE_CAP, Int.MAX_VALUE).put(Keys.WARN_AFTER_ITERATIONS, Int.MAX_VALUE)
-      path(Keys.EFFECTIVE_POLICY_SETTINGS).put(Keys.PHASE_TIMEOUT_MILLIS, Long.MAX_VALUE)
+      (path(Keys.EFFECTIVE_POLICY_SETTINGS) as ObjectNode).put(Keys.PHASE_TIMEOUT_MILLIS, Long.MAX_VALUE)
     }
     validate(plan)
   }
@@ -265,23 +301,33 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
         owned.forEach { step ->
           dispatches.addObject().put(Keys.STEP, step).put(Keys.SLOT, slot)
             .put(Keys.STRATEGY_ID, slot).put(Keys.SEMANTIC_REVISION, 1)
-          policies.addObject().put(Keys.STEP, step).put(Keys.IDENTITY, "policy-$step").put(Keys.SEMANTIC_DIGEST, "a".repeat(64))
-          resumes.addObject().put(Keys.STEP, step).put(Keys.IDENTITY, "resume-$step").put(Keys.SEMANTIC_DIGEST, "b".repeat(64))
+          policies.addObject().put(
+            Keys.STEP,
+            step,
+          ).put(Keys.IDENTITY, "policy-$step").put(Keys.SEMANTIC_DIGEST, "a".repeat(64))
+          resumes.addObject().put(
+            Keys.STEP,
+            step,
+          ).put(Keys.IDENTITY, "resume-$step").put(Keys.SEMANTIC_DIGEST, "b".repeat(64))
         }
       }
       putObject(Keys.TRAVERSAL).apply {
         putArray(Keys.FORWARD_STEPS).also { array -> steps.forEach(array::add) }
         putArray(Keys.LOOP_ONLY_STEPS).also { array -> loopOnly.forEach(array::add) }
         putArray(Keys.BACKWARD_EDGES).apply {
-          if (loopOnly.isNotEmpty()) addObject()
-            .put(Keys.FROM_STEP, review.first()).put(Keys.DESTINATION_STEP, loopOnly.first())
-            .put(Keys.VERDICT, "changes_requested").put(Keys.LOOP_ID, "repair")
-            .put(Keys.PER_EDGE_CAP, 1).put(Keys.CAP_EXHAUSTION_BEHAVIOR, "BLOCK")
-            .put(Keys.CAP_SCOPE, "PER_SUBTASK").putNull(Keys.WARN_AFTER_ITERATIONS)
+          if (loopOnly.isNotEmpty()) {
+            addObject()
+              .put(Keys.FROM_STEP, review.first()).put(Keys.DESTINATION_STEP, loopOnly.first())
+              .put(Keys.VERDICT, "changes_requested").put(Keys.LOOP_ID, "repair")
+              .put(Keys.PER_EDGE_CAP, 1).put(Keys.CAP_EXHAUSTION_BEHAVIOR, "BLOCK")
+              .put(Keys.CAP_SCOPE, "PER_SUBTASK").putNull(Keys.WARN_AFTER_ITERATIONS)
+          }
         }
         putArray(Keys.ENTRY_GATES).apply {
-          if (review.isNotEmpty()) addObject().put(Keys.STEP, review.first())
-            .put(Keys.REQUIRED_STEP, implementation.last()).put(Keys.REQUIRED_VERDICT, "advance")
+          if (review.isNotEmpty()) {
+            addObject().put(Keys.STEP, review.first())
+              .put(Keys.REQUIRED_STEP, implementation.last()).put(Keys.REQUIRED_VERDICT, "advance")
+          }
         }
         putArray(Keys.LOOP_ONLY_SUCCESSORS).apply {
           loopOnly.zipWithNext().forEach { (step, successor) ->

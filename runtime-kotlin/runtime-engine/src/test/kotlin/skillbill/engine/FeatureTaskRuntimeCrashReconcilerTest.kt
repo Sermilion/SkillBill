@@ -1,9 +1,10 @@
 package skillbill.engine
 
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import java.nio.file.Path
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.db.DatabaseSessionFactory
@@ -35,9 +36,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 class FeatureTaskRuntimeCrashReconcilerTest {
   private val execution = ExecutionPlanAdmissionFixture()
+
   @Test
   fun `only NotRunning is confirmed dead while ExactLive and ambiguous evidence stay conservative`() {
     assertTrue(FeatureTaskRuntimeProcessInspection.NotRunning.isConfirmedDead())
@@ -100,9 +103,9 @@ class FeatureTaskRuntimeCrashReconcilerTest {
       dbPathOverride = root.resolve("runtime.db").toString(),
       environment = emptyMap(),
     )
-    val rootA = java.nio.file.Path.of("/tmp/crash-repo-a")
-    val rootB = java.nio.file.Path.of("/tmp/crash-repo-b")
-    val rootC = java.nio.file.Path.of("/tmp/crash-repo-c")
+    val rootA = Path.of("/tmp/crash-repo-a")
+    val rootB = Path.of("/tmp/crash-repo-b")
+    val rootC = Path.of("/tmp/crash-repo-c")
     val idA = "wftr-crash-repo-a"
     val idB = "wftr-crash-repo-b"
     val idC = "wftr-crash-repo-c"
@@ -112,10 +115,10 @@ class FeatureTaskRuntimeCrashReconcilerTest {
         Triple(idB, rootB, "wrapper-b" to null),
         Triple(idC, rootC, "wrapper-a" to null),
       ).forEach { (workflowId, repositoryRoot, policy) ->
-        database.transaction { unit ->
+        database.selfManagedWrite { unit ->
           val inputs = execution.inputsFor(policy.first, policy.second)
           val identity = execution.identity(workflowId).copy(
-            repositoryIdentity = skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX +
+            repositoryIdentity = FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX +
               repositoryRoot.toAbsolutePath().normalize(),
           )
           execution.seed(
@@ -155,7 +158,7 @@ class FeatureTaskRuntimeCrashReconcilerTest {
       val identityA = database.read { requireNotNull(it.workflowStates.getFeatureTaskExecutionIdentity(idA)) }
       val identityB = database.read { requireNotNull(it.workflowStates.getFeatureTaskExecutionIdentity(idB)) }
       val leaseC = database.read { requireNotNull(it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(idC)) }
-      val resolvedRoots = mutableListOf<java.nio.file.Path>()
+      val resolvedRoots = mutableListOf<Path>()
       val wrappers = mapOf(rootA to "wrapper-a", rootB to "wrapper-b", rootC to "wrapper-c")
       val reconciler = FeatureTaskRuntimeCrashReconciler(
         database,
@@ -232,11 +235,13 @@ class FeatureTaskRuntimeCrashReconcilerTest {
   }
 
   @Test
-  fun `crash reconciliation refuses incompatible and identityless candidates before changing lease or workflow state`() {
+  fun `crash recovery refuses incompatible or missing identity before mutation`() {
     val repository = crashCandidateRepository(execution)
     val incompatibleId = "wftr-incompatible-crash"
     val incompatibleDescriptor = execution.descriptor().toMutableMap().apply {
-      val strategies = (get(Keys.SELECTED_STRATEGIES) as List<Map<String, Any?>>).mapIndexed { index, strategy ->
+      val strategies = (get(Keys.SELECTED_STRATEGIES) as List<*>).map {
+        requireNotNull(JsonCodec.anyToStringAnyMap(it))
+      }.mapIndexed { index, strategy ->
         if (index == 0) strategy + (Keys.SEMANTIC_REVISION to 99) else strategy
       }
       put(Keys.SELECTED_STRATEGIES, strategies)
@@ -249,7 +254,7 @@ class FeatureTaskRuntimeCrashReconcilerTest {
     )
     repository.saveFeatureTaskWorkflow(incompatibleRow, RUNTIME)
     repository.saveFeatureTaskExecutionIdentity(execution.identity(incompatibleId))
-    val incompatibleLease = admittedLease.copy(
+    val incompatibleLease = requireNotNull(repository.getFeatureTaskRuntimeWorkerOwnership(WORKFLOW_ID)).copy(
       workflowId = incompatibleId,
       ownerToken = "incompatible-owner-token",
     )
@@ -259,10 +264,14 @@ class FeatureTaskRuntimeCrashReconcilerTest {
       incompatibleRow.copy(workflowId = identitylessId, artifactsJson = "{}"),
       RUNTIME,
     )
-    repository.seedWorkerOwnership(incompatibleLease.copy(workflowId = identitylessId, ownerToken = "identityless-owner-token"))
+    repository.seedWorkerOwnership(
+      incompatibleLease.copy(workflowId = identitylessId, ownerToken = "identityless-owner-token"),
+    )
     val changedGateId = "wftr-changed-gate-crash"
     val changedGateDescriptor = execution.descriptor().toMutableMap().apply {
-      val policies = (get(Keys.EFFECTIVE_POLICIES) as List<Map<String, Any?>>).map { policy ->
+      val policies = (get(Keys.EFFECTIVE_POLICIES) as List<*>).map {
+        requireNotNull(JsonCodec.anyToStringAnyMap(it))
+      }.map { policy ->
         if (policy[Keys.ID] == "gate-commands") policy + (Keys.SEMANTIC_DIGEST to "0".repeat(64)) else policy
       }
       put(Keys.EFFECTIVE_POLICIES, policies)
@@ -315,8 +324,14 @@ class FeatureTaskRuntimeCrashReconcilerTest {
       environment = emptyMap(),
     )
     try {
-      database.transaction { execution.seed(it.workflowStates, WORKFLOW_ID) }
-      database.transaction { unit ->
+      database.transaction {
+        execution.seed(
+          it.workflowStates,
+          WORKFLOW_ID,
+          descriptor = execution.descriptor(execution.inputsFor(null, 45_000)),
+        )
+      }
+      database.selfManagedWrite { unit ->
         val row = requireNotNull(unit.workflowStates.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME))
         val recordTime = "2026-09-28T12:00:00Z"
         val retainedRecords = mapOf(
@@ -342,7 +357,7 @@ class FeatureTaskRuntimeCrashReconcilerTest {
         val artifacts = row.toSnapshot().artifacts +
           DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
             execution.validator.read(
-              execution.encoded(execution.inputs.copy(phaseTimeoutMillis = 45_000)),
+              execution.encoded(execution.inputsFor(null, 45_000)),
               "crash recovery preservation test",
             ),
           ) +
@@ -401,7 +416,11 @@ class FeatureTaskRuntimeCrashReconcilerTest {
           updatedRow.updatedAt,
         )
       }
-      val before = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME)) }
+      val before = database.read {
+        requireNotNull(
+          it.workflowStates.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME),
+        )
+      }
       val reconciler = FeatureTaskRuntimeCrashReconciler(
         database,
         inspectionSupervisor(FeatureTaskRuntimeProcessInspection.NotRunning),
@@ -478,10 +497,7 @@ class FeatureTaskRuntimeCrashReconcilerTest {
         override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership): FeatureTaskRuntimeProcessInspection =
           error("probe blew up")
 
-        override fun awaitExit(
-          ownership: FeatureTaskRuntimeWorkerOwnership,
-          timeout: Duration,
-        ) = Unit
+        override fun awaitExit(ownership: FeatureTaskRuntimeWorkerOwnership, timeout: Duration) = Unit
 
         override fun terminateGracefully(ownership: FeatureTaskRuntimeWorkerOwnership) = true
 
@@ -513,9 +529,12 @@ class FeatureTaskRuntimeCrashReconcilerTest {
 
   private fun crashCandidateRepository(execution: ExecutionPlanAdmissionFixture): InMemoryRuntimeWorkflowRepository =
     InMemoryRuntimeWorkflowRepository().apply {
-      execution.seed(this, WORKFLOW_ID)
+      execution.seed(this, WORKFLOW_ID, descriptor = execution.descriptor(execution.inputsFor(null, null)))
       val row = requireNotNull(getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME))
-      saveFeatureTaskWorkflow(row.copy(workflowStatus = WorkflowStatus.RUNNING.wireValue, currentStepId = "implement"), RUNTIME)
+      saveFeatureTaskWorkflow(
+        row.copy(workflowStatus = WorkflowStatus.RUNNING.wireValue, currentStepId = "implement"),
+        RUNTIME,
+      )
       seedWorkerOwnership(
         FeatureTaskRuntimeWorkerOwnership(
           workflowId = WORKFLOW_ID,
@@ -536,26 +555,22 @@ class FeatureTaskRuntimeCrashReconcilerTest {
 
   private fun inspectionSupervisor(
     inspection: FeatureTaskRuntimeProcessInspection,
-  ): FeatureTaskRuntimeWorkerSupervisor =
-    object : FeatureTaskRuntimeWorkerSupervisor {
-      override fun currentProcess() = FeatureTaskRuntimeProcessIdentity("h", "b", 1, "birth")
+  ): FeatureTaskRuntimeWorkerSupervisor = object : FeatureTaskRuntimeWorkerSupervisor {
+    override fun currentProcess() = FeatureTaskRuntimeProcessIdentity("h", "b", 1, "birth")
 
-      override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = inspection
+    override fun inspect(ownership: FeatureTaskRuntimeWorkerOwnership) = inspection
 
-      override fun awaitExit(
-        ownership: FeatureTaskRuntimeWorkerOwnership,
-        timeout: Duration,
-      ) = Unit
+    override fun awaitExit(ownership: FeatureTaskRuntimeWorkerOwnership, timeout: Duration) = Unit
 
-      override fun terminateGracefully(ownership: FeatureTaskRuntimeWorkerOwnership) = true
+    override fun terminateGracefully(ownership: FeatureTaskRuntimeWorkerOwnership) = true
 
-      override fun terminateForcibly(ownership: FeatureTaskRuntimeWorkerOwnership) = true
+    override fun terminateForcibly(ownership: FeatureTaskRuntimeWorkerOwnership) = true
 
-      override fun startHeartbeat(
-        plan: FeatureTaskRuntimeHeartbeatPlan,
-        heartbeat: () -> FeatureTaskRuntimeHeartbeatTick,
-      ) = NoopFeatureTaskRuntimeHeartbeat
+    override fun startHeartbeat(
+      plan: FeatureTaskRuntimeHeartbeatPlan,
+      heartbeat: () -> FeatureTaskRuntimeHeartbeatTick,
+    ) = NoopFeatureTaskRuntimeHeartbeat
 
-      override fun pause(durationMillis: Long) = Unit
-    }
+    override fun pause(durationMillis: Long) = Unit
+  }
 }

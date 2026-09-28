@@ -1,13 +1,16 @@
 package skillbill.engine.featuretask.slot
 
+import skillbill.application.FakeDatabaseSessionFactory
+import skillbill.engine.InMemoryRuntimeWorkflowRepository
+import skillbill.engine.featuretask.slot.artifactValue
 import skillbill.engine.ExecutionPlanAdmissionFixture
-import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.featuretask.validation.kotlinPackWithoutGate
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.validation.repoLocalConfig
 import skillbill.engine.featuretask.validation.validationGateTestDeclaration
 import skillbill.engine.featuretask.validation.validationGateTestRepoRoot
-import skillbill.engine.featuretask.validation.model.ValidationGateCommandFamily
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -31,11 +34,23 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
   fun `creation binds routed pack wrapper command family and timeout before accepting a durable descriptor`() {
     val fixture = Fixture()
     val resolver = fixture.resolver()
-    val inputs = resolver.resolveInputs(root, FeatureTaskRuntimeQualityGateSelection.BUILD, ValidationDepth.FULL, 7.minutes)
-    val descriptor = resolver.resolveCreation(root, SkeletonDefinition.GOAL_CHILD, CodeReviewExecutionMode.INLINE,
-      FeatureTaskRuntimeQualityGateSelection.BUILD, ValidationDepth.FULL, 7.minutes)
+    val inputs = resolver.resolveInputs(
+      root,
+      FeatureTaskRuntimeQualityGateSelection.BUILD,
+      ValidationDepth.FULL,
+      7.minutes,
+    )
+    val descriptor = resolver.resolveCreation(
+      root,
+      SkeletonDefinition.GOAL_CHILD,
+      CodeReviewExecutionMode.INLINE,
+      FeatureTaskRuntimeQualityGateSelection.BUILD,
+      ValidationDepth.FULL,
+      7.minutes,
+    )
     val plan = fixture.execution.compatibility.requireSupportedExecution(
-      fixture.execution.validator.write(descriptor.artifactValue, "created descriptor"), inputs,
+      fixture.execution.validator.write(descriptor.artifactValue, "created descriptor"),
+      inputs,
     )
 
     assertEquals("kotlin", inputs.packSlug)
@@ -49,47 +64,103 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
     assertEquals(0, fixture.execution.launches)
 
     val changed = fixture.resolver("other/gradlew").resolveInputs(
-      root, FeatureTaskRuntimeQualityGateSelection.BUILD, ValidationDepth.FULL, 7.minutes,
+      root,
+      FeatureTaskRuntimeQualityGateSelection.BUILD,
+      ValidationDepth.FULL,
+      7.minutes,
     )
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
       fixture.execution.compatibility.requireSupportedExecution(
-        fixture.execution.validator.write(descriptor.artifactValue, "created descriptor"), changed,
+        fixture.execution.validator.write(descriptor.artifactValue, "created descriptor"),
+        changed,
       )
     }
-    val validation = resolver.resolveCreation(root, SkeletonDefinition.STANDALONE, CodeReviewExecutionMode.INLINE,
-      null, ValidationDepth.FULL, 7.minutes)
+    val validation = resolver.resolveCreation(
+      root,
+      SkeletonDefinition.STANDALONE,
+      CodeReviewExecutionMode.INLINE,
+      null,
+      ValidationDepth.FULL,
+      7.minutes,
+    )
     assertNotEquals(descriptor.artifactValue, validation.artifactValue)
   }
 
   @Test
-  fun `creation refuses unreadable inventory ambiguous routing and missing build commands without launching`() {
+  fun `creation refuses unknown routing and records missing build commands for the required gate`() {
     val fixture = Fixture()
     fixture.inventory = WorkflowGitNameListResult.Failed("inventory unavailable")
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
     fixture.inventory = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt", "ios/Main.swift"))
     fixture.packs = fixture.packs + fixture.packs.single().copy(
-      slug = "ios", routingSignals = RoutingSignals(listOf("*.swift"), emptyList(), listOf("*.swift")),
+      slug = "ios",
+      routingSignals = RoutingSignals(listOf("*.swift"), emptyList(), listOf("*.swift")),
     )
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
     fixture.inventory = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
     fixture.packs = listOf(kotlinPackWithoutGate())
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
+    val absent = fixture.execution.codec.decode(fixture.create().encoded())
+    assertEquals(FeatureTaskRuntimeQualityGateSelection.BUILD, absent.qualityGateSelection)
     fixture.packs = fixture.packs.map { it.copy(validationGate = validationGateTestDeclaration) }
-    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
+    val missingCommands = fixture.execution.codec.decode(fixture.create().encoded())
+    assertEquals(FeatureTaskRuntimeQualityGateSelection.BUILD, missingCommands.qualityGateSelection)
+    assertEquals(0, fixture.execution.launches)
+  }
+
+  @Test
+  fun `clean or differently routed checkout resumes the recorded pack but changed commands are rejected`() {
+    val fixture = Fixture()
+    val resolver = fixture.resolver()
+    val descriptor = fixture.create()
+    fixture.execution.seed(fixture.states, "wftr-clean", descriptor = descriptor.artifactValue)
+    fixture.inventory = WorkflowGitNameListResult.Listed(emptyList())
+    val clean = resolver.resolveInputs(
+      root, FeatureTaskRuntimeQualityGateSelection.BUILD, ValidationDepth.FULL, 7.minutes, "wftr-clean",
+    )
+    assertEquals("kotlin", clean.packSlug)
+    val admitted = fixture.execution.admission.admit(fixture.states, "wftr-clean", clean)
+    assertEquals(SkeletonDefinition.GOAL_CHILD.id, admitted.plan.definitionId)
+    assertEquals(descriptor, resolver.resolveCreation(
+      root, SkeletonDefinition.GOAL_CHILD, CodeReviewExecutionMode.INLINE,
+      FeatureTaskRuntimeQualityGateSelection.BUILD, ValidationDepth.FULL, 7.minutes, "wftr-clean",
+    ))
+    fixture.inventory = WorkflowGitNameListResult.Listed(listOf("ios/New.swift"))
+    assertEquals(clean, resolver.resolveInputs(
+      root, FeatureTaskRuntimeQualityGateSelection.BUILD, ValidationDepth.FULL, 7.minutes, "wftr-clean",
+    ))
+    fixture.packs = fixture.packs.map { pack ->
+      pack.copy(validationGate = requireNotNull(pack.validationGate).copy(buildCommand = listOf("other-build")))
+    }
+    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+      resolver.resolveInputs(
+        root, FeatureTaskRuntimeQualityGateSelection.BUILD, ValidationDepth.FULL, 7.minutes, "wftr-clean",
+      )
+    }
     assertEquals(0, fixture.execution.launches)
   }
 
   private class Fixture {
-    val execution = ExecutionPlanAdmissionFixture()
+    val states = InMemoryRuntimeWorkflowRepository()
+    val database = FakeDatabaseSessionFactory(states)
+    val execution = ExecutionPlanAdmissionFixture(
+      SkeletonDefinition.GOAL_CHILD, qualityGate = FeatureTaskRuntimeQualityGateSelection.BUILD,
+    )
     var inventory: WorkflowGitNameListResult = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
     var inventoryRoot: Path? = null
-    var packs = listOf(kotlinPackWithoutGate().copy(validationGate = validationGateTestDeclaration.copy(
-      buildCommand = listOf("./gradlew", "compileKotlin"),
-      cacheBypassingBuildCommand = listOf("./gradlew", "compileKotlin", "--rerun-tasks"),
-    )))
+    var packs = listOf(
+      kotlinPackWithoutGate().copy(
+        validationGate = validationGateTestDeclaration.copy(
+          buildCommand = listOf("./gradlew", "compileKotlin"),
+          cacheBypassingBuildCommand = listOf("./gradlew", "compileKotlin", "--rerun-tasks"),
+        ),
+      ),
+    )
 
     fun resolver(wrapper: String = "runtime/gradlew") = FeatureTaskRuntimeExecutionPlanResolver(
-      execution.strategies, execution.codec, execution.validator, ValidationGateResolver { packs },
+      execution.strategies,
+      execution.codec,
+      execution.validator,
+      ValidationGateResolver { packs },
       object : WorkflowGitOperations by NoopWorkflowGitOperations {
         override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult {
           inventoryRoot = repoRoot
@@ -97,10 +168,18 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         }
       },
       repoLocalConfig(wrapper),
+      database,
+      execution.compatibility,
     )
 
-    fun create() = resolver().resolveCreation(root, SkeletonDefinition.GOAL_CHILD, CodeReviewExecutionMode.INLINE,
-      FeatureTaskRuntimeQualityGateSelection.BUILD, ValidationDepth.FULL, 7.minutes)
+    fun create() = resolver().resolveCreation(
+      root,
+      SkeletonDefinition.GOAL_CHILD,
+      CodeReviewExecutionMode.INLINE,
+      FeatureTaskRuntimeQualityGateSelection.BUILD,
+      ValidationDepth.FULL,
+      7.minutes,
+    )
   }
 
   private companion object {

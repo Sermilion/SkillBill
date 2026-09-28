@@ -61,12 +61,12 @@ class FeatureTaskRuntimeQuarantineRegenerateTest {
       FeatureTaskRuntimeTransitionDeclaration(
         forwardPhaseIds = surviving,
         backwardEdges =
-          FeatureTaskRuntimePhaseWorkflowDefinition.transitions.backwardEdges
-            .filter { it.fromPhaseId in surviving && it.destinationPhaseId in surviving },
+        FeatureTaskRuntimePhaseWorkflowDefinition.transitions.backwardEdges
+          .filter { it.fromPhaseId in surviving && it.destinationPhaseId in surviving },
         loopOnlyPhaseIds = emptySet(),
         entryGates =
-          FeatureTaskRuntimePhaseWorkflowDefinition.transitions.entryGates
-            .filter { it.phaseId in surviving && it.requiredPhaseId in surviving },
+        FeatureTaskRuntimePhaseWorkflowDefinition.transitions.entryGates
+          .filter { it.phaseId in surviving && it.requiredPhaseId in surviving },
       )
     val harness = runnerHarness(RuntimeHarnessConfig(agentAssignment = phasePerAgentAssignment()))
     harness.seedPhase("preplan", "completed", 1, phaseAgent("preplan"), validJsonOutput("preplan"))
@@ -88,7 +88,7 @@ class FeatureTaskRuntimeQuarantineRegenerateTest {
   @Test
   fun `quarantine evidence is append-only retrievable in order and crash-replay idempotent`() {
     val harness = runnerHarness()
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     val first =
       FeatureTaskRuntimeQuarantineEntry(
         producingPhaseId = "implement",
@@ -124,7 +124,7 @@ class FeatureTaskRuntimeQuarantineRegenerateTest {
   @Test
   fun `a pre-change identity-bearing entry decodes with the identity unchanged`() {
     val harness = runnerHarness()
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     val identity = "rod_prechange_identity"
     val artifacts = harness.repository.taskRuntimeArtifacts(WORKFLOW_ID).toMutableMap()
     artifacts[FEATURE_TASK_RUNTIME_QUARANTINED_RECORDS_ARTIFACT_KEY] =

@@ -51,6 +51,12 @@ class ValidationGateResolver(
     }
   }
 
+  fun declaredCandidates(): List<ValidationGateResolution> =
+    installedCatalog.manifests().map { manifest ->
+      manifest.validationGate?.let { ValidationGateResolution.Declared(manifest.slug, it) }
+        ?: ValidationGateResolution.Absent(manifest.slug)
+    } + ValidationGateResolution.Absent(null)
+
   private fun dominantPacks(
     manifests: List<PlatformManifest>,
     routing: ReviewStackRoutingResult,

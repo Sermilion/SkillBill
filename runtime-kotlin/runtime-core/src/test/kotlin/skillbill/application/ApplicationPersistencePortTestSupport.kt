@@ -26,6 +26,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerReq
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.MissingCompositionLayerError
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
@@ -156,52 +157,47 @@ private val FEATURE_TASK_RUNTIME_PHASE_BRIEFINGS_ARTIFACT_KEY =
 private val FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.label()
 
-private fun defaultPortReturn(method: Method): Any? =
-  when {
-    method.returnType == Void.TYPE -> null
-    List::class.java.isAssignableFrom(method.returnType) -> emptyList<Any>()
-    Map::class.java.isAssignableFrom(method.returnType) -> emptyMap<Any, Any>()
-    method.returnType == TYPE -> false
-    method.returnType == Integer.TYPE -> 0
-    method.returnType == LongTYPE -> 0L
-    method.returnType == DoubleTYPE -> 0.0
-    else -> null
-  }
+private fun defaultPortReturn(method: Method): Any? = when {
+  method.returnType == Void.TYPE -> null
+  List::class.java.isAssignableFrom(method.returnType) -> emptyList<Any>()
+  Map::class.java.isAssignableFrom(method.returnType) -> emptyMap<Any, Any>()
+  method.returnType == TYPE -> false
+  method.returnType == Integer.TYPE -> 0
+  method.returnType == LongTYPE -> 0L
+  method.returnType == DoubleTYPE -> 0.0
+  else -> null
+}
 
 internal fun WorkflowService.openTestFeatureTask(
   kind: WorkflowFamilyKind,
   sessionId: String = "",
   currentStepId: String? = null,
   issueKey: String = "SKILL-120",
-): WorkflowOpenResult =
-  openFeatureTask(
-    WorkflowServiceOpenFeatureTaskArgs(
-      kind = kind,
-      sessionId = sessionId,
-      currentStepId = currentStepId,
-      issueKey = issueKey,
-      repositoryIdentity = "repo-root-realpath-v1:/test/repository",
-      governedSpecPath = ".feature-specs/$issueKey/spec.md",
-    ),
-  )
+): WorkflowOpenResult = openFeatureTask(
+  WorkflowServiceOpenFeatureTaskArgs(
+    executionPlan = testExecutionPlan(),
+    kind = kind,
+    sessionId = sessionId,
+    currentStepId = currentStepId,
+    issueKey = issueKey,
+    repositoryIdentity = "repo-root-realpath-v1:/test/repository",
+    governedSpecPath = ".feature-specs/$issueKey/spec.md",
+  ),
+)
 
-internal fun laneReviewService(
-  database: FakeDatabaseSessionFactory,
-  text: String,
-): ReviewService =
-  ReviewService(
-    EnvironmentContext(
-      environment = emptyMap(),
-      userHome = Files.createTempDirectory("skillbill-app-lane"),
-      stdinText = text,
-    ),
-    database,
-    FakeTelemetrySettingsProvider(enabled = false),
-    FakeReviewInputSource,
-    FakePlanReviewAttributionPort,
-    NoopRuntimeDiagnostics,
-    HARNESS_ORIGIN_UNAVAILABLE,
-  )
+internal fun laneReviewService(database: FakeDatabaseSessionFactory, text: String): ReviewService = ReviewService(
+  EnvironmentContext(
+    environment = emptyMap(),
+    userHome = Files.createTempDirectory("skillbill-app-lane"),
+    stdinText = text,
+  ),
+  database,
+  FakeTelemetrySettingsProvider(enabled = false),
+  FakeReviewInputSource,
+  FakePlanReviewAttributionPort,
+  NoopRuntimeDiagnostics,
+  HARNESS_ORIGIN_UNAVAILABLE,
+)
 
 internal fun reviewText(findings: Boolean): String {
   val header =
@@ -250,20 +246,19 @@ internal class FakeDatabaseSessionFactory(
     return block(fakeUnitOfWork())
   }
 
-  private fun fakeUnitOfWork(): UnitOfWork =
-    object : UnitOfWorkDefaults() {
-      override val dbPath: Path = this@FakeDatabaseSessionFactory.dbPath
-      override val reviews: ReviewRepository = this@FakeDatabaseSessionFactory.reviews
-      override val learnings: LearningRepository = this@FakeDatabaseSessionFactory.learnings
-      override val lifecycleTelemetry: LifecycleTelemetryRepository = this@FakeDatabaseSessionFactory.lifecycleTelemetry
-      override val telemetryReconciliation: TelemetryReconciliationRepository =
-        this@FakeDatabaseSessionFactory.telemetryReconciliation
-      override val telemetryOutbox: TelemetryOutboxRepository = this@FakeDatabaseSessionFactory.telemetryOutbox
-      override val workflowStates: WorkflowStateRepository = this@FakeDatabaseSessionFactory.workflows
-      override val workList = EmptyWorkListRepository
-      override val goalPlanningPreparations = EmptyGoalPlanningPreparationRepository
-      override val goalRunnerControls = EmptyGoalRunnerControlRepository
-    }
+  private fun fakeUnitOfWork(): UnitOfWork = object : UnitOfWorkDefaults() {
+    override val dbPath: Path = this@FakeDatabaseSessionFactory.dbPath
+    override val reviews: ReviewRepository = this@FakeDatabaseSessionFactory.reviews
+    override val learnings: LearningRepository = this@FakeDatabaseSessionFactory.learnings
+    override val lifecycleTelemetry: LifecycleTelemetryRepository = this@FakeDatabaseSessionFactory.lifecycleTelemetry
+    override val telemetryReconciliation: TelemetryReconciliationRepository =
+      this@FakeDatabaseSessionFactory.telemetryReconciliation
+    override val telemetryOutbox: TelemetryOutboxRepository = this@FakeDatabaseSessionFactory.telemetryOutbox
+    override val workflowStates: WorkflowStateRepository = this@FakeDatabaseSessionFactory.workflows
+    override val workList = EmptyWorkListRepository
+    override val goalPlanningPreparations = EmptyGoalPlanningPreparationRepository
+    override val goalRunnerControls = EmptyGoalRunnerControlRepository
+  }
 }
 
 internal class RecordingProjectionLifecycleTelemetryRepository :
@@ -301,44 +296,41 @@ internal object ThrowingTelemetryReconciliationRepository : TelemetryReconciliat
     error("SQLITE_BUSY: database is locked")
 }
 
-internal fun goalStartedRequest(): GoalStartedRequest =
-  GoalStartedRequest(
-    issueKey = "SKILL-66",
-    featureName = "goal telemetry",
-    workflowId = "wf-goal-1",
-    subtaskTotal = 4,
-    resumed = true,
-    startedAt = "2026-06-04T10:00:00Z",
-    mode = "runtime",
-  )
+internal fun goalStartedRequest(): GoalStartedRequest = GoalStartedRequest(
+  issueKey = "SKILL-66",
+  featureName = "goal telemetry",
+  workflowId = "wf-goal-1",
+  subtaskTotal = 4,
+  resumed = true,
+  startedAt = "2026-06-04T10:00:00Z",
+  mode = "runtime",
+)
 
-internal fun goalSubtaskFinishedRequest(): GoalSubtaskFinishedRequest =
-  GoalSubtaskFinishedRequest(
-    issueKey = "SKILL-66",
-    workflowId = "wf-goal-1",
-    subtaskId = 2,
-    subtaskName = "persistence",
-    status = "blocked",
-    startedAt = "2026-06-04T10:05:00Z",
-    finishedAt = "2026-06-04T10:09:00Z",
-    durationMs = 240_000L,
-    attemptCount = 3,
-    blockedReason = "validation failed",
-  )
+internal fun goalSubtaskFinishedRequest(): GoalSubtaskFinishedRequest = GoalSubtaskFinishedRequest(
+  issueKey = "SKILL-66",
+  workflowId = "wf-goal-1",
+  subtaskId = 2,
+  subtaskName = "persistence",
+  status = "blocked",
+  startedAt = "2026-06-04T10:05:00Z",
+  finishedAt = "2026-06-04T10:09:00Z",
+  durationMs = 240_000L,
+  attemptCount = 3,
+  blockedReason = "validation failed",
+)
 
-internal fun goalFinishedRequest(): GoalFinishedRequest =
-  GoalFinishedRequest(
-    issueKey = "SKILL-66",
-    workflowId = "wf-goal-1",
-    status = "blocked",
-    startedAt = "2026-06-04T10:00:00Z",
-    finishedAt = "2026-06-04T10:20:00Z",
-    durationMs = 1_200_000L,
-    subtasksComplete = 1,
-    subtasksBlocked = 1,
-    subtasksSkipped = 0,
-    mode = "runtime",
-  )
+internal fun goalFinishedRequest(): GoalFinishedRequest = GoalFinishedRequest(
+  issueKey = "SKILL-66",
+  workflowId = "wf-goal-1",
+  status = "blocked",
+  startedAt = "2026-06-04T10:00:00Z",
+  finishedAt = "2026-06-04T10:20:00Z",
+  durationMs = 1_200_000L,
+  subtasksComplete = 1,
+  subtasksBlocked = 1,
+  subtasksSkipped = 0,
+  mode = "runtime",
+)
 
 internal class RecordingGoalLifecycleTelemetryRepository :
   LifecycleTelemetryRepository by noopPort(LifecycleTelemetryRepository::class.java) {
@@ -347,31 +339,19 @@ internal class RecordingGoalLifecycleTelemetryRepository :
   val finishedRecords = mutableListOf<GoalFinishedRecord>()
   val issueFinishedRecords = mutableListOf<GoalIssueFinishedRecord>()
 
-  override fun goalStarted(
-    record: GoalStartedRecord,
-    level: String,
-  ) {
+  override fun goalStarted(record: GoalStartedRecord, level: String) {
     startedRecords += record
   }
 
-  override fun goalSubtaskFinished(
-    record: GoalSubtaskFinishedRecord,
-    level: String,
-  ) {
+  override fun goalSubtaskFinished(record: GoalSubtaskFinishedRecord, level: String) {
     subtaskRecords += record
   }
 
-  override fun goalFinished(
-    record: GoalFinishedRecord,
-    level: String,
-  ) {
+  override fun goalFinished(record: GoalFinishedRecord, level: String) {
     finishedRecords += record
   }
 
-  override fun goalIssueFinished(
-    record: GoalIssueFinishedRecord,
-    level: String,
-  ) {
+  override fun goalIssueFinished(record: GoalIssueFinishedRecord, level: String) {
     issueFinishedRecords += record
   }
 }
@@ -389,10 +369,7 @@ internal class FakeGoalStatsRepository(
 internal class FakeGoalStatsReviewRepository(
   private val stats: GoalWorkflowStats,
 ) : ReviewRepository, ReviewRunCompletenessRepository by UnavailableReviewRunCompletenessRepository {
-  override fun saveImportedReview(
-    review: ImportedReview,
-    sourcePath: String?,
-  ) = error("Unexpected saveImportedReview")
+  override fun saveImportedReview(review: ImportedReview, sourcePath: String?) = error("Unexpected saveImportedReview")
 
   override fun markOrchestrated(runId: String) = error("Unexpected markOrchestrated")
 
@@ -411,15 +388,10 @@ internal class FakeGoalStatsReviewRepository(
 
   override fun fetchNumberedFindings(runId: String): List<NumberedFinding> = error("Unexpected fetchNumberedFindings")
 
-  override fun findingExists(
-    runId: String,
-    findingId: String,
-  ): Boolean = error("Unexpected findingExists")
+  override fun findingExists(runId: String, findingId: String): Boolean = error("Unexpected findingExists")
 
-  override fun latestRejectedLearningSourceOutcome(
-    runId: String,
-    findingId: String,
-  ): RejectedLearningSourceOutcome? = error("Unexpected latestRejectedLearningSourceOutcome")
+  override fun latestRejectedLearningSourceOutcome(runId: String, findingId: String): RejectedLearningSourceOutcome? =
+    error("Unexpected latestRejectedLearningSourceOutcome")
 
   override fun reviewStats(runId: String?): ReviewRepositoryStatsSnapshot = error("Unexpected reviewStats")
 
@@ -435,10 +407,7 @@ internal class FakeGoalStatsReviewRepository(
 }
 
 internal object FakeReviewInputSource : ReviewInputSource {
-  override fun readInput(
-    inputPath: String,
-    stdinText: String?,
-  ): Pair<String, String?> = (stdinText ?: "") to null
+  override fun readInput(inputPath: String, stdinText: String?): Pair<String, String?> = (stdinText ?: "") to null
 }
 
 internal class FakeLearningRepository(
@@ -451,21 +420,12 @@ internal class FakeLearningRepository(
 
   override fun get(id: Int): LearningRecord = records.getValue(id)
 
-  override fun resolve(
-    repoScopeKey: String?,
-    skillName: String?,
-  ): LearningResolution =
+  override fun resolve(repoScopeKey: String?, skillName: String?): LearningResolution =
     LearningResolution(repoScopeKey = repoScopeKey, skillName = skillName, records = list(status = "active"))
 
-  override fun saveSessionLearnings(
-    reviewSessionId: String,
-    learningsJson: String,
-  ) = Unit
+  override fun saveSessionLearnings(reviewSessionId: String, learningsJson: String) = Unit
 
-  override fun add(
-    request: CreateLearningRequest,
-    sourceValidation: LearningSourceValidation,
-  ): Int {
+  override fun add(request: CreateLearningRequest, sourceValidation: LearningSourceValidation): Int {
     addedRequests += request
     val id = (records.keys.maxOrNull() ?: 0) + 1
     records[id] =
@@ -491,10 +451,8 @@ internal class FakeLearningRepository(
       ).also { records[request.learningId] = it }
     }
 
-  override fun setStatus(
-    id: Int,
-    status: String,
-  ): LearningRecord = records.getValue(id).copy(status = status).also { records[id] = it }
+  override fun setStatus(id: Int, status: String): LearningRecord =
+    records.getValue(id).copy(status = status).also { records[id] = it }
 
   override fun delete(id: Int) {
     records.remove(id)
@@ -511,17 +469,11 @@ internal class FakeReviewRepository(
   val savedReviews = mutableListOf<ImportedReview>()
   val terminalStateWrites = mutableListOf<Pair<String, String?>>()
 
-  override fun saveImportedReview(
-    review: ImportedReview,
-    sourcePath: String?,
-  ) {
+  override fun saveImportedReview(review: ImportedReview, sourcePath: String?) {
     savedReviews += review
   }
 
-  override fun ensureTerminalReviewState(
-    runId: String,
-    executionMode: String?,
-  ) {
+  override fun ensureTerminalReviewState(runId: String, executionMode: String?) {
     terminalStateWrites += runId to executionMode
   }
 
@@ -545,18 +497,13 @@ internal class FakeReviewRepository(
 
   override fun fetchNumberedFindings(runId: String): List<NumberedFinding> = numberedFindings
 
-  override fun findingExists(
-    runId: String,
-    findingId: String,
-  ): Boolean {
+  override fun findingExists(runId: String, findingId: String): Boolean {
     learningSourceLookups += "$runId:$findingId"
     return sourceFindingExists
   }
 
-  override fun latestRejectedLearningSourceOutcome(
-    runId: String,
-    findingId: String,
-  ): RejectedLearningSourceOutcome? = rejectedLearningSourceOutcome
+  override fun latestRejectedLearningSourceOutcome(runId: String, findingId: String): RejectedLearningSourceOutcome? =
+    rejectedLearningSourceOutcome
 
   override fun reviewStats(runId: String?): ReviewRepositoryStatsSnapshot = error("Unexpected reviewStats")
 
@@ -574,24 +521,23 @@ internal class FakeReviewRepository(
 internal object FakePlanReviewAttributionPort : ReviewAttributionPort {
   override fun routedSkillPlatformSlugs(): Map<String, String> = emptyMap()
 
-  override fun composedLaunchPlan(routedPackSlug: String): ReviewLaunchPlan =
-    ReviewLaunchPlan(
-      routedPackSlug = routedPackSlug,
-      lanes =
-        listOf(
-          ReviewLaunchLane(
-            skillName = "bill-kmp-code-review-architecture",
-            packSlug = "kmp",
-            area = "architecture",
-            depth = 0,
-            originLayerChain = listOf("kmp"),
-            required = true,
-            addOns = emptyList(),
-            orderIndex = 0,
-            inclusionReason = "routed-pack override",
-          ),
-        ),
-    )
+  override fun composedLaunchPlan(routedPackSlug: String): ReviewLaunchPlan = ReviewLaunchPlan(
+    routedPackSlug = routedPackSlug,
+    lanes =
+    listOf(
+      ReviewLaunchLane(
+        skillName = "bill-kmp-code-review-architecture",
+        packSlug = "kmp",
+        area = "architecture",
+        depth = 0,
+        originLayerChain = listOf("kmp"),
+        required = true,
+        addOns = emptyList(),
+        orderIndex = 0,
+        inclusionReason = "routed-pack override",
+      ),
+    ),
+  )
 }
 
 internal object ThrowingPlanReviewAttributionPort : ReviewAttributionPort {
@@ -602,10 +548,7 @@ internal object ThrowingPlanReviewAttributionPort : ReviewAttributionPort {
 }
 
 internal object NoopTelemetryOutboxRepository : TelemetryOutboxRepository {
-  override fun enqueue(
-    event: TelemetryOutboxEvent,
-    payloadJson: String,
-  ): Long = error("Unexpected enqueue")
+  override fun enqueue(event: TelemetryOutboxEvent, payloadJson: String): Long = error("Unexpected enqueue")
 
   override fun claimPending(request: TelemetryOutboxClaimRequest): List<TelemetryOutboxRecord> = emptyList()
 
@@ -617,10 +560,8 @@ internal object NoopTelemetryOutboxRepository : TelemetryOutboxRepository {
 
   override fun lastSyncedAt(): String? = null
 
-  override fun markSynced(
-    eventIds: List<Long>,
-    claimToken: String,
-  ): TelemetryOutboxSettlementResult = TelemetryOutboxSettlementResult.forRequest(eventIds, updatedRows = 0)
+  override fun markSynced(eventIds: List<Long>, claimToken: String): TelemetryOutboxSettlementResult =
+    TelemetryOutboxSettlementResult.forRequest(eventIds, updatedRows = 0)
 
   override fun markFailed(
     eventIds: List<Long>,
@@ -643,10 +584,7 @@ internal class InMemoryTelemetryOutboxRepository(
   val enqueuedEventNames = mutableListOf<String>()
   private val claimTokens = mutableMapOf<Long, String>()
 
-  override fun enqueue(
-    event: TelemetryOutboxEvent,
-    payloadJson: String,
-  ): Long {
+  override fun enqueue(event: TelemetryOutboxEvent, payloadJson: String): Long {
     val id = (rows.maxOfOrNull { it.id } ?: 0L) + 1
     enqueuedEventNames += event.wireValue
     rows +=
@@ -682,10 +620,7 @@ internal class InMemoryTelemetryOutboxRepository(
 
   override fun lastSyncedAt(): String? = rows.mapNotNull { it.syncedAt }.maxOrNull()
 
-  override fun markSynced(
-    eventIds: List<Long>,
-    claimToken: String,
-  ): TelemetryOutboxSettlementResult {
+  override fun markSynced(eventIds: List<Long>, claimToken: String): TelemetryOutboxSettlementResult {
     var updated = 0
     rows.replaceAll { row ->
       if (row.id in eventIds && claimTokens[row.id] == claimToken && row.syncedAt == null) {
@@ -745,16 +680,15 @@ internal class InMemoryTelemetryOutboxRepository(
 internal class FakeTelemetrySettingsProvider(
   private val enabled: Boolean,
 ) : TelemetrySettingsProvider {
-  override fun load(materialize: Boolean): TelemetrySettings =
-    TelemetrySettings(
-      configPath = Path.of("/fake/config.json").toFileLocation(),
-      level = if (enabled) "anonymous" else "off",
-      enabled = enabled,
-      installId = if (enabled) "fake-install-id" else "",
-      proxyUrl = if (enabled) "https://telemetry.example.dev/ingest" else "",
-      customProxyUrl = if (enabled) "https://telemetry.example.dev/ingest" else null,
-      batchSize = 50,
-    )
+  override fun load(materialize: Boolean): TelemetrySettings = TelemetrySettings(
+    configPath = Path.of("/fake/config.json").toFileLocation(),
+    level = if (enabled) "anonymous" else "off",
+    enabled = enabled,
+    installId = if (enabled) "fake-install-id" else "",
+    proxyUrl = if (enabled) "https://telemetry.example.dev/ingest" else "",
+    customProxyUrl = if (enabled) "https://telemetry.example.dev/ingest" else null,
+    batchSize = 50,
+  )
 }
 
 internal object FakeTelemetryConfigStore : TelemetryConfigStore {
@@ -772,10 +706,7 @@ internal object FakeTelemetryConfigStore : TelemetryConfigStore {
 internal class FakeTelemetryClient : TelemetryClient {
   val sentBatchIds = mutableListOf<List<Long>>()
 
-  override fun sendBatch(
-    settings: TelemetrySettings,
-    rows: List<TelemetryOutboxRecord>,
-  ): TelemetryDeliveryReport {
+  override fun sendBatch(settings: TelemetrySettings, rows: List<TelemetryOutboxRecord>): TelemetryDeliveryReport {
     sentBatchIds += rows.map { it.id }
     return TelemetryDeliveryReport(TelemetryDeliveryOutcome.ACCEPTED)
   }
@@ -783,19 +714,14 @@ internal class FakeTelemetryClient : TelemetryClient {
   override fun fetchProxyCapabilities(settings: TelemetrySettings): TelemetryProxyCapabilities =
     error("Unexpected fetchProxyCapabilities")
 
-  override fun fetchRemoteStats(
-    settings: TelemetrySettings,
-    request: RemoteStatsRequest,
-  ): TelemetryRemoteStatsResult = error("Unexpected fetchRemoteStats")
+  override fun fetchRemoteStats(settings: TelemetrySettings, request: RemoteStatsRequest): TelemetryRemoteStatsResult =
+    error("Unexpected fetchRemoteStats")
 }
 
 internal object NoopWorkflowStateRepository : WorkflowStateRepositoryDefaults()
 
-internal fun createDecompositionWorkflow(
-  service: WorkflowService,
-  parentSpec: Path,
-  subtaskSpec: Path,
-): String = createDecompositionWorkflow(service, parentSpec, subtaskSpec, null)
+internal fun createDecompositionWorkflow(service: WorkflowService, parentSpec: Path, subtaskSpec: Path): String =
+  createDecompositionWorkflow(service, parentSpec, subtaskSpec, null)
 
 internal fun blockedGoalChildRetryFixture(): BlockedGoalChildRetryFixture {
   val tempDir = Files.createTempDirectory("skillbill-goal-child-retry")
@@ -813,7 +739,7 @@ internal fun blockedGoalChildRetryFixture(): BlockedGoalChildRetryFixture {
         sessionId = "ftr-goal-child",
         issueKey = "SKILL-51",
       ) as WorkflowOpenResult.Ok
-    ).workflowId
+      ).workflowId
   service.update(
     WorkflowFamilyKind.TASK_RUNTIME,
     WorkflowUpdateRequest(
@@ -822,19 +748,19 @@ internal fun blockedGoalChildRetryFixture(): BlockedGoalChildRetryFixture {
       currentStepId = "preplan",
       stepUpdates = null,
       artifactsPatch =
-        WorkflowArtifactPatch.from(
-          mapOf(
-            FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to
-              FeatureTaskRuntimeGoalContinuationArtifact(
-                issueKey = "SKILL-51",
-                subtaskId = 1,
-                suppressPr = true,
-                goalBranch = "feat/SKILL-51-demo",
-                parentWorkflowId = parentWorkflowId,
-                codeReviewMode = CodeReviewExecutionMode.INLINE,
-              ).asWorkflowArtifactEntry().toWorkflowArtifactMap(),
-          ),
+      WorkflowArtifactPatch.from(
+        mapOf(
+          FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to
+            FeatureTaskRuntimeGoalContinuationArtifact(
+              issueKey = "SKILL-51",
+              subtaskId = 1,
+              suppressPr = true,
+              goalBranch = "feat/SKILL-51-demo",
+              parentWorkflowId = parentWorkflowId,
+              codeReviewMode = CodeReviewExecutionMode.INLINE,
+            ).asWorkflowArtifactEntry().toWorkflowArtifactMap(),
         ),
+      ),
     ),
   )
   testPhaseRecorder(database).recordRuntimePhase(
@@ -881,26 +807,22 @@ internal fun createDecompositionWorkflow(
       workflowStatus = WorkflowStatus.RUNNING.wireValue,
       currentStepId = "plan",
       stepUpdates =
-        WorkflowStepUpdates.from(
-          listOf(
-            mapOf("step_id" to "plan", "status" to "completed", "attempt_count" to 1),
-          ),
+      WorkflowStepUpdates.from(
+        listOf(
+          mapOf("step_id" to "plan", "status" to "completed", "attempt_count" to 1),
         ),
+      ),
       artifactsPatch = decompositionPlanPatch(parentSpec, subtaskOne, subtaskTwo, executionModel),
       planningResult =
-        decompositionPlanningResultFromPatch(
-          decompositionPlanPatch(parentSpec, subtaskOne, subtaskTwo, executionModel),
-        ),
+      decompositionPlanningResultFromPatch(
+        decompositionPlanPatch(parentSpec, subtaskOne, subtaskTwo, executionModel),
+      ),
     ),
   )
   return workflowId
 }
 
-internal fun markDecompositionSubtaskBlocked(
-  service: WorkflowService,
-  workflowId: String,
-  subtaskSpec: Path,
-) {
+internal fun markDecompositionSubtaskBlocked(service: WorkflowService, workflowId: String, subtaskSpec: Path) {
   service.update(
     WorkflowFamilyKind.TASK_RUNTIME,
     WorkflowUpdateRequest(
@@ -908,29 +830,25 @@ internal fun markDecompositionSubtaskBlocked(
       workflowStatus = WorkflowStatus.BLOCKED.wireValue,
       currentStepId = "validate",
       stepUpdates =
-        WorkflowStepUpdates.from(
-          listOf(
-            mapOf("step_id" to "validate", "status" to "blocked", "attempt_count" to 1),
-          ),
+      WorkflowStepUpdates.from(
+        listOf(
+          mapOf("step_id" to "validate", "status" to "blocked", "attempt_count" to 1),
         ),
+      ),
       artifactsPatch =
-        WorkflowArtifactPatch.from(
-          mapOf(
-            "assessment" to mapOf("spec_path" to subtaskSpec.toString()),
-            FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY to completedPhaseRecords("plan", "audit"),
-            "validation_result" to mapOf("passed" to false),
-            "blocked_reason" to "Validation failed.",
-          ),
+      WorkflowArtifactPatch.from(
+        mapOf(
+          "assessment" to mapOf("spec_path" to subtaskSpec.toString()),
+          FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY to completedPhaseRecords("plan", "audit"),
+          "validation_result" to mapOf("passed" to false),
+          "blocked_reason" to "Validation failed.",
         ),
+      ),
     ),
   )
 }
 
-internal fun markDecompositionSubtaskSkipped(
-  service: WorkflowService,
-  workflowId: String,
-  subtaskSpec: Path,
-) {
+internal fun markDecompositionSubtaskSkipped(service: WorkflowService, workflowId: String, subtaskSpec: Path) {
   service.update(
     WorkflowFamilyKind.TASK_RUNTIME,
     WorkflowUpdateRequest(
@@ -938,27 +856,23 @@ internal fun markDecompositionSubtaskSkipped(
       workflowStatus = WorkflowStatus.RUNNING.wireValue,
       currentStepId = "pr",
       stepUpdates =
-        WorkflowStepUpdates.from(
-          listOf(
-            mapOf("step_id" to "pr", "status" to "skipped", "attempt_count" to 1),
-          ),
+      WorkflowStepUpdates.from(
+        listOf(
+          mapOf("step_id" to "pr", "status" to "skipped", "attempt_count" to 1),
         ),
+      ),
       artifactsPatch =
-        WorkflowArtifactPatch.from(
-          mapOf(
-            "assessment" to mapOf("spec_path" to subtaskSpec.toString()),
-            FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY to completedPhaseRecords("implement", "commit_push"),
-          ),
+      WorkflowArtifactPatch.from(
+        mapOf(
+          "assessment" to mapOf("spec_path" to subtaskSpec.toString()),
+          FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY to completedPhaseRecords("implement", "commit_push"),
         ),
+      ),
     ),
   )
 }
 
-internal fun markDecompositionSubtaskComplete(
-  service: WorkflowService,
-  workflowId: String,
-  subtaskSpec: Path,
-) {
+internal fun markDecompositionSubtaskComplete(service: WorkflowService, workflowId: String, subtaskSpec: Path) {
   service.update(
     WorkflowFamilyKind.TASK_RUNTIME,
     WorkflowUpdateRequest(
@@ -966,40 +880,36 @@ internal fun markDecompositionSubtaskComplete(
       workflowStatus = WorkflowStatus.COMPLETED.wireValue,
       currentStepId = "pr",
       stepUpdates =
-        WorkflowStepUpdates.from(
-          listOf(
-            mapOf("step_id" to "pr", "status" to "completed", "attempt_count" to 1),
-          ),
+      WorkflowStepUpdates.from(
+        listOf(
+          mapOf("step_id" to "pr", "status" to "completed", "attempt_count" to 1),
         ),
+      ),
       artifactsPatch =
-        WorkflowArtifactPatch.from(
-          mapOf(
-            "assessment" to mapOf("spec_path" to subtaskSpec.toString()),
-            FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY to completedPhaseRecords("implement", "commit_push"),
-          ),
+      WorkflowArtifactPatch.from(
+        mapOf(
+          "assessment" to mapOf("spec_path" to subtaskSpec.toString()),
+          FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY to completedPhaseRecords("implement", "commit_push"),
         ),
+      ),
     ),
   )
 }
 
-internal fun completedPhaseRecord(
-  phaseId: String,
-  outputArtifact: String? = null,
-): Map<String, Any?> =
-  linkedMapOf(
-    "contract_version" to FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION,
-    "record_kind" to "private_phase_record",
-    "phase_id" to phaseId,
-    "status" to "completed",
-    "attempt_count" to 1,
-    "started_at" to "2026-08-09T10:00:00Z",
-    "first_started_at" to "2026-08-09T10:00:00Z",
-    "finished_at" to "2026-08-09T10:01:00Z",
-    "resolved_agent_id" to "agent-$phaseId",
-    "execution_origin" to "agent-executed",
-  ).apply {
-    outputArtifact?.let { put("output_artifact", it) }
-  }
+internal fun completedPhaseRecord(phaseId: String, outputArtifact: String? = null): Map<String, Any?> = linkedMapOf(
+  "contract_version" to FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION,
+  "record_kind" to "private_phase_record",
+  "phase_id" to phaseId,
+  "status" to "completed",
+  "attempt_count" to 1,
+  "started_at" to "2026-08-09T10:00:00Z",
+  "first_started_at" to "2026-08-09T10:00:00Z",
+  "finished_at" to "2026-08-09T10:01:00Z",
+  "resolved_agent_id" to "agent-$phaseId",
+  "execution_origin" to "agent-executed",
+).apply {
+  outputArtifact?.let { put("output_artifact", it) }
+}
 
 internal fun completedPhaseRecords(vararg phaseIds: String): Map<String, Any?> =
   phaseIds.associateWith { completedPhaseRecord(it) }
@@ -1059,10 +969,7 @@ internal fun decompositionPlanningResultFromPatch(patch: WorkflowArtifactPatch):
     },
   )
 
-internal fun writeSpecs(
-  parentSpec: Path,
-  vararg subtasks: Path,
-) {
+internal fun writeSpecs(parentSpec: Path, vararg subtasks: Path) {
   Files.createDirectories(parentSpec.parent)
   Files.writeString(parentSpec, "---\nstatus: Pending\n---\n\n# Parent\n\n## Status\n\nPending\n")
   subtasks.forEach { subtask ->
@@ -1088,34 +995,32 @@ internal fun decodeArtifactsForTest(artifactsJson: String): Map<String, Any?> =
 internal fun FeatureTaskRuntimePhaseRecorder.appendPlanLedger(
   workflowId: String,
   action: FeatureTaskRuntimePhaseLedgerAction,
-): Boolean =
-  appendLedgerEntry(
-    FeatureTaskRuntimePhaseLedgerRequest(
-      workflowId = workflowId,
-      action = action,
-      phaseId = "plan",
-      attemptCount = 1,
-      resolvedAgentId = "agent-plan-1",
-    ),
-  )
+): Boolean = appendLedgerEntry(
+  FeatureTaskRuntimePhaseLedgerRequest(
+    workflowId = workflowId,
+    action = action,
+    phaseId = "plan",
+    attemptCount = 1,
+    resolvedAgentId = "agent-plan-1",
+  ),
+)
 
 internal fun FeatureTaskRuntimePhaseRecorder.recordPlanPhase(
   workflowId: String,
   status: String,
   finished: Boolean,
   outputArtifact: String? = null,
-): Boolean =
-  recordPhaseState(
-    FeatureTaskRuntimePhaseStateRequest(
-      workflowId = workflowId,
-      phaseId = "plan",
-      status = status,
-      attemptCount = 1,
-      resolvedAgentId = "agent-plan-1",
-      finished = finished,
-      outputArtifact = outputArtifact,
-    ),
-  )
+): Boolean = recordPhaseState(
+  FeatureTaskRuntimePhaseStateRequest(
+    workflowId = workflowId,
+    phaseId = "plan",
+    status = status,
+    attemptCount = 1,
+    resolvedAgentId = "agent-plan-1",
+    finished = finished,
+    outputArtifact = outputArtifact,
+  ),
+)
 
 internal fun FeatureTaskRuntimePhaseRecorder.recordRuntimePhase(
   workflowId: String,
@@ -1123,25 +1028,23 @@ internal fun FeatureTaskRuntimePhaseRecorder.recordRuntimePhase(
   status: String,
   finished: Boolean,
   blockedReason: String? = null,
-): Boolean =
-  recordPhaseState(
-    FeatureTaskRuntimePhaseStateRequest(
-      workflowId = workflowId,
-      phaseId = phaseId,
-      status = status,
-      attemptCount = 1,
-      resolvedAgentId = "agent-$phaseId-1",
-      finished = finished,
-      blockedReason = blockedReason,
-    ),
-  )
+): Boolean = recordPhaseState(
+  FeatureTaskRuntimePhaseStateRequest(
+    workflowId = workflowId,
+    phaseId = phaseId,
+    status = status,
+    attemptCount = 1,
+    resolvedAgentId = "agent-$phaseId-1",
+    finished = finished,
+    blockedReason = blockedReason,
+  ),
+)
 
-internal fun expectedStepStatusForRecord(record: FeatureTaskRuntimePhaseRecord): String =
-  when {
-    record.status == WorkflowStepStatus.BLOCKED -> "blocked"
-    record.finishedAt != null -> "completed"
-    else -> record.status.wireValue
-  }
+internal fun expectedStepStatusForRecord(record: FeatureTaskRuntimePhaseRecord): String = when {
+  record.status == WorkflowStepStatus.BLOCKED -> "blocked"
+  record.finishedAt != null -> "completed"
+  else -> record.status.wireValue
+}
 
 internal fun decodeStepsForTest(
   repository: InMemoryWorkflowStateRepository,
@@ -1155,11 +1058,8 @@ internal fun decodeStepsForTest(
   }
 }
 
-internal fun stepStatusFor(
-  repository: InMemoryWorkflowStateRepository,
-  workflowId: String,
-  stepId: String,
-): String = decodeStepsForTest(repository, workflowId).first { it.first == stepId }.second
+internal fun stepStatusFor(repository: InMemoryWorkflowStateRepository, workflowId: String, stepId: String): String =
+  decodeStepsForTest(repository, workflowId).first { it.first == stepId }.second
 
 internal fun assertRuntimeWorkflowRow(
   repository: InMemoryWorkflowStateRepository,
@@ -1175,19 +1075,18 @@ internal fun assertRuntimeWorkflowRow(
 internal fun testWorkflowService(
   database: DatabaseSessionFactory,
   gitOperations: WorkflowGitOperations = NoopWorkflowGitOperations,
-): WorkflowService =
-  WorkflowService(
-    database = database,
-    gitOperations = gitOperations,
-    decompositionManifestStore = FileSystemDecompositionManifestFileStore(),
-    workflowSnapshotValidator = WorkflowStateSchemaValidator(),
-    decompositionManifestValidator = DecompositionManifestSchemaValidator(),
-    decompositionManifestWriter = DecompositionManifestWriter(),
-    repositoryRoot = RepositoryRoot(Path.of("").toAbsolutePath().normalize()),
-    goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
-    runtimeDiagnostics = NoopRuntimeDiagnostics,
-    clock = Clock.systemUTC(),
-  )
+): WorkflowService = WorkflowService(
+  database = database,
+  gitOperations = gitOperations,
+  decompositionManifestStore = FileSystemDecompositionManifestFileStore(),
+  workflowSnapshotValidator = WorkflowStateSchemaValidator(),
+  decompositionManifestValidator = DecompositionManifestSchemaValidator(),
+  decompositionManifestWriter = DecompositionManifestWriter(),
+  repositoryRoot = RepositoryRoot(Path.of("").toAbsolutePath().normalize()),
+  goalObservabilityEventValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
+  runtimeDiagnostics = NoopRuntimeDiagnostics,
+  clock = Clock.systemUTC(),
+)
 
 internal fun loadTestDecompositionManifest(path: Path) =
   loadDecompositionManifest(path, FileSystemDecompositionManifestFileStore(), DecompositionManifestSchemaValidator())
@@ -1198,10 +1097,7 @@ internal class InMemoryWorkflowStateRepository : WorkflowStateRepositoryDefaults
   private val taskRuntimeRows = linkedMapOf<String, WorkflowStateRecord>()
   var failNextRuntimeSave: Boolean = false
 
-  override fun saveFeatureTaskWorkflow(
-    row: WorkflowStateRecord,
-    mode: FeatureTaskWorkflowMode,
-  ) {
+  override fun saveFeatureTaskWorkflow(row: WorkflowStateRecord, mode: FeatureTaskWorkflowMode) {
     when (mode) {
       RUNTIME -> {
         if (failNextRuntimeSave) {
@@ -1217,10 +1113,7 @@ internal class InMemoryWorkflowStateRepository : WorkflowStateRepositoryDefaults
   override fun getFeatureTaskWorkflow(workflowId: String): WorkflowStateRecord? =
     taskRuntimeRows[workflowId] ?: implementRows[workflowId]
 
-  override fun getFeatureTaskWorkflowAsMode(
-    workflowId: String,
-    mode: FeatureTaskWorkflowMode,
-  ): WorkflowStateRecord? =
+  override fun getFeatureTaskWorkflowAsMode(workflowId: String, mode: FeatureTaskWorkflowMode): WorkflowStateRecord? =
     getFeatureTaskWorkflow(workflowId)?.also { row ->
       val actualMode = row.mode ?: PROSE
       if (actualMode != mode) {
@@ -1228,10 +1121,7 @@ internal class InMemoryWorkflowStateRepository : WorkflowStateRepositoryDefaults
       }
     }
 
-  override fun listFeatureTaskWorkflows(
-    mode: FeatureTaskWorkflowMode,
-    limit: Int,
-  ): List<WorkflowStateRecord> =
+  override fun listFeatureTaskWorkflows(mode: FeatureTaskWorkflowMode, limit: Int): List<WorkflowStateRecord> =
     when (mode) {
       RUNTIME -> taskRuntimeRows
       PROSE -> implementRows
@@ -1240,10 +1130,7 @@ internal class InMemoryWorkflowStateRepository : WorkflowStateRepositoryDefaults
   override fun latestFeatureTaskWorkflow(mode: FeatureTaskWorkflowMode): WorkflowStateRecord? =
     listFeatureTaskWorkflows(mode, Int.MAX_VALUE).firstOrNull()
 
-  override fun save(
-    family: WorkflowFamily,
-    snapshot: WorkflowStateSnapshot,
-  ) {
+  override fun save(family: WorkflowFamily, snapshot: WorkflowStateSnapshot) {
     val source =
       when (family) {
         WorkflowFamily.VERIFY -> verifyRows[snapshot.workflowId]
@@ -1252,46 +1139,30 @@ internal class InMemoryWorkflowStateRepository : WorkflowStateRepositoryDefaults
     saveRecord(family, snapshot.toRecord(source))
   }
 
-  override fun saveRecord(
-    family: WorkflowFamily,
-    record: WorkflowStateRecord,
-  ) {
+  override fun saveRecord(family: WorkflowFamily, record: WorkflowStateRecord) {
     when (family) {
       WorkflowFamily.VERIFY -> verifyRows[record.workflowId] = record
       WorkflowFamily.TASK_RUNTIME -> saveFeatureTaskWorkflow(record, RUNTIME)
     }
   }
 
-  override fun get(
-    family: WorkflowFamily,
-    workflowId: String,
-  ): WorkflowStateSnapshot? = record(family, workflowId)?.toSnapshot()
+  override fun get(family: WorkflowFamily, workflowId: String): WorkflowStateSnapshot? =
+    record(family, workflowId)?.toSnapshot()
 
-  override fun getAll(
-    family: WorkflowFamily,
-    workflowIds: Set<String>,
-  ): Map<String, WorkflowStateSnapshot> =
+  override fun getAll(family: WorkflowFamily, workflowIds: Set<String>): Map<String, WorkflowStateSnapshot> =
     workflowIds.mapNotNull { id -> record(family, id)?.let { id to it.toSnapshot() } }.toMap()
 
-  override fun list(
-    family: WorkflowFamily,
-    limit: Int,
-  ): List<WorkflowStateSnapshot> =
-    when (family) {
-      WorkflowFamily.VERIFY -> verifyRows.values.toList().asReversed().take(limit)
-      WorkflowFamily.TASK_RUNTIME -> listFeatureTaskWorkflows(RUNTIME, limit)
-    }.map(WorkflowStateRecord::toSnapshot)
+  override fun list(family: WorkflowFamily, limit: Int): List<WorkflowStateSnapshot> = when (family) {
+    WorkflowFamily.VERIFY -> verifyRows.values.toList().asReversed().take(limit)
+    WorkflowFamily.TASK_RUNTIME -> listFeatureTaskWorkflows(RUNTIME, limit)
+  }.map(WorkflowStateRecord::toSnapshot)
 
   override fun latest(family: WorkflowFamily): WorkflowStateSnapshot? = list(family, 1).firstOrNull()
 
-  private fun record(
-    family: WorkflowFamily,
-    workflowId: String,
-  ): WorkflowStateRecord? =
-    when (family) {
-      WorkflowFamily.VERIFY -> verifyRows[workflowId]
-      WorkflowFamily.TASK_RUNTIME -> taskRuntimeRows[workflowId]
-    }
+  private fun record(family: WorkflowFamily, workflowId: String): WorkflowStateRecord? = when (family) {
+    WorkflowFamily.VERIFY -> verifyRows[workflowId]
+    WorkflowFamily.TASK_RUNTIME -> taskRuntimeRows[workflowId]
+  }
 }
 
 internal class FakeWorkflowGitOperations(
@@ -1302,27 +1173,18 @@ internal class FakeWorkflowGitOperations(
   val baseValidations = mutableListOf<String>()
   val commits = mutableListOf<String>()
 
-  override fun checkoutBranch(
-    repoRoot: Path,
-    branch: String,
-    baseBranch: String?,
-  ): WorkflowGitOperationResult {
+  override fun checkoutBranch(repoRoot: Path, branch: String, baseBranch: String?): WorkflowGitOperationResult {
     checkouts += "$branch@${baseBranch.orEmpty()}"
     return WorkflowGitOperationResult.Ok(value = branch)
   }
 
-  override fun branchExists(
-    repoRoot: Path,
-    branch: String,
-  ): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "true")
+  override fun branchExists(repoRoot: Path, branch: String): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Ok(value = "true")
 
   override fun currentBranch(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = checkouts.lastOrNull()?.substringBefore("@").orEmpty())
 
-  override fun createCommit(
-    repoRoot: Path,
-    message: String,
-  ): WorkflowGitCommitResult {
+  override fun createCommit(repoRoot: Path, message: String): WorkflowGitCommitResult {
     commits += message
     if (commitError.isNotBlank()) {
       return WorkflowGitCommitResult.Failed(error = commitError)
@@ -1363,87 +1225,75 @@ internal class FakeWorkflowGitOperations(
   ): WorkflowGitOperationResult = repositoryFingerprint(repoRoot)
 }
 
-internal fun evaluatorReceipt(verdict: String): Map<String, Any?> =
-  mapOf(
-    "contract_version" to "0.3",
-    "verdict" to verdict,
-    "findings" to emptyList<Any>(),
-  )
+internal fun evaluatorReceipt(verdict: String): Map<String, Any?> = mapOf(
+  "contract_version" to "0.3",
+  "verdict" to verdict,
+  "findings" to emptyList<Any>(),
+)
 
-internal fun learningRecord(
-  id: Int,
-  title: String = "Learning $id",
-): LearningRecord =
-  LearningRecord(
-    id = id,
-    scope = "global",
-    scopeKey = "global",
-    title = title,
-    ruleText = "Rule $id",
-    rationale = "",
-    status = "active",
-    sourceReviewRunId = "rvw-1",
-    sourceFindingId = "F-$id",
-    createdAt = "2026-04-24 00:00:00",
-    updatedAt = "2026-04-24 00:00:00",
-  )
+internal fun learningRecord(id: Int, title: String = "Learning $id"): LearningRecord = LearningRecord(
+  id = id,
+  scope = "global",
+  scopeKey = "global",
+  title = title,
+  ruleText = "Rule $id",
+  rationale = "",
+  status = "active",
+  sourceReviewRunId = "rvw-1",
+  sourceFindingId = "F-$id",
+  createdAt = "2026-04-24 00:00:00",
+  updatedAt = "2026-04-24 00:00:00",
+)
 
-internal fun numberedFinding(
-  number: Int,
-  findingId: String,
-): NumberedFinding =
-  NumberedFinding(
-    number = number,
-    findingId = findingId,
-    severity = "Major",
-    confidence = "High",
-    location = "README.md:1",
-    description = "Example finding",
-  )
+internal fun numberedFinding(number: Int, findingId: String): NumberedFinding = NumberedFinding(
+  number = number,
+  findingId = findingId,
+  severity = "Major",
+  confidence = "High",
+  location = "README.md:1",
+  description = "Example finding",
+)
 
-internal fun testPhaseRecorder(database: DatabaseSessionFactory) =
-  featureTaskRuntimePhaseRecorder(
-    database,
-    WorkflowStateSchemaValidator(),
-    FeatureTaskRuntimeWireArtifactSchemaValidator(),
-    FeatureTaskRuntimeWireArtifactSchemaValidator(),
-    Clock.systemUTC(),
-    NoopRuntimeDiagnostics,
-  )
+internal fun testPhaseRecorder(database: DatabaseSessionFactory) = featureTaskRuntimePhaseRecorder(
+  database,
+  WorkflowStateSchemaValidator(),
+  FeatureTaskRuntimeWireArtifactSchemaValidator(),
+  FeatureTaskRuntimeWireArtifactSchemaValidator(),
+  Clock.systemUTC(),
+  NoopRuntimeDiagnostics,
+)
 
-internal fun openTaskRuntimeWorkflow(database: DatabaseSessionFactory): String =
-  (
-    testWorkflowService(database)
-      .openTestFeatureTask(WorkflowFamilyKind.TASK_RUNTIME, sessionId = "ftr-envelope")
-      as WorkflowOpenResult.Ok
+internal fun openTaskRuntimeWorkflow(database: DatabaseSessionFactory): String = (
+  testWorkflowService(database)
+    .openTestFeatureTask(WorkflowFamilyKind.TASK_RUNTIME, sessionId = "ftr-envelope")
+    as WorkflowOpenResult.Ok
   ).workflowId
 
-internal fun handoffEnvelope() =
-  FeatureTaskRuntimeHandoffEnvelope(
-    consumerPhaseId = "implement",
-    projections =
+internal fun handoffEnvelope() = FeatureTaskRuntimeHandoffEnvelope(
+  consumerPhaseId = "implement",
+  projections =
+  listOf(
+    FeatureTaskRuntimeHandoffProjection(
+      projectionName = "plan_receipt",
+      sourceRef = FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput("plan"),
+      projectionContractId = "feature_task_runtime.upstream_phase_receipt",
+      projectionContractVersion = "0.1",
+      promptVisibility = FeatureTaskRuntimeHandoffPromptVisibility.PROMPT_VISIBLE,
+      fields =
       listOf(
-        FeatureTaskRuntimeHandoffProjection(
-          projectionName = "plan_receipt",
-          sourceRef = FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput("plan"),
-          projectionContractId = "feature_task_runtime.upstream_phase_receipt",
-          projectionContractVersion = "0.1",
-          promptVisibility = FeatureTaskRuntimeHandoffPromptVisibility.PROMPT_VISIBLE,
-          fields =
-            listOf(
-              FeatureTaskRuntimeHandoffProjectionField(
-                name = "phase_output_receipt",
-                value =
-                  FeatureTaskRuntimeHandoffProjectionValue.CompactReference(
-                    kind = FeatureTaskRuntimeCompactReferenceKind.PRIVATE_EVIDENCE_ARTIFACT,
-                    value = "feature_task_runtime_phase_records/plan#1",
-                  ),
-              ),
-            ),
+        FeatureTaskRuntimeHandoffProjectionField(
+          name = "phase_output_receipt",
+          value =
+          FeatureTaskRuntimeHandoffProjectionValue.CompactReference(
+            kind = FeatureTaskRuntimeCompactReferenceKind.PRIVATE_EVIDENCE_ARTIFACT,
+            value = "feature_task_runtime_phase_records/plan#1",
+          ),
         ),
       ),
-    repositoryCheckpoint = FeatureTaskRuntimeRepositoryCheckpoint("head-abc"),
-  )
+    ),
+  ),
+  repositoryCheckpoint = FeatureTaskRuntimeRepositoryCheckpoint("head-abc"),
+)
 
 internal fun handoffBriefing(envelope: FeatureTaskRuntimeHandoffEnvelope = handoffEnvelope()) =
   FeatureTaskRuntimePhaseLaunchBriefing(
@@ -1494,11 +1344,11 @@ internal fun telemetrySyncService(reconciliation: RecordingTelemetryReconciliati
     telemetryClient = FakeTelemetryClient(),
     clock = Clock.systemUTC(),
     levelMutationService =
-      TelemetryLevelMutationService(
-        database = database,
-        settingsProvider = settingsProvider,
-        configStore = FakeTelemetryConfigStore,
-      ),
+    TelemetryLevelMutationService(
+      database = database,
+      settingsProvider = settingsProvider,
+      configStore = FakeTelemetryConfigStore,
+    ),
     diagnostics = NoopRuntimeDiagnostics,
     interruptSignal = JvmInterruptSignalPort,
   )

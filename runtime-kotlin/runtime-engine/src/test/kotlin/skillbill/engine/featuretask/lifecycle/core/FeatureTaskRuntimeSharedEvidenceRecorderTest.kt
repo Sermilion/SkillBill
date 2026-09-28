@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
+import skillbill.engine.openTestWorkflow
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
@@ -66,7 +67,7 @@ class FeatureTaskRuntimeSharedEvidenceRecorderTest {
   fun `exactly one derivation and N-1 reuse events are emitted for N consumers at an unchanged fingerprint`() {
     val lifecycle = RecordingLifecycleTelemetryRepository()
     val recorder = recorder(lifecycle)
-    recorder.ensureWorkflowOpen("wf-shared", "session-1")
+    recorder.openTestWorkflow("wf-shared", "session-1")
     val fingerprint = "fp-stable"
     val consumers = listOf("audit", "review", "review_lane_architecture", "review_lane_testing")
 
@@ -94,27 +95,27 @@ class FeatureTaskRuntimeSharedEvidenceRecorderTest {
   fun `a changed checkpoint fingerprint emits a re-derivation event with checkpoint-change attribution`() {
     val lifecycle = RecordingLifecycleTelemetryRepository()
     val recorder = recorder(lifecycle)
-    recorder.ensureWorkflowOpen("wf-shared", "session-1")
+    recorder.openTestWorkflow("wf-shared", "session-1")
 
     recorder.recordPhaseBriefing(
       workflowId = "wf-shared",
       briefing = emptyBriefing("audit"),
       sharedEvidenceMeasurement =
-        measurement(
-          "audit",
-          "fp-before",
-          FeatureTaskRuntimeSharedEvidenceOutcome.DERIVATION,
-        ),
+      measurement(
+        "audit",
+        "fp-before",
+        FeatureTaskRuntimeSharedEvidenceOutcome.DERIVATION,
+      ),
     )
     recorder.recordPhaseBriefing(
       workflowId = "wf-shared",
       briefing = emptyBriefing("audit"),
       sharedEvidenceMeasurement =
-        measurement(
-          "audit",
-          "fp-after",
-          FeatureTaskRuntimeSharedEvidenceOutcome.CHECKPOINT_CHANGE_REDERIVATION,
-        ),
+      measurement(
+        "audit",
+        "fp-after",
+        FeatureTaskRuntimeSharedEvidenceOutcome.CHECKPOINT_CHANGE_REDERIVATION,
+      ),
     )
 
     assertEquals(
@@ -130,49 +131,41 @@ class FeatureTaskRuntimeSharedEvidenceRecorderTest {
     )
   }
 
-  private fun recorder(lifecycle: RecordingLifecycleTelemetryRepository) =
-    featureTaskRuntimePhaseRecorder(
-      RuntimeFakeDatabaseSessionFactory(InMemoryRuntimeWorkflowRepository(), lifecycle),
-      NoopWorkflowSnapshotValidator,
-      AcceptingFeatureTaskRuntimeWireArtifactValidator,
-      AcceptingFeatureTaskRuntimeWireArtifactValidator,
-      testHarnessClock,
-      NoopRuntimeDiagnostics,
-    )
-
-  private fun emptyBriefing(phaseId: String) =
-    FeatureTaskRuntimePhaseLaunchBriefing(
-      phaseId = phaseId,
-      specReference = "spec.md",
-      featureSize = "MEDIUM",
-      acceptanceCriteria = listOf("AC-001"),
-      mandatesAndOverrides = emptyList(),
-      handoffEnvelope =
-        FeatureTaskRuntimeHandoffEnvelope(
-          consumerPhaseId = phaseId,
-          projections = emptyList(),
-        ),
-      derivedContextKeys = emptyList(),
-      briefingText = "briefing",
-    )
-
-  private fun measurement(
-    phaseId: String,
-    fingerprint: String,
-    outcome: FeatureTaskRuntimeSharedEvidenceOutcome,
-  ) = FeatureTaskRuntimeSharedEvidenceMeasurement(
-    workflowId = "wf-shared",
-    checkpointFingerprint = fingerprint,
-    consumerPhaseId = phaseId,
-    outcome = outcome,
-    fileIndexCount = 1,
-    hunkIndexCount = 1,
+  private fun recorder(lifecycle: RecordingLifecycleTelemetryRepository) = featureTaskRuntimePhaseRecorder(
+    RuntimeFakeDatabaseSessionFactory(InMemoryRuntimeWorkflowRepository(), lifecycle),
+    NoopWorkflowSnapshotValidator,
+    AcceptingFeatureTaskRuntimeWireArtifactValidator,
+    AcceptingFeatureTaskRuntimeWireArtifactValidator,
+    testHarnessClock,
+    NoopRuntimeDiagnostics,
   )
 
+  private fun emptyBriefing(phaseId: String) = FeatureTaskRuntimePhaseLaunchBriefing(
+    phaseId = phaseId,
+    specReference = "spec.md",
+    featureSize = "MEDIUM",
+    acceptanceCriteria = listOf("AC-001"),
+    mandatesAndOverrides = emptyList(),
+    handoffEnvelope =
+    FeatureTaskRuntimeHandoffEnvelope(
+      consumerPhaseId = phaseId,
+      projections = emptyList(),
+    ),
+    derivedContextKeys = emptyList(),
+    briefingText = "briefing",
+  )
+
+  private fun measurement(phaseId: String, fingerprint: String, outcome: FeatureTaskRuntimeSharedEvidenceOutcome) =
+    FeatureTaskRuntimeSharedEvidenceMeasurement(
+      workflowId = "wf-shared",
+      checkpointFingerprint = fingerprint,
+      consumerPhaseId = phaseId,
+      outcome = outcome,
+      fileIndexCount = 1,
+      hunkIndexCount = 1,
+    )
+
   private object NoopWorkflowSnapshotValidator : WorkflowSnapshotValidator {
-    override fun validate(
-      snapshot: WorkflowStateSnapshot,
-      slug: String,
-    ) = Unit
+    override fun validate(snapshot: WorkflowStateSnapshot, slug: String) = Unit
   }
 }

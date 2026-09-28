@@ -13,6 +13,7 @@ import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
 import skillbill.application.workflow.persist.openFeatureTask
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
 import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.error.shellcontent.WorkflowIssueKeyConflictError
@@ -49,6 +50,7 @@ class WorkflowIssueKeyPersistenceTest {
       assertIs<WorkflowOpenResult.Ok>(
         service.openFeatureTask(
           WorkflowServiceOpenFeatureTaskArgs(
+            executionPlan = testExecutionPlan(),
             kind = WorkflowFamilyKind.TASK_RUNTIME,
             issueKey = "  SKILL-117  ",
             repositoryIdentity = "repo-root-realpath-v1:/test/repository",
@@ -60,6 +62,7 @@ class WorkflowIssueKeyPersistenceTest {
       assertIs<WorkflowOpenResult.Ok>(
         service.openFeatureTask(
           WorkflowServiceOpenFeatureTaskArgs(
+            executionPlan = testExecutionPlan(),
             kind = WorkflowFamilyKind.TASK_RUNTIME,
             issueKey = " SKILL-118 ",
             repositoryIdentity = "repo-root-realpath-v1:/test/repository",
@@ -97,6 +100,7 @@ class WorkflowIssueKeyPersistenceTest {
     assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
       service.openFeatureTask(
         WorkflowServiceOpenFeatureTaskArgs(
+          executionPlan = testExecutionPlan(),
           kind = WorkflowFamilyKind.TASK_RUNTIME,
           issueKey = "SKILL-117\nspoofed",
           repositoryIdentity = "repo-root-realpath-v1:/test/repository",
@@ -107,6 +111,7 @@ class WorkflowIssueKeyPersistenceTest {
     assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
       service.openFeatureTask(
         WorkflowServiceOpenFeatureTaskArgs(
+          executionPlan = testExecutionPlan(),
           kind = WorkflowFamilyKind.TASK_RUNTIME,
           issueKey = "S".repeat(129),
           repositoryIdentity = "repo-root-realpath-v1:/test/repository",
@@ -127,16 +132,16 @@ class WorkflowIssueKeyPersistenceTest {
         handoffFoundationValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
       )
 
-    recorder.ensureWorkflowOpen("wftr-117", "session-117")
-    recorder.ensureWorkflowOpen("wftr-117", "session-117", issueKey = " SKILL-117 ")
-    recorder.ensureWorkflowOpen("wftr-117", "session-117", issueKey = "SKILL-117")
+    recorder.openTestWorkflow("wftr-117", "session-117")
+    recorder.openTestWorkflow("wftr-117", "session-117", issueKey = " SKILL-117 ")
+    recorder.openTestWorkflow("wftr-117", "session-117", issueKey = "SKILL-117")
 
     val healed = assertNotNull(workflows.getFeatureTaskWorkflowAsMode("wftr-117", FeatureTaskWorkflowMode.RUNTIME))
     assertEquals("SKILL-117", healed.issueKey)
 
     val conflict =
       assertFailsWith<WorkflowIssueKeyConflictError> {
-        recorder.ensureWorkflowOpen("wftr-117", "session-117", issueKey = "SKILL-118")
+        recorder.openTestWorkflow("wftr-117", "session-117", issueKey = "SKILL-118")
       }
     assertEquals("wftr-117", conflict.workflowId)
     assertEquals("SKILL-117", conflict.persistedIssueKey)

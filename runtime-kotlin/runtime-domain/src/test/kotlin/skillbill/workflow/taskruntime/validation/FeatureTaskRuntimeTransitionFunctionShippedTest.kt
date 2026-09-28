@@ -22,14 +22,13 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
     verdict: FeatureTaskRuntimeVerdict,
     edgeIterationCount: Int = 0,
     settledVerdicts: Map<String, FeatureTaskRuntimeVerdict> = satisfiedAudit,
-  ): FeatureTaskRuntimeNextPhase =
-    shippedTransition(
-      shipped,
-      currentPhaseId,
-      verdict,
-      edgeIterationCount,
-      settledVerdicts,
-    )
+  ): FeatureTaskRuntimeNextPhase = shippedTransition(
+    shipped,
+    currentPhaseId,
+    verdict,
+    edgeIterationCount,
+    settledVerdicts,
+  )
 
   @Test
   fun `a clean run advances implement to simplify to audit to review to verify_findings to validate`() {
@@ -153,10 +152,12 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
   }
 
   @Test
-  fun `write_history and commit_push never originate a backward edge`() {
+  fun `write_history only regenerates receipts and commit_push never originates a backward edge`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     val fromPhases = shipped.backwardEdges.map { it.fromPhaseId }.toSet()
-    assertTrue(def.PHASE_WRITE_HISTORY !in fromPhases)
+    val historyEdges = shipped.backwardEdges.filter { it.fromPhaseId == def.PHASE_WRITE_HISTORY }
+    assertEquals(setOf(def.PHASE_BUILD, def.PHASE_VALIDATE), historyEdges.map { it.destinationPhaseId }.toSet())
+    assertTrue(historyEdges.all { it.triggeringVerdict == FeatureTaskRuntimeVerdict.RECORD_REJECTED })
     assertTrue(def.PHASE_COMMIT_PUSH !in fromPhases)
   }
 

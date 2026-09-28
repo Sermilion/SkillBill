@@ -11,6 +11,10 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
  * shapes and resume decisions a step owns live with the step instead of in the shared reconstruction.
  */
 internal interface PhaseResumeRules {
+  /** Whether a completed receipt must validate before reconstruction can change any completion. */
+  val requiresValidCompletedOutput: Boolean
+    get() = false
+
   /** Whether this step records review passes, so the run state tracks its pass numbers and invalidation tombstone. */
   val tracksReviewPasses: Boolean
     get() = false
@@ -34,10 +38,8 @@ internal interface PhaseResumeRules {
   ): FeatureTaskRuntimePhaseRecord = stripped
 
   /** Whether a blocked ledger entry of this step is dropped, given its [raw] and [resumed] record. */
-  fun dropsBlockedLedgerEntry(
-    raw: FeatureTaskRuntimePhaseRecord?,
-    resumed: FeatureTaskRuntimePhaseRecord?,
-  ): Boolean = false
+  fun dropsBlockedLedgerEntry(raw: FeatureTaskRuntimePhaseRecord?, resumed: FeatureTaskRuntimePhaseRecord?): Boolean =
+    false
 
   /** Whether the durable output of [record] is withheld from the resumed run. */
   fun withholdsDurableOutput(record: FeatureTaskRuntimePhaseRecord): Boolean = false
@@ -52,10 +54,8 @@ internal interface PhaseResumeRules {
   ): Boolean = false
 
   /** How a persisted block of this step with [reason] resumes, given its [recentBlockedReasons], newest first. */
-  fun persistedBlockResume(
-    reason: String,
-    recentBlockedReasons: List<String?>,
-  ): PhaseBlockResume = PhaseBlockResume.DEFAULT
+  fun persistedBlockResume(reason: String, recentBlockedReasons: List<String?>): PhaseBlockResume =
+    PhaseBlockResume.DEFAULT
 
   companion object {
     val None: PhaseResumeRules = object : PhaseResumeRules {}

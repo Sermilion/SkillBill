@@ -2,6 +2,7 @@ package skillbill.workflow.taskruntime.unbounded
 
 import skillbill.error.shellcontent.FeatureTaskRuntimePhaseOrderViolationError
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCapExhaustionBehavior
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionContext
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -72,8 +73,14 @@ class UnboundedRemediationLoopRegressionTest {
   }
 
   @Test
-  fun `no backward edge is a record-regeneration loop after implement prose migration`() {
-    assertEquals(emptySet(), def.REGENERATION_LOOP_IDS)
-    assertTrue(transitions.backwardEdges.none { def.isRegenerationLoopId(it.loopId) })
+  fun `receipt regeneration is bounded and cannot reenter implementation or finalization`() {
+    val edges = transitions.backwardEdges.filter { def.isRegenerationLoopId(it.loopId) }
+    assertEquals(setOf(def.PHASE_BUILD, def.PHASE_VALIDATE), edges.map { it.destinationPhaseId }.toSet())
+    edges.forEach {
+      assertEquals(def.PHASE_WRITE_HISTORY, it.fromPhaseId)
+      assertEquals(FeatureTaskRuntimeVerdict.RECORD_REJECTED, it.triggeringVerdict)
+      assertEquals(2, it.perEdgeCap)
+      assertEquals(FeatureTaskRuntimeCapExhaustionBehavior.BLOCK, it.capExhaustionBehavior)
+    }
   }
 }

@@ -21,7 +21,7 @@ class FeatureTaskRuntimeValidationGateStatusProjectionTest {
     val workflowId = "wfl-gate-evidence-status"
     val harness = statusHarness()
     val recorder = harness.recorder
-    recorder.ensureWorkflowOpen(workflowId, "goal-gate-evidence")
+    recorder.openTestWorkflow(workflowId, "goal-gate-evidence")
     val output = gateEvidenceOutput()
     recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
@@ -64,25 +64,24 @@ class FeatureTaskRuntimeValidationGateStatusProjectionTest {
     assertEquals(2, projected.gateRuns.single().executedWorkUnits)
   }
 
-  private fun gateEvidenceOutput(): String =
-    FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
-      phaseId = "validate",
-      repositoryCheckpoint = "checkpoint",
-      measurements =
-        listOf(
-          FeatureTaskRuntimeValidationGateRunRecord(
-            durationMs = 1,
-            outcome = ValidationGateRunOutcome.PASSED,
-            cacheMode = ValidationGateCacheMode.FORCED_FULL,
-            executedWorkUnits = 2,
-            executedChecks = listOf("runtime-engine|compileKotlin", "runtime-engine|test"),
-            command = "./gradlew check --continue",
-            exitCode = 0,
-            repositoryCheckpoint = "checkpoint",
-          ),
-        ),
-      requiredCommand = "./gradlew check --continue",
-    ).payload
+  private fun gateEvidenceOutput(): String = FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
+    phaseId = "validate",
+    repositoryCheckpoint = "checkpoint",
+    measurements =
+    listOf(
+      FeatureTaskRuntimeValidationGateRunRecord(
+        durationMs = 1,
+        outcome = ValidationGateRunOutcome.PASSED,
+        cacheMode = ValidationGateCacheMode.FORCED_FULL,
+        executedWorkUnits = 2,
+        executedChecks = listOf("runtime-engine|compileKotlin", "runtime-engine|test"),
+        command = "./gradlew check --continue",
+        exitCode = 0,
+        repositoryCheckpoint = "checkpoint",
+      ),
+    ),
+    requiredCommand = "./gradlew check --continue",
+  ).payload
 
   private fun settledValidationResult(payload: String): Map<String, Any?>? {
     val envelope =
@@ -101,24 +100,24 @@ class FeatureTaskRuntimeValidationGateStatusProjectionTest {
     val workflowId = "wfl-gate-evidence-zero-work"
     val harness = statusHarness()
     val recorder = harness.recorder
-    recorder.ensureWorkflowOpen(workflowId, "goal-gate-evidence-zero-work")
+    recorder.openTestWorkflow(workflowId, "goal-gate-evidence-zero-work")
     val output =
       FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
         phaseId = "validate",
         repositoryCheckpoint = "checkpoint",
         measurements =
-          listOf(
-            FeatureTaskRuntimeValidationGateRunRecord(
-              durationMs = 1,
-              outcome = ValidationGateRunOutcome.PASSED,
-              cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE,
-              executedWorkUnits = 0,
-              executedChecks = emptyList(),
-              command = "./gradlew check",
-              exitCode = 0,
-              repositoryCheckpoint = "checkpoint",
-            ),
+        listOf(
+          FeatureTaskRuntimeValidationGateRunRecord(
+            durationMs = 1,
+            outcome = ValidationGateRunOutcome.PASSED,
+            cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE,
+            executedWorkUnits = 0,
+            executedChecks = emptyList(),
+            command = "./gradlew check",
+            exitCode = 0,
+            repositoryCheckpoint = "checkpoint",
           ),
+        ),
         requiredCommand = "./gradlew check",
       )
     recorder.recordPhaseState(

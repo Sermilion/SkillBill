@@ -14,7 +14,7 @@ class FeatureTaskRuntimeReviewFixBudgetTest {
   @Test
   fun `a repair round that later completed spent no budget and an exhaustion stays readable after a resume`() {
     val harness = runnerHarness()
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     harness.appendLoopEdge(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID, edgeIteration = 1)
 
     assertEquals(
@@ -45,7 +45,7 @@ class FeatureTaskRuntimeReviewFixBudgetTest {
   @Test
   fun `a relaunched stateless audit counts as a gap round and a satisfied first audit stays a measured zero`() {
     val harness = runnerHarness()
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     harness.appendLoopEdge(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID, edgeIteration = 1)
     harness.appendAuditContinuation(FeatureTaskRuntimeContinuationKind.IMPLEMENTATION_CONTINUATION)
 
@@ -80,23 +80,20 @@ private fun RunnerHarness.appendLedger(
   ).detail(),
 )
 
-private fun RunnerHarness.appendAuditContinuation(kind: FeatureTaskRuntimeContinuationKind) =
-  appendLedger(
-    FeatureTaskRuntimePhaseLedgerAction.FIX_LOOP_ITERATION,
-    phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
-  ) {
-    copy(
-      blockedReason = FeatureTaskRuntimeContinuationKind.LEDGER_DETAIL_PREFIX + kind.wireValue,
-      fixLoopIteration = 1,
-    )
-  }
-
-private fun RunnerHarness.appendLoopEdge(
-  loopId: String,
-  edgeIteration: Int,
-) = appendLedger(FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE) {
-  copy(loopId = loopId, edgeIteration = edgeIteration)
+private fun RunnerHarness.appendAuditContinuation(kind: FeatureTaskRuntimeContinuationKind) = appendLedger(
+  FeatureTaskRuntimePhaseLedgerAction.FIX_LOOP_ITERATION,
+  phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+) {
+  copy(
+    blockedReason = FeatureTaskRuntimeContinuationKind.LEDGER_DETAIL_PREFIX + kind.wireValue,
+    fixLoopIteration = 1,
+  )
 }
+
+private fun RunnerHarness.appendLoopEdge(loopId: String, edgeIteration: Int) =
+  appendLedger(FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE) {
+    copy(loopId = loopId, edgeIteration = edgeIteration)
+  }
 
 private fun RunnerHarness.appendLoopCapExhausted(loopId: String) =
   appendLedger(FeatureTaskRuntimePhaseLedgerAction.LOOP_CAP_EXHAUSTED) {

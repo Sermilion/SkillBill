@@ -77,7 +77,12 @@ class PhaseValidationRunTest {
     assertEquals(listOf(PHASE_VALIDATE), first.completedStepIds)
     assertEquals(listOf(PHASE_VALIDATE), second.completedStepIds)
     assertEquals(emptyList(), launcher.requests)
-    assertEquals(List(2) { listOf("./tools/gradlew", "-p", "./tools", "validation-discovery") }, gateRequests.map { it.argv })
+    assertEquals(
+      List(2) {
+        listOf("./tools/gradlew", "-p", "./tools", "validation-discovery")
+      },
+      gateRequests.map { it.argv },
+    )
     database.assertNoDurableWorkflowState()
     branchSetup.gitOperations.assertNoCommitOrCheckpointRef(headBefore)
   }
@@ -110,23 +115,40 @@ class PhaseValidationRunTest {
     val result = entry(launcher, gateRequests, listOf(failure, verified)).run(validationRequest())
 
     assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertEquals(listOf("./tools/gradlew -p ./tools validation-discovery", "./tools/gradlew -p ./tools validation-verification"), gateRequests.map { it.argv.joinToString(" ") })
-    assertEquals(listOf(ValidationGateCacheMode.CACHE_ELIGIBLE, ValidationGateCacheMode.FORCED_FULL),
-      gateRequests.map { it.cacheMode })
+    assertEquals(
+      listOf(
+        "./tools/gradlew -p ./tools validation-discovery",
+        "./tools/gradlew -p ./tools validation-verification",
+      ),
+      gateRequests.map {
+        it.argv.joinToString(" ")
+      },
+    )
+    assertEquals(
+      listOf(ValidationGateCacheMode.CACHE_ELIGIBLE, ValidationGateCacheMode.FORCED_FULL),
+      gateRequests.map { it.cacheMode },
+    )
     val envelope = requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(requireNotNull(result.value))))
     val produced = assertIs<Map<*, *>>(envelope["produced_outputs"])
     val evidence = assertIs<Map<*, *>>(produced["validation_result"])
     val runs = assertIs<List<*>>(evidence["gate_runs"])
     assertEquals(listOf("failed", "passed"), runs.map { assertIs<Map<*, *>>(it)["outcome"] })
     assertEquals(listOf(1L, 0L), runs.map { (assertIs<Map<*, *>>(it)["exit_code"] as Number).toLong() })
-    assertEquals(listOf("./tools/gradlew -p ./tools validation-discovery", "./tools/gradlew -p ./tools validation-verification"),
-      runs.map { assertIs<Map<*, *>>(it)["command"] })
+    assertEquals(
+      listOf("./tools/gradlew -p ./tools validation-discovery", "./tools/gradlew -p ./tools validation-verification"),
+      runs.map { assertIs<Map<*, *>>(it)["command"] },
+    )
     val started = database.outboxPayloads("skillbill_quality_check_started").single()
     val finished = database.outboxPayloads("skillbill_quality_check_finished").single()
     assertEquals("bill-code-check", started["routed_skill"])
     assertEquals("pass", finished["result"])
     assertEquals(2L, (finished["iterations"] as Number).toLong())
-    assertEquals(listOf(PHASE_VALIDATE), launcher.requests.mapNotNull { it.skillRunRequest.promptOverride?.let(::phaseIdFromPrompt) })
+    assertEquals(
+      listOf(PHASE_VALIDATE),
+      launcher.requests.mapNotNull {
+        it.skillRunRequest.promptOverride?.let(::phaseIdFromPrompt)
+      },
+    )
     database.assertNoDurableWorkflowState()
     branchSetup.gitOperations.assertNoCommitOrCheckpointRef(headBefore)
   }
@@ -136,8 +158,10 @@ class PhaseValidationRunTest {
     val gateRequests = mutableListOf<ValidationGateRunRequest>()
     val launcher = launcher { validJsonOutput(PHASE_VALIDATE) }
 
-    val result = assertIs<PhaseRunResult.Blocked>(entry(launcher, gateRequests, emptyList(), manifests = emptyList())
-      .run(validationRequest()))
+    val result = assertIs<PhaseRunResult.Blocked>(
+      entry(launcher, gateRequests, emptyList(), manifests = emptyList())
+        .run(validationRequest()),
+    )
 
     assertEquals(PHASE_VALIDATE, result.stepId)
     assertContains(result.reason, "declaration is absent")
@@ -200,8 +224,11 @@ class PhaseValidationRunTest {
     val requests = mutableListOf<ValidationGateRunRequest>()
     val launcher = launcher { error("Rejected briefing must prevent repair launch") }
     val failure = ValidationGateRunResult(
-      exitCode = 1, durationMs = 1, outcome = ValidationGateRunOutcome.FAILED,
-      cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE, executedWorkUnits = 0,
+      exitCode = 1,
+      durationMs = 1,
+      outcome = ValidationGateRunOutcome.FAILED,
+      cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE,
+      executedWorkUnits = 0,
       executedCheckIdentities = emptyList(),
       findings = listOf(ValidationGateFinding("engine", "compile", "broken", "Foo.kt")),
     )
@@ -220,7 +247,8 @@ class PhaseValidationRunTest {
             sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
             attempt: Int,
           ) {
-            val rejection = RequiredPhaseWriteRejected(RequiredPhaseWriteKind.BRIEFING, workflowId, briefing.phaseId, attempt)
+            val rejection =
+              RequiredPhaseWriteRejected(RequiredPhaseWriteKind.BRIEFING, workflowId, briefing.phaseId, attempt)
             original = rejection
             throw rejection
           }
@@ -251,20 +279,21 @@ class PhaseValidationRunTest {
   }
 
   private fun validationPack(): PlatformManifest = kotlinPackWithValidationGate().let { pack ->
-    pack.copy(validationGate = requireNotNull(pack.validationGate).copy(
-      buildCommand = listOf("./gradlew", "build-discovery"),
-      cacheBypassingBuildCommand = listOf("./gradlew", "build-verification"),
-      collectAllFullGateCommand = listOf("./gradlew", "validation-discovery"),
-      cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "validation-verification"),
-    ))
+    pack.copy(
+      validationGate = requireNotNull(pack.validationGate).copy(
+        buildCommand = listOf("./gradlew", "build-discovery"),
+        cacheBypassingBuildCommand = listOf("./gradlew", "build-verification"),
+        collectAllFullGateCommand = listOf("./gradlew", "validation-discovery"),
+        cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "validation-verification"),
+      ),
+    )
   }
 
-  private fun validationRequest(): PhaseRunRequest =
-    PhaseRunRequest(
-      definitionId = SkeletonDefinition.VALIDATION.id,
-      repoRoot = repoRoot,
-      invokedAgentId = "claude",
-    )
+  private fun validationRequest(): PhaseRunRequest = PhaseRunRequest(
+    definitionId = SkeletonDefinition.VALIDATION.id,
+    repoRoot = repoRoot,
+    invokedAgentId = "claude",
+  )
 
   private fun launcher(output: (Int) -> String): RuntimeRecordingLauncher {
     var attempt = 0
@@ -282,35 +311,36 @@ class PhaseValidationRunTest {
     val runner =
       telemetryRunnerHarness(
         runtimeConfig =
-          RuntimeHarnessConfig(
-            branchSetup =
-              branchSetup.also {
-                it.gitOperations.ownedPathsResult =
-                  WorkflowGitNameListResult.Listed(listOf("src/Foo.kt"))
-              },
-            repoRoot = repoRoot,
-            launcher = launcher,
-            validator = realFeatureTaskRuntimePhaseOutputValidator,
-            validationGatePlatformManifests = manifests,
-            gateRepoLocalConfig = repoLocalConfig("./tools/gradlew"),
-            validationGateRunner =
-              object : ValidationGateRunner {
-                override fun run(request: ValidationGateRunRequest): ValidationGateRunResult {
-                  gateRequests += request
-                  return results.getOrNull(resultIndex++)?.copy(command = request.argv.joinToString(" "))
-                    ?: ValidationGateRunResult(
-                      exitCode = 0,
-                      durationMs = 1,
-                      outcome = ValidationGateRunOutcome.PASSED,
-                      cacheMode = request.cacheMode,
-                      executedWorkUnits = 1,
-                      executedCheckIdentities = emptyList(),
-                      findings = emptyList(),
-                      command = request.argv.joinToString(" "),
-                    )
-                }
-              },
-          ),
+        RuntimeHarnessConfig(
+          seedDurableWorkflow = false,
+          branchSetup =
+          branchSetup.also {
+            it.gitOperations.ownedPathsResult =
+              WorkflowGitNameListResult.Listed(listOf("src/Foo.kt"))
+          },
+          repoRoot = repoRoot,
+          launcher = launcher,
+          validator = realFeatureTaskRuntimePhaseOutputValidator,
+          validationGatePlatformManifests = manifests,
+          gateRepoLocalConfig = repoLocalConfig("./tools/gradlew"),
+          validationGateRunner =
+          object : ValidationGateRunner {
+            override fun run(request: ValidationGateRunRequest): ValidationGateRunResult {
+              gateRequests += request
+              return results.getOrNull(resultIndex++)?.copy(command = request.argv.joinToString(" "))
+                ?: ValidationGateRunResult(
+                  exitCode = 0,
+                  durationMs = 1,
+                  outcome = ValidationGateRunOutcome.PASSED,
+                  cacheMode = request.cacheMode,
+                  executedWorkUnits = 1,
+                  executedCheckIdentities = emptyList(),
+                  findings = emptyList(),
+                  command = request.argv.joinToString(" "),
+                )
+            }
+          },
+        ),
         databaseFactory = { database },
       ).runner
     return phaseRunEntry(runner, database, clock, runLoopEntry)

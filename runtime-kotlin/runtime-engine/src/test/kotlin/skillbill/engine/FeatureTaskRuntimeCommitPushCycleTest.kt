@@ -51,28 +51,28 @@ class FeatureTaskRuntimeCommitPushCycleTest {
             branchSetup = BranchSetupTestConfig(gitOperations = git),
             repoRoot = repoRoot,
             goalContinuation =
-              FeatureTaskRuntimeGoalContinuationContext(
-                parentIssueKey = RUNNER_TEST_ISSUE_KEY,
-                subtaskId = 5,
-                subtaskName = "one owner for every wire token",
-                goalBranch = "feat/existing-runtime-branch",
-                suppressPr = true,
-                parentWorkflowId = "wfl-parent",
-                reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
-              ),
+            FeatureTaskRuntimeGoalContinuationContext(
+              parentIssueKey = RUNNER_TEST_ISSUE_KEY,
+              subtaskId = 5,
+              subtaskName = "one owner for every wire token",
+              goalBranch = "feat/existing-runtime-branch",
+              suppressPr = true,
+              parentWorkflowId = "wfl-parent",
+              reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
+            ),
           ),
           core =
-            RunnerHarnessCore(
-              launcher =
-                RuntimeRecordingLauncher { request ->
-                  val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-                  check(phaseId != "commit_push") { "commit_push must not launch an agent" }
-                  facts(validJsonOutput(phaseId))
-                },
-              agentAssignment = phasePerAgentAssignment(),
-            ),
+          RunnerHarnessCore(
+            launcher =
+            RuntimeRecordingLauncher { request ->
+              val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+              check(phaseId != "commit_push") { "commit_push must not launch an agent" }
+              facts(validJsonOutput(phaseId))
+            },
+            agentAssignment = phasePerAgentAssignment(),
+          ),
         )
-      harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+      harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
       harness.seedPhase("preplan", "completed", 1, phaseAgent("preplan"), PREPLAN_OUTPUT)
       harness.seedPhase("plan", "completed", 1, phaseAgent("plan"), PLAN_OUTPUT)
       harness.seedPhase("implement", "completed", 1, phaseAgent("implement"), IMPLEMENT_OUTPUT)

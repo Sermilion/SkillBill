@@ -47,8 +47,8 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoord
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
-import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.goalrunner.GoalOperatorDecisionService
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
@@ -90,28 +90,28 @@ abstract class RuntimeComponent(
   private val inputRuntimeContext: RuntimeContext,
 ) :
   RuntimeInstallTargetProvides,
-    RuntimeInstallPlanProvides,
-    RuntimeExternalPlatformPackProvides,
-    RuntimeTelemetryProvides,
-    RuntimeGoalPlanningProvides,
-    RuntimeGoalPlanningSweepProvides,
-    RuntimeGoalRunnerStoreProvides,
-    RuntimeGoalRunnerLaunchProvides,
-    RuntimeReviewLaunchProvides,
-    RuntimeReviewAddonCatalogProvides,
-    RuntimeReviewEvidenceProvides,
-    RuntimeFeatureTaskProvides,
-    RuntimeFeatureTaskSlotProvides,
-    RuntimeOperationProvides,
-    RuntimeFeatureSpecProvides,
-    RuntimeWorkflowProvides,
-    RuntimeWorkflowValidatorProvides,
-    RuntimeFeatureTaskValidatorProvides,
-    RuntimeScaffoldProvides,
-    RuntimeScaffoldValidationProvides,
-    RuntimeInstallerProvides,
-    RuntimeOptionalCallbackProvides,
-    RuntimeDiagnosticsProvides {
+  RuntimeInstallPlanProvides,
+  RuntimeExternalPlatformPackProvides,
+  RuntimeTelemetryProvides,
+  RuntimeGoalPlanningProvides,
+  RuntimeGoalPlanningSweepProvides,
+  RuntimeGoalRunnerStoreProvides,
+  RuntimeGoalRunnerLaunchProvides,
+  RuntimeReviewLaunchProvides,
+  RuntimeReviewAddonCatalogProvides,
+  RuntimeReviewEvidenceProvides,
+  RuntimeFeatureTaskProvides,
+  RuntimeFeatureTaskSlotProvides,
+  RuntimeOperationProvides,
+  RuntimeFeatureSpecProvides,
+  RuntimeWorkflowProvides,
+  RuntimeWorkflowValidatorProvides,
+  RuntimeFeatureTaskValidatorProvides,
+  RuntimeScaffoldProvides,
+  RuntimeScaffoldValidationProvides,
+  RuntimeInstallerProvides,
+  RuntimeOptionalCallbackProvides,
+  RuntimeDiagnosticsProvides {
   private val resolvedRuntimeContext: RuntimeContext by lazy {
     RuntimeBootstrapBindings.runtimeContext(inputRuntimeContext)
   }

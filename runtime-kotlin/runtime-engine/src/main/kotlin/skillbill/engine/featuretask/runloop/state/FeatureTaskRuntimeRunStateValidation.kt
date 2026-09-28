@@ -73,12 +73,8 @@ internal fun invalidateUnsettledResumedCompletions(
   state: ValidationSettlementState,
   validation: ValidationSettlementValidation,
 ) {
-  val gatePhases = setOf(
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
-  )
   val gateOutputs = state.initialRecords.values
-    .filter { it.phaseId in gatePhases && it.status == WorkflowStepStatus.COMPLETED }
+    .filter { validation.resumeRules(it.phaseId).requiresValidCompletedOutput && it.status == WorkflowStepStatus.COMPLETED }
     .associate { it.phaseId to validation.validatedRecordToOutput(it) }
   state.completed.sortedBy(state.transitions.forwardPhaseIds::indexOf).forEach { stepId ->
     if (stepId !in state.completed) return@forEach
@@ -87,9 +83,10 @@ internal fun invalidateUnsettledResumedCompletions(
       try {
         if (stepId in gateOutputs) gateOutputs[stepId] else validation.validatedRecordToOutput(record)
       } catch (error: InvalidFeatureTaskRuntimePhaseOutputSchemaError) {
-        if (stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE ||
-          stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
-        ) throw error
+        if (validation.resumeRules(stepId).requiresValidCompletedOutput
+        ) {
+          throw error
+        }
         null
       }
     }

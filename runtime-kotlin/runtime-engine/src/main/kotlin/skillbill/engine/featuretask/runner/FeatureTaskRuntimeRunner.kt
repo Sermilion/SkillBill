@@ -14,9 +14,9 @@ import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPrepara
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
-import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
+import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
@@ -65,9 +65,12 @@ class FeatureTaskRuntimeRunner(
   private fun validateAdmittedRequest(request: FeatureTaskRuntimeRunRequest) {
     val admitted = requireNotNull(request.admittedExecution)
     val identity = admitted.identity
-    if (identity.workflowId != request.workflowId || identity.normalizedIssueKey != request.issueKey.trim().uppercase() ||
+    if (identity.workflowId != request.workflowId ||
+      identity.normalizedIssueKey != request.issueKey.trim().uppercase() ||
       (identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD) != (request.goalContinuation != null)
-    ) throw InvalidFeatureTaskExecutionIdentitySchemaError(request.workflowId, "admission does not match run request")
+    ) {
+      throw InvalidFeatureTaskExecutionIdentitySchemaError(request.workflowId, "admission does not match run request")
+    }
     if (request.transitionsOverride != null && request.transitionsOverride != admitted.plan.traversal) {
       throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
     }
@@ -92,10 +95,10 @@ class FeatureTaskRuntimeRunner(
       featureSize = request.runInvariants.featureSize.name,
       lastIncompletePhase = FeatureTaskRuntimePhaseWorkflowDefinition.definition.defaultInitialStepId,
       blockedReason =
-        "Cannot resume workflow '${request.workflowId}' in runtime mode: it was created in " +
-          "'${existingMode.wireValue}' mode. A feature-task workflow is mode-scoped — prose and runtime are " +
-          "not interchangeable. Finish this subtask in '${existingMode.wireValue}' mode, or reset the subtask " +
-          "to start a fresh runtime attempt.",
+      "Cannot resume workflow '${request.workflowId}' in runtime mode: it was created in " +
+        "'${existingMode.wireValue}' mode. A feature-task workflow is mode-scoped — prose and runtime are " +
+        "not interchangeable. Finish this subtask in '${existingMode.wireValue}' mode, or reset the subtask " +
+        "to start a fresh runtime attempt.",
       completedPhaseIds = emptyList(),
       resolvedBranch = null,
     )

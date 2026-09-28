@@ -41,12 +41,12 @@ class FeatureTaskRuntimeCorrectiveRespawnIntegrationTest {
       runnerHarness(
         RuntimeHarnessConfig(
           launcher =
-            RuntimeRecordingLauncher { request ->
-              val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-              if (phaseId != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
-              auditAttempts += 1
-              facts(if (auditAttempts == 1) rejectedBody else defaultPhaseOutput(request))
-            },
+          RuntimeRecordingLauncher { request ->
+            val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+            if (phaseId != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
+            auditAttempts += 1
+            facts(if (auditAttempts == 1) rejectedBody else defaultPhaseOutput(request))
+          },
           validator = rejectingOnceValidator(rejectedBody),
         ),
       )
@@ -69,34 +69,31 @@ class FeatureTaskRuntimeCorrectiveRespawnIntegrationTest {
       runnerHarness(
         RuntimeHarnessConfig(
           launcher =
-            RuntimeRecordingLauncher { request ->
-              val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-              if (phaseId != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
-              auditAttempts += 1
-              facts(
-                when (auditAttempts) {
-                  1 -> firstBody
-                  2 -> secondBody
-                  else -> defaultPhaseOutput(request)
-                },
-              )
-            },
+          RuntimeRecordingLauncher { request ->
+            val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+            if (phaseId != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
+            auditAttempts += 1
+            facts(
+              when (auditAttempts) {
+                1 -> firstBody
+                2 -> secondBody
+                else -> defaultPhaseOutput(request)
+              },
+            )
+          },
           validator =
-            object : FeatureTaskRuntimePhaseOutputTestValidator() {
-              override fun validatePhaseOutputText(
-                phaseOutputText: String,
-                sourceLabel: String,
-              ) {
-                if (sourceLabel != "audit") return
-                if (phaseOutputText.contains("SKILL187-ATTEMPT-1") || phaseOutputText.contains("SKILL187-ATTEMPT-2")) {
-                  throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
-                    sourceLabel = sourceLabel,
-                    reason = "status: does not have a value in the enumeration — offending value: bad",
-                    payloadFreeReason = payloadFreeConstraint,
-                  )
-                }
+          object : FeatureTaskRuntimePhaseOutputTestValidator() {
+            override fun validatePhaseOutputText(phaseOutputText: String, sourceLabel: String) {
+              if (sourceLabel != "audit") return
+              if (phaseOutputText.contains("SKILL187-ATTEMPT-1") || phaseOutputText.contains("SKILL187-ATTEMPT-2")) {
+                throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+                  sourceLabel = sourceLabel,
+                  reason = "status: does not have a value in the enumeration — offending value: bad",
+                  payloadFreeReason = payloadFreeConstraint,
+                )
               }
-            },
+            }
+          },
         ),
       )
 
@@ -120,42 +117,39 @@ class FeatureTaskRuntimeCorrectiveRespawnIntegrationTest {
       runnerHarness(
         RuntimeHarnessConfig(
           launcher =
-            RuntimeRecordingLauncher { request ->
-              val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-              when (phaseId) {
-                "plan" -> {
-                  planAttempts += 1
-                  facts(if (planAttempts == 1) planBody else defaultPhaseOutput(request))
-                }
-                "audit" -> {
-                  auditAttempts += 1
-                  facts(if (auditAttempts == 1) auditBody else defaultPhaseOutput(request))
-                }
-                else -> facts(defaultPhaseOutput(request))
+          RuntimeRecordingLauncher { request ->
+            val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+            when (phaseId) {
+              "plan" -> {
+                planAttempts += 1
+                facts(if (planAttempts == 1) planBody else defaultPhaseOutput(request))
               }
-            },
+              "audit" -> {
+                auditAttempts += 1
+                facts(if (auditAttempts == 1) auditBody else defaultPhaseOutput(request))
+              }
+              else -> facts(defaultPhaseOutput(request))
+            }
+          },
           validator =
-            object : FeatureTaskRuntimePhaseOutputTestValidator() {
-              override fun validatePhaseOutputText(
-                phaseOutputText: String,
-                sourceLabel: String,
-              ) {
-                if (sourceLabel == "plan" && phaseOutputText.contains("SKILL187-PLAN-STALE")) {
-                  throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
-                    sourceLabel = sourceLabel,
-                    reason = "plan rejected",
-                    payloadFreeReason = payloadFreeConstraint,
-                  )
-                }
-                if (sourceLabel == "audit" && phaseOutputText.contains("SKILL187-AUDIT-CURRENT")) {
-                  throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
-                    sourceLabel = sourceLabel,
-                    reason = "audit rejected",
-                    payloadFreeReason = "verdict: must be a top-level string",
-                  )
-                }
+          object : FeatureTaskRuntimePhaseOutputTestValidator() {
+            override fun validatePhaseOutputText(phaseOutputText: String, sourceLabel: String) {
+              if (sourceLabel == "plan" && phaseOutputText.contains("SKILL187-PLAN-STALE")) {
+                throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+                  sourceLabel = sourceLabel,
+                  reason = "plan rejected",
+                  payloadFreeReason = payloadFreeConstraint,
+                )
               }
-            },
+              if (sourceLabel == "audit" && phaseOutputText.contains("SKILL187-AUDIT-CURRENT")) {
+                throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+                  sourceLabel = sourceLabel,
+                  reason = "audit rejected",
+                  payloadFreeReason = "verdict: must be a top-level string",
+                )
+              }
+            }
+          },
         ),
       )
 
@@ -187,11 +181,11 @@ class FeatureTaskRuntimeCorrectiveRespawnIntegrationTest {
       runnerHarness(
         RuntimeHarnessConfig(
           launcher =
-            RuntimeRecordingLauncher { request ->
-              val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-              if (phaseId == "audit") auditLaunches += 1
-              facts(if (phaseId == "audit" && auditLaunches == 1) retryableFailure else defaultPhaseOutput(request))
-            },
+          RuntimeRecordingLauncher { request ->
+            val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+            if (phaseId == "audit") auditLaunches += 1
+            facts(if (phaseId == "audit" && auditLaunches == 1) retryableFailure else defaultPhaseOutput(request))
+          },
         ),
       )
 
@@ -214,15 +208,15 @@ class FeatureTaskRuntimeCorrectiveRespawnIntegrationTest {
       runnerHarness(
         RuntimeHarnessConfig(
           launcher =
-            RuntimeRecordingLauncher { request ->
-              val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-              if (phaseId == "simplify") {
-                simplifyLaunches += 1
-                facts(malformed)
-              } else {
-                facts(defaultPhaseOutput(request))
-              }
-            },
+          RuntimeRecordingLauncher { request ->
+            val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+            if (phaseId == "simplify") {
+              simplifyLaunches += 1
+              facts(malformed)
+            } else {
+              facts(defaultPhaseOutput(request))
+            }
+          },
           validator = realFeatureTaskRuntimePhaseOutputValidator,
         ),
       )
@@ -262,28 +256,25 @@ class FeatureTaskRuntimeCorrectiveRespawnIntegrationTest {
         runnerHarness(
           RuntimeHarnessConfig(
             launcher =
-              RuntimeRecordingLauncher { request ->
-                val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-                if (phaseId != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
-                auditAttempts += 1
-                facts(if (auditAttempts == 1) rejectedBody else defaultPhaseOutput(request))
-              },
+            RuntimeRecordingLauncher { request ->
+              val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+              if (phaseId != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
+              auditAttempts += 1
+              facts(if (auditAttempts == 1) rejectedBody else defaultPhaseOutput(request))
+            },
             validator =
-              object : FeatureTaskRuntimePhaseOutputTestValidator() {
-                override fun validatePhaseOutputText(
-                  phaseOutputText: String,
-                  sourceLabel: String,
-                ) {
-                  if (sourceLabel != "audit") return
-                  if (phaseOutputText.contains(sentinel)) {
-                    throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
-                      sourceLabel = sourceLabel,
-                      reason = "field rejected — offending value: $sentinel",
-                      payloadFreeReason = payloadFreeConstraint,
-                    )
-                  }
+            object : FeatureTaskRuntimePhaseOutputTestValidator() {
+              override fun validatePhaseOutputText(phaseOutputText: String, sourceLabel: String) {
+                if (sourceLabel != "audit") return
+                if (phaseOutputText.contains(sentinel)) {
+                  throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+                    sourceLabel = sourceLabel,
+                    reason = "field rejected — offending value: $sentinel",
+                    payloadFreeReason = payloadFreeConstraint,
+                  )
                 }
-              },
+              }
+            },
           ),
         )
 
@@ -311,39 +302,36 @@ class FeatureTaskRuntimeCorrectiveRespawnIntegrationTest {
       runnerHarness(
         RuntimeHarnessConfig(
           launcher =
-            RuntimeRecordingLauncher { request ->
-              val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-              if (phaseId != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
-              auditAttempts += 1
-              if (auditAttempts == 1) {
-                agentRunLaunchFacts(
-                  agent = CLAUDE,
-                  stdout = excerpt,
-                  stderr = "",
-                  stdoutTruncated = true,
-                  stdoutByteSize = fullStreamBytes,
-                  stdoutSha256 = fullStreamDigest,
-                )
-              } else {
-                facts(defaultPhaseOutput(request))
-              }
-            },
+          RuntimeRecordingLauncher { request ->
+            val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+            if (phaseId != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
+            auditAttempts += 1
+            if (auditAttempts == 1) {
+              agentRunLaunchFacts(
+                agent = CLAUDE,
+                stdout = excerpt,
+                stderr = "",
+                stdoutTruncated = true,
+                stdoutByteSize = fullStreamBytes,
+                stdoutSha256 = fullStreamDigest,
+              )
+            } else {
+              facts(defaultPhaseOutput(request))
+            }
+          },
           validator =
-            object : FeatureTaskRuntimePhaseOutputTestValidator() {
-              override fun validatePhaseOutputText(
-                phaseOutputText: String,
-                sourceLabel: String,
-              ) {
-                if (sourceLabel != "audit") return
-                if (phaseOutputText.contains("SKILL187-TRUNCATED-EXCERPT")) {
-                  throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
-                    sourceLabel = sourceLabel,
-                    reason = "truncated rejection",
-                    payloadFreeReason = payloadFreeConstraint,
-                  )
-                }
+          object : FeatureTaskRuntimePhaseOutputTestValidator() {
+            override fun validatePhaseOutputText(phaseOutputText: String, sourceLabel: String) {
+              if (sourceLabel != "audit") return
+              if (phaseOutputText.contains("SKILL187-TRUNCATED-EXCERPT")) {
+                throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+                  sourceLabel = sourceLabel,
+                  reason = "truncated rejection",
+                  payloadFreeReason = payloadFreeConstraint,
+                )
               }
-            },
+            }
+          },
         ),
       )
 
@@ -369,43 +357,40 @@ class FeatureTaskRuntimeCorrectiveRespawnIntegrationTest {
       runnerHarness(
         RuntimeHarnessConfig(
           launcher =
-            RuntimeRecordingLauncher { request ->
-              val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-              if (phaseId != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
-              auditAttempts += 1
-              if (auditAttempts == 1) {
-                agentRunLaunchFacts(
-                  agent = CLAUDE,
-                  stdout = excerpt,
-                  stderr = "",
-                  stdoutTruncated = true,
-                  stdoutByteSize = fullStreamBytes,
-                  stdoutSha256 = fullStreamDigest,
-                )
-              } else {
-                facts(defaultPhaseOutput(request))
-              }
-            },
+          RuntimeRecordingLauncher { request ->
+            val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+            if (phaseId != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
+            auditAttempts += 1
+            if (auditAttempts == 1) {
+              agentRunLaunchFacts(
+                agent = CLAUDE,
+                stdout = excerpt,
+                stderr = "",
+                stdoutTruncated = true,
+                stdoutByteSize = fullStreamBytes,
+                stdoutSha256 = fullStreamDigest,
+              )
+            } else {
+              facts(defaultPhaseOutput(request))
+            }
+          },
           validator =
-            object : FeatureTaskRuntimePhaseOutputTestValidator() {
-              override fun validatePhaseOutputText(
-                phaseOutputText: String,
-                sourceLabel: String,
-              ) {
-                if (sourceLabel != "audit") return
-                if (phaseOutputText.contains("SKILL187-DEGRADED-EXCERPT")) {
-                  throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
-                    sourceLabel = sourceLabel,
-                    reason = "degraded rejection",
-                    payloadFreeReason = payloadFreeConstraint,
-                  )
-                }
+          object : FeatureTaskRuntimePhaseOutputTestValidator() {
+            override fun validatePhaseOutputText(phaseOutputText: String, sourceLabel: String) {
+              if (sourceLabel != "audit") return
+              if (phaseOutputText.contains("SKILL187-DEGRADED-EXCERPT")) {
+                throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+                  sourceLabel = sourceLabel,
+                  reason = "degraded rejection",
+                  payloadFreeReason = payloadFreeConstraint,
+                )
               }
-            },
+            }
+          },
           agentAssignment = phasePerAgentAssignment(),
         ),
       )
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     harness.recorder.recordRejectedOutput(
       RejectedOutputDiagnosticRequest(
         workflowId = WORKFLOW_ID,
@@ -426,17 +411,13 @@ class FeatureTaskRuntimeCorrectiveRespawnIntegrationTest {
     assertEquals(1, auditAttempts)
   }
 
-  private fun auditPrompts(harness: RunnerHarness): List<String> =
-    harness.launcher.requests
-      .map { requireNotNull(it.skillRunRequest.promptOverride) }
-      .filter { phaseIdFromPrompt(it) == "audit" }
+  private fun auditPrompts(harness: RunnerHarness): List<String> = harness.launcher.requests
+    .map { requireNotNull(it.skillRunRequest.promptOverride) }
+    .filter { phaseIdFromPrompt(it) == "audit" }
 
   private fun rejectingOnceValidator(rejectedBody: String): FeatureTaskRuntimePhaseOutputTestValidator =
     object : FeatureTaskRuntimePhaseOutputTestValidator() {
-      override fun validatePhaseOutputText(
-        phaseOutputText: String,
-        sourceLabel: String,
-      ) {
+      override fun validatePhaseOutputText(phaseOutputText: String, sourceLabel: String) {
         if (sourceLabel != "audit") return
         if (phaseOutputText.contains(rawSpan) || phaseOutputText == rejectedBody) {
           throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(

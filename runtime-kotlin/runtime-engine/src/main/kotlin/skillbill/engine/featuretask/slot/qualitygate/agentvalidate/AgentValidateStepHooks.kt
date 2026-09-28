@@ -14,6 +14,8 @@ internal object AgentValidateStepHooks : PhaseStepHooks {
 }
 
 internal object AgentValidateResumeRules : PhaseResumeRules {
+  override val requiresValidCompletedOutput = true
+
   override fun invalidatesResumedCompletion(
     record: FeatureTaskRuntimePhaseRecord,
     output: () -> FeatureTaskRuntimePhaseOutput?,

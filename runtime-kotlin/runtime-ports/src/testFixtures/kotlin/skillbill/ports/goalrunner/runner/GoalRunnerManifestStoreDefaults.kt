@@ -5,6 +5,7 @@ import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
+import skillbill.ports.goalrunner.runner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.ports.goalrunner.runner.model.GoalRunnerChildWorkflowSetup
 import skillbill.ports.goalrunner.runner.model.GoalRunnerCompletionPersistenceResult
 import skillbill.ports.goalrunner.runner.model.GoalRunnerLaunchAuthorization
@@ -19,15 +20,11 @@ import java.nio.file.Path
 import java.time.Instant
 
 abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
-  override fun readByIssueKey(
-    issueKey: String,
-    repoRoot: Path?,
-  ): GoalRunnerManifestState? = loadByIssueKey(issueKey, repoRoot)
+  override fun readByIssueKey(issueKey: String, repoRoot: Path?): GoalRunnerManifestState? =
+    loadByIssueKey(issueKey, repoRoot)
 
-  override fun readByIssueKeyIfPresent(
-    issueKey: String,
-    repoRoot: Path?,
-  ): GoalRunnerManifestState? = readByIssueKey(issueKey, repoRoot)
+  override fun readByIssueKeyIfPresent(issueKey: String, repoRoot: Path?): GoalRunnerManifestState? =
+    readByIssueKey(issueKey, repoRoot)
 
   override fun loadDurableByIssueKey(issueKey: String): GoalRunnerManifestState? = loadByIssueKey(issueKey, null)
 
@@ -40,14 +37,18 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
     overwriteExistingReason: Boolean,
   ): GoalRunnerControlState? = null
 
-  override fun requestPauseByIssueKey(
-    issueKey: String,
-    repoRoot: Path?,
-  ): GoalRunnerPausePersistenceResult? = null
+  override fun requestPauseByIssueKey(issueKey: String, repoRoot: Path?): GoalRunnerPausePersistenceResult? = null
 
   override fun resume(parentWorkflowId: String): GoalRunnerManifestState? = null
 
   override fun pauseAtBoundary(state: GoalRunnerManifestState): GoalRunnerManifestState = state
+
+  override fun acquireExecutionLeaseWithChildAdmission(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+    expectedOwnerToken: String?,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission,
+  ): Boolean = acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken)
 
   override fun executionLease(parentWorkflowId: String): GoalRunnerExecutionLease? = null
 
@@ -65,23 +66,15 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
 
   override fun controlState(parentWorkflowId: String): GoalRunnerControlState = GoalRunnerControlState()
 
-  override fun bindRepositoryIdentity(
-    parentWorkflowId: String,
-    repositoryIdentity: String,
-  ): GoalRunnerControlState {
+  override fun bindRepositoryIdentity(parentWorkflowId: String, repositoryIdentity: String): GoalRunnerControlState {
     require(repositoryIdentity.isNotBlank()) { "repositoryIdentity is required." }
     return controlState(parentWorkflowId)
   }
 
-  override fun persistStopAfterSubtask(
-    parentWorkflowId: String,
-    subtaskId: Int,
-  ): GoalRunnerControlState = GoalRunnerControlState(stopAfterSubtaskId = subtaskId)
+  override fun persistStopAfterSubtask(parentWorkflowId: String, subtaskId: Int): GoalRunnerControlState =
+    GoalRunnerControlState(stopAfterSubtaskId = subtaskId)
 
-  override fun authorizeSubtaskLaunch(
-    state: GoalRunnerManifestState,
-    subtaskId: Int,
-  ): GoalRunnerLaunchAuthorization {
+  override fun authorizeSubtaskLaunch(state: GoalRunnerManifestState, subtaskId: Int): GoalRunnerLaunchAuthorization {
     require(subtaskId > 0) { "subtaskId must be positive." }
     val controls = controlState(state.parentWorkflowId)
     return GoalRunnerLaunchAuthorization(
@@ -92,10 +85,8 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
 
   override fun authorizePlanningLaunch(parentWorkflowId: String): AgentRunSpawnAuthorization? = null
 
-  override fun persistControlState(
-    parentWorkflowId: String,
-    state: GoalRunnerControlState,
-  ): GoalRunnerControlState = state
+  override fun persistControlState(parentWorkflowId: String, state: GoalRunnerControlState): GoalRunnerControlState =
+    state
 
   override fun clearRunnerInterruptedPause(parentWorkflowId: String): GoalRunnerControlState {
     val state = controlState(parentWorkflowId)
@@ -124,16 +115,13 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
   override fun saveCompletedSubtaskAtBoundary(
     state: GoalRunnerManifestState,
     subtaskId: Int,
-  ): GoalRunnerCompletionPersistenceResult =
-    GoalRunnerCompletionPersistenceResult(
-      state = saveRuntimeState(state),
-      paused = false,
-    )
+  ): GoalRunnerCompletionPersistenceResult = GoalRunnerCompletionPersistenceResult(
+    state = saveRuntimeState(state),
+    paused = false,
+  )
 
-  override fun saveHardReset(
-    state: GoalRunnerManifestState,
-    preservePlanning: Boolean,
-  ): GoalRunnerManifestState = error("Goal runner manifest store must atomically persist hard reset state.")
+  override fun saveHardReset(state: GoalRunnerManifestState, preservePlanning: Boolean): GoalRunnerManifestState =
+    error("Goal runner manifest store must atomically persist hard reset state.")
 
   override fun deleteIncompatibleChildWorkflow(
     state: GoalRunnerManifestState,
@@ -164,18 +152,13 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
 
   override fun reviewMode(parentWorkflowId: String): CodeReviewExecutionMode? = null
 
-  override fun persistReviewMode(
-    parentWorkflowId: String,
-    mode: CodeReviewExecutionMode,
-  ): CodeReviewExecutionMode = mode
+  override fun persistReviewMode(parentWorkflowId: String, mode: CodeReviewExecutionMode): CodeReviewExecutionMode =
+    mode
 
   override fun reviewPolicy(parentWorkflowId: String): GoalRunnerReviewPolicy? =
     reviewMode(parentWorkflowId)?.let(::GoalRunnerReviewPolicy)
 
-  override fun persistReviewPolicy(
-    parentWorkflowId: String,
-    policy: GoalRunnerReviewPolicy,
-  ): GoalRunnerReviewPolicy =
+  override fun persistReviewPolicy(parentWorkflowId: String, policy: GoalRunnerReviewPolicy): GoalRunnerReviewPolicy =
     GoalRunnerReviewPolicy(
       codeReviewMode = persistReviewMode(parentWorkflowId, policy.codeReviewMode),
       agentAddonSelection = policy.agentAddonSelection,

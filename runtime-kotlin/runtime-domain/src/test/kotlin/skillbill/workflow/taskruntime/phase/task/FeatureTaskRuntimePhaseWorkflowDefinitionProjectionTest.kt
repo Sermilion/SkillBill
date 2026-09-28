@@ -50,10 +50,7 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionProjectionTest {
   fun `repair and finalization projections expose only checkpoint-specific request fields`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
 
-    fun fields(
-      consumer: String,
-      projection: String,
-    ): List<String> =
+    fun fields(consumer: String, projection: String): List<String> =
       def.phaseDeclarations.getValue(consumer).projectionDeclarations
         .single { it.projectionName == projection }
         .declaredFieldNames
@@ -177,9 +174,9 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionProjectionTest {
         FeatureTaskRuntimeTransitionDeclaration(
           forwardPhaseIds = listOf("review", "audit"),
           entryGates =
-            listOf(
-              FeatureTaskRuntimePhaseEntryGate("review", "audit", FeatureTaskRuntimeVerdict.SATISFIED),
-            ),
+          listOf(
+            FeatureTaskRuntimePhaseEntryGate("review", "audit", FeatureTaskRuntimeVerdict.SATISFIED),
+          ),
         )
       }
     assertTrue(error.message.orEmpty().contains("precede"))
@@ -191,6 +188,19 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionProjectionTest {
       FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY,
       definition.completedTerminalSummaryArtifact,
     )
+  }
+
+  @Test
+  fun `all backward edges declare PER_SUBTASK capScope explicitly`() {
+    val edges = FeatureTaskRuntimePhaseWorkflowDefinition.transitions.backwardEdges
+    assertTrue(edges.isNotEmpty())
+    edges.forEach { edge ->
+      assertEquals(
+        FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+        edge.capScope,
+        "backward edge '${edge.loopId}' must explicitly declare PER_SUBTASK capScope",
+      )
+    }
   }
 
   @Test

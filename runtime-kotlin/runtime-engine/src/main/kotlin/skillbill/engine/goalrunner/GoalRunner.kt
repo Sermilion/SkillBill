@@ -41,15 +41,22 @@ class GoalRunner(
 
   fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport {
     val loadedState =
-      manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
+      manifestStore.loadDurableByIssueKey(request.issueKey)?.copy(repoRoot = request.repoRoot)
+        ?: manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
         ?: return unknownGoal(request.issueKey)
+    val childAdmission = runPreparation.existingChildExecutionPlanAdmission(loadedState, request)
     return try {
-      executionCoordinator.runOwned(loadedState.parentWorkflowId) {
+      val execute = {
         val state = reconcileStateBeforeRun(loadedState)
         when (val preparation = runPreparation.prepareRun(state, request)) {
           is GoalRunPreparation.PreparationBlocked -> preparation.report
           is GoalRunPreparation.Prepared -> runPrepared(preparation)
         }
+      }
+      if (childAdmission == null) {
+        executionCoordinator.runOwned(loadedState.parentWorkflowId, execute)
+      } else {
+        executionCoordinator.runOwnedWithChildAdmission(loadedState.parentWorkflowId, childAdmission, execute)
       }
     } catch (alreadyRunning: GoalRunnerExecutionAlreadyRunningException) {
       stopped(
@@ -61,11 +68,11 @@ class GoalRunner(
           blockedReason = alreadyRunning.message.orEmpty(),
           workflowId = loadedState.manifest.workflowIdFor(loadedState.manifest.currentSubtaskIntent.subtaskId),
           lastResumableStep =
-            loadedState.manifest.subtasks
-              .firstOrNull { it.id == loadedState.manifest.currentSubtaskIntent.subtaskId }
-              ?.lastResumableStep
-              .orEmpty()
-              .ifBlank { "plan" },
+          loadedState.manifest.subtasks
+            .firstOrNull { it.id == loadedState.manifest.currentSubtaskIntent.subtaskId }
+            ?.lastResumableStep
+            .orEmpty()
+            .ifBlank { "plan" },
         ),
       )
     }
@@ -158,10 +165,7 @@ class GoalRunner(
     return planningStop.withParentWorkflowId(state.parentWorkflowId)
   }
 
-  private fun emitCompletedGoalEvent(
-    request: GoalRunnerRunRequest,
-    finalReport: GoalRunnerRunReport,
-  ) {
+  private fun emitCompletedGoalEvent(request: GoalRunnerRunRequest, finalReport: GoalRunnerRunReport) {
     if (finalReport is GoalRunnerRunReport.Completed) {
       request.eventSink.emit(
         GoalRunnerRunEvent.Completed(
@@ -192,8 +196,7 @@ class GoalRunner(
   }
 }
 
-private fun GoalRunnerRunReport.withParentWorkflowId(parentWorkflowId: String): GoalRunnerRunReport =
-  when (this) {
-    is GoalRunnerRunReport.Completed -> copy(parentWorkflowId = parentWorkflowId)
-    is GoalRunnerRunReport.Stopped -> copy(parentWorkflowId = parentWorkflowId)
-  }
+private fun GoalRunnerRunReport.withParentWorkflowId(parentWorkflowId: String): GoalRunnerRunReport = when (this) {
+  is GoalRunnerRunReport.Completed -> copy(parentWorkflowId = parentWorkflowId)
+  is GoalRunnerRunReport.Stopped -> copy(parentWorkflowId = parentWorkflowId)
+}

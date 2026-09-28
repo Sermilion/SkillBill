@@ -22,11 +22,10 @@ import skillbill.engine.featuretask.slot.qualitygate.buildGateProgressStore
 import skillbill.engine.featuretask.slot.qualitygate.gateChangedPaths
 import skillbill.engine.featuretask.slot.qualitygate.gateCheckpoint
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentTriageLauncher
-import skillbill.engine.featuretask.validation.model.ValidationGateCommandFamily
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleRequest
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
@@ -74,18 +73,15 @@ internal class PackBuildGateCycle(
     val outcome = stoppedAttempt ?: settle(run, iteration, cycle)
     val finalFindings = reporting.lastFindings
     context.runState.qualityCheckFinished(
-        run.phaseId,
-        finalFailureCount = if (outcome.completedOutput != null) 0 else finalFindings.size.coerceAtLeast(1),
-        failingCheckNames = finalFindings.mapNotNull { it[RULE_OR_TEST_ID_KEY] }.distinct().sorted(),
-        iterations = gateRuns,
-      )
+      run.phaseId,
+      finalFailureCount = if (outcome.completedOutput != null) 0 else finalFindings.size.coerceAtLeast(1),
+      failingCheckNames = finalFindings.mapNotNull { it[RULE_OR_TEST_ID_KEY] }.distinct().sorted(),
+      iterations = gateRuns,
+    )
     return outcome
   }
 
-  private fun persistRunning(
-    run: PhaseRun,
-    iteration: Int,
-  ): PhaseOutcome? {
+  private fun persistRunning(run: PhaseRun, iteration: Int): PhaseOutcome? {
     val runningPhaseState =
       FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
         context.request,
@@ -93,13 +89,13 @@ internal class PackBuildGateCycle(
         context.goalContinuationRecorder,
         PhaseStateRequestArgs(
           write =
-            PhaseStateWriteArgs(
-              run = run,
-              iteration = iteration,
-              status = STATUS_RUNNING,
-              finished = false,
-              outputArtifact = null,
-            ),
+          PhaseStateWriteArgs(
+            run = run,
+            iteration = iteration,
+            status = STATUS_RUNNING,
+            finished = false,
+            outputArtifact = null,
+          ),
         ),
       )
     context.state.reserveReviewPass(runningPhaseState.reviewPassNumber)
@@ -124,23 +120,22 @@ internal class PackBuildGateCycle(
     checkpoint: String,
     changedPaths: List<String>,
     progressStore: ValidationGateProgressStore,
-  ): ValidationGateCycleRequest =
-    ValidationGateCycleRequest(
-      repoRoot = run.request.repoRoot,
-      request = run.request,
-      phaseId = run.phaseId,
-      validationDepth = run.request.admittedExecution?.effectiveInputs?.validationDepth ?: ValidationDepth.DEFAULT,
-      commandFamily = commandFamily,
-      changedPaths = changedPaths,
-      repositoryCheckpoint = checkpoint,
-      repositoryCheckpointProvider = { context.gateCheckpoint(run) },
-      agentRepairLauncher =
-        ValidationGateAgentRepairLauncher { findings, repairTurn, triagePlan ->
-          launchRepair(run, iteration, PackBuildRepairTurn(findings, repairTurn, triagePlan))
-        },
-      progressStore = progressStore,
-      agentTriageLauncher = ValidationGateAgentTriageLauncher { findings -> launchTriage(run, iteration, findings) },
-    )
+  ): ValidationGateCycleRequest = ValidationGateCycleRequest(
+    repoRoot = run.request.repoRoot,
+    request = run.request,
+    phaseId = run.phaseId,
+    validationDepth = run.request.admittedExecution?.effectiveInputs?.validationDepth ?: ValidationDepth.DEFAULT,
+    commandFamily = commandFamily,
+    changedPaths = changedPaths,
+    repositoryCheckpoint = checkpoint,
+    repositoryCheckpointProvider = { context.gateCheckpoint(run) },
+    agentRepairLauncher =
+    ValidationGateAgentRepairLauncher { findings, repairTurn, triagePlan ->
+      launchRepair(run, iteration, PackBuildRepairTurn(findings, repairTurn, triagePlan))
+    },
+    progressStore = progressStore,
+    agentTriageLauncher = ValidationGateAgentTriageLauncher { findings -> launchTriage(run, iteration, findings) },
+  )
 
   private inner class QualityCheckReportingStore(
     private val run: PhaseRun,
@@ -152,17 +147,20 @@ internal class PackBuildGateCycle(
 
     private var reported = false
 
-    override fun persist(
-      workflowId: String,
-      progress: FeatureTaskRuntimeValidationGateProgress,
-    ) {
+    override fun persist(workflowId: String, progress: FeatureTaskRuntimeValidationGateProgress) {
       delegate.persist(workflowId, progress)
       lastFindings = progress.completeFindings
       if (reported) return
       reported = true
       val admitted = run.request.admittedExecution
-      val packSlug = if (admitted != null) admitted.effectiveInputs.packSlug else {
-        (context.phaseGates.validationGateResolver.resolve(changedPaths) as? ValidationGateResolution.Declared)?.packSlug
+      val packSlug = if (admitted != null) {
+        admitted.effectiveInputs.packSlug
+      } else {
+        (
+          context.phaseGates.validationGateResolver.resolve(
+            changedPaths,
+          ) as? ValidationGateResolution.Declared
+          )?.packSlug
       }
       context.runState.qualityCheckStarted(
         run.phaseId,
@@ -191,20 +189,12 @@ internal class PackBuildGateCycle(
     )
   }
 
-  private fun attemptOnce(
-    run: PhaseRun,
-    iteration: Int,
-  ): PhaseOutcome? =
-    PhaseAttemptOnce.attemptOnce(
-      context,
-      recordRejectionAttemptArgs(PhaseAttemptContext(run, context.state, iteration, context.observability), call),
-    ).settledOutcome
+  private fun attemptOnce(run: PhaseRun, iteration: Int): PhaseOutcome? = PhaseAttemptOnce.attemptOnce(
+    context,
+    recordRejectionAttemptArgs(PhaseAttemptContext(run, context.state, iteration, context.observability), call),
+  ).settledOutcome
 
-  private fun launchRepair(
-    run: PhaseRun,
-    iteration: Int,
-    turn: PackBuildRepairTurn,
-  ): ValidationGateAgentRepairResult {
+  private fun launchRepair(run: PhaseRun, iteration: Int, turn: PackBuildRepairTurn): ValidationGateAgentRepairResult {
     val repairRun =
       run.copy(
         validationGateFindings = turn.findings.takeIf { it.findings.isNotEmpty() },
@@ -227,32 +217,23 @@ internal class PackBuildGateCycle(
     }
   }
 
-  private fun settle(
-    run: PhaseRun,
-    iteration: Int,
-    cycle: ValidationGateCycleResult,
-  ): PhaseOutcome =
-    when (cycle) {
-      is ValidationGateCycleResult.Terminal ->
-        when (val terminal = cycle.outcome) {
-          is ValidationGateCycleTerminalOutcome.Paused -> PhaseOutcome.paused(terminal.reason)
-          is ValidationGateCycleTerminalOutcome.Completed -> runtimeOwnedGate(run, iteration, terminal.output.payload)
-          is ValidationGateCycleTerminalOutcome.Blocked ->
-            context.blockGateStep(
-              run,
-              iteration,
-              terminal.reason,
-              terminal.failureDisposition ?: FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
-              context.observability,
-            )
-        }
-    }
+  private fun settle(run: PhaseRun, iteration: Int, cycle: ValidationGateCycleResult): PhaseOutcome = when (cycle) {
+    is ValidationGateCycleResult.Terminal ->
+      when (val terminal = cycle.outcome) {
+        is ValidationGateCycleTerminalOutcome.Paused -> PhaseOutcome.paused(terminal.reason)
+        is ValidationGateCycleTerminalOutcome.Completed -> runtimeOwnedGate(run, iteration, terminal.output.payload)
+        is ValidationGateCycleTerminalOutcome.Blocked ->
+          context.blockGateStep(
+            run,
+            iteration,
+            terminal.reason,
+            terminal.failureDisposition ?: FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+            context.observability,
+          )
+      }
+  }
 
-  private fun runtimeOwnedGate(
-    run: PhaseRun,
-    iteration: Int,
-    outputText: String,
-  ): PhaseOutcome =
+  private fun runtimeOwnedGate(run: PhaseRun, iteration: Int, outputText: String): PhaseOutcome =
     RuntimeOwnedGateSettlement(
       context,
       label = commandFamily.name.lowercase(),
@@ -260,10 +241,7 @@ internal class PackBuildGateCycle(
     )
       .settle(run, iteration, outputText, context.observability)
 
-  private fun requireBuildReceipt(
-    run: PhaseRun,
-    accepted: AcceptedFeatureTaskRuntimePhaseOutput,
-  ) {
+  private fun requireBuildReceipt(run: PhaseRun, accepted: AcceptedFeatureTaskRuntimePhaseOutput) {
     val buildReceipt =
       JsonCodec.anyToStringAnyMap(
         JsonCodec.anyToStringAnyMap(

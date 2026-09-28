@@ -75,10 +75,10 @@ object PhaseAttemptContinuations {
           run = run,
           attemptCount = loop.iteration,
           reason =
-            "Feature-task-runtime phase '${run.phaseId}' could not durably append its incomplete implementation " +
-              "attempt (segment ${loop.continuationSegmentCount}). Continuing would lose the continuation " +
-              "projection, so the run stops here rather than retrying against persistence.state that was never " +
-              "persisted.",
+          "Feature-task-runtime phase '${run.phaseId}' could not durably append its incomplete implementation " +
+            "attempt (segment ${loop.continuationSegmentCount}). Continuing would lose the continuation " +
+            "projection, so the run stops here rather than retrying against persistence.state that was never " +
+            "persisted.",
           observability = observability,
           payload = BlockAndPersistPayload(fileManifest = attempt.fileManifest),
           failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
@@ -185,10 +185,10 @@ object PhaseAttemptContinuations {
         reason = withSchemaGateDetail(formatBlock, requireNotNull(attempt.schemaInvalidOperatorReason)),
         observability = observability,
         payload =
-          BlockAndPersistPayload(
-            fileManifest = attempt.fileManifest,
-            rejectedOutput = attempt.rejectedOutput,
-          ),
+        BlockAndPersistPayload(
+          fileManifest = attempt.fileManifest,
+          rejectedOutput = attempt.rejectedOutput,
+        ),
         failureDisposition = FeatureTaskRuntimeFailureDisposition.INVALID_OUTPUT,
       ),
     )
@@ -210,16 +210,16 @@ object PhaseAttemptContinuations {
         run = context.run,
         attemptCount = context.loop.iteration,
         reason =
-          withSchemaGateDetail(
-            nonRetryingPhaseSchemaBlockReason(context.run.phaseId),
-            requireNotNull(attempt.schemaInvalidOperatorReason),
-          ),
+        withSchemaGateDetail(
+          nonRetryingPhaseSchemaBlockReason(context.run.phaseId),
+          requireNotNull(attempt.schemaInvalidOperatorReason),
+        ),
         observability = context.observability,
         payload =
-          BlockAndPersistPayload(
-            fileManifest = attempt.fileManifest,
-            rejectedOutput = attempt.rejectedOutput,
-          ),
+        BlockAndPersistPayload(
+          fileManifest = attempt.fileManifest,
+          rejectedOutput = attempt.rejectedOutput,
+        ),
         failureDisposition = FeatureTaskRuntimeFailureDisposition.INVALID_OUTPUT,
       ),
     )
@@ -461,27 +461,27 @@ object PhaseAttemptContinuations {
         rule = "reconciliation-${rejection.rejectionClass}",
         reason = retryRejectionReason(detail, rejection.rejectionDetail),
         captured =
-          CapturedPhaseOutput(
-            text = payload.decodeToString(),
-            bytes = payload,
-            truncated = evidence.payload == null,
-            byteSize = evidence.byteSize,
-            sha256 = evidence.sha256,
-          ),
+        CapturedPhaseOutput(
+          text = payload.decodeToString(),
+          bytes = payload,
+          truncated = evidence.payload == null,
+          byteSize = evidence.byteSize,
+          sha256 = evidence.sha256,
+        ),
         targeting =
-          PhaseOutputGate.rejectedOutputTargeting(
-            defaultRejectedOutputTargetingArgs(
-              run,
-              RejectedOutputTargetingOverrides(
-                phaseId = evidence.phaseId,
-                agentId = evidence.agentId,
-                model = evidence.model,
-                path = rejectionPath(rejection.rejectionDetail),
-                repairTurn = evidence.repairTurn,
-                generationScoped = args.generationScoped,
-              ),
+        PhaseOutputGate.rejectedOutputTargeting(
+          defaultRejectedOutputTargetingArgs(
+            run,
+            RejectedOutputTargetingOverrides(
+              phaseId = evidence.phaseId,
+              agentId = evidence.agentId,
+              model = evidence.model,
+              path = rejectionPath(rejection.rejectionDetail),
+              repairTurn = evidence.repairTurn,
+              generationScoped = args.generationScoped,
             ),
           ),
+        ),
       ),
     )
   }
@@ -491,25 +491,25 @@ object PhaseAttemptContinuations {
     rejection: RecordRejection,
     producer: String?,
     detail: String,
-  ): String =
-    if (producer == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD ||
-      producer == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
-    ) {
-      "Feature-task-runtime phase '$consumerPhaseId' rejected gate evidence produced by '$producer'. " +
-        "Preserve the run and inspect its bounded diagnostics with a compatible runtime or a separately reviewed " +
-        "recovery mapping. Automatic regeneration is blocked because retained command semantics are unproven. " +
+  ): String = if (producer == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD ||
+    producer == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
+  ) {
+    "Feature-task-runtime phase '$consumerPhaseId' rejected gate evidence produced by '$producer'. " +
+      "Preserve the run and inspect its bounded diagnostics with a compatible runtime or a separately reviewed " +
+      "recovery mapping. Automatic regeneration is blocked because retained command semantics are unproven. " +
+      "Detail: $detail"
+  } else if (producer == null) {
+    "Feature-task-runtime phase '$consumerPhaseId' rejected an upstream durable record " +
+      "(${rejection.rejectionClass}) it cannot attribute to a producing phase, so no regeneration edge " +
+      "applies; the run blocks durably. Retain the workflow and its evidence. Inspect status and diagnostics " +
+      "with a compatible runtime or use a separately reviewed semantic mapping. Detail: $detail"
+  } else {
+    "Feature-task-runtime phase '$consumerPhaseId' rejected the durable record produced by '$producer', but " +
+      "'$producer' is absent from this run's resolved pipeline (a goal-continuation truncation dropped it), " +
+      "so it cannot be regenerated in-band; the run blocks durably. Retain the workflow and its evidence. " +
+      "Inspect status and diagnostics with a compatible runtime or use a separately reviewed semantic mapping. " +
         "Detail: $detail"
-    } else if (producer == null) {
-      "Feature-task-runtime phase '$consumerPhaseId' rejected an upstream durable record " +
-        "(${rejection.rejectionClass}) it cannot attribute to a producing phase, so no regeneration edge " +
-        "applies; the run blocks durably. Retain the workflow and its evidence. Inspect status and diagnostics " +
-        "with a compatible runtime or use a separately reviewed semantic mapping. Detail: $detail"
-    } else {
-      "Feature-task-runtime phase '$consumerPhaseId' rejected the durable record produced by '$producer', but " +
-        "'$producer' is absent from this run's resolved pipeline (a goal-continuation truncation dropped it), " +
-        "so it cannot be regenerated in-band; the run blocks durably. Retain the workflow and its evidence. " +
-        "Inspect status and diagnostics with a compatible runtime or use a separately reviewed semantic mapping. Detail: $detail"
-    }
+  }
 
   internal fun PhaseAttemptEnvironment.settleRecordRejection(args: SettleRecordRejectionArgs): PhaseOutcome {
     val run = args.run
@@ -525,22 +525,9 @@ object PhaseAttemptContinuations {
         UnattributableRecordRejectionArgs(
           context = PhaseAttemptContext(run, state, iteration, observability),
           rejection = rejection,
-          producer = FeatureTaskRuntimePhaseWorkflowDefinition.REGENERATION_PRODUCER_BY_CONSUMER[run.phaseId],
-        ),
-        generationScoped = { stepPolicy(it).generationScoped },
-      )
-    }
-    if (
-      regeneration.producer == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD ||
-      regeneration.producer == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
-    ) {
-      return PhaseAttemptContinuations.blockUnattributableRecordRejection(
-        request,
-        recorder,
-        UnattributableRecordRejectionArgs(
-          context = PhaseAttemptContext(run, state, iteration, observability),
-          rejection = rejection,
-          producer = regeneration.producer,
+          producer = transitions.backwardEdges.firstOrNull {
+            it.fromPhaseId == run.phaseId && it.triggeringVerdict == FeatureTaskRuntimeVerdict.RECORD_REJECTED
+          }?.destinationPhaseId,
         ),
         generationScoped = { stepPolicy(it).generationScoped },
       )
@@ -589,14 +576,13 @@ object PhaseAttemptContinuations {
     transitions: FeatureTaskRuntimeTransitionDeclaration,
     consumer: String,
   ): PhaseAttemptContinuations.RecordRejectionRegenerationEdge? {
-    val producer =
-      FeatureTaskRuntimePhaseWorkflowDefinition.REGENERATION_PRODUCER_BY_CONSUMER[consumer] ?: return null
-    val edge =
-      transitions.backwardEdges.firstOrNull {
-        it.fromPhaseId == consumer &&
-          it.destinationPhaseId == producer &&
-          it.triggeringVerdict == FeatureTaskRuntimeVerdict.RECORD_REJECTED
-      } ?: return null
+    val edge = transitions.backwardEdges.singleOrNull {
+      it.fromPhaseId == consumer &&
+        it.triggeringVerdict == FeatureTaskRuntimeVerdict.RECORD_REJECTED &&
+        it.destinationPhaseId in FeatureTaskRuntimePhaseWorkflowDefinition.REGENERATION_LOOP_ID_BY_PRODUCER &&
+        FeatureTaskRuntimePhaseWorkflowDefinition.REGENERATION_LOOP_ID_BY_PRODUCER[it.destinationPhaseId] == it.loopId
+    } ?: return null
+    val producer = edge.destinationPhaseId
     if (producer !in transitions.forwardPhaseIds) return null
     return PhaseAttemptContinuations.RecordRejectionRegenerationEdge(producer, edge)
   }
@@ -680,22 +666,21 @@ object PhaseAttemptContinuations {
 
   private fun missingProducerAgentResolution(
     args: MissingProducerAgentResolutionArgs,
-  ): RecordRejectionEvidenceResolution =
-    RecordRejectionEvidenceResolution.Settled(
-      missingProducerAgentBlock(
-        args.request,
-        args.state,
-        args.recorder,
+  ): RecordRejectionEvidenceResolution = RecordRejectionEvidenceResolution.Settled(
+    missingProducerAgentBlock(
+      args.request,
+      args.state,
+      args.recorder,
+      args.observability,
+      MissingProducerAgentBlockArgs(
+        args.run,
+        args.iteration,
+        args.consumer,
+        args.producer,
         args.observability,
-        MissingProducerAgentBlockArgs(
-          args.run,
-          args.iteration,
-          args.consumer,
-          args.producer,
-          args.observability,
-        ),
       ),
-    )
+    ),
+  )
 
   private fun missingProducerAgentBlock(
     request: FeatureTaskRuntimeRunFacts,
@@ -703,24 +688,23 @@ object PhaseAttemptContinuations {
     recorder: PhaseRunRecords,
     observability: FeatureTaskRuntimeRunObservability,
     args: MissingProducerAgentBlockArgs,
-  ): PhaseOutcome =
-    FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-      request,
-      state,
-      recorder,
-      observability,
-      PhaseBlockRequest(
-        run = args.run,
-        attemptCount = args.iteration,
-        reason =
-          "Feature-task-runtime phase '${args.consumer}' rejected the durable record produced by " +
-            "'${args.producer}', but the producing phase's resolved agent is unavailable, so exact raw " +
-            "evidence cannot be scoped to a producer. The run blocks instead of fabricating a " +
-            "rejected-output diagnostic.",
-        observability = args.observability,
-        failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
-      ),
-    )
+  ): PhaseOutcome = FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+    request,
+    state,
+    recorder,
+    observability,
+    PhaseBlockRequest(
+      run = args.run,
+      attemptCount = args.iteration,
+      reason =
+      "Feature-task-runtime phase '${args.consumer}' rejected the durable record produced by " +
+        "'${args.producer}', but the producing phase's resolved agent is unavailable, so exact raw " +
+        "evidence cannot be scoped to a producer. The run blocks instead of fabricating a " +
+        "rejected-output diagnostic.",
+      observability = args.observability,
+      failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+    ),
+  )
 
   private data class MissingProducerEvidenceBlockArgs(
     val run: PhaseRun,
@@ -757,8 +741,8 @@ object PhaseAttemptContinuations {
         run = args.run,
         attemptCount = args.iteration,
         reason =
-          "Feature-task-runtime phase '${args.consumer}' rejected the durable record " +
-            "produced by '${args.producer}', but $evidenceClause",
+        "Feature-task-runtime phase '${args.consumer}' rejected the durable record " +
+          "produced by '${args.producer}', but $evidenceClause",
         observability = args.observability,
         failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
       ),
@@ -770,13 +754,12 @@ object PhaseAttemptContinuations {
     state: FeatureTaskRuntimeRunState,
     recorder: PhaseRunRecords,
     args: QuarantineRecordRejectionArgs,
-  ): PhaseOutcome =
-    quarantineRecordRejectionBody(
-      request,
-      state,
-      recorder,
-      args,
-    )
+  ): PhaseOutcome = quarantineRecordRejectionBody(
+    request,
+    state,
+    recorder,
+    args,
+  )
 
   internal fun quarantineRecordRejectionBody(
     request: FeatureTaskRuntimeRunFacts,
@@ -844,35 +827,35 @@ object PhaseAttemptContinuations {
         iteration = producingIteration,
         rule = "reconciliation-${rejection.rejectionClass}",
         reason =
-          retryRejectionReason(
-            payloadFreeRejectionReason(
-              "reconciliation-${rejection.rejectionClass}",
-              rejectionPath(rejection.rejectionDetail),
-            ),
-            rejection.rejectionDetail,
+        retryRejectionReason(
+          payloadFreeRejectionReason(
+            "reconciliation-${rejection.rejectionClass}",
+            rejectionPath(rejection.rejectionDetail),
           ),
+          rejection.rejectionDetail,
+        ),
         captured =
-          CapturedPhaseOutput(
-            text = rejectedPayload.decodeToString(),
-            bytes = rejectedPayload,
-            truncated = producerEvidence.payload == null,
-            byteSize = producerEvidence.byteSize,
-            sha256 = producerEvidence.sha256,
-          ),
+        CapturedPhaseOutput(
+          text = rejectedPayload.decodeToString(),
+          bytes = rejectedPayload,
+          truncated = producerEvidence.payload == null,
+          byteSize = producerEvidence.byteSize,
+          sha256 = producerEvidence.sha256,
+        ),
         targeting =
-          PhaseOutputGate.rejectedOutputTargeting(
-            defaultRejectedOutputTargetingArgs(
-              run,
-              RejectedOutputTargetingOverrides(
-                phaseId = producer,
-                agentId = producerEvidence.agentId,
-                model = producerEvidence.model,
-                path = rejectionPath(rejection.rejectionDetail),
-                repairTurn = producerEvidence.repairTurn,
-                generationScoped = args.producerGenerationScoped,
-              ),
+        PhaseOutputGate.rejectedOutputTargeting(
+          defaultRejectedOutputTargetingArgs(
+            run,
+            RejectedOutputTargetingOverrides(
+              phaseId = producer,
+              agentId = producerEvidence.agentId,
+              model = producerEvidence.model,
+              path = rejectionPath(rejection.rejectionDetail),
+              repairTurn = producerEvidence.repairTurn,
+              generationScoped = args.producerGenerationScoped,
             ),
           ),
+        ),
       ),
     )
   }
@@ -901,14 +884,14 @@ object PhaseAttemptContinuations {
         producingIteration = args.producingIteration,
         rejectionClass = args.rejection.rejectionClass,
         rejectionDetail =
-          payloadFreeRejectionReason(
-            "reconciliation-${args.rejection.rejectionClass}",
-            rejectionPath(args.rejection.rejectionDetail),
-          ),
+        payloadFreeRejectionReason(
+          "reconciliation-${args.rejection.rejectionClass}",
+          rejectionPath(args.rejection.rejectionDetail),
+        ),
         regenerationAttempt = args.regenerationAttempt,
         quarantinedAtIteration = args.iteration.coerceAtLeast(1),
         diagnosticIdentity =
-          (args.diagnosticWrite as? FeatureTaskRuntimeRejectedOutputWrite.Written)?.identity,
+        (args.diagnosticWrite as? FeatureTaskRuntimeRejectedOutputWrite.Written)?.identity,
         rejectedRecordByteSize = args.producerEvidence.byteSize,
         rejectedRecordSha256 = args.producerEvidence.sha256,
         diagnosticDegraded = args.diagnosticWrite is FeatureTaskRuntimeRejectedOutputWrite.Degraded,

@@ -1,8 +1,9 @@
-package skillbill.engine.featuretask.slot.execution
+package skillbill.engine.featuretask.lifecycle.execution
 
+import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
-import skillbill.engine.featuretask.slot.execution.model.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.ports.db.DatabaseSessionFactory
@@ -29,13 +30,19 @@ class FeatureTaskRuntimeExecutionEntry(
       throw InvalidFeatureTaskExecutionIdentitySchemaError(request.workflowId, "spec escapes admitted repository")
     }
     val expected = FeatureTaskExecutionIdentity(
-      request.workflowId, request.issueKey.trim().uppercase(), repositories.repositoryIdentity(root),
-      root.relativize(canonicalSpec).joinToString("/"), FeatureTaskWorkflowMode.RUNTIME,
+      request.workflowId,
+      request.issueKey.trim().uppercase(),
+      repositories.repositoryIdentity(root),
+      root.relativize(canonicalSpec).joinToString("/"),
+      FeatureTaskWorkflowMode.RUNTIME,
       if (request.goalContinuation == null) FeatureTaskRouteScope.STANDALONE else FeatureTaskRouteScope.GOAL_CHILD,
     )
     val inputs = request.admittedExecution?.effectiveInputs ?: resolver.resolveInputs(
-      root, request.goalContinuation?.qualityGateSelection,
-      request.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT, request.timeout,
+      root,
+      request.goalContinuation?.qualityGateSelection,
+      request.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
+      request.timeout,
+      request.workflowId,
     )
     return database.transaction { unit ->
       val accepted = admission.admit(unit.workflowStates, request.workflowId, inputs, expected)
@@ -43,11 +50,13 @@ class FeatureTaskRuntimeExecutionEntry(
         request.runInvariants.codeReviewMode.toRuntimeSelection() != accepted.plan.reviewSelection ||
         request.timeout?.inWholeMilliseconds != inputs.phaseTimeoutMillis ||
         (request.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT) != inputs.validationDepth
-      ) throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+      ) {
+        throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+      }
       accepted
     }
   }
 
-  private fun skillbill.review.context.model.launch.CodeReviewExecutionMode.toRuntimeSelection() =
+  private fun CodeReviewExecutionMode.toRuntimeSelection() =
     RuntimeReviewSelection.valueOf(name)
 }

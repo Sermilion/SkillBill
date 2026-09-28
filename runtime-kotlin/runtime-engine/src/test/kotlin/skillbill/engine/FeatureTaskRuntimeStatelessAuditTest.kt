@@ -140,7 +140,7 @@ class FeatureTaskRuntimeStatelessAuditTest {
   fun `legacy blocked audit with only loop_id marker is discarded and relaunched fresh`() {
     val harness = runnerHarness(RuntimeHarnessConfig(launcher = satisfiedAuditLauncher()))
     seedPlanningUpstreamPhases(harness)
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     harness.recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = WORKFLOW_ID,
@@ -164,7 +164,7 @@ class FeatureTaskRuntimeStatelessAuditTest {
   fun `legacy blocked gaps_found audit is discarded and relaunched fresh`() {
     val harness = runnerHarness(RuntimeHarnessConfig(launcher = satisfiedAuditLauncher()))
     seedPlanningUpstreamPhases(harness)
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     harness.recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = WORKFLOW_ID,
@@ -188,7 +188,7 @@ class FeatureTaskRuntimeStatelessAuditTest {
   fun `legacy paused gaps_found audit is discarded and relaunched fresh`() {
     val harness = runnerHarness(RuntimeHarnessConfig(launcher = satisfiedAuditLauncher()))
     seedPlanningUpstreamPhases(harness)
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     harness.recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = WORKFLOW_ID,
@@ -265,18 +265,18 @@ class FeatureTaskRuntimeStatelessAuditTest {
           repoRoot = root,
           git = git,
           launcher =
-            RuntimeRecordingLauncher { request ->
-              val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-              facts(
-                when {
-                  phaseId == "audit" -> auditSatisfiedOutput()
-                  phaseId == "commit_push" -> validJsonOutput("commit_push")
-                  else -> validJsonOutput(phaseId)
-                },
-              )
-            },
+          RuntimeRecordingLauncher { request ->
+            val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+            facts(
+              when {
+                phaseId == "audit" -> auditSatisfiedOutput()
+                phaseId == "commit_push" -> validJsonOutput("commit_push")
+                else -> validJsonOutput(phaseId)
+              },
+            )
+          },
         )
-      harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+      harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
       recordReviewCap(harness)
       seedPlanningUpstreamPhases(harness)
 
@@ -294,14 +294,14 @@ class FeatureTaskRuntimeStatelessAuditTest {
         GoalContinuationStateRecordRequest(
           workflowId = WORKFLOW_ID,
           continuation =
-            FeatureTaskRuntimeGoalContinuationArtifact(
-              issueKey = RUNNER_TEST_ISSUE_KEY,
-              subtaskId = 5,
-              suppressPr = true,
-              goalBranch = "feat/existing-runtime-branch",
-              parentWorkflowId = "wfl-parent",
-              codeReviewMode = CodeReviewExecutionMode.DEFAULT,
-            ),
+          FeatureTaskRuntimeGoalContinuationArtifact(
+            issueKey = RUNNER_TEST_ISSUE_KEY,
+            subtaskId = 5,
+            suppressPr = true,
+            goalBranch = "feat/existing-runtime-branch",
+            parentWorkflowId = "wfl-parent",
+            codeReviewMode = CodeReviewExecutionMode.DEFAULT,
+          ),
           reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
         ),
       ),
@@ -313,14 +313,14 @@ class FeatureTaskRuntimeStatelessAuditTest {
             verdict = FeatureTaskRuntimeVerdict.CHANGES_REQUESTED,
             unresolvedFindingCount = 1,
             findings =
-              listOf(
-                GoalSubtaskReviewCompactFinding(
-                  severity = "blocker",
-                  label = "Missing behavior",
-                  text = "The required behavior is still absent.",
-                  findingId = "F-001",
-                ),
+            listOf(
+              GoalSubtaskReviewCompactFinding(
+                severity = "blocker",
+                label = "Missing behavior",
+                text = "The required behavior is still absent.",
+                findingId = "F-001",
               ),
+            ),
           ).copy(disposition = GoalSubtaskReviewDisposition.REVIEW_CAP_REACHED)
         },
       )

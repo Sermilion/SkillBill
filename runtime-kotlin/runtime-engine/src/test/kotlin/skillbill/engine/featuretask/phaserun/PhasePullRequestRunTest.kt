@@ -131,19 +131,13 @@ class PhasePullRequestRunTest {
     git(repoRoot, "push", "-u", "origin", MAIN)
   }
 
-  private fun commitFile(
-    relative: String,
-    content: String,
-  ) {
+  private fun commitFile(relative: String, content: String) {
     Files.writeString(repoRoot.resolve(relative), content)
     git(repoRoot, "add", relative)
     git(repoRoot, "commit", "-m", "Change $relative")
   }
 
-  private fun git(
-    workDir: Path,
-    vararg args: String,
-  ): String {
+  private fun git(workDir: Path, vararg args: String): String {
     val process =
       ProcessBuilder(listOf("git", "-C", workDir.toString()) + args.toList())
         .redirectErrorStream(true)
@@ -164,12 +158,13 @@ class PhasePullRequestRunTest {
     val runner =
       telemetryRunnerHarness(
         runtimeConfig =
-          RuntimeHarnessConfig(
-            repoRoot = repoRoot,
-            launcher = launcher,
-            pullRequestIdentityLookup = PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
-            gitOperationsOverride = GitWorkflowGitOperations(),
-          ),
+        RuntimeHarnessConfig(
+          seedDurableWorkflow = false,
+          repoRoot = repoRoot,
+          launcher = launcher,
+          pullRequestIdentityLookup = PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
+          gitOperationsOverride = GitWorkflowGitOperations(),
+        ),
         databaseFactory = { database },
       ).runner
     return phaseRunEntry(runner, database, clock)

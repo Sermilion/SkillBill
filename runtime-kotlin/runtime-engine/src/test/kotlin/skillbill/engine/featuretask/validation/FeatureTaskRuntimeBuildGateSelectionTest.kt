@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.validation
 
-import skillbill.engine.featuretask.validation.model.ValidationGateCyclePhase
+import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.scaffold.model.ValidationGateCompilerDiagnosticsFormat.GRADLE_KOTLIN_COMPILER_STDOUT
 import skillbill.scaffold.model.ValidationGateCompilerDiagnosticsLocator
 import skillbill.scaffold.model.ValidationGateDeclaration
@@ -22,15 +22,15 @@ class FeatureTaskRuntimeBuildGateSelectionTest {
       buildCommand = listOf("echo", "build"),
       cacheBypassingBuildCommand = listOf("echo", "build-full"),
       findings =
-        ValidationGateFindingsLocator(
-          format = ValidationGateFindingsFormat.JUNIT_XML,
-          artifactGlobs = listOf("**/*.xml"),
-          compilerDiagnostics =
-            ValidationGateCompilerDiagnosticsLocator(
-              GRADLE_KOTLIN_COMPILER_STDOUT,
-            ),
-          executedWork = ValidationGateExecutedWorkSignal(ValidationGateExecutedWorkFormat.GRADLE_ACTIONABLE_SUMMARY),
+      ValidationGateFindingsLocator(
+        format = ValidationGateFindingsFormat.JUNIT_XML,
+        artifactGlobs = listOf("**/*.xml"),
+        compilerDiagnostics =
+        ValidationGateCompilerDiagnosticsLocator(
+          GRADLE_KOTLIN_COMPILER_STDOUT,
         ),
+        executedWork = ValidationGateExecutedWorkSignal(ValidationGateExecutedWorkFormat.GRADLE_ACTIONABLE_SUMMARY),
+      ),
     )
 
   @Test

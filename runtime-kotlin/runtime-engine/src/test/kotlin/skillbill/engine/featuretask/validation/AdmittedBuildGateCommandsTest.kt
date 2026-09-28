@@ -5,16 +5,16 @@ import skillbill.contracts.JsonCodec
 import skillbill.engine.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
-import skillbill.engine.featuretask.slot.execution.EffectiveGatePolicyInputs
-import skillbill.engine.featuretask.validation.model.ValidationGateCommandFamily
+import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
-import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
-import skillbill.workflow.engine.WorkflowEngine
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -39,40 +39,65 @@ class AdmittedBuildGateCommandsTest {
         cacheBypassingBuildCommand = listOf("./gradlew", "compileKotlin", "--rerun-tasks"),
       )
       val inputs = EffectiveGatePolicyInputs(
-        ValidationGateCommandFamily.BUILD, "kotlin", declaration, "admitted/gradlew", ValidationDepth.FULL, null,
+        ValidationGateCommandFamily.BUILD,
+        "kotlin",
+        declaration,
+        "admitted/gradlew",
+        ValidationDepth.FULL,
+        null,
       )
-      val plan = execution.strategies.executionPlan(PhaseStrategySelectionFacts(
-        SkeletonDefinition.GOAL_CHILD, setOf(CodeReviewExecutionMode.INLINE, FeatureTaskRuntimeQualityGateSelection.BUILD),
-      ))
+      val plan = execution.strategies.executionPlan(
+        PhaseStrategySelectionFacts(
+          SkeletonDefinition.GOAL_CHILD,
+          setOf(CodeReviewExecutionMode.INLINE, FeatureTaskRuntimeQualityGateSelection.BUILD),
+        ),
+      )
       val descriptor = execution.validator.read(execution.codec.encodeExecution(plan, inputs), "build creation")
       val request = minimalRequest()
       val admitted = database.transaction { unit ->
         val row = WorkflowEngine().openRecord(
-          WorkflowFamily.TASK_RUNTIME.definition, request.workflowId, "session", "build",
+          WorkflowFamily.TASK_RUNTIME.definition,
+          request.workflowId,
+          "session",
+          "build",
         ).toRecord().copy(issueKey = request.issueKey)
-        unit.workflowStates.saveFeatureTaskWorkflow(row.copy(artifactsJson = JsonCodec.mapToJsonString(
-          row.toSnapshot().artifacts + DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(descriptor),
-        )), FeatureTaskWorkflowMode.RUNTIME)
-        unit.workflowStates.saveFeatureTaskExecutionIdentity(execution.identity(request.workflowId, request.issueKey)
-          .copy(routeScope = FeatureTaskRouteScope.GOAL_CHILD))
+        unit.workflowStates.saveFeatureTaskWorkflow(
+          row.copy(
+            artifactsJson = JsonCodec.mapToJsonString(
+              row.toSnapshot().artifacts + DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
+                descriptor,
+              ),
+            ),
+          ),
+          FeatureTaskWorkflowMode.RUNTIME,
+        )
+        unit.workflowStates.saveFeatureTaskExecutionIdentity(
+          execution.identity(request.workflowId, request.issueKey)
+            .copy(routeScope = FeatureTaskRouteScope.GOAL_CHILD),
+        )
         execution.admission.admit(unit.workflowStates, request.workflowId, inputs)
       }
       argv[1] = "changed-task"
       val runner = ScriptedGateRunner(listOf(passed()))
       val coordinator = FeatureTaskRuntimeBuildGateCoordinator(
-        outOfContractResolver(), runner, repoLocalConfig("changed/gradlew"), NoopRuntimeDiagnostics,
+        outOfContractResolver(),
+        runner,
+        repoLocalConfig("changed/gradlew"),
+        NoopRuntimeDiagnostics,
       )
-      val result = coordinator.execute(outOfContractCycle().copy(
-        request = request.copy(admittedExecution = admitted),
-        changedPaths = listOf("ios/Changed.swift"),
-      ))
+      val result = coordinator.execute(
+        outOfContractCycle().copy(
+          request = request.copy(admittedExecution = admitted),
+          changedPaths = listOf("ios/Changed.swift"),
+        ),
+      )
 
-      assertEquals(listOf("admitted/gradlew", "compileKotlin"), runner.requests.single().argv)
+      assertEquals(listOf("admitted/gradlew", "-p", "admitted", "compileKotlin"), runner.requests.single().argv)
       assertEquals(listOf("./gradlew", "compileKotlin"), runner.requests.single().declaration.buildCommand)
       val completed = assertIs<ValidationGateCycleTerminalOutcome.Completed>(
         assertIs<ValidationGateCycleResult.Terminal>(result).outcome,
       )
-      assertEquals(true, completed.output.payload.contains("admitted/gradlew compileKotlin"))
+      assertEquals(true, completed.output.payload.contains("admitted/gradlew -p admitted compileKotlin"))
     } finally {
       root.toFile().deleteRecursively()
     }

@@ -13,7 +13,7 @@ class FeatureTaskRuntimeGoalStartBaselineTest {
       PARENT_WORKFLOW_ID,
       listOf(UNSTARTED_CHILD, FIRST_CHILD, RETRIED_CHILD),
     )
-    harness.recorder.ensureWorkflowOpen(UNSTARTED_CHILD, SESSION_ID)
+    harness.recorder.openTestWorkflow(UNSTARTED_CHILD, SESSION_ID)
     seedBaseline(harness, FIRST_CHILD, listOf("operator/Notes.md"))
     seedBaseline(harness, RETRIED_CHILD, listOf("operator/Notes.md", "src/LeftoverFromEarlierAttempt.kt"))
 
@@ -26,17 +26,13 @@ class FeatureTaskRuntimeGoalStartBaselineTest {
   fun `goal start baseline is absent when no goal child recorded a resolved branch`() {
     val harness = runnerHarness()
     harness.repository.seedGoalChildWorkflowIds(PARENT_WORKFLOW_ID, listOf(UNSTARTED_CHILD))
-    harness.recorder.ensureWorkflowOpen(UNSTARTED_CHILD, SESSION_ID)
+    harness.recorder.openTestWorkflow(UNSTARTED_CHILD, SESSION_ID)
 
     assertNull(harness.recorder.loadGoalStartResolvedBranch(PARENT_WORKFLOW_ID))
   }
 
-  private fun seedBaseline(
-    harness: RunnerHarness,
-    workflowId: String,
-    baselineOwnedPaths: List<String>,
-  ) {
-    harness.recorder.ensureWorkflowOpen(workflowId, SESSION_ID)
+  private fun seedBaseline(harness: RunnerHarness, workflowId: String, baselineOwnedPaths: List<String>) {
+    harness.recorder.openTestWorkflow(workflowId, SESSION_ID)
     harness.recorder.recordResolvedBranch(
       workflowId,
       FeatureTaskRuntimeResolvedBranch(

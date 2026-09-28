@@ -11,6 +11,7 @@ import skillbill.engine.goalrunner.execution.core.goalRunnerDefaultPhaseRecorder
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
+import skillbill.engine.openTestWorkflow
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -38,7 +39,7 @@ class GoalRunnerValidationEvidenceProjectionTest {
     ).forEach { case ->
       val workflowId = "wfl-validation-result"
       val recorder = goalRunnerDefaultPhaseRecorder()
-      recorder.ensureWorkflowOpen(workflowId, "goal-validation-result")
+      recorder.openTestWorkflow(workflowId, "goal-validation-result")
       val produced =
         buildMap<String, Any?> {
           put(SharedPayloadKeys.VALUE, "Project validation result.")
@@ -53,15 +54,15 @@ class GoalRunnerValidationEvidenceProjectionTest {
           resolvedAgentId = "claude",
           finished = true,
           outputArtifact =
-            JsonCodec.mapToJsonString(
-              mapOf(
-                SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-                SharedPayloadKeys.PHASE_ID to FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
-                SharedPayloadKeys.STATUS to case.envelopeStatus,
-                SharedPayloadKeys.SUMMARY to "Validate output.",
-                SharedPayloadKeys.PRODUCED_OUTPUTS to produced,
-              ),
+          JsonCodec.mapToJsonString(
+            mapOf(
+              SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+              SharedPayloadKeys.PHASE_ID to FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
+              SharedPayloadKeys.STATUS to case.envelopeStatus,
+              SharedPayloadKeys.SUMMARY to "Validate output.",
+              SharedPayloadKeys.PRODUCED_OUTPUTS to produced,
             ),
+          ),
         ),
       )
       val manifest = completedManifest(workflowId)
@@ -84,20 +85,19 @@ class GoalRunnerValidationEvidenceProjectionTest {
     }
   }
 
-  private fun completedManifest(workflowId: String): DecompositionManifest =
-    manifest(1).copy(
-      status = "complete",
-      subtasks =
-        listOf(
-          DecompositionSubtask(
-            id = 1,
-            name = "Subtask 1",
-            specPath = ".feature-specs/SKILL-56-goal/spec_subtask_1.md",
-            dependencies = emptyList(),
-            status = "complete",
-            workflowId = workflowId,
-            commitSha = "sha-1",
-          ),
-        ),
-    )
+  private fun completedManifest(workflowId: String): DecompositionManifest = manifest(1).copy(
+    status = "complete",
+    subtasks =
+    listOf(
+      DecompositionSubtask(
+        id = 1,
+        name = "Subtask 1",
+        specPath = ".feature-specs/SKILL-56-goal/spec_subtask_1.md",
+        dependencies = emptyList(),
+        status = "complete",
+        workflowId = workflowId,
+        commitSha = "sha-1",
+      ),
+    ),
+  )
 }

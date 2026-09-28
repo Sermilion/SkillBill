@@ -118,16 +118,12 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
     loopId: String,
     threshold: Int,
     edgeIteration: Int,
-  ): String =
-    "Remediation loop '$loopId' exceeded its warning threshold of $threshold: entering iteration " +
-      "$edgeIteration for issue ${request.issueKey}, workflow ${request.workflowId}, subtask " +
-      "${request.goalContinuation?.subtaskId ?: request.issueKey}, spec " +
-      "${request.runInvariants.specReference}."
+  ): String = "Remediation loop '$loopId' exceeded its warning threshold of $threshold: entering iteration " +
+    "$edgeIteration for issue ${request.issueKey}, workflow ${request.workflowId}, subtask " +
+    "${request.goalContinuation?.subtaskId ?: request.issueKey}, spec " +
+    "${request.runInvariants.specReference}."
 
-  internal fun capExhaustedOnResume(
-    context: FeatureTaskRuntimeRunLoopContext,
-    phaseId: String,
-  ): String? =
+  internal fun capExhaustedOnResume(context: FeatureTaskRuntimeRunLoopContext, phaseId: String): String? =
     with(context) {
       if (FeatureTaskRuntimeRunLoopPhaseBlocking.operatorReopenedPhase(session, phaseId)) return null
       val record = state.recordFor(phaseId) ?: return null
@@ -142,111 +138,100 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
     record: FeatureTaskRuntimePhaseRecord,
-  ): String? =
-    with(context) {
-      val loopId = record.loopId
-      val iteration = record.edgeIteration
-      if (loopId == null || iteration == null || state.isLoopLiveClaimed(loopId)) {
+  ): String? = with(context) {
+    val loopId = record.loopId
+    val iteration = record.edgeIteration
+    if (loopId == null || iteration == null || state.isLoopLiveClaimed(loopId)) {
+      return null
+    }
+    val edge =
+      transitions.backwardEdges.firstOrNull { candidate ->
+        candidate.loopId == loopId &&
+          (candidate.destinationPhaseId == phaseId || candidate.fromPhaseId == phaseId)
+      }
+    if (edge?.destinationPhaseId == phaseId) {
+      val sourceRecord = state.recordFor(edge.fromPhaseId)
+      if (
+        sourceRecord?.status?.workflowStepStatus() == WorkflowStepStatus.BLOCKED && sourceRecord.loopId == loopId &&
+        sourceRecord.edgeIteration == iteration
+      ) {
         return null
       }
-      val edge =
-        transitions.backwardEdges.firstOrNull { candidate ->
-          candidate.loopId == loopId &&
-            (candidate.destinationPhaseId == phaseId || candidate.fromPhaseId == phaseId)
-        }
-      if (edge?.destinationPhaseId == phaseId) {
-        val sourceRecord = state.recordFor(edge.fromPhaseId)
-        if (
-          sourceRecord?.status?.workflowStepStatus() == WorkflowStepStatus.BLOCKED && sourceRecord.loopId == loopId &&
-          sourceRecord.edgeIteration == iteration
-        ) {
-          return null
-        }
-      }
-      return edge
-        ?.takeIf { candidate -> blocksWhenCapExhausted(candidate, iteration) }
-        ?.let {
-          FeatureTaskRuntimeRunLoopPlanningBranch.capExhaustionReason(
-            CapExhaustionReasonArgs(
-              request = request,
-              recorder = recorder,
-              loopId = loopId,
-              edgeIteration = iteration,
-              verdict = it.triggeringVerdict,
-              unresolvedFindings = emptyList<FeatureTaskRuntimeReviewFinding>(),
-            ),
-          )
-        }
     }
+    return edge
+      ?.takeIf { candidate -> blocksWhenCapExhausted(candidate, iteration) }
+      ?.let {
+        FeatureTaskRuntimeRunLoopPlanningBranch.capExhaustionReason(
+          CapExhaustionReasonArgs(
+            request = request,
+            recorder = recorder,
+            loopId = loopId,
+            edgeIteration = iteration,
+            verdict = it.triggeringVerdict,
+            unresolvedFindings = emptyList<FeatureTaskRuntimeReviewFinding>(),
+          ),
+        )
+      }
+  }
 
-  internal fun blocksWhenCapExhausted(
-    edge: FeatureTaskRuntimeBackwardEdge,
-    iteration: Int,
-  ): Boolean =
+  internal fun blocksWhenCapExhausted(edge: FeatureTaskRuntimeBackwardEdge, iteration: Int): Boolean =
     edge.capExhaustionBehavior == FeatureTaskRuntimeCapExhaustionBehavior.BLOCK &&
       edge.perEdgeCap?.let { iteration >= it } == true
 
-  internal fun runPhaseFor(
-    context: FeatureTaskRuntimeRunLoopContext,
-    phaseId: String,
-  ): String? =
-    with(context) {
-      val briefingReentry = session.pendingReentry?.takeIf { it.phaseId == phaseId }
-      if (briefingReentry != null) session.transitionPendingReentry(null)
-      val reentry =
-        briefingReentry ?: session.activeReentry?.takeIf { active ->
-          transitions.backwardEdges
-            .firstOrNull { it.loopId == active.loopId }
-            ?.let { edge ->
-              phaseId in
-                spanBetween(
-                  transitions,
-                  edge.destinationPhaseId,
-                  edge.fromPhaseId,
-                )
-            } == true
-        }?.copy(phaseId = phaseId)
-      val outcome =
-        FeatureTaskRuntimeRunLoopPlanningBranch.runPhase(
-          context,
-          RunPhaseArgs(
-            phaseId = phaseId,
-            request = request,
-            state = state,
-            observability = observability,
-            specSource = specSource,
-            reentry = reentry,
-          ),
-        )
-      outcome.regenerationTargetPhaseId?.let {
-        session.markRecordRejectionSettlementPending()
-        return null
-      }
-      outcome.pausedReason?.let { return it }
-      return outcome.blockedReason ?: run {
-        val completedOutput = requireNotNull(outcome.completedOutput)
-        state.recordCompleted(completedOutput)
-        session.consumeOperatorBlockRetryCompletion(phaseId)
-        afterCompletion(context, completedOutput)
-      }
+  internal fun runPhaseFor(context: FeatureTaskRuntimeRunLoopContext, phaseId: String): String? = with(context) {
+    val briefingReentry = session.pendingReentry?.takeIf { it.phaseId == phaseId }
+    if (briefingReentry != null) session.transitionPendingReentry(null)
+    val reentry =
+      briefingReentry ?: session.activeReentry?.takeIf { active ->
+        transitions.backwardEdges
+          .firstOrNull { it.loopId == active.loopId }
+          ?.let { edge ->
+            phaseId in
+              spanBetween(
+                transitions,
+                edge.destinationPhaseId,
+                edge.fromPhaseId,
+              )
+          } == true
+      }?.copy(phaseId = phaseId)
+    val outcome =
+      FeatureTaskRuntimeRunLoopPlanningBranch.runPhase(
+        context,
+        RunPhaseArgs(
+          phaseId = phaseId,
+          request = request,
+          state = state,
+          observability = observability,
+          specSource = specSource,
+          reentry = reentry,
+        ),
+      )
+    outcome.regenerationTargetPhaseId?.let {
+      session.markRecordRejectionSettlementPending()
+      return null
     }
+    outcome.pausedReason?.let { return it }
+    return outcome.blockedReason ?: run {
+      val completedOutput = requireNotNull(outcome.completedOutput)
+      state.recordCompleted(completedOutput)
+      session.consumeOperatorBlockRetryCompletion(phaseId)
+      afterCompletion(context, completedOutput)
+    }
+  }
 
   internal fun afterCompletion(
     context: FeatureTaskRuntimeRunLoopContext,
     output: FeatureTaskRuntimePhaseOutput,
   ): String? = context.strategyFor(output.phaseId).stepHooks(output.phaseId).afterCompletion(context, output)
 
-  internal fun establishBranchIfNeeded(
-    context: FeatureTaskRuntimeRunLoopContext,
-    phaseId: String,
-  ): String? =
+  internal fun establishBranchIfNeeded(context: FeatureTaskRuntimeRunLoopContext, phaseId: String): String? =
     with(context) {
       if (!stepPolicy(phaseId).fileMutating) {
         return null
       }
       val setup =
         runState.ensureFeatureBranch(
-          guardPhase = runState.selectedOwnerOf(PhaseSlot.IMPLEMENTATION.steps.first())?.entryStep ?: phaseId,
+          guardPhase = transitions.forwardPhaseIds.firstOrNull { stepPolicy(it).fileMutating } ?: phaseId,
         )
       return setup.blockedReason?.also { reason ->
         FeatureTaskRuntimeRunLoopPhaseBlocking.persistBranchSetupBlock(

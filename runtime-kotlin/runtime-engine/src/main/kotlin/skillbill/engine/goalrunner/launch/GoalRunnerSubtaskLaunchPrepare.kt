@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.launch
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.workflow.persist.generateWorkflowId
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.goalrunner.execution.core.GoalRunnerSubtaskLaunchBoundaries
 import skillbill.engine.goalrunner.execution.core.StoppedReportArgs
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
@@ -23,10 +24,7 @@ import skillbill.engine.goalrunner.review.effectiveAgentAddonSelection
 import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.status.supervisionEvent
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
-import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
-import skillbill.workflow.model.ValidationDepth
-import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.goalrunner.runner.model.GoalRunnerChildWorkflowSetup
@@ -38,9 +36,10 @@ import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaselineResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.decompositionStatus
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
@@ -76,15 +75,15 @@ class GoalRunnerSubtaskLaunchPrepare(
           ?: GoalSubtaskReviewBaselineResult(
             status = WorkflowGitOperationStatus.ERROR,
             error =
-              "Goal-subtask review state is missing for existing child '$existingWorkflowId'; " +
-                "refusing to recapture its immutable baseline.",
+            "Goal-subtask review state is missing for existing child '$existingWorkflowId'; " +
+              "refusing to recapture its immutable baseline.",
           )
       }.getOrElse { error ->
         GoalSubtaskReviewBaselineResult(
           status = WorkflowGitOperationStatus.ERROR,
           error =
-            "Goal-subtask review persistence is malformed for existing child '$existingWorkflowId': " +
-              error.message.orEmpty(),
+          "Goal-subtask review persistence is malformed for existing child '$existingWorkflowId': " +
+            error.message.orEmpty(),
         )
       }
     }
@@ -119,17 +118,17 @@ class GoalRunnerSubtaskLaunchPrepare(
     return GoalRunnerIterationResult(
       state = saved,
       report =
-        stopped(
-          StoppedReportArgs(
-            issueKey = saved.manifest.issueKey,
-            attempted = emptyList(),
-            subtaskId = subtaskId,
-            reason = GoalRunnerStopReason.BLOCKED,
-            blockedReason = blockedReason,
-            workflowId = state.manifest.workflowIdFor(subtaskId),
-            lastResumableStep = "preplan",
-          ),
+      stopped(
+        StoppedReportArgs(
+          issueKey = saved.manifest.issueKey,
+          attempted = emptyList(),
+          subtaskId = subtaskId,
+          reason = GoalRunnerStopReason.BLOCKED,
+          blockedReason = blockedReason,
+          workflowId = state.manifest.workflowIdFor(subtaskId),
+          lastResumableStep = "preplan",
         ),
+      ),
     )
   }
 
@@ -163,12 +162,7 @@ class GoalRunnerSubtaskLaunchPrepare(
     return blockedReviewBaselineIteration(state, targetSubtaskId, reason, request)
   }
 
-  fun emitGoalReviewSummaries(
-    issueKey: String,
-    subtaskId: Int,
-    workflowId: String,
-    request: GoalRunnerRunRequest,
-  ) {
+  fun emitGoalReviewSummaries(issueKey: String, subtaskId: Int, workflowId: String, request: GoalRunnerRunRequest) {
     outcomeStore.unemittedGoalReviewPasses(workflowId).forEach { pass ->
       request.eventSink.emit(
         GoalRunnerRunEvent.SubtaskReviewSummary(
@@ -206,6 +200,7 @@ class GoalRunnerSubtaskLaunchPrepare(
       qualityGate = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, subtaskId),
       validationDepth = ValidationDepth.FULL,
       timeout = request.timeout,
+      workflowId = priorWorkflowId,
     )
     val firstRun = priorWorkflowId == null
     val assignedWorkflowId = priorWorkflowId ?: generateWorkflowId(RUNTIME_WORKFLOW_ID_PREFIX, clock, random)
@@ -243,16 +238,18 @@ class GoalRunnerSubtaskLaunchPrepare(
             governedSpecPath = governedSpecPath,
             reviewBaseline = reviewBaseline,
             reviewPolicy =
-              GoalRunnerReviewPolicy(
-                codeReviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT,
-                agentAddonSelection = manifestStore.effectiveAgentAddonSelection(state.parentWorkflowId, request),
-              ),
+            GoalRunnerReviewPolicy(
+              codeReviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT,
+              agentAddonSelection = manifestStore.effectiveAgentAddonSelection(state.parentWorkflowId, request),
+            ),
             planningHydration = planning.hydrationFor(subtaskId),
             executionPlan = executionPlan,
             operatorResumePhaseId =
-              (subtask.lastResumableStep?.takeIf(String::isNotBlank)
-                ?: FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT)
-                .takeIf { subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && priorWorkflowId != null },
+            (
+              subtask.lastResumableStep?.takeIf(String::isNotBlank)
+                ?: FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
+              )
+              .takeIf { subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && priorWorkflowId != null },
             operatorResumeReason = "Operator resumed the goal after a blocked stop at subtask $subtaskId."
               .takeIf { subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && priorWorkflowId != null },
           ),
@@ -308,17 +305,17 @@ class GoalRunnerSubtaskLaunchPrepare(
     return GoalRunnerIterationResult(
       state = saved,
       report =
-        stopped(
-          StoppedReportArgs(
-            issueKey = saved.manifest.issueKey,
-            attempted = emptyList(),
-            subtaskId = subtaskId,
-            reason = GoalRunnerStopReason.BLOCKED,
-            blockedReason = reason,
-            workflowId = null,
-            lastResumableStep = "create_branch",
-          ),
+      stopped(
+        StoppedReportArgs(
+          issueKey = saved.manifest.issueKey,
+          attempted = emptyList(),
+          subtaskId = subtaskId,
+          reason = GoalRunnerStopReason.BLOCKED,
+          blockedReason = reason,
+          workflowId = null,
+          lastResumableStep = "create_branch",
         ),
+      ),
     )
   }
 }

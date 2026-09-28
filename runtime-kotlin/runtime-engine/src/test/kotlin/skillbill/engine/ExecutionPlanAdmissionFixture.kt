@@ -1,45 +1,54 @@
 package skillbill.engine
 
+import skillbill.application.FakeDatabaseSessionFactory
+import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.config.model.ReadRepoLocalConfigResult
+import skillbill.ports.config.model.ReadRepoLocalConfigRequest
+import skillbill.ports.config.RepoLocalConfigPort
+import skillbill.config.model.ValidationGateRepoConfig
+import skillbill.config.model.RepoLocalConfig
 import skillbill.contracts.JsonCodec
-import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionAdmission
+import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
+import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.slot.testPhaseStrategies
+import skillbill.engine.featuretask.validation.ValidationGateResolver
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
+import skillbill.engine.featuretask.validation.repoLocalConfig
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.workflow.WorkflowStateRepository
+import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
+import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
-import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionPlanResolver
-import skillbill.engine.featuretask.validation.ValidationGateResolver
-import skillbill.engine.featuretask.validation.repoLocalConfig
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
-import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
-import java.nio.file.Path
-import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
-import skillbill.engine.featuretask.slot.execution.EffectiveGatePolicyInputs
-import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionPlanCodec
-import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionPlanCompatibility
-import skillbill.engine.featuretask.slot.testPhaseStrategies
-import skillbill.engine.featuretask.validation.model.ValidationGateCommandFamily
-import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
-import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
-import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import java.nio.file.Path
 
 class ExecutionPlanAdmissionFixture(
   definition: SkeletonDefinition = SkeletonDefinition.STANDALONE,
   private val repository: String = "repo-root-realpath-v1:/tmp/admission-repository",
   private val specPath: String = ".feature-specs/SKILL-384/spec.md",
+  private val database: DatabaseSessionFactory = FakeDatabaseSessionFactory(InMemoryRuntimeWorkflowRepository()),
   qualityGate: FeatureTaskRuntimeQualityGateSelection? =
     FeatureTaskRuntimeQualityGateSelection.VALIDATE.takeIf { definition == SkeletonDefinition.GOAL_CHILD },
 ) {
-  private val routeScope = if (definition == SkeletonDefinition.GOAL_CHILD) FeatureTaskRouteScope.GOAL_CHILD else FeatureTaskRouteScope.STANDALONE
+  private val routeScope =
+    if (definition == SkeletonDefinition.GOAL_CHILD) FeatureTaskRouteScope.GOAL_CHILD else FeatureTaskRouteScope.STANDALONE
   var launches = 0
     private set
   val strategies = testPhaseStrategies(
@@ -53,9 +62,16 @@ class ExecutionPlanAdmissionFixture(
   val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
   val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, strategies)
   val inputs = EffectiveGatePolicyInputs(
-    if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD) ValidationGateCommandFamily.BUILD
-    else ValidationGateCommandFamily.VALIDATION,
-    null, null, null, ValidationDepth.FULL, null,
+    if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD) {
+      ValidationGateCommandFamily.BUILD
+    } else {
+      ValidationGateCommandFamily.VALIDATION
+    },
+    null,
+    null,
+    null,
+    ValidationDepth.FULL,
+    null,
   )
   private val recoveryGateDeclaration = requireNotNull(kotlinPackWithValidationGate().validationGate).copy(
     fullGateCommand = listOf("./gradlew", "full"),
@@ -64,10 +80,13 @@ class ExecutionPlanAdmissionFixture(
     cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "check", "--continue", "--no-cache"),
   )
   val plan = strategies.executionPlan(
-    PhaseStrategySelectionFacts(definition, setOfNotNull(
-      CodeReviewExecutionMode.INLINE,
-      qualityGate,
-    )),
+    PhaseStrategySelectionFacts(
+      definition,
+      setOfNotNull(
+        CodeReviewExecutionMode.INLINE,
+        qualityGate,
+      ),
+    ),
   )
   val encoded = codec.encodeExecution(plan, inputs)
 
@@ -81,33 +100,54 @@ class ExecutionPlanAdmissionFixture(
     executionIdentity: FeatureTaskExecutionIdentity = identity(workflowId, issueKey),
   ) {
     val existing = states.getFeatureTaskWorkflow(workflowId)
-      ?: WorkflowEngine().openRecord(WorkflowFamily.TASK_RUNTIME.definition, workflowId, "session", "implement").toRecord()
-    states.saveFeatureTaskWorkflow(existing.copy(
-      issueKey = issueKey,
-      artifactsJson = JsonCodec.mapToJsonString(existing.toSnapshot().artifacts +
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(descriptor)),
-    ), FeatureTaskWorkflowMode.RUNTIME)
+      ?: WorkflowEngine().openRecord(
+        WorkflowFamily.TASK_RUNTIME.definition,
+        workflowId,
+        "session",
+        "implement",
+      ).toRecord()
+    states.saveFeatureTaskWorkflow(
+      existing.copy(
+        issueKey = issueKey,
+        artifactsJson = JsonCodec.mapToJsonString(
+          existing.toSnapshot().artifacts +
+            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(descriptor),
+        ),
+      ),
+      FeatureTaskWorkflowMode.RUNTIME,
+    )
     states.saveFeatureTaskExecutionIdentity(executionIdentity)
   }
 
   fun identity(workflowId: String, issueKey: String = "SKILL-384") = FeatureTaskExecutionIdentity(
-    workflowId, issueKey, repository, specPath,
-    FeatureTaskWorkflowMode.RUNTIME, routeScope,
+    workflowId,
+    issueKey,
+    repository,
+    specPath,
+    FeatureTaskWorkflowMode.RUNTIME,
+    routeScope,
   )
 
   fun creationResolver(): FeatureTaskRuntimeExecutionPlanResolver = FeatureTaskRuntimeExecutionPlanResolver(
-    strategies, codec, validator, ValidationGateResolver { listOf(kotlinPackWithBuildGate()) },
+    strategies,
+    codec,
+    validator,
+    ValidationGateResolver { listOf(kotlinPackWithBuildGate()) },
     object : WorkflowGitOperations by NoopWorkflowGitOperations {
       override fun repositoryOwnedPaths(repoRoot: Path) = WorkflowGitNameListResult.Listed(listOf("src/Main.kt"))
     },
     repoLocalConfig(),
+    database,
+    compatibility,
   )
 
   fun recoveryResolver(
     wrapperForRoot: (Path) -> String? = { null },
     onResolve: ((Path) -> Unit)? = null,
   ): FeatureTaskRuntimeExecutionPlanResolver = FeatureTaskRuntimeExecutionPlanResolver(
-    strategies, codec, validator,
+    strategies,
+    codec,
+    validator,
     ValidationGateResolver {
       listOf(kotlinPackWithValidationGate().copy(validationGate = recoveryGateDeclaration))
     },
@@ -117,16 +157,18 @@ class ExecutionPlanAdmissionFixture(
         return WorkflowGitNameListResult.Listed(listOf("src/Main.kt"))
       }
     },
-    object : skillbill.ports.config.RepoLocalConfigPort {
-      override fun readRepoLocalConfig(request: skillbill.ports.config.model.ReadRepoLocalConfigRequest) =
-        skillbill.ports.config.model.ReadRepoLocalConfigResult(
-          skillbill.config.model.RepoLocalConfig.defaults().copy(
-            validationGate = skillbill.config.model.ValidationGateRepoConfig(
-              gradleWrapper = wrapperForRoot(request.repoRoot),
+    object : RepoLocalConfigPort {
+      override fun readRepoLocalConfig(request: ReadRepoLocalConfigRequest) =
+        ReadRepoLocalConfigResult(
+          RepoLocalConfig.defaults().copy(
+            validationGate = ValidationGateRepoConfig(
+              gradleWrapper = wrapperForRoot(request.repoRoot).also { onResolve?.invoke(request.repoRoot) },
             ),
           ),
         )
     },
+    database,
+    compatibility,
   )
 
   fun encoded(inputs: EffectiveGatePolicyInputs = this.inputs): ByteArray = codec.encodeExecution(plan, inputs)

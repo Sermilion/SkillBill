@@ -1,6 +1,9 @@
-package skillbill.engine.featuretask.slot.execution
+package skillbill.engine.featuretask.lifecycle.execution
 
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
+import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
@@ -8,8 +11,8 @@ import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaE
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
-import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedExecutionPolicy
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.traversal
 
@@ -34,14 +37,14 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
 
   fun requireCompatibleExecution(
     encoded: ByteArray?,
-    expectedDescriptor: Map<String, Any?>?,
+    expectedDescriptor: ValidatedFeatureTaskRuntimeExecutionPlan?,
   ): ResolvedPhaseExecutionPlan {
     val plan = requireSupportedComposition(encoded)
     val expected = expectedDescriptor
       ?: throw MissingFeatureTaskRuntimeExecutionPlanError()
-    val expectedPlan = codec.decode(skillbill.contracts.JsonCodec.mapToJsonString(expected).toByteArray(Charsets.UTF_8))
+    val expectedPlan = codec.decode(expected.encoded())
     requireSupportedPolicies(expectedPlan.effectivePolicies)
-    if (plan.effectivePolicies != expectedPlan.effectivePolicies) incompatible()
+    if (!codec.encode(plan).contentEquals(codec.encode(expectedPlan))) incompatible()
     return plan
   }
 
@@ -81,12 +84,16 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
       if (
         identity.entryStep != strategy.entryStep ||
         identity.steps != strategy.steps.filter { it in definition.stepIds }
-      ) incompatible()
+      ) {
+        incompatible()
+      }
       identity.steps.forEach { step ->
         if (
           plan.stepPolicyIdentities[step] != strategy.stepPolicyIdentity(step) ||
           plan.resumeInterpretationIdentities[step] != strategy.resumeInterpretationIdentity(step)
-        ) incompatible()
+        ) {
+          incompatible()
+        }
       }
     }
     val selectionMatches = try {
@@ -107,8 +114,14 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
 
   private fun requireSupportedPolicies(policies: List<ResolvedExecutionPolicy>) {
     val supported = setOf(
-      "gate-commands", "receipt-interpretation", "retry-budgets", "resume-budgets",
-      "acceptance-audit", "review-invalidation", "checkpoint-ownership", "finalization",
+      "gate-commands",
+      "receipt-interpretation",
+      "retry-budgets",
+      "resume-budgets",
+      "acceptance-audit",
+      "review-invalidation",
+      "checkpoint-ownership",
+      "finalization",
     )
     if (policies.map { it.id }.toSet() != supported || policies.any { it.semanticRevision != 1 }) {
       throw UnsupportedFeatureTaskRuntimeExecutionPlanError()

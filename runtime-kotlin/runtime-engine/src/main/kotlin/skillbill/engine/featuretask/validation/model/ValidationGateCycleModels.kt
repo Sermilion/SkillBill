@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.validation.model
 
+import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.ports.validation.model.ValidationGateFinding
@@ -11,16 +13,6 @@ import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidat
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRepairWindowPhase
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
 import java.nio.file.Path
-
-enum class ValidationGateCyclePhase {
-  INITIAL_DISCOVERY,
-  POST_REPAIR_VERIFY,
-}
-
-enum class ValidationGateCommandFamily {
-  BUILD,
-  VALIDATION,
-}
 
 sealed interface ValidationGateResolution {
   data class Declared(
@@ -87,10 +79,7 @@ sealed interface ValidationGateCycleTerminalOutcome {
 }
 
 fun interface ValidationGateProgressStore {
-  fun persist(
-    workflowId: String,
-    progress: FeatureTaskRuntimeValidationGateProgress,
-  )
+  fun persist(workflowId: String, progress: FeatureTaskRuntimeValidationGateProgress)
 
   fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress? = null
 }
@@ -108,14 +97,13 @@ data class ValidationGateProgressWrite(
       repairsUsed: Int,
       capturedTriagePlan: String?,
       remainingFindings: ValidationFindingSetProjection? = null,
-    ): ValidationGateProgressWrite =
-      ValidationGateProgressWrite(
-        repairWindowPhase = FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN,
-        remainingFindings = remainingFindings,
-        completeFindings = completeFindings,
-        repairsUsed = repairsUsed,
-        capturedTriagePlan = capturedTriagePlan,
-      )
+    ): ValidationGateProgressWrite = ValidationGateProgressWrite(
+      repairWindowPhase = FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN,
+      remainingFindings = remainingFindings,
+      completeFindings = completeFindings,
+      repairsUsed = repairsUsed,
+      capturedTriagePlan = capturedTriagePlan,
+    )
   }
 }
 

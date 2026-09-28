@@ -1,17 +1,18 @@
-package skillbill.engine.featuretask.slot.execution
+package skillbill.engine.featuretask.lifecycle.execution
 
+import skillbill.workflow.model.ValidationDepth
 import skillbill.contracts.JsonCodec
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
-import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
-import skillbill.workflow.taskruntime.model.skeleton.ResolvedFeatureTaskRuntimeExecutionSettings
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedExecutionPolicy
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedFeatureTaskRuntimeExecutionSettings
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyDispatch
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseStrategyIdentity
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 internal fun decodeExecutionPlan(payload: Map<String, Any?>): ResolvedPhaseExecutionPlan {
   val definition = planObject(payload[Keys.DEFINITION])
@@ -44,17 +45,21 @@ internal fun decodeExecutionPlan(payload: Map<String, Any?>): ResolvedPhaseExecu
     stepPolicyIdentities = decodePolicies(payload, Keys.STEP_POLICIES),
     resumeInterpretationIdentities = decodePolicies(payload, Keys.RESUME_INTERPRETATIONS),
     effectivePolicies = planObjects(payload, Keys.EFFECTIVE_POLICIES).map { policy ->
-      ResolvedExecutionPolicy(planString(policy, Keys.ID), planRevision(policy), planString(policy, Keys.SEMANTIC_DIGEST))
+      ResolvedExecutionPolicy(
+        planString(policy, Keys.ID),
+        planRevision(policy),
+        planString(policy, Keys.SEMANTIC_DIGEST),
+      )
     },
     effectivePolicySettings = payload[Keys.EFFECTIVE_POLICY_SETTINGS]?.let { raw ->
       val settings = planObject(raw)
       try {
         ResolvedFeatureTaskRuntimeExecutionSettings(
-          validationDepth = skillbill.workflow.model.ValidationDepth.fromWire(
+          validationDepth = ValidationDepth.fromWire(
             planString(settings, Keys.VALIDATION_DEPTH),
           ),
           phaseTimeoutMillis =
-            (settings[Keys.PHASE_TIMEOUT_MILLIS] as? Number)?.toLong(),
+          (settings[Keys.PHASE_TIMEOUT_MILLIS] as? Number)?.toLong(),
         )
       } catch (error: IllegalArgumentException) {
         throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError(

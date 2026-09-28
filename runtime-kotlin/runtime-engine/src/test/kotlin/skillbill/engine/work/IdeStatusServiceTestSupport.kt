@@ -1,5 +1,6 @@
 package skillbill.engine.work
 
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.parentSpecPath
@@ -109,10 +110,10 @@ internal fun goalWireMapUnderControls(
     ideStatusService(
       goalOnlyDatabase(),
       manifestStore =
-        StubGoalManifestStore(
-          goalManifestState(fixture, identity, childWorkflowId = "w-child")
-            .copy(controlState = controlState.copy(repositoryIdentity = identity)),
-        ),
+      StubGoalManifestStore(
+        goalManifestState(fixture, identity, childWorkflowId = "w-child")
+          .copy(controlState = controlState.copy(repositoryIdentity = identity)),
+      ),
     )
 
   val result = service.status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
@@ -121,10 +122,7 @@ internal fun goalWireMapUnderControls(
   return result.snapshot.toStatusWireMap()
 }
 
-internal fun nestedWireMap(
-  wire: Map<String, Any?>,
-  key: String,
-): Map<String, Any?> {
+internal fun nestedWireMap(wire: Map<String, Any?>, key: String): Map<String, Any?> {
   val value = wire[key]
   require(value is Map<*, *>) { "expected nested map at '$key'" }
   return buildMap {
@@ -134,11 +132,10 @@ internal fun nestedWireMap(
   }
 }
 
-internal fun goalOnlyDatabase(goalState: String = "running"): TrackingDatabase =
-  TrackingDatabase(
-    work = listOf(workItem("goal-1", WorkItemKind.FEATURE_GOAL, goalState, "2026-08-06T10:00:00Z")),
-    workflows = IdeStatusWorkflowStates(),
-  )
+internal fun goalOnlyDatabase(goalState: String = "running"): TrackingDatabase = TrackingDatabase(
+  work = listOf(workItem("goal-1", WorkItemKind.FEATURE_GOAL, goalState, "2026-08-06T10:00:00Z")),
+  workflows = IdeStatusWorkflowStates(),
+)
 
 internal fun goalWithLaunchedChildDatabase(
   identity: String,
@@ -162,11 +159,11 @@ internal fun goalWithLaunchedChildDatabase(
     }
   return TrackingDatabase(
     work =
-      listOf(
-        workItem("goal-1", WorkItemKind.FEATURE_GOAL, "running", "2026-08-06T10:00:00Z"),
-        workItem("w-child", WorkItemKind.FEATURE_TASK_RUNTIME, "running", "2026-08-06T11:00:00Z")
-          .copy(startedAt = childStarted),
-      ),
+    listOf(
+      workItem("goal-1", WorkItemKind.FEATURE_GOAL, "running", "2026-08-06T10:00:00Z"),
+      workItem("w-child", WorkItemKind.FEATURE_TASK_RUNTIME, "running", "2026-08-06T11:00:00Z")
+        .copy(startedAt = childStarted),
+    ),
     workflows = workflows,
     controls = controls,
   )
@@ -175,52 +172,47 @@ internal fun goalWithLaunchedChildDatabase(
 internal fun planningSnapshot(
   state: GoalPlanningStatusState,
   wave: List<Int> = emptyList(),
-): GoalPlanningStatusSnapshot =
-  GoalPlanningStatusSnapshot(
-    state = state,
-    sharedPreplanPrepared = true,
-    plannedSubtaskCount = 1,
-    totalSubtaskCount = 2,
-    currentPlanningSubtaskId = wave.minOrNull() ?: 2,
-    planningWaveSubtaskIds = wave,
-    reason = null,
-  )
+): GoalPlanningStatusSnapshot = GoalPlanningStatusSnapshot(
+  state = state,
+  sharedPreplanPrepared = true,
+  plannedSubtaskCount = 1,
+  totalSubtaskCount = 2,
+  currentPlanningSubtaskId = wave.minOrNull() ?: 2,
+  planningWaveSubtaskIds = wave,
+  reason = null,
+)
 
-internal fun goalManifestState(
-  fixture: Path,
-  identity: String,
-  childWorkflowId: String,
-): GoalRunnerManifestState =
+internal fun goalManifestState(fixture: Path, identity: String, childWorkflowId: String): GoalRunnerManifestState =
   GoalRunnerManifestState(
     parentWorkflowId = "goal-1",
     dbPath = "/fake/ide-status.db",
     manifest =
-      DecompositionManifest(
-        issueKey = "SKILL-148",
-        featureName = "ide-status",
-        parentSpecPath = ".feature-specs/SKILL-148/spec.md",
-        baseBranch = "main",
-        featureBranch = "feat/SKILL-148",
-        currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 2, action = "start"),
-        subtasks =
-          listOf(
-            DecompositionSubtask(
-              id = 1,
-              name = "One",
-              specPath = "spec_1.md",
-              status = "complete",
-              workflowId = "w-done",
-            ),
-            DecompositionSubtask(
-              id = 2,
-              name = "Two",
-              specPath = "spec_2.md",
-              status = "in_progress",
-              workflowId = childWorkflowId,
-              lastResumableStep = "implement",
-            ),
-          ),
+    DecompositionManifest(
+      issueKey = "SKILL-148",
+      featureName = "ide-status",
+      parentSpecPath = ".feature-specs/SKILL-148/spec.md",
+      baseBranch = "main",
+      featureBranch = "feat/SKILL-148",
+      currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 2, action = "start"),
+      subtasks =
+      listOf(
+        DecompositionSubtask(
+          id = 1,
+          name = "One",
+          specPath = "spec_1.md",
+          status = "complete",
+          workflowId = "w-done",
+        ),
+        DecompositionSubtask(
+          id = 2,
+          name = "Two",
+          specPath = "spec_2.md",
+          status = "in_progress",
+          workflowId = childWorkflowId,
+          lastResumableStep = "implement",
+        ),
       ),
+    ),
     controlState = GoalRunnerControlState(repositoryIdentity = identity),
     repoRoot = fixture,
   )
@@ -232,10 +224,7 @@ internal fun ideStatusService(
 ): IdeStatusService {
   val snapshotValidator =
     object : WorkflowSnapshotValidator {
-      override fun validate(
-        snapshot: WorkflowStateSnapshot,
-        slug: String,
-      ) = Unit
+      override fun validate(snapshot: WorkflowStateSnapshot, slug: String) = Unit
     }
   val phaseRecorder =
     featureTaskRuntimePhaseRecorder(
@@ -250,26 +239,26 @@ internal fun ideStatusService(
     FeatureTaskRuntimeStatusService(
       recorder = phaseRecorder,
       runInvariantsStore =
-        FeatureTaskRuntimeRunInvariantsStore(
-          database,
-          FeatureTaskRuntimeWorkflowPersistence(database, snapshotValidator),
-        ),
+      FeatureTaskRuntimeRunInvariantsStore(
+        database,
+        FeatureTaskRuntimeWorkflowPersistence(database, snapshotValidator),
+      ),
       decomposeTerminalRecorder = FeatureTaskRuntimeDecomposeTerminalRecorder(database, testHarnessClock),
     )
   val projector =
     IdeStatusProjector(
       workflowSnapshotValidator = snapshotValidator,
       goalRunnerStatusService =
-        testGoalRunnerStatusService(
-          manifestStore = manifestStore,
-          outcomeStore = outcomeStore,
-          phaseRecorder = phaseRecorder,
-          clock = ideStatusClock,
-          ports =
-            GoalRunnerStatusTestPorts(
-              runtimeStatusService = runtimeStatusService,
-            ),
+      testGoalRunnerStatusService(
+        manifestStore = manifestStore,
+        outcomeStore = outcomeStore,
+        phaseRecorder = phaseRecorder,
+        clock = ideStatusClock,
+        ports =
+        GoalRunnerStatusTestPorts(
+          runtimeStatusService = runtimeStatusService,
         ),
+      ),
       featureTaskRuntimeStatusService = runtimeStatusService,
       diagnostics = NoopRuntimeDiagnostics,
     )
@@ -290,10 +279,7 @@ internal fun fixtureCheckedOutBranch(repoRoot: Path): String? =
     ?.removePrefix("ref: refs/heads/")
 
 internal object EmitShapeValidator : IdeStatusValidator by NoopIdeStatusValidator {
-  override fun validate(
-    snapshot: IdeStatusSnapshot,
-    sourceLabel: String,
-  ) {
+  override fun validate(snapshot: IdeStatusSnapshot, sourceLabel: String) {
     val wire = snapshot.toStatusWireMap()
     require(wire["contract_version"] == IDE_STATUS_CONTRACT_VERSION)
     require(wire["repository_identity"] is String)
@@ -301,10 +287,7 @@ internal object EmitShapeValidator : IdeStatusValidator by NoopIdeStatusValidato
   }
 }
 
-internal fun gitRepoFixture(
-  prefix: String,
-  branch: String? = "feat/SKILL-148-fixture",
-): Path {
+internal fun gitRepoFixture(prefix: String, branch: String? = "feat/SKILL-148-fixture"): Path {
   val root = Files.createTempDirectory(prefix)
   Files.createDirectory(root.resolve(".git"))
   if (branch != null) {
@@ -313,26 +296,17 @@ internal fun gitRepoFixture(
   return root.toRealPath()
 }
 
-internal fun workItem(
-  workflowId: String,
-  kind: WorkItemKind,
-  state: String,
-  updatedAt: String,
-): WorkItem =
-  WorkItem(
-    issueKey = "SKILL-148",
-    workflowKind = kind,
-    workflowId = workflowId,
-    startedAt = Instant.parse("2026-08-06T08:00:00Z"),
-    currentState = state,
-    stateEnteredAt = Instant.parse(updatedAt),
-    stateEnteredAtEstimated = false,
-  )
+internal fun workItem(workflowId: String, kind: WorkItemKind, state: String, updatedAt: String): WorkItem = WorkItem(
+  issueKey = "SKILL-148",
+  workflowKind = kind,
+  workflowId = workflowId,
+  startedAt = Instant.parse("2026-08-06T08:00:00Z"),
+  currentState = state,
+  stateEnteredAt = Instant.parse(updatedAt),
+  stateEnteredAtEstimated = false,
+)
 
-internal fun identityFor(
-  workflowId: String,
-  repositoryIdentity: String,
-): FeatureTaskExecutionIdentity =
+internal fun identityFor(workflowId: String, repositoryIdentity: String): FeatureTaskExecutionIdentity =
   FeatureTaskExecutionIdentity(
     workflowId = workflowId,
     normalizedIssueKey = "SKILL-148",
@@ -356,22 +330,21 @@ internal fun phaseRecordWire(
   status: String,
   launchedModel: String?,
   options: PhaseRecordOptions = PhaseRecordOptions(),
-): Map<String, Any?> =
-  FeatureTaskRuntimePhaseRecord(
-    phaseId = phaseId,
-    status = status,
-    attemptCount = options.attemptCount,
-    startedAt = "2026-08-06T09:00:00Z",
-    finishedAt = if (status == "completed") "2026-08-06T09:30:00Z" else null,
-    resolvedAgentId = "claude",
-    launchedModel = launchedModel,
-    launchedEffort = options.effort,
-    reviewPassNumber = options.reviewPassNumber,
-    loopId = options.loopId,
-    edgeIteration = options.edgeIteration,
-    blockedReason = options.blockedReason,
-    failureDisposition = options.failureDisposition,
-  ).asWorkflowArtifactEntry().toWorkflowArtifactMap()
+): Map<String, Any?> = FeatureTaskRuntimePhaseRecord(
+  phaseId = phaseId,
+  status = status,
+  attemptCount = options.attemptCount,
+  startedAt = "2026-08-06T09:00:00Z",
+  finishedAt = if (status == "completed") "2026-08-06T09:30:00Z" else null,
+  resolvedAgentId = "claude",
+  launchedModel = launchedModel,
+  launchedEffort = options.effort,
+  reviewPassNumber = options.reviewPassNumber,
+  loopId = options.loopId,
+  edgeIteration = options.edgeIteration,
+  blockedReason = options.blockedReason,
+  failureDisposition = options.failureDisposition,
+).asWorkflowArtifactEntry().toWorkflowArtifactMap()
 
 internal fun blockedQualityGateChildArtifacts(
   phaseId: String,
@@ -388,12 +361,12 @@ internal fun blockedQualityGateChildArtifacts(
             "blocked",
             null,
             options =
-              PhaseRecordOptions(
-                blockedReason = blockedReason,
-                failureDisposition = failureDisposition,
-              ),
+            PhaseRecordOptions(
+              blockedReason = blockedReason,
+              failureDisposition = failureDisposition,
+            ),
           )
-      )
+        )
   return phaseRecordsArtifactsJson(*records.toTypedArray())
 }
 
@@ -406,47 +379,42 @@ internal fun runtimeRecord(
   workflowId: String,
   updatedAt: String,
   currentStep: String = "implement",
-): WorkflowStateRecord =
-  WorkflowStateRecord(
-    workflowId = workflowId,
-    sessionId = "session-$workflowId",
-    workflowName = "bill-feature-task",
-    contractVersion = "0.1",
-    workflowStatus = if (currentStep == "pr") "completed" else "running",
-    currentStepId = currentStep,
-    stepsJson = pipelineStepsJson(FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds, currentStep),
-    artifactsJson = "{}",
-    startedAt = "2026-08-06T08:00:00Z",
-    updatedAt = updatedAt,
-    finishedAt = if (currentStep == "pr") updatedAt else null,
-    issueKey = "SKILL-148",
-    mode = FeatureTaskWorkflowMode.RUNTIME,
-  )
+): WorkflowStateRecord = WorkflowStateRecord(
+  workflowId = workflowId,
+  sessionId = "session-$workflowId",
+  workflowName = "bill-feature-task",
+  contractVersion = "0.1",
+  workflowStatus = if (currentStep == "pr") "completed" else "running",
+  currentStepId = currentStep,
+  stepsJson = pipelineStepsJson(FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds, currentStep),
+  artifactsJson = "{}",
+  startedAt = "2026-08-06T08:00:00Z",
+  updatedAt = updatedAt,
+  finishedAt = if (currentStep == "pr") updatedAt else null,
+  issueKey = "SKILL-148",
+  mode = FeatureTaskWorkflowMode.RUNTIME,
+)
 
 internal fun verifyRecord(
   workflowId: String,
   updatedAt: String,
   currentStep: String = "code_review",
-): WorkflowStateRecord =
-  WorkflowStateRecord(
-    workflowId = workflowId,
-    sessionId = "session-$workflowId",
-    workflowName = "bill-feature-verify",
-    contractVersion = "0.1",
-    workflowStatus = WorkflowStatus.RUNNING.wireValue,
-    currentStepId = currentStep,
-    stepsJson = pipelineStepsJson(FeatureVerifyWorkflowDefinition.definition.stepIds, currentStep),
-    artifactsJson = "{}",
-    startedAt = "2026-08-06T08:00:00Z",
-    updatedAt = updatedAt,
-    finishedAt = null,
-    issueKey = "SKILL-148",
-  )
+): WorkflowStateRecord = WorkflowStateRecord(
+  workflowId = workflowId,
+  sessionId = "session-$workflowId",
+  workflowName = "bill-feature-verify",
+  contractVersion = "0.1",
+  workflowStatus = WorkflowStatus.RUNNING.wireValue,
+  currentStepId = currentStep,
+  stepsJson = pipelineStepsJson(FeatureVerifyWorkflowDefinition.definition.stepIds, currentStep),
+  artifactsJson = "{}",
+  startedAt = "2026-08-06T08:00:00Z",
+  updatedAt = updatedAt,
+  finishedAt = null,
+  issueKey = "SKILL-148",
+)
 
-internal fun pipelineStepsJson(
-  stepIds: List<String>,
-  currentStep: String,
-): String {
+internal fun pipelineStepsJson(stepIds: List<String>, currentStep: String): String {
   val currentIndex =
     stepIds.indexOf(currentStep).takeIf { it >= 0 }
       ?: error("Unknown step id '$currentStep' for fixture pipeline.")
@@ -492,27 +460,26 @@ internal class TrackingDatabase(
     return block(unitOfWork())
   }
 
-  internal fun unitOfWork(): UnitOfWork =
-    object : UnitOfWorkDefaults() {
-      override val dbPath: Path = Path.of("/fake/ide-status.db")
-      override val workflowStates = workflows
-      override val workList: WorkListRepository =
-        object : WorkListRepository {
-          override fun list(limit: Int?): List<WorkItem> = limit?.let(work::take) ?: work
-        }
-      override val goalRunnerControls = controls
-      override val learnings: LearningRepository
-        get() = error("Not exercised by IdeStatusServiceTest.")
-      override val reviews: ReviewRepository
-        get() = error("Not exercised by IdeStatusServiceTest.")
-      override val lifecycleTelemetry: LifecycleTelemetryRepository
-        get() = error("Not exercised by IdeStatusServiceTest.")
-      override val telemetryReconciliation: TelemetryReconciliationRepository
-        get() = error("Not exercised by IdeStatusServiceTest.")
-      override val telemetryOutbox: TelemetryOutboxRepository
-        get() = error("Not exercised by IdeStatusServiceTest.")
-      override val goalPlanningPreparations = EmptyGoalPlanningPreparationRepository
-    }
+  internal fun unitOfWork(): UnitOfWork = object : UnitOfWorkDefaults() {
+    override val dbPath: Path = Path.of("/fake/ide-status.db")
+    override val workflowStates = workflows
+    override val workList: WorkListRepository =
+      object : WorkListRepository {
+        override fun list(limit: Int?): List<WorkItem> = limit?.let(work::take) ?: work
+      }
+    override val goalRunnerControls = controls
+    override val learnings: LearningRepository
+      get() = error("Not exercised by IdeStatusServiceTest.")
+    override val reviews: ReviewRepository
+      get() = error("Not exercised by IdeStatusServiceTest.")
+    override val lifecycleTelemetry: LifecycleTelemetryRepository
+      get() = error("Not exercised by IdeStatusServiceTest.")
+    override val telemetryReconciliation: TelemetryReconciliationRepository
+      get() = error("Not exercised by IdeStatusServiceTest.")
+    override val telemetryOutbox: TelemetryOutboxRepository
+      get() = error("Not exercised by IdeStatusServiceTest.")
+    override val goalPlanningPreparations = EmptyGoalPlanningPreparationRepository
+  }
 }
 
 internal class OrphanedIdentityWorkflowStates(
@@ -542,44 +509,33 @@ internal class IdeStatusWorkflowStates : WorkflowStateRepositoryDefaults() {
   override fun findGoalChildFeatureTaskCandidates(
     normalizedIssueKey: String,
     repositoryIdentity: String,
-  ): List<FeatureTaskWorkflowCandidate> =
-    identities.values
-      .filter {
-        it.routeScope == FeatureTaskRouteScope.GOAL_CHILD &&
-          it.normalizedIssueKey == normalizedIssueKey &&
-          it.repositoryIdentity == repositoryIdentity
-      }
-      .mapNotNull { identity ->
-        implement[identity.workflowId]?.let { FeatureTaskWorkflowCandidate(identity = identity, workflow = it) }
-      }
-
-  override fun countGoalChildIdentities(normalizedIssueKey: String): Int =
-    identities.values.count {
-      it.normalizedIssueKey == normalizedIssueKey && it.routeScope == FeatureTaskRouteScope.GOAL_CHILD
+  ): List<FeatureTaskWorkflowCandidate> = identities.values
+    .filter {
+      it.routeScope == FeatureTaskRouteScope.GOAL_CHILD &&
+        it.normalizedIssueKey == normalizedIssueKey &&
+        it.repositoryIdentity == repositoryIdentity
+    }
+    .mapNotNull { identity ->
+      implement[identity.workflowId]?.let { FeatureTaskWorkflowCandidate(identity = identity, workflow = it) }
     }
 
-  override fun saveFeatureTaskWorkflow(
-    row: WorkflowStateRecord,
-    mode: FeatureTaskWorkflowMode,
-  ) {
+  override fun countGoalChildIdentities(normalizedIssueKey: String): Int = identities.values.count {
+    it.normalizedIssueKey == normalizedIssueKey && it.routeScope == FeatureTaskRouteScope.GOAL_CHILD
+  }
+
+  override fun saveFeatureTaskWorkflow(row: WorkflowStateRecord, mode: FeatureTaskWorkflowMode) {
     implement[row.workflowId] = row
   }
 
   override fun getFeatureTaskWorkflow(workflowId: String): WorkflowStateRecord? = implement[workflowId]
 
-  override fun getFeatureTaskWorkflowAsMode(
-    workflowId: String,
-    mode: FeatureTaskWorkflowMode,
-  ): WorkflowStateRecord? =
+  override fun getFeatureTaskWorkflowAsMode(workflowId: String, mode: FeatureTaskWorkflowMode): WorkflowStateRecord? =
     getFeatureTaskWorkflow(workflowId)?.also { row ->
       val actualMode = row.mode ?: FeatureTaskWorkflowMode.PROSE
       require(actualMode == mode) { "Unexpected feature-task workflow mode." }
     }
 
-  override fun listFeatureTaskWorkflows(
-    mode: FeatureTaskWorkflowMode,
-    limit: Int,
-  ): List<WorkflowStateRecord> =
+  override fun listFeatureTaskWorkflows(mode: FeatureTaskWorkflowMode, limit: Int): List<WorkflowStateRecord> =
     implement.values
       .filter { row -> (row.mode ?: FeatureTaskWorkflowMode.PROSE) == mode }
       .take(limit)
@@ -587,41 +543,28 @@ internal class IdeStatusWorkflowStates : WorkflowStateRepositoryDefaults() {
   override fun latestFeatureTaskWorkflow(mode: FeatureTaskWorkflowMode): WorkflowStateRecord? =
     listFeatureTaskWorkflows(mode, Int.MAX_VALUE).lastOrNull()
 
-  override fun save(
-    family: WorkflowFamily,
-    snapshot: WorkflowStateSnapshot,
-  ) = saveRecord(family, snapshot.toRecord(rows(family)[snapshot.workflowId]))
+  override fun save(family: WorkflowFamily, snapshot: WorkflowStateSnapshot) =
+    saveRecord(family, snapshot.toRecord(rows(family)[snapshot.workflowId]))
 
-  override fun saveRecord(
-    family: WorkflowFamily,
-    record: WorkflowStateRecord,
-  ) {
+  override fun saveRecord(family: WorkflowFamily, record: WorkflowStateRecord) {
     rows(family)[record.workflowId] = record
   }
 
-  override fun get(
-    family: WorkflowFamily,
-    workflowId: String,
-  ): WorkflowStateSnapshot? = rows(family)[workflowId]?.toSnapshot()
+  override fun get(family: WorkflowFamily, workflowId: String): WorkflowStateSnapshot? =
+    rows(family)[workflowId]?.toSnapshot()
 
-  override fun getAll(
-    family: WorkflowFamily,
-    workflowIds: Set<String>,
-  ): Map<String, WorkflowStateSnapshot> =
+  override fun getAll(family: WorkflowFamily, workflowIds: Set<String>): Map<String, WorkflowStateSnapshot> =
     workflowIds.mapNotNull { id -> rows(family)[id]?.let { id to it.toSnapshot() } }.toMap()
 
-  override fun list(
-    family: WorkflowFamily,
-    limit: Int,
-  ): List<WorkflowStateSnapshot> = rows(family).values.take(limit).map(WorkflowStateRecord::toSnapshot)
+  override fun list(family: WorkflowFamily, limit: Int): List<WorkflowStateSnapshot> =
+    rows(family).values.take(limit).map(WorkflowStateRecord::toSnapshot)
 
   override fun latest(family: WorkflowFamily): WorkflowStateSnapshot? = rows(family).values.lastOrNull()?.toSnapshot()
 
-  private fun rows(family: WorkflowFamily): MutableMap<String, WorkflowStateRecord> =
-    when (family) {
-      WorkflowFamily.VERIFY -> verify
-      WorkflowFamily.TASK_RUNTIME -> implement
-    }
+  private fun rows(family: WorkflowFamily): MutableMap<String, WorkflowStateRecord> = when (family) {
+    WorkflowFamily.VERIFY -> verify
+    WorkflowFamily.TASK_RUNTIME -> implement
+  }
 }
 
 internal class StubGoalManifestStore(
@@ -631,10 +574,8 @@ internal class StubGoalManifestStore(
 ) : GoalRunnerManifestStoreDefaults() {
   override fun executionLease(parentWorkflowId: String): GoalRunnerExecutionLease? = lease
 
-  override fun loadByIssueKey(
-    issueKey: String,
-    repoRoot: Path?,
-  ): GoalRunnerManifestState? = state.takeIf { it.manifest.issueKey.equals(issueKey, ignoreCase = true) }
+  override fun loadByIssueKey(issueKey: String, repoRoot: Path?): GoalRunnerManifestState? =
+    state.takeIf { it.manifest.issueKey.equals(issueKey, ignoreCase = true) }
 
   override fun planningStatus(
     parentWorkflowId: String,
@@ -651,23 +592,13 @@ internal class StubGoalManifestStore(
     expectedOwnerToken: String?,
   ): Boolean = false
 
-  override fun heartbeatExecutionLease(
-    parentWorkflowId: String,
-    lease: GoalRunnerExecutionLease,
-  ): Boolean = false
+  override fun heartbeatExecutionLease(parentWorkflowId: String, lease: GoalRunnerExecutionLease): Boolean = false
 
-  override fun releaseExecutionLease(
-    parentWorkflowId: String,
-    ownerToken: String,
-    generation: Long,
-  ): Boolean = false
+  override fun releaseExecutionLease(parentWorkflowId: String, ownerToken: String, generation: Long): Boolean = false
 }
 
 internal object EmptyManifestStore : GoalRunnerManifestStoreDefaults() {
-  override fun loadByIssueKey(
-    issueKey: String,
-    repoRoot: Path?,
-  ): GoalRunnerManifestState? = null
+  override fun loadByIssueKey(issueKey: String, repoRoot: Path?): GoalRunnerManifestState? = null
 
   override fun save(state: GoalRunnerManifestState): GoalRunnerManifestState = state
 
@@ -677,24 +608,13 @@ internal object EmptyManifestStore : GoalRunnerManifestStoreDefaults() {
     expectedOwnerToken: String?,
   ): Boolean = false
 
-  override fun heartbeatExecutionLease(
-    parentWorkflowId: String,
-    lease: GoalRunnerExecutionLease,
-  ): Boolean = false
+  override fun heartbeatExecutionLease(parentWorkflowId: String, lease: GoalRunnerExecutionLease): Boolean = false
 
-  override fun releaseExecutionLease(
-    parentWorkflowId: String,
-    ownerToken: String,
-    generation: Long,
-  ): Boolean = false
+  override fun releaseExecutionLease(parentWorkflowId: String, ownerToken: String, generation: Long): Boolean = false
 }
 
 internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
-  override fun terminalOutcome(
-    workflowId: String,
-    issueKey: String,
-    subtaskId: Int,
-  ): GoalRunnerStoredOutcome? = null
+  override fun terminalOutcome(workflowId: String, issueKey: String, subtaskId: Int): GoalRunnerStoredOutcome? = null
 
   override fun recoverAndPersistTerminalOutcome(
     workflowId: String,
@@ -746,18 +666,15 @@ internal object EmptyOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     workflowId: String,
     preferredPhaseId: String,
     reason: String,
-    expectedIdentity: skillbill.workflow.model.FeatureTaskExecutionIdentity,
-    expectedExecutionPlan: Map<String, Any?>,
+    expectedIdentity: FeatureTaskExecutionIdentity,
+    expectedExecutionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
   ): Boolean = false
 
   override fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState? = null
 
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> = emptyList()
 
-  override fun acknowledgeGoalReviewPass(
-    workflowId: String,
-    passNumber: Int,
-  ): Boolean = false
+  override fun acknowledgeGoalReviewPass(workflowId: String, passNumber: Int): Boolean = false
 
   override fun progressEvents(workflowId: String) = emptyList<GoalProgressEvent>()
 

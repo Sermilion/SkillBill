@@ -17,14 +17,17 @@ import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanErr
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeExecutionPlanSchemaPaths
-import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator as FeatureTaskRuntimeExecutionPlanValidatorPort
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
+import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator as FeatureTaskRuntimeExecutionPlanValidatorPort
 
 @Inject
 class FeatureTaskRuntimeExecutionPlanSchemaValidator : FeatureTaskRuntimeExecutionPlanValidatorPort {
-  override fun read(encoded: ByteArray, sourceLabel: String): Map<String, Any?> {
+  override fun canonicalize(encoded: ByteArray, sourceLabel: String): ByteArray =
+    JsonCodec.mapToJsonString(read(encoded, sourceLabel)).toByteArray(Charsets.UTF_8)
+
+  fun read(encoded: ByteArray, sourceLabel: String): Map<String, Any?> {
     requireBoundedBytes(encoded)
     val raw = try {
       Charsets.UTF_8.newDecoder()
@@ -54,7 +57,7 @@ class FeatureTaskRuntimeExecutionPlanSchemaValidator : FeatureTaskRuntimeExecuti
       ?: throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("execution plan must be a JSON object")
   }
 
-  override fun write(payload: Map<String, Any?>, sourceLabel: String): ByteArray {
+  fun write(payload: Map<String, Any?>, sourceLabel: String): ByteArray {
     val encoded = try {
       JsonCodec.mapToJsonString(payload).toByteArray(Charsets.UTF_8)
     } catch (_: UnsupportedJsonValueError) {
@@ -63,10 +66,7 @@ class FeatureTaskRuntimeExecutionPlanSchemaValidator : FeatureTaskRuntimeExecuti
     return JsonCodec.mapToJsonString(read(encoded, sourceLabel)).toByteArray(Charsets.UTF_8)
   }
 
-  override fun validate(
-    payload: Map<String, Any?>,
-    sourceLabel: String,
-  ) {
+  fun validate(payload: Map<String, Any?>, sourceLabel: String) {
     write(payload, sourceLabel)
   }
 
@@ -81,26 +81,25 @@ class FeatureTaskRuntimeExecutionPlanSchemaValidator : FeatureTaskRuntimeExecuti
   }
 }
 
-private fun schema(): JsonSchema =
-  ClasspathContractSchemaLoader.compiledSchema(
-    CompiledSchemaRequest(
-      cacheKey = FeatureTaskRuntimeExecutionPlanSchemaPaths.CLASSPATH_RESOURCE,
-      classLoader = FeatureTaskRuntimeExecutionPlanSchemaValidator::class.java.classLoader,
-      classpathResource = FeatureTaskRuntimeExecutionPlanSchemaPaths.CLASSPATH_RESOURCE,
-      missingResource = {
-        InvalidFeatureTaskRuntimeExecutionPlanSchemaError(
-          "Canonical schema is missing: ${FeatureTaskRuntimeExecutionPlanSchemaPaths.CLASSPATH_RESOURCE}",
-        )
-      },
-      processingFailure = { cause ->
-        InvalidFeatureTaskRuntimeExecutionPlanSchemaError(cause.message ?: cause::class.simpleName.orEmpty())
-      },
-      loadFailureLogger = {},
-      expectedSchemaId = FeatureTaskRuntimeExecutionPlanSchemaPaths.EXPECTED_SCHEMA_ID,
-      expectedContractVersion = FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION,
-      identityFailure = ::InvalidFeatureTaskRuntimeExecutionPlanSchemaError,
-    ),
-  )
+private fun schema(): JsonSchema = ClasspathContractSchemaLoader.compiledSchema(
+  CompiledSchemaRequest(
+    cacheKey = FeatureTaskRuntimeExecutionPlanSchemaPaths.CLASSPATH_RESOURCE,
+    classLoader = FeatureTaskRuntimeExecutionPlanSchemaValidator::class.java.classLoader,
+    classpathResource = FeatureTaskRuntimeExecutionPlanSchemaPaths.CLASSPATH_RESOURCE,
+    missingResource = {
+      InvalidFeatureTaskRuntimeExecutionPlanSchemaError(
+        "Canonical schema is missing: ${FeatureTaskRuntimeExecutionPlanSchemaPaths.CLASSPATH_RESOURCE}",
+      )
+    },
+    processingFailure = { cause ->
+      InvalidFeatureTaskRuntimeExecutionPlanSchemaError(cause.message ?: cause::class.simpleName.orEmpty())
+    },
+    loadFailureLogger = {},
+    expectedSchemaId = FeatureTaskRuntimeExecutionPlanSchemaPaths.EXPECTED_SCHEMA_ID,
+    expectedContractVersion = FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION,
+    identityFailure = ::InvalidFeatureTaskRuntimeExecutionPlanSchemaError,
+  ),
+)
 
 private const val MAXIMUM_ENCODED_BYTES: Int = 65536
 

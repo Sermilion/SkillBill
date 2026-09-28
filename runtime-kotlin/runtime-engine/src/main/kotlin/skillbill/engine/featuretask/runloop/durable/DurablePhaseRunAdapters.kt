@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.runloop.durable
 
-import skillbill.engine.featuretask.slot.execution.model.AdmittedFeatureTaskRuntimeExecution
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.continuation.GoalContinuationStateRecordRequest
@@ -26,6 +25,7 @@ import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservatio
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
@@ -87,17 +87,21 @@ internal class DurablePhaseRunRecords(
   override fun completeGoalReviewPhase(completion: GoalReviewPhaseCompletionRequest): Boolean =
     recorder.completeGoalReviewPhase(completion)
 
-  override fun persistReviewGenerationInvalidation(
-    workflowId: String,
-    reviewStepId: String,
-  ): Int? = recorder.persistReviewGenerationInvalidation(workflowId, reviewStepId)
+  override fun persistReviewGenerationInvalidation(workflowId: String, reviewStepId: String): Int? =
+    recorder.persistReviewGenerationInvalidation(workflowId, reviewStepId)
 
   override fun invalidateQuarantinedProducerRecord(
     workflowId: String,
     producerPhaseId: String,
     loopId: String,
     edgeIteration: Int,
-  ): Boolean = recorder.invalidateQuarantinedProducerRecord(workflowId, producerPhaseId, loopId, edgeIteration, admitted)
+  ): Boolean = recorder.invalidateQuarantinedProducerRecord(
+    workflowId,
+    producerPhaseId,
+    loopId,
+    edgeIteration,
+    admitted,
+  )
 
   override fun recordedFindingVerdicts(output: Map<String, Any?>): List<ReviewFindingVerdict> =
     recorder.recordedFindingVerdicts(output)
@@ -157,26 +161,20 @@ internal class DurablePhaseRunRecords(
   override fun loadValidationGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
     recorder.loadValidationGateProgress(workflowId)
 
-  override fun persistValidationGateProgress(
-    workflowId: String,
-    progress: FeatureTaskRuntimeValidationGateProgress,
-  ) = recorder.persistValidationGateProgress(workflowId, progress)
+  override fun persistValidationGateProgress(workflowId: String, progress: FeatureTaskRuntimeValidationGateProgress) =
+    recorder.persistValidationGateProgress(workflowId, progress)
 
   override fun loadBuildGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
     recorder.loadBuildGateProgress(workflowId)
 
-  override fun persistBuildGateProgress(
-    workflowId: String,
-    progress: FeatureTaskRuntimeValidationGateProgress,
-  ) = recorder.persistBuildGateProgress(workflowId, progress)
+  override fun persistBuildGateProgress(workflowId: String, progress: FeatureTaskRuntimeValidationGateProgress) =
+    recorder.persistBuildGateProgress(workflowId, progress)
 
   override fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean =
     recorder.appendLedgerEntry(request)
 
-  override fun appendQuarantineEntry(
-    workflowId: String,
-    entry: FeatureTaskRuntimeQuarantineEntry,
-  ): Boolean = recorder.appendQuarantineEntry(workflowId, entry)
+  override fun appendQuarantineEntry(workflowId: String, entry: FeatureTaskRuntimeQuarantineEntry): Boolean =
+    recorder.appendQuarantineEntry(workflowId, entry)
 
   override fun loadQuarantinedRecords(workflowId: String): List<FeatureTaskRuntimeQuarantineEntry>? =
     recorder.loadQuarantinedRecords(workflowId)
@@ -193,10 +191,8 @@ internal class DurablePhaseRunRecords(
   override fun loadCheckpointIdentities(workflowId: String): List<FeatureTaskRuntimeCheckpointIdentity>? =
     recorder.loadCheckpointIdentities(workflowId)
 
-  override fun recordWorkflowOwnedPaths(
-    workflowId: String,
-    ownedPaths: List<String>,
-  ): Boolean = recorder.recordWorkflowOwnedPaths(workflowId, ownedPaths)
+  override fun recordWorkflowOwnedPaths(workflowId: String, ownedPaths: List<String>): Boolean =
+    recorder.recordWorkflowOwnedPaths(workflowId, ownedPaths)
 
   override fun loadDecomposeTerminal(workflowId: String): FeatureTaskRuntimeDecomposeTerminal? =
     decomposeTerminalRecorder.loadDecomposeTerminal(workflowId)
@@ -231,22 +227,18 @@ internal class DurablePhaseRunGoal(
     repoRoot: Path,
     scopedUntrackedExclusions: List<String>?,
     ownedPathspec: List<String>,
-  ): GoalSubtaskReviewInputPreparation =
-    recorder.buildGoalReviewInput(
-      workflowId = workflowId,
-      gitOperations = gitOperations,
-      repoRoot = repoRoot,
-      scope = FeatureTaskRuntimeGoalContinuationRecorder.GoalReviewInputScope(scopedUntrackedExclusions, ownedPathspec),
-    )
+  ): GoalSubtaskReviewInputPreparation = recorder.buildGoalReviewInput(
+    workflowId = workflowId,
+    gitOperations = gitOperations,
+    repoRoot = repoRoot,
+    scope = FeatureTaskRuntimeGoalContinuationRecorder.GoalReviewInputScope(scopedUntrackedExclusions, ownedPathspec),
+  )
 
   override fun reviewState(workflowId: String): GoalSubtaskReviewState? = recorder.reviewState(workflowId)
 
   override fun lastGoalReviewResult(workflowId: String): String? = recorder.lastGoalReviewResult(workflowId)
 
-  override fun appendRemediationRollbackDegradationEvidence(
-    workflowId: String,
-    signal: RemediationDegradationSignal,
-  ) {
+  override fun appendRemediationRollbackDegradationEvidence(workflowId: String, signal: RemediationDegradationSignal) {
     recorder.appendRemediationRollbackDegradationEvidence(workflowId, signal)
   }
 }
@@ -254,17 +246,11 @@ internal class DurablePhaseRunGoal(
 internal class DurablePhaseRunSettlements(
   private val service: FeatureTaskPhaseSettlementService,
 ) : PhaseRunSettlements {
-  override fun findEnvelope(
-    workflowId: String,
-    phaseId: String,
-    attempt: Int,
-  ): FeatureTaskPhaseSettlementEnvelope? = service.findEnvelope(workflowId, phaseId, attempt)
+  override fun findEnvelope(workflowId: String, phaseId: String, attempt: Int): FeatureTaskPhaseSettlementEnvelope? =
+    service.findEnvelope(workflowId, phaseId, attempt)
 
-  override fun clear(
-    workflowId: String,
-    phaseId: String,
-    attempt: Int,
-  ): Boolean = service.clear(workflowId, phaseId, attempt)
+  override fun clear(workflowId: String, phaseId: String, attempt: Int): Boolean =
+    service.clear(workflowId, phaseId, attempt)
 }
 
 internal class DurablePhaseRunCheckpoints(

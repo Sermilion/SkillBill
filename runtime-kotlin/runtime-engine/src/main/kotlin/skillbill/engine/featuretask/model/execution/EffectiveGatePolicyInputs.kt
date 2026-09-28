@@ -1,8 +1,8 @@
-package skillbill.engine.featuretask.slot.execution
+package skillbill.engine.featuretask.model.execution
 
 import skillbill.config.model.applyValidationGateGradleWrapper
-import skillbill.engine.featuretask.validation.model.ValidationGateCommandFamily
-import skillbill.engine.featuretask.validation.model.ValidationGateCyclePhase
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
+import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
 import skillbill.ports.validation.model.ValidationGateFindingParseMode
 import skillbill.scaffold.model.ValidationGateDeclaration
@@ -18,18 +18,20 @@ data class EffectiveGatePolicyInputs(
   val validationDepth: ValidationDepth,
   val phaseTimeoutMillis: Long?,
 ) {
-  fun frozen(): EffectiveGatePolicyInputs = copy(declaration = declaration?.let { gate ->
-    gate.copy(
-      fullGateCommand = immutable(gate.fullGateCommand),
-      cacheBypassingFullGateCommand = immutable(gate.cacheBypassingFullGateCommand),
-      collectAllFullGateCommand = immutable(gate.collectAllFullGateCommand),
-      cacheBypassingCollectAllFullGateCommand = immutable(gate.cacheBypassingCollectAllFullGateCommand),
-      buildCommand = gate.buildCommand?.let(::immutable),
-      cacheBypassingBuildCommand = gate.cacheBypassingBuildCommand?.let(::immutable),
-      suppressionMarkers = immutable(gate.suppressionMarkers),
-      findings = gate.findings.copy(artifactGlobs = immutable(gate.findings.artifactGlobs)),
-    )
-  })
+  fun frozen(): EffectiveGatePolicyInputs = copy(
+    declaration = declaration?.let { gate ->
+      gate.copy(
+        fullGateCommand = immutable(gate.fullGateCommand),
+        cacheBypassingFullGateCommand = immutable(gate.cacheBypassingFullGateCommand),
+        collectAllFullGateCommand = immutable(gate.collectAllFullGateCommand),
+        cacheBypassingCollectAllFullGateCommand = immutable(gate.cacheBypassingCollectAllFullGateCommand),
+        buildCommand = gate.buildCommand?.let(::immutable),
+        cacheBypassingBuildCommand = gate.cacheBypassingBuildCommand?.let(::immutable),
+        suppressionMarkers = immutable(gate.suppressionMarkers),
+        findings = gate.findings.copy(artifactGlobs = immutable(gate.findings.artifactGlobs)),
+      )
+    },
+  )
 
   fun commandArgv(role: ValidationGateCyclePhase): List<String>? = declaration?.let { gate ->
     val argv = when (commandFamily) {
@@ -55,17 +57,26 @@ data class EffectiveGatePolicyInputs(
       throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("effective policy has a negative timeout")
     }
     return listOf(
-      commandFamily.name, packSlug, validationDepth.wireValue, phaseTimeoutMillis,
+      commandFamily.name,
+      packSlug,
+      validationDepth.wireValue,
+      phaseTimeoutMillis,
       declaration?.let { gate ->
         listOf(
-          command(ValidationGateCyclePhase.INITIAL_DISCOVERY, when (commandFamily) {
-            ValidationGateCommandFamily.BUILD -> gate.buildCommand
-            ValidationGateCommandFamily.VALIDATION -> gate.collectAllFullGateCommand
-          }),
-          command(ValidationGateCyclePhase.POST_REPAIR_VERIFY, when (commandFamily) {
-            ValidationGateCommandFamily.BUILD -> gate.cacheBypassingBuildCommand
-            ValidationGateCommandFamily.VALIDATION -> gate.cacheBypassingCollectAllFullGateCommand
-          }),
+          command(
+            ValidationGateCyclePhase.INITIAL_DISCOVERY,
+            when (commandFamily) {
+              ValidationGateCommandFamily.BUILD -> gate.buildCommand
+              ValidationGateCommandFamily.VALIDATION -> gate.collectAllFullGateCommand
+            },
+          ),
+          command(
+            ValidationGateCyclePhase.POST_REPAIR_VERIFY,
+            when (commandFamily) {
+              ValidationGateCommandFamily.BUILD -> gate.cacheBypassingBuildCommand
+              ValidationGateCommandFamily.VALIDATION -> gate.cacheBypassingCollectAllFullGateCommand
+            },
+          ),
           gate.findings.format.wireValue,
           gate.findings.artifactGlobs.sorted(),
           gate.findings.compilerDiagnostics.format.wireValue,

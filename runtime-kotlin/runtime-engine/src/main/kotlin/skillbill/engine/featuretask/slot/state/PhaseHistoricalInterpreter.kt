@@ -58,8 +58,11 @@ internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPol
     ?: throw InvalidPhaseStrategyCompositionError("no historical interpretation for $stepId under $policy")
 
   fun loopOnlyStepIds(gate: FeatureTaskRuntimeQualityGateSelection): Set<String> =
-    if (gate == FeatureTaskRuntimeQualityGateSelection.BUILD) setOf(PHASE_IMPLEMENT_FIX)
-    else setOf(PHASE_IMPLEMENT_FIX, PHASE_BUILD)
+    if (gate == FeatureTaskRuntimeQualityGateSelection.BUILD) {
+      setOf(PHASE_IMPLEMENT_FIX)
+    } else {
+      setOf(PHASE_IMPLEMENT_FIX, PHASE_BUILD)
+    }
 
   fun gateReportedBy(stepId: String?): PhaseReportedGate? = when (stepId) {
     PHASE_BUILD -> PhaseReportedGate.BUILD

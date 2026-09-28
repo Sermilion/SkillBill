@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.slot.audit.AcceptanceAuditResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.engine.goalrunner.status.completed
+import skillbill.engine.openTestWorkflow
 import skillbill.engine.runnerHarness
 import skillbill.engine.satisfiedAuditLauncher
 import skillbill.engine.validJsonOutput
@@ -191,32 +192,32 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     val resumed =
       FeatureTaskRuntimeRunState(
         initialRecords =
-          mapOf(
-            output.phaseId to
-              FeatureTaskRuntimePhaseRecord(
-                phaseId = output.phaseId,
-                status = WorkflowStepStatus.COMPLETED,
-                attemptCount = 1,
-                startedAt = "2026-01-01T00:00:00Z",
-                resolvedAgentId = "claude",
-                outputArtifact = output.payload,
-                loopId = FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID,
-                edgeIteration = 2,
-              ),
-          ),
-        transitions = transitions,
-        durableInitialLedger =
-          listOf(
-            FeatureTaskRuntimePhaseLedgerEntry(
-              action = FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE,
-              sequenceNumber = 1,
-              timestamp = "2026-01-01T00:00:00Z",
+        mapOf(
+          output.phaseId to
+            FeatureTaskRuntimePhaseRecord(
               phaseId = output.phaseId,
+              status = WorkflowStepStatus.COMPLETED,
               attemptCount = 1,
+              startedAt = "2026-01-01T00:00:00Z",
+              resolvedAgentId = "claude",
+              outputArtifact = output.payload,
               loopId = FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID,
               edgeIteration = 2,
             ),
+        ),
+        transitions = transitions,
+        durableInitialLedger =
+        listOf(
+          FeatureTaskRuntimePhaseLedgerEntry(
+            action = FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE,
+            sequenceNumber = 1,
+            timestamp = "2026-01-01T00:00:00Z",
+            phaseId = output.phaseId,
+            attemptCount = 1,
+            loopId = FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID,
+            edgeIteration = 2,
           ),
+        ),
         outputValidator = AlwaysValidValidator,
         resumeRules = RESUME_RULES,
       )
@@ -293,17 +294,13 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     assertEquals(live.outputFor(output.phaseId)?.payload, resumed.outputFor(output.phaseId)?.payload)
   }
 
-  private fun sqliteResumeDatabase(tempDir: Path): SQLiteDatabaseSessionFactory =
-    sqliteDatabaseSessionFactory(
-      userHome = tempDir,
-      dbPathOverride = tempDir.resolve("runtime.db").toString(),
-      environment = emptyMap(),
-    )
+  private fun sqliteResumeDatabase(tempDir: Path): SQLiteDatabaseSessionFactory = sqliteDatabaseSessionFactory(
+    userHome = tempDir,
+    dbPathOverride = tempDir.resolve("runtime.db").toString(),
+    environment = emptyMap(),
+  )
 
-  private fun seedSqliteResumeWorkflow(
-    database: SQLiteDatabaseSessionFactory,
-    workflowId: String,
-  ) {
+  private fun seedSqliteResumeWorkflow(database: SQLiteDatabaseSessionFactory, workflowId: String) {
     database.transaction { unitOfWork ->
       unitOfWork.workflowStates.saveFeatureTaskWorkflow(
         WorkflowStateRecord(
@@ -399,7 +396,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     harness.seedPhase("preplan", "completed", 1, "claude", PREPLAN_OUTPUT)
     harness.seedPhase("plan", "completed", 1, "claude", PLAN_OUTPUT)
     harness.seedPhase("implement", "completed", 1, "claude", IMPLEMENT_OUTPUT)
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, "ftr-test-001")
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, "ftr-test-001")
     harness.recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = WORKFLOW_ID,
@@ -587,7 +584,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     harness.seedPhase("preplan", "completed", 1, "claude", PREPLAN_OUTPUT)
     harness.seedPhase("plan", "completed", 1, "claude", PLAN_OUTPUT)
     harness.seedPhase("implement", "completed", 1, "claude", IMPLEMENT_OUTPUT)
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, "ftr-test-001")
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, "ftr-test-001")
     harness.recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = WORKFLOW_ID,
@@ -613,24 +610,20 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     edgeIteration: Int? = null,
     blockedReason: String? = null,
     outputArtifact: String? = null,
-  ): FeatureTaskRuntimePhaseRecord =
-    FeatureTaskRuntimePhaseRecord(
-      phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
-      status = status,
-      attemptCount = 1,
-      startedAt = "2026-01-01T00:00:00Z",
-      resolvedAgentId = "claude",
-      loopId = loopId,
-      edgeIteration = edgeIteration,
-      blockedReason = blockedReason,
-      outputArtifact = outputArtifact,
-      finishedAt = if (status == WorkflowStepStatus.COMPLETED) "2026-01-01T00:01:00Z" else null,
-    )
+  ): FeatureTaskRuntimePhaseRecord = FeatureTaskRuntimePhaseRecord(
+    phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+    status = status,
+    attemptCount = 1,
+    startedAt = "2026-01-01T00:00:00Z",
+    resolvedAgentId = "claude",
+    loopId = loopId,
+    edgeIteration = edgeIteration,
+    blockedReason = blockedReason,
+    outputArtifact = outputArtifact,
+    finishedAt = if (status == WorkflowStepStatus.COMPLETED) "2026-01-01T00:01:00Z" else null,
+  )
 
   private object NoopWorkflowSnapshotValidator : WorkflowSnapshotValidator {
-    override fun validate(
-      snapshot: WorkflowStateSnapshot,
-      slug: String,
-    ) = Unit
+    override fun validate(snapshot: WorkflowStateSnapshot, slug: String) = Unit
   }
 }

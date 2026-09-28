@@ -36,9 +36,13 @@ data class SkeletonDefinition(
   }
 
   companion object {
-    val STANDALONE: SkeletonDefinition = SkeletonDefinition("standalone", PhaseSlot.entries)
+    val STANDALONE: SkeletonDefinition = SkeletonDefinition("standalone", PhaseSlot.entries, semanticRevision = 2)
     val GOAL_CHILD: SkeletonDefinition =
-      SkeletonDefinition("goal-child", PhaseSlot.entries.filter { it != PhaseSlot.PULL_REQUEST })
+      SkeletonDefinition(
+        "goal-child",
+        PhaseSlot.entries.filter { it != PhaseSlot.PULL_REQUEST },
+        semanticRevision = 2,
+      )
     val REVIEW: SkeletonDefinition =
       SkeletonDefinition("review", listOf(PhaseSlot.CODE_REVIEW), SkeletonRunStateKind.IN_MEMORY)
     val VALIDATION: SkeletonDefinition =

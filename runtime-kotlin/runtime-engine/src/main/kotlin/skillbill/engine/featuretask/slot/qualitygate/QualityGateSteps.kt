@@ -15,10 +15,12 @@ import skillbill.engine.featuretask.runloop.settlement.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.engine.featuretask.validation.model.ValidationGateCommandFamily
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.validation.model.ValidationGateProgressStore
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
+import skillbill.ports.diagnostics.model.ProducerOutputEvidence
+import skillbill.text.sha256HexUtf8
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -39,14 +41,13 @@ internal val QUALITY_GATE_STEP_POLICY: PhaseStepPolicy =
 internal fun gateCurrentExecution(
   stepId: String,
   context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
-): IdeStatusCurrentPhaseExecution? =
-  context.gateRunCount?.takeIf { it >= 1 }?.let { count ->
-    IdeStatusCurrentPhaseExecution(
-      phaseId = stepId,
-      kind = IdeStatusCurrentPhaseExecutionKind.GATE_RUN,
-      count = count,
-    )
-  } ?: attemptPhaseExecution(stepId, context)
+): IdeStatusCurrentPhaseExecution? = context.gateRunCount?.takeIf { it >= 1 }?.let { count ->
+  IdeStatusCurrentPhaseExecution(
+    phaseId = stepId,
+    kind = IdeStatusCurrentPhaseExecutionKind.GATE_RUN,
+    count = count,
+  )
+} ?: attemptPhaseExecution(stepId, context)
 
 internal fun PhaseAttemptEnvironment.gateCheckpoint(run: PhaseRun): String? =
   phaseGates.gitOperations.repositoryFingerprint(run.request.repoRoot).value.takeIf(String::isNotBlank)
@@ -62,24 +63,19 @@ internal fun PhaseAttemptEnvironment.gateChangedPaths(run: PhaseRun): List<Strin
 
 internal fun PhaseRunRecords.buildGateProgressStore(
   family: ValidationGateCommandFamily = ValidationGateCommandFamily.BUILD,
-): ValidationGateProgressStore =
-  object : ValidationGateProgressStore {
-    override fun persist(
-      workflowId: String,
-      progress: FeatureTaskRuntimeValidationGateProgress,
-    ) {
-      when (family) {
-        ValidationGateCommandFamily.BUILD -> persistBuildGateProgress(workflowId, progress)
-        ValidationGateCommandFamily.VALIDATION -> persistValidationGateProgress(workflowId, progress)
-      }
+): ValidationGateProgressStore = object : ValidationGateProgressStore {
+  override fun persist(workflowId: String, progress: FeatureTaskRuntimeValidationGateProgress) {
+    when (family) {
+      ValidationGateCommandFamily.BUILD -> persistBuildGateProgress(workflowId, progress)
+      ValidationGateCommandFamily.VALIDATION -> persistValidationGateProgress(workflowId, progress)
     }
-
-    override fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
-      when (family) {
-        ValidationGateCommandFamily.BUILD -> loadBuildGateProgress(workflowId)
-        ValidationGateCommandFamily.VALIDATION -> loadValidationGateProgress(workflowId)
-      }
   }
+
+  override fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress? = when (family) {
+    ValidationGateCommandFamily.BUILD -> loadBuildGateProgress(workflowId)
+    ValidationGateCommandFamily.VALIDATION -> loadValidationGateProgress(workflowId)
+  }
+}
 
 internal class RuntimeOwnedGateSettlement(
   private val context: PhaseAttemptEnvironment,
@@ -108,6 +104,21 @@ internal class RuntimeOwnedGateSettlement(
           ),
         )
       }
+    val payload = outputText.toByteArray(Charsets.UTF_8)
+    context.recorder.retainProducerOutput(
+      ProducerOutputEvidence(
+        workflowId = context.request.workflowId,
+        phaseId = run.phaseId,
+        attempt = iteration,
+        agentId = run.resolvedAgent.resolvedAgentId,
+        model = "runtime",
+        recordedAt = context.clock.instant(),
+        byteSize = payload.size.toLong(),
+        sha256 = sha256HexUtf8(outputText),
+        payload = payload,
+        generation = context.state.evidenceGeneration(run.policy.generationScoped),
+      ),
+    )
     if (!persistCompleted(run, iteration, outputText, accepted)) {
       return context.blockGateStep(
         run,
@@ -131,46 +142,41 @@ internal class RuntimeOwnedGateSettlement(
     )
   }
 
-  private fun accept(
-    run: PhaseRun,
-    outputText: String,
-  ): Result<AcceptedFeatureTaskRuntimePhaseOutput> =
-    runCatching {
-      val accepted =
-        context.outputValidator.validatePhaseOutput(outputText, sourceLabel = run.phaseId)
-          .requireAcceptedOutput(run.phaseId)
-      acceptance(run, accepted)
-      accepted
-    }
+  private fun accept(run: PhaseRun, outputText: String): Result<AcceptedFeatureTaskRuntimePhaseOutput> = runCatching {
+    val accepted =
+      context.outputValidator.validatePhaseOutput(outputText, sourceLabel = run.phaseId)
+        .requireAcceptedOutput(run.phaseId)
+    acceptance(run, accepted)
+    accepted
+  }
 
   private fun persistCompleted(
     run: PhaseRun,
     iteration: Int,
     outputText: String,
     accepted: AcceptedFeatureTaskRuntimePhaseOutput,
-  ): Boolean =
-    context.recorder.recordCompletedPhase(
-      FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
-        context.request,
-        context.state,
-        context.goalContinuationRecorder,
-        PhaseStateRequestArgs(
-          write =
-            PhaseStateWriteArgs(
-              run = run,
-              iteration = iteration,
-              status = STATUS_COMPLETED,
-              finished = true,
-              outputArtifact = outputText,
-            ),
-          extras =
-            PhaseStateRequestAttachments(
-              normalizedOutput = accepted.normalizedOutput,
-              repairEvidence = accepted.repairEvidence,
-            ),
+  ): Boolean = context.recorder.recordCompletedPhase(
+    FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
+      context.request,
+      context.state,
+      context.goalContinuationRecorder,
+      PhaseStateRequestArgs(
+        write =
+        PhaseStateWriteArgs(
+          run = run,
+          iteration = iteration,
+          status = STATUS_COMPLETED,
+          finished = true,
+          outputArtifact = outputText,
+        ),
+        extras =
+        PhaseStateRequestAttachments(
+          normalizedOutput = accepted.normalizedOutput,
+          repairEvidence = accepted.repairEvidence,
         ),
       ),
-    )
+    ),
+  )
 }
 
 internal fun PhaseAttemptEnvironment.blockGateStep(
@@ -179,17 +185,16 @@ internal fun PhaseAttemptEnvironment.blockGateStep(
   reason: String,
   disposition: FeatureTaskRuntimeFailureDisposition,
   observability: FeatureTaskRuntimeRunObservability,
-): PhaseOutcome =
-  FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-    request,
-    state,
-    recorder,
-    observability,
-    PhaseBlockRequest(
-      run = run,
-      attemptCount = iteration,
-      reason = reason,
-      observability = observability,
-      failureDisposition = disposition,
-    ),
-  )
+): PhaseOutcome = FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+  request,
+  state,
+  recorder,
+  observability,
+  PhaseBlockRequest(
+    run = run,
+    attemptCount = iteration,
+    reason = reason,
+    observability = observability,
+    failureDisposition = disposition,
+  ),
+)

@@ -59,7 +59,7 @@ class FeatureTaskRuntimeWriteHistorySettlementTest {
           ),
           core = RunnerHarnessCore(agentAssignment = phasePerAgentAssignment()),
         )
-      harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+      harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
       harness.seedPhase("preplan", "completed", 1, phaseAgent("preplan"), PREPLAN_OUTPUT)
       harness.seedPhase("plan", "completed", 1, phaseAgent("plan"), PLAN_OUTPUT)
       harness.seedPhase("implement", "completed", 1, phaseAgent("implement"), IMPLEMENT_OUTPUT)
@@ -87,16 +87,15 @@ class FeatureTaskRuntimeWriteHistorySettlementTest {
     }
   }
 
-  private fun goalChild(): FeatureTaskRuntimeGoalContinuationContext =
-    FeatureTaskRuntimeGoalContinuationContext(
-      parentIssueKey = RUNNER_TEST_ISSUE_KEY,
-      subtaskId = 11,
-      subtaskName = "runtime-owned write_history rules",
-      goalBranch = GOAL_BRANCH,
-      suppressPr = true,
-      parentWorkflowId = "wfl-parent",
-      reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
-    )
+  private fun goalChild(): FeatureTaskRuntimeGoalContinuationContext = FeatureTaskRuntimeGoalContinuationContext(
+    parentIssueKey = RUNNER_TEST_ISSUE_KEY,
+    subtaskId = 11,
+    subtaskName = "runtime-owned write_history rules",
+    goalBranch = GOAL_BRANCH,
+    suppressPr = true,
+    parentWorkflowId = "wfl-parent",
+    reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
+  )
 
   private fun measuredFacts(outputArtifact: String): Map<String, Any?> {
     val envelope = JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(outputArtifact))

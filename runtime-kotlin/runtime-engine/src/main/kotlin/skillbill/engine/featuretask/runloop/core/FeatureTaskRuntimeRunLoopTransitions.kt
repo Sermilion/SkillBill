@@ -13,7 +13,6 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
-import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 
 internal fun strategySelectionFacts(request: FeatureTaskRuntimeRunFacts): PhaseStrategySelectionFacts =
@@ -26,8 +25,7 @@ internal fun slotStepVerdictRule(
   strategies: PhaseStrategyLookup,
   plan: ResolvedPhaseExecutionPlan,
   diagnostics: RuntimeDiagnostics,
-): (String) -> FeatureTaskRuntimeStepVerdictRule? =
-  { stepId -> strategies.verdictRule(stepId, plan, diagnostics) }
+): (String) -> FeatureTaskRuntimeStepVerdictRule? = { stepId -> strategies.verdictRule(stepId, plan, diagnostics) }
 
 internal fun spanBetween(
   transitions: FeatureTaskRuntimeTransitionDeclaration,
@@ -42,24 +40,23 @@ object FeatureTaskRuntimeRunLoopTransitions {
     edge: FeatureTaskRuntimeBackwardEdge?,
     effectiveVerdict: FeatureTaskRuntimeVerdict,
     transition: FeatureTaskRuntimeNextPhase,
-  ): String? =
-    with(context) {
-      when (transition) {
-        is FeatureTaskRuntimeNextPhase.TerminalAdvance -> null
-        is FeatureTaskRuntimeNextPhase.TerminalBlock -> {
-          FeatureTaskRuntimeRunLoopPlanningBranch.blockOnCapExhaustion(context, phaseId, transition)
-          null
-        }
-        is FeatureTaskRuntimeNextPhase.Next ->
-          nextTransitionTarget(
-            context,
-            phaseId,
-            edge,
-            effectiveVerdict,
-            transition,
-          )
+  ): String? = with(context) {
+    when (transition) {
+      is FeatureTaskRuntimeNextPhase.TerminalAdvance -> null
+      is FeatureTaskRuntimeNextPhase.TerminalBlock -> {
+        FeatureTaskRuntimeRunLoopPlanningBranch.blockOnCapExhaustion(context, phaseId, transition)
+        null
       }
+      is FeatureTaskRuntimeNextPhase.Next ->
+        nextTransitionTarget(
+          context,
+          phaseId,
+          edge,
+          effectiveVerdict,
+          transition,
+        )
     }
+  }
 
   internal fun nextTransitionTarget(
     context: FeatureTaskRuntimeRunLoopContext,
@@ -67,59 +64,57 @@ object FeatureTaskRuntimeRunLoopTransitions {
     edge: FeatureTaskRuntimeBackwardEdge?,
     effectiveVerdict: FeatureTaskRuntimeVerdict,
     transition: FeatureTaskRuntimeNextPhase.Next,
-  ): String? =
-    with(context) {
-      val loopId = transition.loopId
-      return when {
-        loopId == null &&
-          !establishForwardCheckpoint(
+  ): String? = with(context) {
+    val loopId = transition.loopId
+    return when {
+      loopId == null &&
+        !establishForwardCheckpoint(
+          context,
+          precedingPhaseId = phaseId,
+          destinationPhaseId = transition.phaseId,
+        )
+      -> null
+      loopId == null -> transition.phaseId
+      reentersMutatingPhase(context, requireNotNull(edge), transition.phaseId) &&
+        !with(FeatureTaskRuntimeRunLoopCheckpointRemediation) {
+          FeatureTaskRuntimeRunLoopCheckpointRemediation.establishRemediationCheckpoint(context, phaseId, loopId)
+        } -> null
+      else -> {
+        with(FeatureTaskRuntimeRunLoopBackwardEdge) {
+          FeatureTaskRuntimeRunLoopBackwardEdge.recordBackwardEdge(
             context,
-            precedingPhaseId = phaseId,
-            destinationPhaseId = transition.phaseId,
+            session,
+            edge = requireNotNull(edge),
+            edgeIteration = requireNotNull(transition.edgeIteration),
+            verdict = effectiveVerdict,
           )
-        -> null
-        loopId == null -> transition.phaseId
-        reentersMutatingPhase(context, requireNotNull(edge), transition.phaseId) &&
-          !with(FeatureTaskRuntimeRunLoopCheckpointRemediation) {
-            FeatureTaskRuntimeRunLoopCheckpointRemediation.establishRemediationCheckpoint(context, phaseId, loopId)
-          } -> null
-        else -> {
-          with(FeatureTaskRuntimeRunLoopBackwardEdge) {
-            FeatureTaskRuntimeRunLoopBackwardEdge.recordBackwardEdge(
-              context,
-              session,
-              edge = requireNotNull(edge),
-              edgeIteration = requireNotNull(transition.edgeIteration),
-              verdict = effectiveVerdict,
-            )
-            observability.loopEdge(
-              transition.phaseId,
-              loopId,
-              requireNotNull(transition.edgeIteration),
-              effectiveVerdict,
-            )
-            FeatureTaskRuntimeRunLoopBackwardEdge.warnOnThresholdCrossing(
-              request,
-              diagnostics,
-              requireNotNull(edge),
-              requireNotNull(transition.edgeIteration),
-            )
-          }
-          transition.phaseId
+          observability.loopEdge(
+            transition.phaseId,
+            loopId,
+            requireNotNull(transition.edgeIteration),
+            effectiveVerdict,
+          )
+          FeatureTaskRuntimeRunLoopBackwardEdge.warnOnThresholdCrossing(
+            request,
+            diagnostics,
+            requireNotNull(edge),
+            requireNotNull(transition.edgeIteration),
+          )
         }
+        transition.phaseId
       }
     }
+  }
 
   internal fun reentersMutatingPhase(
     context: PhaseAttemptEnvironment,
     edge: FeatureTaskRuntimeBackwardEdge,
     destinationPhaseId: String,
-  ): Boolean =
-    spanBetween(
-      context.transitions,
-      destinationPhaseId,
-      edge.fromPhaseId,
-    ).any { context.stepPolicy(it).mutating }
+  ): Boolean = spanBetween(
+    context.transitions,
+    destinationPhaseId,
+    edge.fromPhaseId,
+  ).any { context.stepPolicy(it).mutating }
 
   internal fun establishForwardCheckpoint(
     context: PhaseAttemptEnvironment,

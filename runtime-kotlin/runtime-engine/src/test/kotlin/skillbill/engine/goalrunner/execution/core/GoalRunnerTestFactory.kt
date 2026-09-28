@@ -1,11 +1,11 @@
 package skillbill.engine.goalrunner.execution.core
 
-import skillbill.engine.ExecutionPlanAdmissionFixture
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.realPlanningProjectionValidator
 import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
 import skillbill.application.telemetry.lifecycle.noopGoalLifecycleTelemetryEmitter
+import skillbill.engine.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.slot.goalPlanningPhaseStrategies
@@ -75,13 +75,12 @@ internal fun testActivityStampWriter(
 
 internal fun testWorktreeEditJournalWriter(
   database: DatabaseSessionFactory = TestGoalActivityStampDatabase,
-): WorktreeEditJournalWriter =
-  WorktreeEditJournalWriter(
-    database,
-    Clock.systemUTC(),
-    NoopRuntimeDiagnostics,
-    NoopWorkflowGitOperations,
-  )
+): WorktreeEditJournalWriter = WorktreeEditJournalWriter(
+  database,
+  Clock.systemUTC(),
+  NoopRuntimeDiagnostics,
+  NoopWorkflowGitOperations,
+)
 
 internal data class GoalRunnerTestWiring(
   val runBoundaries: GoalRunnerRunBoundaries,
@@ -147,38 +146,37 @@ internal data class GoalRunnerTestInputs(
   val executionCoordinator: GoalRunnerExecutionCoordinator = DIRECT_GOAL_RUNNER_EXECUTION_COORDINATOR,
   val phaseRecorder: FeatureTaskRuntimePhaseRecorder = goalRunnerDefaultPhaseRecorder(),
 ) {
-  fun toWiring(): GoalRunnerTestWiring =
-    GoalRunnerTestWiring(
-      runBoundaries =
-        GoalRunnerRunBoundaries(
-          manifestStore = manifestStore,
-          outcomeStore = outcomeStore,
-          goalPlanningSweep = goalPlanningSweep,
-          telemetry = telemetry,
-          clock = clock,
-          diagnostics = NoopRuntimeDiagnostics,
-          executionCoordinator = executionCoordinator,
-          phaseQuery = phaseRecorder.phaseQuery,
-          unaddressedFindingsLedgerService = unaddressedFindingsLedgerService,
-        ),
-      launchBoundaries =
-        GoalRunnerSubtaskLaunchBoundaries(
-          manifestStore = manifestStore,
-          outcomeStore = outcomeStore,
-          subtaskLauncher = subtaskLauncher,
-          gitOperations = gitOperations,
-        ),
-      finalizationBoundaries =
-        GoalRunnerFinalizationBoundaries(
-          manifestStore = manifestStore,
-          outcomeStore = outcomeStore,
-          pullRequestPort = pullRequestPort,
-          specScratchStore = specScratchStore,
-          gitOperations = gitOperations,
-          diagnostics = NoopRuntimeDiagnostics,
-          unaddressedFindingsLedgerService = unaddressedFindingsLedgerService,
-        ),
-    )
+  fun toWiring(): GoalRunnerTestWiring = GoalRunnerTestWiring(
+    runBoundaries =
+    GoalRunnerRunBoundaries(
+      manifestStore = manifestStore,
+      outcomeStore = outcomeStore,
+      goalPlanningSweep = goalPlanningSweep,
+      telemetry = telemetry,
+      clock = clock,
+      diagnostics = NoopRuntimeDiagnostics,
+      executionCoordinator = executionCoordinator,
+      phaseQuery = phaseRecorder.phaseQuery,
+      unaddressedFindingsLedgerService = unaddressedFindingsLedgerService,
+    ),
+    launchBoundaries =
+    GoalRunnerSubtaskLaunchBoundaries(
+      manifestStore = manifestStore,
+      outcomeStore = outcomeStore,
+      subtaskLauncher = subtaskLauncher,
+      gitOperations = gitOperations,
+    ),
+    finalizationBoundaries =
+    GoalRunnerFinalizationBoundaries(
+      manifestStore = manifestStore,
+      outcomeStore = outcomeStore,
+      pullRequestPort = pullRequestPort,
+      specScratchStore = specScratchStore,
+      gitOperations = gitOperations,
+      diagnostics = NoopRuntimeDiagnostics,
+      unaddressedFindingsLedgerService = unaddressedFindingsLedgerService,
+    ),
+  )
 }
 
 internal fun goalRunnerDeps(
@@ -186,13 +184,12 @@ internal fun goalRunnerDeps(
   subtaskLauncher: GoalRunnerSubtaskLauncher,
   outcomeStore: GoalRunnerWorkflowOutcomeStore,
   pullRequestPort: GoalPullRequestPort,
-): GoalRunnerTestInputs =
-  GoalRunnerTestInputs(
-    manifestStore = manifestStore,
-    subtaskLauncher = subtaskLauncher,
-    outcomeStore = outcomeStore,
-    pullRequestPort = pullRequestPort,
-  )
+): GoalRunnerTestInputs = GoalRunnerTestInputs(
+  manifestStore = manifestStore,
+  subtaskLauncher = subtaskLauncher,
+  outcomeStore = outcomeStore,
+  pullRequestPort = pullRequestPort,
+)
 
 internal fun testGoalRunner(deps: GoalRunnerTestInputs): GoalRunner = testGoalRunner(deps.toWiring())
 
@@ -236,7 +233,11 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
     )
   return GoalRunner(
     runBoundaries = wiring.runBoundaries,
-    runPreparation = GoalRunnerRunPreparation(wiring.runBoundaries.manifestStore, TestRepositoryEnclosingRoot),
+    runPreparation = GoalRunnerRunPreparation(
+      wiring.runBoundaries.manifestStore,
+      TestRepositoryEnclosingRoot,
+      ExecutionPlanAdmissionFixture().creationResolver(),
+    ),
     perRunLoopAssembler = perRunLoopAssembler,
     pauseBoundary = pauseBoundary,
   )
@@ -248,18 +249,17 @@ internal fun testGoalRunner(
   outcomeStore: GoalRunnerWorkflowOutcomeStore,
   pullRequestPort: GoalPullRequestPort,
   phaseRecorder: FeatureTaskRuntimePhaseRecorder = goalRunnerDefaultPhaseRecorder(),
-): GoalRunner =
-  testGoalRunner(
-    testGoalRunnerWiring(
-      GoalRunnerTestWiringParams(
-        manifestStore = manifestStore,
-        subtaskLauncher = subtaskLauncher,
-        outcomeStore = outcomeStore,
-        pullRequestPort = pullRequestPort,
-        phaseRecorder = phaseRecorder,
-      ),
+): GoalRunner = testGoalRunner(
+  testGoalRunnerWiring(
+    GoalRunnerTestWiringParams(
+      manifestStore = manifestStore,
+      subtaskLauncher = subtaskLauncher,
+      outcomeStore = outcomeStore,
+      pullRequestPort = pullRequestPort,
+      phaseRecorder = phaseRecorder,
     ),
-  )
+  ),
+)
 
 private object TestGoalActivityStampDatabase : DatabaseSessionFactory {
   private val dbPath = Path.of("/fake/goal-activity-stamp.db")
@@ -274,21 +274,20 @@ private object TestGoalActivityStampDatabase : DatabaseSessionFactory {
 
   override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unitOfWork())
 
-  private fun unitOfWork(): UnitOfWork =
-    object : UnitOfWorkDefaults() {
-      override val dbPath: Path = this@TestGoalActivityStampDatabase.dbPath
-      override val reviews: ReviewRepository get() = error("unused by goal activity stamp wiring")
-      override val learnings: LearningRepository get() = error("unused by goal activity stamp wiring")
-      override val lifecycleTelemetry: LifecycleTelemetryRepository
-        get() = error("unused by goal activity stamp wiring")
-      override val telemetryReconciliation: TelemetryReconciliationRepository
-        get() = error("unused by goal activity stamp wiring")
-      override val telemetryOutbox: TelemetryOutboxRepository get() = error("unused by goal activity stamp wiring")
-      override val workflowStates: WorkflowStateRepository get() = error("unused by goal activity stamp wiring")
-      override val workList = EmptyWorkListRepository
-      override val goalPlanningPreparations = EmptyGoalPlanningPreparationRepository
-      override val goalRunnerControls = EmptyGoalRunnerControlRepository
-    }
+  private fun unitOfWork(): UnitOfWork = object : UnitOfWorkDefaults() {
+    override val dbPath: Path = this@TestGoalActivityStampDatabase.dbPath
+    override val reviews: ReviewRepository get() = error("unused by goal activity stamp wiring")
+    override val learnings: LearningRepository get() = error("unused by goal activity stamp wiring")
+    override val lifecycleTelemetry: LifecycleTelemetryRepository
+      get() = error("unused by goal activity stamp wiring")
+    override val telemetryReconciliation: TelemetryReconciliationRepository
+      get() = error("unused by goal activity stamp wiring")
+    override val telemetryOutbox: TelemetryOutboxRepository get() = error("unused by goal activity stamp wiring")
+    override val workflowStates: WorkflowStateRepository get() = error("unused by goal activity stamp wiring")
+    override val workList = EmptyWorkListRepository
+    override val goalPlanningPreparations = EmptyGoalPlanningPreparationRepository
+    override val goalRunnerControls = EmptyGoalRunnerControlRepository
+  }
 }
 
 internal fun testDefaultGoalPlanningSweep(
@@ -341,7 +340,7 @@ internal fun testGoalPlanningSweepPorts(params: GoalPlanningSweepPortsParams): D
       burstSchedule = params.burstSchedule,
       refreshLiveness = params.refreshLiveness,
       phaseStrategies =
-        goalPlanningPhaseStrategies(params.subtaskLauncher, params.fanOutPort, params.burstSchedule.planFanOutCap),
+      goalPlanningPhaseStrategies(params.subtaskLauncher, params.fanOutPort, params.burstSchedule.planFanOutCap),
       clock = Clock.systemUTC(),
       diagnostics = NoopRuntimeDiagnostics,
       runLoopEntry = params.runLoopEntry,
@@ -356,27 +355,23 @@ internal fun testGoalPlanningContextDiscovery(
       boundaryCatalogTruncated = false,
       validationGuidance = "",
     ),
-): GoalPlanningContextDiscovery =
-  if (context ==
-    GoalPlanningContext(
-      boundaryCatalog = emptyList(),
-      boundaryCatalogTruncated = false,
-      validationGuidance = "",
-    )
-  ) {
-    EMPTY_GOAL_PLANNING_CONTEXT_DISCOVERY
-  } else {
-    object : GoalPlanningContextDiscovery {
-      override fun loadPlanningContext(repoRoot: Path): GoalPlanningContext = context
+): GoalPlanningContextDiscovery = if (context ==
+  GoalPlanningContext(
+    boundaryCatalog = emptyList(),
+    boundaryCatalogTruncated = false,
+    validationGuidance = "",
+  )
+) {
+  EMPTY_GOAL_PLANNING_CONTEXT_DISCOVERY
+} else {
+  object : GoalPlanningContextDiscovery {
+    override fun loadPlanningContext(repoRoot: Path): GoalPlanningContext = context
 
-      override fun discoverForFindingPaths(
-        repoRoot: Path,
-        findingPaths: List<String>,
-        loudFailOnCapExceeded: Boolean,
-      ) = EMPTY_GOAL_PLANNING_CONTEXT_DISCOVERY.discoverForFindingPaths(
+    override fun discoverForFindingPaths(repoRoot: Path, findingPaths: List<String>, loudFailOnCapExceeded: Boolean) =
+      EMPTY_GOAL_PLANNING_CONTEXT_DISCOVERY.discoverForFindingPaths(
         repoRoot,
         findingPaths,
         loudFailOnCapExceeded,
       )
-    }
   }
+}

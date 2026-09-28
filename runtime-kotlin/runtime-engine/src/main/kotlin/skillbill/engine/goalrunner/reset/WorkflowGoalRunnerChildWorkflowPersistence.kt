@@ -1,12 +1,12 @@
 package skillbill.engine.goalrunner.reset
 
 import skillbill.application.workflow.decomposition.requireRuntimeModeForEngineWrite
+import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
 import skillbill.engine.goalrunner.manifest.mergeConcurrentGoalProgress
-import skillbill.engine.featuretask.slot.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerBlockWrites
-import skillbill.contracts.JsonCodec
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
@@ -47,7 +47,7 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
   private val engine: WorkflowEngine,
   private val planningHydrator: GoalChildPlanningHydratorPort,
   private val parentProjection: GoalParentProjectionWriter,
-  private val executionPlanCompatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
+  private val executionAdmission: FeatureTaskRuntimeExecutionAdmission,
   private val clock: Clock,
 ) {
   private val blockWrites = WorkflowGoalRunnerBlockWrites(engine, clock)
@@ -65,12 +65,7 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
     }
     if (existingChild != null) {
       if (setup.executionPlan == null) throw FeatureTaskRuntimeExecutionPlanConflictError()
-      val storedPlan = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(existingChild.artifacts)
-      if (storedPlan == null) throw MissingFeatureTaskRuntimeExecutionPlanError()
-      executionPlanCompatibility.requireCompatibleExecution(
-        JsonCodec.valueToJsonString(storedPlan).toByteArray(Charsets.UTF_8),
-        setup.executionPlan?.artifactValue,
-      )
+      executionAdmission.requireCompatibleDescriptor(unitOfWork.workflowStates, setup.workflowId, setup.executionPlan)
       val persistedIdentity = unitOfWork.workflowStates.getFeatureTaskExecutionIdentity(setup.workflowId)
       if (persistedIdentity != expectedIdentity) {
         throw IncompatibleGoalPlanningPreparationRecoveryError(
@@ -89,7 +84,7 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
             phaseId,
             requireNotNull(setup.operatorResumeReason),
             expectedIdentity,
-            requireNotNull(setup.executionPlan).artifactValue,
+            requireNotNull(setup.executionPlan),
           ),
         ) { "Goal child '${setup.workflowId}' could not be reopened for operator resume." }
       }
@@ -114,30 +109,26 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
       unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, parentUpdated.workflowId) ?: parentUpdated
     return SavedGoalChildWorkflow(
       state =
-        GoalRunnerManifestState(
-          parentWorkflowId = refreshedParent.workflowId,
-          dbPath = unitOfWork.dbPath.toString(),
-          manifest = refreshedParent.decompositionRuntime() ?: state.manifest,
-          controlState = unitOfWork.goalRunnerControls.controlState(refreshedParent.workflowId),
-        ),
+      GoalRunnerManifestState(
+        parentWorkflowId = refreshedParent.workflowId,
+        dbPath = unitOfWork.dbPath.toString(),
+        manifest = refreshedParent.decompositionRuntime() ?: state.manifest,
+        controlState = unitOfWork.goalRunnerControls.controlState(refreshedParent.workflowId),
+      ),
       projectionArtifacts = refreshedParent.artifacts,
     )
   }
 
-  private fun expectedChildIdentity(setup: GoalRunnerChildWorkflowSetup) =
-    FeatureTaskExecutionIdentity(
-      workflowId = setup.workflowId,
-      normalizedIssueKey = setup.normalizedIssueKey,
-      repositoryIdentity = setup.repositoryIdentity,
-      governedSpecPath = setup.governedSpecPath,
-      mode = FeatureTaskWorkflowMode.RUNTIME,
-      routeScope = FeatureTaskRouteScope.GOAL_CHILD,
-    )
+  private fun expectedChildIdentity(setup: GoalRunnerChildWorkflowSetup) = FeatureTaskExecutionIdentity(
+    workflowId = setup.workflowId,
+    normalizedIssueKey = setup.normalizedIssueKey,
+    repositoryIdentity = setup.repositoryIdentity,
+    governedSpecPath = setup.governedSpecPath,
+    mode = FeatureTaskWorkflowMode.RUNTIME,
+    routeScope = FeatureTaskRouteScope.GOAL_CHILD,
+  )
 
-  private fun requireConsistentChildSetup(
-    state: GoalRunnerManifestState,
-    setup: GoalRunnerChildWorkflowSetup,
-  ) {
+  private fun requireConsistentChildSetup(state: GoalRunnerManifestState, setup: GoalRunnerChildWorkflowSetup) {
     val request = setup.planningHydration ?: return
     val selected = state.manifest.subtasks.singleOrNull { it.id == setup.subtaskId }
     val failures =
@@ -164,10 +155,7 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
     }
   }
 
-  private fun canonicalGovernedSpecPath(
-    specPath: String,
-    repositoryIdentity: String,
-  ): String {
+  private fun canonicalGovernedSpecPath(specPath: String, repositoryIdentity: String): String {
     val repository =
       Path.of(repositoryIdentity.removePrefix(FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX))
     val lexical =
@@ -218,15 +206,15 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
           currentStepId = existingParent.currentStepId,
           stepUpdates = null,
           artifactsPatch =
-            WorkflowArtifactPatch.from(
-              parentProjection.artifacts(
-                mergeConcurrentGoalProgress(
-                  existingParent.decompositionRuntime() ?: state.manifest,
-                  state.manifest,
-                ),
-                existingParent.artifacts,
+          WorkflowArtifactPatch.from(
+            parentProjection.artifacts(
+              mergeConcurrentGoalProgress(
+                existingParent.decompositionRuntime() ?: state.manifest,
+                state.manifest,
               ),
+              existingParent.artifacts,
             ),
+          ),
           sessionId = existingParent.sessionId.orEmpty(),
           replaceArtifacts = true,
         ),
@@ -267,11 +255,11 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
         currentStepId = hydration.currentStepId,
         stepUpdates = hydration.stepUpdates,
         artifactsPatch =
-          WorkflowArtifactPatch.from(
-            LinkedHashMap(childWorkflowArtifacts(state, setup, parentWorkflowId)).apply {
-              putAll(hydration.artifacts)
-            },
-          ),
+        WorkflowArtifactPatch.from(
+          LinkedHashMap(childWorkflowArtifacts(state, setup, parentWorkflowId)).apply {
+            putAll(hydration.artifacts)
+          },
+        ),
         sessionId = openedChild.sessionId.orEmpty(),
       ),
     )
@@ -281,46 +269,45 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
     state: GoalRunnerManifestState,
     setup: GoalRunnerChildWorkflowSetup,
     parentWorkflowId: String,
-  ): Map<String, Any?> =
-    linkedMapOf<String, Any?>().apply {
-      setup.executionPlan?.let { descriptor ->
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.putInto(this, descriptor.artifactValue)
-      }
-      putAll(
-        FeatureTaskRuntimeGoalContinuationArtifact(
-          issueKey = state.manifest.issueKey,
-          subtaskId = setup.subtaskId,
-          suppressPr = true,
-          goalBranch = setup.goalBranch,
-          parentWorkflowId = parentWorkflowId,
-          codeReviewMode = setup.reviewPolicy.codeReviewMode,
-          validationDepth = ValidationDepth.FULL,
-          qualityGateSelection = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, setup.subtaskId),
-          subtaskName =
-            state.manifest.subtasks.firstOrNull { it.id == setup.subtaskId }?.name?.takeIf(
-              String::isNotBlank,
-            ),
-        ).toWorkflowArtifactPatch(),
-      )
-      putAll(
-        mapOf(
-          DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.entry(
-            GoalSubtaskReviewState.initial(
-              reviewBaseSha = setup.reviewBaseline.reviewBaseSha,
-              baselineUntrackedPaths = setup.reviewBaseline.baselineUntrackedPaths,
-              codeReviewMode = setup.reviewPolicy.codeReviewMode,
-            ).toPersistenceWire(),
-          ),
-        ),
-      )
-      put(
-        "install_sync_result",
-        mapOf(
-          SharedPayloadKeys.STATUS to "deferred",
-          "reason" to
-            "goal-continuation defers installer, uninstall, and install-sync flows until the parent goal exits; " +
-            "deferred install sync must not block subtask completion",
-        ),
-      )
+  ): Map<String, Any?> = linkedMapOf<String, Any?>().apply {
+    setup.executionPlan?.let { descriptor ->
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.putInto(this, JsonCodec.parseValue(descriptor.encoded().toString(Charsets.UTF_8)))
     }
+    putAll(
+      FeatureTaskRuntimeGoalContinuationArtifact(
+        issueKey = state.manifest.issueKey,
+        subtaskId = setup.subtaskId,
+        suppressPr = true,
+        goalBranch = setup.goalBranch,
+        parentWorkflowId = parentWorkflowId,
+        codeReviewMode = setup.reviewPolicy.codeReviewMode,
+        validationDepth = ValidationDepth.FULL,
+        qualityGateSelection = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, setup.subtaskId),
+        subtaskName =
+        state.manifest.subtasks.firstOrNull { it.id == setup.subtaskId }?.name?.takeIf(
+          String::isNotBlank,
+        ),
+      ).toWorkflowArtifactPatch(),
+    )
+    putAll(
+      mapOf(
+        DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.entry(
+          GoalSubtaskReviewState.initial(
+            reviewBaseSha = setup.reviewBaseline.reviewBaseSha,
+            baselineUntrackedPaths = setup.reviewBaseline.baselineUntrackedPaths,
+            codeReviewMode = setup.reviewPolicy.codeReviewMode,
+          ).toPersistenceWire(),
+        ),
+      ),
+    )
+    put(
+      "install_sync_result",
+      mapOf(
+        SharedPayloadKeys.STATUS to "deferred",
+        "reason" to
+          "goal-continuation defers installer, uninstall, and install-sync flows until the parent goal exits; " +
+          "deferred install sync must not block subtask completion",
+      ),
+    )
+  }
 }

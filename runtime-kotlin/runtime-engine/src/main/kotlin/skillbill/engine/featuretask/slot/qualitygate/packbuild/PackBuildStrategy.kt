@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.qualitygate.packbuild
 
+import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
@@ -35,6 +36,9 @@ class PackBuildStrategy(override val runner: PhaseRunner) : PhaseStrategyStatusP
   override val steps: List<String> = policies.keys.toList()
   override val entryStep: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
 
+  override fun resumeRules(stepId: String): PhaseResumeRules =
+    if (stepId in policies) BuildReceiptResumeRules else super.resumeRules(stepId)
+
   override fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 
   override fun directiveFor(stepId: String): String {
@@ -50,29 +54,27 @@ class PackBuildStrategy(override val runner: PhaseRunner) : PhaseStrategyStatusP
     val repairTurn = inputs.validationGateRepair || inputs.validationGateTriage
     return PhaseStepPromptSections(
       taskDirective =
-        if (inputs.validationGateTriage) {
-          buildGateTriagePhaseTask(inputs.packBuildCommand)
-        } else {
-          runtimeOwnedBuildPhaseTask(inputs.packBuildCommand)
-        },
+      if (inputs.validationGateTriage) {
+        buildGateTriagePhaseTask(inputs.packBuildCommand)
+      } else {
+        runtimeOwnedBuildPhaseTask(inputs.packBuildCommand)
+      },
       runsValidationGate = true,
       runsBuildGate = true,
       stepContext =
-        listOfNotNull(
-          directiveResource(QUALITY_CHECK_DIRECTIVE_RESOURCE).trim()
-            .takeIf { inputs.validationGateRepair && !inputs.validationGateTriage },
-          buildGateFindingsDirective(inputs.validationGateFindings, inputs.validationGateTriagePlan),
-        ).filter(String::isNotBlank).joinToString("\n\n"),
+      listOfNotNull(
+        directiveResource(QUALITY_CHECK_DIRECTIVE_RESOURCE).trim()
+          .takeIf { inputs.validationGateRepair && !inputs.validationGateTriage },
+        buildGateFindingsDirective(inputs.validationGateFindings, inputs.validationGateTriagePlan),
+      ).filter(String::isNotBlank).joinToString("\n\n"),
       valueContent = BUILD_VALUE_CONTENT,
       settles = false,
       outputContract = gateRepairNoOutputSchemaDirective(stepId, inputs.validationGateTriage).takeIf { repairTurn },
     )
   }
 
-  override fun runStep(
-    run: PhaseRun,
-    state: PhaseStepState,
-  ): PhaseOutcome = PackBuildGateCycle(PhaseAttemptScope(run.request, state), stepCall(run, state)).run(run)
+  override fun runStep(run: PhaseRun, state: PhaseStepState): PhaseOutcome =
+    PackBuildGateCycle(PhaseAttemptScope(run.request, state), stepCall(run, state)).run(run)
 
   override fun stepHooks(stepId: String): PhaseStepHooks =
     if (stepId in policies) PackBuildStepHooks else PhaseStepHooks.None
@@ -91,3 +93,7 @@ class PackBuildStrategy(override val runner: PhaseRunner) : PhaseStrategyStatusP
 
 private const val QUALITY_CHECK_DIRECTIVE_RESOURCE =
   "/skillbill/engine/featuretask/slot/qualitygate/packbuild/quality-check-directive.md"
+
+private object BuildReceiptResumeRules : PhaseResumeRules {
+  override val requiresValidCompletedOutput = true
+}

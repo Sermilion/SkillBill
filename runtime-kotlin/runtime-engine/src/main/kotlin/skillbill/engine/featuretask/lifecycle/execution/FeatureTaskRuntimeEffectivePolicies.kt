@@ -1,5 +1,6 @@
-package skillbill.engine.featuretask.slot.execution
+package skillbill.engine.featuretask.lifecycle.execution
 
+import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_BUILD_RECEIPT_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
@@ -16,28 +17,44 @@ internal object FeatureTaskRuntimeEffectivePolicies {
   fun resolve(plan: ResolvedPhaseExecutionPlan, gate: EffectiveGatePolicyInputs): List<ResolvedExecutionPolicy> =
     listOf(
       policy("gate-commands", gate.canonicalInputs()),
-      policy("receipt-interpretation", listOf(
-        FEATURE_TASK_RUNTIME_BUILD_RECEIPT_CONTRACT_VERSION,
-        FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION,
-        "checkpoint-and-command-bound", "preserve-quarantined-evidence",
-      )),
-      policy("retry-budgets", listOf(
-        FeatureTaskRuntimeAttemptBudgets.MAX_OUTPUT_GATE_RETRY_ATTEMPTS,
-        FeatureTaskRuntimeAttemptBudgets.MAX_PROCESS_FAILURE_ATTEMPTS,
-        FeatureTaskRuntimeBuildGateCoordinator.MAX_REPAIR_TURNS,
-        FeatureTaskRuntimePhaseWorkflowDefinition.MAX_RECORD_REGENERATION_ATTEMPTS,
-        plan.stepPolicyIdentities.toSortedMap(),
-      )),
-      policy("resume-budgets", listOf(
-        "new-process-failure-budget-per-invocation", "preserve-ordinary-attempt-attribution",
-        plan.resumeInterpretationIdentities.toSortedMap(),
-      )),
+      policy(
+        "receipt-interpretation",
+        listOf(
+          FEATURE_TASK_RUNTIME_BUILD_RECEIPT_CONTRACT_VERSION,
+          FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION,
+          "checkpoint-and-command-bound",
+          "preserve-quarantined-evidence",
+        ),
+      ),
+      policy(
+        "retry-budgets",
+        listOf(
+          FeatureTaskRuntimeAttemptBudgets.MAX_OUTPUT_GATE_RETRY_ATTEMPTS,
+          FeatureTaskRuntimeAttemptBudgets.MAX_PROCESS_FAILURE_ATTEMPTS,
+          FeatureTaskRuntimeBuildGateCoordinator.MAX_REPAIR_TURNS,
+          FeatureTaskRuntimePhaseWorkflowDefinition.MAX_RECORD_REGENERATION_ATTEMPTS,
+          plan.stepPolicyIdentities.toSortedMap(),
+        ),
+      ),
+      policy(
+        "resume-budgets",
+        listOf(
+          "new-process-failure-budget-per-invocation",
+          "preserve-ordinary-attempt-attribution",
+          plan.resumeInterpretationIdentities.toSortedMap(),
+        ),
+      ),
       policy("acceptance-audit", listOf("stateless-full-scope", "empty-list-only", "unchanged-remaining-blocks")),
       policy("review-invalidation", listOf("generation-tombstone", "retain-review-baseline")),
-      policy("checkpoint-ownership", listOf(
-        FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION,
-        "same-branch-commit-per-subtask", "owned-head-amend", "prune-after-push-and-manifest-commit",
-      )),
+      policy(
+        "checkpoint-ownership",
+        listOf(
+          FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION,
+          "same-branch-commit-per-subtask",
+          "owned-head-amend",
+          "prune-after-push-and-manifest-commit",
+        ),
+      ),
       policy("finalization", listOf("runtime-owned-commit-push", "retain-uncertain-effects", "terminal-refusal")),
     )
 

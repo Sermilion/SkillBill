@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.review.core
 
-import skillbill.engine.featuretask.slot.execution.model.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.lifecycle.execution.requireCurrent
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.persist.WorkflowRowAdvance
@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.reviewGenerationFrom
 import skillbill.engine.featuretask.runloop.state.REVIEW_INVALIDATION_AGENT_ID
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
 import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
 import skillbill.goalrunner.model.UnaddressedFinding
@@ -33,10 +34,7 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
   private val workflowPersistence: FeatureTaskRuntimeWorkflowPersistence,
   private val runtimeOwnedPersistence: RuntimeOwnedPersistenceBoundary,
 ) {
-  fun persistReviewGenerationInvalidation(
-    workflowId: String,
-    reviewStepId: String,
-  ): Int? =
+  fun persistReviewGenerationInvalidation(workflowId: String, reviewStepId: String): Int? =
     database.transaction { unitOfWork ->
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
@@ -93,23 +91,22 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
       nextGeneration
     }
 
-  fun reconcileReviewGeneration(workflowId: String): Int =
-    database.transaction { unitOfWork ->
-      val record =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-          ?: return@transaction 0
-      val artifacts = record.artifacts
-      val storedGeneration = reviewGenerationFrom(artifacts)
-      val tombstoned =
-        decodePhaseRecords(artifacts).values.any { it.resolvedAgentId == REVIEW_INVALIDATION_AGENT_ID }
-      if (!tombstoned || storedGeneration > 0) return@transaction storedGeneration
-      workflowPersistence.persistArtifactsPatch(
-        unitOfWork.workflowStates,
-        record,
-        mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_REVIEW_GENERATION.entry(1)),
-      )
-      1
-    }
+  fun reconcileReviewGeneration(workflowId: String): Int = database.transaction { unitOfWork ->
+    val record =
+      unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+        ?: return@transaction 0
+    val artifacts = record.artifacts
+    val storedGeneration = reviewGenerationFrom(artifacts)
+    val tombstoned =
+      decodePhaseRecords(artifacts).values.any { it.resolvedAgentId == REVIEW_INVALIDATION_AGENT_ID }
+    if (!tombstoned || storedGeneration > 0) return@transaction storedGeneration
+    workflowPersistence.persistArtifactsPatch(
+      unitOfWork.workflowStates,
+      record,
+      mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_REVIEW_GENERATION.entry(1)),
+    )
+    1
+  }
 
   fun invalidateQuarantinedProducerRecord(
     workflowId: String,
@@ -117,65 +114,78 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
     loopId: String,
     edgeIteration: Int,
     admitted: AdmittedFeatureTaskRuntimeExecution? = null,
-  ): Boolean =
-    database.transaction { unitOfWork ->
-      val record =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-          ?: return@transaction false
-      if (record.workflowStatus in WorkflowStatus.terminalStatuses) {
-        throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.TERMINAL_WORKFLOW)
-      }
-      if (producerPhaseId in PhaseSlot.QUALITY_GATE.steps && admitted == null) {
-        throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS)
-      }
-      admitted?.requireCurrent(unitOfWork.workflowStates, workflowId)
-      val artifacts = record.artifacts
-      val existingRecords = decodePhaseRecords(artifacts)
-      val irreversibleSteps = PhaseSlot.COMMIT_PUSH.steps + PhaseSlot.PULL_REQUEST.steps
-      val checkpointIdentities = decodeCheckpointIdentitiesFromArtifact(
-        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(artifacts),
-      )
-      if (
-        existingRecords.keys.any { it in irreversibleSteps } ||
-        decodePhaseLedger(artifacts).any { it.phaseId in irreversibleSteps } ||
-        checkpointIdentities.any { it.phaseId in irreversibleSteps }
-      ) {
-        throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.IRREVERSIBLE_WORK_RECORDED)
-      }
-      val previous = existingRecords[producerPhaseId]
-        ?: throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.MISSING_PRODUCER_EVIDENCE)
-      if (producerPhaseId in PhaseSlot.QUALITY_GATE.steps) {
-        requireAdmittedGateRegenerationBoundary(record, existingRecords, producerPhaseId, requireNotNull(admitted))
-      }
-      if (previous.status.workflowStepStatus() != WorkflowStepStatus.COMPLETED) {
-        return@transaction true
-      }
-      val invalidated =
-        previous.copy(
-          status = WorkflowStepStatus.RUNNING,
-          finishedAt = null,
-          outputArtifact = null,
-          rejectedOutput = previous.outputArtifact ?: previous.rejectedOutput,
-          loopId = loopId,
-          edgeIteration = edgeIteration,
-        )
-      val updatedRecords = LinkedHashMap(existingRecords).apply { put(producerPhaseId, invalidated) }
-      workflowPersistence.persistArtifactsPatch(
-        unitOfWork.workflowStates,
-        record,
-        mapOf(
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
-            updatedRecords.mapValues { (_, value) -> value.asWorkflowArtifactEntry() },
-          ),
-        ),
-        WorkflowRowAdvance(
-          currentStepId = record.currentStepId,
-          workflowStatus = record.workflowStatus.wireValue,
-          stepUpdates = stepUpdatesFrom(updatedRecords),
-        ),
-      )
-      true
+  ): Boolean = database.transaction { unitOfWork ->
+    val record =
+      unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+        ?: return@transaction false
+    if (record.workflowStatus in WorkflowStatus.terminalStatuses) {
+      throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.TERMINAL_WORKFLOW)
     }
+    if (producerPhaseId in PhaseSlot.QUALITY_GATE.steps && admitted == null) {
+      throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS)
+    }
+    admitted?.requireCurrent(unitOfWork.workflowStates, workflowId)
+    val artifacts = record.artifacts
+    val existingRecords = decodePhaseRecords(artifacts)
+    val irreversibleSteps = PhaseSlot.COMMIT_PUSH.steps + PhaseSlot.PULL_REQUEST.steps
+    val checkpointIdentities = decodeCheckpointIdentitiesFromArtifact(
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(artifacts),
+    )
+    if (
+      existingRecords.keys.any { it in irreversibleSteps } ||
+      decodePhaseLedger(artifacts).any { it.phaseId in irreversibleSteps } ||
+      checkpointIdentities.any { it.phaseId in irreversibleSteps }
+    ) {
+      throw UnsafeFeatureTaskRuntimeRegenerationError(
+        FeatureTaskRuntimeRegenerationRefusal.IRREVERSIBLE_WORK_RECORDED,
+      )
+    }
+    val previous = existingRecords[producerPhaseId]
+      ?: throw UnsafeFeatureTaskRuntimeRegenerationError(
+        FeatureTaskRuntimeRegenerationRefusal.MISSING_PRODUCER_EVIDENCE,
+      )
+    if (producerPhaseId in PhaseSlot.QUALITY_GATE.steps) {
+      requireAdmittedGateRegenerationBoundary(record, existingRecords, producerPhaseId, requireNotNull(admitted))
+      val evidence = unitOfWork.rejectedOutputDiagnostics.readProducerOutput(
+        workflowId,
+        producerPhaseId,
+        previous.attemptCount,
+        previous.resolvedAgentId,
+      )
+      if (evidence?.payload == null) {
+        throw UnsafeFeatureTaskRuntimeRegenerationError(
+          FeatureTaskRuntimeRegenerationRefusal.MISSING_PRODUCER_EVIDENCE,
+        )
+      }
+    }
+    if (previous.status.workflowStepStatus() != WorkflowStepStatus.COMPLETED) {
+      return@transaction true
+    }
+    val invalidated =
+      previous.copy(
+        status = WorkflowStepStatus.RUNNING,
+        finishedAt = null,
+        outputArtifact = null,
+        loopId = loopId,
+        edgeIteration = edgeIteration,
+      )
+    val updatedRecords = LinkedHashMap(existingRecords).apply { put(producerPhaseId, invalidated) }
+    workflowPersistence.persistArtifactsPatch(
+      unitOfWork.workflowStates,
+      record,
+      mapOf(
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
+          updatedRecords.mapValues { (_, value) -> value.asWorkflowArtifactEntry() },
+        ),
+      ),
+      WorkflowRowAdvance(
+        currentStepId = record.currentStepId,
+        workflowStatus = record.workflowStatus.wireValue,
+        stepUpdates = stepUpdatesFrom(updatedRecords),
+      ),
+    )
+    true
+  }
 
   fun recordedFindingVerdicts(output: Map<String, Any?>): List<ReviewFindingVerdict> {
     val reviewRunId = GoalSubtaskReviewSummaryReducer.reviewRunIdOf(output) ?: return emptyList()
@@ -187,16 +197,11 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
     }
   }
 
-  fun fetchUnaddressedLedger(workflowId: String): List<UnaddressedFinding> =
-    database.transaction { unitOfWork ->
-      unitOfWork.unaddressedFindings.fetchWorkflowLedger(workflowId)
-    }
+  fun fetchUnaddressedLedger(workflowId: String): List<UnaddressedFinding> = database.transaction { unitOfWork ->
+    unitOfWork.unaddressedFindings.fetchWorkflowLedger(workflowId)
+  }
 
-  fun appendRejectedVerificationFindings(
-    workflowId: String,
-    passNumber: Int,
-    rejected: List<UnaddressedFinding>,
-  ) {
+  fun appendRejectedVerificationFindings(workflowId: String, passNumber: Int, rejected: List<UnaddressedFinding>) {
     if (rejected.isEmpty()) return
     database.transaction { unitOfWork ->
       val existing = unitOfWork.unaddressedFindings.fetchWorkflowLedger(workflowId)

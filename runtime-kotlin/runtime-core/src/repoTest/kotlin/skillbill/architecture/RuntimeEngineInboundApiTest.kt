@@ -12,11 +12,11 @@ class RuntimeEngineInboundApiTest {
     val violations =
       engineInboundApiViolations(
         consumerSourceRoots =
-          listOf(
-            moduleMainKotlinRootRelative("runtime-application"),
-            moduleMainKotlinRootRelative("runtime-cli"),
-            moduleMainKotlinRootRelative("runtime-mcp"),
-          ),
+        listOf(
+          moduleMainKotlinRootRelative("runtime-application"),
+          moduleMainKotlinRootRelative("runtime-cli"),
+          moduleMainKotlinRootRelative("runtime-mcp"),
+        ),
         allowedTypes = PINNED_ENGINE_INBOUND_API_TYPES,
       )
     assertEquals(
@@ -93,6 +93,7 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetup",
         "skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver",
         "skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner",
+        "skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver",
         "skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService",
         "skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator",
         "skillbill.engine.featuretask.runner.OPERATOR_DECISION_QUALITY_GATE_PHASE_IDS",
