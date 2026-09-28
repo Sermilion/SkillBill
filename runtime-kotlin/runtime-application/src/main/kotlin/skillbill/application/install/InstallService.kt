@@ -14,6 +14,7 @@ import skillbill.install.model.PlatformPackSelectionMode
 import skillbill.install.model.ReconciliationPlan
 import skillbill.install.model.SharedInstallSelection
 import skillbill.install.policy.InstallPlanPolicy
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.policy.selectedPlatformSlugs
 import skillbill.model.toPath
 import skillbill.ports.install.InstallPlanWireValidator
@@ -57,7 +58,7 @@ class InstallService(
     val facts = planningFactsPort.collectPlanningFacts(InstallPlanningFactsRequest(request)).facts
     val resolvedReviewFallback =
       facts.baseSkills
-        .takeIf { skills -> skills.any { it.name == "bill-code-review" } }
+        .takeIf { skills -> skills.any { it.name == PACK_SIDECAR_PARENT_SKILL } }
         ?.let { ReviewFallbackResolver.resolveOptional(facts.platformManifests) }
     val materializationPlan =
       InstallPlanPolicy.planPlatformSkillMaterialization(

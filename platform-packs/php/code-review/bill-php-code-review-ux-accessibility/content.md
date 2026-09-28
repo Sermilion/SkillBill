@@ -1,7 +1,7 @@
 ---
 name: bill-php-code-review-ux-accessibility
 description: Use when reviewing accessibility and task completion in PHP-rendered forms, templates, and server-driven components.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # PHP UX and Accessibility Review Specialist

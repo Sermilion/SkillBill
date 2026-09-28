@@ -23,8 +23,11 @@ import skillbill.infrastructure.skills.scaffold.rendering.renderContentBody
 import skillbill.infrastructure.skills.scaffold.rendering.renderNativeAgentSourceStub
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.TemplateContext
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.supportingFileTargets
+import skillbill.infrastructure.skills.scaffold.runtime.service.planCodeReviewArea
+import skillbill.infrastructure.skills.scaffold.runtime.service.renderDeclaredPackContentSheet
 import skillbill.infrastructure.skills.scaffold.runtime.service.scaffold
 import skillbill.infrastructure.skills.scaffold.runtime.service.support.requiredSupportingFilesForSkill
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
 import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestRenderRequest
@@ -208,7 +211,7 @@ class PlatformPackScaffoldParityTest {
       assertEquals("platform-pack", result.kind)
       assertContains(
         Files.readString(repo.resolve("platform-packs/java/code-review/bill-java-code-review/content.md")),
-        "internal-for: bill-code-review",
+        "internal-for: skill-bill",
       )
       APPROVED_CODE_REVIEW_AREAS.sorted().forEach { area ->
         assertTrue(
@@ -221,7 +224,7 @@ class PlatformPackScaffoldParityTest {
           Files.readString(
             repo.resolve("platform-packs/java/code-review/bill-java-code-review-$area/content.md"),
           )
-        assertContains(specialist, "internal-for: bill-code-review")
+        assertContains(specialist, "internal-for: skill-bill")
         assertContains(specialist, canonicalSeverityCloser(area))
       }
       assertComposedSourceBundle(
@@ -249,6 +252,28 @@ class PlatformPackScaffoldParityTest {
       assertContains(subagentNote, "content.md files")
       assertFalse("native-agents/agents.yaml" in subagentNote)
       assertFalse("TODO" in subagentNote)
+    }
+
+  @Test
+  fun `new platform pack and new code review area content declare the skill-bill sidecar parent`() =
+    withIsolatedUserHome {
+      val repo = seedRepo()
+      scaffold(payload(repo, "platform-pack", "platform" to "java"))
+      val packContents =
+        Files.walk(repo.resolve("platform-packs/java")).use { paths ->
+          paths.filter { it.name == "content.md" }.toList()
+        }
+      val areaPlan =
+        planCodeReviewArea(
+          payload(repo, "code-review-area", "platform" to "kotlin", "area" to "performance"),
+          repo,
+        )
+
+      assertEquals(APPROVED_CODE_REVIEW_AREAS.size + 1, packContents.size, packContents.toString())
+      packContents.forEach { content ->
+        assertContains(Files.readString(content), "internal-for: $PACK_SIDECAR_PARENT_SKILL", message = "$content")
+      }
+      assertContains(renderDeclaredPackContentSheet(areaPlan), "internal-for: $PACK_SIDECAR_PARENT_SKILL")
     }
 
   @Test
@@ -841,7 +866,7 @@ private fun seedRepo(): Path {
     Files.writeString(target, "# ${target.fileName}\n")
   }
   seedBaseSkill(repo, "bill-code-check")
-  seedBaseSkill(repo, "bill-code-review")
+  seedBaseSkill(repo, PACK_SIDECAR_PARENT_SKILL)
   seedKotlinPack(repo)
   seedKmpPack(repo)
   return repo

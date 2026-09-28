@@ -128,8 +128,57 @@ class AuthoringRenderOutputTest {
     val pointerHeader = "===== pointer: skills/bill-feature/agent-addon-review-helper.md ====="
     assertEquals(pointerHeader, parentRender.blocks.last().header)
     assertEquals("Use the helper.\n", parentRender.blocks.last().content)
-    assertEquals(pointerHeader, sidecarRender.blocks.last().header)
+    assertEquals(
+      listOf("===== SKILL.md: skills/bill-feature-helper/SKILL.md ====="),
+      sidecarRender.blocks.map { block -> block.header },
+    )
     assertFalse(Files.exists(featureDir.resolve("agent-addon-review-helper.md")))
+  }
+
+  @Test
+  fun `skill-bill render includes agent addon pointers while its sidecars render none`() {
+    val repoRoot = tempRoot.resolve("skill-bill-addon-render-repo")
+    val parentDir = repoRoot.resolve("skills/skill-bill")
+    val sidecarDir = repoRoot.resolve("skills/skill-bill-review-helper")
+    Files.createDirectories(parentDir)
+    Files.createDirectories(sidecarDir)
+    Files.writeString(
+      parentDir.resolve("content.md"),
+      "---\nname: skill-bill\ndescription: Skill Bill router.\n---\n\nRoute governed work.\n",
+    )
+    Files.writeString(
+      sidecarDir.resolve("content.md"),
+      "---\nname: skill-bill-review-helper\ninternal-for: skill-bill\n" +
+        "description: Review sidecar.\n---\n\nRun review helper work.\n",
+    )
+    val addonDir = repoRoot.resolve("agent-addons/router-helper")
+    Files.createDirectories(addonDir)
+    Files.writeString(
+      addonDir.resolve("agent-addon.yaml"),
+      """
+      contract_version: "1.0"
+      slug: router-helper
+      description: Router helper
+      agent_ids:
+        - codex
+      consumers:
+        - skill-bill
+      """.trimIndent() + "\n",
+    )
+    Files.writeString(addonDir.resolve("content.md"), "Use the router helper.\n")
+
+    val parentRender = renderAuthoringTarget(repoRoot, "skill-bill")
+    val sidecarRender = renderAuthoringTarget(repoRoot, "skill-bill-review-helper")
+
+    assertEquals(
+      "===== pointer: skills/skill-bill/agent-addon-router-helper.md =====",
+      parentRender.blocks.last().header,
+    )
+    assertEquals("Use the router helper.\n", parentRender.blocks.last().content)
+    assertEquals(
+      listOf("===== SKILL.md: skills/skill-bill-review-helper/SKILL.md ====="),
+      sidecarRender.blocks.map { block -> block.header },
+    )
   }
 
   @Test

@@ -6,6 +6,7 @@ import skillbill.infrastructure.skills.scaffold.rendering.areaReviewContent
 import skillbill.infrastructure.skills.scaffold.rendering.baselineReviewContent
 import skillbill.infrastructure.skills.scaffold.rendering.renderFrontmatter
 import skillbill.install.model.InstallPlan
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import java.nio.file.Files
 import java.nio.file.Path
@@ -51,7 +52,7 @@ fun seedConformingPlatformPack(
     governedContent(
       baselineName,
       "Test $slug baseline review.",
-      "bill-code-review",
+      PACK_SIDECAR_PARENT_SKILL,
       baselineReviewContent("Review $slug changes."),
     ),
   )
@@ -61,7 +62,7 @@ fun seedConformingPlatformPack(
       governedContent(
         skillName,
         "Test $slug $area review.",
-        "bill-code-review",
+        PACK_SIDECAR_PARENT_SKILL,
         areaReviewContent("Review ${focuses.getValue(area)}.", area, slug),
       ),
     )

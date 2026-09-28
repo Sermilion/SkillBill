@@ -1,7 +1,7 @@
 ---
 name: bill-ios-code-review-architecture
 description: Use when reviewing iOS ownership, composition, module, and package-boundary risks.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Architecture Review Specialist

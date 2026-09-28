@@ -190,9 +190,9 @@ only authored source change in the family.
 ### Flatten rule (PD2)
 
 All review-pack skills — the stack entries AND their specialists —
-declare `internal-for: bill-code-review`. Stack entry skills do **not** become
+declare `internal-for: skill-bill`. Stack entry skills do **not** become
 parents of their specialists. Nesting (specialists internal to their stack
-entry, entries internal to `bill-code-review`) would require depth-2 sidecars —
+entry, entries internal to `skill-bill`) would require depth-2 sidecars —
 a sidecar hosting sidecars — which the staging model cannot express (a sidecar
 is a file, not a directory). Flattening keeps depth at 1, and sibling
 co-location is what the review flow wants: the routed entry sidecar and the

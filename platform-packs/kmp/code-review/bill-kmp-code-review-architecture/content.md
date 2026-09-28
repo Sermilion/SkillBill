@@ -1,7 +1,7 @@
 ---
 name: bill-kmp-code-review-architecture
 description: Use when reviewing Gradle module boundaries and dependency direction, DI graph and scope ownership, ViewModel lifecycle ownership of long-lived work, repository/use-case/sync-engine authority, WorkManager ownership, and offline single-source-of-truth on Android and KMP.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # KMP Architecture Review Specialist

@@ -1,7 +1,7 @@
 ---
 name: bill-rust-code-review-reliability
 description: Use when reviewing Rust cancellation, backpressure, retries, timeouts, task supervision, runtime shutdown, observability, and degradation.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Reliability Review Specialist

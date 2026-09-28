@@ -1,7 +1,7 @@
 ---
 name: bill-php-code-review-performance
 description: Use when reviewing measurable PHP latency, query, hydration, rendering, allocation, autoload, cache, and worker-memory regressions.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # PHP Performance Review Specialist

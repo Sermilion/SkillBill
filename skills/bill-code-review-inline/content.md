@@ -1,5 +1,5 @@
 ---
-internal-for: bill-code-review
+internal-for: skill-bill
 name: bill-code-review-inline
 description: "Inline review worker for bill-code-review mode:inline. Parent-launched via Agent tool, not Skill tool."
 ---

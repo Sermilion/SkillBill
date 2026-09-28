@@ -2,8 +2,10 @@ package skillbill.install
 
 import skillbill.infrastructure.skills.install.staging.StageInstalledSkillInput
 import skillbill.infrastructure.skills.install.staging.stageInstalledSkill
+import skillbill.infrastructure.skills.scaffold.authoring.parseInternalForFrontmatter
 import skillbill.install.model.InstallPlanSkill
 import skillbill.install.model.InstallPlanSkillKind
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import skillbill.testing.repoRootFromTest
@@ -34,7 +36,7 @@ class InternalSkillStagingRepoTest {
   fun `shipped kmp ui wrapper resolves its flat compose guidelines companion`() {
     val repoRoot = repoRootFromTest()
     val home = Files.createTempDirectory("skillbill-kmp-companion-home").also(tempDirs::add)
-    val parentDir = repoRoot.resolve("skills/bill-code-review")
+    val parentDir = repoRoot.resolve("skills/$PACK_SIDECAR_PARENT_SKILL")
     val uiDir = repoRoot.resolve("platform-packs/kmp/code-review/bill-kmp-code-review-ui")
     val uiSkill =
       InstallPlanSkill(
@@ -42,7 +44,7 @@ class InternalSkillStagingRepoTest {
         sourceDir = uiDir.toFileLocation(),
         kind = InstallPlanSkillKind.PLATFORM_PACK,
         platformSlug = "kmp",
-        internalFor = "bill-code-review",
+        internalFor = PACK_SIDECAR_PARENT_SKILL,
       )
 
     val rendered =
@@ -61,5 +63,91 @@ class InternalSkillStagingRepoTest {
     assertTrue(Files.isRegularFile(companion.toPath(), LinkOption.NOFOLLOW_LINKS))
     assertTrue(Files.readString(wrapper.toPath()).contains("[compose-guidelines.md](compose-guidelines.md)"))
     assertEquals(companion.toPath(), wrapper.toPath().parent.resolve("compose-guidelines.md"))
+  }
+
+  @Test
+  fun `every shipped pack specialist and the inline worker stage as sidecars of skill-bill only`() {
+    val repoRoot = repoRootFromTest()
+    val home = Files.createTempDirectory("skillbill-sidecar-parent-home").also(tempDirs::add)
+    val packSkills = shippedCodeReviewSkills(repoRoot)
+    assertTrue(packSkills.isNotEmpty(), "expected shipped pack code-review skills")
+    val misparented = packSkills.filter { it.internalFor != PACK_SIDECAR_PARENT_SKILL }.map { it.name }
+    assertTrue(misparented.isEmpty(), "pack specialists must declare internal-for: skill-bill; found $misparented")
+
+    val rendered =
+      stageInstalledSkill(
+        StageInstalledSkillInput(
+          repoRoot = repoRoot,
+          sourceSkillDir = repoRoot.resolve("skills/$PACK_SIDECAR_PARENT_SKILL"),
+          home = home,
+          selectedPackSkills = packSkills,
+        ),
+      )
+
+    val inlineWorkerDir = repoRoot.resolve("skills/bill-code-review-inline")
+    assertEquals(PACK_SIDECAR_PARENT_SKILL, parseInternalForFrontmatter(inlineWorkerDir.resolve("content.md")))
+    val expectedWrappers = (packSkills.map { it.name } + "bill-code-review-inline").map { "$it.md" }.toSet()
+    val expectedCompanions =
+      (packSkills.map { it.sourceDir.toPath() } + listOf(inlineWorkerDir)).flatMap(::authoredCompanionNames).toSet()
+    assertEquals(
+      expectedWrappers + expectedCompanions,
+      rendered.renderedSidecarFiles.map { it.fileName }.toSet(),
+      "skill-bill must stage exactly the shipped pack specialists plus the inline worker as sidecars",
+    )
+    expectedWrappers.forEach { name ->
+      assertTrue(
+        Files.isRegularFile(rendered.stagingDir.resolve(name).toPath(), LinkOption.NOFOLLOW_LINKS),
+        "missing staged sidecar $name under the installed $PACK_SIDECAR_PARENT_SKILL dir",
+      )
+    }
+
+    val legacyParent = repoRoot.resolve("skills/bill-code-review")
+    if (Files.isDirectory(legacyParent)) {
+      val legacy =
+        stageInstalledSkill(
+          StageInstalledSkillInput(
+            repoRoot = repoRoot,
+            sourceSkillDir = legacyParent,
+            home = home,
+            selectedPackSkills = packSkills,
+          ),
+        )
+      val leaked =
+        expectedWrappers.filter { name ->
+          Files.exists(legacy.stagingDir.resolve(name).toPath(), LinkOption.NOFOLLOW_LINKS)
+        }
+      assertTrue(leaked.isEmpty(), "bill-code-review staging must not hold skill-bill sidecars; found $leaked")
+    }
+  }
+
+  private fun authoredCompanionNames(skillDir: Path): List<String> =
+    Files.list(skillDir).use { stream ->
+      stream
+        .filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
+        .map { it.fileName.toString() }
+        .filter { it.endsWith(".md") && it != "content.md" }
+        .toList()
+    }
+
+  private fun shippedCodeReviewSkills(repoRoot: Path): List<InstallPlanSkill> {
+    val packsRoot = repoRoot.resolve("platform-packs")
+    return Files.list(packsRoot).use { packs -> packs.filter { Files.isDirectory(it) }.sorted().toList() }
+      .flatMap { packDir ->
+        val codeReview = packDir.resolve("code-review")
+        if (!Files.isDirectory(codeReview)) {
+          emptyList()
+        } else {
+          Files.list(codeReview).use { skills -> skills.filter { Files.isDirectory(it) }.sorted().toList() }
+            .map { skillDir ->
+              InstallPlanSkill(
+                name = skillDir.fileName.toString(),
+                sourceDir = skillDir.toFileLocation(),
+                kind = InstallPlanSkillKind.PLATFORM_PACK,
+                platformSlug = packDir.fileName.toString(),
+                internalFor = parseInternalForFrontmatter(skillDir.resolve("content.md")),
+              )
+            }
+        }
+      }
   }
 }

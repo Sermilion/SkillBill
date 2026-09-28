@@ -79,12 +79,12 @@ path installs after merge.
 
 ## Acceptance Criteria
 
-1. An install into a temporary `HOME` lists exactly `skill-bill`. `skills/bill-feature` and `skills/bill-monitor` do not exist. No production doc tells the operator to invoke `/bill-monitor` or `/bill-feature` as a listed skill.
+1. A test installs into a temporary `HOME` and asserts the listed catalog is exactly `skill-bill`. `skills/bill-feature` and `skills/bill-monitor` do not exist. No production doc tells the operator to invoke `/bill-monitor` or `/bill-feature` as a listed skill.
 2. The trees listed in Scope are gone from `skills/`. `bill-code-review-inline` is gone if the SKILL-380 subtask 8 census found no caller, and otherwise remains with `internal-for: skill-bill`.
-3. An install over a home that has the old skills removes their links and installed copies.
+3. Every deleted name is in `InstallLegacySkillNames`, and a test installs over a home that has the old skills and asserts their links and installed copies are removed.
 4. No production prompt tells an agent to invoke, run, or avoid a retired skill by its old name. The re-baselined fixtures differ from their previous baseline only by the name replacements.
 5. Telemetry `skill` values, the feature-verify `workflow_name` default, and the stored workflow skill label are unchanged.
-6. Every other full-run, phase-run, and operation fixture still matches.
+6. No other full-run, phase-run, or operation fixture baseline is changed in this subtask.
 
 ## Non-goals
 

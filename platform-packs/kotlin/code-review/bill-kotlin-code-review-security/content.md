@@ -1,7 +1,7 @@
 ---
 name: bill-kotlin-code-review-security
 description: Review Kotlin input, authorization, injection, secrets, authentication, deserialization, and dependency security failures.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Security Review Specialist

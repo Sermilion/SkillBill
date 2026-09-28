@@ -1,7 +1,7 @@
 ---
 name: bill-rust-code-review-api-contracts
 description: Use when reviewing Rust public traits and types, serde and wire formats, HTTP or RPC contracts, FFI ABI, and compatibility.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # API Contracts Review Specialist

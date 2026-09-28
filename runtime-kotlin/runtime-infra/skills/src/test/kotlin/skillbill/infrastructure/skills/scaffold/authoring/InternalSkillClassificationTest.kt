@@ -171,11 +171,11 @@ class InternalSkillClassificationTest {
   fun `classification passes when a platform-pack skill declares internal-for on a listed base parent`() {
     val targets =
       mapOf(
-        "bill-code-review" to target("bill-code-review", internalFor = null),
+        "skill-bill" to target("skill-bill", internalFor = null),
         "bill-kotlin-code-review" to
           target(
             "bill-kotlin-code-review",
-            internalFor = "bill-code-review",
+            internalFor = "skill-bill",
             platform = "kotlin",
           ),
       )

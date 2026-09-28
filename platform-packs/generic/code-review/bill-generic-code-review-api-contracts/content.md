@@ -1,7 +1,7 @@
 ---
 name: bill-generic-code-review-api-contracts
 description: Technology-neutral API contract review for compatibility, validation, representation, and errors.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Technology-Neutral Contract Review

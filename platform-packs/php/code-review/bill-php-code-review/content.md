@@ -1,7 +1,7 @@
 ---
 name: bill-php-code-review
 description: Use when conducting a thorough PHP PR code review across backend, service, and server-rendered PHP code. Select specialists for architecture, correctness, API contracts, persistence, reliability, security, performance, testing, UI, and UX/accessibility based on changed-file signals.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Adaptive PHP PR Review

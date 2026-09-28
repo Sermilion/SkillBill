@@ -1,7 +1,7 @@
 ---
 name: bill-typescript-code-review-platform-correctness
 description: Use when reviewing TypeScript type soundness, emitted JavaScript, module loading, bundlers, and runtime-target compatibility.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Platform Correctness Review Specialist

@@ -1,7 +1,7 @@
 ---
 name: bill-generic-code-review-ux-accessibility
 description: Technology-neutral UX and accessibility review for task completion, semantics, input, focus, and localization.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Generic UX and Accessibility Review

@@ -105,11 +105,11 @@ private fun renderAgentAddonPointerBlocks(
   repoRoot: Path,
   target: AuthoringTarget,
 ): List<AuthoringRenderBlock> {
+  if (target.internalFor != null) return emptyList()
   val consumer =
-    runCatching { AgentAddonConsumer.fromId(target.internalFor ?: target.skillName) }.getOrNull()
+    runCatching { AgentAddonConsumer.fromId(target.skillName) }.getOrNull()
       ?: return emptyList()
-  val consumerTarget = if (target.skillName == consumer.id) target else resolveTarget(repoRoot, consumer.id)
-  val outputDir = consumerTarget.skillFile.parent
+  val outputDir = target.skillFile.parent
   return AgentAddonDeliveryResolver().resolve(repoRoot, consumer).map { pointer ->
     val outputFile = outputDir.resolve(pointer.name)
     AuthoringRenderBlock(

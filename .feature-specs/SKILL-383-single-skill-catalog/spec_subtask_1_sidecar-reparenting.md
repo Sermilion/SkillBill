@@ -54,11 +54,11 @@ Telemetry labels (`bill-code-review` in `McpAdapterContracts`, `bill-code-check`
 ## Acceptance Criteria
 
 1. No file under `platform-packs/` or `skills/` declares `internal-for: bill-code-review` or `internal-for: bill-code-check`.
-2. An install into a temporary `HOME` places every pack specialist (and `bill-code-review-inline`, if it is kept) under the installed `skill-bill` directory, and none under `bill-code-review`.
-3. A pack quality-check override declaring `internal-for: skill-bill` loads, and one declaring `internal-for: bill-code-check` is rejected with a message naming `skill-bill`.
-4. `routeQualityCheck` is deleted if it still has no production caller; otherwise quality-check routing for every maintained dominant stack routes to `phase:validation` with the pack slug unchanged.
-5. `skill-bill code-review` and `skill-bill phase review` still find every specialist rubric and the inline worker after the move; the SKILL-380 subtask 8 review fixture still matches.
-6. A scaffolded new pack skill declares `internal-for: skill-bill`.
+2. A test installs into a temporary `HOME` and asserts every pack specialist (and `bill-code-review-inline`, if it is kept) lands under the installed `skill-bill` directory, and none under `bill-code-review`.
+3. A loader test asserts a pack quality-check override declaring `internal-for: skill-bill` loads, and one declaring `internal-for: bill-code-check` is rejected with a message naming `skill-bill`.
+4. `routeQualityCheck` is deleted if it still has no production caller; otherwise a routing test asserts every maintained dominant stack routes to `phase:validation` with the pack slug unchanged.
+5. The runtime readers that locate specialist rubrics and the inline worker resolve them from the installed `skill-bill` directory, and a test asserts `skill-bill code-review` and `skill-bill phase review` find them there. The SKILL-380 subtask 8 review fixture baseline is not changed in this subtask.
+6. The scaffold renderers emit `internal-for: skill-bill` for a new pack skill, and a scaffold test asserts it.
 
 ## Non-goals
 

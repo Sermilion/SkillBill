@@ -1,7 +1,7 @@
 ---
 name: bill-kotlin-code-review-architecture
 description: Review Kotlin ownership, module, coroutine-scope, service, transaction, and JVM boundary architecture. Use for Kotlin architecture and dependency reviews.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Architecture Review Specialist

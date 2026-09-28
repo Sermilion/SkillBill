@@ -1,5 +1,16 @@
 # Boundary History — runtime-kotlin/runtime-infra
 
+## [2026-09-28] SKILL-383 subtask 1 — re-parent sidecars and the quality-check route to skill-bill
+Areas: runtime-infra/skills (install plan, platform-pack loader, review structure validator, scaffold renderers, testFixtures), runtime-infra/workflow review preflight tests, runtime-domain install policy, runtime-application InstallService, platform-packs code-review content, skills/bill-code-review-inline, skills/bill-code-check, orchestration shell contract, docs
+- All 96 platform-pack code-review skills and bill-code-review-inline now declare `internal-for: skill-bill`, so pack specialists, the inline worker and quality-check overrides install as sidecars of the installed skill-bill directory rather than bill-code-review or bill-code-check.
+- One constant, PACK_SIDECAR_PARENT_SKILL = "skill-bill" in runtime-domain skillbill.install.policy, is the only place the parent is named. The install gate (InstallService, InstallPlanBuilder, InstallPlanPolicyResolution), the shell-content loader, the review structure validator, the scaffold renderers and the conforming-pack test fixture all read it. reusable
+- The review fallback pack is selected only when that sidecar parent is a base skill in the install set. Install tests now seed skill-bill as a base skill wherever validation needs the parent.
+- Deleted QualityCheckRoute/routeQualityCheck and QualityCheckRoutingTest because nothing in production called them. The MCP quality_check_* routed_skill label stays bill-code-check.
+- AuthoringRenderOutput renders agent add-on pointers on skill-bill itself but not on its sidecars.
+- Known limitation: pack load does not validate declared quality-check files (the SKILL-360 decision), so the skill-bill parent rule for quality-check overrides is enforced only through validateGovernedSkill. Subtask 2 deletes the old bill-code-review and bill-code-check parents.
+Feature flag: N/A
+Acceptance criteria: 6/6 implemented
+
 ## [2026-09-25] SKILL-376 subtask 1 — process ownership, single owners, and adapter seams
 Areas: runtime-infra/{host,launcher,workflow,sqlite,skills,contracts}, runtime-core architecture guards, runtime-application and runtime-engine test edges, runtime-kotlin documentation
 - Split process ownership by lifetime: runtime-infra/host owns one-shot execution (BoundedExternalProcessRunner, BoundedExternalProcessOutput, InstallerProcessAdapter, GateJvmResolver, GitTrackedFiles) and runtime-infra/launcher owns long-running agent processes; git invocation and the PR-check runner delegate to host while keeping git result semantics (trimmed output, exit -1 on timeout, IOException as readFailure). reusable

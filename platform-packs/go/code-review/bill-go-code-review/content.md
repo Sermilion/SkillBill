@@ -1,7 +1,7 @@
 ---
 name: bill-go-code-review
 description: Use when conducting a Go PR code review across services, CLIs, APIs, workers, tests, modules, concurrency, persistence, and Go-rendered UI surfaces.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Adaptive Go PR Review

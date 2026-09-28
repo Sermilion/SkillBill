@@ -14,6 +14,7 @@ import skillbill.install.model.InstallPolicyInput
 import skillbill.install.model.SupportedAgent
 import skillbill.install.model.validateInstallPlanWireSnapshot
 import skillbill.install.policy.InstallPlanPolicy
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.ports.install.InstallPlanWireValidator
 import skillbill.ports.install.plan.model.InstallPlanningFacts
@@ -52,7 +53,7 @@ private fun buildInstallPolicyInput(
   val baseSkills = discoverBaseSkills(request.targetPaths.skillsRoot.toPath())
   val resolvedReviewFallback =
     baseSkills
-      .takeIf { skills -> skills.any { it.name == "bill-code-review" } }
+      .takeIf { skills -> skills.any { it.name == PACK_SIDECAR_PARENT_SKILL } }
       ?.let { ReviewFallbackResolver.resolveOptional(platformManifests) }
   val discoveredPlatformPacks = platformManifests.toDiscoverySnapshots()
   val materializationPlan =

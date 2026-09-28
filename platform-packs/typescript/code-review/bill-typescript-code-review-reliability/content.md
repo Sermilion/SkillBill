@@ -1,7 +1,7 @@
 ---
 name: bill-typescript-code-review-reliability
 description: Use when reviewing TypeScript promise observation, cancellation, queues, retries, streams, shutdown, telemetry, and partial failure.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Reliability Review Specialist

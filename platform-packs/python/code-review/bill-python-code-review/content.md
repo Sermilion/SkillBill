@@ -1,7 +1,7 @@
 ---
 name: bill-python-code-review
 description: Use when conducting a Python PR code review across applications, libraries, CLIs, APIs, data code, tests, packaging, async/concurrency, and Python-rendered UI surfaces.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Adaptive Python PR Review

@@ -1,7 +1,7 @@
 ---
 name: bill-go-code-review-platform-correctness
 description: Use when reviewing Go language and runtime correctness for goroutines, channels, contexts, errors, interfaces, aliasing, defer, panic, races, and deadlocks.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Go Platform Correctness Review Specialist

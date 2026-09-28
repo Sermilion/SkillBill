@@ -1,7 +1,7 @@
 ---
 name: bill-generic-code-review-ui
 description: Technology-neutral UI review for state ownership, rendering identity, navigation, feedback, and interactions.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Generic UI Review

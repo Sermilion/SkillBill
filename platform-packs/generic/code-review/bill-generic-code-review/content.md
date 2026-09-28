@@ -1,7 +1,7 @@
 ---
 name: bill-generic-code-review
 description: Use as the manifest-declared code-review fallback when no concrete platform pack owns the changed surface or concrete ownership remains ambiguous.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Generic Fallback Review

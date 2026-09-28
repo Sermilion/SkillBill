@@ -1,7 +1,7 @@
 ---
 name: bill-kmp-code-review
 description: Use when conducting a thorough Android/KMP PR code review. Preserve mobile review depth by flattening the manifest-declared Kotlin baseline into direct specialist lanes alongside KMP-specific specialists. Produces a structured review with risk register and prioritized action items. Use when user mentions Android review, KMP review, mobile review, or asks to review Android/KMP changes.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Android/KMP PR Review

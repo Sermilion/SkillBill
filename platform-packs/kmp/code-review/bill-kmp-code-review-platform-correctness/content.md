@@ -1,7 +1,7 @@
 ---
 name: bill-kmp-code-review-platform-correctness
 description: Use when reviewing Kotlin Multiplatform source-set, expect/actual, target-runtime, serialization, dispatcher, ObjC export, Skie bridge, or native cancellation correctness.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # KMP Platform Correctness Review Specialist

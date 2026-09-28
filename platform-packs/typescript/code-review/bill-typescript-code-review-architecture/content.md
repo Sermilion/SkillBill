@@ -1,7 +1,7 @@
 ---
 name: bill-typescript-code-review-architecture
 description: Use when reviewing TypeScript workspaces, project references, package exports, dependency direction, runtime partitions, and lifecycle ownership.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Architecture Review Specialist

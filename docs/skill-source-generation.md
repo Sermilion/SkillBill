@@ -190,8 +190,8 @@ router flow needs: the parent's installed directory holds the routed entry
 sidecar and the specialist sidecars it reads as siblings, all resolvable as
 "a file next to this `SKILL.md`" with no per-agent path knowledge. The
 code-review family is the worked example: 84 review-pack skills — eight stack
-entries plus their 77 specialists — all carry `internal-for: bill-code-review`
-and all install as siblings inside `bill-code-review/`. The stack entry skills
+entries plus their 77 specialists — all carry `internal-for: skill-bill`
+and all install as siblings inside `skill-bill/`. The stack entry skills
 do **not** become parents of their specialists.
 
 The maintained manifest-derived totals are 85 review sidecars and 77
@@ -267,8 +267,8 @@ review-pack skill is internal — all entries under
 (`bill-ios-code-review`, `bill-kotlin-code-review`, `bill-kmp-code-review`,
 `bill-go-code-review`, `bill-php-code-review`, `bill-python-code-review`, `bill-rust-code-review`,
 `bill-typescript-code-review`) plus their area specialists. Go, iOS, Kotlin, PHP, Python, Rust, and TypeScript declare all ten areas; KMP covers Android and Kotlin Multiplatform, declaring seven areas (`architecture`, `platform-correctness`, `security`, `persistence`, `reliability`, `ui`, `ux-accessibility`) and composing the remaining three (`performance`, `testing`, `api-contracts`) from Kotlin. All carry
-`internal-for: bill-code-review` and install as siblings inside
-`bill-code-review/`'s staged directory; the eight stack entries do **not** become
+`internal-for: skill-bill` and install as siblings inside
+`skill-bill/`'s staged directory; the eight stack entries do **not** become
 parents of their specialists (PD2 flatten rule). After install with all packs
 selected, the agent skill list shows `bill-code-review` (plus the listed
 `bill-code-check`) but none of those internal sidecars.

@@ -1,7 +1,7 @@
 ---
 name: bill-kotlin-code-review-testing
 description: Review Kotlin coroutine, Flow, framework, persistence, serialization, failure-path, generated-code, and toolchain test evidence.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Testing Review Specialist

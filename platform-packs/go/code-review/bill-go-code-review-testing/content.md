@@ -1,7 +1,7 @@
 ---
 name: bill-go-code-review-testing
 description: Use when reviewing Go regression proof, concurrency tests, subtests, race-sensitive behavior, fuzzing, cleanup, integration boundaries, and test-value failures.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Go Testing Review Specialist

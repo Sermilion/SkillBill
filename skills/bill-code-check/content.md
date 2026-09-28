@@ -15,7 +15,7 @@ Run the pack collect-all gate once and read that output. Fix every finding in th
 
 ## Pack validation_gate
 
-Select the dominant pack with manifest-driven routing (`routeQualityCheck`). Collect-all is exactly that pack's `validation_gate.collect_all_full_gate_command`. Confirmation is exactly that pack's `validation_gate.cache_bypassing_collect_all_full_gate_command`. Do not read a pack quality-check sidecar, sibling `<name>.md`, or rediscover a different full-suite command.
+Select the dominant pack with manifest-driven routing. Collect-all is exactly that pack's `validation_gate.collect_all_full_gate_command`. Confirmation is exactly that pack's `validation_gate.cache_bypassing_collect_all_full_gate_command`. Do not read a pack quality-check sidecar, sibling `<name>.md`, or rediscover a different full-suite command.
 
 When the dominant pack declares no `validation_gate`, stop with the typed missing-gate error from routing. Do not fall back to another pack, a sidecar, or a conventional task name.
 

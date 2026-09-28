@@ -11,6 +11,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.contract.Templat
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.supportingFileTargets
 import skillbill.infrastructure.skills.scaffold.runtime.service.performInstall
 import skillbill.infrastructure.skills.scaffold.runtime.service.scaffoldWithAdapters
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestRenderRequest
 import skillbill.scaffold.policy.platformpack.renderPlatformPackManifest
 import skillbill.testsupport.SkillClassFixtures
@@ -37,14 +38,14 @@ class ScaffoldPlatformPackInstallTest {
         "platform quality-check skill must not install as a listed skill",
       )
       assertFalse(Files.exists(repo.resolve("platform-packs/java/quality-check"), LinkOption.NOFOLLOW_LINKS))
-      val reviewParentTarget = readSymlinkTarget(codexSkills.resolve("bill-code-review"))
+      val reviewParentTarget = readSymlinkTarget(codexSkills.resolve(PACK_SIDECAR_PARENT_SKILL))
       assertTrue(
         Files.isRegularFile(reviewParentTarget.resolve("bill-java-code-review.md")),
-        "platform review baseline must install as a sidecar of bill-code-review",
+        "platform review baseline must install as a sidecar of $PACK_SIDECAR_PARENT_SKILL",
       )
       assertTrue(
         Files.isRegularFile(reviewParentTarget.resolve("bill-java-code-review-security.md")),
-        "platform review specialists must install as sidecars of bill-code-review",
+        "platform review specialists must install as sidecars of $PACK_SIDECAR_PARENT_SKILL",
       )
     }
 }
@@ -80,7 +81,7 @@ private fun seedRepo(): Path {
     Files.writeString(target, "# ${target.fileName}\n")
   }
   seedBaseSkill(repo, "bill-code-check")
-  seedBaseSkill(repo, "bill-code-review")
+  seedBaseSkill(repo, PACK_SIDECAR_PARENT_SKILL)
   seedKmpPack(repo)
   return repo
 }

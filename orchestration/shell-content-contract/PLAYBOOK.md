@@ -227,7 +227,7 @@ Loader precedence is authoritative and must stay stable:
 ### Quality-check gate
 
 The `bill-code-check` shell resolves the dominant pack through
-`routeQualityCheck`. The winning pack must declare `validation_gate`; otherwise
+manifest-driven routing. The winning pack must declare `validation_gate`; otherwise
 the runtime raises the typed `MissingValidationGateError`. Collect-all and
 confirmation commands come only from that declaration. The shell never reads a
 quality-check sidecar, rediscovers a command, or substitutes another pack.

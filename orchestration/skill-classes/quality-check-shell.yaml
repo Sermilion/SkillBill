@@ -17,7 +17,7 @@ sections:
       Keep this shell thin:
 
       - detect the dominant stack in the current unit of work via manifest-driven discovery
-      - resolve the dominant pack through `skillbill.scaffold.platformpack.routeQualityCheck` in `runtime-infra-fs`
+      - resolve the dominant pack from the manifest-declared routing signals
       - run that pack's `validation_gate.collect_all_full_gate_command`, then after in-session repair run `validation_gate.cache_bypassing_collect_all_full_gate_command` once
       - refuse to run when the dominant pack has no `validation_gate` — never silently fall back to another pack or a sidecar
 
@@ -38,7 +38,7 @@ sections:
     body: |
       Stack detection and routing are manifest-driven. The shell discovers every `platform-packs/<slug>/platform.yaml` from the skill-adjacent installed `platform-packs` link (or `~/.skill-bill/platform-packs/` / the install-published review catalog), not from the reviewed repository root unless that repository is itself the Skill Bill source tree. It reads each pack's declared routing signals and chooses the dominant stack using manifest-declared tie-breakers.
 
-      - `routeQualityCheck` selects the winning pack slug; `routed_skill` for telemetry and output is always `bill-code-check`.
+      - Routing selects the winning pack slug; `routed_skill` for telemetry and output is always `bill-code-check`.
       - Collect-all and confirmation argv come only from the winning pack `validation_gate`. Do not read `declared_quality_check_file`, sibling sidecars, or rediscover build files, wrappers, or CI configuration.
       - When Kotlin/JVM and KMP ownership share one scope, adjacent-pack dominance still applies; argv always come from the winning pack gate.
       - A pack without `validation_gate` loud-fails with `MissingValidationGateError`; the shell never substitutes another pack.

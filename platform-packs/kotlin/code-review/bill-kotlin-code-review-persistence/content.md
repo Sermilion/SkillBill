@@ -1,7 +1,7 @@
 ---
 name: bill-kotlin-code-review-persistence
 description: Review Kotlin transaction, session, concurrency, migration, tenant, bulk-write, retry, and durable-side-effect persistence failures.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Persistence Review Specialist

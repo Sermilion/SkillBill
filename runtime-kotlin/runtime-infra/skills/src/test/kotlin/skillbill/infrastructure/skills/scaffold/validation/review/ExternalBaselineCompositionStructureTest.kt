@@ -71,7 +71,7 @@ class ExternalBaselineCompositionStructureTest {
     ---
     name: bill-$slug-code-review
     description: $slug review
-    internal-for: bill-code-review
+    internal-for: skill-bill
     ---
 
     # $slug

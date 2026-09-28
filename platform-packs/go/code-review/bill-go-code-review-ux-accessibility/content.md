@@ -1,7 +1,7 @@
 ---
 name: bill-go-code-review-ux-accessibility
 description: Use when reviewing accessibility and task completion in Go-owned templates, forms, fragments, CLI, and TUI surfaces.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Go UX and Accessibility Review Specialist

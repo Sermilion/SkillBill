@@ -114,7 +114,7 @@ class NativeAgentToolsetContractTest {
 
     assertEquals(NativeAgentCompositionKind.GovernedContent, inline.composition?.kind)
     val governed = Files.readString(root.resolve("skills/bill-code-review-inline/content.md"))
-    assertTrue("internal-for: bill-code-review" in governed, "The inline worker must install as a sidecar")
+    assertTrue("internal-for: skill-bill" in governed, "The inline worker must install as a sidecar")
     assertTrue("never launches one" in governed, "The governed content must forbid per-area fan-out")
   }
 

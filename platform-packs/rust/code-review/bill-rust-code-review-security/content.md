@@ -1,7 +1,7 @@
 ---
 name: bill-rust-code-review-security
 description: Use when reviewing Rust unsafe code, FFI, auth, secrets, untrusted parsing, process and file boundaries, dependencies, and sensitive data.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Security Review Specialist

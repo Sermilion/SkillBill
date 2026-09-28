@@ -37,6 +37,7 @@ import skillbill.install.model.WindowsSymlinkDecision
 import skillbill.install.model.WindowsSymlinkFallbackState
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.policy.selectedPlatformSlugs
 import skillbill.ports.install.apply.InstallApplyExecutionPort
 import skillbill.ports.install.apply.model.InstallApplyExecutionRequest
@@ -473,8 +474,8 @@ class InstallServiceTest {
             baseSkills =
               listOf(
                 InstallPlanSkill(
-                  name = "bill-code-review",
-                  sourceDir = repoRoot.resolve("skills/bill-code-review").toFileLocation(),
+                  name = PACK_SIDECAR_PARENT_SKILL,
+                  sourceDir = repoRoot.resolve("skills/$PACK_SIDECAR_PARENT_SKILL").toFileLocation(),
                   kind = InstallPlanSkillKind.BASE,
                 ),
               ),

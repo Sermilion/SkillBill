@@ -1,7 +1,7 @@
 ---
 name: bill-rust-code-review-architecture
 description: Use when reviewing Rust crate boundaries, dependency direction, trait ownership, public abstractions, and Cargo feature architecture.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Architecture Review Specialist

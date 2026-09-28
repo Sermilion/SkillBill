@@ -42,9 +42,9 @@ phase, and every operation.
 
 ## Acceptance Criteria
 
-1. After an install into a temporary `HOME`, the listed skill catalog is exactly `skill-bill`. `skills/bill-feature` and `skills/bill-monitor` do not exist. `bill-monitor` is not an operation.
+1. A test installs into a temporary `HOME` and asserts the listed skill catalog is exactly `skill-bill`. `skills/bill-feature` and `skills/bill-monitor` do not exist. `bill-monitor` is not an operation.
 2. No file under `platform-packs/` or `skills/` declares `internal-for` a retired skill. Pack specialists install under the `skill-bill` install directory and stay unlisted native-agent inputs, not slash commands.
-3. An install over a home that has the old skills removes their links and installed copies.
+3. A test installs over a home that has the old skills and asserts their links and installed copies are removed.
 4. No production prompt or doc tells an agent or operator to invoke a retired skill by its old name.
 5. Telemetry `skill` values, the feature-verify `workflow_name` default, and the workflow skill label stored by `WorkflowStateWrites` that name retired skills keep their current wire values.
 6. `AGENTS.md`, `docs/skill-source-generation.md`, `docs/internal-skills-architecture.md`, `docs/getting-started.md`, and the README describe `/skill-bill` as the only listed skill. `runtime-kotlin/agent/decisions.md` records the retirement and the stable telemetry labels.

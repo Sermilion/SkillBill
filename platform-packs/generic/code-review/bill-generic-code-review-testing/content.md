@@ -1,7 +1,7 @@
 ---
 name: bill-generic-code-review-testing
 description: Technology-neutral testing review for behavioral coverage, failures, isolation, determinism, and regression value.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Generic Testing Review

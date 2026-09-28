@@ -3,6 +3,7 @@ package skillbill.infrastructure.skills.scaffold.runtime.service
 
 import skillbill.infrastructure.skills.scaffold.rendering.renderContentBody
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.TemplateContext
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.policy.SKILL_KIND_ADD_ON
 import skillbill.scaffold.policy.SKILL_KIND_PLATFORM_PACK
@@ -49,7 +50,7 @@ internal fun stagePlatformPackSkills(
   stageFile(
     txn,
     baselineSkillPath.resolve("content.md"),
-    renderContentBody(baselineContext, baselineDescription, internalFor = "bill-code-review"),
+    renderContentBody(baselineContext, baselineDescription, internalFor = PACK_SIDECAR_PARENT_SKILL),
   )
 
   plan.specialistAreas.forEach { area ->
@@ -70,7 +71,7 @@ internal fun stagePlatformPackArea(
   stageFile(
     txn,
     areaPath.resolve("content.md"),
-    renderContentBody(areaContext, areaDescription, internalFor = "bill-code-review"),
+    renderContentBody(areaContext, areaDescription, internalFor = PACK_SIDECAR_PARENT_SKILL),
   )
   return emptyList()
 }

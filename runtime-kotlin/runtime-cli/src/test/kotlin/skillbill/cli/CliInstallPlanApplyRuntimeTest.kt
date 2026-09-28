@@ -40,6 +40,7 @@ import skillbill.install.model.WindowsSymlinkDecision
 import skillbill.install.model.WindowsSymlinkFallbackState
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.policy.selectedPlatformSlugs
 import skillbill.ports.repository.toFileLocation
 import java.nio.file.Files
@@ -171,7 +172,10 @@ class CliInstallPlanApplyRuntimeTest {
       payload.listOfMaps("staging").all { staging -> staging["staging_dir"].toString().startsWith(stagingRoot) },
     )
     val skills = payload.listOfMaps("skills")
-    assertEquals(setOf("bill-code-review", "bill-code-check"), skills.map { skill -> skill["name"] }.toSet())
+    assertEquals(
+      setOf(PACK_SIDECAR_PARENT_SKILL, "bill-code-review", "bill-code-check"),
+      skills.map { skill -> skill["name"] }.toSet(),
+    )
     assertTrue(skills.all { skill -> skill["kind"] == "base" })
     assertTrue(skills.all { skill -> skill.mapValue("staging")["status"] == "staged" })
     val links = skills.flatMap { skill -> skill.listOfMaps("links") }
@@ -295,6 +299,7 @@ class CliInstallPlanApplyRuntimeTest {
       expectedSelectedPlatforms = setOf("kotlin"),
       expectedSkillNames =
         setOf(
+          PACK_SIDECAR_PARENT_SKILL,
           "bill-code-review",
           "bill-code-check",
         ),
@@ -313,6 +318,7 @@ class CliInstallPlanApplyRuntimeTest {
       expectedSelectedPlatforms = setOf("kmp", "kotlin"),
       expectedSkillNames =
         setOf(
+          PACK_SIDECAR_PARENT_SKILL,
           "bill-code-review",
           "bill-code-check",
         ),
@@ -729,6 +735,7 @@ private val supportedAgents = setOf("claude", "codex", "junie", "cursor")
 private fun installPlanApplyFixture(): InstallPlanApplyFixture {
   val home = Files.createTempDirectory("skillbill-cli-install-plan-apply-home")
   val repoRoot = Files.createTempDirectory("skillbill-cli-install-plan-apply-repo")
+  seedCliBaseSkill(repoRoot, PACK_SIDECAR_PARENT_SKILL)
   seedCliBaseSkill(repoRoot, "bill-code-review")
   seedCliBaseSkill(repoRoot, "bill-code-check")
   seedCliPlatformPack(repoRoot, "kmp")
@@ -882,15 +889,15 @@ private fun seedCliPlatformPack(
   Files.writeString(packRoot.resolve("platform.yaml"), cliPlatformManifest(slug, codeReviewName, qualityCheckName))
   Files.writeString(
     baselineDir.resolve("content.md"),
-    cliSkillContent(codeReviewName, internalFor = "bill-code-review", body = cliBaselineBody(slug)),
+    cliSkillContent(codeReviewName, internalFor = PACK_SIDECAR_PARENT_SKILL, body = cliBaselineBody(slug)),
   )
   Files.writeString(
     packRoot.resolve("code-review").resolve(architectureName).resolve("content.md"),
-    cliSkillContent(architectureName, internalFor = "bill-code-review", body = cliArchitectureBody(slug)),
+    cliSkillContent(architectureName, internalFor = PACK_SIDECAR_PARENT_SKILL, body = cliArchitectureBody(slug)),
   )
   Files.writeString(
     packRoot.resolve("quality-check").resolve(qualityCheckName).resolve("content.md"),
-    cliSkillContent(qualityCheckName, internalFor = "bill-code-check", body = cliQualityCheckBody(slug)),
+    cliSkillContent(qualityCheckName, internalFor = PACK_SIDECAR_PARENT_SKILL, body = cliQualityCheckBody(slug)),
   )
   Files.writeString(baselineDir.resolve("native-agents/agents.yaml"), cliNativeAgents(slug))
 }
