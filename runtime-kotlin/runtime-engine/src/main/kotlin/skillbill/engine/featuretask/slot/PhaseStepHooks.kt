@@ -8,8 +8,13 @@ import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptTraversalHookContext
+import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
+import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.goalreview.ReviewPassResolution
@@ -25,6 +30,13 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
  * prompt sections, and output checks live with the step instead of in the shared code.
  */
 internal interface PhaseStepHooks : PhaseStepLaunchHooks {
+  /** The reason the strategy cannot proceed with an agent launch after briefing persistence, or null when it can. */
+  fun beforeAgentLaunch(
+    run: PhaseRun,
+    context: PhaseAttemptLaunchHookContext,
+    state: PhaseStepBinding,
+  ): String? = null
+
   /** Whether the output gate fingerprints the repository when this step completes. */
   val fingerprintsCompletedRepository: Boolean
     get() = false
@@ -39,7 +51,7 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
 
   /** Retains step evidence from [outputText] after the output gate rejected its schema. */
   fun retainSchemaRejectedOutput(
-    state: PhaseStepState,
+    state: PhaseStepBinding,
     outputText: String,
   ) = Unit
 
@@ -56,24 +68,24 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
   /** Checks validated [outputMap] of [run] before the shared output checks run. */
   fun checkValidatedOutput(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseAcceptedStepExecution,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck = PhaseStepOutputCheck.Accept
 
   /** The reason completed [outputMap] of [run] cannot settle, or null when it can. */
   fun completionRejection(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseAcceptedStepExecution,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? = null
 
   /** Settles the step records that completed [outputMap] of [run] carries, once every completion check passed. */
   fun settleCompletedOutput(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseAcceptedStepExecution,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck = PhaseStepOutputCheck.Accept
 
@@ -82,7 +94,7 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
    * an in-phase retry, or null when the output goes on to acceptance.
    */
   fun settleCompletedRound(
-    context: PhaseAttemptEnvironment,
+    context: PhaseStepOutputContext,
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
@@ -93,7 +105,7 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
    * step stamps the facts the runtime measured around it here.
    */
   fun acceptedOutput(
-    context: PhaseAttemptEnvironment,
+    context: PhaseStepOutputContext,
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
@@ -102,8 +114,8 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
   /** Records step evidence from accepted [outputMap] of [run] before the completed step is persisted. */
   fun recordAcceptedOutput(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ) = Unit
 
@@ -112,7 +124,7 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
    * completed: the blocked reason that stops the run, or null when the run continues.
    */
   fun afterCompletion(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptTraversalHookContext,
     output: FeatureTaskRuntimePhaseOutput,
   ): String? = null
 
@@ -133,8 +145,8 @@ internal interface PhaseStepLaunchHooks {
   /** The prompt sections appended after the composed launch prompt of [run]. */
   fun launchPromptSupplement(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseAttemptLaunchHookContext,
+    state: PhaseStepBinding,
   ): String = ""
 
   /** The repository checkpoint the launch handoff of [run] expects, given the [current] checkpoint fingerprint. */
@@ -146,7 +158,7 @@ internal interface PhaseStepLaunchHooks {
   /** The review pass and review tier the launch prompt of [run] carries. */
   fun launchReviewTier(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseReviewPassState,
   ): PhaseLaunchReviewTier =
     PhaseLaunchReviewTier(
       passNumber = null,
@@ -155,18 +167,18 @@ internal interface PhaseStepLaunchHooks {
     )
 
   /** The recorded finding verdicts the launch handoff of this step carries. */
-  fun handoffFindingVerdicts(state: PhaseStepState): List<ReviewFindingVerdict> = emptyList()
+  fun handoffFindingVerdicts(state: PhaseImplementFixStepBinding): List<ReviewFindingVerdict> = emptyList()
 
   /** Resets the step state a launch of [run] must not carry over from a prior process. */
   fun onLaunch(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchHookContext,
   ) = Unit
 
   /** Reconciles the durable state [run] reads before the shared pre-launch checks decide whether it can launch. */
   fun reconcileBeforeLaunch(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchHookContext,
   ) = Unit
 }
 
@@ -185,7 +197,9 @@ internal sealed interface PhaseStepOutputCheck {
     val rule: String = OUTPUT_VERIFICATION_RULE,
   ) : PhaseStepOutputCheck
 
-  data class Redeliver(val reason: String) : PhaseStepOutputCheck
+  data class Redeliver(
+    val reason: String,
+  ) : PhaseStepOutputCheck
 
   data class Block(
     val reason: String,

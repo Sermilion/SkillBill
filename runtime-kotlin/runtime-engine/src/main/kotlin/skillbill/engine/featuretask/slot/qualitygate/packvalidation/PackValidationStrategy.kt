@@ -1,15 +1,16 @@
 package skillbill.engine.featuretask.slot.qualitygate.packvalidation
 
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseQualityGateOperation
 import skillbill.engine.featuretask.slot.PhaseReportedGate
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.stepCall
 import skillbill.engine.featuretask.slot.qualitygate.QUALITY_GATE_STEP_POLICY
@@ -19,19 +20,22 @@ import skillbill.engine.featuretask.slot.qualitygate.buildGateFindingsDirective
 import skillbill.engine.featuretask.slot.qualitygate.gateCurrentExecution
 import skillbill.engine.featuretask.slot.qualitygate.gateRepairNoOutputSchemaDirective
 import skillbill.engine.featuretask.slot.qualitygate.packValidationGateTriagePhaseTask
-import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildGateCycle
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStepHooks
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedPackValidationPhaseTask
-import skillbill.engine.featuretask.slot.state.PhaseStepState
-import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseQualityGateStepBinding
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class PackValidationStrategy(override val runner: PhaseRunner) : PhaseStrategyStatusProjection() {
+class PackValidationStrategy(
+  override val runner: PhaseRunner,
+) : PhaseStrategyStatusProjection() {
   private val policies: Map<String, PhaseStepPolicy> =
     mapOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE to QUALITY_GATE_STEP_POLICY)
+
+  override val qualityGateOperation = PhaseQualityGateOperation.PackGate(ValidationGateCommandFamily.VALIDATION)
 
   override val slot: PhaseSlot = PhaseSlot.QUALITY_GATE
   override val strategyId: String = ID
@@ -54,30 +58,33 @@ class PackValidationStrategy(override val runner: PhaseRunner) : PhaseStrategySt
     val repair = inputs.validationGateRepair || triage
     return PhaseStepPromptSections(
       taskDirective =
-      if (triage) {
-        packValidationGateTriagePhaseTask(inputs.packCollectAllCommand)
-      } else {
-        runtimeOwnedPackValidationPhaseTask(inputs.packCollectAllCommand)
-      },
+        if (triage) {
+          packValidationGateTriagePhaseTask(inputs.packCollectAllCommand)
+        } else {
+          runtimeOwnedPackValidationPhaseTask(inputs.packCollectAllCommand)
+        },
       runsValidationGate = true,
       stepContext =
-      buildGateFindingsDirective(
-        inputs.validationGateFindings,
-        inputs.validationGateTriagePlan,
-        gateLabel = "validation",
-        commandLabel = null,
-      ),
+        buildGateFindingsDirective(
+          inputs.validationGateFindings,
+          inputs.validationGateTriagePlan,
+          gateLabel = "validation",
+          commandLabel = null,
+        ),
       valueContent = VALIDATE_VALUE_CONTENT,
       settles = false,
       outputContract = gateRepairNoOutputSchemaDirective(stepId, triage).takeIf { repair },
     )
   }
 
-  override fun runStep(run: PhaseRun, state: PhaseStepState): PhaseOutcome = PackBuildGateCycle(
-    PhaseAttemptScope(run.request, state),
-    stepCall(run, state),
-    ValidationGateCommandFamily.VALIDATION,
-  ).run(run)
+  override fun runStep(
+    run: PhaseRun,
+    state: PhaseAcceptedStepExecution,
+  ): PhaseOutcome =
+    (
+      state as? PhaseQualityGateStepBinding
+        ?: error("Quality gate requires its accepted execution binding.")
+    ).runSelectedQualityGate(run, stepCall(run, state))
 
   override fun stepHooks(stepId: String): PhaseStepHooks =
     if (stepId in policies) PackValidationStepHooks else PhaseStepHooks.None

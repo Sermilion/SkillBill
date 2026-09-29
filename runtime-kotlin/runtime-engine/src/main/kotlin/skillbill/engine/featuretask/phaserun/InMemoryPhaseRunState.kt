@@ -12,13 +12,16 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepState
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.featureTaskRuntimeRunLoopStepBinding
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
+import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaborationScope
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
@@ -26,7 +29,6 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
-import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.error.shellcontent.MissingValidationGateError
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
@@ -46,6 +48,8 @@ internal class InMemoryPhaseRunState(
   val invocationId: String,
   private val entry: PhaseRunEntry,
 ) : PhaseRunState {
+  override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
+    FeatureTaskRuntimeRunLoopStepBindingCoordinator()
   override val session: FeatureTaskRuntimeRunLoopSession =
     FeatureTaskRuntimeRunLoopSession(operatorBlockRetry = null, initialPendingReentry = null)
   override val goal: PhaseRunGoal = InMemoryPhaseRunGoal
@@ -65,19 +69,22 @@ internal class InMemoryPhaseRunState(
 
   private var reviewTarget: ReviewTarget? = null
 
-  override fun strategyFor(stepId: String): PhaseStrategy =
-    entry.strategies.strategyFor(stepId, executionPlan)
+  override fun strategyFor(stepId: String): PhaseStrategy = entry.strategies.strategyFor(stepId, executionPlan)
 
-  override fun selectedOwnerOf(stepId: String): PhaseStrategy? =
-    entry.strategies.selectedOwnerOf(stepId, executionPlan)
+  override fun selectedOwnerOf(stepId: String): PhaseStrategy? = entry.strategies.selectedOwnerOf(stepId, executionPlan)
 
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 
-  override fun step(run: PhaseRun): PhaseStepState =
-    FeatureTaskRuntimeRunLoopStepState(
-      PhaseAttemptScope(run.request, this),
+  override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
+    require(run.request === facts)
+    require(run.phaseId in executionPlan.selectedStepIds)
+    require(strategyFor(run.phaseId).policyFor(run.phaseId) == run.policy)
+    stepBinding.beginStepBinding(run)
+    return featureTaskRuntimeRunLoopStepBinding(
+      phaseAttemptLaunchCollaborationScope(PhaseAttemptRunHost(run.request, this, run.phaseId, this)),
       run,
     )
+  }
 
   override fun ensureFeatureBranch(guardPhase: String): FeatureTaskRuntimeBranchSetupOutcome =
     FeatureTaskRuntimeBranchSetupOutcome.unchanged()
@@ -141,15 +148,16 @@ internal class InMemoryPhaseRunState(
   ) {
     val sessionId =
       emitQualityCheck(stepName) {
-        entry.lifecycleTelemetry.qualityCheckStarted(
-          QualityCheckStartedRequest(
-            routedSkill = QUALITY_CHECK_ROUTED_SKILL,
-            detectedStack = detectedStack,
-            scopeType = QUALITY_CHECK_SCOPE_TYPE,
-            initialFailureCount = initialFailureCount,
-            orchestrated = false,
-          ),
-        ).toPayload()[LifecycleTelemetryPayloadKeys.SESSION_ID] as? String
+        entry.lifecycleTelemetry
+          .qualityCheckStarted(
+            QualityCheckStartedRequest(
+              routedSkill = QUALITY_CHECK_ROUTED_SKILL,
+              detectedStack = detectedStack,
+              scopeType = QUALITY_CHECK_SCOPE_TYPE,
+              initialFailureCount = initialFailureCount,
+              orchestrated = false,
+            ),
+          ).toPayload()[LifecycleTelemetryPayloadKeys.SESSION_ID] as? String
       }
     qualityCheck =
       sessionId?.takeIf(String::isNotBlank)?.let { id ->
@@ -190,13 +198,14 @@ internal class InMemoryPhaseRunState(
     stepName: String,
     emit: () -> T,
   ): T? =
-    runCatching(emit).onFailure { error ->
-      RuntimeDiagnosticsBestEffortWarning.record(
-        entry.diagnostics,
-        "Phase run $invocationId could not report quality check of '$stepName'.",
-        error,
-      )
-    }.getOrNull()
+    runCatching(emit)
+      .onFailure { error ->
+        RuntimeDiagnosticsBestEffortWarning.record(
+          entry.diagnostics,
+          "Phase run $invocationId could not report quality check of '$stepName'.",
+          error,
+        )
+      }.getOrNull()
 }
 
 private data class QualityCheckSession(
@@ -206,7 +215,9 @@ private data class QualityCheckSession(
   val initialFailureCount: Int,
 )
 
-private enum class QualityCheckResult(val wireValue: String) {
+private enum class QualityCheckResult(
+  val wireValue: String,
+) {
   PASS("pass"),
   FAIL("fail"),
 }

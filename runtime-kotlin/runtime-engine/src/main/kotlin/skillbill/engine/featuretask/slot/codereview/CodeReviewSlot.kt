@@ -14,14 +14,16 @@ import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStrategy
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.promptSource
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.codereview.history.CodeReviewHistory
 import skillbill.engine.featuretask.slot.codereview.verify.VerifyFindingsStep
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.engine.featuretask.slot.stepFacts
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.error.featuretask.UnknownPhaseStepError
@@ -51,7 +53,7 @@ internal interface CodeReviewPass {
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
     runner: PhaseRunner,
-    state: PhaseStepState,
+    state: PhaseReviewStepBinding,
   ): ParallelCodeReviewResult
 }
 
@@ -113,19 +115,32 @@ internal class CodeReviewSlot(
   fun runStep(
     strategy: PhaseStrategy,
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome =
     when (run.phaseId) {
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW ->
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> {
+        val reviewBinding =
+          state as? PhaseReviewStepBinding
+            ?: error("Review step requires a review execution binding.")
         review.run(
           run,
-          PhaseAttemptScope(run.request, state),
-          state,
+          reviewBinding.reviewExecutionContext(),
+          reviewBinding,
           strategy.promptSource(run.phaseId),
         )
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS,
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
-      -> strategy.runAgentStep(run, state)
+      }
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> {
+        check(state is PhaseVerifyFindingsStepBinding) {
+          "Verify findings step requires a finding-verification binding."
+        }
+        strategy.runAgentStep(run, state)
+      }
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> {
+        check(state is PhaseImplementFixStepBinding) {
+          "Implement fix step requires an implement-fix binding."
+        }
+        strategy.runAgentStep(run, state)
+      }
       else -> throw UnknownPhaseStepError(run.phaseId)
     }
 
@@ -156,7 +171,6 @@ internal class CodeReviewSlot(
     stepId: String,
     context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
   ): IdeStatusCurrentPhaseExecution? = CodeReviewHistory.currentExecution(stepId, context)
-
 }
 
 internal fun reviewStepInput(

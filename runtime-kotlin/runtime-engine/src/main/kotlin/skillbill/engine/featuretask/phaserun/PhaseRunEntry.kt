@@ -49,7 +49,7 @@ class PhaseRunEntry(
         transitions = executionPlan.traversal,
         outputValidator = outputValidator,
         stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
-        resumeRules = strategies.resumeRules(executionPlan),
+        resumeRulesFn = strategies.resumeRules(executionPlan),
       )
     val records = InMemoryPhaseRunRecords(clock, branch)
     val state =

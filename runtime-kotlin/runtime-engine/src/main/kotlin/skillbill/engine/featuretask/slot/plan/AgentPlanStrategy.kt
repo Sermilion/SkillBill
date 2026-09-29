@@ -6,22 +6,27 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.envelopeContract
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptTraversalHookContext
+import skillbill.engine.featuretask.slot.attempt.PhasePlanningTraversalContext
+import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.jsonValueContent
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class AgentPlanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
+class AgentPlanStrategy(
+  override val runner: PhaseRunner,
+) : PhaseStrategy() {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
@@ -81,7 +86,7 @@ class AgentPlanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
 
   override fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome = runAgentStep(run, state)
 
   override fun stepHooks(stepId: String): PhaseStepHooks {
@@ -97,15 +102,19 @@ class AgentPlanStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
   private object PlanStepHooks : PhaseStepHooks {
     override fun completionRejection(
       run: PhaseRun,
-      context: PhaseAttemptEnvironment,
-      state: PhaseStepState,
+      context: PhaseStepOutputContext,
+      state: PhaseAcceptedStepExecution,
       outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
     ): String? = PlanDecompositionStop.completionRejection(context, outputMap)
 
     override fun afterCompletion(
-      context: PhaseAttemptEnvironment,
+      context: PhaseAttemptTraversalHookContext,
       output: FeatureTaskRuntimePhaseOutput,
-    ): String? = PlanDecompositionStop.apply(context, output)
+    ): String? =
+      (
+        context as? PhasePlanningTraversalContext
+          ?: error("Plan completion requires the accepted planning traversal context.")
+      ).settlePlanningStop(output)
   }
 
   internal object PlanResumeRules : PhaseResumeRules {

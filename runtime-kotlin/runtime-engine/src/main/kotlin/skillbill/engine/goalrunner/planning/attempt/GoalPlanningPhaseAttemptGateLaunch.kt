@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.PhaseStepFacts
 import skillbill.engine.featuretask.slot.PhaseStepInput
+import skillbill.engine.featuretask.slot.state.PhasePlanningBriefingBinding
 import skillbill.engine.goalrunner.planning.context.GoalPlanningContextPromptFormatter
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProduceAttemptArgs
@@ -49,7 +50,7 @@ internal fun DefaultGoalPlanningSweep.launchPlanningAttempt(
   val output =
     launch.runner.run(
       PhaseStepInput(phase.phaseId, prompt, emptyMap(), null, facts, launch.policy),
-      launch.state,
+      launch.state.launchState,
     )
   return requireNotNull(output.launchOutcome) { output.launchFailure?.reason.orEmpty() }
 }
@@ -75,12 +76,7 @@ internal fun DefaultGoalPlanningSweep.composePlanningPrompt(args: GoalPlanningPr
       agentAddonSelection = phase.request.agentAddonSelection,
       scope = FeatureTaskRuntimeBriefingScope(invariantFields = phase.launch.invariantFields),
     )
-  phase.launch.state.records.recordPhaseBriefing(
-    phase.shared.parentWorkflowId,
-    briefing,
-    null,
-    args.attempt,
-  )
+  (phase.launch.state as PhasePlanningBriefingBinding).recordPlanningBriefing(briefing, args.attempt)
   val basePrompt =
     FeatureTaskRuntimePhasePromptComposer.compose(
       FeatureTaskRuntimePhasePromptComposeInputs(

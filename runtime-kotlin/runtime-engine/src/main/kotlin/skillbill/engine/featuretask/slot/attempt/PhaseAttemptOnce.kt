@@ -3,7 +3,10 @@ package skillbill.engine.featuretask.slot.attempt
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
+import skillbill.engine.featuretask.runloop.attempt.launchHookContext
+import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.AttemptResult
+import skillbill.engine.featuretask.runloop.core.BlockAndPersistInPhaseArgs
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
 import skillbill.engine.featuretask.runloop.core.CapturedPhaseOutput
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
@@ -22,6 +25,8 @@ import skillbill.engine.featuretask.runloop.core.phaseBlockArgs
 import skillbill.engine.featuretask.runloop.core.withDisposition
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutputPersistence
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersistInPhase
+import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking.pauseAndPersistInPhase
 import skillbill.engine.featuretask.runloop.state.featureTaskRuntimeChildOutput
 import skillbill.engine.featuretask.runner.LaunchResult
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
@@ -37,57 +42,66 @@ import java.util.concurrent.CancellationException
 
 object PhaseAttemptOnce {
   internal fun persistRequiredStart(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchCollaborationScope,
     run: PhaseRun,
     iteration: Int,
   ) {
     FeatureTaskRuntimeRunLoopOutputPersistence.persistPhase(
-      context.request,
-      context.state,
-      context.recorder,
+      context,
       context.goalContinuationRecorder,
       PersistPhaseArgs(
-        write = PhaseStateWriteArgs(run, iteration, STATUS_RUNNING, false, context.state.outputFor(run.phaseId)?.payload),
+        write =
+          PhaseStateWriteArgs(
+            run,
+            iteration,
+            STATUS_RUNNING,
+            false,
+            context.progress.outputFor(run.phaseId)?.payload,
+          ),
         launched = FeatureTaskRuntimeRunLoopLaunch.launchedModelDirective(run),
       ),
     )
   }
 
   internal fun attemptOnce(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchCollaborationScope,
     args: RecordRejectionAttemptArgs,
   ): AttemptResult {
-    with(context) {
+    args.call.acceptedExecution.requireAcceptedAttempt(args.context.run, args.call)
+    return with(context) {
       val run = args.context.run
       val iteration = args.context.iteration
       val priorCorrection = args.priorCorrection
-      return try {
-        persistRequiredStart(context, run, iteration)
-        val launch = PhaseAttemptOnce.launchAndCapture(context, run, iteration, priorCorrection, args.call)
-        PhaseAttemptOnce.settleRecordRejectionLaunchOutcome(context, args, launch)
+      try {
+        persistRequiredStart(this, run, iteration)
+        val launch = PhaseAttemptOnce.launchAndCapture(this, run, iteration, priorCorrection, args.call)
+        PhaseAttemptOnce.settleRecordRejectionLaunchOutcome(this, args, launch)
       } catch (rejection: RequiredPhaseWriteRejected) {
-        AttemptResult.settled(blockRequiredWriteRejection(context, run, rejection))
+        AttemptResult.settled(blockRequiredWriteRejection(this, run, rejection))
       }
     }
   }
 
   internal fun blockRequiredWriteRejection(
-    context: PhaseAttemptEnvironment,
+    host: PhaseAttemptRunHost,
     run: PhaseRun,
     rejection: RequiredPhaseWriteRejected,
   ): PhaseOutcome {
     val reason = rejection.message.orEmpty()
+    val scope = PhaseAttemptLaunchCollaborationScope(host)
+    val coupling = scope.settlementCoupling()
     return try {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-        context.request,
-        context.state,
-        context.recorder,
-        context.observability,
+        host.request,
+        coupling.progress,
+        coupling.transitions,
+        scope.recorder,
+        scope.observability,
         PhaseBlockRequest(
           run = run,
           attemptCount = rejection.attempt,
           reason = reason,
-          observability = context.observability,
+          observability = scope.observability,
           failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
           payload = BlockAndPersistPayload(childNeverLaunched = true),
         ),
@@ -98,7 +112,7 @@ object PhaseAttemptOnce {
     } catch (secondary: Throwable) {
       rejection.addSuppressed(secondary)
       RuntimeDiagnosticsBestEffortWarning.record(
-        context.diagnostics,
+        scope.diagnostics,
         "Required phase write rejection for '${run.phaseId}' could not be persisted; " +
           "the original ${rejection.writeKind.wireValue} rejection remains primary.",
         secondary,
@@ -107,16 +121,23 @@ object PhaseAttemptOnce {
     }
   }
 
+  internal fun blockRequiredWriteRejection(
+    context: PhaseAttemptLaunchCollaborationScope,
+    run: PhaseRun,
+    rejection: RequiredPhaseWriteRejected,
+  ): PhaseOutcome = blockRequiredWriteRejection(context.attemptRunHost(), run, rejection)
+
   internal fun launchAndCapture(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchCollaborationScope,
     run: PhaseRun,
     iteration: Int,
     priorCorrection: PriorAttemptCorrection?,
     call: PhaseStepCall,
   ): LaunchResult {
+    call.acceptedExecution.requireAcceptedAttempt(run, call)
     var rejected: LaunchResult? = null
     val preparingState =
-      object : PhaseLaunchState by call.state {
+      object : PhaseLaunchState by call.acceptedExecution.launchState {
         override fun prepareLaunch(input: PhaseStepInput): PhaseStepInput? =
           when (
             val preparation =
@@ -126,13 +147,25 @@ object PhaseAttemptOnce {
                 iteration,
                 priorCorrection,
                 call.description.prompt,
+                call.acceptedExecution,
               )
           ) {
-            is PreparedLaunchReady ->
-              input.copy(
-                directive = preparation.value.prompt,
-                facts = input.facts.copy(briefingText = preparation.value.briefing.briefingText),
-              )
+            is PreparedLaunchReady -> {
+              val launchBlock =
+                context
+                  .stepHooks(
+                    run,
+                  ).beforeAgentLaunch(run, context.launchHookContext(run), call.acceptedExecution)
+              if (launchBlock != null) {
+                rejected = LaunchResult.infraFailure(launchBlock, childNeverLaunched = true)
+                null
+              } else {
+                input.copy(
+                  directive = preparation.value.prompt,
+                  facts = input.facts.copy(briefingText = preparation.value.briefing.briefingText),
+                )
+              }
+            }
             is LaunchPreparationRejected -> {
               rejected = preparation.result
               null
@@ -141,7 +174,9 @@ object PhaseAttemptOnce {
           }
       }
     val output =
-      call.runner.run(
+      context.attemptRunHost().runPreparedStep(
+        run,
+        call,
         PhaseStepInput(
           stepName = run.phaseId,
           directive = "",
@@ -156,7 +191,7 @@ object PhaseAttemptOnce {
   }
 
   private fun reconcileLaunch(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchCollaborationScope,
     run: PhaseRun,
     output: PhaseStepOutput,
   ): LaunchResult {
@@ -172,7 +207,12 @@ object PhaseAttemptOnce {
     val fileManifest =
       requireNotNull(output.fileManifest).let { FeatureTaskRuntimePhaseFileManifest(it.before, it.after) }
     with(context) {
-      FeatureTaskRuntimeRunLoopLaunch.capturePhaseContentIdentities(request, session, phaseGates, run.phaseId)
+      FeatureTaskRuntimeRunLoopLaunch.capturePhaseContentIdentities(
+        request,
+        coupledRunTransitions,
+        phaseGates,
+        run.phaseId,
+      )
     }
     return when (kind) {
       PhaseLaunchFailureKind.UNSUPPORTED_AGENT ->
@@ -201,7 +241,7 @@ object PhaseAttemptOnce {
   }
 
   internal fun settleRecordRejectionLaunchOutcome(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchCollaborationScope,
     args: RecordRejectionAttemptArgs,
     launch: LaunchResult,
   ): AttemptResult {
@@ -228,33 +268,36 @@ object PhaseAttemptOnce {
           call = args.call,
           outputGateFailuresBefore = args.context.outputGateFailuresBefore,
           settlementContext = context,
+          stepHooks = context.stepHooks(run),
         ),
       )
     }
   }
 
   private fun settleProviderLimit(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchCollaborationScope,
     args: RecordRejectionAttemptArgs,
     launch: LaunchResult,
     reason: String,
   ): AttemptResult =
     AttemptResult.settled(
-      with(FeatureTaskRuntimeRunLoopPhaseBlocking) {
-        context.pauseAndPersistInPhase(
-          PauseAndPersistInPhaseArgs(
-            args.context.run,
-            args.context.iteration,
-            reason,
-            context.observability,
-            launch.fileManifest,
-          ),
-        )
+      with(context) {
+        with(FeatureTaskRuntimeRunLoopPhaseBlocking) {
+          pauseAndPersistInPhase(
+            PauseAndPersistInPhaseArgs(
+              args.context.run,
+              args.context.iteration,
+              reason,
+              context.observability,
+              launch.fileManifest,
+            ),
+          )
+        }
       },
     )
 
   private fun settleInfrastructureFailure(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchCollaborationScope,
     args: RecordRejectionAttemptArgs,
     launch: LaunchResult,
     reason: String,
@@ -268,30 +311,37 @@ object PhaseAttemptOnce {
         reason,
         launch.infraFailureChildOutput,
       )
+      val blockArgs =
+        phaseBlockArgs(
+          run,
+          args.context.iteration,
+          reason,
+          observability,
+          payload =
+            BlockAndPersistPayload(
+              childNeverLaunched = launch.childNeverLaunched,
+              fileManifest = launch.fileManifest,
+            ),
+        ).withDisposition(launch.failureDisposition)
       return AttemptResult.settled(
-        FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersistInPhase(
-          request,
-          state,
-          recorder,
-          goalContinuationRecorder,
-          phaseBlockArgs(
-            run,
-            args.context.iteration,
-            reason,
-            observability,
-            payload =
-              BlockAndPersistPayload(
-                childNeverLaunched = launch.childNeverLaunched,
-                fileManifest = launch.fileManifest,
-              ),
-          ).withDisposition(launch.failureDisposition),
-        ),
+        with(context) {
+          blockAndPersistInPhase(
+            BlockAndPersistInPhaseArgs(
+              run = blockArgs.run,
+              attemptCount = blockArgs.attemptCount,
+              reason = blockArgs.reason,
+              observability = blockArgs.observability,
+              failureDisposition = blockArgs.failureDisposition,
+              payload = blockArgs.payload,
+            ),
+          )
+        },
       )
     }
   }
 
   private fun settleRecordRejection(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchCollaborationScope,
     args: RecordRejectionAttemptArgs,
     rejection: RecordRejection,
   ): AttemptResult =
@@ -300,7 +350,7 @@ object PhaseAttemptOnce {
         context.settleRecordRejection(
           SettleRecordRejectionArgs(
             args.context.run,
-            context.state,
+            context.settlementCoupling().progress,
             args.context.iteration,
             context.observability,
             rejection,

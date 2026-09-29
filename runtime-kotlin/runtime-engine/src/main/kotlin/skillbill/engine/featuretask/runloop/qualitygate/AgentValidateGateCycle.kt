@@ -1,13 +1,14 @@
-package skillbill.engine.featuretask.slot.qualitygate.agentvalidate
+package skillbill.engine.featuretask.runloop.qualitygate
 
 import skillbill.application.decomposition.baseBranch
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.PhaseQualityGateCycleContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
-import skillbill.engine.featuretask.slot.qualitygate.RuntimeOwnedGateSettlement
-import skillbill.engine.featuretask.slot.qualitygate.blockGateStep
-import skillbill.engine.featuretask.slot.qualitygate.gateChangedPaths
+import skillbill.engine.featuretask.slot.attempt.RuntimeOwnedGateSettlement
+import skillbill.engine.featuretask.slot.attempt.blockGateStep
+import skillbill.engine.featuretask.slot.attempt.gateChangedPaths
+import skillbill.engine.featuretask.slot.attempt.qualityGateAttemptHost
 import skillbill.engine.featuretask.validation.ReadinessPostValidateCaptureRequest
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
@@ -19,24 +20,29 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 private const val DEFAULT_BASE_BRANCH = "main"
 
 internal class AgentValidateGateCycle(
-  private val context: PhaseAttemptEnvironment,
+  private val context: PhaseQualityGateCycleContext,
   private val call: PhaseStepCall,
 ) {
   private var stoppedAttempt: PhaseOutcome? = null
 
   internal fun run(run: PhaseRun): PhaseOutcome {
-    val iteration = call.state.nextStepIteration()
+    call.acceptedExecution.requireAcceptedStep(run, call.strategyId)
+    val iteration = call.acceptedExecution.nextStepIteration()
     val cycle =
       context.phaseGates.validationGateCoordinator.execute(
         ValidationGateAgentRepairLauncher { findings, _, _ ->
-          repair(run.copy(validationGateFindings = findings))
+          repair(run, run.copy(validationGateFindings = findings))
         },
       )
     return stoppedAttempt ?: settle(run, iteration, cycle)
   }
 
-  private fun repair(run: PhaseRun): ValidationGateAgentRepairResult {
-    val settled = call.state.attemptLoop.run(run, call)
+  private fun repair(
+    acceptedRun: PhaseRun,
+    run: PhaseRun,
+  ): ValidationGateAgentRepairResult {
+    val attemptCall = context.gateAttemptCall(call, acceptedRun, run)
+    val settled = context.qualityGateAttemptHost().runAcceptedAttemptLoop(run, attemptCall)
     val completed = settled.completedOutput
     val paused = settled.pausedReason
     if (completed == null) stoppedAttempt = settled
@@ -65,7 +71,10 @@ internal class AgentValidateGateCycle(
           is ValidationGateCycleTerminalOutcome.Blocked ->
             context.blockGateStep(
               run,
-              context.recorder.loadPhaseRecords(context.request.workflowId)?.get(run.phaseId)?.attemptCount
+              context.recorder
+                .loadPhaseRecords(context.request.workflowId)
+                ?.get(run.phaseId)
+                ?.attemptCount
                 ?: iteration,
               terminal.reason,
               terminal.failureDisposition ?: FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,

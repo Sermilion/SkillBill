@@ -13,8 +13,7 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPoli
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeScopedReviewBaseline
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.error.core.DatabaseBusyError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
@@ -26,16 +25,20 @@ import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
 import java.nio.file.Path
 
 internal sealed interface InlineReviewPrepared {
-  data class Ready(val input: GoalSubtaskReviewInput) : InlineReviewPrepared
+  data class Ready(
+    val input: GoalSubtaskReviewInput,
+  ) : InlineReviewPrepared
 
-  data class Settled(val outcome: PhaseOutcome) : InlineReviewPrepared
+  data class Settled(
+    val outcome: PhaseOutcome,
+  ) : InlineReviewPrepared
 }
 
 internal object InlineReviewPreparation {
   fun prepare(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
   ): InlineReviewPrepared =
     when {
       run.request.reviewInvocation != null -> preparePhaseReview(run, context, state)
@@ -45,10 +48,10 @@ internal object InlineReviewPreparation {
 
   private fun preparePhaseReview(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
   ): InlineReviewPrepared {
-    val head = context.phaseGates.gitOperations.headCommitSha(run.request.repoRoot)
+    val head = context.gitOperations.headCommitSha(run.request.repoRoot)
     if (head !is WorkflowGitOperationResult.Ok) {
       return blocked(state, "Phase review could not resolve HEAD: ${head.error}")
     }
@@ -61,7 +64,8 @@ internal object InlineReviewPreparation {
     error: Throwable,
   ): String {
     val location =
-      error.stackTrace.firstOrNull { frame -> frame.className.startsWith("skillbill.") }
+      error.stackTrace
+        .firstOrNull { frame -> frame.className.startsWith("skillbill.") }
         ?.let { frame -> " at ${frame.className}.${frame.methodName}:${frame.lineNumber}" }
         .orEmpty()
     return "Goal-subtask review $stage failed$location: ${error.message.orEmpty()}"
@@ -76,8 +80,8 @@ internal object InlineReviewPreparation {
 
   private fun prepareStandaloneReview(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
   ): InlineReviewPrepared {
     val resolved =
       state.resolvedBranch()
@@ -88,7 +92,7 @@ internal object InlineReviewPreparation {
           state,
           "Standalone review is missing the immutable review base captured before implementation.",
         )
-    val gitOperations = context.phaseGates.gitOperations
+    val gitOperations = context.gitOperations
     val repoRoot = run.request.repoRoot
     val result =
       gitOperations.buildGoalSubtaskReviewInput(
@@ -102,8 +106,8 @@ internal object InlineReviewPreparation {
 
   private fun reserveGoalReview(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
   ): InlineReviewPrepared =
     runCatching { state.reserveReviewPass() }.fold(
       onSuccess = { reservation ->
@@ -127,8 +131,8 @@ internal object InlineReviewPreparation {
 
   private fun buildGoalReviewInput(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
   ): InlineReviewPrepared =
     runCatching {
       val resolved = state.resolvedBranch()
@@ -136,7 +140,7 @@ internal object InlineReviewPreparation {
         scopedUntrackedExclusions =
           resolved?.let {
             FeatureTaskRuntimeScopedReviewBaseline.untrackedExclusions(
-              context.phaseGates.gitOperations,
+              context.gitOperations,
               run.request.repoRoot,
               it,
             )
@@ -163,13 +167,14 @@ internal object InlineReviewPreparation {
 
   private fun settleCarriedForward(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
   ): InlineReviewPrepared {
     val accepted =
       runCatching {
         val output = state.carriedForwardReviewResult() ?: throw MissingCarriedForwardGoalReviewResultException()
-        context.outputValidator.validatePhaseOutput(output, sourceLabel = run.phaseId)
+        context.outputValidator
+          .validatePhaseOutput(output, sourceLabel = run.phaseId)
           .requireAcceptedOutput(run.phaseId)
       }.getOrElse { error ->
         val detail =
@@ -196,7 +201,7 @@ internal object InlineReviewPreparation {
   }
 
   private fun blocked(
-    state: PhaseStepState,
+    state: PhaseReviewStepBinding,
     reason: String,
     disposition: FeatureTaskRuntimeFailureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
   ): InlineReviewPrepared {
@@ -235,6 +240,7 @@ object ReviewTargetResolver {
   private const val HEAD_REVISION: String = "HEAD"
 }
 
-class MissingCarriedForwardGoalReviewResultException : SkillBillRuntimeException(
-  "Goal review result was not carried forward from the prior phase.",
-)
+class MissingCarriedForwardGoalReviewResultException :
+  SkillBillRuntimeException(
+    "Goal review result was not carried forward from the prior phase.",
+  )

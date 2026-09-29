@@ -34,7 +34,8 @@ internal fun FeatureTaskRuntimeRunner.buildExecutePreparedRunTelemetryContext(
 ) = FeatureTaskRuntimeFinishedTelemetryContext(
   telemetrySessionId = telemetrySessionId,
   phaseOutcomes = {
-    recorder.loadPhaseRecords(runRequest.workflowId)
+    recorder
+      .loadPhaseRecords(runRequest.workflowId)
       .orEmpty()
       .mapValues { (_, record) -> record.status.wireValue }
   },
@@ -47,7 +48,7 @@ internal fun FeatureTaskRuntimeRunner.buildExecutePreparedRunTelemetryContext(
   crashReconciliation = { reconciliation },
 )
 
-fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
+internal fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
   runRequest: FeatureTaskRuntimeRunRequest,
   specSource: SpecSource,
   executionPlan: ResolvedPhaseExecutionPlan,
@@ -108,17 +109,16 @@ fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
 internal fun FeatureTaskRuntimeRunner.createExecutePreparedRunState(
   runRequest: FeatureTaskRuntimeRunRequest,
   executionPlan: ResolvedPhaseExecutionPlan,
-): FeatureTaskRuntimeRunState {
-  return FeatureTaskRuntimeRunState(
+): FeatureTaskRuntimeRunState =
+  FeatureTaskRuntimeRunState(
     initialRecords = recorder.loadPhaseRecords(runRequest.workflowId).orEmpty(),
     transitions = executionPlan.traversal,
     durableInitialLedger = recorder.loadPhaseLedger(runRequest.workflowId).orEmpty(),
     outputValidator = outputValidator,
     initialReviewGeneration = recorder.reconcileReviewGeneration(runRequest.workflowId),
     stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
-    resumeRules = strategies.resumeRules(executionPlan),
+    resumeRulesFn = strategies.resumeRules(executionPlan),
   )
-}
 
 fun FeatureTaskRuntimeRunner.finalizeExecutePreparedRunReport(
   runRequest: FeatureTaskRuntimeRunRequest,

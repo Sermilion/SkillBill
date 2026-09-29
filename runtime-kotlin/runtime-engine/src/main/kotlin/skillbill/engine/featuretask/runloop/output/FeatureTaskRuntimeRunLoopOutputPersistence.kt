@@ -7,9 +7,9 @@ import skillbill.engine.featuretask.runloop.core.PersistPhaseArgs
 import skillbill.engine.featuretask.runloop.core.PhaseStateRequestArgs
 import skillbill.engine.featuretask.runloop.core.PhaseStateRequestAttachments
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
+import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
-import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeCorrectiveRepairContext
 
 object FeatureTaskRuntimeRunLoopOutputPersistence {
@@ -29,17 +29,16 @@ object FeatureTaskRuntimeRunLoopOutputPersistence {
     )
 
   internal fun persistPhase(
-    request: FeatureTaskRuntimeRunFacts,
-    state: FeatureTaskRuntimeRunState,
-    recorder: PhaseRunRecords,
+    context: PhaseOutputSettlementContext,
     goalContinuationRecorder: PhaseRunGoal,
     args: PersistPhaseArgs,
   ) {
+    val coupling = context.settlementCoupling()
     val write = args.write
     val phaseState =
       FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
-        request,
-        state,
+        context.request,
+        coupling.progress,
         goalContinuationRecorder,
         PhaseStateRequestArgs(
           write = write,
@@ -51,9 +50,6 @@ object FeatureTaskRuntimeRunLoopOutputPersistence {
             ),
         ),
       )
-    state.reserveReviewPass(phaseState.reviewPassNumber)
-    recorder.recordRequiredPhaseStart(
-      phaseState,
-    )
+    coupling.transitions.recordOutputSettlementRunningPhase(context.recorder, phaseState)
   }
 }

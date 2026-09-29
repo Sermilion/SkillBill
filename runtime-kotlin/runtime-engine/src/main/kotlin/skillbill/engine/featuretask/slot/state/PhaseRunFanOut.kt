@@ -18,12 +18,14 @@ internal interface PhaseRunFanOut {
   /** The outcome that pauses the step before unit [unitId] runs, or null when the step continues. */
   fun pauseBefore(unitId: Int): PhaseOutcome?
 
-  /** The state unit [unitId] of [run] reads and writes, its launches streaming to [outputSink]. */
+  /**
+   * The state unit [unitId] reads and writes under the coordinator-authorized fan-out wave, streaming launches to
+   * [outputSink].
+   */
   fun unitState(
-    run: PhaseRun,
     unitId: Int,
     outputSink: AgentRunOutputSink,
-  ): PhaseStepState
+  ): PhaseAcceptedStepExecution
 
   /** The outcome that stops the step after unit [unitId] settled with [result], or null when the unit completed. */
   fun settleUnit(

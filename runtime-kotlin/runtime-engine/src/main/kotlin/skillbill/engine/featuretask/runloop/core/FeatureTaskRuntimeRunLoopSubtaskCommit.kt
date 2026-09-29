@@ -9,7 +9,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunProgressObservations
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.goalrunner.execution.support.protectedBranchName
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -67,7 +67,7 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
 
   internal fun finalisationBranch(
     request: FeatureTaskRuntimeRunFacts,
-    session: FeatureTaskRuntimeRunLoopSession,
+    session: FeatureTaskRuntimeRunLoopSessionObservations,
     phaseGates: FeatureTaskRuntimePhaseGates,
   ): String? {
     val branch =
@@ -80,7 +80,7 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
 
   internal fun recordFinalisedCheckpointIdentity(
     request: FeatureTaskRuntimeRunFacts,
-    state: FeatureTaskRuntimeRunState,
+    state: FeatureTaskRuntimeRunProgressObservations,
     recorder: PhaseRunRecords,
     diagnostics: RuntimeDiagnostics,
     args: RecordFinalisedCheckpointIdentityArgs,

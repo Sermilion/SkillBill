@@ -9,9 +9,9 @@ import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.engine.featuretask.slot.state.isRetiredAuditGapLoop
 import skillbill.engine.featuretask.slot.state.recordEnvelope
 import skillbill.error.featuretask.UnknownPhaseStepError
@@ -76,7 +76,7 @@ class ImplementThenSimplifyStrategy(override val runner: PhaseRunner) : PhaseStr
 
   override fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome = runAgentStep(run, state)
 
   override fun resumeRules(stepId: String): PhaseResumeRules {

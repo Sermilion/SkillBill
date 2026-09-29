@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPoli
 import skillbill.engine.featuretask.phase.core.featureTaskRuntimeImplementationContinuationFrom
 import skillbill.engine.featuretask.phase.planning.producerProjectionGateReason
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeSharedReviewEvidenceResolver
+import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.checkpoint.goalStartBaselinePaths
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
@@ -33,13 +34,15 @@ import skillbill.engine.featuretask.runloop.core.isFeatureSpecPathForIssue
 import skillbill.engine.featuretask.runloop.core.reconcileCheckpointPathInventory
 import skillbill.engine.featuretask.runloop.observability.completedEvent
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopProgressObservations
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner
+import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
 import skillbill.engine.featuretask.runner.mutatingReconciliationGateReason
 import skillbill.engine.featuretask.runner.phaseDeclaration
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
-import skillbill.engine.featuretask.slot.attempt.stepHooks
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptPlanAuthorization
+import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.goalrunner.status.completed
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
@@ -83,7 +86,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
   }
 
   internal fun completionProjectionRejection(
-    context: PhaseAttemptEnvironment,
+    context: PhaseOutputSettlementContext,
     args: CompletionProjectionRejectionArgs,
   ): Pair<String, String>? =
     with(context) {
@@ -92,11 +95,15 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         args.normalizedOutput.envelopeWireMap(),
         phaseGates.planningProjectionValidator,
       )?.let { "producer-projection" to it }
-        ?: FeatureTaskRuntimeRunLoopOutputVerification
-          .immediateConsumerProjectionGateReason(
-            context = context,
-            args = args,
-          )?.let { "consumer-projection" to it }
+        ?: (context as? PhaseAttemptPlanAuthorization)
+          ?.let { planAuthorization ->
+            FeatureTaskRuntimeRunLoopOutputVerification
+              .immediateConsumerProjectionGateReason(
+                context = context,
+                planAuthorization = planAuthorization,
+                args = args,
+              )?.let { "consumer-projection" to it }
+          }
     }
 
   internal fun firstValidatedOutputRejection(
@@ -111,7 +118,8 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     )?.let { "mutating-reconciliation" to it }
 
   internal fun immediateConsumerProjectionGateReason(
-    context: PhaseAttemptEnvironment,
+    context: PhaseOutputSettlementContext,
+    planAuthorization: PhaseAttemptPlanAuthorization,
     args: CompletionProjectionRejectionArgs,
   ): String? {
     with(context) {
@@ -120,16 +128,16 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       val normalizedOutput = args.normalizedOutput
       val repairEvidence = args.repairEvidence
       val repositoryFingerprint = args.repositoryFingerprint
-      if (!stepHooks(run).checksImmediateConsumerProjection) return null
+      if (!args.checksImmediateConsumerProjection) return null
       if (run.validationGateFindings != null) return null
-      val producerIndex = transitions.forwardPhaseIds.indexOf(run.phaseId)
-      if (producerIndex < 0 || producerIndex == transitions.forwardPhaseIds.lastIndex) return null
-      val consumerPhaseId = transitions.forwardPhaseIds[producerIndex + 1]
+      val producerIndex = transitionDeclaration.forwardPhaseIds.indexOf(run.phaseId)
+      if (producerIndex < 0 || producerIndex == transitionDeclaration.forwardPhaseIds.lastIndex) return null
+      val consumerPhaseId = transitionDeclaration.forwardPhaseIds[producerIndex + 1]
       val declaration =
         phaseDeclaration(
           consumerPhaseId,
           run.request.runInvariants.featureSize,
-          unselectedStepIds(),
+          planAuthorization.unselectedStepIds(),
         )
       val currentOutput =
         FeatureTaskRuntimePhaseOutput(
@@ -139,7 +147,8 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
           normalizedOutput = normalizedOutput,
           repairEvidence = repairEvidence,
         )
-      val outputs = state.outputs().filterNot { it.phaseId == run.phaseId } + currentOutput
+      val outputs = progress.outputs().filterNot { it.phaseId == run.phaseId } + currentOutput
+      val sessionObservations = settlementCoupling().sessionObservations
       val resolvedFingerprint =
         repositoryFingerprint?.takeIf(String::isNotBlank)
           ?: phaseGates.gitOperations
@@ -157,7 +166,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
             recordedOutputs = outputs,
             repositoryCheckpoint = checkpoint,
             expectedRepositoryCheckpoint = checkpoint,
-            branchIdentity = session.resolvedBranch,
+            branchIdentity = sessionObservations.resolvedBranch,
             baseBranch =
               recorder
                 .loadResolvedBranch(run.request.workflowId)
@@ -210,7 +219,8 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
 
   internal fun terminalOutputAttempt(
     request: FeatureTaskRuntimeRunFacts,
-    state: FeatureTaskRuntimeRunState,
+    progress: FeatureTaskRuntimeRunLoopProgressObservations,
+    loopTransitions: FeatureTaskRuntimeRunLoopTransitionOwner,
     recorder: PhaseRunRecords,
     args: TerminalOutputAttemptArgs,
     blockedDisposition: FeatureTaskRuntimeFailureDisposition,
@@ -240,7 +250,8 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       AttemptResult.settled(
         FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
           request,
-          state,
+          progress,
+          loopTransitions,
           recorder,
           observability,
           PhaseBlockRequest(
@@ -303,7 +314,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
   }
 
   internal fun persistAcceptedOutput(
-    context: PhaseAttemptEnvironment,
+    context: PhaseOutputSettlementContext,
     args: PersistAcceptedOutputArgs,
   ): AttemptResult {
     with(context) {
@@ -351,7 +362,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
   ): FeatureTaskRuntimeRepositoryCheckpoint? {
     val run = args.run
     val resolvedBranchRecord = args.recorder.loadResolvedBranch(run.request.workflowId)
-    args.session.transitionResolvedBranch(resolvedBranchRecord?.branch)
+    args.coupledRunTransitions.observeResolvedBranchForCheckpoint(resolvedBranchRecord?.branch)
     val goalReviewState = args.goalContinuationRecorder.reviewState(run.request.workflowId)
     val revisions =
       FeatureTaskRuntimeRunLoopOutputVerification.resolveCheckpointRevisions(
@@ -509,7 +520,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     )
 
   internal fun persistStandardAcceptedOutput(
-    context: PhaseAttemptEnvironment,
+    context: PhaseOutputSettlementContext,
     args: PersistStandardAcceptedOutputArgs,
   ): AttemptResult? {
     with(context) {
@@ -522,36 +533,50 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       val fileManifest = accepted.fileManifest
       val repositoryFingerprint = accepted.repositoryFingerprint
       val outputText = args.outputText
-      val persisted =
-        recorder.recordCompletedPhase(
-          FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
-            request,
-            state,
-            goalContinuationRecorder,
-            PhaseStateRequestArgs(
-              write =
-                PhaseStateWriteArgs(
-                  run = run,
-                  iteration = iteration,
-                  status = STATUS_COMPLETED,
-                  finished = true,
-                  outputArtifact = outputText,
-                ),
-              extras =
-                PhaseStateRequestAttachments(
-                  fileManifest = fileManifest,
-                  normalizedOutput = normalizedOutput,
-                  repairEvidence = repairEvidence,
-                  repositoryFingerprint = repositoryFingerprint,
-                ),
-            ),
+      val phaseState =
+        FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
+          request,
+          context.settlementCoupling().progress,
+          goalContinuationRecorder,
+          PhaseStateRequestArgs(
+            write =
+              PhaseStateWriteArgs(
+                run = run,
+                iteration = iteration,
+                status = STATUS_COMPLETED,
+                finished = true,
+                outputArtifact = outputText,
+              ),
+            extras =
+              PhaseStateRequestAttachments(
+                fileManifest = fileManifest,
+                normalizedOutput = normalizedOutput,
+                repairEvidence = repairEvidence,
+                repositoryFingerprint = repositoryFingerprint,
+              ),
           ),
         )
+      val inMemoryOutput =
+        FeatureTaskRuntimePhaseOutput(
+          run.phaseId,
+          iteration,
+          outputText,
+          normalizedOutput,
+          repairEvidence,
+        )
+      val persisted =
+        coupledRunTransitions.persistAuthoritativePhaseCompletion(
+          recorder = recorder,
+          phaseState = phaseState,
+          inMemoryOutput = inMemoryOutput,
+        )
       if (!persisted) {
+        val blockCoupling = context.settlementCoupling()
         return AttemptResult.settled(
           FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
             request,
-            state,
+            blockCoupling.progress,
+            blockCoupling.transitions,
             recorder,
             observability,
             PhaseBlockRequest(

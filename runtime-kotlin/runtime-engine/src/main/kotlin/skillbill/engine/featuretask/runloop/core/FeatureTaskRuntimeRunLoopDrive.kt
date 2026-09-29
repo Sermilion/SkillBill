@@ -1,10 +1,13 @@
 package skillbill.engine.featuretask.runloop.core
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.runloop.attempt.phaseLoopContext
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
 import skillbill.engine.featuretask.runloop.observability.loopCapExhausted
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
+import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
 import skillbill.engine.goalrunner.status.completed
 import skillbill.error.shellcontent.FeatureTaskRuntimePhaseOrderViolationError
@@ -24,10 +27,10 @@ object FeatureTaskRuntimeRunLoopDrive {
         rules.discardsResumedReentry(loopId, stepState)
       } == true
     ) {
-      state.discardStaleReentry(loopId)
+      context.runState.coupledRunTransitions.discardStaleResumedReentry(loopId)
       return null
     }
-    state.recordEdgeIteration(loopId, reentry.edgeIteration)
+    context.runState.coupledRunTransitions.claimResumedInFlightEdge(loopId, reentry.edgeIteration)
     val resumePhaseId = reentry.resumePhaseId
     return PendingReentry(
       phaseId = resumePhaseId,
@@ -43,13 +46,13 @@ object FeatureTaskRuntimeRunLoopDrive {
 
   internal fun reopenStaleSettledSteps(context: FeatureTaskRuntimeRunLoopContext) {
     FeatureTaskRuntimeRunLoopPlanningBranch.forEachSlotRules(context) { rules, stepState ->
-      rules.reopenStaleSettledSteps(context, stepState)
+      rules.reopenStaleSettledSteps(context.phaseLoopContext(), stepState)
     }
   }
 
   internal fun invalidateStaleEvidence(context: FeatureTaskRuntimeRunLoopContext) {
     FeatureTaskRuntimeRunLoopPlanningBranch.forEachSlotRules(context) { rules, stepState ->
-      rules.invalidateStaleEvidence(context, stepState)
+      rules.invalidateStaleEvidence(context.phaseLoopContext(), stepState)
     }
   }
 
@@ -57,23 +60,24 @@ object FeatureTaskRuntimeRunLoopDrive {
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
   ): PhaseSettlement? =
-    FeatureTaskRuntimeRunLoopPlanningBranch.decideByStep(context, phaseId) { rules, stepState ->
-      rules.settleWithoutLaunch(phaseId, context, stepState)
-    }?.let { settlement ->
-      when (settlement) {
-        is PhaseEntrySettlement.Completed -> PhaseSettlement.completed(phaseId, settlement.verdict)
-        is PhaseEntrySettlement.Blocked -> {
-          FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
-            context.request,
-            context.state,
-            context.session,
-            phaseId,
-            settlement.reason,
-          )
-          PhaseSettlement.stop()
+    FeatureTaskRuntimeRunLoopPlanningBranch
+      .decideByStep(context, phaseId) { rules, stepState ->
+        rules.settleWithoutLaunch(phaseId, context.phaseLoopContext(), stepState)
+      }?.let { settlement ->
+        when (settlement) {
+          is PhaseEntrySettlement.Completed -> PhaseSettlement.completed(phaseId, settlement.verdict)
+          is PhaseEntrySettlement.Blocked -> {
+            FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
+              context.request,
+              context.state,
+              context.runState.coupledSession(),
+              phaseId,
+              settlement.reason,
+            )
+            PhaseSettlement.stop()
+          }
         }
       }
-    }
 
   internal fun phaseEntryBlockReason(
     context: FeatureTaskRuntimeRunLoopContext,
@@ -87,7 +91,7 @@ object FeatureTaskRuntimeRunLoopDrive {
         )
       }
       ?: FeatureTaskRuntimeRunLoopPlanningBranch.decideByStep(context, phaseId) { rules, stepState ->
-        rules.entryBlockReason(phaseId, context, stepState)
+        rules.entryBlockReason(phaseId, context.phaseLoopContext(), stepState)
       }
 
   internal fun entryGateBlockReason(
@@ -161,7 +165,7 @@ object FeatureTaskRuntimeRunLoopDrive {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
         context.request,
         context.state,
-        context.session,
+        context.runState.coupledSession(),
         error.phaseId,
         error.message.orEmpty(),
       )
@@ -170,14 +174,12 @@ object FeatureTaskRuntimeRunLoopDrive {
 
   internal fun FeatureTaskRuntimeRunLoopContext.runPhaseDriveLoop(advance: (String) -> PhaseSettlement) {
     val explicitResume =
-      request.goalContinuation?.lastResumableStep
+      request.goalContinuation
+        ?.lastResumableStep
         ?.takeIf(String::isNotBlank)
         ?.let(state::explicitResumeStart)
     if (explicitResume != null) {
-      if (explicitResume.reopen) {
-        state.reopenFromExplicitResume(explicitResume.phaseId)
-      }
-      session.transitionReentryPair(null, null)
+      runState.coupledRunTransitions.enterExplicitResumeStart(explicitResume)
     }
     var phaseId: String? =
       explicitResume?.phaseId
@@ -229,8 +231,7 @@ object FeatureTaskRuntimeRunLoopDrive {
   ): PhaseSettlement =
     when {
       session.decomposed != null -> PhaseSettlement.stop()
-      session.recordRejectionSettlementPending -> {
-        session.clearRecordRejectionSettlementPending()
+      coupledRunTransitions(state, session).consumeRecordRejectionSettlementAdvance() != null -> {
         PhaseSettlement.completed(phaseId, FeatureTaskRuntimeVerdict.RECORD_REJECTED)
       }
       reason != null -> {

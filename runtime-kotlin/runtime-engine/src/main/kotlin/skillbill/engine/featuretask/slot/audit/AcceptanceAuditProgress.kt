@@ -2,13 +2,13 @@ package skillbill.engine.featuretask.slot.audit
 
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal object AcceptanceAuditProgress {
   fun rejectionReason(
-    context: PhaseAttemptEnvironment,
+    context: PhaseCheckpointRemediationContext,
     run: PhaseRun,
     text: String,
   ): String? {
@@ -22,17 +22,17 @@ internal object AcceptanceAuditProgress {
   }
 
   private fun comparisonRejection(
-    context: PhaseAttemptEnvironment,
+    context: PhaseCheckpointRemediationContext,
     run: PhaseRun,
     catalog: AcceptanceAuditCatalog.Known,
     current: AcceptanceAuditRemainingCriteria.Known,
   ): String? {
     if (FeatureTaskRuntimeRunLoopPhaseBlocking.operatorReopenedPhase(context.session, run.phaseId)) return null
-    val priorOutput = context.state.outputFor(run.phaseId)?.normalizedOutput?.envelopeWireMap()
+    val priorOutput = context.progress.outputFor(run.phaseId)?.normalizedOutput?.envelopeWireMap()
     val priorText = AcceptanceAuditVerdictRule.auditProseValue(priorOutput)
     val repaired =
-      context.state.hasPriorRecord(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX) ||
-        context.state.edgeIterationCount(FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_REPAIR_LOOP_ID) > 0
+      context.progress.hasPriorRecord(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX) ||
+        context.progress.edgeIterationCount(FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_REPAIR_LOOP_ID) > 0
     if (priorText == null) {
       return if (repaired) {
         "Audit comparison baseline is missing after repair; refusing another automatic repair."

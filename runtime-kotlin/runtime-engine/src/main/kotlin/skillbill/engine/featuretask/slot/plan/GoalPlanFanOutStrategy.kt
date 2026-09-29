@@ -9,7 +9,8 @@ import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.state.PhaseFanOutUnits
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhasePlanningStepBinding
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
@@ -32,6 +33,9 @@ class GoalPlanFanOutStrategy(
 
   override fun policyFor(stepId: String): PhaseStepPolicy = plan.policyFor(stepId)
 
+  internal override fun acceptsAttemptStrategy(attemptStrategyId: String): Boolean =
+    attemptStrategyId == plan.strategyId
+
   override fun directiveFor(stepId: String): String = plan.directiveFor(stepId)
 
   override fun promptSections(
@@ -46,9 +50,22 @@ class GoalPlanFanOutStrategy(
 
   override fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome {
-    val fanOut = state.fanOut(run.phaseId)
+    val planning = state as PhasePlanningStepBinding
+    val fanOut = planning.fanOut(run.phaseId)
+    planning.authorizeFanOutWave(run)
+    return try {
+      runFanOutStep(run, fanOut)
+    } finally {
+      planning.releaseFanOutWave(run)
+    }
+  }
+
+  private fun runFanOutStep(
+    run: PhaseRun,
+    fanOut: PhaseRunFanOut,
+  ): PhaseOutcome {
     val pending =
       when (val units = fanOut.pendingUnits()) {
         is PhaseFanOutUnits.Stopped -> return units.outcome
@@ -82,9 +99,11 @@ class GoalPlanFanOutStrategy(
     unitId: Int,
   ): PhaseOutcome {
     val sink = UnitAttributedOutputSink(fanOutPort, fanOut.outputSink, unitId)
+    val state = fanOut.unitState(unitId, sink)
     return try {
-      AgentPlanStrategy(runnerFactory()).runStep(run, fanOut.unitState(run, unitId, sink))
+      plan.runStep(run, state)
     } finally {
+      state.finishStepExecution()
       sink.flushTrailingLines()
     }
   }

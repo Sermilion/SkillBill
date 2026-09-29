@@ -7,7 +7,10 @@ import skillbill.engine.featuretask.runloop.observability.loopEdge
 import skillbill.engine.featuretask.runner.skeletonDefinitionFor
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunLoopCollaborators
+import skillbill.engine.featuretask.runloop.state.coupledSession
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
@@ -83,7 +86,7 @@ object FeatureTaskRuntimeRunLoopTransitions {
         with(FeatureTaskRuntimeRunLoopBackwardEdge) {
           FeatureTaskRuntimeRunLoopBackwardEdge.recordBackwardEdge(
             context,
-            session,
+            runState.coupledSession(),
             edge = requireNotNull(edge),
             edgeIteration = requireNotNull(transition.edgeIteration),
             verdict = effectiveVerdict,
@@ -107,17 +110,17 @@ object FeatureTaskRuntimeRunLoopTransitions {
   }
 
   internal fun reentersMutatingPhase(
-    context: PhaseAttemptEnvironment,
+    context: PhaseRunLoopAttemptCollaborators,
     edge: FeatureTaskRuntimeBackwardEdge,
     destinationPhaseId: String,
   ): Boolean = spanBetween(
     context.transitions,
     destinationPhaseId,
     edge.fromPhaseId,
-  ).any { context.stepPolicy(it).mutating }
+  ).any { context.acceptedStepPolicy(it).mutating }
 
   internal fun establishForwardCheckpoint(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptRunLoopCollaborators,
     precedingPhaseId: String,
     destinationPhaseId: String,
   ): Boolean {

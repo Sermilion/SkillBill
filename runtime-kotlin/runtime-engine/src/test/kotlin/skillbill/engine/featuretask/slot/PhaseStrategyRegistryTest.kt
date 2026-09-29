@@ -2,7 +2,7 @@ package skillbill.engine.featuretask.slot
 
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.error.featuretask.DuplicatePhaseStrategyError
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.PhaseStrategySelectionSlotMismatchError
@@ -54,7 +54,9 @@ class PhaseStrategyRegistryTest {
   @Test
   fun `a strategy repeating a step raises a typed composition error`() {
     assertFailsWith<InvalidPhaseStrategyCompositionError> {
-      PhaseStrategyRegistry(listOf(FakeStrategy(PhaseSlot.CODE_REVIEW, "duplicate", listOf(PHASE_REVIEW, PHASE_REVIEW))))
+      PhaseStrategyRegistry(
+        listOf(FakeStrategy(PhaseSlot.CODE_REVIEW, "duplicate", listOf(PHASE_REVIEW, PHASE_REVIEW))),
+      )
     }
   }
 
@@ -78,7 +80,9 @@ class PhaseStrategyRegistryTest {
   fun `an entry outside the owned steps raises a typed composition error`() {
     assertFailsWith<InvalidPhaseStrategyCompositionError> {
       PhaseStrategyRegistry(
-        listOf(FakeStrategy(PhaseSlot.CODE_REVIEW, "bad-entry", listOf(PHASE_REVIEW), entryStep = PHASE_VERIFY_FINDINGS)),
+        listOf(
+          FakeStrategy(PhaseSlot.CODE_REVIEW, "bad-entry", listOf(PHASE_REVIEW), entryStep = PHASE_VERIFY_FINDINGS),
+        ),
       )
     }
   }
@@ -170,14 +174,13 @@ class PhaseStrategyRegistryTest {
   ) : PhaseStrategy() {
     override val runner: PhaseRunner get() = error("unused")
 
-    override fun policyFor(stepId: String): PhaseStepPolicy =
-      PhaseStepPolicy(false, false, false, false, false, false)
+    override fun policyFor(stepId: String): PhaseStepPolicy = PhaseStepPolicy(false, false, false, false, false, false)
 
     override fun directiveFor(stepId: String): String = error("unused")
 
     override fun runStep(
       run: PhaseRun,
-      state: PhaseStepState,
+      state: PhaseAcceptedStepExecution,
     ): PhaseOutcome = error("unused")
   }
 

@@ -17,8 +17,9 @@ import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -58,7 +59,7 @@ class InlineReviewStrategy(
 
   override fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome = codeReview.runStep(this, run, state)
 
   override fun stepHooks(stepId: String): PhaseStepHooks = codeReview.stepHooks(stepId)
@@ -105,7 +106,7 @@ internal object InlineReviewPass : CodeReviewPass {
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
     runner: PhaseRunner,
-    state: PhaseStepState,
+    state: PhaseReviewStepBinding,
   ): ParallelCodeReviewResult {
     val directive =
       InlineReviewDirective.compose(
@@ -115,7 +116,7 @@ internal object InlineReviewPass : CodeReviewPass {
         specPath = reviewSpecPath(run),
         agentAddonsSection = AgentAddonPromptFormatter.format(run.request.agentAddonSelection),
       )
-    val output = runner.run(reviewStepInput(run, directive), state)
+    val output = runner.run(reviewStepInput(run, directive), state.launchState)
     return InlineReviewResultDecoder.decode(run.resolvedAgent.resolvedAgentId, output)
       .copy(reviewSessionId = run.request.reviewInvocation?.reviewSessionId)
   }

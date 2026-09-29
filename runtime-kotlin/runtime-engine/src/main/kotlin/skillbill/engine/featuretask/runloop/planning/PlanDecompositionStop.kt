@@ -1,4 +1,4 @@
-package skillbill.engine.featuretask.slot.plan
+package skillbill.engine.featuretask.runloop.planning
 
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
@@ -10,8 +10,11 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
 import skillbill.engine.featuretask.runloop.observability.blocked
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner
+import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.STATUS_BLOCKED
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptTraversalRuntimeContext
+import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -31,7 +34,7 @@ internal object PlanDecompositionStop {
       "the runtime blocks rather than completing without a spec."
 
   fun completionRejection(
-    context: PhaseAttemptEnvironment,
+    context: PhaseStepOutputContext,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? {
     if (!context.request.specBundleRequired || isGoalContinuationRun(context.request)) return null
@@ -46,7 +49,7 @@ internal object PlanDecompositionStop {
   }
 
   fun apply(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptTraversalRuntimeContext,
     planOutput: FeatureTaskRuntimePhaseOutput,
   ): String? =
     with(context) {
@@ -56,20 +59,21 @@ internal object PlanDecompositionStop {
           phaseGates.decompositionPlanner,
           recorder,
           diagnostics,
+          coupledRunTransitions,
         )
       when (
         val decision =
           stopper.resolve(
             request = request,
             completedOutput = planOutput,
-            completedPhaseIds = state.completedPhaseIds(),
+            completedPhaseIds = progress.completedPhaseIds(),
             resolvedBranch = session.resolvedBranch,
             specSource = specSource,
           )
       ) {
         is FeatureTaskRuntimePlanningStopDecision.Proceed -> null
         is FeatureTaskRuntimePlanningStopDecision.Decomposed -> {
-          session.transitionToDecomposed(decision.report)
+          coupledRunTransitions.transitionTerminalDecomposed(decision.report)
           null
         }
         is FeatureTaskRuntimePlanningStopDecision.Blocked -> {
@@ -80,17 +84,19 @@ internal object PlanDecompositionStop {
     }
 
   private fun persistPlanningStopBlock(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptTraversalRuntimeContext,
     phaseId: String,
     reason: String,
   ) = with(context) {
     val resolvedAgentId =
-      FeatureTaskRuntimeAgentResolver.resolve(
-        phaseId = phaseId,
-        assignment = request.agentAssignment,
-        invokedAgentId = request.invokedAgentId,
-      ).resolvedAgentId
-    recorder.recordPhaseState(
+      FeatureTaskRuntimeAgentResolver
+        .resolve(
+          phaseId = phaseId,
+          assignment = request.agentAssignment,
+          invokedAgentId = request.invokedAgentId,
+        ).resolvedAgentId
+    coupledRunTransitions.persistBlockedPhaseState(
+      recorder,
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = request.workflowId,
         phaseId = phaseId,
@@ -111,6 +117,7 @@ internal class FeatureTaskRuntimePlanningStopper(
   private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
   private val records: PhaseRunRecords,
   private val diagnostics: RuntimeDiagnostics,
+  private val coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner,
 ) {
   fun resolve(
     request: FeatureTaskRuntimeRunFacts,
@@ -139,15 +146,14 @@ internal class FeatureTaskRuntimePlanningStopper(
     completedPhaseIds: List<String>,
     resolvedBranch: String?,
     specSource: SpecSource,
-  ): FeatureTaskRuntimePlanningStopDecision {
-    return try {
+  ): FeatureTaskRuntimePlanningStopDecision =
+    try {
       resolveFromPlanOutput(request, completedOutput, completedPhaseIds, resolvedBranch, specSource)
     } catch (error: SkillBillRuntimeException) {
       FeatureTaskRuntimePlanningStopDecision.Blocked(malformedDecomposeReason(error.message.orEmpty()))
     } catch (error: IOException) {
       FeatureTaskRuntimePlanningStopDecision.Blocked(malformedDecomposeReason(error.message.orEmpty()))
     }
-  }
 
   private fun resolveFromPlanOutput(
     request: FeatureTaskRuntimeRunFacts,
@@ -170,7 +176,12 @@ internal class FeatureTaskRuntimePlanningStopper(
           FeatureTaskRuntimePlanningStopDecision.Proceed
         }
     val terminal = writeDecompositionTerminal(request, outcome)
-    records.recordDecomposeTerminal(request.workflowId, terminal, completedOutput.phaseId)
+    coupledRunTransitions.persistDecomposeTerminal(
+      records,
+      request.workflowId,
+      terminal,
+      completedOutput.phaseId,
+    )
     emitDecomposedAtPlanning(request, terminal, completedOutput.phaseId)
     return FeatureTaskRuntimePlanningStopDecision.Decomposed(
       terminal.toRunReport(request, completedPhaseIds, resolvedBranch),

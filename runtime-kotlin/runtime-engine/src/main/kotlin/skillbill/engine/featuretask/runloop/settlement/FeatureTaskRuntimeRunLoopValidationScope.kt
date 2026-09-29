@@ -1,10 +1,11 @@
 package skillbill.engine.featuretask.runloop.settlement
 
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSessionObservations
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.RepositoryCheckpointResolutionArgs
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutputVerification
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
@@ -18,7 +19,8 @@ object FeatureTaskRuntimeRunLoopValidationScope {
     phaseGates: FeatureTaskRuntimePhaseGates,
     recorder: PhaseRunRecords,
     goalContinuationRecorder: PhaseRunGoal,
-    session: FeatureTaskRuntimeRunLoopSession,
+    coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner,
+    session: FeatureTaskRuntimeRunLoopSessionObservations,
     run: PhaseRun,
   ): List<String>? {
     if (run.request.skeletonDefinition?.runStateKind == SkeletonRunStateKind.IN_MEMORY) {
@@ -33,6 +35,7 @@ object FeatureTaskRuntimeRunLoopValidationScope {
           recorder = recorder,
           goalContinuationRecorder = goalContinuationRecorder,
           phaseGates = phaseGates,
+          coupledRunTransitions = coupledRunTransitions,
           session = session,
           run = run,
         ),
@@ -47,7 +50,8 @@ object FeatureTaskRuntimeRunLoopValidationScope {
     phaseGates: FeatureTaskRuntimePhaseGates,
     recorder: PhaseRunRecords,
     goalContinuationRecorder: PhaseRunGoal,
-    session: FeatureTaskRuntimeRunLoopSession,
+    coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner,
+    session: FeatureTaskRuntimeRunLoopSessionObservations,
     run: PhaseRun,
   ): String? {
     run.request.admittedExecution?.let {
@@ -58,6 +62,7 @@ object FeatureTaskRuntimeRunLoopValidationScope {
         phaseGates,
         recorder,
         goalContinuationRecorder,
+        coupledRunTransitions,
         session,
         run,
       )
@@ -74,13 +79,22 @@ object FeatureTaskRuntimeRunLoopValidationScope {
     phaseGates: FeatureTaskRuntimePhaseGates,
     recorder: PhaseRunRecords,
     goalContinuationRecorder: PhaseRunGoal,
-    session: FeatureTaskRuntimeRunLoopSession,
+    coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner,
+    session: FeatureTaskRuntimeRunLoopSessionObservations,
     run: PhaseRun,
   ): String? {
     run.request.admittedExecution?.let {
       return it.effectiveInputs.commandArgv(ValidationGateCyclePhase.INITIAL_DISCOVERY)?.joinToString(" ")
     }
-    val paths = validationChangedPaths(phaseGates, recorder, goalContinuationRecorder, session, run)
+    val paths =
+      validationChangedPaths(
+        phaseGates,
+        recorder,
+        goalContinuationRecorder,
+        coupledRunTransitions,
+        session,
+        run,
+      )
     return (phaseGates.validationGateResolver.resolve(paths.orEmpty()) as? ValidationGateResolution.Declared)
       ?.declaration
       ?.collectAllFullGateCommand

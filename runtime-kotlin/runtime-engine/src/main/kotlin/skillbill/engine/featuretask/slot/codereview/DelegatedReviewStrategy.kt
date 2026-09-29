@@ -18,8 +18,9 @@ import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepSession
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -61,7 +62,7 @@ class DelegatedReviewStrategy(
 
   override fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome = codeReview.runStep(this, run, state)
 
   override fun stepHooks(stepId: String): PhaseStepHooks = codeReview.stepHooks(stepId)
@@ -110,7 +111,7 @@ internal class DelegatedReviewPass(
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
     runner: PhaseRunner,
-    state: PhaseStepState,
+    state: PhaseReviewStepBinding,
   ): ParallelCodeReviewResult {
     val agentId = run.resolvedAgent.resolvedAgentId
     var reviewed: ParallelCodeReviewResult? = null
@@ -128,7 +129,7 @@ internal class DelegatedReviewPass(
           stdoutSha256 = "",
         )
       }
-    val output = runner.run(reviewStepInput(run, directive), state, session)
+    val output = runner.run(reviewStepInput(run, directive), state.launchState, session)
     return reviewed ?: ParallelCodeReviewResult(
       mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = ""),
       lane1 =
@@ -144,7 +145,7 @@ internal class DelegatedReviewPass(
     run: PhaseRun,
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
     launch: SkillRunRequest,
   ): ParallelCodeReviewRequest {
     val branch = state.resolvedBranch()

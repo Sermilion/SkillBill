@@ -8,15 +8,17 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.policyOf
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseCommitStepBinding
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class RuntimeCommitStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
+class RuntimeCommitStrategy(
+  override val runner: PhaseRunner,
+) : PhaseStrategy() {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH to
@@ -59,8 +61,14 @@ class RuntimeCommitStrategy(override val runner: PhaseRunner) : PhaseStrategy() 
 
   override fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
-  ): PhaseOutcome = with(RuntimeCommitCycle) { PhaseAttemptScope(run.request, state).runDeclaredCommitPushCycle(run) }
+    state: PhaseAcceptedStepExecution,
+  ): PhaseOutcome {
+    state.requireAcceptedStep(run, strategyId)
+    return (
+      state as? PhaseCommitStepBinding
+        ?: error("Commit requires its accepted execution binding.")
+    ).runCommitPush(run)
+  }
 
   override fun stepHooks(stepId: String): PhaseStepHooks {
     policies.policyOf(stepId)

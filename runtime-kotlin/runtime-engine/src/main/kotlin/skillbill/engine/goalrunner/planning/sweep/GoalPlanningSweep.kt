@@ -113,7 +113,7 @@ class DefaultGoalPlanningSweep(
         transitions = executionPlan.traversal,
         outputValidator = outputValidator,
         stepVerdictRule = slotStepVerdictRule(phaseStrategies, executionPlan, diagnostics),
-        resumeRules = phaseStrategies.resumeRules(executionPlan),
+        resumeRulesFn = phaseStrategies.resumeRules(executionPlan),
       )
     val runState =
       GoalPlanningPhaseRunState(

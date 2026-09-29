@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.qualitygate
 
+import skillbill.engine.featuretask.runloop.qualitygate.buildGateProgressStore
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.ScriptedGateRunner

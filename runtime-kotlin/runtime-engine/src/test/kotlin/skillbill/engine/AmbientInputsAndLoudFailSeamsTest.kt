@@ -56,7 +56,7 @@ class AmbientInputsAndLoudFailSeamsTest {
           AcceptanceAuditVerdictRule(SilentDiagnostics)
             .takeIf { stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT }
         },
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
 
     val start = state.explicitResumeStart(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
@@ -93,7 +93,7 @@ class AmbientInputsAndLoudFailSeamsTest {
           ),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
 
     val start = state.explicitResumeStart(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
@@ -124,7 +124,7 @@ class AmbientInputsAndLoudFailSeamsTest {
           ),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
 
     val start = state.explicitResumeStart(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
@@ -142,7 +142,7 @@ class AmbientInputsAndLoudFailSeamsTest {
             listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT),
           ),
         outputValidator = ThrowingValidator(setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT)),
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
     val output =
       FeatureTaskRuntimePhaseOutput(

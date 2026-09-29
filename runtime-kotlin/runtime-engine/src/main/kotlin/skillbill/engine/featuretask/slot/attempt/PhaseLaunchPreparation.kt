@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.slot.attempt
 
 import skillbill.application.decomposition.baseBranch
+import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
@@ -11,6 +12,8 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposer
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
+import skillbill.engine.featuretask.runloop.attempt.launchHookContext
+import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.DeclaredLaunchArgs
 import skillbill.engine.featuretask.runloop.core.LaunchMeasurementContextReady
 import skillbill.engine.featuretask.runloop.core.LaunchPreparation
@@ -25,9 +28,13 @@ import skillbill.engine.featuretask.runloop.core.RepositoryCheckpointResolutionA
 import skillbill.engine.featuretask.runloop.core.resolveLaunchRejectionAttribution
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutputVerification
 import skillbill.engine.featuretask.runloop.settlement.FeatureTaskRuntimeRunLoopValidationScope
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopProgressObservations
 import skillbill.engine.featuretask.runner.LaunchResult
+import skillbill.engine.featuretask.slot.PhaseLaunchReviewTier
+import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePlanningProjectionSchemaError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
@@ -43,11 +50,12 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProje
 
 object PhaseLaunchPreparation {
   internal fun prepareLaunchForCapture(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchPreparationContext,
     run: PhaseRun,
     iteration: Int?,
     priorCorrection: PriorAttemptCorrection?,
     prompt: PhaseStepPromptSource,
+    boundStep: PhaseStepBinding,
   ): LaunchPreparation {
     with(context) {
       val measurementContext =
@@ -62,18 +70,19 @@ object PhaseLaunchPreparation {
         context,
         DeclaredLaunchArgs(
           run,
-          state,
+          settlementCoupling().progress,
           iteration,
           priorCorrection,
           measurementContext,
           prompt,
+          boundStep,
         ),
       )
     }
   }
 
   internal fun resolveLaunchMeasurementContext(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchPreparationContext,
     run: PhaseRun,
   ): LaunchPreparation {
     with(context) {
@@ -81,10 +90,9 @@ object PhaseLaunchPreparation {
         run.declaration.projectionDeclarations
           .map { declaration ->
             val phaseId = declaration.producerIteration.phaseId
-            state.outputFor(phaseId)?.let { FeatureTaskRuntimeProducerIteration(phaseId, it.iteration) }
+            progress.outputFor(phaseId)?.let { FeatureTaskRuntimeProducerIteration(phaseId, it.iteration) }
               ?: declaration.producerIteration
-          }
-          .maxByOrNull(FeatureTaskRuntimeProducerIteration::iteration)
+          }.maxByOrNull(FeatureTaskRuntimeProducerIteration::iteration)
           ?: FeatureTaskRuntimeProducerIteration(run.phaseId, 1)
       return try {
         LaunchMeasurementContextReady(
@@ -97,6 +105,7 @@ object PhaseLaunchPreparation {
                     recorder = recorder,
                     goalContinuationRecorder = goalContinuationRecorder,
                     phaseGates = phaseGates,
+                    coupledRunTransitions = coupledRunTransitions,
                     session = session,
                     run = run,
                   ),
@@ -109,7 +118,7 @@ object PhaseLaunchPreparation {
           recorder,
           LaunchSeamRejectionArgs(
             run = run,
-            state = state,
+            state = settlementCoupling().progress,
             classification = FeatureTaskRuntimeProjectionFailureClassification.BUDGET_OVERFLOW,
             sourceLabel = error.projectionName,
             fallbackProducerIteration = producerIteration,
@@ -126,7 +135,7 @@ object PhaseLaunchPreparation {
   }
 
   internal fun prepareDeclaredLaunch(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchPreparationContext,
     args: DeclaredLaunchArgs,
   ): LaunchPreparation = PhaseLaunchPreparation.prepareDeclaredLaunchBody(context, args)
 
@@ -179,7 +188,7 @@ object PhaseLaunchPreparation {
   }
 
   internal fun prepareDeclaredLaunchBody(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchPreparationContext,
     args: DeclaredLaunchArgs,
   ): LaunchPreparation {
     with(context) {
@@ -204,7 +213,7 @@ object PhaseLaunchPreparation {
   private fun rejectedHandoffLaunch(
     recorder: PhaseRunRecords,
     run: PhaseRun,
-    state: FeatureTaskRuntimeRunState,
+    state: FeatureTaskRuntimeRunLoopProgressObservations,
     error: InvalidFeatureTaskRuntimeHandoffProjectionError,
     context: LaunchRejectionMeasurementContext,
   ): LaunchPreparationRejected =
@@ -225,7 +234,7 @@ object PhaseLaunchPreparation {
   private fun rejectedPlanningProjectionLaunch(
     recorder: PhaseRunRecords,
     run: PhaseRun,
-    state: FeatureTaskRuntimeRunState,
+    state: FeatureTaskRuntimeRunLoopProgressObservations,
     error: InvalidFeatureTaskRuntimePlanningProjectionSchemaError,
     context: LaunchRejectionMeasurementContext,
   ): LaunchPreparationRejected {
@@ -251,7 +260,7 @@ object PhaseLaunchPreparation {
   private fun rejectedDurableBriefingLaunch(
     recorder: PhaseRunRecords,
     run: PhaseRun,
-    state: FeatureTaskRuntimeRunState,
+    state: FeatureTaskRuntimeRunLoopProgressObservations,
     error: InvalidWorkflowStateSchemaError,
     context: LaunchRejectionMeasurementContext,
   ): LaunchPreparationRejected =
@@ -270,7 +279,7 @@ object PhaseLaunchPreparation {
     )
 
   internal fun prepareLaunch(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchPreparationContext,
     args: DeclaredLaunchArgs,
   ): PreparedLaunch {
     val run = args.run
@@ -286,6 +295,7 @@ object PhaseLaunchPreparation {
           run,
           repositoryCheckpoint,
           resolvedBranchRecord,
+          args.boundStep,
         )
       recorder.validateHandoffDeclarations(handoff.projectionDeclarations)
       val sharedEvidence =
@@ -302,7 +312,7 @@ object PhaseLaunchPreparation {
           run.request.agentAddonSelection,
           FeatureTaskRuntimeBriefingScope(
             sharedEvidence?.reference,
-            strategyFor(run.phaseId).briefingInvariantFields(run.phaseId),
+            briefingInvariantFields(run.phaseId),
           ),
         )
       if (!run.policy.singleAgentSession) {
@@ -315,61 +325,80 @@ object PhaseLaunchPreparation {
       }
       val inputs =
         PhaseLaunchPreparation
-          .composeLaunchPromptInputs(context, run, handoff, priorCorrection, briefing)
+          .composeLaunchPromptInputs(context, run, handoff, priorCorrection, briefing, args.boundStep)
           .copy(
-            phaseSettlement = iteration?.let(runState::settlementTarget),
+            phaseSettlement = iteration?.let(::phaseSettlementTarget),
           )
-      return PreparedLaunch(briefing, PhaseLaunchPreparation.composeLaunchPrompt(context, run, inputs, prompt))
+      return PreparedLaunch(
+        briefing,
+        PhaseLaunchPreparation.composeLaunchPrompt(context, run, inputs, prompt, args.boundStep),
+      )
     }
   }
 
   private fun assembleLaunchHandoff(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchPreparationContext,
     run: PhaseRun,
     repositoryCheckpoint: FeatureTaskRuntimeRepositoryCheckpoint?,
     resolvedBranchRecord: FeatureTaskRuntimeResolvedBranch?,
+    boundStep: PhaseStepBinding,
   ) = with(context) {
-    FeatureTaskRuntimeHandoffContract.assembleHandoff(
-      FeatureTaskRuntimeHandoffAssemblyRequest(
-        declaration = run.declaration,
-        runInvariants = run.request.runInvariants,
-        recordedOutputs = state.outputs(run.declaration.consumedUpstreamPhaseIds),
-        drivingVerdict = run.reentry?.drivingVerdict,
-        repairLedger = null,
-        repositoryCheckpoint = repositoryCheckpoint,
-        expectedRepositoryCheckpoint =
-          stepHooks(run).expectedLaunchCheckpoint(run, repositoryCheckpoint?.fingerprint)
-            ?.let(::FeatureTaskRuntimeRepositoryCheckpoint),
-        branchIdentity = resolvedBranchRecord?.branch,
-        baseBranch = resolvedBranchRecord?.baseBranch ?: "main",
-        validationDepth = run.request.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
-        unselectedStepIds = unselectedStepIds(),
-      ),
-    ).copy(
-      recordedFindingVerdicts = stepHooks(run).handoffFindingVerdicts(stepState(run)),
-    )
+    FeatureTaskRuntimeHandoffContract
+      .assembleHandoff(
+        FeatureTaskRuntimeHandoffAssemblyRequest(
+          declaration = run.declaration,
+          runInvariants = run.request.runInvariants,
+          recordedOutputs = progress.outputs(run.declaration.consumedUpstreamPhaseIds),
+          drivingVerdict = run.reentry?.drivingVerdict,
+          repairLedger = null,
+          repositoryCheckpoint = repositoryCheckpoint,
+          expectedRepositoryCheckpoint =
+            stepHooks(run)
+              .expectedLaunchCheckpoint(run, repositoryCheckpoint?.fingerprint)
+              ?.let(::FeatureTaskRuntimeRepositoryCheckpoint),
+          branchIdentity = resolvedBranchRecord?.branch,
+          baseBranch = resolvedBranchRecord?.baseBranch ?: "main",
+          validationDepth = run.request.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
+          unselectedStepIds = unselectedStepIds(),
+        ),
+      ).copy(
+        recordedFindingVerdicts =
+          (boundStep as? PhaseImplementFixStepBinding)?.let { stepHooks(run).handoffFindingVerdicts(it) }
+            ?: emptyList(),
+      )
   }
 
   private fun composeLaunchPrompt(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchPreparationContext,
     run: PhaseRun,
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
     prompt: PhaseStepPromptSource,
+    boundStep: PhaseStepBinding,
   ): String =
     FeatureTaskRuntimePhasePromptComposer.compose(inputs, prompt) +
-      context.stepHooks(run).launchPromptSupplement(run, context, context.stepState(run))
+      context.stepHooks(run).launchPromptSupplement(run, context.launchHookContext(run), boundStep)
 
   private fun composeLaunchPromptInputs(
-    context: PhaseAttemptEnvironment,
+    context: PhaseAttemptLaunchPreparationContext,
     run: PhaseRun,
     handoff: FeatureTaskRuntimePhaseHandoff,
     priorCorrection: PriorAttemptCorrection?,
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
+    boundStep: PhaseStepBinding,
   ): FeatureTaskRuntimePhasePromptComposeInputs {
     with(context) {
       val context = this
       val resolvedBranchRecord = recorder.loadResolvedBranch(run.request.workflowId)
-      val (passNumber, depthResolution, executedTier) = stepHooks(run).launchReviewTier(run, stepState(run))
+      val launchReviewTier =
+        (boundStep as? PhaseReviewPassState)?.let { stepHooks(run).launchReviewTier(run, it) }
+          ?: PhaseLaunchReviewTier(
+            passNumber = null,
+            resolution = null,
+            executedTier = RuntimeOwnedReviewMode.execute(run.request.runInvariants.codeReviewMode),
+          )
+      val passNumber = launchReviewTier.passNumber
+      val depthResolution = launchReviewTier.resolution
+      val executedTier = launchReviewTier.executedTier
       return FeatureTaskRuntimePhasePromptComposeInputs(
         issueKey = run.request.issueKey,
         briefing = briefing,
@@ -403,6 +432,7 @@ object PhaseLaunchPreparation {
               phaseGates,
               recorder,
               goalContinuationRecorder,
+              coupledRunTransitions,
               session,
               run,
             )
@@ -415,6 +445,7 @@ object PhaseLaunchPreparation {
               phaseGates,
               recorder,
               goalContinuationRecorder,
+              coupledRunTransitions,
               session,
               run,
             )

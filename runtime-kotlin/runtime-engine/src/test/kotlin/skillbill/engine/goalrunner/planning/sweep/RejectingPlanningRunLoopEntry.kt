@@ -7,12 +7,12 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepState
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
+import skillbill.engine.featuretask.runloop.state.featureTaskRuntimeRunLoopStepBinding
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunState
-import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.ports.agentrun.model.AgentRunOutputSink
@@ -30,46 +30,57 @@ internal class RejectingPlanningRunLoopEntry(
   ): FeatureTaskRuntimeRunReport {
     val delegate = context.runState
     val records = rejecting(delegate.records)
-    val intercepted = object : PhaseRunState by delegate {
-      override val records = records
-      override fun step(run: PhaseRun): PhaseStepState =
-        FeatureTaskRuntimeRunLoopStepState(PhaseAttemptScope(run.request, this), run)
-      override fun fanOut(stepId: String): PhaseRunFanOut {
-        val fanOut = delegate.fanOut(stepId)
-        return object : PhaseRunFanOut by fanOut {
-          override fun unitState(run: PhaseRun, unitId: Int, outputSink: AgentRunOutputSink): PhaseStepState {
-            val original = fanOut.unitState(run, unitId, outputSink)
-            return object : PhaseStepState by original {
-              override val records = rejecting(original.records)
-            }
+    val intercepted =
+      object : PhaseRunState by delegate {
+        override val records = records
+
+        override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
+          stepBinding.beginStepBinding(run)
+          return featureTaskRuntimeRunLoopStepBinding(
+            skillbill.engine.featuretask.slot.attempt.phaseAttemptCollaborationScope(
+              PhaseAttemptRunHost(run.request, this, run.phaseId, this),
+            ),
+            run,
+          )
+        }
+
+        override fun fanOut(stepId: String): PhaseRunFanOut {
+          val fanOut = delegate.fanOut(stepId)
+          return object : PhaseRunFanOut by fanOut {
+            override fun unitState(
+              unitId: Int,
+              outputSink: AgentRunOutputSink,
+            ): PhaseAcceptedStepExecution = fanOut.unitState(unitId, outputSink)
           }
         }
       }
-    }
     return super.run(context.copy(runState = intercepted), beforeDrive)
   }
 
-  private fun rejecting(delegate: PhaseRunRecords): PhaseRunRecords = object : PhaseRunRecords by delegate {
-    override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest) {
-      if (request.phaseId == phase && kind == RequiredPhaseWriteKind.START) {
-        throw RequiredPhaseWriteRejected(kind, request.workflowId, phase, request.attemptCount)
+  private fun rejecting(delegate: PhaseRunRecords): PhaseRunRecords =
+    object : PhaseRunRecords by delegate {
+      override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest) {
+        if (request.phaseId == phase && kind == RequiredPhaseWriteKind.START) {
+          throw RequiredPhaseWriteRejected(kind, request.workflowId, phase, request.attemptCount)
+        }
+        delegate.recordRequiredPhaseStart(request)
       }
-      delegate.recordRequiredPhaseStart(request)
-    }
-    override fun recordPhaseBriefing(
-      workflowId: String,
-      briefing: FeatureTaskRuntimePhaseLaunchBriefing,
-      sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
-      attempt: Int,
-    ) {
-      if (briefing.phaseId == phase && kind == RequiredPhaseWriteKind.BRIEFING) {
-        throw RequiredPhaseWriteRejected(kind, workflowId, phase, attempt)
+
+      override fun recordPhaseBriefing(
+        workflowId: String,
+        briefing: FeatureTaskRuntimePhaseLaunchBriefing,
+        sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
+        attempt: Int,
+      ) {
+        if (briefing.phaseId == phase && kind == RequiredPhaseWriteKind.BRIEFING) {
+          throw RequiredPhaseWriteRejected(kind, workflowId, phase, attempt)
+        }
+        delegate.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement, attempt)
       }
-      delegate.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement, attempt)
+
+      override fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean {
+        if (request.phaseId == phase && request.status == "blocked") terminalReasons += request.blockedReason
+        return delegate.recordPhaseState(request)
+      }
     }
-    override fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean {
-      if (request.phaseId == phase && request.status == "blocked") terminalReasons += request.blockedReason
-      return delegate.recordPhaseState(request)
-    }
-  }
 }

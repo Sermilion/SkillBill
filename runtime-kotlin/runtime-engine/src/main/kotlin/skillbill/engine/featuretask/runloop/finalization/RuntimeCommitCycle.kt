@@ -1,4 +1,4 @@
-package skillbill.engine.featuretask.slot.commitpush
+package skillbill.engine.featuretask.runloop.finalization
 
 import skillbill.application.decomposition.baseBranch
 import skillbill.contracts.JsonCodec
@@ -26,20 +26,20 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSubtas
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.core.PhaseStateRequestArgs
-import skillbill.engine.featuretask.runloop.core.PhaseStateRequestAttachments
-import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
 import skillbill.engine.featuretask.runloop.core.RecordFinalisedCheckpointIdentityArgs
 import skillbill.engine.featuretask.runloop.core.SubtaskCommitLedgerState
 import skillbill.engine.featuretask.runloop.core.UnownedWorktreeCommitShaArgs
 import skillbill.engine.featuretask.runloop.core.phaseBlockArgs
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
-import skillbill.engine.featuretask.runner.STATUS_RUNNING
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptOnce
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
+import skillbill.engine.featuretask.slot.attempt.PhaseRuntimeFinalizationContext
+import skillbill.engine.featuretask.slot.attempt.blockAndPersistInPhase
+import skillbill.engine.featuretask.slot.attempt.finalizationCoupledProgress
+import skillbill.engine.featuretask.slot.attempt.persistFinalizationCompleted
+import skillbill.engine.featuretask.slot.attempt.persistFinalizationRequiredRunning
+import skillbill.engine.featuretask.slot.commitpush.InMemoryCommitPush
 import skillbill.engine.featuretask.validation.ReadinessCommitPushSettleRequest
 import skillbill.engine.featuretask.validation.ReadinessCommitPushSettleResult
 import skillbill.engine.featuretask.validation.ReadinessCommittedHeadBindRequest
@@ -67,8 +67,8 @@ private data class BindCommittedHeadArgs(
 )
 
 object RuntimeCommitCycle {
-  internal fun PhaseAttemptEnvironment.runDeclaredCommitPushCycle(run: PhaseRun): PhaseOutcome {
-    val iteration = state.nextIteration(run.phaseId)
+  internal fun PhaseRuntimeFinalizationContext.runDeclaredCommitPushCycle(run: PhaseRun): PhaseOutcome {
+    val iteration = progress.nextIteration(run.phaseId)
     persistRunning(run, iteration)?.let { return it }
     observability.started(
       run.phaseId,
@@ -106,7 +106,7 @@ object RuntimeCommitCycle {
     )
   }
 
-  private fun PhaseAttemptEnvironment.settle(
+  private fun PhaseRuntimeFinalizationContext.settle(
     run: PhaseRun,
     iteration: Int,
   ): PhaseOutcome {
@@ -114,16 +114,16 @@ object RuntimeCommitCycle {
       return settleInMemory(run, iteration)
     }
     val branch =
-      FeatureTaskRuntimeRunLoopSubtaskCommit.finalisationBranch(request, session, phaseGates)
+      FeatureTaskRuntimeRunLoopSubtaskCommit.finalisationBranch(
+        request,
+        session,
+        phaseGates,
+      )
         ?: return settleUnownedHead(run, iteration)
     val baseBranch = recorder.loadResolvedBranch(request.workflowId)?.baseBranch ?: "main"
     val readiness = commitPushReadiness(this, run.phaseId, baseBranch)
     if (readiness is ReadinessCommitPushSettleResult.Blocked) {
-      return FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersistInPhase(
-        request,
-        state,
-        recorder,
-        goalContinuationRecorder,
+      return blockAndPersistInPhase(
         phaseBlockArgs(run, iteration, readiness.reason, observability)
           .copy(failureDisposition = readiness.failureDisposition),
       )
@@ -131,7 +131,7 @@ object RuntimeCommitCycle {
     return finaliseAndBindCommitPush(this, run, iteration, branch, baseBranch)
   }
 
-  private fun PhaseAttemptEnvironment.settleInMemory(
+  private fun PhaseRuntimeFinalizationContext.settleInMemory(
     run: PhaseRun,
     iteration: Int,
   ): PhaseOutcome {
@@ -150,7 +150,7 @@ object RuntimeCommitCycle {
   }
 
   private fun commitPushReadiness(
-    context: PhaseAttemptEnvironment,
+    context: PhaseRuntimeFinalizationContext,
     stepId: String,
     baseBranch: String,
   ): ReadinessCommitPushSettleResult {
@@ -174,7 +174,7 @@ object RuntimeCommitCycle {
   }
 
   private fun finaliseAndBindCommitPush(
-    context: PhaseAttemptEnvironment,
+    context: PhaseRuntimeFinalizationContext,
     run: PhaseRun,
     iteration: Int,
     branch: String,
@@ -205,7 +205,7 @@ object RuntimeCommitCycle {
   }
 
   private fun bindCommittedHead(
-    context: PhaseAttemptEnvironment,
+    context: PhaseRuntimeFinalizationContext,
     args: BindCommittedHeadArgs,
   ): PhaseOutcome {
     val rebound =
@@ -238,7 +238,7 @@ object RuntimeCommitCycle {
   }
 
   private fun finaliseSubtask(
-    context: PhaseAttemptEnvironment,
+    context: PhaseRuntimeFinalizationContext,
     run: PhaseRun,
     args: FinaliseSubtaskArgs,
   ) = FeatureTaskRuntimeSubtaskFinalisation(
@@ -248,7 +248,7 @@ object RuntimeCommitCycle {
     recordCommit = { commitSha, stagedPaths ->
       FeatureTaskRuntimeRunLoopSubtaskCommit.recordFinalisedCheckpointIdentity(
         context.request,
-        context.state,
+        context.progress,
         context.recorder,
         context.diagnostics,
         RecordFinalisedCheckpointIdentityArgs(
@@ -270,15 +270,19 @@ object RuntimeCommitCycle {
         FeatureTaskRuntimeCheckpointMetadata(
           phaseId = run.phaseId,
           loopId = null,
-          generation = FeatureTaskRuntimeRunLoopCheckpoint.checkpointGeneration(context.state, null),
+          generation = FeatureTaskRuntimeRunLoopCheckpoint.checkpointGeneration(context.progress, null),
           branch = args.branch,
           intent = FeatureTaskRuntimeCheckpointMessage.INTENT_FINALISED_SUBTASK,
         ),
     ),
   )
 
-  private fun PhaseAttemptEnvironment.commitSubject(subtaskId: String): String {
-    val subtaskName = request.goalContinuation?.subtaskName?.trim()?.takeIf(String::isNotBlank)
+  private fun PhaseRuntimeFinalizationContext.commitSubject(subtaskId: String): String {
+    val subtaskName =
+      request.goalContinuation
+        ?.subtaskName
+        ?.trim()
+        ?.takeIf(String::isNotBlank)
     if (subtaskName == null && request.goalContinuation != null) {
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
@@ -288,7 +292,7 @@ object RuntimeCommitCycle {
     return FeatureTaskRuntimeCheckpointMessage.subject(request.issueKey, subtaskName, subtaskId)
   }
 
-  private fun PhaseAttemptEnvironment.settleUnownedHead(
+  private fun PhaseRuntimeFinalizationContext.settleUnownedHead(
     run: PhaseRun,
     iteration: Int,
   ): PhaseOutcome {
@@ -323,7 +327,7 @@ object RuntimeCommitCycle {
     }
   }
 
-  private fun PhaseAttemptEnvironment.complete(
+  private fun PhaseRuntimeFinalizationContext.complete(
     run: PhaseRun,
     iteration: Int,
     outputText: String,
@@ -340,7 +344,8 @@ object RuntimeCommitCycle {
     if (!persistCompleted(run, iteration, outputText, accepted)) {
       return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
         request,
-        state,
+        finalizationCoupledProgress(),
+        coupledRunTransitions,
         recorder,
         observability,
         PhaseBlockRequest(
@@ -364,65 +369,19 @@ object RuntimeCommitCycle {
     )
   }
 
-  private fun PhaseAttemptEnvironment.persistRunning(
+  private fun PhaseRuntimeFinalizationContext.persistRunning(
     run: PhaseRun,
     iteration: Int,
-  ): PhaseOutcome? {
-    val runningPhaseState =
-      FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
-        request,
-        state,
-        goalContinuationRecorder,
-        PhaseStateRequestArgs(
-          write =
-            PhaseStateWriteArgs(
-              run = run,
-              iteration = iteration,
-              status = STATUS_RUNNING,
-              finished = false,
-              outputArtifact = null,
-            ),
-        ),
-      )
-    state.reserveReviewPass(runningPhaseState.reviewPassNumber)
-    try {
-      recorder.recordRequiredPhaseStart(runningPhaseState)
-    } catch (rejection: RequiredPhaseWriteRejected) {
-      return PhaseAttemptOnce.blockRequiredWriteRejection(this, run, rejection)
-    }
-    return null
-  }
+  ): PhaseOutcome? = persistFinalizationRequiredRunning(run, iteration)
 
-  private fun PhaseAttemptEnvironment.persistCompleted(
+  private fun PhaseRuntimeFinalizationContext.persistCompleted(
     run: PhaseRun,
     iteration: Int,
     outputText: String,
     acceptedOutput: AcceptedFeatureTaskRuntimePhaseOutput,
-  ): Boolean =
-    recorder.recordCompletedPhase(
-      FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
-        request,
-        state,
-        goalContinuationRecorder,
-        PhaseStateRequestArgs(
-          write =
-            PhaseStateWriteArgs(
-              run = run,
-              iteration = iteration,
-              status = STATUS_COMPLETED,
-              finished = true,
-              outputArtifact = outputText,
-            ),
-          extras =
-            PhaseStateRequestAttachments(
-              normalizedOutput = acceptedOutput.normalizedOutput,
-              repairEvidence = acceptedOutput.repairEvidence,
-            ),
-        ),
-      ),
-    )
+  ): Boolean = persistFinalizationCompleted(run, iteration, outputText, acceptedOutput)
 
-  private fun PhaseAttemptEnvironment.accept(
+  private fun PhaseRuntimeFinalizationContext.accept(
     run: PhaseRun,
     outputText: String,
   ): Result<AcceptedFeatureTaskRuntimePhaseOutput> =
@@ -430,16 +389,12 @@ object RuntimeCommitCycle {
       outputValidator.validatePhaseOutput(outputText, sourceLabel = run.phaseId).requireAcceptedOutput(run.phaseId)
     }
 
-  private fun PhaseAttemptEnvironment.block(
+  private fun PhaseRuntimeFinalizationContext.block(
     run: PhaseRun,
     iteration: Int,
     reason: String,
   ): PhaseOutcome =
-    FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersistInPhase(
-      request,
-      state,
-      recorder,
-      goalContinuationRecorder,
+    blockAndPersistInPhase(
       phaseBlockArgs(run, iteration, reason, observability),
     )
 }

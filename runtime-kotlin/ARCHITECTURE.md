@@ -38,6 +38,59 @@ parameter into a context, callback bag, or role interface does not narrow access
 Reconstruction from durable records must preserve the same invariants as live
 execution, including retry consumption, checkpoint ownership, and phase order.
 
+Finding observations are shared by review, verification and remediation. Verification checkpoint
+and boundary writes belong to `PhaseFindingVerificationState`; repair receipts belong to
+`PhaseRepairReceiptState`. These roles check the active binding and accepted writer phase.
+Planning briefing writes exist only on preplan/plan bindings and check the briefing phase.
+
+Strategies receive `PhaseAcceptedStepExecution` and a private implementation for the accepted
+step. Agent and review bindings implement `PhaseAgentExecution` for current-step launch. Gate and commit
+bindings expose their owned cycle operations and do not implement the agent launch capability.
+All bindings provide detached observations and admission checks. Planning,
+review, quality-gate, commit and PR bindings add only their role operations. The coordinator
+checks request identity, selected step and policy, authorizes dispatch, and closes each binding
+when the strategy returns. Planning unit bindings require an authorized wave and keep separate
+progress, session and records.
+
+`PhaseStepCall` carries accepted metadata and its bound target. It has no runner callback or
+prepared-launch operation. The runtime attempt host selects the accepted owner's runner after
+required persistence. Strategies cannot recover the host, records, gate context or finalization
+context from a binding. Runtime gate cycles and commit cycles live under `runloop.qualitygate`
+and `runloop.finalization`; bindings invoke the selected operation rather than return its context.
+
+`PhaseAttemptEnvironment` contains request facts only. Strategy hooks receive detached
+progress/session observations and private role views. Audit settlement, planning stop, commit
+upstream recovery and PR pre-launch push are named runtime operations. PR push resolves the
+owned branch internally. Loop rules receive a readonly `PhaseLoopContext`; review and PR reads
+use `PhaseRepositoryObservations`, whose private adapter exposes no Git writes. PR measurement
+receives a single telemetry emitter instead of lifecycle terminal authority.
+
+`FeatureTaskRuntimeRunLoopTransitionOwner` owns coupled progress, session, accounting,
+completion, re-entry, evidence and checkpoint state transitions. Each `FeatureTaskRuntimeRunState`
+stores one owner paired with one session; a second session is rejected. Durable completion and
+review tombstone writes precede corresponding in-memory changes. Required phase-start writes
+precede attempt accounting and review reservations. Runtime checkpoint machinery retains its
+storage and Git collaborators behind the owner operations. Durable and ephemeral records keep
+their storage policies, including ephemeral audit briefings.
+
+Progress and session getters return private wrappers over detached copies. Their collections,
+buffers and terminal reports do not alias live storage, and casting an observation cannot recover
+the live owner. Settlement coupling receives the owner directly from runtime context; it does
+not reconstruct mutation authority from observations.
+
+`StrategyCapabilityBoundaryArchitectureTest` uses Kotlin PSI to build a declaration graph across
+all engine source. It follows consumer roots through helpers, extensions, aliases, constructors,
+properties, factories and used parameter/return types. Attempt and state folders remain in the
+transitive catalog. Skeleton composition wiring is excluded as a consumer root. Unresolved
+governed edges fail. Raw state is forbidden to all consumers; review authority is forbidden to
+non-review consumers. A typed primitive-writer inventory also checks helpers outside the
+consumer graph. Synthetic allowed and violating cases prove these boundaries, and runtime
+binding tests prove accepted-step admission. The rule is registered in
+`PrincipleEnforcementInventory.enforceableRules`.
+
+The operation-level inventory and retained runtime collaborator dispositions are in
+`.feature-specs/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership/capability-census.md`.
+
 #### Feature-task run-loop helper inputs (SKILL-247 subtask 3)
 
 Investigation F-005 counted 122 `FeatureTaskRuntimeRunLoopContext` extension
@@ -75,8 +128,12 @@ goalContinuationRecorder/phaseSettlementService ports those paths use.
 audit/checkpoint and accepted-output persistence tail inside
 `settleValidatedOutputAfterFingerprint`; implement-fix repair-receipt settlement
 and commit finalisation now receive their request/state/recorder/goal-recorder/
-diagnostics ports directly. Review runs in `InlineReviewStrategy` and reaches
-durable state only through `PhaseRunState`.
+diagnostics ports directly. Review runs in `InlineReviewStrategy` and reaches review-owned persistence
+through the accepted step binding (`PhaseReviewStepBinding` on the active
+`PhaseStepCall`), not by reopening step state from `PhaseRunState.step`.
+SKILL-384 closes the review boundary with private bindings for each step role.
+`GateOutput` retains a runtime-only `PhaseOutputSettlementContext`; strategy hooks receive
+separate detached views.
 PhaseAttempts keeps `blockAndPersist` context and top-level overloads; governed
 block paths prefer the top-level `blockAndPersist(request, state, recorder,
 goalContinuationRecorder, args)` seam. `FeatureTaskRuntimeRunLoop` exposes only
@@ -107,9 +164,9 @@ inputs:
   `settlementContext`.
 - Review preparation and the review step live in the `code_review` slot
   (`slot.codereview`). They reach durable run state, git operations, the
-  output validator, and the clock only through `PhaseStepState` and its
-  attempt scope. Since SKILL-380 subtask 7, no slot class takes the run-loop
-  context.
+  output validator, and the clock through the active step binding and its
+  attempt scope, not through a fresh `PhaseRunState.step` lookup. Since
+  SKILL-380 subtask 7, no slot class takes the run-loop context.
 - PhaseAttempts exposes top-level block/pause seams with request/state/
   recorder/goal-recorder/observability arguments; its context overloads remain
   only for the generic attempt-loop adjacency.
@@ -1076,25 +1133,24 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   settled envelope, typed launch failure). `DefaultPhaseRunner` is the only
   implementation, and it is the only featuretask type that depends on
   `GoalRunnerSubtaskLauncher`.
-- The run state sits behind three ports. `PhaseLaunchState` is what a
-  `PhaseRunner` reads and writes around one launch: the settlement target,
-  launch observation, token accounting, and the settled envelope.
-  `PhaseRunState` extends it with everything one run reads and writes: the
-  in-memory progress, the session, telemetry, the attempt loop, strategy
-  selection, and the sub-ports in `slot.state` (`PhaseRunRecords`,
-  `PhaseRunGoal`, `PhaseRunSettlements`, `PhaseRunCheckpoints`).
-  `PhaseStepState` is the per-call port `runStep` receives. It adds the
-  review members of the `code_review` strategy. The run loop's entry takes
-  (definition, `PhaseRunState`, facts). `FeatureTaskRuntimeRunRequest` is
-  only the durable entry's input. The runner builds `DurablePhaseRunState`
-  and `DurablePhaseStepState` (`runloop.durable`). They are the only
-  run-loop and slot classes that hold the durable stores, writers, and
-  checkpoint git operations.
-- Strategies are context-free. No slot class references
-  `FeatureTaskRuntimeRunLoopContext`. A strategy builds its
-  `PhaseAttemptScope` (the run request and the run state) from the
-  `PhaseRun` and `PhaseStepState` it receives. Hooks and loop rules take a
-  `PhaseAttemptEnvironment`.
+- `PhaseRunState` exposes progress, session, attempt execution, strategy
+  selection, records, goal continuation, settlements, checkpoints, and phase
+  gates. Ordinary steps receive `PhaseAgentStepBinding` at dispatch; review steps
+  receive `PhaseReviewStepBinding` (review interfaces in `PhaseStepState.kt`, not
+  a `PhaseRunState` inheritance chain). `FeatureTaskRuntimeRunLoopStepState`
+  implements those review interfaces only on review bindings. `FeatureTaskRuntimeRunLoopDurableState`
+  (`runloop.durable`) adapts durable services to `FeatureTaskRuntimeRunLoopStepState`
+  (`runloop.state`), while `InMemoryPhaseRunState` and
+  `GoalPlanningPhaseRunState` use the same step-state adapter with in-memory
+  records. Goal planning fan-out units run on `GoalPlanningUnitRunState` with
+  isolated progress, session, records, telemetry, and step binding. Durable
+  and in-memory storage remain distinct.
+- `PhaseAttemptEnvironment` supplies request facts only. Runtime scopes retain storage and effect
+  collaborators privately. Strategy hooks receive detached observations and bound role operations;
+  review/PR/loop helpers receive readonly repository inspection. Step factories require coordinator
+  dispatch, request identity, selected membership and policy. Attempt launch selects the admitted
+  owner's runner after required persistence. The transition owner coordinates progress, session,
+  evidence, retry and checkpoint state, with durable acknowledgement before in-memory advancement.
 - Execution lookup requires membership in `ResolvedPhaseExecutionPlan` and
   checks the selected strategy revision, step policy identity, and resume
   interpretation identity before returning a strategy. Durable run state reads
@@ -1171,7 +1227,9 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   schedule, over the run state's `PhaseRunFanOut`. The sweep drives it through
   `FeatureTaskRuntimeRunLoopEntry` over an in-memory
   `GoalPlanningPhaseRunState`, whose attempt loop keeps the planning attempt
-  gate, budget, and checkpoints, and writes no feature-task workflow row.
+  gate, budget, and checkpoints, and writes no feature-task workflow row. The
+  selected `goal-plan-fan-out` strategy authorizes `agent-plan` at the attempt
+  boundary while preserving the selected step policy and request checks.
   `ResolvedPhaseExecutionPlan.unselectedStepIds` counts every canonical step a run
   does not select, including steps outside a short definition, so a step
   drops its projections from producers the definition never runs.

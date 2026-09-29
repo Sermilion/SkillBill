@@ -77,7 +77,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
             initialRecords = mapOf("validate" to validation, "write_history" to history),
             transitions = FeatureTaskRuntimeTransitionDeclaration(listOf("validate", "write_history")),
             outputValidator = realFeatureTaskRuntimePhaseOutputValidator,
-            resumeRules = RESUME_RULES,
+            resumeRulesFn = RESUME_RULES,
           )
         val valid = status == "completed"
         assertEquals(valid, "validate" in state.completedPhaseIds())
@@ -94,7 +94,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         initialRecords = emptyMap(),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
     val output =
       FeatureTaskRuntimePhaseOutput(
@@ -118,7 +118,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         initialRecords = emptyMap(),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
 
     state.recordPhaseTokenUsage("implement", 11, 17)
@@ -151,14 +151,14 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         initialRecords = durableRecords,
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
     val resumed =
       FeatureTaskRuntimeRunState(
         initialRecords = durableRecords,
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
 
     live.recordPhaseTokenUsage("review", 13, 21)
@@ -178,7 +178,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         initialRecords = emptyMap(),
         transitions = transitions,
         outputValidator = AlwaysValidValidator,
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
     val output =
       FeatureTaskRuntimePhaseOutput(
@@ -192,34 +192,34 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     val resumed =
       FeatureTaskRuntimeRunState(
         initialRecords =
-        mapOf(
-          output.phaseId to
-            FeatureTaskRuntimePhaseRecord(
+          mapOf(
+            output.phaseId to
+              FeatureTaskRuntimePhaseRecord(
+                phaseId = output.phaseId,
+                status = WorkflowStepStatus.COMPLETED,
+                attemptCount = 1,
+                startedAt = "2026-01-01T00:00:00Z",
+                resolvedAgentId = "claude",
+                outputArtifact = output.payload,
+                loopId = FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID,
+                edgeIteration = 2,
+              ),
+          ),
+        transitions = transitions,
+        durableInitialLedger =
+          listOf(
+            FeatureTaskRuntimePhaseLedgerEntry(
+              action = FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE,
+              sequenceNumber = 1,
+              timestamp = "2026-01-01T00:00:00Z",
               phaseId = output.phaseId,
-              status = WorkflowStepStatus.COMPLETED,
               attemptCount = 1,
-              startedAt = "2026-01-01T00:00:00Z",
-              resolvedAgentId = "claude",
-              outputArtifact = output.payload,
               loopId = FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID,
               edgeIteration = 2,
             ),
-        ),
-        transitions = transitions,
-        durableInitialLedger =
-        listOf(
-          FeatureTaskRuntimePhaseLedgerEntry(
-            action = FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE,
-            sequenceNumber = 1,
-            timestamp = "2026-01-01T00:00:00Z",
-            phaseId = output.phaseId,
-            attemptCount = 1,
-            loopId = FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID,
-            edgeIteration = 2,
           ),
-        ),
         outputValidator = AlwaysValidValidator,
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
 
     assertEquals(live.completedPhaseIds(), resumed.completedPhaseIds())
@@ -272,7 +272,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         initialRecords = emptyMap(),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       ).also {
         it.recordEdgeIteration(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID, 2)
         it.recordCompleted(output)
@@ -283,7 +283,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         durableInitialLedger = recorder.loadPhaseLedger(workflowId).orEmpty(),
         outputValidator = AlwaysValidValidator,
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
 
     assertEquals(live.completedPhaseIds(), resumed.completedPhaseIds())
@@ -294,13 +294,17 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     assertEquals(live.outputFor(output.phaseId)?.payload, resumed.outputFor(output.phaseId)?.payload)
   }
 
-  private fun sqliteResumeDatabase(tempDir: Path): SQLiteDatabaseSessionFactory = sqliteDatabaseSessionFactory(
-    userHome = tempDir,
-    dbPathOverride = tempDir.resolve("runtime.db").toString(),
-    environment = emptyMap(),
-  )
+  private fun sqliteResumeDatabase(tempDir: Path): SQLiteDatabaseSessionFactory =
+    sqliteDatabaseSessionFactory(
+      userHome = tempDir,
+      dbPathOverride = tempDir.resolve("runtime.db").toString(),
+      environment = emptyMap(),
+    )
 
-  private fun seedSqliteResumeWorkflow(database: SQLiteDatabaseSessionFactory, workflowId: String) {
+  private fun seedSqliteResumeWorkflow(
+    database: SQLiteDatabaseSessionFactory,
+    workflowId: String,
+  ) {
     database.transaction { unitOfWork ->
       unitOfWork.workflowStates.saveFeatureTaskWorkflow(
         WorkflowStateRecord(
@@ -418,7 +422,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         initialRecords = harness.recorder.loadPhaseRecords(WORKFLOW_ID).orEmpty(),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
     assertNull(state.persistedBlockedReason("audit"))
     assertEquals(WorkflowStepStatus.PENDING, state.recordFor("audit")?.status)
@@ -610,20 +614,24 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     edgeIteration: Int? = null,
     blockedReason: String? = null,
     outputArtifact: String? = null,
-  ): FeatureTaskRuntimePhaseRecord = FeatureTaskRuntimePhaseRecord(
-    phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
-    status = status,
-    attemptCount = 1,
-    startedAt = "2026-01-01T00:00:00Z",
-    resolvedAgentId = "claude",
-    loopId = loopId,
-    edgeIteration = edgeIteration,
-    blockedReason = blockedReason,
-    outputArtifact = outputArtifact,
-    finishedAt = if (status == WorkflowStepStatus.COMPLETED) "2026-01-01T00:01:00Z" else null,
-  )
+  ): FeatureTaskRuntimePhaseRecord =
+    FeatureTaskRuntimePhaseRecord(
+      phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+      status = status,
+      attemptCount = 1,
+      startedAt = "2026-01-01T00:00:00Z",
+      resolvedAgentId = "claude",
+      loopId = loopId,
+      edgeIteration = edgeIteration,
+      blockedReason = blockedReason,
+      outputArtifact = outputArtifact,
+      finishedAt = if (status == WorkflowStepStatus.COMPLETED) "2026-01-01T00:01:00Z" else null,
+    )
 
   private object NoopWorkflowSnapshotValidator : WorkflowSnapshotValidator {
-    override fun validate(snapshot: WorkflowStateSnapshot, slug: String) = Unit
+    override fun validate(
+      snapshot: WorkflowStateSnapshot,
+      slug: String,
+    ) = Unit
   }
 }

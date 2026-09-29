@@ -8,19 +8,20 @@ plugins {
 }
 
 tasks.named<Test>("repoTest") {
-  inputs.files(
-    fileTree(rootProject.layout.projectDirectory) {
-      include(
-        "**/src/**",
-        "**/*.gradle.kts",
-        "**/ARCHITECTURE.md",
-        "**/agent/**",
-        "config/**",
-        ".editorconfig",
-      )
-      exclude("**/build/**", "**/.gradle/**", ".kotlin/**")
-    },
-  ).withPathSensitivity(PathSensitivity.RELATIVE)
+  inputs
+    .files(
+      fileTree(rootProject.layout.projectDirectory) {
+        include(
+          "**/src/**",
+          "**/*.gradle.kts",
+          "**/ARCHITECTURE.md",
+          "**/agent/**",
+          "config/**",
+          ".editorconfig",
+        )
+        exclude("**/build/**", "**/.gradle/**", ".kotlin/**")
+      },
+    ).withPathSensitivity(PathSensitivity.RELATIVE)
     .withPropertyName("runtimeKotlinArchitectureSources")
 }
 
@@ -33,6 +34,7 @@ tasks.named<ProcessResources>("processResources") {
 }
 
 dependencies {
+  testImplementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:${libs.versions.kotlin.get()}")
   api(project(":runtime-application"))
   api(project(":runtime-ports"))
   api(project(":runtime-engine"))
