@@ -6,8 +6,6 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
-internal const val AGENT_RUN_OUTPUT_LIMIT_BYTES: Int = 1024 * 1024
-
 fun interface AgentRunActivityProbe {
   fun activityToken(): String?
 

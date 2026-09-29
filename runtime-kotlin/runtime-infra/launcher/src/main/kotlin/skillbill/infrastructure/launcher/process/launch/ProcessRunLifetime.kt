@@ -8,15 +8,15 @@ import java.util.concurrent.TimeUnit
 internal data class ProcessRunReleaseSnapshot(
   val interrupted: Boolean,
   val outputCaptureIncomplete: Boolean,
-  val stdoutCapture: CappedUtf8DrainCapture,
-  val stderrCapture: CappedUtf8DrainCapture,
+  val stdoutCapture: Utf8DrainCapture,
+  val stderrCapture: Utf8DrainCapture,
 )
 
 internal class ProcessRunLifetime(
   private val process: Process,
   private val liveProcesses: MutableSet<Process>,
-  private val stdout: CappedUtf8Drain,
-  private val stderr: CappedUtf8Drain,
+  private val stdout: Utf8Drain,
+  private val stderr: Utf8Drain,
   private val degradation: ProcessRunDegradationRecorder,
 ) {
   @Volatile
@@ -88,7 +88,7 @@ internal class ProcessRunLifetime(
   }
 
   private fun joinDrain(
-    drain: CappedUtf8Drain,
+    drain: Utf8Drain,
     seam: String,
     state: CleanupState,
   ): Boolean =

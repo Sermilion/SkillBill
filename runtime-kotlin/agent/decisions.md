@@ -1,5 +1,18 @@
 # runtime-kotlin/ boundary decisions
 
+## 2026-09-29: Retain complete agent process output
+
+Agent stdout and stderr have no byte retention limit. The previous 1 MiB
+limit discarded output and blocked a completed review on SKILL-384. The
+launcher now retains and forwards every byte through process completion.
+Capture still reports incomplete drains and preserves cancellation and cleanup
+failures. The existing truncation result field remains for adapter compatibility
+and historical evidence. The JVM launcher no longer sets it.
+
+A process regression emits more than 1 MiB on each stream and checks the
+complete capture and live sink, including multibyte UTF-8 text and the final
+completion marker.
+
 This file records architectural and implementation decisions that span the
 `runtime-kotlin/` boundary. Each entry is dated and explains the trade-off,
 not the implementation detail.

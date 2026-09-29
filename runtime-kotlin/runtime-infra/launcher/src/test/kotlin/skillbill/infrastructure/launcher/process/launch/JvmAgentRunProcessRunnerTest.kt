@@ -282,9 +282,8 @@ class JvmAgentRunProcessRunnerTest {
   fun `drain join timeout reports incomplete capture instead of settled evidence`() {
     val blocking = BlockingInputStream()
     val drain =
-      CappedUtf8Drain(
+      Utf8Drain(
         input = blocking,
-        limitBytes = AGENT_RUN_OUTPUT_LIMIT_BYTES,
         outputStream = AgentRunOutputStream.STDOUT,
         outputSink = AgentRunOutputSink.NONE,
         onChunkRead = {},
@@ -383,33 +382,42 @@ class JvmAgentRunProcessRunnerTest {
   }
 
   @Test
-  fun `an over-cap stream retains its terminal event instead of its preamble`() {
-    val flood =
-      """awk 'BEGIN{p=sprintf("%0500d",0); """ +
-        """for(i=0;i<4000;i++) printf "{\"type\":\"assistant\",\"pad\":\"%s\"}\n", p; """ +
-        """printf "{\"type\":\"result\",\"result\":\"TERMINAL\"}\n"}'"""
-    val result =
-      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
-        testAgentRunProcessRequest(
-          listOf("sh", "-c", flood),
-          Path.of("."),
-        ),
-      )
+  fun `large agent streams retain and forward every byte through completion`() {
+    val directory = Files.createTempDirectory("agent-large-output")
+    try {
+      val expected = "BEGIN\n" + "agent output é\n".repeat(160_000) + "TERMINAL\n"
+      val payload = directory.resolve("output.txt")
+      Files.writeString(payload, expected)
+      val stdout = StringBuilder()
+      val stderr = StringBuilder()
+      val result =
+        JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+          testAgentRunProcessRequest(
+            listOf("sh", "-c", "cat output.txt; cat output.txt >&2"),
+            directory,
+          ) {
+            outputSink =
+              AgentRunOutputSink { stream, chunk ->
+                when (stream) {
+                  AgentRunOutputStream.STDOUT -> stdout.append(chunk)
+                  AgentRunOutputStream.STDERR -> stderr.append(chunk)
+                }
+              }
+          },
+        )
 
-    assertEquals(0, result.exitStatus)
-    assertTrue(result.stdoutTruncated, "the flood must exceed the retention cap for this to prove anything")
-    assertTrue(
-      result.stdout.trimEnd().endsWith("""{"type":"result","result":"TERMINAL"}"""),
-      "the terminal event is the only harvestable one; retaining the head would discard it",
-    )
-    assertTrue(
-      result.stdout.startsWith("{"),
-      "retention must resume at a record boundary so a line-oriented decoder can parse the tail",
-    )
-    assertTrue(
-      result.stdoutByteSize > result.stdoutBytes.size,
-      "the observed total stays the full stream even though only the tail is retained",
-    )
+      assertEquals(0, result.exitStatus)
+      assertFalse(result.stdoutTruncated)
+      assertFalse(result.outputCaptureIncomplete)
+      assertEquals(expected, result.stdout)
+      assertEquals(expected, result.stderr)
+      assertEquals(expected, stdout.toString())
+      assertEquals(expected, stderr.toString())
+      assertEquals(expected.encodeToByteArray().size.toLong(), result.stdoutByteSize)
+      assertEquals(expected.encodeToByteArray().size, result.stdoutBytes.size)
+    } finally {
+      directory.toFile().deleteRecursively()
+    }
   }
 
   @Test
@@ -706,9 +714,8 @@ class JvmAgentRunProcessRunnerTest {
   }
 
   private fun testDrain(input: InputStream) =
-    CappedUtf8Drain(
+    Utf8Drain(
       input = input,
-      limitBytes = AGENT_RUN_OUTPUT_LIMIT_BYTES,
       outputStream = AgentRunOutputStream.STDOUT,
       outputSink = AgentRunOutputSink.NONE,
       onChunkRead = {},
