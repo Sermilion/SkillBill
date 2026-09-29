@@ -9,8 +9,10 @@ import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLo
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
+import skillbill.engine.featuretask.lifecycle.execution.requireCompletedGateOutputEvidence
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
 import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.error.shellcontent.LegacyProseWorkflowError
 import skillbill.ports.db.DatabaseSessionFactory
@@ -85,6 +87,7 @@ class FeatureTaskContinuationLookupService(
       ) {
         throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
       }
+      requireCompletedGateOutputEvidence(snapshot.artifacts, plan)
       if (states.claimFeatureTaskContinuation(candidate.workflowId, candidate.updatedAt)) plan else null
     }
   } catch (error: FeatureTaskRuntimeExecutionPlanAdmissionError) {
@@ -97,6 +100,12 @@ class FeatureTaskContinuationLookupService(
     RuntimeDiagnosticsBestEffortWarning.record(
       diagnostics,
       "Execution admission refused workflow=${candidate.workflowId.take(128)} reason=invalid_route_identity",
+    )
+    throw error
+  } catch (error: UnsafeFeatureTaskRuntimeRegenerationError) {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "Execution admission refused workflow=${candidate.workflowId.take(128)} reason=${error.refusal.wireValue}",
     )
     throw error
   }

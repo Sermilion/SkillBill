@@ -33,7 +33,7 @@ subtasks:
   commit_sha: null
   workflow_id: "wftr-20260928-125330-rqcb"
   blocked_reason: null
-  last_resumable_step: "audit"
+  last_resumable_step: "review"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

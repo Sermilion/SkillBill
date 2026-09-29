@@ -3,12 +3,16 @@ package skillbill.engine.featuretask.lifecycle.execution
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
+import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
 import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.WorkflowStateRepository
@@ -19,6 +23,8 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
@@ -49,7 +55,8 @@ class FeatureTaskRuntimeExecutionAdmission(
       throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "execution identity changed")
     }
     val checkedInputs = inputs.frozen()
-    val descriptor = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(row.toSnapshot().artifacts)
+    val artifacts = row.toSnapshot().artifacts
+    val descriptor = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(artifacts)
     val plan = compatibility.requireSupportedExecution(
       descriptor?.let { JsonCodec.valueToJsonString(it).toByteArray(Charsets.UTF_8) },
       checkedInputs,
@@ -60,12 +67,16 @@ class FeatureTaskRuntimeExecutionAdmission(
     if (plan.definitionId != SkeletonDefinition.forRun(identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD).id) {
       throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
     }
+    requireCompletedGateOutputEvidence(artifacts, plan)
     AdmittedFeatureTaskRuntimeExecution(identity, plan, checkedInputs, requireNotNull(descriptor))
   } catch (error: FeatureTaskRuntimeExecutionPlanAdmissionError) {
     warn(workflowId, error.reasonCode)
     throw error
   } catch (error: InvalidFeatureTaskExecutionIdentitySchemaError) {
     warn(workflowId, "invalid_route_identity")
+    throw error
+  } catch (error: UnsafeFeatureTaskRuntimeRegenerationError) {
+    warn(workflowId, error.refusal.wireValue)
     throw error
   }
 
@@ -91,6 +102,40 @@ class FeatureTaskRuntimeExecutionAdmission(
     RuntimeDiagnosticsBestEffortWarning.record(
       diagnostics,
       "Execution admission refused workflow=${workflowId.take(128)} reason=$reason",
+    )
+  }
+}
+
+internal fun requireCompletedGateOutputEvidence(
+  artifacts: Map<String, Any?>,
+  plan: ResolvedPhaseExecutionPlan,
+) {
+  val gateSteps = plan.selectedStrategies
+    .filter { it.slot == PhaseSlot.QUALITY_GATE }
+    .flatMapTo(mutableSetOf()) { it.steps }
+  if (gateSteps.isEmpty()) return
+  val records = decodePhaseRecords(artifacts).values
+  val completedGateRecords = records.filter { record ->
+    record.phaseId in gateSteps && record.status == WorkflowStepStatus.COMPLETED
+  }
+  val missingCompletedOutput = completedGateRecords.any { record ->
+    record.outputArtifact == null
+  }
+  val inconsistentCompletedOutput = completedGateRecords.any { record ->
+    val outputStatus = record.outputArtifact
+      ?.let(JsonCodec::parseObjectOrNull)
+      ?.get(SharedPayloadKeys.STATUS)
+      ?.let(JsonCodec::jsonElementToValue) as? String
+    outputStatus?.let { WorkflowStepStatus.fromWire(it) }
+      ?.let { it != WorkflowStepStatus.COMPLETED } == true
+  }
+  if (missingCompletedOutput || inconsistentCompletedOutput) {
+    throw UnsafeFeatureTaskRuntimeRegenerationError(
+      if (missingCompletedOutput) {
+        FeatureTaskRuntimeRegenerationRefusal.MISSING_PRODUCER_EVIDENCE
+      } else {
+        FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS
+      },
     )
   }
 }
