@@ -172,7 +172,7 @@ The phase uses the same agent strategy as goal validate. It discovers required c
 | `/skill-bill phase:pr` | Commit pending changes, push the branch, and create or update a PR | `skill-bill phase pr` |
 | `/skill-bill <intake> operation:feature-guard` | Guard an implementation with a feature flag | `skill-bill operation feature-guard` |
 | `/skill-bill <intake> operation:feature-guard-cleanup` | Remove a rolled-out feature flag and its legacy path | `skill-bill operation feature-guard-cleanup` |
-| `/skill-bill operation:verify spec:<path> target:<pr\|branch\|base..head>` | Verify a PR against a task spec or design doc | `skill-bill operation verify` |
+| `/skill-bill operation:verify <linear-issue\|requirements\|spec:<path>> [target:<pr\|branch\|base..head>]` | Verify a change against a Linear issue, requirements text, or a task spec | `skill-bill operation verify` |
 | `/skill-bill [<pr>] operation:pr-review-fix` | Triage PR feedback, then apply selected fixes, reply, and push after approval | `skill-bill operation pr-review-fix` |
 | `/skill-bill [<scope>] operation:unit-test-value-check` | Identify tests that cannot catch a realistic regression | `skill-bill operation unit-test-value-check` |
 | `/skill-bill operation:release bump:<patch\|minor\|major>` | Prepare a changelog, confirm the requested semver bump, and push an annotated tag | `skill-bill operation release` |

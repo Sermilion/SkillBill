@@ -32,7 +32,7 @@ internal data class VerifyRun(
   val context: OperationContext,
   val workflowId: String,
   val sessionId: String,
-  val specPath: String,
+  val intake: String,
   val target: VerifyTarget,
   val mode: VerifyReviewMode,
   val criteria: VerifyCriteria,
@@ -315,7 +315,7 @@ internal class VerifyStepSequence(
         orchestrated = false,
         acceptanceCriteriaCount = run.criteria.acceptanceCriteriaCount,
         rolloutRelevant = run.criteria.rolloutRelevant,
-        specSummary = run.specPath,
+        specSummary = run.intake,
         durationSeconds = Duration.between(run.startedAt, clock.instant()).seconds.toInt(),
       ),
     )

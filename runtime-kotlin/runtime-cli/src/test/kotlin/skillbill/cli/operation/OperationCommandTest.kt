@@ -95,8 +95,8 @@ class OperationCommandTest {
   }
 
   @Test
-  fun `verify without spec and target is a usage error naming both`() {
-    listOf(emptyList(), listOf("spec:docs/spec.md"), listOf("target:12")).forEach { args ->
+  fun `verify without an intake is a usage error naming the accepted intakes`() {
+    listOf(emptyList(), listOf("target:12"), listOf("mode:inline")).forEach { args ->
       val result =
         CliRuntime.run(
           listOf("--db", dbPath.toString(), "operation", "verify") + args,
@@ -105,7 +105,7 @@ class OperationCommandTest {
       val output = result.stdout + result.stderr
 
       assertNotEquals(0, result.exitCode, output)
-      assertContains(output, "spec:<path> and target:<pr-number|branch|base..head>")
+      assertContains(output, "a Linear issue key or URL, requirements text, or spec:<path>")
     }
     assertEquals(0, rowCount("feature_verify_workflows"))
   }

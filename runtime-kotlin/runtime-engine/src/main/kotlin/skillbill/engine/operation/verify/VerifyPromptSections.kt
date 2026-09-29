@@ -51,16 +51,26 @@ internal object VerifyPromptSections {
       "Do not ask for confirmation; the runtime shows the criteria to the operator."
 
   fun extractCriteriaDirective(
-    specPath: String,
+    intake: VerifyIntake,
     targetLabel: String,
   ): String =
     listOf(
-      "# Operation: verify (extract criteria)\n\n" +
-        "Read the task spec at `$specPath` (a file, or a directory of spec files) and extract its criteria. " +
-        "$READ_ONLY\n\nVerify target: $targetLabel",
+      "# Operation: verify (extract criteria)\n\n" + intakeSource(intake) + " $READ_ONLY\n\n" +
+        "Verify target: $targetLabel",
       CRITERIA_EXTRACTION,
       CRITERIA_HEADINGS,
     ).joinToString("\n\n")
+
+  private fun intakeSource(intake: VerifyIntake): String =
+    when (intake) {
+      is VerifyIntake.SpecFile ->
+        "Read the task spec at `${intake.value}` (a file, or a directory of spec files) and extract its criteria."
+      is VerifyIntake.Text ->
+        "The `Operator instructions` section names the task to verify. When it names a Linear issue key or URL, " +
+          "fetch that issue with the Linear tools and read its description and comments. When it names a spec " +
+          "file or directory in this repository, read it. Otherwise it states the requirements itself. Extract " +
+          "the task's criteria from that source."
+    }
 
   fun featureFlagAuditDirective(comparisonScope: String): String =
     listOf(

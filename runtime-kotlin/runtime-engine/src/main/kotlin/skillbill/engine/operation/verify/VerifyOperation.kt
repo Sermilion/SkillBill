@@ -60,7 +60,7 @@ class VerifyOperation(
     arguments.mode?.let { mode ->
       VerifyReviewMode.fromWire(mode) ?: throw InvalidOperationArgumentError("mode", mode, "inline|delegated")
     }
-    if (!context.confirming && (arguments.spec.isNullOrBlank() || arguments.target.isNullOrBlank())) {
+    if (!context.confirming && arguments.spec.isNullOrBlank() && context.instructions.isNullOrBlank()) {
       throw MissingOperationIntakeError(id, INTAKE)
     }
   }
@@ -75,9 +75,8 @@ class VerifyOperation(
   }
 
   private fun propose(context: OperationContext): OperationOutcome {
-    val specPath = requireNotNull(context.arguments.spec).trim()
-    requireSpec(context, specPath)
-    val target = resolveTarget(context, requireNotNull(context.arguments.target).trim())
+    val intake = intakeOf(context)
+    val target = resolveTarget(context, context.arguments.target?.trim()?.takeIf(String::isNotEmpty) ?: DEFAULT_TARGET)
     val mode = VerifyReviewMode.fromWire(context.arguments.mode) ?: VerifyReviewMode.INLINE
     val openArgs = WorkflowServiceOpenArgs(WorkflowFamilyKind.VERIFY, currentStepId = VerifyWorkflow.EXTRACT_CRITERIA)
     val workflowId =
@@ -88,7 +87,7 @@ class VerifyOperation(
     val inputContext =
       mapOf(
         VerifyWorkflow.REPO_ROOT to repoRootOf(context),
-        VerifyWorkflow.SPEC_PATH to specPath,
+        intake.storageKey to intake.value,
         VerifyWorkflow.TARGET to target.label,
         VerifyWorkflow.BASE_REVISION to target.baseRevision,
         VerifyWorkflow.HEAD_REVISION to target.headRevision,
@@ -107,16 +106,16 @@ class VerifyOperation(
         mapOf(VerifyWorkflow.INPUT_CONTEXT to inputContext),
       )
     if (started is VerifyWrite.Rejected) return OperationOutcome.Failed(started.error)
-    return extractAndPark(context, workflowId, specPath, target)
+    return extractAndPark(context, workflowId, intake, target)
   }
 
   private fun extractAndPark(
     context: OperationContext,
     workflowId: String,
-    specPath: String,
+    intake: VerifyIntake,
     target: VerifyTarget,
   ): OperationOutcome {
-    val directive = VerifyPromptSections.extractCriteriaDirective(specPath, target.label)
+    val directive = VerifyPromptSections.extractCriteriaDirective(intake, target.label)
     val extracted =
       when (val step = context.steps.runReadOnly(context, VerifyPromptSections.EXTRACT_CRITERIA_STEP, directive)) {
         is OperationStepResult.Failed -> return failExtraction(workflowId, step.reason)
@@ -135,7 +134,7 @@ class VerifyOperation(
     supersedeParked(context, workflowId)
     return OperationOutcome.AwaitingConfirmation(
       workflowId,
-      "Verify criteria for $specPath against ${target.label}:\n\n${criteria.summary()}\n\n" +
+      "Verify criteria for ${intake.label} against ${target.label}:\n\n${criteria.summary()}\n\n" +
         "Confirm or adjust the criteria before the review runs.",
     )
   }
@@ -167,9 +166,9 @@ class VerifyOperation(
     val mode = VerifyReviewMode.fromWire(context.arguments.mode ?: storedMode) ?: VerifyReviewMode.INLINE
     val criteriaArtifact = snapshot.artifacts[VerifyWorkflow.CRITERIA_SUMMARY]
     val criteria = VerifyCriteria.fromArtifact(criteriaArtifact)
-    val specPath = VerifyWorkflow.string(inputContext, VerifyWorkflow.SPEC_PATH).orEmpty()
+    val intake = VerifyIntake.stored(inputContext)?.label.orEmpty()
     val attempts = snapshot.steps.associate { step -> step.stepId to step.attemptCount }
-    val run = VerifyRun(context, workflowId, snapshot.sessionId, specPath, target, mode, criteria, clock.instant())
+    val run = VerifyRun(context, workflowId, snapshot.sessionId, intake, target, mode, criteria, clock.instant())
     if (snapshot.currentStepId in PARKED_STEPS) {
       return if (criteriaArtifact == null) {
         OperationOutcome.Failed(
@@ -215,7 +214,7 @@ class VerifyOperation(
         FeatureVerifyStartedRequest(
           acceptanceCriteriaCount = run.criteria.acceptanceCriteriaCount,
           rolloutRelevant = run.criteria.rolloutRelevant,
-          specSummary = run.specPath,
+          specSummary = run.intake,
           orchestrated = false,
         ),
       )
@@ -326,6 +325,13 @@ class VerifyOperation(
       null
     }
 
+  private fun intakeOf(context: OperationContext): VerifyIntake {
+    val specPath = context.arguments.spec?.trim()?.takeIf(String::isNotEmpty)
+    if (specPath == null) return VerifyIntake.Text(context.instructions.orEmpty().trim())
+    requireSpec(context, specPath)
+    return VerifyIntake.SpecFile(specPath)
+  }
+
   private fun requireSpec(
     context: OperationContext,
     specPath: String,
@@ -403,7 +409,8 @@ class VerifyOperation(
   private fun repoRootOf(context: OperationContext): String = context.repoRoot.toAbsolutePath().normalize().toString()
 
   private companion object {
-    const val INTAKE = "spec:<path> and target:<pr-number|branch|base..head>"
+    const val INTAKE = "a Linear issue key or URL, requirements text, or spec:<path>"
+    const val DEFAULT_TARGET = "HEAD"
     const val MANIFEST = "decomposition-manifest.yaml"
     const val RANGE = ".."
     const val DEFAULT_BASE_REF = "origin/HEAD"

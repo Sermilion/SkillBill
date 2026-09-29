@@ -43,8 +43,9 @@ class OperationCommand(
       "key:value pairs (${OperationInvocationParser.KEYS.joinToString(", ") { "$it:" }}); any other text is " +
         "operator instructions for the operation's agent step. pr-review-fix reads a leading #<number> or PR " +
         "URL, or a lone PR number (default: the current branch's PR) and alone accepts push:on|off and " +
-        "replies:post|draft. verify alone accepts spec:<path>, target:<pr-number|branch|base..head>, and " +
-        "mode:inline|delegated; its confirm:<token> is the verify workflow id.",
+        "replies:post|draft. verify reads its intake from the free text (a Linear issue key or URL, or the " +
+        "requirements) or spec:<path>, and alone accepts spec:, target:<pr-number|branch|base..head> (default: " +
+        "HEAD against origin/HEAD), and mode:inline|delegated; its confirm:<token> is the verify workflow id.",
   ).multiple()
   private val agent by option(
     "--agent",

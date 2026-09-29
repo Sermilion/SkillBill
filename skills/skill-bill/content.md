@@ -44,7 +44,7 @@ intake. Forwarded `key:value` tokens follow the intake unchanged.
 | `/skill-bill <intake> operation:feature-guard` | `skill-bill operation feature-guard <intake> --agent <currently-executing-agent>` | required |
 | `/skill-bill <intake> operation:feature-guard-cleanup` | `skill-bill operation feature-guard-cleanup <intake> --agent <currently-executing-agent>` | required |
 | `/skill-bill [<pr>] operation:pr-review-fix [scope:analyze-only] [push:on] [replies:draft]` | `skill-bill operation pr-review-fix [<pr>] [<tokens>] --agent <currently-executing-agent>` | optional |
-| `/skill-bill operation:verify spec:<path> target:<pr\|branch\|base..head> [mode:inline\|delegated]` | `skill-bill operation verify [spec:<value>] [target:<value>] [mode:inline\|delegated] --agent <currently-executing-agent>` | required |
+| `/skill-bill operation:verify <intake> [target:<pr\|branch\|base..head>] [mode:inline\|delegated]` | `skill-bill operation verify <intake> [spec:<value>] [target:<value>] [mode:inline\|delegated] --agent <currently-executing-agent>` | required |
 
 If `phase:plan` has no intake, stop and ask for it. For any
 other `phase:` name, stop and list the names in this table. If
@@ -64,8 +64,11 @@ and `target:` tokens verbatim and any other text as operator instructions. The
 runtime rejects an unknown operation name, a missing bump, a missing guard
 intake, a `push:` or `replies:` token outside `operation:pr-review-fix`, or a
 `spec:`, `target:`, or `mode:` token outside `operation:verify`; relay its usage
-error. For `operation:verify`, forward `mode:` verbatim; without it, the runtime
-reviews inline.
+error. For `operation:verify`, forward the intake verbatim: a Linear issue key or
+URL, the requirements as raw text, or a `spec:<path>` token. If it has no intake,
+stop and ask for it. Forward `target:` and `mode:` verbatim; without `target:`,
+the runtime verifies HEAD against `origin/HEAD`, and without `mode:`, it reviews
+inline.
 
 ## Token Forwarding
 
@@ -293,8 +296,8 @@ recognise; relay that usage error and ask again.
 For `operation:verify` the proposal is the extracted acceptance criteria. Show
 them and ask the operator once to confirm or adjust them. On confirm, run the same
 operation with `confirm:<token>`. On an adjustment, run the same operation again
-with the same `spec:`, `target:`, and `mode:` tokens and the adjustment as
-instructions, then relay the new criteria and their new token; the new run
+with the same intake and the same `spec:`, `target:`, and `mode:` tokens, adding
+the adjustment after the intake, then relay the new criteria and their new token; the new run
 supersedes the earlier one. The verify report is final: never offer a fix or a
 PR comment. When the command is blocked with a reason starting
 `rehydrate-needed:`, run Rehydrate for that spec path, then run the same

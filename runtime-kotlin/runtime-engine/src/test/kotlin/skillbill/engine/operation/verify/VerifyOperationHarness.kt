@@ -94,6 +94,7 @@ internal class VerifyOperationHarness : AutoCloseable {
     write("src/test/kotlin/GreeterTest.kt", "class GreeterTest\n")
     commitAll("feature")
     head = git("rev-parse", "HEAD")
+    git("update-ref", "refs/remotes/origin/HEAD", base)
     workflows =
       WorkflowService(
         database = database,

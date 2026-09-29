@@ -167,7 +167,7 @@ Then try the `/skill-bill` forms in your agent, in this order:
 - `/skill-bill <KEY> <description>`
 - `/skill-bill phase:review`
 - `/skill-bill phase:validation`
-- `/skill-bill operation:verify spec:<path> target:<pr>`
+- `/skill-bill operation:verify <linear-issue|requirements|spec:<path>> [target:<pr>]`
 
 Use the full run first because it exercises the full governed path: feature spec, planning, implementation, routed review, validation, history, and PR handoff. Use `phase:plan` when you need standalone spec/decomposition preparation before implementation. Use `phase:review` directly when you only need the review phase. `/skill-bill` is the only listed skill; each form runs `skill-bill phase <name>` or `skill-bill operation <name>`.
 

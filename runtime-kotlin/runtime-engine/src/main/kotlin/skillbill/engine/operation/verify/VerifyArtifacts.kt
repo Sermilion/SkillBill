@@ -33,6 +33,7 @@ internal object VerifyWorkflow {
 
   const val REPO_ROOT = "repo_root"
   const val SPEC_PATH = "spec_path"
+  const val INTAKE = "intake"
   const val TARGET = "target"
   const val BASE_REVISION = "base_revision"
   const val HEAD_REVISION = "head_revision"

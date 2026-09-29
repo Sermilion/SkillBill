@@ -1,7 +1,9 @@
 package skillbill.engine.operation.verify
 
+import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
+import skillbill.error.operation.MissingOperationIntakeError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -201,7 +203,59 @@ class VerifyOperationTest {
     }
   }
 
+  @Test
+  fun `a free-text intake with no spec or target verifies HEAD against origin HEAD from that text`() {
+    VerifyOperationHarness().use { harness ->
+      val parked =
+        assertIs<OperationOutcome.AwaitingConfirmation>(harness.invoke(OperationArguments(), instructions = LINEAR))
+
+      assertTrue("Verify criteria for $LINEAR against HEAD" in parked.proposalSummary, parked.proposalSummary)
+      val extraction = harness.runner.input(VerifyPromptSections.EXTRACT_CRITERIA_STEP)
+      assertTrue("Linear issue" in extraction.directive, extraction.directive)
+      assertFalse("Read the task spec at" in extraction.directive, extraction.directive)
+      assertEquals(LINEAR, extraction.operatorInstructions)
+      val inputContext = harness.snapshot(parked.token).artifacts.getValue("input_context") as Map<*, *>
+      assertEquals(LINEAR, inputContext["intake"])
+      assertFalse("spec_path" in inputContext)
+      assertEquals(harness.base, inputContext["base_revision"])
+      assertEquals(harness.head, inputContext["head_revision"])
+
+      assertIs<OperationOutcome.Completed>(harness.confirm(parked.token))
+      assertEquals(listOf(LINEAR), harness.telemetry.started.map { it.specSummary })
+    }
+  }
+
+  @Test
+  fun `raw requirements text is labelled by its first line against an explicit target`() {
+    VerifyOperationHarness().use { harness ->
+      val text = "\n  Greets the user by name.\nFalls back to a plain greeting without one."
+
+      val parked =
+        assertIs<OperationOutcome.AwaitingConfirmation>(
+          harness.invoke(OperationArguments(target = harness.range), instructions = text),
+        )
+
+      assertTrue(
+        "Verify criteria for Greets the user by name. against ${harness.range}" in parked.proposalSummary,
+        parked.proposalSummary,
+      )
+      val inputContext = harness.snapshot(parked.token).artifacts.getValue("input_context") as Map<*, *>
+      assertEquals(text.trim(), inputContext["intake"])
+    }
+  }
+
+  @Test
+  fun `verify with neither free text nor spec is a usage error that opens no workflow`() {
+    VerifyOperationHarness().use { harness ->
+      assertFailsWith<MissingOperationIntakeError> { harness.invoke(OperationArguments(target = harness.range)) }
+
+      assertEquals(0, harness.rowCount("feature_verify_workflows"))
+    }
+  }
+
   private companion object {
+    const val LINEAR = "https://linear.app/acme/issue/FP-1/greeting"
+
     val ARTIFACTS =
       setOf(
         "input_context",
