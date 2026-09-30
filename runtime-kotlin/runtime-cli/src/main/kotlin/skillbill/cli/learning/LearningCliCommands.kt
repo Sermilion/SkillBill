@@ -1,5 +1,6 @@
 package skillbill.cli.learning
 
+import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.option
@@ -22,19 +23,23 @@ import skillbill.learnings.model.LearningScope
 
 @Inject
 class LearningsQueryCommands(
-  val listCommand: LearningsListCommand,
-  val showCommand: LearningsShowCommand,
-  val resolveCommand: LearningsResolveCommand,
-)
+  listCommand: LearningsListCommand,
+  showCommand: LearningsShowCommand,
+  resolveCommand: LearningsResolveCommand,
+) {
+  val commands: List<CliktCommand> = listOf(listCommand, showCommand, resolveCommand)
+}
 
 @Inject
 class LearningsMutationCommands(
-  val addCommand: LearningsAddCommand,
-  val editCommand: LearningsEditCommand,
-  val disableCommand: LearningsDisableCommand,
-  val enableCommand: LearningsEnableCommand,
-  val deleteCommand: LearningsDeleteCommand,
-)
+  addCommand: LearningsAddCommand,
+  editCommand: LearningsEditCommand,
+  disableCommand: LearningsDisableCommand,
+  enableCommand: LearningsEnableCommand,
+  deleteCommand: LearningsDeleteCommand,
+) {
+  val commands: List<CliktCommand> = listOf(addCommand, editCommand, disableCommand, enableCommand, deleteCommand)
+}
 
 @Inject
 class LearningsCommand(
@@ -42,16 +47,7 @@ class LearningsCommand(
   mutationCommands: LearningsMutationCommands,
 ) : DocumentedNoOpCliCommand("learnings", "Manage local review learnings.") {
   init {
-    subcommands(
-      queryCommands.listCommand,
-      queryCommands.showCommand,
-      queryCommands.resolveCommand,
-      mutationCommands.addCommand,
-      mutationCommands.editCommand,
-      mutationCommands.disableCommand,
-      mutationCommands.enableCommand,
-      mutationCommands.deleteCommand,
-    )
+    subcommands(queryCommands.commands + mutationCommands.commands)
   }
 }
 

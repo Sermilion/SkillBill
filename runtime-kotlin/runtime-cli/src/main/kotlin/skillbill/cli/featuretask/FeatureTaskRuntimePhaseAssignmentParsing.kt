@@ -67,6 +67,8 @@ internal fun parsePhaseModels(rawAssignments: List<String>): Map<String, PhaseMo
 internal fun invalidPhaseModel(message: String): Nothing = throw UsageError(message)
 
 internal data class PreparedRuntimeRun(
+  val issueKey: String,
+  val specPath: String,
   val repoRoot: Path,
   val invokedAgentId: String,
   val agentAssignment: FeatureTaskRuntimeAgentAssignment,

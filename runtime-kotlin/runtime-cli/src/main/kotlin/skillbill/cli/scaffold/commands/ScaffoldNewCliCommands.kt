@@ -24,19 +24,14 @@ import skillbill.ports.scaffold.UnsupportedScaffoldGateway
 import java.time.Clock
 
 @Inject
-data class ScaffoldNewDependencies(
-  val clock: Clock,
-  val scaffoldGateway: ScaffoldGateway,
-  val scaffoldCatalogGateway: ScaffoldCatalogGateway,
-  val installAgentService: InstallAgentService,
-  val externalAddonOverlayService: ExternalAddonOverlayService,
-)
-
-@Inject
 class NewSkillCommand(
   private val state: CliRunState,
   private val inputs: CliRunInputs,
-  private val deps: ScaffoldNewDependencies,
+  private val clock: Clock,
+  private val scaffoldGateway: ScaffoldGateway,
+  private val scaffoldCatalogGateway: ScaffoldCatalogGateway,
+  private val installAgentService: InstallAgentService,
+  private val externalAddonOverlayService: ExternalAddonOverlayService,
 ) : DocumentedCliCommand("new-skill", "Scaffold a new skill from a short wizard or payload file.") {
   private val payload by option("--payload", help = "Path to a JSON payload file (or '-' for stdin).")
   private val interactive by option(
@@ -60,9 +55,9 @@ class NewSkillCommand(
         format = format,
         state = state,
         inputs = inputs,
-        clock = deps.clock,
-        scaffoldGateway = deps.scaffoldGateway,
-        externalAddonOverlayService = deps.externalAddonOverlayService,
+        clock = clock,
+        scaffoldGateway = scaffoldGateway,
+        externalAddonOverlayService = externalAddonOverlayService,
       )
     state.result =
       if (assisted && payload != null) {
@@ -71,15 +66,15 @@ class NewSkillCommand(
         runNativeAssistedScaffoldWizard(
           AssistedScaffoldWizardArgs(
             run = runArgs,
-            scaffoldCatalogGateway = deps.scaffoldCatalogGateway,
-            installAgentService = deps.installAgentService,
+            scaffoldCatalogGateway = scaffoldCatalogGateway,
+            installAgentService = installAgentService,
           ),
         )
       } else if (interactive || payload == null) {
         runNativeScaffoldWizard(
           ScaffoldWizardArgs(
             run = runArgs,
-            scaffoldCatalogGateway = deps.scaffoldCatalogGateway,
+            scaffoldCatalogGateway = scaffoldCatalogGateway,
           ),
         )
       } else {
@@ -94,7 +89,11 @@ class NewSkillCommand(
 class NewCommand(
   private val state: CliRunState,
   private val inputs: CliRunInputs,
-  private val deps: ScaffoldNewDependencies,
+  private val clock: Clock,
+  private val scaffoldGateway: ScaffoldGateway,
+  private val scaffoldCatalogGateway: ScaffoldCatalogGateway,
+  private val installAgentService: InstallAgentService,
+  private val externalAddonOverlayService: ExternalAddonOverlayService,
 ) : DocumentedCliCommand("new", "Scaffold a new skill from a short wizard or payload file.") {
   private val payload by option("--payload", help = "Path to a JSON payload file (or '-' for stdin).")
   private val interactive by option(
@@ -118,9 +117,9 @@ class NewCommand(
         format = format,
         state = state,
         inputs = inputs,
-        clock = deps.clock,
-        scaffoldGateway = deps.scaffoldGateway,
-        externalAddonOverlayService = deps.externalAddonOverlayService,
+        clock = clock,
+        scaffoldGateway = scaffoldGateway,
+        externalAddonOverlayService = externalAddonOverlayService,
       )
     state.result =
       if (assisted && payload != null) {
@@ -129,15 +128,15 @@ class NewCommand(
         runNativeAssistedScaffoldWizard(
           AssistedScaffoldWizardArgs(
             run = runArgs,
-            scaffoldCatalogGateway = deps.scaffoldCatalogGateway,
-            installAgentService = deps.installAgentService,
+            scaffoldCatalogGateway = scaffoldCatalogGateway,
+            installAgentService = installAgentService,
           ),
         )
       } else if (interactive || payload == null) {
         runNativeScaffoldWizard(
           ScaffoldWizardArgs(
             run = runArgs,
-            scaffoldCatalogGateway = deps.scaffoldCatalogGateway,
+            scaffoldCatalogGateway = scaffoldCatalogGateway,
           ),
         )
       } else {

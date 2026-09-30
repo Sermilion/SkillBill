@@ -41,31 +41,24 @@ class WorkflowTopLevelCommands(
       "verify-workflow",
       "Inspect or resume durable bill-feature-verify workflow runs.",
     ) {}
-      .subcommands(
-        verifyCommands.open,
-        verifyCommands.update,
-        verifyCommands.show,
-        verifyCommands.get,
-        verifyCommands.list,
-        verifyCommands.latest,
-        verifyCommands.resume,
-        verifyCommands.continueCommand,
-      )
+      .subcommands(verifyCommands.commands)
 
   val commands: List<CliktCommand> = listOf(verifyWorkflowCommand)
 }
 
 @Inject
 class VerifyWorkflowCommands(
-  val open: VerifyWorkflowOpenCommand,
-  val update: VerifyWorkflowUpdateCommand,
-  val show: VerifyWorkflowShowCommand,
-  val get: VerifyWorkflowGetCommand,
-  val list: VerifyWorkflowListCommand,
-  val latest: VerifyWorkflowLatestCommand,
-  val resume: VerifyWorkflowResumeCommand,
-  val continueCommand: VerifyWorkflowContinueCommand,
-)
+  open: VerifyWorkflowOpenCommand,
+  update: VerifyWorkflowUpdateCommand,
+  show: VerifyWorkflowShowCommand,
+  get: VerifyWorkflowGetCommand,
+  list: VerifyWorkflowListCommand,
+  latest: VerifyWorkflowLatestCommand,
+  resume: VerifyWorkflowResumeCommand,
+  continueCommand: VerifyWorkflowContinueCommand,
+) {
+  val commands: List<CliktCommand> = listOf(open, update, show, get, list, latest, resume, continueCommand)
+}
 
 @Inject
 class VerifyWorkflowOpenCommand(

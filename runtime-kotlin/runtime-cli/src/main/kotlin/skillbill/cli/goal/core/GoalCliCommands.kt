@@ -1,5 +1,6 @@
 package skillbill.cli.goal.core
 
+import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.optional
@@ -60,47 +61,49 @@ import kotlin.time.Duration.Companion.minutes
 
 @Inject
 class GoalControlFlowCommands(
-  val pause: GoalPauseCommand,
-  val stop: GoalStopCommand,
-  val resume: GoalResumeCommand,
-  val reset: GoalResetCommand,
-  val purge: GoalPurgeCommand,
-)
+  pause: GoalPauseCommand,
+  stop: GoalStopCommand,
+  resume: GoalResumeCommand,
+  reset: GoalResetCommand,
+  purge: GoalPurgeCommand,
+) {
+  val commands: List<CliktCommand> = listOf(pause, stop, resume, reset, purge)
+}
 
 @Inject
 class GoalControlOperatorCommands(
-  val replan: GoalReplanCommand,
-  val accept: GoalAcceptCommand,
-  val repair: GoalRepairCommand,
-  val operatorDecision: GoalOperatorDecisionCommand,
-)
+  replan: GoalReplanCommand,
+  accept: GoalAcceptCommand,
+  repair: GoalRepairCommand,
+  operatorDecision: GoalOperatorDecisionCommand,
+) {
+  val commands: List<CliktCommand> = listOf(replan, accept, repair, operatorDecision)
+}
 
 @Inject
 class GoalControlSubcommands(
-  val flow: GoalControlFlowCommands,
-  val operator: GoalControlOperatorCommands,
-)
+  flow: GoalControlFlowCommands,
+  operator: GoalControlOperatorCommands,
+) {
+  val commands: List<CliktCommand> = flow.commands + operator.commands
+}
 
 @Inject
 class GoalRunSubcommands(
-  val preflight: GoalPreflightCommand,
-  val status: GoalStatusCommand,
-  val watch: GoalWatchCommand,
-  val controls: GoalControlSubcommands,
-  val findings: GoalFindingsCommand,
-  val planningLog: GoalPlanningLogCommand,
-)
-
-@Inject
-class GoalRunExecution(
-  private val goalRunner: GoalRunner,
+  preflight: GoalPreflightCommand,
+  status: GoalStatusCommand,
+  watch: GoalWatchCommand,
+  controls: GoalControlSubcommands,
+  findings: GoalFindingsCommand,
+  planningLog: GoalPlanningLogCommand,
 ) {
-  fun run(request: GoalRunnerRunRequest) = goalRunner.run(request)
+  val commands: List<CliktCommand> =
+    listOf(preflight, status, watch) + controls.commands + listOf(findings, planningLog)
 }
 
 @Inject
 class GoalRunCommand(
-  private val execution: GoalRunExecution,
+  private val goalRunner: GoalRunner,
   private val runtimeProvenanceService: RuntimeProvenanceService,
   private val agentAddonSelectionPort: AgentAddonSelectionPort,
   private val externalAgentAddonSourceConfigPort: ExternalAgentAddonSourceConfigPort,
@@ -177,22 +180,7 @@ class GoalRunCommand(
   override val invokeWithoutSubcommand: Boolean = true
 
   init {
-    subcommands(
-      goalRunSubcommands.preflight,
-      goalRunSubcommands.status,
-      goalRunSubcommands.watch,
-      goalRunSubcommands.controls.flow.pause,
-      goalRunSubcommands.controls.flow.stop,
-      goalRunSubcommands.controls.flow.resume,
-      goalRunSubcommands.controls.flow.reset,
-      goalRunSubcommands.controls.flow.purge,
-      goalRunSubcommands.controls.operator.replan,
-      goalRunSubcommands.controls.operator.accept,
-      goalRunSubcommands.controls.operator.repair,
-      goalRunSubcommands.controls.operator.operatorDecision,
-      goalRunSubcommands.findings,
-      goalRunSubcommands.planningLog,
-    )
+    subcommands(goalRunSubcommands.commands)
   }
 
   override fun run() {
@@ -248,7 +236,7 @@ class GoalRunCommand(
       )
     presenter.emitStartupProvenance()
     val request = runRequest(runIssueKey, invokedAgentId, hydratedSelection, presenter, effectiveRepoRoot)
-    val report = execution.run(request)
+    val report = goalRunner.run(request)
     val payload = report.toGoalRunCliMap()
     state.completeText(goalRunText(report), payload, exitCode = report.goalRunExitCode())
     drainTelemetryOnCompletion(telemetryService, diagnostics)

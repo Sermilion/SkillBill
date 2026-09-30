@@ -132,8 +132,8 @@ class FeatureTaskRuntimeStatusCommand(
 
 @Inject
 class FeatureTaskRuntimeResumeCommand(
-  private val deps: FeatureTaskRuntimeRunDependencies,
-  private val lookupService: FeatureTaskContinuationLookupService,
+  private val preparation: FeatureTaskRuntimeRunPreparation,
+  private val execution: FeatureTaskRuntimeRunExecution,
 ) : FeatureTaskRuntimePhaseAgentCommand(
     FeatureTaskRuntimeGoalContinuationLaunchTokens.RESUME_SUBCOMMAND,
     "Resume a feature-task run against an existing workflow id.",
@@ -143,26 +143,7 @@ class FeatureTaskRuntimeResumeCommand(
   private val specPath by argument(help = "Path to the governed spec the run implements.")
 
   override fun run() {
-    val resolvedRepoRoot = resolveCliRepositoryRoot(repoRoot, deps.inputs)
-    val prepared = prepareRuntimeRun(deps, resolvedRepoRoot)
-    verifyRuntimeResume(
-      VerifyRuntimeResumeArgs(
-        lookupService = lookupService,
-        workflowId = workflowId,
-        issueKey = issueKey,
-        specPath = specPath,
-        repoRoot = prepared.repoRoot,
-        goalChild = goalParentIssueKey != null,
-        repositoryEnclosingRootPort = deps.inputs.repositoryEnclosingRootPort,
-      ),
-    )
-    executeRuntimeRun(
-      deps = deps,
-      issueKey = requireNotNull(issueKey),
-      specPath = specPath,
-      prepared = prepared,
-      workflowId = { workflowId },
-    )
+    execution.execute(this, preparation.prepareResume(this, workflowId, issueKey, specPath), workflowId)
   }
 }
 

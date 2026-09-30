@@ -3,31 +3,31 @@ contract_version: "0.5"
 issue_key: "SKILL-386"
 feature_name: "runtime-cli-architecture"
 parent_spec_path: ".feature-specs/SKILL-386-runtime-cli-architecture/spec.md"
-status: "pending"
+status: "in_progress"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feat/SKILL-386-runtime-cli-architecture"
 stack_branches: []
 current_subtask_intent:
   subtask_id: 1
-  action: "start"
+  action: "resume"
 subtasks:
 - id: 1
   name: "runtime-cli composition without dependency bags"
-  spec_path: "/Users/braian.gapur/IdeaProjects/skill-bill/.feature-specs/SKILL-386-runtime-cli-architecture/spec_subtask_1_runtime-cli-composition-without-dependency-bags.md"
-  status: "pending"
+  spec_path: ".feature-specs/SKILL-386-runtime-cli-architecture/spec_subtask_1_runtime-cli-composition-without-dependency-bags.md"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20260930-201106-lzb6"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "audit"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
   dependencies: []
 - id: 2
   name: "cross-module contract ownership seen from the CLI"
-  spec_path: "/Users/braian.gapur/IdeaProjects/skill-bill/.feature-specs/SKILL-386-runtime-cli-architecture/spec_subtask_2_cross-module-contract-ownership-seen-from-the-cli.md"
+  spec_path: ".feature-specs/SKILL-386-runtime-cli-architecture/spec_subtask_2_cross-module-contract-ownership-seen-from-the-cli.md"
   status: "pending"
   branch: null
   commit_sha: null
