@@ -1,3 +1,10 @@
+## [2026-09-30] Admission routes the gate pack by tracked files when the diff has no concrete owner
+
+Context: Goal-child admission freezes the gate pack from working-tree paths before implementation. A clean tree refused creation and a spec-only diff admitted the gateless review fallback, so SKILL-386 subtask 1 blocked at build with Kotlin changes committed.
+Decision: Admission keeps changed-path routing when a concrete pack owns the diff, including ties. When only the fallback owns it or nothing routes, it routes the repository's tracked files and keeps the fallback result if they have no concrete owner. Build-time resolution without an admitted plan still routes the gate's own changed paths.
+Reason: The frozen pack must name the platform the gate will build. Tracked files are available and deterministic before any code exists; the recorded digest still pins that pack for resume.
+Alternatives considered: Resolving the pack at the first gate run would reopen the frozen policy digest; routing tracked files unconditionally would override a standalone run's concrete diff in mixed repositories.
+
 ## [2026-09-30] Authoring sessions run safe scoped project checks; audit loses its compile exception (SKILL-385)
 
 Context: Authoring prompts banned every command, so formatter and static-analysis findings surfaced only at validate, while audit alone could compile.

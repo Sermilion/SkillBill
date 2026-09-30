@@ -5,4 +5,6 @@ import java.nio.file.Path
 
 interface RepositoryOwnedPathsGitOperations {
   fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult
+
+  fun trackedPaths(repoRoot: Path): WorkflowGitNameListResult
 }

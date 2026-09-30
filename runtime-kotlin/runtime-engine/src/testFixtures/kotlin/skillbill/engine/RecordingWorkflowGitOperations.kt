@@ -43,6 +43,7 @@ class RecordingWorkflowGitOperations(
   val worktreeStatusSequence = ArrayDeque<String>()
   var ownedPathsValue: List<String> = emptyList()
   var ownedPathsResult: WorkflowGitNameListResult? = null
+  var trackedPathsValue: List<String> = emptyList()
   var commitCountAheadValue: String? = null
   var mergeBaseWithHeadValue: String? = null
   val repositoryFingerprintSequence = ArrayDeque<String>()
@@ -367,6 +368,11 @@ class RecordingWorkflowGitOperations(
 
   override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult =
     ownedPathsResult ?: WorkflowGitNameListResult.Listed(ownedPathsValue)
+
+  override fun trackedPaths(repoRoot: Path): WorkflowGitNameListResult =
+    WorkflowGitNameListResult.Listed(
+      trackedPathsValue,
+    )
 
   override fun resolveReadinessTreeIdentity(
     repoRoot: Path,

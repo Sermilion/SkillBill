@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.featuretask.validation.kotlinPackWithoutGate
 import skillbill.engine.featuretask.validation.repoLocalConfig
+import skillbill.engine.featuretask.validation.reviewFallbackPackWithoutGate
 import skillbill.engine.featuretask.validation.validationGateTestDeclaration
 import skillbill.engine.featuretask.validation.validationGateTestRepoRoot
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
@@ -118,6 +119,31 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
   }
 
   @Test
+  fun `goal child creation before implementation binds the repository's pack instead of the review fallback`() {
+    val fixture = Fixture()
+    fixture.packs = fixture.packs + reviewFallbackPackWithoutGate()
+    fixture.tracked = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt", "README.md"))
+
+    listOf(emptyList(), listOf(".feature-specs/SKILL-1-demo/decomposition-manifest.yaml")).forEach { owned ->
+      fixture.inventory = WorkflowGitNameListResult.Listed(owned)
+
+      val inputs =
+        fixture.resolver().resolveInputs(
+          root,
+          FeatureTaskRuntimeQualityGateSelection.BUILD,
+          ValidationDepth.FULL,
+          7.minutes,
+        )
+
+      assertEquals("kotlin", inputs.packSlug)
+      assertEquals(listOf("./gradlew", "compileKotlin"), inputs.declaration?.buildCommand)
+    }
+    fixture.inventory = WorkflowGitNameListResult.Listed(emptyList())
+    fixture.tracked = WorkflowGitNameListResult.Failed("ls-files unavailable")
+    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
+  }
+
+  @Test
   fun `clean or differently routed checkout resumes the recorded pack but changed commands are rejected`() {
     val fixture = Fixture()
     val resolver = fixture.resolver()
@@ -185,6 +211,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         qualityGate = FeatureTaskRuntimeQualityGateSelection.BUILD,
       )
     var inventory: WorkflowGitNameListResult = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
+    var tracked: WorkflowGitNameListResult = WorkflowGitNameListResult.Listed(emptyList())
     var inventoryRoot: Path? = null
     var packs =
       listOf(
@@ -208,6 +235,8 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
             inventoryRoot = repoRoot
             return inventory
           }
+
+          override fun trackedPaths(repoRoot: Path): WorkflowGitNameListResult = tracked
         },
         repoLocalConfig(wrapper),
         database,

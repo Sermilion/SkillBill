@@ -51,4 +51,10 @@ internal object GitRepositoryOwnedPathsOperations : RepositoryOwnedPathsGitOpera
       (untracked.value.orEmpty() + trackedValue).split(GIT_NUL).filter(String::isNotEmpty),
     )
   }
+
+  override fun trackedPaths(repoRoot: Path): WorkflowGitNameListResult {
+    val tracked = runGitCommand(repoRoot, "ls-files", "-z")
+    if (tracked !is WorkflowGitOperationResult.Ok) return WorkflowGitNameListResult.Failed(tracked.error)
+    return WorkflowGitNameListResult.Listed(tracked.value.orEmpty().split(GIT_NUL).filter(String::isNotEmpty))
+  }
 }
