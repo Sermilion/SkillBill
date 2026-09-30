@@ -20,7 +20,6 @@ import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
@@ -46,8 +45,6 @@ internal interface PhaseOutputSettlementContext :
   val session: FeatureTaskRuntimeRunSessionObservations
 
   val recorder: PhaseRunRecords
-
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator
 
   val phaseGates: FeatureTaskRuntimePhaseGates
 
@@ -111,8 +108,6 @@ internal interface PhaseAttemptLaunchRuntimeContext : PhaseAttemptEnvironment {
 
   val session: FeatureTaskRuntimeRunSessionObservations
 
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator
-
   val phaseGates: FeatureTaskRuntimePhaseGates
 
   val diagnostics: RuntimeDiagnostics
@@ -148,8 +143,6 @@ internal interface PhaseQualityGateCycleContext :
 
   val recorder: PhaseRunRecords
 
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator
-
   val phaseGates: FeatureTaskRuntimePhaseGates
 
   val clock: Clock
@@ -172,8 +165,6 @@ internal interface PhaseRuntimeFinalizationContext : PhaseAttemptEnvironment {
   val transitions: FeatureTaskRuntimeTransitionDeclaration
 
   val recorder: PhaseRunRecords
-
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator
 
   val phaseGates: FeatureTaskRuntimePhaseGates
 
@@ -201,8 +192,6 @@ internal interface PhaseAttemptTraversalRuntimeContext : PhaseAttemptEnvironment
   val recorder: PhaseRunRecords
 
   val diagnostics: RuntimeDiagnostics
-
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator
 
   val phaseGates: FeatureTaskRuntimePhaseGates
 
@@ -242,9 +231,6 @@ internal open class PhaseAttemptSettlementScope(
 
   override val request: FeatureTaskRuntimeRunFacts
     get() = attemptRunHost().request
-
-  override val outputValidator: FeatureTaskRuntimePhaseOutputValidator
-    get() = attemptRunHost().outputValidator
 
   override val phaseGates: FeatureTaskRuntimePhaseGates
     get() = attemptRunHost().phaseGates

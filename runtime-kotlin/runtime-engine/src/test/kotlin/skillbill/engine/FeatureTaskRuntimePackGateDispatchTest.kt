@@ -1,6 +1,5 @@
 package skillbill.engine
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
@@ -98,7 +97,6 @@ class FeatureTaskRuntimePackGateDispatchTest {
             repoRoot = repo,
             branchSetup = branch,
             launcher = launcher,
-            validator = realFeatureTaskRuntimePhaseOutputValidator,
             goalContinuation =
               FeatureTaskRuntimeGoalContinuationContext(
                 parentIssueKey = "SKILL-384",

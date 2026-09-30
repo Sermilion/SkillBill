@@ -52,7 +52,7 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   override val checkpoints: PhaseRunCheckpoints = DurablePhaseRunCheckpoints(runner.phaseGates.gitOperations)
   override val attemptLoop: PhaseStepAttempts = PhaseAttemptLoop
   override val collaborators: PhaseAttemptCollaborators =
-    PhaseAttemptCollaborators(runner.outputValidator, runner.clock, runner.diagnostics)
+    PhaseAttemptCollaborators(runner.clock, runner.diagnostics)
   override val phaseGates: FeatureTaskRuntimePhaseGates = runner.phaseGates
 
   override fun strategyFor(stepId: String): PhaseStrategy = runner.strategies.strategyFor(stepId, executionPlan)

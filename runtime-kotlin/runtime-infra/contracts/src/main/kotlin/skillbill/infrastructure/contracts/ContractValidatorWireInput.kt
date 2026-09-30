@@ -10,7 +10,6 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionEr
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeImplementationAttemptSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePersistenceSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePlanningProjectionSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeProjectionMeasurementSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeQuarantineSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeSharedEvidenceProjectionSchemaError
@@ -48,8 +47,6 @@ internal fun featureTaskRuntimeWireArtifactNonObjectError(
   when (kind) {
     FeatureTaskRuntimeWireArtifactKind.QUARANTINE_RECORD ->
       InvalidFeatureTaskRuntimeQuarantineSchemaError(sourceLabel = sourceLabel, reason = reason)
-    FeatureTaskRuntimeWireArtifactKind.PLANNING_PROJECTION ->
-      InvalidFeatureTaskRuntimePlanningProjectionSchemaError(sourceLabel = sourceLabel, reason = reason)
     FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_ATTEMPT ->
       InvalidFeatureTaskRuntimeImplementationAttemptSchemaError(sourceLabel = sourceLabel, reason = reason)
     FeatureTaskRuntimeWireArtifactKind.BUILD_RECEIPT ->

@@ -16,7 +16,6 @@ internal class ImplementFixStep : PhaseStepHooks {
   val policy =
     PhaseStepPolicy(
       mutating = true,
-      relaunchOnInvalidOutput = true,
       singleAgentSession = false,
       readOnlyIdle = false,
       fileMutating = true,

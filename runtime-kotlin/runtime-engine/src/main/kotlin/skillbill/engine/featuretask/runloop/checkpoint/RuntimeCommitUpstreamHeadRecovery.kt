@@ -9,7 +9,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
 internal object RuntimeCommitUpstreamHeadRecovery {
   fun reconcileBeforeLaunch(
@@ -69,7 +69,7 @@ internal object RuntimeCommitUpstreamHeadRecovery {
     val accepted =
       output?.let {
         runCatching {
-          context.outputValidator.validatePhaseOutput(it.payload, phaseId).requireAcceptedOutput(phaseId)
+          NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(it.payload, phaseId)
         }.getOrNull()
       }
     if (output != null && accepted != null) {
@@ -77,8 +77,8 @@ internal object RuntimeCommitUpstreamHeadRecovery {
         FeatureTaskRuntimePhaseOutput(
           phaseId = phaseId,
           iteration = attemptCount,
-          payload = accepted.normalizedOutput.canonicalJson,
-          normalizedOutput = accepted.normalizedOutput,
+          payload = accepted.canonicalJson,
+          normalizedOutput = accepted,
         ),
       )
       RuntimeDiagnosticsBestEffortWarning.record(

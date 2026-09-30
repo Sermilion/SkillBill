@@ -9,7 +9,6 @@ class PhaseStepPolicySemanticIdentityTest {
   private val policy =
     PhaseStepPolicy(
       mutating = false,
-      relaunchOnInvalidOutput = false,
       singleAgentSession = false,
       readOnlyIdle = false,
       fileMutating = false,
@@ -22,7 +21,6 @@ class PhaseStepPolicySemanticIdentityTest {
     val changes =
       listOf(
         policy.copy(mutating = true),
-        policy.copy(relaunchOnInvalidOutput = true),
         policy.copy(singleAgentSession = true),
         policy.copy(readOnlyIdle = true),
         policy.copy(fileMutating = true),
@@ -33,7 +31,7 @@ class PhaseStepPolicySemanticIdentityTest {
     changes.forEach { assertNotEquals(baseline, it) }
     assertEquals(changes.size, changes.toSet().size)
     assertEquals(baseline, identity(policy.copy()))
-    assertTrue(Regex("step-policy-v1:[0-9a-f]{64}").matches(baseline))
+    assertTrue(Regex("step-policy-v2:[0-9a-f]{64}").matches(baseline))
   }
 
   @Test

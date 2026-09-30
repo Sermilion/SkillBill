@@ -11,7 +11,6 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeImplementationO
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.phase.core.featureTaskRuntimeImplementationContinuationFrom
-import skillbill.engine.featuretask.phase.planning.producerProjectionGateReason
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeSharedReviewEvidenceResolver
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.checkpoint.goalStartBaselinePaths
@@ -38,30 +37,24 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitio
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
-import skillbill.engine.featuretask.runner.mutatingReconciliationGateReason
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptPlanAuthorization
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.goalrunner.status.completed
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffAssemblyRequest
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputFormat
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairOperation
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputSourceLocation
 
 object FeatureTaskRuntimeRunLoopOutputVerification {
   internal fun implementationObligations(run: PhaseRun): FeatureTaskRuntimeImplementationObligations =
@@ -88,33 +81,15 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     context: PhaseOutputSettlementContext,
     args: CompletionProjectionRejectionArgs,
   ): Pair<String, String>? =
-    with(context) {
-      producerProjectionGateReason(
-        args.run.phaseId,
-        args.normalizedOutput.envelopeWireMap(),
-        phaseGates.planningProjectionValidator,
-      )?.let { "producer-projection" to it }
-        ?: (context as? PhaseAttemptPlanAuthorization)
-          ?.let { planAuthorization ->
-            FeatureTaskRuntimeRunLoopOutputVerification
-              .immediateConsumerProjectionGateReason(
-                context = context,
-                planAuthorization = planAuthorization,
-                args = args,
-              )?.let { "consumer-projection" to it }
-          }
-    }
-
-  internal fun firstValidatedOutputRejection(
-    phaseId: String,
-    mutating: Boolean,
-    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ): Pair<String, String>? =
-    mutatingReconciliationGateReason(
-      phaseId,
-      mutating,
-      outputMap,
-    )?.let { "mutating-reconciliation" to it }
+    (context as? PhaseAttemptPlanAuthorization)
+      ?.let { planAuthorization ->
+        FeatureTaskRuntimeRunLoopOutputVerification
+          .immediateConsumerProjectionGateReason(
+            context = context,
+            planAuthorization = planAuthorization,
+            args = args,
+          )?.let { "consumer-projection" to it }
+      }
 
   internal fun immediateConsumerProjectionGateReason(
     context: PhaseOutputSettlementContext,
@@ -177,7 +152,6 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         FeatureTaskRuntimePhaseBriefingAssembler.assemble(
           handoff,
           run.request.workflowId,
-          phaseGates.planningProjectionValidator,
           run.request.agentAddonSelection,
         )
         null
@@ -236,76 +210,26 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         outputMap,
         blockedDisposition,
       )
-    return if (
-      disposition.retryOnResume &&
-      run.policy.relaunchOnInvalidOutput
-    ) {
-      val producedOutputs = outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS] as? Map<*, *>
-      val value = producedOutputs?.get(SharedPayloadKeys.VALUE) as? String
-      val continuationOutput = normalizedOutput.takeIf { run.policy.mutating && !value.isNullOrBlank() }
-      AttemptResult.retryableTerminal(reason, fileManifest, disposition, continuationOutput)
-    } else {
-      AttemptResult.settled(
-        FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-          progress,
-          loopTransitions,
-          recorder,
-          PhaseBlockRequest(
-            run = run,
-            attemptCount = iteration,
-            reason = reason,
-            observability = observability,
-            payload = BlockAndPersistPayload(fileManifest = fileManifest, normalizedOutput = normalizedOutput),
-            failureDisposition = disposition,
-          ),
-        ),
-      )
+    if (disposition.retryOnResume && !run.policy.singleAgentSession) {
+      val value = (outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS] as? Map<*, *>)?.get(SharedPayloadKeys.VALUE)
+      val continuationOutput =
+        normalizedOutput.takeIf { run.policy.mutating && !(value as? String).isNullOrBlank() }
+      return AttemptResult.RetryableTerminal(reason, fileManifest, disposition, normalizedOutput, continuationOutput)
     }
-  }
-
-  internal fun structuralRepairEvidenceFromSchemaError(
-    error: InvalidFeatureTaskRuntimePhaseOutputSchemaError,
-  ): FeatureTaskRuntimePhaseOutputRepairEvidence? {
-    val originalDigest = error.structuralRepairOriginalDigest
-    val repairedDigest = error.structuralRepairRepairedDigest
-    val format = error.structuralRepairFormat
-    val operation = error.structuralRepairOperation
-    val sourceLabel = error.structuralRepairSourceLabel
-    val sourceOffset = error.structuralRepairSourceOffset
-    val sourceLine = error.structuralRepairSourceLine
-    val sourceColumn = error.structuralRepairSourceColumn
-    if (
-      listOf(
-        originalDigest,
-        repairedDigest,
-        format,
-        operation,
-        sourceLabel,
-        sourceOffset,
-        sourceLine,
-        sourceColumn,
-      ).any { it == null }
-    ) {
-      return null
-    }
-    return FeatureTaskRuntimePhaseOutputRepairEvidence(
-      format =
-        FeatureTaskRuntimePhaseOutputFormat.fromWire(
-          requireNotNull(format),
+    return AttemptResult.settled(
+      FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+        progress,
+        loopTransitions,
+        recorder,
+        PhaseBlockRequest(
+          run = run,
+          attemptCount = iteration,
+          reason = reason,
+          observability = observability,
+          payload = BlockAndPersistPayload(fileManifest = fileManifest, normalizedOutput = normalizedOutput),
+          failureDisposition = disposition,
         ),
-      originalDigest = requireNotNull(originalDigest),
-      repairedDigest = requireNotNull(repairedDigest),
-      operation =
-        FeatureTaskRuntimePhaseOutputRepairOperation.fromWire(
-          requireNotNull(operation),
-        ),
-      sourceLocation =
-        FeatureTaskRuntimePhaseOutputSourceLocation(
-          sourceLabel = requireNotNull(sourceLabel),
-          offset = requireNotNull(sourceOffset),
-          line = requireNotNull(sourceLine),
-          column = requireNotNull(sourceColumn),
-        ),
+      ),
     )
   }
 

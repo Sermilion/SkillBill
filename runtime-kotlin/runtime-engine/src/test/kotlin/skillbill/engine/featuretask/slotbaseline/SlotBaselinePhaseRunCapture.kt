@@ -1,9 +1,8 @@
 package skillbill.engine.featuretask.slotbaseline
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.BranchSetupTestConfig
-import skillbill.engine.DECOMPOSE_PLAN_OUTPUT
+import skillbill.engine.PLAN_BUNDLE_PROSE
 import skillbill.engine.REVIEW_BLOCKER_MESSAGE
 import skillbill.engine.REVIEW_FIX_BLOCKER_FINDING_ID
 import skillbill.engine.RuntimeHarnessConfig
@@ -26,6 +25,7 @@ import skillbill.engine.phaseIdFromPrompt
 import skillbill.engine.telemetryRunnerHarness
 import skillbill.engine.validJsonOutput
 import skillbill.engine.verifyFindingsOutput
+import skillbill.engine.writePlanBundle
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.toReviewAccountingBoundedJson
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -58,11 +58,11 @@ internal object SlotBaselinePhaseRunCapture {
     definitionId: String,
     intake: String?,
   ): AgentPhaseRunCapture =
-    SlotBaselinePhaseRunHarness.use { harness ->
+    SlotBaselinePhaseRunHarness.use(seedSpecIntent = definitionId != SkeletonDefinition.PLAN.id) { harness ->
       val launcher =
         RuntimeRecordingLauncher { request ->
           val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-          facts(if (phaseId == PHASE_PLAN) DECOMPOSE_PLAN_OUTPUT else defaultPhaseOutput(request))
+          facts(if (phaseId == PHASE_PLAN) harness.authorPlanBundle() else defaultPhaseOutput(request))
         }
       val result =
         harness.agentEntry(launcher).run(harness.request(definitionId, mode = null).copy(intake = intake))
@@ -184,7 +184,6 @@ internal class SlotBaselinePhaseRunHarness private constructor(
         branchSetup = BranchSetupTestConfig(gitOperations = git),
         repoRoot = repoRoot,
         launcher = fixLauncher(),
-        validator = realFeatureTaskRuntimePhaseOutputValidator.takeIf { delegated },
         agentAssignment =
           FeatureTaskRuntimeAgentAssignment(perPhaseAgentIds = mapOf(PHASE_REVIEW to REVIEW_AGENT))
             .takeIf { delegated },
@@ -203,7 +202,6 @@ internal class SlotBaselinePhaseRunHarness private constructor(
         repoRoot = repoRoot,
         validationGatePlatformManifests = listOf(kotlinPackWithBuildGate()),
         launcher = RuntimeRecordingLauncher { request -> facts(defaultPhaseOutput(request)) },
-        validator = realFeatureTaskRuntimePhaseOutputValidator,
       ),
     )
   }
@@ -217,6 +215,11 @@ internal class SlotBaselinePhaseRunHarness private constructor(
         launcher = launcher,
       ),
     )
+
+  fun authorPlanBundle(): String {
+    writePlanBundle(repoRoot, PLAN_ISSUE_KEY)
+    return PLAN_BUNDLE_PROSE
+  }
 
   fun specBundleFiles(bundle: PhaseRunSpecBundle): Map<String, String> =
     (listOf(bundle.parentSpecPath, bundle.decompositionManifestPath) + bundle.subtaskSpecPaths)
@@ -256,14 +259,19 @@ internal class SlotBaselinePhaseRunHarness private constructor(
 
   companion object {
     const val REVIEW_AGENT = "claude"
+    const val PLAN_ISSUE_KEY = "SKILL-380"
     const val LEAKY_SOURCE = "val connection = open()\n"
     const val FIXED_SOURCE = "open().use { connection -> connection }\n"
     const val BLOCKER_REVIEW =
       "- [F-001] Blocker | High | $DELEGATED_REVIEWED_PATH:1 | $REVIEW_BLOCKER_MESSAGE\nverdict: changes_requested"
     const val APPROVED_REVIEW = "verdict: approved"
 
-    fun <T> use(block: (SlotBaselinePhaseRunHarness) -> T): T {
-      val repoRoot = SlotBaselineFullRunCapture.seededRepoRoot()
+    fun <T> use(
+      seedSpecIntent: Boolean = true,
+      block: (SlotBaselinePhaseRunHarness) -> T,
+    ): T {
+      val repoRoot =
+        if (seedSpecIntent) SlotBaselineFullRunCapture.seededRepoRoot() else SlotBaselineNormalizer.newRepoRoot()
       val home = SlotBaselineNormalizer.newTempHome()
       try {
         return block(SlotBaselinePhaseRunHarness(repoRoot, home))

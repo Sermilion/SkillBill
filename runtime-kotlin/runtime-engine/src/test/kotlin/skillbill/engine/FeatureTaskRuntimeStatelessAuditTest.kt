@@ -1,6 +1,5 @@
 package skillbill.engine
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.lifecycle.continuation.GoalContinuationStateRecordRequest
 import skillbill.engine.featuretask.lifecycle.continuation.reviewState
@@ -81,7 +80,7 @@ class FeatureTaskRuntimeStatelessAuditTest {
       }
     val harness =
       runnerHarness(
-        RuntimeHarnessConfig(launcher = launcher, validator = realFeatureTaskRuntimePhaseOutputValidator),
+        RuntimeHarnessConfig(launcher = launcher),
       )
     val report = harness.runner.run(harness.request())
     assertIs<FeatureTaskRuntimeRunReport.Blocked>(report)
@@ -358,7 +357,7 @@ class FeatureTaskRuntimeStatelessAuditTest {
       }
     val harness =
       runnerHarness(
-        RuntimeHarnessConfig(launcher = launcher, validator = realFeatureTaskRuntimePhaseOutputValidator),
+        RuntimeHarnessConfig(launcher = launcher),
       )
     val report = harness.runner.run(harness.request())
     assertIs<FeatureTaskRuntimeRunReport.Blocked>(report)

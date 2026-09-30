@@ -1,16 +1,5 @@
 package skillbill.infrastructure.contracts.locator
 
-object FeatureTaskRuntimePhaseOutputSchemaPaths {
-  const val REPO_RELATIVE_PATH: String =
-    "orchestration/contracts/feature-task-runtime-phase-output-schema.yaml"
-
-  const val CLASSPATH_RESOURCE: String =
-    "skillbill/infrastructure/contracts/feature-task-runtime-phase-output-schema.yaml"
-
-  const val EXPECTED_SCHEMA_ID: String =
-    "https://skill-bill.dev/contracts/feature-task-runtime-phase-output-schema.yaml"
-}
-
 object FeatureTaskRuntimeExecutionPlanSchemaPaths {
   const val REPO_RELATIVE_PATH: String =
     "orchestration/contracts/feature-task-runtime-execution-plan.yaml"
@@ -63,15 +52,6 @@ object FeatureTaskRuntimeProjectionMeasurementSchemaPaths {
     "skillbill/infrastructure/contracts/feature-task-runtime-projection-measurement-schema.yaml"
   const val EXPECTED_SCHEMA_ID: String =
     "https://skill-bill.dev/contracts/feature-task-runtime-projection-measurement-schema.yaml"
-}
-
-object FeatureTaskRuntimePlanningProjectionsSchemaPaths {
-  const val REPO_RELATIVE_PATH: String =
-    "orchestration/contracts/feature-task-runtime-planning-projections-schema.yaml"
-  const val CLASSPATH_RESOURCE: String =
-    "skillbill/infrastructure/contracts/feature-task-runtime-planning-projections-schema.yaml"
-  const val EXPECTED_SCHEMA_ID: String =
-    "https://skill-bill.dev/contracts/feature-task-runtime-planning-projections-schema.yaml"
 }
 
 object FeatureTaskRuntimeQuarantineSchemaPaths {

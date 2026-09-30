@@ -7,7 +7,6 @@ import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.encodeValidatedDecompositionManifestYaml
 import skillbill.application.decomposition.executionModel
 import skillbill.application.decomposition.parentSpecPath
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testRepositoryRoot
@@ -31,7 +30,6 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
-import skillbill.engine.featuretask.lifecycle.core.AlwaysValidValidator
 import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
@@ -77,7 +75,6 @@ import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.goalrunner.runner.model.GoalRunnerScopedReplanOptions
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
@@ -3699,11 +3696,7 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
 
   @Test
   fun `hydrating a projection-invalid stored plan loud-fails before any child artifact is written`() {
-    val harness =
-      hydrationHarness(
-        variant = "projection_invalid",
-        phaseOutputValidator = realFeatureTaskRuntimePhaseOutputValidator,
-      )
+    val harness = hydrationHarness(variant = "projection_invalid")
 
     val error =
       assertFailsWith<InvalidFeatureTaskRuntimePhaseOutputSchemaError> {
@@ -4109,7 +4102,6 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
   private fun hydrationHarness(
     twoSubtasks: Boolean = false,
     variant: String = "valid",
-    phaseOutputValidator: FeatureTaskRuntimePhaseOutputValidator = AlwaysValidValidator,
   ): HydrationHarness {
     val workflows = InMemoryWorkflowStates()
     val manifest = hydrationManifest(twoSubtasks)
@@ -4139,14 +4131,13 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
         }
       }
     if (twoSubtasks) preparations.plans[2] = planCheckpoint(2)
-    return HydrationHarness(workflows, preparations, manifest, phaseOutputValidator)
+    return HydrationHarness(workflows, preparations, manifest)
   }
 
   private data class HydrationHarness(
     val workflows: InMemoryWorkflowStates,
     val preparations: RecordingPlanningPreparations,
     val manifest: DecompositionManifest,
-    val phaseOutputValidator: FeatureTaskRuntimePhaseOutputValidator = AlwaysValidValidator,
   ) {
     val state = GoalRunnerManifestState("goal-parent", "/fake/metrics.db", manifest)
 

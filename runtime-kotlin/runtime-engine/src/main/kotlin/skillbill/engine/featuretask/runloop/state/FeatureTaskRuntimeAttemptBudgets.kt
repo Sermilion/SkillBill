@@ -4,7 +4,6 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 object FeatureTaskRuntimeAttemptBudgets {
   const val MAX_OUTPUT_GATE_RETRY_ATTEMPTS: Int = 1
-  const val MAX_FORMAT_RETRY_ATTEMPTS: Int = MAX_OUTPUT_GATE_RETRY_ATTEMPTS
   const val MAX_PROCESS_FAILURE_ATTEMPTS: Int = 3
 
   fun processFailureBlockReason(
@@ -47,12 +46,6 @@ object FeatureTaskRuntimeAttemptBudgets {
     }
   }
 
-  fun malformedOutputBlockReason(
-    phaseId: String,
-    policy: PhaseStepPolicy,
-    malformedAttemptCount: Int,
-  ): String? = outputGateBlockReason(phaseId, policy, malformedAttemptCount)
-
   fun outputGateRejectionExhaustsBudget(
     phaseId: String,
     policy: PhaseStepPolicy,
@@ -61,22 +54,7 @@ object FeatureTaskRuntimeAttemptBudgets {
     require(priorOutputGateFailures >= 0) {
       "priorOutputGateFailures must be >= 0, was $priorOutputGateFailures."
     }
-    val relaunches = policy.relaunchOnInvalidOutput && !policy.singleAgentSession
-    return !relaunches || outputGateBlockReason(phaseId, policy, priorOutputGateFailures + 1) != null
-  }
-
-  fun unresolvedFindingBlockReason(
-    phaseId: String,
-    unresolved: Set<String>,
-    priorUnresolved: Set<String>,
-    detail: String,
-  ): String? {
-    require(unresolved.isNotEmpty()) { "unresolved must name at least one finding, was empty." }
-    val repeated = unresolved.intersect(priorUnresolved).ifEmpty { return null }
-    return "Phase '$phaseId' reported the same review findings unresolved on two consecutive " +
-      "attempts: ${repeated.sorted().joinToString(", ")}. It had its retry at each of them and the " +
-      "finding still stands, so the run blocks for an operator rather than spending a third session " +
-      "on it. Reported: $detail"
+    return policy.singleAgentSession || outputGateBlockReason(phaseId, policy, priorOutputGateFailures + 1) != null
   }
 
   fun findingCoverageBlockReason(

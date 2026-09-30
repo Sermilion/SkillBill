@@ -46,7 +46,7 @@ class GoalPlanningContextPromptFormatterTest {
     val composed = GoalPlanningContextPromptFormatter.append("base", packet, null, "preplan")
 
     assertContains(composed, "first-entry")
-    assertContains(composed, "produced_outputs.value")
+    assertFalse("produced_outputs.value" in composed)
     assertContains(composed, "Recommended headings")
     assertFalse(FIRST_BODY in composed)
     assertFalse(SECOND_BODY in composed)

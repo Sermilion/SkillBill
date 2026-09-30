@@ -8,14 +8,13 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.slot.PhaseRepositoryObservations
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.goalrunner.model.UnaddressedFinding
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.goalreview.ReviewPassResolution
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
-import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import java.time.Clock
@@ -84,7 +83,7 @@ internal interface PhaseReviewSettlementState {
   /** Persists a carried-forward review result as the completed step. Returns a failure reason, or null. */
   fun completeCarriedForwardReview(
     iteration: Int,
-    output: AcceptedFeatureTaskRuntimePhaseOutput,
+    output: NormalizedFeatureTaskRuntimePhaseOutput,
   ): String?
 
   /** Amends the review's worktree edits into the remediation checkpoint. Returns whether it was established. */
@@ -100,7 +99,7 @@ internal interface PhaseReviewSettlementState {
   fun completeReview(
     iteration: Int,
     outputText: String,
-    output: AcceptedFeatureTaskRuntimePhaseOutput,
+    output: NormalizedFeatureTaskRuntimePhaseOutput,
     fileManifest: PhaseStepFileManifest,
   ): String?
 
@@ -109,7 +108,7 @@ internal interface PhaseReviewSettlementState {
     attemptCount: Int,
     reason: String,
     disposition: FeatureTaskRuntimeFailureDisposition,
-    carriedOutput: AcceptedFeatureTaskRuntimePhaseOutput? = null,
+    carriedOutput: NormalizedFeatureTaskRuntimePhaseOutput? = null,
   )
 
   /** Persists a block of the launched review step at [iteration]. */
@@ -130,7 +129,7 @@ internal interface PhaseReviewSettlementState {
    * Records a carried-forward review [output] as the completed step ahead of dispatch, keeping the prior record's
    * agent and the active re-entry. Throws when the completed step cannot persist.
    */
-  fun settleCarriedForwardReview(output: AcceptedFeatureTaskRuntimePhaseOutput)
+  fun settleCarriedForwardReview(output: NormalizedFeatureTaskRuntimePhaseOutput)
 }
 
 /** Finding and goal-review observations shared by the review and remediation steps. */
@@ -190,6 +189,5 @@ internal interface PhaseReviewGenerationState {
 
 internal data class PhaseReviewExecutionContext(
   val gitOperations: PhaseRepositoryObservations,
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   val clock: Clock,
 )

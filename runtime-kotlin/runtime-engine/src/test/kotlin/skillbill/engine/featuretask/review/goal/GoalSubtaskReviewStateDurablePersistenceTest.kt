@@ -7,7 +7,6 @@ import skillbill.engine.featuretask.lifecycle.continuation.reconcileRemediationB
 import skillbill.engine.featuretask.lifecycle.continuation.reviewState
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskGitIntegrationDatabase
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskGitIntegrationWorkflowRepository
-import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeParseRepairReceiptOrNull
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputBlocked
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputReady
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassCarryForward
@@ -43,7 +42,6 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewDisposition
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
-import skillbill.workflow.model.goalreview.REPAIR_RECEIPT_MAX_UNRESOLVED_REASON_UTF8_BYTES
 import skillbill.workflow.model.goalreview.upsertRepairReceipt
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.asCheckpointIdentitiesArtifactEntry
@@ -716,41 +714,6 @@ class GoalSubtaskReviewStateDurablePersistenceTest {
     assertEquals(
       FeatureTaskRuntimeRepairOutcome.ADDRESSED,
       reloaded.repairReceipts.single().entries.single().outcome,
-    )
-  }
-
-  @Test
-  fun `an oversized unresolved_reason truncates without echoing producer payload on the parser surface`() {
-    val oversized = "x".repeat(REPAIR_RECEIPT_MAX_UNRESOLVED_REASON_UTF8_BYTES + 1)
-    val truncations = mutableListOf<String>()
-    val receipt =
-      featureTaskRuntimeParseRepairReceiptOrNull(
-        mapOf(
-          "repair_receipt" to
-            mapOf(
-              "contract_version" to "0.3",
-              "entries" to
-                listOf(
-                  mapOf(
-                    "finding_id" to "F-001",
-                    "outcome" to "attempted_unresolved",
-                    "unresolved_reason" to oversized,
-                  ),
-                ),
-            ),
-        ),
-        remediationBaseSha = "b".repeat(40),
-        roundNumber = 1,
-        recordTruncation = truncations::add,
-      )
-    val parsed = assertNotNull(receipt)
-    assertTrue(truncations.isNotEmpty())
-    assertTrue(truncations.none { it.contains(oversized) })
-    assertTrue(truncations.none { it.contains("@@") })
-    assertTrue(truncations.none { it.contains("diff --git") })
-    assertTrue(
-      parsed.entries.single().unresolvedReason.orEmpty().encodeToByteArray().size <=
-        REPAIR_RECEIPT_MAX_UNRESOLVED_REASON_UTF8_BYTES,
     )
   }
 

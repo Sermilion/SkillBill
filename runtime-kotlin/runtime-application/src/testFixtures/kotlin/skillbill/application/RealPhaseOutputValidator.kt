@@ -1,7 +1,0 @@
-package skillbill.application
-
-import skillbill.infrastructure.contracts.FeatureTaskRuntimePhaseOutputSchemaValidator
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
-
-val realFeatureTaskRuntimePhaseOutputValidator: FeatureTaskRuntimePhaseOutputValidator =
-  FeatureTaskRuntimePhaseOutputSchemaValidator()

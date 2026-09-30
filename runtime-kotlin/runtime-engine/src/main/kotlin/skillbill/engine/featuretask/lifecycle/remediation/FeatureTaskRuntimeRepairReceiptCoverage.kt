@@ -31,12 +31,11 @@ fun featureTaskRuntimeCompactFindingRef(finding: GoalSubtaskReviewCompactFinding
     ?: error("Carried finding must carry a stable finding_id before coverage runs.")
 
 fun featureTaskRuntimeOmittedFindingsRetryReason(omitted: List<GoalSubtaskReviewCompactFinding>): String =
-  "The repair receipt left these carried findings unaccounted for under finding_id: " +
+  "The repair report left these carried findings unaccounted for: " +
     omitted.joinToString(", ", transform = ::featureTaskRuntimeCompactFindingRef) +
-    ". Continue this round: add one entry per owed ref using finding_id (aliases finding_ref, id, " +
-    "and ref are accepted), or, if the fix was attempted and the finding is still open, declare " +
-    "outcome 'attempted_unresolved' with unresolved_reason and the constructs you touched. A " +
-    "carried finding may never be left out of the receipt."
+    ". They stay owed. Continue this round: name each owed finding by its ref and say whether it was " +
+    "fixed, needed no edit, or is still open after your attempt. A carried finding may never be left " +
+    "out of the report."
 
 class FeatureTaskRuntimeUnresolvedFindings(
   val refs: Set<String>,
@@ -46,7 +45,7 @@ class FeatureTaskRuntimeUnresolvedFindings(
     "You reported these carried findings still open after your " +
       "attempt: $detail. You have one more attempt at each. Close it, or report it unresolved again " +
       "and the run stops for an operator instead of trying a third time. Do not silently drop it from " +
-      "the receipt and do not restate the same attempt as if it were new work."
+      "the report and do not restate the same attempt as if it were new work."
 }
 
 fun featureTaskRuntimeUnresolvedFindings(
@@ -57,6 +56,20 @@ fun featureTaskRuntimeUnresolvedFindings(
     refs = unresolved.mapTo(linkedSetOf(), ::unresolvedEntryRef),
     detail = unresolved.joinToString("; ", transform = ::unresolvedEntryDetail),
   )
+}
+
+fun featureTaskRuntimeRepeatedUnresolvedBlockReason(
+  phaseId: String,
+  unresolved: Set<String>,
+  priorUnresolved: Set<String>,
+  detail: String,
+): String? {
+  require(unresolved.isNotEmpty()) { "unresolved must name at least one finding, was empty." }
+  val repeated = unresolved.intersect(priorUnresolved).ifEmpty { return null }
+  return "Phase '$phaseId' reported the same review findings unresolved on two consecutive " +
+    "attempts: ${repeated.sorted().joinToString(", ")}. It had its retry at each of them and the " +
+    "finding still stands, so the run blocks for an operator rather than spending a third session " +
+    "on it. Reported: $detail"
 }
 
 private fun unresolvedEntryRef(entry: FeatureTaskRuntimeRepairReceiptEntry): String = entry.findingId

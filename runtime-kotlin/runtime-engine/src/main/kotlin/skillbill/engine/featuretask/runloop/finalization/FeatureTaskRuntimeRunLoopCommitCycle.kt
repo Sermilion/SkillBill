@@ -44,9 +44,8 @@ import skillbill.engine.featuretask.validation.ReadinessCommitPushSettleResult
 import skillbill.engine.featuretask.validation.ReadinessCommittedHeadBindRequest
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 
 private data class FinaliseSubtaskArgs(
@@ -93,6 +92,12 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
       result[DecompositionPlanningPayloadKeys.BASE_BRANCH] = baseBranch
     }
     result[FeatureTaskRuntimeCommitPushPayloadKeys.PUSHED] = receipt.pushed
+    val value =
+      "Runtime committed " +
+        (result[DecompositionManifestPayloadKeys.COMMIT_SHA]?.let { "commit $it" } ?: "no recorded commit") +
+        (result[DecompositionPlanningPayloadKeys.BRANCH]?.let { " on branch $it" } ?: "") +
+        (result[DecompositionPlanningPayloadKeys.BASE_BRANCH]?.let { " against base $it" } ?: "") +
+        if (receipt.pushed) " and pushed it." else " without pushing."
     return JsonCodec.mapToJsonString(
       mapOf(
         SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
@@ -101,6 +106,7 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
         SharedPayloadKeys.SUMMARY to "Runtime staged every dirty path, committed, and recorded commit_sha.",
         SharedPayloadKeys.PRODUCED_OUTPUTS to
           mapOf(
+            SharedPayloadKeys.VALUE to value,
             FeatureTaskRuntimeCommitPushPayloadKeys.COMMIT_PUSH_RESULT to result,
           ),
       ),
@@ -315,11 +321,10 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
         FeatureTaskRuntimeRunLoopSubtaskCommit.unownedWorktreeCommitSha(
           UnownedWorktreeCommitShaArgs(
             request,
-            outputValidator,
             diagnostics,
             phaseGates,
             run,
-            accepted.normalizedOutput,
+            accepted,
           ),
         )
     ) {
@@ -343,7 +348,7 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
           "Runtime-owned commit_push settlement did not validate: ${error.message.orEmpty()}",
         )
       }
-    val normalizedOutput = accepted.normalizedOutput
+    val normalizedOutput = accepted
     if (!persistCompleted(run, iteration, outputText, accepted)) {
       return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
         finalizationCoupledProgress(),
@@ -365,7 +370,7 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
         iteration,
         normalizedOutput.canonicalJson,
         normalizedOutput,
-        accepted.repairEvidence,
+        null,
       ),
     )
   }
@@ -379,15 +384,15 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
     run: PhaseRun,
     iteration: Int,
     outputText: String,
-    acceptedOutput: AcceptedFeatureTaskRuntimePhaseOutput,
+    acceptedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
   ): Boolean = persistFinalizationCompleted(run, iteration, outputText, acceptedOutput)
 
-  private fun PhaseRuntimeFinalizationContext.accept(
+  private fun accept(
     run: PhaseRun,
     outputText: String,
-  ): Result<AcceptedFeatureTaskRuntimePhaseOutput> =
+  ): Result<NormalizedFeatureTaskRuntimePhaseOutput> =
     runCatching {
-      outputValidator.validatePhaseOutput(outputText, sourceLabel = run.phaseId).requireAcceptedOutput(run.phaseId)
+      NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(outputText, run.phaseId)
     }
 
   private fun PhaseRuntimeFinalizationContext.block(

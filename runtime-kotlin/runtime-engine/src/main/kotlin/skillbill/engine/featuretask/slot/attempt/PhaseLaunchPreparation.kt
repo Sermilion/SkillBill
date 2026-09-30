@@ -36,11 +36,9 @@ import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePlanningProjectionSchemaError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
-import skillbill.workflow.taskruntime.model.audit.QUARANTINE_REJECTION_CLASS_PLANNING_PROJECTION
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffAssemblyRequest
@@ -202,8 +200,6 @@ object PhaseLaunchPreparation {
         )
       } catch (error: InvalidFeatureTaskRuntimeHandoffProjectionError) {
         rejectedHandoffLaunch(recorder, run, state, error, measurementContext)
-      } catch (error: InvalidFeatureTaskRuntimePlanningProjectionSchemaError) {
-        rejectedPlanningProjectionLaunch(recorder, run, state, error, measurementContext)
       } catch (error: InvalidWorkflowStateSchemaError) {
         rejectedDurableBriefingLaunch(recorder, run, state, error, measurementContext)
       }
@@ -230,32 +226,6 @@ object PhaseLaunchPreparation {
             "projection: ${error.message}",
       ),
     )
-
-  private fun rejectedPlanningProjectionLaunch(
-    recorder: PhaseRunRecords,
-    run: PhaseRun,
-    state: FeatureTaskRuntimeProgressSnapshotAccess,
-    error: InvalidFeatureTaskRuntimePlanningProjectionSchemaError,
-    context: LaunchRejectionMeasurementContext,
-  ): LaunchPreparationRejected {
-    PhaseLaunchPreparation.recordLaunchSeamRejection(
-      recorder,
-      LaunchSeamRejectionArgs(
-        run = run,
-        state = state,
-        classification = FeatureTaskRuntimeProjectionFailureClassification.INVALID_CONTRACT,
-        sourceLabel = error.projectionName ?: "planning_projection",
-        fallbackProducerIteration = context.producerIteration,
-        repositoryCheckpoint = context.repositoryCheckpoint,
-      ),
-    )
-    return LaunchPreparationRejected(
-      LaunchResult.recordRejected(
-        QUARANTINE_REJECTION_CLASS_PLANNING_PROJECTION,
-        error.message.orEmpty(),
-      ),
-    )
-  }
 
   private fun rejectedDurableBriefingLaunch(
     recorder: PhaseRunRecords,
@@ -308,7 +278,6 @@ object PhaseLaunchPreparation {
         FeatureTaskRuntimePhaseBriefingAssembler.assemble(
           handoff,
           run.request.workflowId,
-          phaseGates.planningProjectionValidator,
           run.request.agentAddonSelection,
           FeatureTaskRuntimeBriefingScope(
             sharedEvidence?.reference,
@@ -419,10 +388,8 @@ object PhaseLaunchPreparation {
         reviewDecidingRule = launchReviewTier.resolution?.decidingRule,
         repairLedger = handoff.repairLedger,
         priorReviewContext = null,
-        priorSchemaFailure = priorCorrection?.schemaGateReason,
         priorTerminalFailure = priorCorrection?.retryableTerminalReason,
         priorFindingCoverage = priorCorrection?.findingCoverageReason,
-        correctiveRepairContext = priorCorrection?.correctiveRepairContext,
         operatorBlockRetry =
           session.operatorBlockRetry
             ?.takeIf { it.phaseId == run.phaseId && !session.operatorBlockRetryCompleted },

@@ -5,7 +5,6 @@ import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseStepDescription
 import skillbill.engine.featuretask.slot.PhaseStrategy
-import skillbill.engine.featuretask.slot.phaseEnvelopeDecoder
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseAgentExecution
 import skillbill.error.featuretask.UnknownPhaseStepError
@@ -19,7 +18,7 @@ internal fun PhaseStrategy.stepCall(
   state: PhaseAcceptedStepExecution,
 ): PhaseStepCall =
   PhaseStepCall(
-    PhaseStepDescription(run.phaseId, promptSource(run.phaseId), policyFor(run.phaseId), phaseEnvelopeDecoder),
+    PhaseStepDescription(run.phaseId, promptSource(run.phaseId), policyFor(run.phaseId)),
     state,
     run.request,
     strategyId,

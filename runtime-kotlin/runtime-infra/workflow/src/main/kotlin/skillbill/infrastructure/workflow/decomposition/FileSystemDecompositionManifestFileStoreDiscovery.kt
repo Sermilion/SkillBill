@@ -14,6 +14,8 @@ internal class FileSystemDecompositionManifestFileStoreDiscovery(
     }
   }
 
+  override fun listTree(directory: Path): List<Path> = Files.walk(directory).use { paths -> paths.toList() }
+
   override fun findDecompositionManifestFiles(repoRoot: Path): List<Path> {
     val featureSpecsRoot = repoRoot.resolve(".feature-specs")
     if (!Files.isDirectory(featureSpecsRoot)) return emptyList()

@@ -19,8 +19,6 @@ const val FEATURE_TASK_RUNTIME_REPAIR_RECEIPT_CONTRACT_VERSION: String = "0.3"
 
 const val FEATURE_TASK_RUNTIME_REPAIR_LEDGER_CONTRACT_VERSION: String = "0.1"
 
-const val FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_CONTRACT_VERSION: String = "0.1"
-
 const val FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID: String =
   "https://skill-bill.dev/contracts/feature-task-runtime-phase-output-schema.yaml"
 

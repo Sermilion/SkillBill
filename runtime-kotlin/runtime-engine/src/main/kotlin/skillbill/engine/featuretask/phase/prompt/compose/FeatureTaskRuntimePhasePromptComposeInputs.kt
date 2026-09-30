@@ -8,7 +8,6 @@ import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimePriorReviewContext
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedger
-import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeCorrectiveRepairContext
 import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeOperatorBlockRetry
 import java.nio.file.Path
 
@@ -23,10 +22,8 @@ data class FeatureTaskRuntimePhasePromptComposeInputs(
   val baselineUntrackedPaths: List<String> = emptyList(),
   val resolvedReviewTier: CodeReviewExecutionMode? = null,
   val reviewDecidingRule: String? = null,
-  val priorSchemaFailure: String? = null,
   val priorTerminalFailure: String? = null,
   val priorFindingCoverage: String? = null,
-  val correctiveRepairContext: FeatureTaskRuntimeCorrectiveRepairContext? = null,
   val operatorBlockRetry: FeatureTaskRuntimeOperatorBlockRetry? = null,
   val implementationContinuation: FeatureTaskRuntimeImplementationContinuation? = null,
   val validationGateFindings: ValidationFindingSetProjection? = null,

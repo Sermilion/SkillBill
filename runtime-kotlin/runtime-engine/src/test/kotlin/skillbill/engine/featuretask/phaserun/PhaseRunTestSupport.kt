@@ -52,7 +52,6 @@ internal fun phaseRunEntry(
 ): PhaseRunEntry =
   PhaseRunEntry(
     strategies = runner.strategies,
-    outputValidator = runner.outputValidator,
     phaseGates = runner.phaseGates,
     reviewResultAssembly =
       ParallelCodeReviewRunnerResultAssembly(

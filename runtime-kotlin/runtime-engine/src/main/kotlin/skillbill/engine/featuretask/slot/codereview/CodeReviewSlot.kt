@@ -102,10 +102,9 @@ internal class CodeReviewSlot(
   ): PhaseStepPromptSections =
     when (stepId) {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW ->
-        InlineReviewPromptSections.review(stepId, inputs, pass.directive)
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS ->
-        InlineReviewPromptSections.verifyFindings(stepId)
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> InlineReviewPromptSections.implementFix(stepId)
+        InlineReviewPromptSections.review(inputs, pass.directive)
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> InlineReviewPromptSections.verifyFindings()
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> InlineReviewPromptSections.implementFix()
       else -> throw UnknownPhaseStepError(stepId)
     }
 

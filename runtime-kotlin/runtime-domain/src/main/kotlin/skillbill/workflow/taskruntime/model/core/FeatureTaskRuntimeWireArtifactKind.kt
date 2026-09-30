@@ -2,7 +2,6 @@ package skillbill.workflow.taskruntime.model.core
 
 enum class FeatureTaskRuntimeWireArtifactKind {
   QUARANTINE_RECORD,
-  PLANNING_PROJECTION,
   IMPLEMENTATION_ATTEMPT,
   BUILD_RECEIPT,
   HANDOFF_DECLARATION,

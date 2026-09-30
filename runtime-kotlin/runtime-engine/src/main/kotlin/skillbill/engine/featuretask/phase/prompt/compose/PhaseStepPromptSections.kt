@@ -1,7 +1,6 @@
 package skillbill.engine.featuretask.phase.prompt.compose
 
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
-import skillbill.engine.featuretask.phase.prompt.directives.PhaseRetryShape
 
 /**
  * Supplies the step-specific prompt sections a step's launch prompt composes with. The running strategy owns the
@@ -22,8 +21,6 @@ data class PhaseStepPromptSections(
   val testValueDiscipline: Boolean = false,
   val stepContext: String = "",
   val continuation: String = "",
-  val retryShape: PhaseRetryShape = PhaseRetryShape(),
-  val schemaFailureCorrection: ((String) -> String)? = null,
   val valueContent: String = "",
   val settles: Boolean = true,
   val outputContract: String? = null,

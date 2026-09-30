@@ -51,12 +51,6 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
   val blockedOutputDisposition: FeatureTaskRuntimeFailureDisposition
     get() = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION
 
-  /** Retains step evidence from [outputText] after the output gate rejected its schema. */
-  fun retainSchemaRejectedOutput(
-    state: PhaseStepBinding,
-    outputText: String,
-  ) = Unit
-
   /**
    * The outcome [outputText] of [run] settles to before the shared output gate decodes it, or null when the shared
    * gate decodes it. A runtime-owned step settles its triage and repair sessions here.
@@ -112,6 +106,13 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): NormalizedFeatureTaskRuntimePhaseOutput = attested
+
+  fun interpretedOutput(
+    run: PhaseRun,
+    context: PhaseStepOutputContext,
+    state: PhaseAcceptedStepExecution,
+    output: NormalizedFeatureTaskRuntimePhaseOutput,
+  ): NormalizedFeatureTaskRuntimePhaseOutput = output
 
   /** Records step evidence from accepted [outputMap] of [run] before the completed step is persisted. */
   fun recordAcceptedOutput(
@@ -220,7 +221,7 @@ internal fun NormalizedFeatureTaskRuntimePhaseOutput.withMeasuredFacts(
   val produced = JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty().toMutableMap()
   produced[FeatureTaskRuntimeMeasuredFactKeys.MEASURED_FACTS] = facts
   envelope[SharedPayloadKeys.PRODUCED_OUTPUTS] = produced
-  return copy(envelope = envelope, canonicalJson = JsonCodec.mapToJsonString(envelope))
+  return NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(envelope))
 }
 
 internal enum class PhaseStepHookContextKind { COMMON, AUDIT, COMMIT, FINDING_VERIFICATION, PULL_REQUEST, PLANNING }

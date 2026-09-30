@@ -1,5 +1,6 @@
 package skillbill.engine
 
+import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
@@ -42,6 +43,9 @@ internal fun verifyFindingsPhaseOutput(
     1,
     verifyFindingsOutput(verifiedFindingIds),
   )
+
+internal fun FeatureTaskRuntimePhaseOutput.withRawPayload(payload: String): FeatureTaskRuntimePhaseOutput =
+  copy(output = PhaseOutput(value = payload), normalizedOutput = null)
 
 internal fun verifyFindingsOutputForFindingIds(vararg findingIds: String): String =
   verifyFindingsOutput(findingIds.toList())
@@ -109,7 +113,7 @@ internal fun commitPushProducedOutputs(
   val sha = commitSha?.let { """"commit_sha":"$it",""" } ?: ""
   val pathsJson = changedPaths.joinToString(",") { "\"$it\"" }
   return """
-    {"commit_push_result":{
+    {"value":"Runtime committed the subtask and pushed it.","commit_push_result":{
       $sha
       "message":"SKILL-65: runtime feature-task parity",
       "changed_paths":[$pathsJson],

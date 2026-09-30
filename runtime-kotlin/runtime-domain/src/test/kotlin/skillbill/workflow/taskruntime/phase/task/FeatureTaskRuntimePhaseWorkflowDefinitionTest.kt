@@ -215,7 +215,7 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
   }
 
   @Test
-  fun `phase projections omit audit completion dependencies and pr owns its diff key`() {
+  fun `phase projections omit audit completion and implement plan dependencies and pr owns its diff key`() {
     val declarations = FeatureTaskRuntimePhaseWorkflowDefinition.phaseDeclarations
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     definition.stepIds.forEach { phaseId ->
@@ -231,7 +231,8 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         }
       val projectedDependencies =
         phaseWorkflowDependenciesOf(phaseId).filterNot {
-          it == def.PHASE_AUDIT && phaseId != def.PHASE_AUDIT_IMPLEMENT_FIX
+          (it == def.PHASE_AUDIT && phaseId != def.PHASE_AUDIT_IMPLEMENT_FIX) ||
+            (it == def.PHASE_PLAN && phaseId == def.PHASE_IMPLEMENT)
         }
       assertEquals(projectedDependencies, declaration.consumedUpstreamPhaseIds, phaseId)
     }

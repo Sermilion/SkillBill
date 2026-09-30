@@ -1,6 +1,9 @@
 package skillbill.engine.featuretask.runloop.attempt
 
 import skillbill.engine.featuretask.runloop.checkpoint.RuntimeCommitUpstreamHeadRecovery
+import skillbill.engine.featuretask.runloop.core.AttemptResult
+import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
+import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
@@ -20,6 +23,8 @@ import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationConte
 import skillbill.engine.featuretask.slot.attempt.PhaseCommitLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseFindingEvidenceContext
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
+import skillbill.engine.featuretask.slot.attempt.PhasePlanningLaunchContext
+import skillbill.engine.featuretask.slot.attempt.PhasePlanningOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhasePlanningTraversalContext
 import skillbill.engine.featuretask.slot.attempt.PhasePullRequestLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
@@ -37,8 +42,19 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
       PhaseStepHookContextKind.COMMIT -> CommitLaunchView(this, run)
       PhaseStepHookContextKind.FINDING_VERIFICATION -> FindingLaunchView(this)
       PhaseStepHookContextKind.PULL_REQUEST -> PullRequestLaunchView(this)
+      PhaseStepHookContextKind.PLANNING -> PlanningLaunchView(this)
       else -> LaunchView(this)
     }
+  }
+
+  private class PlanningLaunchView(
+    private val context: PhaseAttemptLaunchRuntimeContext,
+  ) : LaunchView(context),
+    PhasePlanningLaunchContext {
+    override fun existingBundleReason(): String? =
+      context.phaseGates.decompositionPlanner
+        .existingParentSpec(request.repoRoot, request.issueKey)
+        ?.let { PlanDecompositionStop.existingBundleReason(request.issueKey, it) }
   }
 
   private open class LaunchView(
@@ -47,7 +63,6 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
     override val request get() = context.request
     override val progress get() = context.progress
     override val session get() = context.session
-    override val outputValidator get() = context.outputValidator
     override val diagnostics get() = context.diagnostics
 
     override fun resolvedBranch() = context.recorder.loadResolvedBranch(request.workflowId)
@@ -91,8 +106,36 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
       PhaseStepHookContextKind.AUDIT ->
         AuditOutputView(this as PhaseCheckpointRemediationContext, this, run)
       PhaseStepHookContextKind.FINDING_VERIFICATION -> FindingOutputView(this)
+      PhaseStepHookContextKind.PLANNING -> PlanningOutputView(this)
       else -> OutputView(this)
     }
+  }
+
+  private class PlanningOutputView(
+    private val context: PhaseOutputSettlementContext,
+  ) : OutputView(context),
+    PhasePlanningOutputContext {
+    override fun settleAuthoredBundle(capture: ValidatedOutputCapture): AttemptResult? {
+      val reason = PlanDecompositionStop.authoredBundleRejection(context, capture) ?: return null
+      val coupling = context.settlementCoupling()
+      return AttemptResult.settled(
+        FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+          coupling.progress,
+          coupling.transitions,
+          context.recorder,
+          PhaseBlockRequest(
+            run = capture.run,
+            attemptCount = capture.iteration,
+            reason = reason,
+            observability = context.observability,
+            payload = BlockAndPersistPayload(fileManifest = capture.fileManifest),
+          ),
+        ),
+      )
+    }
+
+    override fun withAuthoredParentSpecPath(attested: NormalizedFeatureTaskRuntimePhaseOutput) =
+      PlanDecompositionStop.withAuthoredParentSpecPath(context, attested)
   }
 
   private open class OutputView(
@@ -100,7 +143,6 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
   ) : PhaseStepOutputContext {
     override val request get() = context.request
     override val progress get() = context.progress
-    override val outputValidator get() = context.outputValidator
     override val diagnostics get() = context.diagnostics
     override val specSource get() = context.specSource
 
@@ -185,8 +227,5 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
   }
 
   internal fun PhaseCheckpointRemediationContext.phaseLoopContext(): PhaseLoopContext =
-    PhaseLoopContext(request, phaseOutputValidator(), phaseGates.gitOperations.repositoryObservations())
-
-  private fun PhaseCheckpointRemediationContext.phaseOutputValidator() =
-    (this as PhaseOutputSettlementContext).outputValidator
+    PhaseLoopContext(request, phaseGates.gitOperations.repositoryObservations())
 }

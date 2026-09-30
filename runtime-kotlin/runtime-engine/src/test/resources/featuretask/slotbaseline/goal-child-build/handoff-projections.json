@@ -1,5 +1,5 @@
 {
-    "wftr-20260602-test-0001|implement|1|implement#1,plan#1|not_required:implement": {
+    "wftr-20260602-test-0001|implement|1|implement#1|not_required:implement": {
         "consumer_delivery_iteration": 1,
         "consumer_phase_id": "implement",
         "contract_version": "0.2",
@@ -7,24 +7,6 @@
             "consumer_phase_id": "implement",
             "contract_version": "0.1",
             "projections": [
-                {
-                    "fields": [
-                        {
-                            "kind": "text",
-                            "name": "value",
-                            "text": "Fixture plan prose for downstream implement and audit."
-                        }
-                    ],
-                    "producer_iteration": {
-                        "iteration": 1,
-                        "phase_id": "plan"
-                    },
-                    "projection_contract_id": "feature_task_runtime.phase_prose",
-                    "projection_contract_version": "0.1",
-                    "projection_name": "plan_prose",
-                    "prompt_visibility": "prompt_visible",
-                    "source_ref": "upstream_phase_output:plan"
-                },
                 {
                     "fields": [
                         {
@@ -131,10 +113,6 @@
             "fingerprint": "not_required:implement"
         },
         "source_producer_iterations": [
-            {
-                "iteration": 1,
-                "phase_id": "plan"
-            },
             {
                 "iteration": 1,
                 "phase_id": "implement"
@@ -525,9 +503,9 @@
                 {
                     "fields": [
                         {
-                            "items": [],
-                            "kind": "text_list",
-                            "name": "findings"
+                            "kind": "text",
+                            "name": "value",
+                            "text": "{\"contract_version\":\"0.3\",\"produced_outputs\":{\"findings\":[]}}"
                         },
                         {
                             "kind": "compact_reference",
@@ -725,36 +703,7 @@
                     "source_ref": "upstream_phase_output:implement"
                 },
                 {
-                    "fields": [
-                        {
-                            "kind": "text",
-                            "name": "validation_status",
-                            "text": "passed"
-                        },
-                        {
-                            "items": [],
-                            "kind": "text_list",
-                            "name": "checks"
-                        },
-                        {
-                            "kind": "compact_reference",
-                            "name": "repository_checkpoint",
-                            "reference_kind": "repository_checkpoint",
-                            "reference_value": "slot-baseline-checkpoint+producer-claimed:slot-baseline-checkpoint"
-                        },
-                        {
-                            "kind": "text",
-                            "name": "gate_run_count",
-                            "text": "1"
-                        },
-                        {
-                            "items": [
-                                "{\"duration_ms\":1,\"outcome\":\"passed\",\"cache_mode\":\"cache_eligible\",\"executed_work_units\":1,\"executed_checks\":[],\"command\":\"echo build\",\"exit_code\":0,\"repository_checkpoint\":\"slot-baseline-checkpoint\"}"
-                            ],
-                            "kind": "text_list",
-                            "name": "gate_runs"
-                        }
-                    ],
+                    "fields": [],
                     "producer_iteration": {
                         "iteration": 1,
                         "phase_id": "build"

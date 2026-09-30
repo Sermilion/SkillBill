@@ -29,7 +29,6 @@ class AgentValidateStrategy : PhaseStrategyStatusProjection() {
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE to
         QUALITY_GATE_STEP_POLICY.copy(
-          relaunchOnInvalidOutput = false,
           singleAgentSession = true,
           extendsOwnedInventory = true,
         ),

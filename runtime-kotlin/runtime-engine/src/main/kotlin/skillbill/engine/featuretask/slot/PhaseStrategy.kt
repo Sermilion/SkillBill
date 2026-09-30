@@ -89,17 +89,6 @@ abstract class PhaseStrategyStatusProjection : PhaseStrategy() {
 
 internal enum class PhaseReportedGate { BUILD, VALIDATION }
 
-internal fun jsonValueContent(
-  innerJsonExample: String,
-  notes: String,
-): String =
-  "Carry this JSON object as the value text; the runtime does not validate its shape and the next phase reads\n" +
-    "it as structured prose:\n" +
-    "```json\n" +
-    innerJsonExample +
-    "```\n" +
-    notes
-
 internal sealed interface PhaseQualityGateOperation {
   data class PackGate(
     val commandFamily: ValidationGateCommandFamily,

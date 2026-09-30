@@ -21,9 +21,8 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
 
 internal fun PhaseQualityGateCycleContext.gateCheckpoint(run: PhaseRun): String? =
   phaseGates.gitOperations
@@ -121,7 +120,7 @@ internal fun PhaseQualityGateCycleContext.blockGateStep(
 internal class RuntimeOwnedGateSettlement(
   private val context: PhaseQualityGateCycleContext,
   private val label: String,
-  private val acceptance: (PhaseRun, AcceptedFeatureTaskRuntimePhaseOutput) -> Unit = { _, _ -> },
+  private val acceptance: (PhaseRun, NormalizedFeatureTaskRuntimePhaseOutput) -> Unit = { _, _ -> },
   private val afterCompleted: (PhaseRun) -> Unit = {},
 ) {
   internal fun settle(
@@ -166,14 +165,12 @@ internal class RuntimeOwnedGateSettlement(
     }
     observability.completed(run.phaseId, run.resolvedAgent.resolvedAgentId, iteration)
     afterCompleted(run)
-    val normalizedOutput = accepted.normalizedOutput
     return PhaseOutcome.completed(
       FeatureTaskRuntimePhaseOutput(
         run.phaseId,
         iteration,
-        normalizedOutput.canonicalJson,
-        normalizedOutput,
-        accepted.repairEvidence,
+        accepted.canonicalJson,
+        accepted,
       ),
     )
   }
@@ -181,12 +178,9 @@ internal class RuntimeOwnedGateSettlement(
   private fun accept(
     run: PhaseRun,
     outputText: String,
-  ): Result<AcceptedFeatureTaskRuntimePhaseOutput> =
+  ): Result<NormalizedFeatureTaskRuntimePhaseOutput> =
     runCatching {
-      val accepted =
-        context.outputValidator
-          .validatePhaseOutput(outputText, sourceLabel = run.phaseId)
-          .requireAcceptedOutput(run.phaseId)
+      val accepted = NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(outputText, run.phaseId)
       acceptance(run, accepted)
       accepted
     }
@@ -195,7 +189,7 @@ internal class RuntimeOwnedGateSettlement(
     run: PhaseRun,
     iteration: Int,
     outputText: String,
-    accepted: AcceptedFeatureTaskRuntimePhaseOutput,
+    accepted: NormalizedFeatureTaskRuntimePhaseOutput,
   ): Boolean {
     val coupling = context.gateSettlementCoupling()
     val phaseState =
@@ -214,8 +208,7 @@ internal class RuntimeOwnedGateSettlement(
             ),
           extras =
             PhaseStateRequestAttachments(
-              normalizedOutput = accepted.normalizedOutput,
-              repairEvidence = accepted.repairEvidence,
+              normalizedOutput = accepted,
             ),
         ),
       )
@@ -223,9 +216,8 @@ internal class RuntimeOwnedGateSettlement(
       FeatureTaskRuntimePhaseOutput(
         run.phaseId,
         iteration,
-        accepted.normalizedOutput.canonicalJson,
-        accepted.normalizedOutput,
-        accepted.repairEvidence,
+        accepted.canonicalJson,
+        accepted,
       )
     return context.coupledRunTransitions.persistAuthoritativePhaseCompletion(
       recorder = context.recorder,

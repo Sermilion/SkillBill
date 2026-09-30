@@ -40,7 +40,7 @@ class GoalPlanFanOutStrategy(
   override fun promptSections(
     stepId: String,
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
-  ): PhaseStepPromptSections = plan.promptSections(stepId, inputs)
+  ): PhaseStepPromptSections = plan.promptSections(stepId, inputs).copy(taskDirective = PLAN_SPEC_DIRECTIVE)
 
   override fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField> =
     plan.briefingInvariantFields(stepId)
@@ -142,5 +142,15 @@ class GoalPlanFanOutStrategy(
 
   companion object {
     const val ID = "goal-plan-fan-out"
+
+    private const val PLAN_SPEC_DIRECTIVE: String =
+      "Plan the current governed sub-spec and write the plan into that same file. Edit only the assigned " +
+        "sub-spec named in the goal planning session context: keep its title, scope, acceptance criteria, " +
+        "dependencies, validation strategy, and next path unchanged, and add a non-blank " +
+        "\"## Implementation Details\" section holding the ordered tasks, the acceptance criteria each one " +
+        "serves, the paths or symbols it touches, the tests to add or run, and constraints. Use the upstream " +
+        "preplan value as planning context. Never modify the parent spec, a sibling sub-spec, or any other " +
+        "repository file; this directive supersedes any earlier instruction not to modify files. " +
+        "Finish with a short prose summary of the plan."
   }
 }

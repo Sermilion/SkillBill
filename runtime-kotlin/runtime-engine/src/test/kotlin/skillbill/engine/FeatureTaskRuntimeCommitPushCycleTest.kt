@@ -1,7 +1,6 @@
 package skillbill.engine
 
 import skillbill.application.decomposition.baseBranch
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeCommitPushPayloadKeys
@@ -11,7 +10,7 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushRe
 import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopCommitCycle
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
-import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,16 +22,15 @@ class FeatureTaskRuntimeCommitPushCycleTest {
   @Test
   fun `runtime-owned commit_push output validates and carries only the sha`() {
     val sha = "a".repeat(40)
-    val accepted =
-      realFeatureTaskRuntimePhaseOutputValidator
-        .validatePhaseOutput(
-          FeatureTaskRuntimeRunLoopCommitCycle.runtimeOwnedCommitPushOutput(
-            "commit_push",
-            FeatureTaskRuntimeCommitPushReceipt(commitSha = sha, branch = "feat/x", baseBranch = "main", pushed = true),
-          ),
-          sourceLabel = "commit_push",
-        ).requireAcceptedOutput("commit_push")
-    val produced = accepted.normalizedOutput.envelopeWireMap()[SharedPayloadKeys.PRODUCED_OUTPUTS] as Map<*, *>
+    val normalized =
+      NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(
+        FeatureTaskRuntimeRunLoopCommitCycle.runtimeOwnedCommitPushOutput(
+          "commit_push",
+          FeatureTaskRuntimeCommitPushReceipt(commitSha = sha, branch = "feat/x", baseBranch = "main", pushed = true),
+        ),
+        "commit_push",
+      )
+    val produced = normalized.envelopeWireMap()[SharedPayloadKeys.PRODUCED_OUTPUTS] as Map<*, *>
     val result = produced[FeatureTaskRuntimeCommitPushPayloadKeys.COMMIT_PUSH_RESULT] as Map<*, *>
     assertEquals(sha, result[DecompositionManifestPayloadKeys.COMMIT_SHA])
     assertFalse(result.containsKey(FeatureTaskRuntimeCommitPushPayloadKeys.MESSAGE))

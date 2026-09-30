@@ -1,6 +1,5 @@
 package skillbill.engine
 
-import skillbill.application.realPlanningProjectionValidator
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.lifecycle.continuation.GoalContinuationStateRecordRequest
@@ -75,10 +74,7 @@ private fun briefingsForCompletedPhases(
         repositoryCheckpoint = FeatureTaskRuntimeRepositoryCheckpoint(fingerprint = "fixture-checkpoint-1"),
       ),
     )
-  FeatureTaskRuntimePhaseBriefingAssembler.assemble(
-    handoff,
-    planningProjectionValidator = realPlanningProjectionValidator,
-  )
+  FeatureTaskRuntimePhaseBriefingAssembler.assemble(handoff)
 }
 
 private fun assertBriefingRunInvariants(briefings: Map<String, FeatureTaskRuntimePhaseLaunchBriefing>) {

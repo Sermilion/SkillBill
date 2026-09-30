@@ -14,7 +14,6 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.featuretask.InMemorySkeletonDefinitionRequiredError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -25,7 +24,6 @@ import java.util.UUID
 @Inject
 class PhaseRunEntry(
   internal val strategies: PhaseStrategyLookup,
-  internal val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   internal val phaseGates: FeatureTaskRuntimePhaseGates,
   internal val reviewResultAssembly: ParallelCodeReviewRunnerResultAssembly,
   internal val lifecycleTelemetry: LifecycleTelemetryService,
@@ -47,7 +45,6 @@ class PhaseRunEntry(
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
         transitions = executionPlan.traversal,
-        outputValidator = outputValidator,
         stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
         resumeRulesFn = strategies.resumeRules(executionPlan),
       )

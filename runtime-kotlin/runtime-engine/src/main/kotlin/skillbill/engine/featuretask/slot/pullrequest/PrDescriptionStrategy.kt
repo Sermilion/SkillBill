@@ -42,7 +42,6 @@ class PrDescriptionStrategy(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR to
         PhaseStepPolicy(
           mutating = false,
-          relaunchOnInvalidOutput = false,
           singleAgentSession = false,
           readOnlyIdle = false,
           fileMutating = true,

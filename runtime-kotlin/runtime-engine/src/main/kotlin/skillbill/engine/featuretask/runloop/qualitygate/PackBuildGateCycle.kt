@@ -29,7 +29,7 @@ import skillbill.engine.featuretask.validation.repairSegmentOutput
 import skillbill.ports.taskruntime.validateBuildReceipt
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
-import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 
@@ -231,13 +231,13 @@ internal class PackBuildGateCycle(
 
   private fun requireBuildReceipt(
     run: PhaseRun,
-    accepted: AcceptedFeatureTaskRuntimePhaseOutput,
+    accepted: NormalizedFeatureTaskRuntimePhaseOutput,
   ) {
     val buildReceipt =
       JsonCodec.anyToStringAnyMap(
         JsonCodec
           .anyToStringAnyMap(
-            accepted.normalizedOutput.envelopeWireMap()[SharedPayloadKeys.PRODUCED_OUTPUTS],
+            accepted.envelopeWireMap()[SharedPayloadKeys.PRODUCED_OUTPUTS],
           )?.get(ValidationEvidencePayloadKeys.BUILD_RECEIPT),
       )
     context.phaseGates.buildReceiptValidator.validateBuildReceipt(

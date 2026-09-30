@@ -1,7 +1,5 @@
 package skillbill.engine.featuretask.slotbaseline
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
-import skillbill.application.realPlanningProjectionValidator
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
@@ -93,15 +91,11 @@ internal object SlotBaselineGoalPlanningCapture {
             GoalPlanningPreparationCheckpoint(
               database = database,
               envelopeValidator = NoopGoalPlanningPreparationEnvelopeValidator,
-              phaseOutputValidator = realFeatureTaskRuntimePhaseOutputValidator,
-              planningProjectionValidator = realPlanningProjectionValidator,
             ),
-          outputValidator = realFeatureTaskRuntimePhaseOutputValidator,
           subtaskLauncher = launcher,
           invariantsSource = FakeInvariantsSource(),
           manifestFileStore = manifestFileStore,
           contextDiscovery = fakeContextDiscovery,
-          planningProjectionValidator = realPlanningProjectionValidator,
           planningAttemptRecorder = DurableGoalPlanningAttemptRecorder(outcomeStore, clock),
         ),
       )
@@ -133,12 +127,7 @@ internal object SlotBaselineGoalPlanningCapture {
         reviewPolicy = GoalRunnerReviewPolicy(CodeReviewExecutionMode.INLINE),
         planningHydration = request,
       )
-    val hydrator =
-      GoalChildPlanningHydrator(
-        realFeatureTaskRuntimePhaseOutputValidator,
-        realPlanningProjectionValidator,
-        SlotBaselineFullRunCapture.sqliteClock,
-      )
+    val hydrator = GoalChildPlanningHydrator(SlotBaselineFullRunCapture.sqliteClock)
     return prepared.database.read { unitOfWork ->
       val preparations = unitOfWork.goalPlanningPreparations
       HydratedGoalChild(
@@ -230,6 +219,10 @@ internal object SlotBaselineGoalPlanningCapture {
     ## Acceptance Criteria
 
     1. The sweep produces a schema-valid plan for this sub-spec.
+
+    ## Implementation Details
+
+    Planned implementation details for $name.
     """.trimIndent()
 
   private fun planningLogPayload(log: GoalPlanningLog): Map<String, Any?> =

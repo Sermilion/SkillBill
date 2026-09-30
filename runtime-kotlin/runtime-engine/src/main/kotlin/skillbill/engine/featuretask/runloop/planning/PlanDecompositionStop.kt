@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.runloop.planning
 
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePlanningStopDecision
@@ -8,43 +10,86 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.observability.blocked
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.STATUS_BLOCKED
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptTraversalRuntimeContext
-import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
+import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
-import skillbill.workflow.decomposition.model.SpecSource
-import skillbill.workflow.taskruntime.artifact.decomposePlanOutcomeFromPhaseOutput
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDecomposePlanOutcome
-import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import java.io.IOException
+import java.nio.file.Path
 
 internal object PlanDecompositionStop {
-  const val SPEC_BUNDLE_MISSING_REASON =
-    "Plan must persist as a governed spec bundle but emitted a direct plan with no decomposition package; " +
-      "the runtime blocks rather than completing without a spec."
+  private const val DETAIL_MAX_CHARS = 500
 
-  fun completionRejection(
-    context: PhaseStepOutputContext,
-    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  fun requiresBundle(request: FeatureTaskRuntimeRunFacts): Boolean =
+    request.specBundleRequired && !isGoalContinuationRun(request)
+
+  fun existingBundleReason(
+    issueKey: String,
+    existingParentSpec: Path,
+  ): String =
+    "Plan must author a new .feature-specs/$issueKey-<slug>/ bundle but '$existingParentSpec' already exists; " +
+      "the runtime never overwrites a parent spec."
+
+  fun withAuthoredParentSpecPath(
+    context: PhaseOutputSettlementContext,
+    attested: NormalizedFeatureTaskRuntimePhaseOutput,
+  ): NormalizedFeatureTaskRuntimePhaseOutput {
+    val request = context.request
+    val parentSpec =
+      context.phaseGates.decompositionPlanner.existingParentSpec(request.repoRoot, request.issueKey)
+        ?: return attested
+    val parentPath = request.repoRoot.toAbsolutePath().normalize().relativize(parentSpec).toString()
+    val envelope = attested.envelopeWireMap().toMutableMap()
+    val produced = JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty().toMutableMap()
+    produced[SharedPayloadKeys.VALUE] = parentPath
+    envelope[SharedPayloadKeys.PRODUCED_OUTPUTS] = produced
+    return NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(envelope))
+  }
+
+  fun notReadyReason(detail: String?): String {
+    val bounded =
+      detail.orEmpty().takeIf(String::isNotBlank)?.let {
+        if (it.length <= DETAIL_MAX_CHARS) it else it.take(DETAIL_MAX_CHARS) + "… [truncated]"
+      }
+    return "Plan did not author a ready spec bundle; the runtime blocks at planning rather than advancing." +
+      (bounded?.let { " Readiness problem: $it" } ?: "")
+  }
+
+  fun authoredBundleRejection(
+    context: PhaseOutputSettlementContext,
+    capture: ValidatedOutputCapture,
   ): String? {
-    if (!context.request.specBundleRequired || isGoalContinuationRun(context.request)) return null
+    val request = context.request
+    PlanBundleAuthorization
+      .violation(
+        request.repoRoot,
+        request.issueKey,
+        capture.fileManifest.introduced,
+        context.phaseGates.decompositionPlanner::bundleTree,
+      )?.let { return notReadyReason(it) }
     return try {
-      val outcome = decomposePlanOutcomeFromPhaseOutput(outputMap, context.specSource)
-      if (outcome == null) SPEC_BUNDLE_MISSING_REASON else null
+      context.phaseGates.decompositionPlanner.verifyAuthoredBundle(
+        request.repoRoot,
+        request.issueKey,
+        request.runInvariants,
+      )
+      null
     } catch (error: SkillBillRuntimeException) {
-      "Plan emitted a malformed decomposition package: ${error.message}"
-    } catch (error: IllegalArgumentException) {
-      "Plan emitted a malformed decomposition package: ${error.message}"
+      notReadyReason(error.message)
+    } catch (error: IOException) {
+      notReadyReason(error.message)
     }
   }
 
@@ -55,7 +100,6 @@ internal object PlanDecompositionStop {
     with(context) {
       val stopper =
         FeatureTaskRuntimePlanningStopper(
-          outputValidator,
           phaseGates.decompositionPlanner,
           recorder,
           diagnostics,
@@ -68,7 +112,6 @@ internal object PlanDecompositionStop {
             completedOutput = planOutput,
             completedPhaseIds = progress.completedPhaseIds,
             resolvedBranch = session.resolvedBranch,
-            specSource = specSource,
           )
       ) {
         is FeatureTaskRuntimePlanningStopDecision.Proceed -> null
@@ -113,7 +156,6 @@ internal object PlanDecompositionStop {
 }
 
 internal class FeatureTaskRuntimePlanningStopper(
-  private val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
   private val records: PhaseRunRecords,
   private val diagnostics: RuntimeDiagnostics,
@@ -124,91 +166,53 @@ internal class FeatureTaskRuntimePlanningStopper(
     completedOutput: FeatureTaskRuntimePhaseOutput,
     completedPhaseIds: List<String>,
     resolvedBranch: String?,
-    specSource: SpecSource,
   ): FeatureTaskRuntimePlanningStopDecision {
     if (isGoalContinuationRun(request)) {
       return FeatureTaskRuntimePlanningStopDecision.Proceed
     }
 
     val recordedTerminal = records.loadDecomposeTerminal(request.workflowId)
-    return if (recordedTerminal != null) {
-      FeatureTaskRuntimePlanningStopDecision.Decomposed(
-        recordedTerminal.toRunReport(request, completedPhaseIds, resolvedBranch),
-      )
-    } else {
-      resolveFreshPlanOutput(request, completedOutput, completedPhaseIds, resolvedBranch, specSource)
+    return when {
+      recordedTerminal != null ->
+        FeatureTaskRuntimePlanningStopDecision.Decomposed(
+          recordedTerminal.toRunReport(request, completedPhaseIds, resolvedBranch),
+        )
+      !request.specBundleRequired -> FeatureTaskRuntimePlanningStopDecision.Proceed
+      else -> resolveAuthoredBundle(request, completedOutput, completedPhaseIds, resolvedBranch)
     }
   }
 
-  private fun resolveFreshPlanOutput(
+  private fun resolveAuthoredBundle(
     request: FeatureTaskRuntimeRunFacts,
     completedOutput: FeatureTaskRuntimePhaseOutput,
     completedPhaseIds: List<String>,
     resolvedBranch: String?,
-    specSource: SpecSource,
   ): FeatureTaskRuntimePlanningStopDecision =
     try {
-      resolveFromPlanOutput(request, completedOutput, completedPhaseIds, resolvedBranch, specSource)
-    } catch (error: SkillBillRuntimeException) {
-      FeatureTaskRuntimePlanningStopDecision.Blocked(malformedDecomposeReason(error.message.orEmpty()))
-    } catch (error: IOException) {
-      FeatureTaskRuntimePlanningStopDecision.Blocked(malformedDecomposeReason(error.message.orEmpty()))
-    }
-
-  private fun resolveFromPlanOutput(
-    request: FeatureTaskRuntimeRunFacts,
-    completedOutput: FeatureTaskRuntimePhaseOutput,
-    completedPhaseIds: List<String>,
-    resolvedBranch: String?,
-    specSource: SpecSource,
-  ): FeatureTaskRuntimePlanningStopDecision {
-    val parsed =
-      outputValidator
-        .validatePhaseOutput(completedOutput.payload, completedOutput.phaseId)
-        .requireAcceptedOutput(completedOutput.phaseId)
-        .normalizedOutput
-        .envelopePayload()
-    val outcome =
-      decomposePlanOutcomeFromPhaseOutput(parsed, specSource)
-        ?: return if (request.specBundleRequired) {
-          FeatureTaskRuntimePlanningStopDecision.Blocked(PlanDecompositionStop.SPEC_BUNDLE_MISSING_REASON)
-        } else {
-          FeatureTaskRuntimePlanningStopDecision.Proceed
-        }
-    val terminal = writeDecompositionTerminal(request, outcome)
-    coupledRunTransitions.persistDecomposeTerminal(
-      records,
-      request.workflowId,
-      terminal,
-      completedOutput.phaseId,
-    )
-    emitDecomposedAtPlanning(request, terminal, completedOutput.phaseId)
-    return FeatureTaskRuntimePlanningStopDecision.Decomposed(
-      terminal.toRunReport(request, completedPhaseIds, resolvedBranch),
-    )
-  }
-
-  private fun writeDecompositionTerminal(
-    request: FeatureTaskRuntimeRunFacts,
-    outcome: FeatureTaskRuntimeDecomposePlanOutcome,
-  ): FeatureTaskRuntimeDecomposeTerminal {
-    val writeResult =
-      decompositionPlanner.writeDecomposition(
-        repoRoot = request.repoRoot,
-        issueKey = request.issueKey,
-        runInvariants = request.runInvariants,
-        outcome = outcome,
+      val bundle =
+        decompositionPlanner.verifyAuthoredBundle(request.repoRoot, request.issueKey, request.runInvariants)
+      val terminal =
+        FeatureTaskRuntimeDecomposeTerminal(
+          reason = FeatureTaskRuntimeDecompositionPlanner.AUTHORED_BUNDLE_REASON,
+          parentSpecPath = bundle.parentSpecPath,
+          decompositionManifestPath = bundle.decompositionManifestPath,
+          subtaskSpecPaths = bundle.subtaskSpecPaths,
+        )
+      coupledRunTransitions.persistDecomposeTerminal(
+        records,
+        request.workflowId,
+        terminal,
+        completedOutput.phaseId,
       )
-    return FeatureTaskRuntimeDecomposeTerminal(
-      reason = outcome.reason,
-      parentSpecPath = writeResult.parentSpecPath,
-      decompositionManifestPath =
-        requireNotNull(writeResult.decompositionManifestPath) {
-          "Decomposed feature-spec write result must include a decomposition manifest path."
-        },
-      subtaskSpecPaths = writeResult.subtaskSpecPaths,
-    )
-  }
+      emitDecomposedAtPlanning(request, terminal, completedOutput.phaseId)
+      FeatureTaskRuntimePlanningStopDecision.Decomposed(
+        terminal.toRunReport(request, completedPhaseIds, resolvedBranch),
+      )
+    } catch (error: SkillBillRuntimeException) {
+      FeatureTaskRuntimePlanningStopDecision.Blocked(PlanDecompositionStop.notReadyReason(error.message))
+    } catch (error: IOException) {
+      FeatureTaskRuntimePlanningStopDecision.Blocked(PlanDecompositionStop.notReadyReason(error.message))
+    }
 
   private fun emitDecomposedAtPlanning(
     request: FeatureTaskRuntimeRunFacts,
@@ -248,18 +252,4 @@ internal class FeatureTaskRuntimePlanningStopper(
       subtaskSpecPaths = subtaskSpecPaths,
       resolvedBranch = resolvedBranch,
     )
-
-  private fun malformedDecomposeReason(detail: String): String {
-    val bounded =
-      detail.takeIf(String::isNotBlank)?.let {
-        if (it.length <= MALFORMED_DETAIL_MAX_CHARS) it else it.take(MALFORMED_DETAIL_MAX_CHARS) + "… [truncated]"
-      }
-    return "Plan declared mode 'decompose' but emitted a malformed decomposition package; the runtime " +
-      "blocks at planning rather than crashing or advancing to implement." +
-      (bounded?.let { " Schema problem: $it" } ?: "")
-  }
-
-  private companion object {
-    const val MALFORMED_DETAIL_MAX_CHARS = 500
-  }
 }

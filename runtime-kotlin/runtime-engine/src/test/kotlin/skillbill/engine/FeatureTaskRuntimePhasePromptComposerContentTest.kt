@@ -16,41 +16,31 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
   @Test
   fun `implementation and audit may inspect new checkout contracts without replacing their settlement contract`() {
     listOf("implement", "audit").forEach { phaseId ->
-      listOf<String?>(null, "Prior output was not an object").forEach { failure ->
-        val prompt =
-          composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(phaseId)) {
-            copy(priorSchemaFailure = failure)
-          }
+      val prompt = composePromptForPhase(phaseId)
 
-        assertContains(
-          prompt,
-          "Read and edit checkout schemas, Kotlin contract constants, test fixtures, and skill sources",
-        )
-        assertContains(prompt, "New implementation contracts may be absent from the installed runtime.")
-        assertContains(prompt, "block repository work or require permission to inspect the checkout.")
-        assertContains(prompt, "Keep this phase's output and settlement on the contract supplied by this briefing")
-        assertFalse(prompt.contains("never this checkout"))
-      }
+      assertContains(
+        prompt,
+        "Read and edit checkout schemas, Kotlin contract constants, test fixtures, and skill sources",
+      )
+      assertContains(prompt, "New implementation contracts may be absent from the installed runtime.")
+      assertContains(prompt, "block repository work or require permission to inspect the checkout.")
+      assertContains(prompt, "Keep this phase's output and settlement on the contract supplied by this briefing")
+      assertFalse(prompt.contains("never this checkout"))
     }
   }
 
   @Test
   fun `phase workers and retries cannot reopen the dispatcher update confirmation`() {
     listOf("preplan", "plan", "implement", "audit", "review", "validate", "pr").forEach { phaseId ->
-      listOf<String?>(null, "Prior output was not an object").forEach { failure ->
-        val prompt =
-          composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(phaseId)) {
-            copy(priorSchemaFailure = failure)
-          }
+      val prompt = composePromptForPhase(phaseId)
 
-        assertContains(prompt, "The initial user-facing goal invocation owns update checks and launch confirmation.")
-        assertContains(
-          prompt,
-          "Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher",
-        )
-        assertContains(prompt, "including on retries and continuation.")
-        assertContains(prompt, "Reading the installed skill-bill skill does not make this phase a new invocation.")
-      }
+      assertContains(prompt, "The initial user-facing goal invocation owns update checks and launch confirmation.")
+      assertContains(
+        prompt,
+        "Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher",
+      )
+      assertContains(prompt, "including on retries and continuation.")
+      assertContains(prompt, "Reading the installed skill-bill skill does not make this phase a new invocation.")
     }
   }
 
@@ -66,17 +56,19 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(preplanPrompt, "scaled pre-planning digest")
     assertContains(preplanPrompt, "full preplan covering boundaries")
     assertContains(preplanPrompt, "Do not modify repository files during this phase.")
-    assertContains(preplanPrompt, "non-blank value")
+    assertContains(preplanPrompt, "as prose")
     assertContains(planPrompt, "Do not modify repository files during this phase.")
     assertContains(planPrompt, "upstream preplan value")
     assertContains(implementPrompt, "Reconcile the repository to the intended state")
+    assertContains(implementPrompt, "read the file named by spec_reference")
+    assertFalse(implementPrompt.contains("executable_plan"))
     assertTrue(
       !implementPrompt.contains("Do not modify repository files during this phase."),
       "implement must not carry the plan directive",
     )
     assertContains(implementPrompt, "Mutating-phase idempotency contract")
-    assertContains(implementPrompt, "implementation_receipt JSON")
-    assertContains(implementPrompt, "Carry this JSON object as the value text")
+    assertFalse(implementPrompt.contains("implementation_receipt"))
+    assertFalse(implementPrompt.contains("Carry this JSON object as the value text"))
     assertTrue(
       !implementPrompt.contains("reconciliation report missing or \"reconciled\" not true fails the schema gate"),
       "implement must not keep the sibling reconciled_state schema-gate prompt",
@@ -230,7 +222,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
 
   @Test
   fun `upstream outputs flow into the prompt through the briefing text`() {
-    val prompt = composePromptForPhase("implement")
+    val prompt = composePromptForPhase("audit")
 
     assertContains(prompt, "### from: plan")
     assertContains(prompt, "Fixture plan prose for downstream implement and audit.")
@@ -264,7 +256,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertTrue(!prompt.contains("return a blocked plan"))
     assertFalse(prompt.contains("## Subtask Sizing"), "goal-child plan omits the spec directive")
     assertFalse(prompt.contains("## Spec Format Contract"), "goal-child plan omits the spec directive")
-    assertContains(prompt, "stamps the contract version and phase id itself")
+    assertContains(prompt, "plain prose")
   }
 
   @Test
@@ -278,8 +270,8 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(prompt, "## Subtask Sizing")
     assertContains(prompt, "## Spec Format Contract")
     assertContains(prompt, "Spec bundle planning requirement")
-    assertContains(prompt, "\"phase_id\": must be \"plan\"")
-    assertContains(prompt, "Both fields belong inside produced_outputs")
+    assertContains(prompt, "Write nothing outside that")
+    assertFalse(prompt.contains("decomposition_package"))
     assertFalse(prompt.contains("stamps the contract version and phase id itself"))
     assertFalse(prompt.contains("\"mode\": \"direct\""))
     assertFalse(prompt.contains("Do not forward the complete plan envelope"))
@@ -322,25 +314,30 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
   }
 
   @Test
-  fun `review names its schema-gate signal and audit names its remaining-criteria value`() {
+  fun `review names its prose findings and verdict and audit names its remaining-criteria value`() {
     val reviewPrompt = composePromptForPhase("review")
     val auditPrompt = composePromptForPhase("audit")
 
-    assertContains(reviewPrompt, "VERIFYING phase", false, "review names itself a verifying phase")
-    assertContains(reviewPrompt, "\"findings\" array", false, "review names the findings signal")
-    assertContains(reviewPrompt, "\"approved\" or \"changes_requested\"", false, "review names the verdict values")
+    assertContains(reviewPrompt, "severity (blocker, major, minor, or nit)", false, "review names finding severity")
+    assertContains(reviewPrompt, "approved or requested changes", false, "review names the verdict in prose")
+    assertFalse(reviewPrompt.contains("VERIFYING phase"), "review carries no envelope verifying-signal addendum")
     assertFalse(auditPrompt.contains("VERIFYING phase"), "audit carries no envelope verifying-signal addendum")
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "value carries the remaining acceptance criteria only",
+      "Report the remaining acceptance criteria in prose",
       "the audit prose signal",
     )
-    assertAuditPromptNamesSignal(auditPrompt, "explicit empty list", "the remaining-criteria completion contract")
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "Omit verdict unless the list is empty, then use satisfied",
-      "the audit-specific verdict rule",
+      "say plainly that no production criteria remain",
+      "the remaining-criteria completion contract",
     )
+    assertAuditPromptNamesSignal(
+      auditPrompt,
+      "Only a report that no criteria remain allows downstream review",
+      "the audit-specific advance rule",
+    )
+    assertFalse(auditPrompt.contains("exactly `[]`"), "audit must not demand a literal empty list")
   }
 
   @Test
@@ -386,20 +383,12 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
   }
 
   @Test
-  fun `review prompt is the producer seam for commit-focused accounting`() {
-    val reviewPrompt = composePromptForPhase("review")
-
-    assertContains(reviewPrompt, "\"commit_focused_accounting\"", false, "review names the accounting key")
-    assertContains(reviewPrompt, "commit_sequence_digest", false, "the sequence identity is required")
-    assertContains(reviewPrompt, "integration_terminal_outcome", false, "the integration terminal state is required")
-    assertContains(reviewPrompt, "skipped_not_applicable", false, "the skipped outcome is in the named vocabulary")
-    assertContains(reviewPrompt, "incomplete_lanes", false, "incomplete lanes are reported as non-clean coverage")
-    assertContains(reviewPrompt, "OMITS the key entirely", false, "an inline pass omits rather than fabricates")
-    assertFalse(
-      composePromptForPhase("audit")
-        .contains("commit_focused_accounting"),
-      "only the review phase produces the accounting record",
-    )
+  fun `commit-focused accounting is runtime-owned and never asked of a phase agent`() {
+    listOf("review", "audit").forEach { phaseId ->
+      val prompt = composePromptForPhase(phaseId)
+      assertFalse(prompt.contains("commit_focused_accounting"), "$phaseId must not ask for the accounting record")
+      assertFalse(prompt.contains("commit_sequence_digest"), "$phaseId must not ask for the sequence identity")
+    }
   }
 
   @Test
@@ -408,41 +397,5 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
       val prompt = composePromptForPhase(phaseId)
       assertTrue(!prompt.contains("VERIFYING phase"), "$phaseId must not carry the verifying-signal addendum")
     }
-  }
-
-  @Test
-  fun `a prior schema-gate failure is surfaced as a corrective directive on retry`() {
-    val reason = "Audit phase reported 'completed' without a verification signal"
-
-    listOf("review").forEach { phaseId ->
-      val firstAttempt = composePromptForPhase(phaseId)
-      val retry =
-        composePhasePrompt(
-          PROMPT_COMPOSER_ISSUE_KEY,
-          promptComposerBriefingFor(phaseId),
-        ) { copy(priorSchemaFailure = reason) }
-
-      assertTrue(!firstAttempt.contains("REJECTED by the schema gate"), "$phaseId first attempt: no correction")
-      assertContains(retry, "Previous attempt was REJECTED by the schema gate", false, "$phaseId retry: rejection")
-      assertContains(retry, reason, false, "$phaseId retry carries the validator's reason verbatim")
-    }
-  }
-
-  @Test
-  fun `a retryable terminal envelope is prompted to retry, not told it was rejected`() {
-    val reason = "Implement phase reported blocked: the target module does not compile on this branch."
-
-    val retry =
-      composePhasePrompt(
-        PROMPT_COMPOSER_ISSUE_KEY,
-        promptComposerBriefingFor("implement"),
-      ) { copy(priorTerminalFailure = reason) }
-
-    assertContains(retry, "reported a retryable block", false, "terminal retry names its own kind")
-    assertContains(retry, reason, false, "terminal retry carries the reported reason verbatim")
-    assertTrue(
-      !retry.contains("REJECTED by the schema gate"),
-      "a schema-valid terminal envelope must never receive the schema-correction directive",
-    )
   }
 }

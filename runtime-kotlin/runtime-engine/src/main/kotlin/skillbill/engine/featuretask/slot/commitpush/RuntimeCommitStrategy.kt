@@ -21,7 +21,6 @@ class RuntimeCommitStrategy : PhaseStrategy() {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH to
         PhaseStepPolicy(
           mutating = false,
-          relaunchOnInvalidOutput = false,
           singleAgentSession = false,
           readOnlyIdle = false,
           fileMutating = true,

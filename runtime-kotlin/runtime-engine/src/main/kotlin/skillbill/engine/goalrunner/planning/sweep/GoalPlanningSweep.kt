@@ -41,11 +41,9 @@ class DefaultGoalPlanningSweep(
   val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ) : GoalPlanningSweep {
   val checkpoint = checkpointBoundaries.checkpoint
-  val outputValidator = checkpointBoundaries.outputValidator
   val invariantsSource = checkpointBoundaries.invariantsSource
   val manifestFileStore = checkpointBoundaries.manifestFileStore
   val contextDiscovery = checkpointBoundaries.contextDiscovery
-  val planningProjectionValidator = checkpointBoundaries.planningProjectionValidator
   val manifestStore = launchBoundaries.manifestStore
   val planningAttemptRecorder = launchBoundaries.planningAttemptRecorder
   val planningRejectionRecorder = launchBoundaries.planningRejectionRecorder
@@ -111,7 +109,6 @@ class DefaultGoalPlanningSweep(
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
         transitions = executionPlan.traversal,
-        outputValidator = outputValidator,
         stepVerdictRule = slotStepVerdictRule(phaseStrategies, executionPlan, diagnostics),
         resumeRulesFn = phaseStrategies.resumeRules(executionPlan),
       )
@@ -122,7 +119,7 @@ class DefaultGoalPlanningSweep(
         planning = planning,
         strategies = phaseStrategies,
         executionPlan = executionPlan,
-        collaborators = PhaseAttemptCollaborators(outputValidator, clock, diagnostics),
+        collaborators = PhaseAttemptCollaborators(clock, diagnostics),
         specSource = shared.specSource,
       )
     val report = runLoopEntry.run(FeatureTaskRuntimeRunLoopContext(facts, runState, phaseStrategies))

@@ -58,7 +58,7 @@ object GoalPlanningContextPromptFormatter {
         append(
           "\nboundary_memory is a heading catalog: heading text and stable heading_id only, no entry bodies. " +
             "Walk the headings, stop once they are no longer relevant to this goal's scope, and weave the " +
-            "relevant context into produced_outputs.value as prose for the plan phase. Recommended headings " +
+            "relevant context into your final prose for the plan phase. Recommended headings " +
             "may guide your prose; selected_boundary_headings is not required.",
         )
       }

@@ -240,7 +240,6 @@ class ImplementationOwnershipArchitectureTest {
         "skillbill.infrastructure.launcher.agentrun.PathExecutableLookup",
         "skillbill.infrastructure.launcher.review.UnixSocketGovernedReviewEvidenceEndpointBinder",
         "skillbill.ports.workflow.decomposition.DecompositionManifestValidator",
-        "skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator",
         "skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator",
         "skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator",
         "skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator",

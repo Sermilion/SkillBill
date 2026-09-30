@@ -18,7 +18,6 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
@@ -189,7 +188,6 @@ internal data class CapExhaustionReasonArgs(
 
 internal data class UnownedWorktreeCommitShaArgs(
   val request: FeatureTaskRuntimeRunFacts,
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   val diagnostics: RuntimeDiagnostics,
   val phaseGates: FeatureTaskRuntimePhaseGates,
   val run: PhaseRun,
@@ -380,7 +378,6 @@ internal data class ShouldRetryPersistedBlockArgs(
   val durable: FeatureTaskRuntimePhaseRecord?,
   val resume: PhaseBlockResume,
   val reenterableRecordRejection: Boolean,
-  val relaunchOnInvalidOutput: Boolean,
 )
 
 internal data class RecordFinalisedCheckpointIdentityArgs(

@@ -26,7 +26,6 @@ import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 
@@ -49,7 +48,7 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
   internal fun ReviewOutputPersistenceContext.persistStandaloneReviewCompletion(
     args: PhaseReviewPersistenceArgs,
     outputText: String,
-    acceptedOutput: AcceptedFeatureTaskRuntimePhaseOutput,
+    acceptedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
   ): PhaseOutcome? {
     val run = args.run
     val iteration = args.iteration
@@ -94,7 +93,7 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
   private fun ReviewOutputPersistenceContext.recordStandaloneReviewCompletion(
     args: PhaseReviewPersistenceArgs,
     outputText: String,
-    acceptedOutput: AcceptedFeatureTaskRuntimePhaseOutput,
+    acceptedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
   ): Boolean {
     val phaseState =
       FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
@@ -113,8 +112,8 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
           extras =
             PhaseStateRequestAttachments(
               fileManifest = args.fileManifest,
-              normalizedOutput = acceptedOutput.normalizedOutput,
-              repairEvidence = acceptedOutput.repairEvidence,
+              normalizedOutput = acceptedOutput,
+              repairEvidence = null,
               reviewRunId = state.phase(args.run.phaseId).record?.reviewRunId,
             ),
         ),
@@ -127,8 +126,8 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
           args.run.phaseId,
           args.iteration,
           outputText,
-          acceptedOutput.normalizedOutput,
-          acceptedOutput.repairEvidence,
+          acceptedOutput,
+          null,
         ),
     )
   }

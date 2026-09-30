@@ -42,6 +42,7 @@ object InlineReviewEnvelope {
     val findings = result.mergeResult.findings.map(::findingPayload)
     val produced =
       linkedMapOf<String, Any?>(
+        SharedPayloadKeys.VALUE to prose,
         FeatureTaskRuntimeVerificationSignalKeys.REVIEW_FINDINGS to emptyList<Any?>(),
         FeatureTaskRuntimeVerificationSignalKeys.REVIEW_RUN_ID to reviewRunId,
         FeatureTaskRuntimeVerificationSignalKeys.REPOSITORY_CHECKPOINT to

@@ -7,19 +7,13 @@ import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntim
 import skillbill.ports.diagnostics.ProducerOutputEvidenceValidator
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeExecutionPlanValidator
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.infrastructure.contracts.FeatureTaskRuntimePhaseOutputSchemaValidator as FeatureTaskRuntimePhaseOutputSchemaValidatorImpl
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
 
 internal interface RuntimeFeatureTaskValidatorProvides {
   @Provides
   fun featureTaskRuntimeExecutionPlanValidator(): FeatureTaskRuntimeExecutionPlanValidator =
     FeatureTaskRuntimeExecutionPlanSchemaValidator()
-
-  @Provides
-  fun featureTaskRuntimePhaseOutputValidator(): FeatureTaskRuntimePhaseOutputValidator =
-    FeatureTaskRuntimePhaseOutputSchemaValidatorImpl()
 
   @Provides
   fun featureTaskRuntimeWireArtifactValidator(): FeatureTaskRuntimeWireArtifactValidator =

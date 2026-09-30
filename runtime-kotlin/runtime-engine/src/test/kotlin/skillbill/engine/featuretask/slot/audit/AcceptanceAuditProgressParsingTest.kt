@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.audit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class AcceptanceAuditProgressParsingTest {
   @Test
@@ -89,6 +90,51 @@ class AcceptanceAuditProgressParsingTest {
       """[{"missing_production_behavior":"AC-001"}]""",
       """[{"criterion":"AC-001""",
       "A completely reworded uncountable audit report.",
+    ).forEach { report ->
+      assertIs<AcceptanceAuditRemainingCriteria.Unusable>(
+        AcceptanceAuditRemainingCriteriaParser.parse(report, catalog),
+        report,
+      )
+    }
+  }
+
+  @Test
+  fun `plain prose that no criteria remain completes the audit`() {
+    val catalog = assertIs<AcceptanceAuditCatalog.Known>(AcceptanceAuditCatalog.create(CRITERIA))
+    listOf(
+      "All acceptance criteria are met; no production criteria remain.",
+      "Both AC1 and AC2 are satisfied. Nothing remains to repair.",
+      "There are no remaining production gaps.",
+    ).forEach { report ->
+      assertIs<AcceptanceAuditRemainingCriteria.Complete>(
+        AcceptanceAuditRemainingCriteriaParser.parse(report, catalog),
+        report,
+      )
+      assertEquals(null, AcceptanceAuditProgress.rejectionReason(CRITERIA, report, "- AC-002: gap", true, false))
+    }
+  }
+
+  @Test
+  fun `prose naming the same or a larger set after repair blocks as stalled`() {
+    val before = "Criteria AC1 and AC2 are still open because of missing production behavior."
+    listOf(
+      "Criteria AC1 and AC2 are still open because the gaps remain.",
+      "Open criteria: AC1, AC2 and again AC1 without an admission path.",
+    ).forEach { after ->
+      val reason = AcceptanceAuditProgress.rejectionReason(CRITERIA, after, before, true, false)
+      assertTrue(reason.orEmpty().contains("did not shrink"), after)
+    }
+    val shrunk = "Criterion AC2 is still open."
+    assertEquals(null, AcceptanceAuditProgress.rejectionReason(CRITERIA, shrunk, before, true, false))
+  }
+
+  @Test
+  fun `vague prose without identities or a clear completion statement is ambiguous`() {
+    val catalog = assertIs<AcceptanceAuditCatalog.Known>(AcceptanceAuditCatalog.create(CRITERIA))
+    listOf(
+      "The implementation looks mostly fine.",
+      "Some work is still missing in the export path.",
+      "All criteria are met, but the export path is not wired.",
     ).forEach { report ->
       assertIs<AcceptanceAuditRemainingCriteria.Unusable>(
         AcceptanceAuditRemainingCriteriaParser.parse(report, catalog),

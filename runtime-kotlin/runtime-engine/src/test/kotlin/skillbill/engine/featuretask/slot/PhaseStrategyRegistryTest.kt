@@ -172,7 +172,7 @@ class PhaseStrategyRegistryTest {
     override val semanticRevision: Int = 1,
     override val entryStep: String = steps.firstOrNull().orEmpty(),
   ) : PhaseStrategy() {
-    override fun policyFor(stepId: String): PhaseStepPolicy = PhaseStepPolicy(false, false, false, false, false, false)
+    override fun policyFor(stepId: String): PhaseStepPolicy = PhaseStepPolicy(false, false, false, false, false)
 
     override fun directiveFor(stepId: String): String = error("unused")
 

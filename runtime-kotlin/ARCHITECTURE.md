@@ -143,9 +143,9 @@ repository-checkpoint calculation use explicit arguments. Carried-forward goal
 review settlement uses `CarriedForwardGoalReviewArgs`;
 PhaseRunner and PlanningBranch enter through the phase-boundary state and
 observability values. AttemptSettlement moves
-`gateOutput` / `settleValidatedOutput` / envelope settlement off the context
+`gateOutput` / `settleValidatedOutput` / prose settlement off the context
 receiver; `GateOutput` and `SettleValidatedOutput` carry the
-request/state/recorder/outputValidator/phaseGates/clock/diagnostics/
+request/state/recorder/phaseGates/clock/diagnostics/
 goalContinuationRecorder/phaseSettlementService ports those paths use.
 `settlementContext` on those args remains only for the not-yet-peeled
 audit/checkpoint and accepted-output persistence tail inside
@@ -629,7 +629,7 @@ and `:runtime-infra:sqlite`.
   not under `skillbill.infrastructure.contracts`, because they are
   adapter-owned parse/repair engines rather than schema validators.
 - `skillbill.error`: runtime exception taxonomy.
-- `skillbill.agent.model`: phase handoff string envelopes for agent phase input and output owned by `runtime-domain`.
+- `skillbill.agent.model`: phase handoff inputs and the prose `PhaseOutput` (`value`, optional `prompt`) owned by `runtime-domain`.
 - `skillbill.infrastructure.skills.agentaddon`: governed agent-add-on filesystem
   discovery and schema validation owned by `runtime-infra/skills`;
   `skillbill.agentaddon.model` holds the typed declaration models owned by
@@ -1417,15 +1417,17 @@ Composition:
   discipline, retry, and settlement sections and has no phase-keyed table.
   Goal planning composes preplan and plan prompts from the registered
   strategies through `PhaseStrategyLookup`.
-- Every step except the three `code_review` steps settles with the minimal
-  final object: status, summary, prose value, optional verdict, and a failure
-  disposition when not completed. The runtime stamps the contract version and
-  phase id, and the durable settlement directive is added whenever the step
-  has a settlement target. `DefaultPhaseRunner` prefers the MCP-settled
-  envelope and otherwise reads the minimal final object from stdout for any
-  step name, including a step outside the domain graph. A step whose prompt
-  sections set `settles = false` (the runtime-owned build and commit_push
-  turns) does not settle with the uniform output.
+- Every step except the three `code_review` steps settles through
+  `feature_task_phase_complete` / `feature_task_phase_block` with a status,
+  summary, prose value, and optional prompt; a failure disposition accompanies
+  a non-completed status. The runtime stamps the phase id, and the durable
+  settlement directive is added whenever the step has a settlement target.
+  `PhaseOutputGate` takes the terminal outcome first, then the settlement
+  record, then non-blank stdout prose as the value for any step name, including
+  a step outside the domain graph. There is no response envelope to parse and
+  no format relaunch. A step whose prompt sections set `settles = false` (the
+  runtime-owned build and commit_push turns) does not settle with the uniform
+  output.
 
 Dispatch and policy:
 
@@ -1528,10 +1530,9 @@ Adding a phase strategy:
   ordering helper on that path.)
 - Feature-task runtime wire artifact schema validation ports live in
   `runtime-domain` as `FeatureTaskRuntimeWireArtifactValidator` (closed
-  `FeatureTaskRuntimeWireArtifactKind`) plus `FeatureTaskRuntimePhaseOutputValidator`
-  and `DecompositionManifestValidator`. Infra implements them through
-  `FeatureTaskRuntimeWireArtifactValidatorAdapter` and the phase-output /
-  decomposition adapters under `runtime-infra/contracts`; composition wires one adapter
+  `FeatureTaskRuntimeWireArtifactKind`) plus `DecompositionManifestValidator`.
+  Infra implements them through
+  `FeatureTaskRuntimeWireArtifactValidatorAdapter` and the decomposition adapters under `runtime-infra/contracts`; composition wires one adapter
   instance per port. Goal progress, observability, and planning-preparation validator
   names are type aliases to that same port and select their closed artifact kinds
   through extension helpers. Extension helpers on the wire-artifact port preserve
@@ -1905,8 +1906,6 @@ Contract validators log schema drift at `WARNING` through
 `skillbill.infrastructure.contracts.locator.logSchemaLoadFailure`
 before throwing the family's `Invalid*SchemaError`; that is the operator signal
 for packaged-schema versus runtime-contract version skew, not a silent fallback.
-`FeatureTaskRuntimePhaseOutputSchemaValidatorSupportParsing` logs unparsable
-phase-output candidates at `FINE` while continuing envelope selection.
 `InstallStaging` and staging I/O log reuse and failure at `FINE`/`SEVERE`.
 `JvmAgentRunProcessRunner` and `ProcessRunDegradationRecorder` export bounded
 degradation lines to stderr; `degradationExportLogger` records sink failures
@@ -1923,9 +1922,6 @@ degradation export);
 `SkillRemoveJvmFileSystemApply` (uninstall cleanup);
 `NativeAgentCompositionSchemaValidator` (schema drift before a typed failure);
 `PlatformPackSchemaValidator` (tolerated legacy manifest version);
-`FeatureTaskRuntimePhaseOutputSchemaLoading` and
-`FeatureTaskRuntimePhaseOutputSchemaValidatorSupportParsing` (schema-load and
-candidate-selection diagnostics);
 `WorkflowStateSchemaValidator`, `IdeStatusSchemaValidator`,
 `GoalProgressEventSchemaValidator`, `GoalObservabilityEventSchemaValidator`,
 `GoalPlanningPreparationSchemaValidator`, `InstallPlanSchemaValidator`,
@@ -2361,7 +2357,7 @@ The closed workflow-Git result vocabulary is owned by
 
 Runtime-domain wire-token declarations own closed enum tokens and their aliases. Runtime-contracts
 `*Keys` declarations own durable and wire payload keys that two or more production modules read;
-`SharedPayloadKeys` is the shared owner for the feature-task phase-output envelope;
+`SharedPayloadKeys` is the shared owner for the feature-task phase settlement keys;
 `DecompositionManifestPayloadKeys` and `DecompositionPlanningPayloadKeys` own decomposition-manifest
 and planning-projection keys; `LifecycleTelemetryPayloadKeys` owns the telemetry envelope, including
 `event_name`. A `*Keys` object with a single owner lives in that owner's module instead — for
@@ -2371,14 +2367,12 @@ example `SqliteReviewTelemetryPayloadKeys` and
 `GovernedReviewEvidencePayloadKeys` in `runtime-infra/launcher` — and it must not restate a value a
 shared owner already declares. `WireVocabularyArchitectureTest` asserts that zero-overlap for the
 two SQLite adapter key objects (SKILL-374).
-`ProsePhaseOutputParse` delegates status normalization to `SettlementStatus`, while
 `DecompositionStatus` retains its separate `completed` input alias and `complete` output token.
 
 ## Governed payload seams (mechanical scope)
 
 `WireVocabularyGovernedSeamInventory` is the independent expected-key authority. It reads canonical
-schema YAML for decomposition manifests, the decomposition bundle journal, and the workflow
-phase-output envelope (not a scan of existing `*Keys` objects). It also declares the closed
+schema YAML for decomposition manifests and the decomposition bundle journal (not a scan of existing `*Keys` objects). It also declares the closed
 goal-continuation artifact vocabulary independently from its Kotlin owner. For each seam it
 compares closed schema fields to declared `*Keys` / `*PayloadKeys` constants and fails when a
 schema field has no Kotlin owner.
@@ -2392,7 +2386,6 @@ they spell the same token.
 | --- | --- | --- |
 | Decomposition manifest | Root, subtask, dependency, stack branch, and current-intent closed objects | N/A at manifest root (`additionalProperties: false`) |
 | Decomposition manifest bundle journal | Bundle-journal root and entry closed objects | None |
-| Workflow phase-output envelope | Top-level envelope fields only | `produced_outputs` entry maps (phase-specific keys stay open) |
 | Feature-task runtime goal-continuation artifact | `FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys` | None |
 
 A green `WireVocabularyArchitectureTest` on runtime main sources does not prove every `String` in

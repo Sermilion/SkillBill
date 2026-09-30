@@ -72,7 +72,6 @@ internal fun DefaultGoalPlanningSweep.composePlanningPrompt(args: GoalPlanningPr
   val briefing =
     FeatureTaskRuntimePhaseBriefingAssembler.assemble(
       handoff,
-      planningProjectionValidator = planningProjectionValidator,
       agentAddonSelection = phase.request.agentAddonSelection,
       scope = FeatureTaskRuntimeBriefingScope(invariantFields = phase.launch.invariantFields),
     )
@@ -83,7 +82,6 @@ internal fun DefaultGoalPlanningSweep.composePlanningPrompt(args: GoalPlanningPr
         issueKey = phase.request.issueKey,
         briefing = briefing,
         suppressDecomposition = true,
-        priorSchemaFailure = args.priorSchemaFailure,
       ),
       phase.launch.prompt,
     )

@@ -8,7 +8,6 @@ import skillbill.install.model.SupportedAgent
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeCorrectiveRepairContext
 
 object FeatureTaskRuntimeRunLoopLaunch {
   internal fun capturePhaseContentIdentities(
@@ -40,8 +39,6 @@ internal sealed interface AttemptResult {
     val retryReason: String,
     override val fileManifest: FeatureTaskRuntimePhaseFileManifest,
     override val rejectedOutput: String?,
-    override val malformedOutput: Boolean,
-    override val correctiveRepairContext: FeatureTaskRuntimeCorrectiveRepairContext?,
   ) : AttemptResult
 
   data class IncompleteWork(
@@ -53,10 +50,10 @@ internal sealed interface AttemptResult {
 
   data class RetryableTerminal(
     val operatorReason: String,
-    val retryReason: String,
     override val fileManifest: FeatureTaskRuntimePhaseFileManifest,
     val failureDisposition: FeatureTaskRuntimeFailureDisposition,
-    val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput? = null,
+    val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
+    val continuationOutput: NormalizedFeatureTaskRuntimePhaseOutput?,
   ) : AttemptResult
 
   data class BoundaryBodyDelivery(
@@ -77,9 +74,6 @@ internal sealed interface AttemptResult {
         is BoundaryBodyDelivery -> fileManifest
       }
   val rejectedOutput: String? get() = (this as? SchemaInvalid)?.rejectedOutput
-  val malformedOutput: Boolean get() = (this as? SchemaInvalid)?.malformedOutput == true
-  val correctiveRepairContext: FeatureTaskRuntimeCorrectiveRepairContext?
-    get() = (this as? SchemaInvalid)?.correctiveRepairContext
 
   val retryableOperatorReason: String?
     get() =
@@ -101,13 +95,7 @@ internal sealed interface AttemptResult {
         is BoundaryBodyDelivery -> null
       }
 
-  val retryableTerminalRetryReason: String? get() = (this as? RetryableTerminal)?.retryReason
-
-  val retryableTerminalDisposition: FeatureTaskRuntimeFailureDisposition?
-    get() = (this as? RetryableTerminal)?.failureDisposition
-
-  val retryableTerminalOutput: NormalizedFeatureTaskRuntimePhaseOutput?
-    get() = (this as? RetryableTerminal)?.normalizedOutput
+  val retryableTerminal: RetryableTerminal? get() = this as? RetryableTerminal
 
   val incompleteWorkContinuationReason: String? get() = (this as? IncompleteWork)?.continuationReason
   val incompleteWorkOutput: NormalizedFeatureTaskRuntimePhaseOutput?
@@ -130,28 +118,16 @@ internal sealed interface AttemptResult {
       normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
     ): AttemptResult = IncompleteWork(operatorReason, continuationReason, fileManifest, normalizedOutput)
 
-    fun retryableTerminal(
-      operatorReason: String,
-      fileManifest: FeatureTaskRuntimePhaseFileManifest,
-      failureDisposition: FeatureTaskRuntimeFailureDisposition,
-      normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput? = null,
-    ): AttemptResult =
-      RetryableTerminal(operatorReason, operatorReason, fileManifest, failureDisposition, normalizedOutput)
-
     fun schemaInvalid(
       operatorReason: String,
       fileManifest: FeatureTaskRuntimePhaseFileManifest,
-      malformedOutput: Boolean = false,
       retryReason: String = operatorReason,
-      correctiveRepairContext: FeatureTaskRuntimeCorrectiveRepairContext? = null,
     ): AttemptResult =
       SchemaInvalid(
         operatorReason = operatorReason,
         retryReason = retryReason,
         fileManifest = fileManifest,
         rejectedOutput = null,
-        malformedOutput = malformedOutput,
-        correctiveRepairContext = correctiveRepairContext,
       )
   }
 }

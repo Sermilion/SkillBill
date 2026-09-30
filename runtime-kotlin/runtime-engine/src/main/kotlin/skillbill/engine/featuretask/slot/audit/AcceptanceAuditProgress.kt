@@ -20,16 +20,50 @@ internal data class AcceptanceAuditProgressInput(
 internal object AcceptanceAuditProgress {
   const val MAX_NON_SHRINKING_ROUNDS: Int = 2
 
+  fun declaresComplete(
+    criteria: List<String>,
+    text: String?,
+  ): Boolean {
+    val catalog = AcceptanceAuditCatalog.create(criteria) as? AcceptanceAuditCatalog.Known ?: return false
+    return AcceptanceAuditRemainingCriteriaParser.parse(text.orEmpty(), catalog) is
+      AcceptanceAuditRemainingCriteria.Complete
+  }
+
+  fun rejectionReason(
+    criteria: List<String>,
+    text: String,
+    priorText: String?,
+    repaired: Boolean,
+    operatorReopened: Boolean,
+  ): String? {
+    val result =
+      outcome(
+        AcceptanceAuditProgressInput(
+          criteria = criteria,
+          text = text,
+          priorText = priorText,
+          repaired = repaired,
+          operatorReopened = operatorReopened,
+          nonShrinkingRounds = MAX_NON_SHRINKING_ROUNDS,
+        ),
+      )
+    return when (result) {
+      AcceptanceAuditProgressOutcome.Advance,
+      AcceptanceAuditProgressOutcome.NonShrinking,
+      -> null
+      is AcceptanceAuditProgressOutcome.Rejected -> result.reason
+    }
+  }
+
   fun outcome(input: AcceptanceAuditProgressInput): AcceptanceAuditProgressOutcome {
     val catalog = AcceptanceAuditCatalog.create(input.criteria)
     if (catalog is AcceptanceAuditCatalog.Unusable) return AcceptanceAuditProgressOutcome.Rejected(catalog.reason)
     catalog as AcceptanceAuditCatalog.Known
-    val current = AcceptanceAuditRemainingCriteriaParser.parse(input.text, catalog)
-    if (current is AcceptanceAuditRemainingCriteria.Unusable) {
-      return AcceptanceAuditProgressOutcome.Rejected(current.reason)
+    return when (val current = AcceptanceAuditRemainingCriteriaParser.parse(input.text, catalog)) {
+      is AcceptanceAuditRemainingCriteria.Unusable -> AcceptanceAuditProgressOutcome.Rejected(current.reason)
+      AcceptanceAuditRemainingCriteria.Complete -> AcceptanceAuditProgressOutcome.Advance
+      is AcceptanceAuditRemainingCriteria.Known -> comparisonOutcome(catalog, current, input)
     }
-    current as AcceptanceAuditRemainingCriteria.Known
-    return comparisonOutcome(catalog, current, input)
   }
 
   private fun comparisonOutcome(

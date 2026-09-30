@@ -1,7 +1,6 @@
 package skillbill.engine.featuretask.runloop.core
 
 import skillbill.application.decomposition.baseBranch
-import skillbill.contracts.JsonCodec
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetup
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinalisation
@@ -13,21 +12,18 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnap
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.goalrunner.execution.support.protectedBranchName
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FEATURE_TASK_RUNTIME_STANDALONE_SUBTASK_ID
-import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
 
 object FeatureTaskRuntimeRunLoopSubtaskCommit {
   internal fun unownedWorktreeCommitSha(args: UnownedWorktreeCommitShaArgs): CommitPushFinalisation {
     val request = args.request
-    val outputValidator = args.outputValidator
     val diagnostics = args.diagnostics
     val phaseGates = args.phaseGates
-    val run = args.run
     val normalizedOutput = args.normalizedOutput
     val head = phaseGates.gitOperations.headCommitSha(request.repoRoot)
     val sha =
@@ -42,8 +38,6 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
     )
     return CommitPushSettled(
       revalidated(
-        outputValidator,
-        run.phaseId,
         FeatureTaskRuntimeSubtaskFinalisation.withCommitSha(
           normalizedOutput.envelopeWireMap(),
           sha,
@@ -124,15 +118,8 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
       "the workflow store and resume; the commit is already on the branch."
   }
 
-  internal fun revalidated(
-    outputValidator: FeatureTaskRuntimePhaseOutputValidator,
-    phaseId: String,
-    envelope: Map<String, Any?>,
-  ): NormalizedFeatureTaskRuntimePhaseOutput =
-    outputValidator
-      .validatePhaseOutput(JsonCodec.mapToJsonString(envelope), sourceLabel = phaseId)
-      .requireAcceptedOutput(phaseId)
-      .normalizedOutput
+  internal fun revalidated(envelope: Map<String, Any?>): NormalizedFeatureTaskRuntimePhaseOutput =
+    NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(envelope))
 }
 
 internal data class ReadinessChangedPaths(

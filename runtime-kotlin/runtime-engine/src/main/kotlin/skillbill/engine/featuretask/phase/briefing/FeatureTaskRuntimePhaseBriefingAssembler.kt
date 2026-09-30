@@ -4,7 +4,6 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeBriefingProjectionInputs
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposer
-import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffProjectionValidator
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionShape
@@ -41,7 +40,6 @@ object FeatureTaskRuntimePhaseBriefingAssembler {
   fun assemble(
     handoff: FeatureTaskRuntimePhaseHandoff,
     workflowId: String? = null,
-    planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidator,
     agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
     scope: FeatureTaskRuntimeBriefingScope = FeatureTaskRuntimeBriefingScope(),
   ): FeatureTaskRuntimePhaseLaunchBriefing {
@@ -76,7 +74,6 @@ object FeatureTaskRuntimePhaseBriefingAssembler {
             handoff = handoff,
             declarations = promptDeclarations,
             workflowId = workflowId,
-            planningProjectionValidator = planningProjectionValidator,
             sharedReviewEvidence = scope.sharedReviewEvidence,
             addonContentBySlug = boundedAddonSelection.entries.associate { it.persisted.slug to it.content },
           ),

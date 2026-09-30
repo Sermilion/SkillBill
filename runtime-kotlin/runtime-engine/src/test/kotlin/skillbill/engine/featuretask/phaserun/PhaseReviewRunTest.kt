@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.phaserun
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.engine.BranchSetupTestConfig
@@ -38,7 +37,6 @@ import skillbill.engine.telemetryRunnerHarness
 import skillbill.engine.validJsonOutput
 import skillbill.engine.verifyFindingsOutput
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -139,7 +137,7 @@ class PhaseReviewRunTest {
       var reviews = 0
       val lanes = LaneScript()
       val entry =
-        delegatedEntry(fixLauncher(), lanes, validator = null) {
+        delegatedEntry(fixLauncher(), lanes) {
           reviews += 1
           APPROVED_REVIEW
         }
@@ -271,7 +269,6 @@ class PhaseReviewRunTest {
   private fun delegatedEntry(
     launcher: RuntimeRecordingLauncher,
     lanes: LaneScript,
-    validator: FeatureTaskRuntimePhaseOutputValidator? = realFeatureTaskRuntimePhaseOutputValidator,
     inlineReview: () -> String = { error("the delegated review must not open an inline review session") },
   ): PhaseRunEntry =
     entryFor(
@@ -279,7 +276,6 @@ class PhaseReviewRunTest {
         branchSetup = BranchSetupTestConfig(gitOperations = git),
         repoRoot = repoRoot,
         launcher = launcher,
-        validator = validator,
         agentAssignment = FeatureTaskRuntimeAgentAssignment(perPhaseAgentIds = mapOf(PHASE_REVIEW to REVIEW_AGENT)),
         reviewRunner = scriptedReviewPhaseRunner(inlineReview),
         delegatedReviewRunner = scriptedDelegatedReviewRunner(database, home, lanes),
@@ -384,7 +380,6 @@ private fun FeatureTaskRuntimeRunner.withRunLoopEntry(
     strategies = strategies,
     recorder = recorder,
     goalContinuationRecorder = goalContinuationRecorder,
-    outputValidator = outputValidator,
     phaseGates = phaseGates,
     startup = startup,
     phaseSettlementService = phaseSettlementService,

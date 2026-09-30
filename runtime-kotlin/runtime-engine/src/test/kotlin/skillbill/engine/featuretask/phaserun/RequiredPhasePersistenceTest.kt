@@ -431,7 +431,6 @@ internal fun FeatureTaskRuntimeRunner.withEntry(entry: FeatureTaskRuntimeRunLoop
     strategies,
     recorder,
     goalContinuationRecorder,
-    outputValidator,
     phaseGates,
     startup,
     phaseSettlementService,

@@ -91,7 +91,6 @@ internal object InlineReviewPass : CodeReviewPass {
   override val policy =
     PhaseStepPolicy(
       mutating = false,
-      relaunchOnInvalidOutput = true,
       singleAgentSession = false,
       readOnlyIdle = false,
       fileMutating = true,

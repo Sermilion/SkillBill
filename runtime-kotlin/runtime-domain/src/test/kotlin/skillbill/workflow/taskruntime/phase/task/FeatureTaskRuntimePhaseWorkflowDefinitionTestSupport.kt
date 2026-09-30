@@ -34,7 +34,7 @@ private fun expectedConsumerProjectionMatrix(): Map<String, Set<Pair<String, Str
   val def = FeatureTaskRuntimePhaseWorkflowDefinition
   return mapOf(
     def.PHASE_PLAN to setOf(def.PHASE_PREPLAN to "feature_task_runtime.phase_prose"),
-    def.PHASE_IMPLEMENT to setOf(def.PHASE_PLAN to "feature_task_runtime.phase_prose"),
+    def.PHASE_IMPLEMENT to emptySet(),
     def.PHASE_SIMPLIFY to
       setOf(
         def.PHASE_IMPLEMENT to FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.CHANGE_RECEIPT,

@@ -32,7 +32,7 @@ internal fun upstreamPhaseOutputFields(
                     output.iteration,
                   ),
               )
-            } ?: FeatureTaskRuntimeHandoffProjectionValue.Text(output.payload),
+            } ?: FeatureTaskRuntimeHandoffProjectionValue.Text(output.output.value),
         ),
       )
   }

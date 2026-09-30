@@ -156,7 +156,6 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
         durable = durable,
         resume = resume,
         reenterableRecordRejection = reenterableRecordRejection,
-        relaunchOnInvalidOutput = run.policy.relaunchOnInvalidOutput,
       ),
     )
   }
@@ -171,7 +170,7 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
       args.resume != PhaseBlockResume.DEFAULT -> true
       args.reenterableRecordRejection -> true
       disposition != null -> disposition.retryOnResume
-      else -> args.relaunchOnInvalidOutput
+      else -> false
     }
   }
 }

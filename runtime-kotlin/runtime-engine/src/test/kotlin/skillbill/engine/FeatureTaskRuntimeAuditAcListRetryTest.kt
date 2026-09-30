@@ -1,6 +1,5 @@
 package skillbill.engine
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.config.model.ExecutionMatrix
 import skillbill.config.model.ExecutionTier
 import skillbill.config.model.PhaseModelDirective
@@ -67,7 +66,6 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
       runnerHarness(
         RuntimeHarnessConfig(
           launcher = launcher,
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
         ),
       )
 
@@ -112,7 +110,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
       }
     val harness =
       runnerHarness(
-        RuntimeHarnessConfig(launcher = launcher, validator = realFeatureTaskRuntimePhaseOutputValidator),
+        RuntimeHarnessConfig(launcher = launcher),
       )
 
     assertIs<FeatureTaskRuntimeRunReport.Completed>(harness.runner.run(harness.request()))
@@ -151,7 +149,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
       }
     val harness =
       runnerHarness(
-        RuntimeHarnessConfig(launcher = launcher, validator = realFeatureTaskRuntimePhaseOutputValidator),
+        RuntimeHarnessConfig(launcher = launcher),
       )
 
     val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
@@ -179,7 +177,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
       }
     val harness =
       runnerHarness(
-        RuntimeHarnessConfig(launcher = launcher, validator = realFeatureTaskRuntimePhaseOutputValidator),
+        RuntimeHarnessConfig(launcher = launcher),
       )
 
     val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
@@ -243,7 +241,6 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
         RuntimeHarnessConfig(
           acceptanceCriteria = CRITERIA,
           launcher = launcher,
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
           diagnostics = diagnostics,
         ),
       )
@@ -311,7 +308,6 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
         RuntimeHarnessConfig(
           acceptanceCriteria = listOf("S3-AC3. First criterion.", "S3-AC6. Second criterion."),
           launcher = launcher,
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
         ),
       )
 
@@ -349,7 +345,6 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
         RuntimeHarnessConfig(
           acceptanceCriteria = CRITERIA,
           launcher = launcher,
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
         ),
       )
 
@@ -371,7 +366,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
         .map { requireNotNull(it.skillRunRequest.promptOverride) }
         .first { phaseIdFromPrompt(it) == "audit" }
     assertContains(auditPrompt, "remaining acceptance criteria")
-    assertContains(auditPrompt, "explicit empty list")
+    assertContains(auditPrompt, "no production criteria remain")
     assertContains(auditPrompt, "re-check the entire in-scope criterion list from the beginning")
     assertContains(auditPrompt, "Do not spawn subagents")
   }
@@ -389,9 +384,11 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
         "timeout" to auditFacts(auditSatisfiedOutput(), AgentRunTermination.TimedOut),
         "interruption" to auditFacts(auditSatisfiedOutput(), AgentRunTermination.Interrupted),
         "missing final response" to
-          auditFacts(auditSatisfiedOutput().replace("\"value\": \"[]\"", "\"value_missing\": \"yes\"")),
+          auditFacts(
+            auditSatisfiedOutput().replace("\"value\": \"$AUDIT_SATISFIED_VALUE\"", "\"value_missing\": \"yes\""),
+          ),
         "whitespace-only final response" to
-          auditFacts(auditSatisfiedOutput().replace("\"value\": \"[]\"", "\"value\": \"   \"")),
+          auditFacts(auditSatisfiedOutput().replace("\"value\": \"$AUDIT_SATISFIED_VALUE\"", "\"value\": \"   \"")),
       )
 
     outcomes.forEach { (label, outcome) ->
@@ -411,7 +408,6 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
         runnerHarness(
           RuntimeHarnessConfig(
             launcher = launcher,
-            validator = realFeatureTaskRuntimePhaseOutputValidator,
           ),
         )
 
@@ -450,7 +446,6 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
         RuntimeHarnessConfig(
           acceptanceCriteria = CRITERIA,
           launcher = launcher,
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
         ),
       )
     assertIs<FeatureTaskRuntimeRunReport.Completed>(harness.runner.run(harness.request()))
@@ -486,7 +481,6 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
         runnerHarness(
           RuntimeHarnessConfig(
             launcher = launcher,
-            validator = realFeatureTaskRuntimePhaseOutputValidator,
           ),
         )
 
@@ -520,7 +514,6 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
       runnerHarness(
         RuntimeHarnessConfig(
           launcher = launcher,
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
         ),
       )
 
@@ -583,7 +576,6 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
           branchSetup = BranchSetupTestConfig(gitOperations = git),
           reviewRunner = reviewRunner,
           launcher = launcher,
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
         ),
       )
 
@@ -622,7 +614,6 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
         RuntimeHarnessConfig(
           branchSetup = BranchSetupTestConfig(gitOperations = git),
           launcher = launcher,
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
         ),
       )
 

@@ -1,141 +1,82 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
-import skillbill.contracts.JsonCodec
-import skillbill.engine.featuretask.lifecycle.continuation.reviewState
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeRepairReceiptError
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
+import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairOutcome
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
+import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceiptEntry
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
-import skillbill.workflow.model.goalreview.coversCarriedFindings
 import skillbill.workflow.model.goalreview.featureTaskRuntimeRemediationRoundNumber
-import skillbill.workflow.taskruntime.artifact.decodeRepairReceiptFromArtifactWithObservations
-import skillbill.workflow.taskruntime.artifact.validateRepairReceiptWireEntries
 
-fun featureTaskRuntimeParseRepairReceiptOrNull(
-  producedOutputs: Map<String, Any?>,
+private const val MAX_REPORT_ENTRIES = 50
+private const val MAX_REASON_CHARS = 300
+
+private val SEGMENT_BREAK = Regex("""\R|;|(?<=[.!?])\s""")
+private val UNRESOLVED_CUE =
+  Regex(
+    """\b(unresolved|still (?:open|stands|fails|reproduces)|not (?:fixed|addressed|resolved)|""" +
+      """could(?: not|n't)|unable|cannot|can't|blocked|deferred|remains?)\b""",
+    RegexOption.IGNORE_CASE,
+  )
+private val NO_EDIT_CUE =
+  Regex(
+    """no[_ -]edit|no (?:code )?change|already (?:fixed|handled|addressed|correct)|not a defect|""" +
+      """false positive|disregard""",
+    RegexOption.IGNORE_CASE,
+  )
+
+fun featureTaskRuntimeProseMentions(
+  prose: String,
+  findingId: String,
+): List<String> {
+  val mention = Regex("""(?<![A-Za-z0-9-])${Regex.escape(findingId)}(?![A-Za-z0-9])""", RegexOption.IGNORE_CASE)
+  return prose.split(SEGMENT_BREAK).map(String::trim).filter { it.isNotEmpty() && mention.containsMatchIn(it) }
+}
+
+fun featureTaskRuntimeRepairReceiptFromProse(
+  prose: String,
+  carriedFindings: List<GoalSubtaskReviewCompactFinding>,
   remediationBaseSha: String,
   roundNumber: Int,
-  recordTruncation: (String) -> Unit = {},
-): FeatureTaskRuntimeRepairReceipt? {
-  val raw = producedOutputs["repair_receipt"] ?: return null
-  val map =
-    requireRepairReceiptMap(raw) +
-      ("pre_fix_checkpoint_sha" to remediationBaseSha) +
-      ("round_number" to roundNumber)
-  return try {
-    requireNotNull(decodeRepairReceiptFromArtifactWithObservations(map, "repair_receipt")).also { decoded ->
-      decoded.observations.truncationRecords.forEach(recordTruncation)
-    }.receipt
-  } catch (error: InvalidFeatureTaskRuntimeRepairReceiptError) {
-    throw error
-  } catch (error: InvalidGoalSubtaskReviewStateSchemaError) {
-    throw InvalidFeatureTaskRuntimeRepairReceiptError(
-      fieldPath = error.fieldPath,
-      reason = error.reason,
-      payloadFreeReason = error.reason,
-      cause = error,
-    )
+): FeatureTaskRuntimeRepairReceipt {
+  val entries =
+    carriedFindings.mapNotNull { finding ->
+      val findingId = finding.findingId?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+      val mentions = featureTaskRuntimeProseMentions(prose, findingId)
+      if (mentions.isEmpty()) return@mapNotNull null
+      repairEntry(findingId, mentions)
+    }
+  return FeatureTaskRuntimeRepairReceipt(
+    roundNumber = roundNumber,
+    preFixCheckpointSha = remediationBaseSha,
+    entries = entries.take(MAX_REPORT_ENTRIES),
+  )
+}
+
+private fun repairEntry(
+  findingId: String,
+  mentions: List<String>,
+): FeatureTaskRuntimeRepairReceiptEntry {
+  val reason = mentions.joinToString(" ").take(MAX_REASON_CHARS)
+  return when {
+    mentions.any(UNRESOLVED_CUE::containsMatchIn) ->
+      FeatureTaskRuntimeRepairReceiptEntry(
+        FeatureTaskRuntimeRepairOutcome.ATTEMPTED_UNRESOLVED,
+        findingId,
+        unresolvedReason = reason,
+      )
+    mentions.any(NO_EDIT_CUE::containsMatchIn) ->
+      FeatureTaskRuntimeRepairReceiptEntry(
+        FeatureTaskRuntimeRepairOutcome.NO_EDIT_REQUIRED,
+        findingId,
+        noEditReason = reason,
+      )
+    else -> FeatureTaskRuntimeRepairReceiptEntry(FeatureTaskRuntimeRepairOutcome.ADDRESSED, findingId)
   }
 }
-
-private fun requireRepairReceiptMap(raw: Any): Map<String, Any?> =
-  JsonCodec.anyToStringAnyMap(raw)
-    ?: throw InvalidFeatureTaskRuntimeRepairReceiptError(
-      fieldPath = "repair_receipt",
-      reason = "must be an object.",
-      payloadFreeReason = "repair_receipt must be an object.",
-    )
-
-internal sealed interface FeatureTaskRuntimeRepairReceiptParse
-
-data object FeatureTaskRuntimeRepairReceiptMissing : FeatureTaskRuntimeRepairReceiptParse
-
-internal data class FeatureTaskRuntimeRepairReceiptValid(
-  val receipt: FeatureTaskRuntimeRepairReceipt,
-) : FeatureTaskRuntimeRepairReceiptParse
-
-internal data class FeatureTaskRuntimeRepairReceiptRejected(
-  val fieldPath: String,
-  val payloadFreeReason: String,
-) : FeatureTaskRuntimeRepairReceiptParse {
-  val rejectionDetail: String get() = featureTaskRuntimeRepairReceiptRejectionDetail(fieldPath, payloadFreeReason)
-}
-
-private val REPAIR_RECEIPT_POINTER_INDEX = Regex("""\[(\d+)]""")
-
-fun featureTaskRuntimeRepairReceiptRejectionDetail(
-  fieldPath: String,
-  payloadFreeReason: String,
-): String {
-  val relative = fieldPath.removePrefix("repair_receipt").trim('.')
-  val pointer =
-    (if (relative.isEmpty()) "repair_receipt" else "repair_receipt.$relative")
-      .replace(REPAIR_RECEIPT_POINTER_INDEX) { match -> ".${match.groupValues[1]}" }
-      .split('.')
-      .filter(String::isNotBlank)
-      .joinToString("/", prefix = "/")
-  return "[repair-receipt] $pointer: $payloadFreeReason"
-}
-
-internal fun featureTaskRuntimeParseRepairReceipt(
-  producedOutputs: Map<String, Any?>,
-  remediationBaseSha: String,
-  roundNumber: Int,
-  recordTruncation: (String) -> Unit = {},
-): FeatureTaskRuntimeRepairReceiptParse =
-  try {
-    featureTaskRuntimeParseRepairReceiptOrNull(
-      producedOutputs,
-      remediationBaseSha,
-      roundNumber,
-      recordTruncation,
-    )
-      ?.let(::FeatureTaskRuntimeRepairReceiptValid)
-      ?: FeatureTaskRuntimeRepairReceiptMissing
-  } catch (error: InvalidFeatureTaskRuntimeRepairReceiptError) {
-    FeatureTaskRuntimeRepairReceiptRejected(error.fieldPath, error.payloadFreeReason)
-  }
 
 fun featureTaskRuntimeRemediationRoundNumberOrNull(reviewState: GoalSubtaskReviewState): Int? =
   runCatching { featureTaskRuntimeRemediationRoundNumber(reviewState.completedPassCount) }
     .getOrElse { error ->
       if (error is InvalidFeatureTaskRuntimeRepairReceiptError) null else throw error
     }
-
-fun featureTaskRuntimeRepairReceiptShapeRejection(producedOutputs: Map<String, Any?>): String? {
-  val raw = producedOutputs["repair_receipt"] ?: return null
-  return try {
-    validateRepairReceiptWireEntries(requireRepairReceiptMap(raw), "repair_receipt")
-    null
-  } catch (error: InvalidFeatureTaskRuntimeRepairReceiptError) {
-    featureTaskRuntimeRepairReceiptRejectionDetail(error.fieldPath, error.payloadFreeReason)
-  } catch (error: InvalidGoalSubtaskReviewStateSchemaError) {
-    featureTaskRuntimeRepairReceiptRejectionDetail(error.fieldPath, error.reason)
-  }
-}
-
-fun featureTaskRuntimeRepairReceiptSettleRejection(
-  receipt: FeatureTaskRuntimeRepairReceipt,
-  reviewState: GoalSubtaskReviewState,
-  refutedFindingIds: Set<String> = emptySet(),
-): String? =
-  featureTaskRuntimeRepairReceiptCoverageRejection(
-    receipt,
-    featureTaskRuntimeCarriedFindings(reviewState, refutedFindingIds),
-  )
-
-fun featureTaskRuntimeRepairReceiptCoverageRejection(
-  receipt: FeatureTaskRuntimeRepairReceipt,
-  carriedFindings: List<GoalSubtaskReviewCompactFinding>,
-): String? =
-  if (receipt.coversCarriedFindings(carriedFindings)) {
-    null
-  } else {
-    featureTaskRuntimeRepairReceiptRejectionDetail(
-      "entries",
-      "must include one entry for every finding carried into this round; omitted findings require an " +
-        "explicit no_edit_required outcome. Findings verification refuted are not carried and owe no " +
-        "entry.",
-    )
-  }

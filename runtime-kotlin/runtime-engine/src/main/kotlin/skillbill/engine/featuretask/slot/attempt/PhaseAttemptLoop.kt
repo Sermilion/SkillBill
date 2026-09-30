@@ -13,7 +13,6 @@ import skillbill.engine.featuretask.runloop.observability.featureTaskRuntimeStar
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import java.time.Clock
 
 /** Runs the attempts of one step call and settles the step, so a run state decides how its steps launch. */
@@ -27,7 +26,6 @@ internal fun interface PhaseStepAttempts {
 }
 
 internal data class PhaseAttemptCollaborators(
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   val clock: Clock,
   val diagnostics: RuntimeDiagnostics,
 )
@@ -97,7 +95,6 @@ internal object PhaseAttemptSteps {
     val loop =
       PhaseAttemptLoopState(
         iteration = iteration,
-        malformedAttemptCount = 0,
         outputGateFailures = 0,
         semanticIteration = semanticIteration,
         continuationSegmentCount = continuationSegmentCount,
@@ -158,22 +155,10 @@ internal object PhaseAttemptSteps {
         )
       attempt.boundaryBodyDeliveryContinuationReason != null ->
         phaseAttempts.settleBoundaryBodyDelivery(observability, context)
-      attempt.malformedOutput ->
-        phaseAttempts.settleMalformedOutput(
-          recorder,
-          context,
-        )
-      attempt.retryableTerminalRetryReason != null ->
-        phaseAttempts.settleRetryableTerminal(
-          recorder,
-          context,
-        )
+      attempt.retryableTerminal != null ->
+        phaseAttempts.settleRetryableTerminal(recorder, context, requireNotNull(attempt.retryableTerminal))
       else ->
-        FeatureTaskRuntimeRunLoopPhaseBlocking.settleSemanticFailure(
-          recorder,
-          observability,
-          context,
-        )
+        FeatureTaskRuntimeRunLoopPhaseBlocking.settleSemanticFailure(recorder, context)
     }
   }
 }

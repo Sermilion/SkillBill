@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.persist
 import skillbill.application.TestRepositoryEnclosingRoot
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
@@ -17,7 +16,6 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.persistence.GoalChildPlanningHydratorPort
 import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
 import skillbill.ports.repository.RepositoryEnclosingRootPort
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -33,7 +31,6 @@ data class OutcomeStoreTestArtifactPorts(
     AcceptingFeatureTaskRuntimeWireArtifactValidator,
   val goalProgressEventValidator: FeatureTaskRuntimeWireArtifactValidator =
     AcceptingFeatureTaskRuntimeWireArtifactValidator,
-  val phaseOutputValidator: FeatureTaskRuntimePhaseOutputValidator = realFeatureTaskRuntimePhaseOutputValidator,
   val decompositionManifestStore: DecompositionManifestStore = UnavailableDecompositionManifestStore,
 )
 
@@ -85,7 +82,6 @@ fun engineWorkflowGoalRunnerOutcomeStore(
     goalObservabilityEventValidator = artifactPorts.goalObservabilityEventValidator,
     goalProgressEventValidator = artifactPorts.goalProgressEventValidator,
     gitOperations = gitOperations,
-    phaseOutputValidator = artifactPorts.phaseOutputValidator,
     workerSupervisor = workerSupervisor,
     clock = clock,
   )

@@ -1,7 +1,6 @@
 
 package skillbill.engine
 
-import skillbill.application.realPlanningProjectionValidator
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
@@ -14,15 +13,11 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatu
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffAssemblyRequest
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
-import skillbill.workflow.taskruntime.model.repair.CorrectiveRepairCapturedResponse
-import skillbill.workflow.taskruntime.model.repair.CorrectiveRepairDiagnosticLocator
-import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeCorrectiveRepairContext
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.assertContains
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 internal const val PROMPT_COMPOSER_ISSUE_KEY = "SKILL-66"
 internal const val TEST_VALUE_DISCIPLINE_TITLE = "## Test-value discipline"
@@ -92,24 +87,31 @@ internal fun promptComposerBriefingFor(
           ),
         recordedOutputs =
           listOf(
-            FeatureTaskRuntimePhaseOutput("preplan", 1, PROMPT_COMPOSER_PREPLAN_OUTPUT),
-            FeatureTaskRuntimePhaseOutput("plan", 1, PROMPT_COMPOSER_PLAN_OUTPUT),
-            FeatureTaskRuntimePhaseOutput("implement", 1, IMPLEMENT_OUTPUT),
-            FeatureTaskRuntimePhaseOutput("simplify", 1, SIMPLIFY_OUTPUT),
-            FeatureTaskRuntimePhaseOutput("audit", 1, options.auditOutput),
+            recordedPromptComposerOutput("preplan", PROMPT_COMPOSER_PREPLAN_OUTPUT),
+            recordedPromptComposerOutput("plan", PROMPT_COMPOSER_PLAN_OUTPUT),
+            recordedPromptComposerOutput("implement", IMPLEMENT_OUTPUT),
+            recordedPromptComposerOutput("simplify", SIMPLIFY_OUTPUT),
+            recordedPromptComposerOutput("audit", options.auditOutput),
             FeatureTaskRuntimePhaseOutput("review", 1, validJsonOutput("review")),
             verifyFindingsPhaseOutput(),
-            FeatureTaskRuntimePhaseOutput("validate", 1, validJsonOutput("validate")),
-            FeatureTaskRuntimePhaseOutput("write_history", 1, validJsonOutput("write_history")),
-            FeatureTaskRuntimePhaseOutput("commit_push", 1, FINALISED_COMMIT_PUSH_OUTPUT),
+            recordedPromptComposerOutput("validate", validJsonOutput("validate")),
+            recordedPromptComposerOutput("write_history", validJsonOutput("write_history")),
+            recordedPromptComposerOutput("commit_push", FINALISED_COMMIT_PUSH_OUTPUT),
           ),
         repositoryCheckpoint = checkpoint,
         expectedRepositoryCheckpoint = checkpoint,
         validationDepth = ValidationDepth.DEFAULT,
       ),
     ),
-    planningProjectionValidator = realPlanningProjectionValidator,
   )
+}
+
+private fun recordedPromptComposerOutput(
+  phaseId: String,
+  envelopeText: String,
+): FeatureTaskRuntimePhaseOutput {
+  val normalized = NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(envelopeText, phaseId)
+  return FeatureTaskRuntimePhaseOutput(phaseId, 1, normalized.canonicalJson, normalized)
 }
 
 internal fun assertAuditPromptNamesSignal(
@@ -118,47 +120,6 @@ internal fun assertAuditPromptNamesSignal(
   what: String,
 ) {
   assertContains(auditPrompt, fragment, false, "audit names $what")
-}
-
-internal fun assertSchemaCorrectionSuppressesContinuation(context: FeatureTaskRuntimeCorrectiveRepairContext) {
-  val prompt =
-    composePhasePrompt(
-      PROMPT_COMPOSER_ISSUE_KEY,
-      promptComposerBriefingFor("implement"),
-    ) {
-      copy(
-        implementationContinuation = promptComposerImplementationContinuation(),
-        priorSchemaFailure = "produced_outputs must be an object.",
-        correctiveRepairContext = context,
-      )
-    }
-  assertContains(prompt, "Previous attempt was REJECTED by the schema gate")
-  assertContains(prompt, "Untrusted prior phase output")
-  assertTrue(prompt.contains("SKILL187-SHOULD-NOT-APPEAR"))
-  assertFalse(prompt.contains("Continue this implementation"))
-  assertFalse(prompt.contains("segment 2"))
-}
-
-internal fun assertTerminalAndContinuationRetriesOmitRepairContext() {
-  val terminalOnly =
-    composePhasePrompt(
-      PROMPT_COMPOSER_ISSUE_KEY,
-      promptComposerBriefingFor("implement"),
-    ) {
-      copy(priorTerminalFailure = "blocked: waiting on operator")
-    }
-  assertFalse(terminalOnly.contains("Untrusted prior phase output"))
-  assertFalse(terminalOnly.contains("SKILL187-SHOULD-NOT-APPEAR"))
-
-  val continuationOnly =
-    composePhasePrompt(
-      PROMPT_COMPOSER_ISSUE_KEY,
-      promptComposerBriefingFor("implement"),
-    ) {
-      copy(implementationContinuation = promptComposerImplementationContinuation())
-    }
-  assertFalse(continuationOnly.contains("Untrusted prior phase output"))
-  assertFalse(continuationOnly.contains("SKILL187-SHOULD-NOT-APPEAR"))
 }
 
 internal fun promptComposerImplementationContinuation() =
@@ -192,14 +153,3 @@ internal fun locateAncestorDirectory(name: String): Path {
   }
   error("test working directory has no ancestor named $name")
 }
-
-internal fun promptComposerCorrectiveContext(body: String): FeatureTaskRuntimeCorrectiveRepairContext =
-  FeatureTaskRuntimeCorrectiveRepairContext(
-    phaseId = "audit",
-    attempt = 1,
-    rejectionRule = "phase-output-schema",
-    rejectionPath = "\$.verdict",
-    payloadFreeConstraint = "verdict: must be a top-level string",
-    diagnosticLocator = CorrectiveRepairDiagnosticLocator("opaque-diagnostic-composer"),
-    captured = CorrectiveRepairCapturedResponse.classify(body, alreadyTruncated = false),
-  )

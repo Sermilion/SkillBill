@@ -20,9 +20,8 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
 import java.nio.file.Path
 
 internal sealed interface InlineReviewPrepared {
@@ -119,7 +118,7 @@ internal object InlineReviewPreparation {
               "Goal-subtask review state is missing; review_base_sha must be captured before implementation " +
                 "and cannot be substituted.",
             )
-          is GoalSubtaskReviewPassCarryForward -> settleCarriedForward(run, context, state)
+          is GoalSubtaskReviewPassCarryForward -> settleCarriedForward(run, state)
           is GoalSubtaskReviewPassInFlight,
           is GoalSubtaskReviewPassReserved,
           -> buildGoalReviewInput(run, context, state)
@@ -168,15 +167,12 @@ internal object InlineReviewPreparation {
 
   private fun settleCarriedForward(
     run: PhaseRun,
-    context: PhaseReviewExecutionContext,
     state: PhaseReviewStepBinding,
   ): InlineReviewPrepared {
     val accepted =
       runCatching {
         val output = state.carriedForwardReviewResult() ?: throw MissingCarriedForwardGoalReviewResultException()
-        context.outputValidator
-          .validatePhaseOutput(output, sourceLabel = run.phaseId)
-          .requireAcceptedOutput(run.phaseId)
+        NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(output, run.phaseId)
       }.getOrElse { error ->
         val detail =
           if (error is MissingCarriedForwardGoalReviewResultException) {
@@ -214,14 +210,13 @@ internal object InlineReviewPreparation {
 internal fun completedOutput(
   run: PhaseRun,
   iteration: Int,
-  output: AcceptedFeatureTaskRuntimePhaseOutput,
+  output: NormalizedFeatureTaskRuntimePhaseOutput,
 ): FeatureTaskRuntimePhaseOutput =
   FeatureTaskRuntimePhaseOutput(
     run.phaseId,
     iteration,
-    output.normalizedOutput.canonicalJson,
-    output.normalizedOutput,
-    output.repairEvidence,
+    output.canonicalJson,
+    output,
   )
 
 internal fun reviewSpecPath(run: PhaseRun): Path? =

@@ -217,7 +217,6 @@ class RuntimeArchitectureTest {
           setOf("DecompositionManifestSchemaPaths", "DecompositionManifestBundleJournalSchemaPaths"),
         "FeatureTaskRuntimeSchemaPaths.kt" to
           setOf(
-            "FeatureTaskRuntimePhaseOutputSchemaPaths",
             "FeatureTaskExecutionIdentitySchemaPaths",
             "FeatureTaskRuntimeWorkerOwnershipSchemaPaths",
           ),

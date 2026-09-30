@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slot.audit
 
-import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.runloop.core.AttemptResult
@@ -16,8 +15,6 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
-import skillbill.workflow.taskruntime.feature.FeatureTaskRuntimeAuditRemainingAcInterpretation
-import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeAuditRemainingAcResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -35,10 +32,12 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
     val catalog = AcceptanceAuditCatalog.create(context.request.runInvariants.acceptanceCriteria)
     if (catalog is AcceptanceAuditCatalog.Unusable) return catalog.reason
     if (outputMap[SharedPayloadKeys.VERDICT] == FeatureTaskRuntimeVerdict.SATISFIED.wireValue &&
-      FeatureTaskRuntimeAuditRemainingAcInterpretation.interpret(auditProseValue(outputMap)) !=
-      FeatureTaskRuntimeAuditRemainingAcResult.EmptyRemainingList
+      !AcceptanceAuditProgress.declaresComplete(
+        context.request.runInvariants.acceptanceCriteria,
+        auditProseValue(outputMap),
+      )
     ) {
-      return "Audit reported satisfied with remaining criteria. Emit an empty list only when every criterion is met."
+      return "Audit reported satisfied with remaining criteria. Report satisfied only when every criterion is met."
     }
     return null
   }
@@ -62,11 +61,6 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? {
     val finalResponse = auditProseValue(outputMap)
-    if (FeatureTaskRuntimeAuditRemainingAcInterpretation.interpret(finalResponse) !is
-        FeatureTaskRuntimeAuditRemainingAcResult.RemainingCriteriaText
-    ) {
-      return null
-    }
     val priorOutput = context.progress.phase(capture.run.phaseId).output?.normalizedOutput?.envelopeWireMap()
     val repaired =
       context.progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX).hasPriorRecord ||
@@ -104,10 +98,12 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
       return attested
     }
     if (outputMap[SharedPayloadKeys.VERDICT] != null) return attested
-    return when (FeatureTaskRuntimeAuditRemainingAcInterpretation.interpret(auditProseValue(outputMap))) {
-      FeatureTaskRuntimeAuditRemainingAcResult.EmptyRemainingList -> stampSatisfiedVerdict(attested)
-      else -> attested
-    }
+    val complete =
+      AcceptanceAuditProgress.declaresComplete(
+        context.request.runInvariants.acceptanceCriteria,
+        auditProseValue(outputMap),
+      )
+    return if (complete) stampSatisfiedVerdict(attested) else attested
   }
 
   private fun stampSatisfiedVerdict(
@@ -115,9 +111,6 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
   ): NormalizedFeatureTaskRuntimePhaseOutput {
     val envelope = normalizedOutput.envelopeWireMap().toMutableMap()
     envelope[SharedPayloadKeys.VERDICT] = FeatureTaskRuntimeVerdict.SATISFIED.wireValue
-    return normalizedOutput.copy(
-      envelope = envelope,
-      canonicalJson = JsonCodec.mapToJsonString(envelope),
-    )
+    return NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(envelope))
   }
 }

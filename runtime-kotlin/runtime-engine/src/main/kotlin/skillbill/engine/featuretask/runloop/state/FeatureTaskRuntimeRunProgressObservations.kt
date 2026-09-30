@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.runloop.state
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -96,9 +97,8 @@ internal fun detachedOutput(output: FeatureTaskRuntimePhaseOutput): FeatureTaskR
   output.copy(
     normalizedOutput =
       output.normalizedOutput?.let { normalized ->
-        NormalizedFeatureTaskRuntimePhaseOutput(
-          normalized.canonicalJson,
-          detachedEnvelope(normalized),
+        NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(
+          FeatureTaskRuntimeWorkflowArtifactMap.from(detachedEnvelope(normalized)),
         )
       },
   )

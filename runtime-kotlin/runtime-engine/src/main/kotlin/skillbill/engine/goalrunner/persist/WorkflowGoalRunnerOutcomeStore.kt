@@ -22,7 +22,6 @@ import skillbill.ports.goalrunner.runner.model.GoalRunnerLedgerSequenceWatermark
 import skillbill.ports.goalrunner.runner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReconcileGate
 import skillbill.ports.goalrunner.runner.model.GoalRunnerWorkflowProgress
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
@@ -60,7 +59,6 @@ class WorkflowGoalRunnerOutcomeStore
     goalObservabilityEventValidator: FeatureTaskRuntimeWireArtifactValidator,
     goalProgressEventValidator: FeatureTaskRuntimeWireArtifactValidator,
     gitOperations: WorkflowGitOperations,
-    phaseOutputValidator: FeatureTaskRuntimePhaseOutputValidator,
     workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
     clock: Clock,
   ) : GoalRunnerWorkflowOutcomeStore,
@@ -91,7 +89,7 @@ class WorkflowGoalRunnerOutcomeStore
         goalProgressEventValidator,
       )
     private val terminal = WorkflowGoalRunnerTerminalBridge(database, terminalPersistence, gitOperations)
-    private val review = WorkflowGoalRunnerReviewBridge(database, engine, phaseOutputValidator)
+    private val review = WorkflowGoalRunnerReviewBridge(database, engine)
     private val reconcile = WorkflowGoalRunnerReconcileBridge(database, outcomeReconcile)
     private val blocks = WorkflowGoalRunnerBlockBridge(database, blockWrites)
 
@@ -273,7 +271,6 @@ internal class WorkflowGoalRunnerTerminalBridge(
 internal class WorkflowGoalRunnerReviewBridge(
   private val database: DatabaseSessionFactory,
   private val engine: WorkflowEngine,
-  private val phaseOutputValidator: FeatureTaskRuntimePhaseOutputValidator,
 ) : GoalRunnerReviewOutcomeStore {
   override fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState? =
     database.read { unitOfWork ->
@@ -289,7 +286,7 @@ internal class WorkflowGoalRunnerReviewBridge(
       val review = goalReviewArtifacts(artifacts) ?: return@read emptyList()
       validatedGoalReviewPasses(
         review,
-        { rawResult -> goalReviewEmissionEnvelope(rawResult, phaseOutputValidator) },
+        ::goalReviewEmissionEnvelope,
         unitOfWork.reviews::fetchFindingVerdicts,
       )
         .drop(review.state.emittedPassCount)
@@ -306,7 +303,7 @@ internal class WorkflowGoalRunnerReviewBridge(
       val state = review.state
       validatedGoalReviewPasses(
         review,
-        { rawResult -> goalReviewEmissionEnvelope(rawResult, phaseOutputValidator) },
+        ::goalReviewEmissionEnvelope,
         unitOfWork.reviews::fetchFindingVerdicts,
       )
       if (passNumber != state.emittedPassCount + 1 || passNumber > state.completedPassCount) {

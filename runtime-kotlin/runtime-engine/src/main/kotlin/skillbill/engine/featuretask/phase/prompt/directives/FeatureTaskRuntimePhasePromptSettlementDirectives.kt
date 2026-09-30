@@ -22,11 +22,12 @@ fun settlementDirective(
       overrides this description: carry its content as prose or as JSON text, whichever is clearer, and
       emit any exact literal it names with nothing added. Otherwise the runtime does not validate the
       shape of value. Optional summary: one sentence.
-    - Cannot finish: call `$PHASE_BLOCK_SETTLEMENT_TOOL` with the same workflow_id, phase_id, and
-      attempt, a reason string naming the obstacle, and failure_disposition one of "retryable",
+    - Cannot finish because of a concrete obstacle: call `$PHASE_BLOCK_SETTLEMENT_TOOL` with the same
+      workflow_id, phase_id, and attempt, a reason string naming the obstacle, and failure_disposition
+      one of "retryable",
       "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
     Copy workflow_id, phase_id, and attempt exactly as written here. After the tool returns status
-    "ok", end your response with a short prose recap and nothing structured. Print the fallback
-    final object below only if both tools stay unavailable after loading them.
+    "ok", end your response with a short prose recap and nothing structured. Use the prose
+    fallback below only if both tools stay unavailable after loading them.
     """.trimIndent()
 }

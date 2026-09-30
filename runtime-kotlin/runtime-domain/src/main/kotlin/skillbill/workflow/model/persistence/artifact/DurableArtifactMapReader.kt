@@ -1,5 +1,7 @@
 package skillbill.workflow.model.persistence.artifact
 
+import skillbill.agent.model.PhaseOutput
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import java.math.BigDecimal
 import java.math.BigInteger
@@ -124,6 +126,14 @@ internal class DurableArtifactMapReader(
     }
     return map[key].asStringKeyMap()
       ?: fail("Feature-task-runtime artifact field '$key' must decode to an object when present.")
+  }
+
+  fun historicalPhaseOutput(): PhaseOutput {
+    val produced = map[SharedPayloadKeys.PRODUCED_OUTPUTS] as? Map<*, *>
+    return PhaseOutput(
+      value = produced?.get(SharedPayloadKeys.VALUE) as? String ?: "",
+      prompt = (produced?.get(SharedPayloadKeys.PROMPT) as? String)?.takeIf(String::isNotBlank),
+    )
   }
 
   fun nestedObjectFromValue(

@@ -8,7 +8,6 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -18,7 +17,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 internal interface PhaseAttemptLaunchHookContext : PhaseAttemptEnvironment {
   val progress: FeatureTaskRuntimeProgressSnapshotAccess
   val session: FeatureTaskRuntimeRunSessionObservations
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator
   val diagnostics: RuntimeDiagnostics
 
   fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch?
@@ -37,7 +35,6 @@ internal interface PhaseCommitLaunchHookContext : PhaseAttemptLaunchHookContext 
 
 internal interface PhaseStepOutputContext : PhaseAttemptEnvironment {
   val progress: FeatureTaskRuntimeProgressSnapshotAccess
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator
   val diagnostics: RuntimeDiagnostics
   val specSource: SpecSource
 
@@ -64,6 +61,18 @@ internal interface PhaseAuditOutputContext : PhaseStepOutputContext {
 internal interface PhaseFindingEvidenceContext {
   val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory
   val specIntentProjectionResolver: SpecIntentProjectionResolver
+}
+
+internal interface PhasePlanningLaunchContext : PhaseAttemptLaunchHookContext {
+  fun existingBundleReason(): String?
+}
+
+internal interface PhasePlanningOutputContext : PhaseStepOutputContext {
+  fun settleAuthoredBundle(capture: ValidatedOutputCapture): AttemptResult?
+
+  fun withAuthoredParentSpecPath(
+    attested: NormalizedFeatureTaskRuntimePhaseOutput,
+  ): NormalizedFeatureTaskRuntimePhaseOutput
 }
 
 internal interface PhaseAttemptTraversalHookContext : PhaseAttemptEnvironment

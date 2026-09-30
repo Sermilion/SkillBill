@@ -39,11 +39,10 @@ import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -91,9 +90,6 @@ internal class PhaseAttemptRunHost(
 
   val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator
     get() = backingRunState.stepBinding
-
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator
-    get() = backingRunState.collaborators.outputValidator
 
   val clock: Clock
     get() = backingRunState.collaborators.clock
@@ -190,9 +186,6 @@ internal class PhaseQualityGateCycleScope(
   override val recorder
     get() = boundRunHost.records
 
-  override val outputValidator
-    get() = boundRunHost.outputValidator
-
   override val phaseGates
     get() = boundRunHost.phaseGates
 
@@ -234,9 +227,6 @@ internal class PhaseRuntimeFinalizationScope(
 
   override val recorder
     get() = boundRunHost.records
-
-  override val outputValidator
-    get() = boundRunHost.outputValidator
 
   override val phaseGates
     get() = boundRunHost.phaseGates
@@ -306,7 +296,7 @@ internal fun PhaseRuntimeFinalizationContext.persistFinalizationCompleted(
   run: PhaseRun,
   iteration: Int,
   outputText: String,
-  acceptedOutput: AcceptedFeatureTaskRuntimePhaseOutput,
+  acceptedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
 ): Boolean {
   val phaseState =
     FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
@@ -324,8 +314,7 @@ internal fun PhaseRuntimeFinalizationContext.persistFinalizationCompleted(
           ),
         extras =
           PhaseStateRequestAttachments(
-            normalizedOutput = acceptedOutput.normalizedOutput,
-            repairEvidence = acceptedOutput.repairEvidence,
+            normalizedOutput = acceptedOutput,
           ),
       ),
     )
@@ -336,9 +325,8 @@ internal fun PhaseRuntimeFinalizationContext.persistFinalizationCompleted(
       FeatureTaskRuntimePhaseOutput(
         run.phaseId,
         iteration,
-        acceptedOutput.normalizedOutput.canonicalJson,
-        acceptedOutput.normalizedOutput,
-        acceptedOutput.repairEvidence,
+        acceptedOutput.canonicalJson,
+        acceptedOutput,
       ),
   )
 }

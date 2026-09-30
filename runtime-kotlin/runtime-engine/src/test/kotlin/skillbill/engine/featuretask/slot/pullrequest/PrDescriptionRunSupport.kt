@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slot.pullrequest
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.engine.BranchSetupTestConfig
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.RuntimeHarnessConfig
@@ -63,14 +62,12 @@ internal fun standalonePrRun(
         object : ValidationGateRunner {
           override fun run(request: ValidationGateRunRequest) = passed()
         },
-      validator = realFeatureTaskRuntimePhaseOutputValidator,
       launcher = launcher,
       pullRequestIdentityLookup = lookup,
     )
   val harness =
     telemetryRunnerHarness(
       launcher = launcher,
-      validator = realFeatureTaskRuntimePhaseOutputValidator,
       runtimeConfig = config,
       databaseFactory = { database },
     )

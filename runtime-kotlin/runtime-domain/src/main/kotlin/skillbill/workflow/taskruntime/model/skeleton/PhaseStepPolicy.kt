@@ -5,7 +5,6 @@ import java.security.MessageDigest
 
 data class PhaseStepPolicy(
   val mutating: Boolean,
-  val relaunchOnInvalidOutput: Boolean,
   val singleAgentSession: Boolean,
   val readOnlyIdle: Boolean,
   val fileMutating: Boolean,
@@ -25,7 +24,6 @@ data class PhaseStepPolicy(
           semanticRevision,
           stepId,
           mutating,
-          relaunchOnInvalidOutput,
           singleAgentSession,
           readOnlyIdle,
           fileMutating,
@@ -38,6 +36,6 @@ data class PhaseStepPolicy(
       MessageDigest.getInstance("SHA-256")
         .digest(encoded.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
-    return "step-policy-v1:$digest"
+    return "step-policy-v2:$digest"
   }
 }

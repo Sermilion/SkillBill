@@ -3,6 +3,7 @@ package skillbill.engine
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeSimplifyPhasePromptTest {
@@ -12,7 +13,6 @@ class FeatureTaskRuntimeSimplifyPhasePromptTest {
     assertContains(prompt, "subtask_scope")
     assertContains(prompt, "Simplify scope boundary")
     assertContains(prompt, "whole-repository")
-    assertContains(prompt, "simplification_receipt")
     assertContains(prompt, "parity tests")
     listOf(
       "paths outside the boundary",
@@ -24,18 +24,8 @@ class FeatureTaskRuntimeSimplifyPhasePromptTest {
     ).forEach { forbiddenAction ->
       assertContains(prompt, forbiddenAction)
     }
-    assertContains(prompt, "Do not run builds or tests")
-    assertContains(prompt, "no_edit, addressed, or unresolved")
-    listOf(
-      "changed_paths",
-      "reductions",
-      "unresolved_items",
-      "reconciliation_evidence",
-      "reconciled_state",
-      "repository_checkpoint is runtime-owned",
-    ).forEach { receiptField ->
-      assertContains(prompt, receiptField)
-    }
+    assertContains(prompt, "do not run builds or tests")
+    assertFalse(prompt.contains("simplification_receipt"))
   }
 
   @Test

@@ -14,17 +14,6 @@ fun FeatureTaskRuntimeWireArtifactValidator.validateQuarantineRecord(
   )
 }
 
-fun FeatureTaskRuntimeWireArtifactValidator.validatePlanningProjection(
-  producedOutputs: Any,
-  sourceLabel: String,
-) {
-  validate(
-    FeatureTaskRuntimeWireArtifactKind.PLANNING_PROJECTION,
-    FeatureTaskRuntimeWorkflowArtifactMap.from(producedOutputs),
-    sourceLabel,
-  )
-}
-
 fun FeatureTaskRuntimeWireArtifactValidator.validateImplementationAttemptRecord(
   attemptRecord: Any,
   sourceLabel: String,

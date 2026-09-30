@@ -63,7 +63,7 @@ class OperationStepRunner(
       session?.let { runner.run(input, OperationPhaseLaunchState, it) } ?: runner.run(input, OperationPhaseLaunchState)
     return failureOf(stepName, output, input.policy)?.let(OperationStepResult::Failed)
       ?: OperationStepResult.Settled(
-        output.value,
+        output.stdout.text,
         output.fileManifest?.let { manifest -> manifest.after - manifest.before.toSet() }.orEmpty(),
         output,
       )
@@ -109,8 +109,7 @@ class OperationStepRunner(
     return when {
       output.launchFailure != null -> output.launchFailure.reason
       !policy.fileMutating && manifest != null && manifest.before != manifest.after -> readOnlyViolation(stepName)
-      output.status in FAILED_STATUSES -> output.summary ?: "Operation step '$stepName' ended ${output.status}."
-      output.value.isBlank() -> "Operation step '$stepName' produced no value."
+      output.stdout.text.isBlank() -> "Operation step '$stepName' produced no value."
       else -> null
     }
   }
@@ -172,12 +171,9 @@ private const val REPOSITORY_FINGERPRINT = "repository fingerprint"
 private const val WORKTREE_STATUS = "worktree status"
 private const val CONTENT_IDENTITIES = "dirty file contents"
 
-private val FAILED_STATUSES = setOf("blocked", "failed")
-
 private val READ_ONLY_STEP_POLICY =
   PhaseStepPolicy(
     mutating = false,
-    relaunchOnInvalidOutput = false,
     singleAgentSession = true,
     readOnlyIdle = true,
     fileMutating = false,
@@ -187,7 +183,6 @@ private val READ_ONLY_STEP_POLICY =
 private val EDITING_STEP_POLICY =
   PhaseStepPolicy(
     mutating = true,
-    relaunchOnInvalidOutput = false,
     singleAgentSession = true,
     readOnlyIdle = false,
     fileMutating = true,

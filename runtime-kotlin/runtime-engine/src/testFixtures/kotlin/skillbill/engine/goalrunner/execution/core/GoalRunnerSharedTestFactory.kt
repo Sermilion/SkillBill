@@ -4,8 +4,6 @@ import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.DecompositionManifestWriter
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
-import skillbill.application.realPlanningProjectionValidator
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testHarnessClock
@@ -144,12 +142,7 @@ fun testGoalRunnerStatusService(
   )
 }
 
-private val testGoalChildPlanningHydratorPort =
-  GoalChildPlanningHydratorPortAdapter(
-    realFeatureTaskRuntimePhaseOutputValidator,
-    realPlanningProjectionValidator,
-    testHarnessClock,
-  )
+private val testGoalChildPlanningHydratorPort = GoalChildPlanningHydratorPortAdapter(testHarnessClock)
 
 fun testGoalRunnerChildRepairExecutor(
   database: DatabaseSessionFactory = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),

@@ -1,6 +1,5 @@
 package skillbill.engine
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
@@ -42,14 +41,14 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
   }
 
   @Test
-  fun `findings_verified with zero verified rows launches implement_fix covered by empty entries`() {
+  fun `findings_verified with every finding refuted launches implement_fix with nothing owed`() {
     val harness =
       goalCensusHarness(
         findings = listOf(blockerFinding(REVIEW_FIX_BLOCKER_FINDING_ID)),
         verifyOutput =
           verifyCensus(
             verdict = "findings_verified",
-            dispositions = listOf(disposition(REVIEW_FIX_BLOCKER_FINDING_ID, "rejected")),
+            dispositions = listOf(proseDisposition(REVIEW_FIX_BLOCKER_FINDING_ID, "rejected")),
           ),
         implementFixOutput = emptyCensusFix(),
       )
@@ -69,7 +68,7 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
         verifyOutput =
           verifyCensus(
             verdict = "no_findings_verified",
-            dispositions = listOf(disposition(REVIEW_FIX_BLOCKER_FINDING_ID, "verified")),
+            dispositions = listOf(proseDisposition(REVIEW_FIX_BLOCKER_FINDING_ID, "verified")),
           ),
       )
 
@@ -83,7 +82,7 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
   }
 
   @Test
-  fun `omitted review finding id blocks verify without launching implement_fix`() {
+  fun `omitted review finding id stays verified and is carried into implement_fix`() {
     val harness =
       seededVerifyHarness(
         verifyOutput =
@@ -91,44 +90,16 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
             verdict = "findings_verified",
             dispositions = emptyList(),
           ),
+        implementFixOutput = censusFix(REVIEW_FIX_BLOCKER_FINDING_ID),
       )
 
-    val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
+    val report = harness.runner.run(harness.request())
 
-    assertEquals("verify_findings", blocked.lastIncompletePhase)
-    assertTrue(
-      blocked.blockedReason.contains("omitted") ||
-        harness.io.database.rejectedDiagnostics().any {
-          it.metadata.phaseId == "verify_findings" && it.metadata.reason.contains("omitted")
-        },
+    assertFalse(
+      report is FeatureTaskRuntimeRunReport.Blocked && report.lastIncompletePhase == "verify_findings",
+      report.toString(),
     )
-    assertFalse(harness.launchedPromptPhaseOrder().contains("implement_fix"))
-  }
-
-  @Test
-  fun `legacy 0_2 repair receipt blocks implement_fix`() {
-    val harness =
-      seededVerifyHarness(
-        verifyOutput =
-          verifyCensus(
-            verdict = "findings_verified",
-            dispositions = listOf(disposition(REVIEW_FIX_BLOCKER_FINDING_ID, "verified")),
-          ),
-        implementFixOutput =
-          censusFix(
-            findingId = REVIEW_FIX_BLOCKER_FINDING_ID,
-            receiptContractVersion = "0.2",
-          ),
-      )
-
-    val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
-
-    assertEquals("implement_fix", blocked.lastIncompletePhase, blocked.blockedReason)
-    assertContains(blocked.blockedReason, "cap=1")
-    assertTrue(
-      harness.io.database.rejectedDiagnostics().any { it.metadata.phaseId == "implement_fix" },
-    )
-    assertFalse(harness.launchedPromptPhaseOrder().contains("validate"))
+    assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "implement_fix" })
   }
 
   @Test
@@ -139,7 +110,7 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
         verifyOutput =
           verifyCensus(
             verdict = "findings_verified",
-            dispositions = listOf(disposition(REVIEW_FIX_BLOCKER_FINDING_ID, "verified")),
+            dispositions = listOf(proseDisposition(REVIEW_FIX_BLOCKER_FINDING_ID, "verified")),
           ),
         implementFixOutput = emptyCensusFix(),
       )
@@ -148,9 +119,11 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
 
     assertEquals("implement_fix", blocked.lastIncompletePhase, blocked.blockedReason)
     assertTrue(
-      blocked.blockedReason.contains("repair-receipt") ||
-        blocked.blockedReason.contains("omitted") ||
-        harness.io.database.rejectedDiagnostics().any { it.metadata.phaseId == "implement_fix" },
+      blocked.blockedReason.contains("unaccounted") ||
+        harness.io.database.rejectedDiagnostics().any {
+          it.metadata.phaseId == "implement_fix" && it.metadata.reason.contains(REVIEW_FIX_BLOCKER_FINDING_ID)
+        },
+      blocked.blockedReason,
     )
     assertFalse(harness.launchedPromptPhaseOrder().contains("validate"))
   }
@@ -170,8 +143,8 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
             verdict = "findings_verified",
             dispositions =
               listOf(
-                disposition(REVIEW_FIX_BLOCKER_FINDING_ID, "verified"),
-                disposition(refutedId, "rejected", reason = "False positive against spec intent."),
+                proseDisposition(REVIEW_FIX_BLOCKER_FINDING_ID, "verified"),
+                proseDisposition(refutedId, "rejected", reason = "a false positive against spec intent"),
               ),
           ),
         implementFixOutput = censusFix(REVIEW_FIX_BLOCKER_FINDING_ID),
@@ -186,7 +159,7 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
     assertEquals("nit", rejected.severity)
     assertEquals("Bar.kt:1", rejected.location)
     assertEquals(NIT_MESSAGE, rejected.summary)
-    assertEquals("False positive against spec intent.", rejected.verificationReason)
+    assertContains(rejected.verificationReason.orEmpty(), "a false positive against spec intent")
   }
 
   private fun runInline(harness: RunnerHarness): FeatureTaskRuntimeRunReport =
@@ -215,7 +188,6 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
                 else -> facts(validJsonOutput(phaseId))
               }
             },
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
         ),
       )
     harness.seedPhase("preplan", "completed", 1, INVOKED_AGENT, validJsonOutput("preplan"))
@@ -266,7 +238,6 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
               else -> facts(validJsonOutput(phaseId))
             }
           },
-        validator = realFeatureTaskRuntimePhaseOutputValidator,
         agentAssignment = phasePerAgentAssignment(),
       ),
     ).also { harness ->
@@ -313,42 +284,52 @@ internal fun disposition(
   return """{"finding_id":"$findingId","disposition":"$disposition","boundary_context_unavailable":true$reasonField}"""
 }
 
+private fun proseDisposition(
+  findingId: String,
+  disposition: String,
+  reason: String = "not a defect",
+): String =
+  if (disposition == "rejected") {
+    "$findingId rejected as $reason at ${if (findingId == REVIEW_FIX_BLOCKER_FINDING_ID) "Foo.kt:1" else "Bar.kt:1"}"
+  } else {
+    "$findingId stands: the finding reproduces."
+  }
+
 private fun verifyCensus(
   verdict: String,
   dispositions: List<String>,
-  extraProduced: String = "",
 ): String {
-  val extra = if (extraProduced.isEmpty()) "" else ",$extraProduced"
-  return """
-    {
-      "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
-      "phase_id": "verify_findings",
-      "status": "completed",
-      "summary": "Verified findings.",
-      "verdict": "$verdict",
-      "produced_outputs": {
-        "finding_dispositions": [${dispositions.joinToString(",")}]
-        $extra
-      }
-    }
-    """.trimIndent()
+  val prose = dispositions.ifEmpty { listOf("Verification finished without naming individual findings.") }
+  return verifyEnvelope(verdict, """"value": "${prose.joinToString("\\n")}"""")
 }
 
+private fun verifyEnvelope(
+  verdict: String,
+  producedFields: String,
+): String =
+  """
+  {
+    "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
+    "phase_id": "verify_findings",
+    "status": "completed",
+    "summary": "Verified findings.",
+    "verdict": "$verdict",
+    "produced_outputs": {$producedFields}
+  }
+  """.trimIndent()
+
 private fun fatVerifiedCensus(findingId: String): String =
-  verifyCensus(
+  verifyEnvelope(
     verdict = "findings_verified",
-    dispositions =
-      listOf(
-        """{"finding_id":"$findingId","disposition":"verified","boundary_context_unavailable":true,""" +
-          """"reason":"ignored","severity":"major","location":"ignored.kt","message":"ignored"}""",
-      ),
-    extraProduced = """"legacy_sibling":"ignored"""",
+    producedFields =
+      """"finding_dispositions": [{"finding_id":"$findingId","disposition":"verified",""" +
+        """"boundary_context_unavailable":true,"reason":"ignored","severity":"major","location":"ignored.kt",""" +
+        """"message":"ignored"}], "legacy_sibling":"ignored"""",
   )
 
 private fun censusFix(
   findingId: String,
   outcome: String = "addressed",
-  receiptContractVersion: String = "0.3",
 ): String =
   """
   {
@@ -358,7 +339,7 @@ private fun censusFix(
     "summary": "Fixed findings.",
     "produced_outputs": {
       "repair_receipt": {
-        "contract_version": "$receiptContractVersion",
+        "contract_version": "0.3",
         "entries": [{
           "finding_id": "$findingId",
           "outcome": "$outcome"

@@ -7,8 +7,6 @@ import skillbill.ports.goalrunner.persistence.GoalChildPlanningHydratorPort
 import skillbill.ports.goalrunner.persistence.model.GoalChildPlanningHydrationResult
 import skillbill.ports.goalrunner.runner.model.GoalChildPlanningHydrationRequest
 import skillbill.ports.goalrunner.runner.model.GoalRunnerChildWorkflowSetup
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
-import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepUpdates
@@ -16,11 +14,9 @@ import java.time.Clock
 
 @Inject
 class GoalChildPlanningHydratorPortAdapter(
-  phaseOutputValidator: FeatureTaskRuntimePhaseOutputValidator,
-  planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidator,
   clock: Clock,
 ) : GoalChildPlanningHydratorPort {
-  private val hydrator = GoalChildPlanningHydrator(phaseOutputValidator, planningProjectionValidator, clock)
+  private val hydrator = GoalChildPlanningHydrator(clock)
 
   override fun hydrate(
     unitOfWork: GoalRunnerPersistenceSession,

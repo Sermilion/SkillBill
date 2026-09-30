@@ -30,7 +30,6 @@ data class FeatureTaskRuntimePhaseGateBranchBoundaries(
 
 @Inject
 data class FeatureTaskRuntimePhaseGateValidationBoundaries(
-  val planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidator,
   val buildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator,
   val validationGateResolver: ValidationGateResolver,
   val validationGateRunner: ValidationGateRunner,

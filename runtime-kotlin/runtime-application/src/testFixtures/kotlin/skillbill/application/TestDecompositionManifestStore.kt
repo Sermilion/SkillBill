@@ -43,6 +43,8 @@ object TestDecompositionManifestStore : DecompositionManifestStore {
     }
   }
 
+  override fun listTree(directory: Path): List<Path> = Files.walk(directory).use { paths -> paths.toList() }
+
   override fun deleteIfExists(target: Path) {
     Files.deleteIfExists(target)
   }

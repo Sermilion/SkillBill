@@ -4,7 +4,6 @@ import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedger
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactValidation
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReviewEvidenceReference
 
@@ -24,7 +23,6 @@ data class FeatureTaskRuntimeHandoffProjectionInputs(
   val workflowId: String? = null,
   val validationDepth: ValidationDepth = ValidationDepth.DEFAULT,
   val unselectedStepIds: Set<String> = emptySet(),
-  val planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidation,
 )
 
 const val MAX_BOUNDED_POINTER_LENGTH: Int = 256

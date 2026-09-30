@@ -18,7 +18,6 @@ class FeatureTaskRuntimePhaseGates(
   val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry = branch.lifecycleTelemetry
   val gitOperations = branch.gitOperations
   val specGate: FeatureTaskRuntimeSpecGate = branch.specGate
-  val planningProjectionValidator = validation.planningProjectionValidator
   val buildReceiptValidator = validation.buildReceiptValidator
   val validationGateResolver = validation.validationGateResolver
   val validationGateRunner = validation.validationGateRunner

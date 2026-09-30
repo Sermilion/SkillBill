@@ -4,6 +4,8 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 
 internal const val AUDIT_GAP_MESSAGE = "AC-002 acceptance criterion is not yet implemented"
 
+internal const val AUDIT_SATISFIED_VALUE = "All acceptance criteria are met; no production criteria remain."
+
 internal fun auditSatisfiedOutput(): String =
   """
   {
@@ -12,7 +14,21 @@ internal fun auditSatisfiedOutput(): String =
     "status": "completed",
     "summary": "Every acceptance criterion is met.",
     "produced_outputs": {
-      "value": "[]"
+      "value": "$AUDIT_SATISFIED_VALUE"
+    }
+  }
+  """.trimIndent()
+
+internal fun settledAuditSatisfiedRecord(): String =
+  """
+  {
+    "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
+    "phase_id": "audit",
+    "status": "completed",
+    "summary": "Every acceptance criterion is met.",
+    "verdict": "satisfied",
+    "produced_outputs": {
+      "value": "$AUDIT_SATISFIED_VALUE"
     }
   }
   """.trimIndent()

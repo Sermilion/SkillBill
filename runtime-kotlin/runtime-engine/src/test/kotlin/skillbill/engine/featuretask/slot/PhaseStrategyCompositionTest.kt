@@ -8,12 +8,12 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.lifecycle.execution.executionPolicyDigest
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
+import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.FILE_MUTATING
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.GENERATION_SCOPED
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.MUTATING
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.READ_ONLY_IDLE
-import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.RELAUNCH
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.SINGLE
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
 import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
@@ -39,7 +39,6 @@ import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanEr
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
-import skillbill.infrastructure.contracts.FeatureTaskRuntimePhaseOutputSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
@@ -51,7 +50,6 @@ import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGa
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
-import skillbill.workflow.taskruntime.phase.ProsePhaseOutputSynthesizer
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
@@ -142,7 +140,6 @@ class PhaseStrategyCompositionTest {
         .distinct()
         .flatMap { strategy -> strategy.steps.map { step -> strategy to step } }
 
-    val validator = FeatureTaskRuntimePhaseOutputSchemaValidator()
     selectable.forEach { (strategy, step) ->
       val inputs =
         FeatureTaskRuntimePhasePromptComposeInputs(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(step))
@@ -150,8 +147,7 @@ class PhaseStrategyCompositionTest {
       when {
         !sections.settles -> Unit
         sections.outputContract == null -> {
-          assertTrue(ProsePhaseOutputSynthesizer.isProsePhase(step), "$step must be accepted as a prose step")
-          validator.normalizePhaseOutput(MINIMAL_FINAL_OBJECT, step)
+          assertTrue(FeatureTaskPhaseSettlementService.isSettleablePhase(step), "$step must settle on complete/block")
         }
         else -> assertEquals(PhaseSlot.CODE_REVIEW, strategy.slot, "$step carries a structured output contract")
       }
@@ -451,22 +447,20 @@ class PhaseStrategyCompositionTest {
   }
 
   private companion object {
-    const val MINIMAL_FINAL_OBJECT = """{"status": "completed", "summary": "Done.", "value": "The step finished."}"""
-
     val EXPECTED_POLICIES =
       mapOf(
-        PHASE_PREPLAN to policy(RELAUNCH),
-        PHASE_PLAN to policy(RELAUNCH),
-        PHASE_IMPLEMENT to policy(MUTATING, RELAUNCH, FILE_MUTATING).extendingInventory(),
+        PHASE_PREPLAN to policy(),
+        PHASE_PLAN to policy(),
+        PHASE_IMPLEMENT to policy(MUTATING, FILE_MUTATING).extendingInventory(),
         PHASE_SIMPLIFY to
-          policy(MUTATING, RELAUNCH, SINGLE, FILE_MUTATING).extendingInventory(),
+          policy(MUTATING, SINGLE, FILE_MUTATING).extendingInventory(),
         PHASE_AUDIT to policy(SINGLE, READ_ONLY_IDLE),
-        PHASE_AUDIT_IMPLEMENT_FIX to policy(MUTATING, RELAUNCH, FILE_MUTATING).extendingInventory(),
-        PHASE_REVIEW to policy(RELAUNCH, FILE_MUTATING, GENERATION_SCOPED),
-        PHASE_VERIFY_FINDINGS to policy(RELAUNCH, READ_ONLY_IDLE, FILE_MUTATING),
+        PHASE_AUDIT_IMPLEMENT_FIX to policy(MUTATING, FILE_MUTATING).extendingInventory(),
+        PHASE_REVIEW to policy(FILE_MUTATING, GENERATION_SCOPED),
+        PHASE_VERIFY_FINDINGS to policy(READ_ONLY_IDLE, FILE_MUTATING),
         PHASE_IMPLEMENT_FIX to
-          policy(MUTATING, RELAUNCH, FILE_MUTATING, GENERATION_SCOPED).extendingInventory(),
-        PHASE_BUILD to policy(RELAUNCH, FILE_MUTATING),
+          policy(MUTATING, FILE_MUTATING, GENERATION_SCOPED).extendingInventory(),
+        PHASE_BUILD to policy(FILE_MUTATING),
         PHASE_VALIDATE to
           policy(SINGLE, FILE_MUTATING).extendingInventory(),
         PHASE_WRITE_HISTORY to policy(FILE_MUTATING).extendingInventory(),
@@ -478,7 +472,6 @@ class PhaseStrategyCompositionTest {
       val set = traits.toSet()
       return PhaseStepPolicy(
         mutating = MUTATING in set,
-        relaunchOnInvalidOutput = RELAUNCH in set,
         singleAgentSession = SINGLE in set,
         readOnlyIdle = READ_ONLY_IDLE in set,
         fileMutating = FILE_MUTATING in set,
@@ -489,7 +482,7 @@ class PhaseStrategyCompositionTest {
     fun PhaseStepPolicy.extendingInventory() = copy(extendsOwnedInventory = true)
   }
 
-  private enum class PolicyTrait { MUTATING, RELAUNCH, SINGLE, READ_ONLY_IDLE, FILE_MUTATING, GENERATION_SCOPED }
+  private enum class PolicyTrait { MUTATING, SINGLE, READ_ONLY_IDLE, FILE_MUTATING, GENERATION_SCOPED }
 
   private fun assertSelectedComposition(
     registry: PhaseStrategyRegistry,

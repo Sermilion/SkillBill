@@ -118,7 +118,7 @@ class FeatureTaskRuntimeImplementationContinuationTest {
     val directive = ImplementationPromptSections.continuationDirective(continuation, SegmentKind.SIMPLIFICATION)
 
     assertTrue(directive.contains("Continue this simplification"))
-    assertTrue(directive.contains("simplification_receipt"))
+    assertTrue(!directive.contains("simplification_receipt"))
     assertTrue(directive.contains("do not re-apply changes already present"))
     assertTrue(directive.contains("simplification receipt segment"))
   }

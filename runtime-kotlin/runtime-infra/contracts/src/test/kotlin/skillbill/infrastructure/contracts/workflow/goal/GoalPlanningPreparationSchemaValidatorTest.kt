@@ -1,9 +1,9 @@
 package skillbill.infrastructure.contracts.workflow.goal
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_CONTRACT_VERSION
 import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
-import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimePhaseOutputSchemaPaths
 import skillbill.infrastructure.contracts.locator.GoalPlanningPreparationSchemaPaths
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -100,7 +100,7 @@ class GoalPlanningPreparationSchemaValidatorTest {
       "decomposition_manifest_hash" to HASH,
       "planning_contract_id" to GoalPlanningPreparationSchemaPaths.EXPECTED_SCHEMA_ID,
       "planning_contract_version" to GOAL_PLANNING_PREPARATION_CONTRACT_VERSION,
-      "phase_output_contract_id" to FeatureTaskRuntimePhaseOutputSchemaPaths.EXPECTED_SCHEMA_ID,
+      "phase_output_contract_id" to FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID,
       "phase_output_contract_version" to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
     )
 

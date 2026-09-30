@@ -112,11 +112,6 @@ governedResources {
     "SKILL-120: canonical feature-task execution-identity schema",
   )
   copy(
-    "copyFeatureTaskRuntimePhaseOutputSchema",
-    "feature-task-runtime-phase-output-schema.yaml",
-    "SKILL-65: canonical feature-task-runtime phase output schema",
-  )
-  copy(
     "copyFeatureTaskRuntimeHandoffEnvelopeSchema",
     "feature-task-runtime-handoff-envelope-schema.yaml",
     "SKILL-137: canonical handoff-envelope schema",
@@ -165,11 +160,6 @@ governedResources {
     "copyGoalPlanningPreparationSchema",
     "goal-planning-preparation-schema.yaml",
     "SKILL-128: canonical goal planning preparation schema",
-  )
-  copy(
-    "copyFeatureTaskRuntimePlanningProjectionsSchema",
-    "feature-task-runtime-planning-projections-schema.yaml",
-    "SKILL-137: canonical planning-projections schema",
   )
   copy(
     "copyFeatureTaskRuntimeImplementationAttemptSchema",

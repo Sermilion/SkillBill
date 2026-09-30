@@ -1,90 +1,29 @@
 package skillbill.engine.goalrunner.planning.attempt
 
-import skillbill.contracts.SharedPayloadKeys
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseProduction
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProduceAttemptArgs
-import skillbill.engine.goalrunner.planning.model.GoalPlanningProducePhaseArgs
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
-import skillbill.engine.goalrunner.planning.outcome.malformedReason
 import skillbill.engine.goalrunner.planning.outcome.stopped
 import skillbill.engine.goalrunner.planning.outcome.unexpectedPlanningFailureReason
-import skillbill.engine.goalrunner.planning.outcome.unsuccessfulStatusReason
 import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.time.model.RuntimeWaitResult
-import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.workflowStepStatus
-import skillbill.workflow.taskruntime.artifact.envelopeWireMap
-import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
 import java.util.concurrent.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.ZERO
 
-internal fun DefaultGoalPlanningSweep.producePhase(args: GoalPlanningProducePhaseArgs): GoalPlanningPhaseProduction {
-  val attemptArgs = args.attempt
-  val phase = attemptArgs.phase
-  val shared = phase.shared
-  val phaseId = phase.phaseId
-  val subtask = phase.subtask
-  var priorSchemaFailure = attemptArgs.priorSchemaFailure
-  var retryableDeclines = 0
+internal fun DefaultGoalPlanningSweep.producePhase(args: GoalPlanningProduceAttemptArgs): GoalPlanningPhaseProduction {
+  val phase = args.phase
   var attempt = 0
   while (true) {
     attempt += 1
-    val scope = planningAttemptScope(shared, phaseId, subtask, attempt)
+    val scope = planningAttemptScope(phase.shared, phase.phaseId, phase.subtask, attempt)
     recordPlanningAttemptStarted(this, scope)
-    val step =
-      advancePlanningProduceAttempt(
-        PlanningProduceAdvanceArgs(
-          attemptArgs = attemptArgs.copy(priorSchemaFailure = priorSchemaFailure, attempt = attempt),
-          scope = scope,
-          retryableDeclines = retryableDeclines,
-          phaseId = phaseId,
-          finalizePayload = args.finalizePayload,
-        ),
-      )
-    when (step) {
-      is PlanningProduceStep.Done -> return step.production
-      is PlanningProduceStep.RetryDecline -> {
-        retryableDeclines = step.retryableDeclines
-      }
-      is PlanningProduceStep.RetrySchema -> {
-        priorSchemaFailure = step.priorSchemaFailure
-      }
-    }
+    val production = produceAttemptOrStop(args.copy(attempt = attempt))
+    settlePlanningProduction(scope, production)?.let { return it }
   }
-}
-
-fun DefaultGoalPlanningSweep.gateCapturedPayload(
-  captured: GoalPlanningPhaseProduction.Captured,
-  phaseId: String,
-  finalizePayload: (String) -> String,
-): GoalPlanningPhaseProduction {
-  val payload = finalizePayload(captured.payload)
-  val accepted =
-    if (payload == captured.payload) {
-      AcceptedFeatureTaskRuntimePhaseOutput(
-        normalizedOutput = captured.normalizedOutput,
-        repairEvidence = captured.repairEvidence,
-      )
-    } else {
-      outputValidator.validatePhaseOutput(payload, phaseId).requireAcceptedOutput(phaseId)
-    }
-  val canonicalPayload = accepted.normalizedOutput.canonicalJson
-  val gateReason =
-    projectionGateReason(canonicalPayload, phaseId)
-      ?: return GoalPlanningPhaseProduction.Captured(
-        canonicalPayload,
-        accepted.normalizedOutput,
-        accepted.repairEvidence ?: captured.repairEvidence,
-        captured.agentId,
-      )
-  return GoalPlanningPhaseProduction.SchemaRejected(gateReason, canonicalPayload, captured.agentId)
 }
 
 internal fun DefaultGoalPlanningSweep.produceAttemptOrStop(
@@ -160,52 +99,3 @@ internal fun DefaultGoalPlanningSweep.interruptibleWait(
   }
   return planningPauseOutcome(shared, subtaskId, phaseId)?.outcome
 }
-
-internal fun DefaultGoalPlanningSweep.validatePlanningAttemptOutput(
-  stdout: String,
-  shared: GoalPlanningSharedContext,
-  subtaskId: Int,
-  phaseId: String,
-  agentId: String,
-): GoalPlanningPhaseProduction =
-  runCatching {
-    outputValidator.validatePhaseOutput(stdout, phaseId).requireAcceptedOutput(phaseId)
-  }.fold(
-    onSuccess = { accepted ->
-      val payload = accepted.normalizedOutput.envelopeWireMap()
-      if (payload[SharedPayloadKeys.STATUS].workflowStepStatus() != WorkflowStepStatus.COMPLETED) {
-        val reason = unsuccessfulStatusReason(phaseId, payload)
-        val canonical = accepted.normalizedOutput.canonicalJson
-        if (FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(payload).retryOnResume) {
-          GoalPlanningPhaseProduction.RetryableDecline(reason, canonical, agentId)
-        } else {
-          GoalPlanningPhaseProduction.UnsuccessfulStatus(
-            reason,
-            canonical,
-            agentId,
-            stopped(shared, subtaskId, reason, phaseId),
-          )
-        }
-      } else {
-        GoalPlanningPhaseProduction.Captured(
-          accepted.normalizedOutput.canonicalJson,
-          accepted.normalizedOutput,
-          accepted.repairEvidence,
-          agentId,
-        )
-      }
-    },
-    onFailure = { error ->
-      if (error is InvalidFeatureTaskRuntimePhaseOutputSchemaError) {
-        GoalPlanningPhaseProduction.SchemaRejected(
-          error.payloadFreeReason ?: "Goal planning phase output was rejected by its schema contract.",
-          stdout,
-          agentId,
-        )
-      } else {
-        GoalPlanningPhaseProduction.Stopped(
-          stopped(shared, subtaskId, malformedReason(phaseId, error), phaseId),
-        )
-      }
-    },
-  )

@@ -1,6 +1,5 @@
 package skillbill.engine
 
-import skillbill.engine.featuretask.lifecycle.core.AlwaysValidValidator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditVerdictRule
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
@@ -32,7 +31,7 @@ class AmbientInputsAndLoudFailSeamsTest {
       mapOf(
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to PREPLAN_OUTPUT,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to PLAN_OUTPUT,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to auditSatisfiedOutput(),
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to settledAuditSatisfiedRecord(),
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW to VALID_REVIEW_OUTPUT,
       ).mapValues { (phaseId, output) ->
         completedRecord(phaseId, output)
@@ -51,7 +50,6 @@ class AmbientInputsAndLoudFailSeamsTest {
               )
           ),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
-        outputValidator = AlwaysValidValidator,
         stepVerdictRule = { stepId ->
           AcceptanceAuditVerdictRule(SilentDiagnostics)
             .takeIf { stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT }
@@ -92,7 +90,6 @@ class AmbientInputsAndLoudFailSeamsTest {
               ),
           ),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
-        outputValidator = AlwaysValidValidator,
         resumeRulesFn = RESUME_RULES,
       )
 
@@ -123,7 +120,6 @@ class AmbientInputsAndLoudFailSeamsTest {
               ),
           ),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
-        outputValidator = AlwaysValidValidator,
         resumeRulesFn = RESUME_RULES,
       )
 
@@ -141,14 +137,13 @@ class AmbientInputsAndLoudFailSeamsTest {
           FeatureTaskRuntimeTransitionDeclaration(
             listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT),
           ),
-        outputValidator = ThrowingValidator(setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT)),
         resumeRulesFn = RESUME_RULES,
       )
     val output =
       FeatureTaskRuntimePhaseOutput(
         phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
         iteration = 1,
-        payload = """{"contract_version":"not-a-version","phase_id":"implement","status":"completed"}""",
+        payload = "not a json object",
       )
 
     assertFailsWith<InvalidFeatureTaskRuntimePhaseOutputSchemaError> {

@@ -14,7 +14,6 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinua
 import skillbill.infrastructure.contracts.locator.DecompositionManifestBundleJournalSchemaPaths
 import skillbill.infrastructure.contracts.locator.DecompositionManifestSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeExecutionPlanSchemaPaths
-import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimePhaseOutputSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvidenceSchemaPaths
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
@@ -75,19 +74,6 @@ internal object WireVocabularyGovernedSeamInventory {
             "engine/featuretask/validation/FeatureTaskRuntimeReadinessGateCoordinator",
             "engine/featuretask/validation/ReadinessCheckSelection",
             "engine/featuretask/phase/record/FeatureTaskRuntimeGateProgressRecorder",
-          ),
-      ),
-      GovernedPayloadSeam(
-        seamId = "workflow-phase-output-envelope",
-        schemaRepoRelativePath = FeatureTaskRuntimePhaseOutputSchemaPaths.REPO_RELATIVE_PATH,
-        governedRelativePathMarkers =
-          listOf(
-            "workflow/taskruntime/",
-            "engine/featuretask/",
-            "infrastructure/contracts/phaseoutput/",
-            "mcp/featuretask/McpFeatureTaskSettlement",
-            "application/workflow/WorkflowWire",
-            "application/workflow/WorkflowService",
           ),
       ),
       GovernedPayloadSeam(
@@ -161,10 +147,6 @@ internal object WireVocabularyGovernedSeamInventory {
         )
       DecompositionManifestBundleJournalSchemaPaths.REPO_RELATIVE_PATH ->
         bundleJournalGovernedKeys(
-          loadRepoSchema(schemaRepoRelativePath),
-        )
-      FeatureTaskRuntimePhaseOutputSchemaPaths.REPO_RELATIVE_PATH ->
-        phaseOutputEnvelopeGovernedKeys(
           loadRepoSchema(schemaRepoRelativePath),
         )
       FeatureTaskRuntimeReadinessEvidenceSchemaPaths.REPO_RELATIVE_PATH ->
@@ -261,9 +243,6 @@ internal object WireVocabularyGovernedSeamInventory {
     keys += propertyNames(schema.path("\$defs").path("entry").path("properties"))
     return keys
   }
-
-  private fun phaseOutputEnvelopeGovernedKeys(schema: JsonNode): Set<String> =
-    propertyNames(schema.path("properties")).toSet()
 
   private fun readinessEvidenceGovernedKeys(schema: JsonNode): Set<String> =
     propertyNames(schema.path("properties")).toSet() +

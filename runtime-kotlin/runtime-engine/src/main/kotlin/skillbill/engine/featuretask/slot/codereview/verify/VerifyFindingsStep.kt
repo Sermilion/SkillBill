@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 internal class VerifyFindingsStep : PhaseStepHooks {
@@ -17,7 +18,6 @@ internal class VerifyFindingsStep : PhaseStepHooks {
   val policy =
     PhaseStepPolicy(
       mutating = false,
-      relaunchOnInvalidOutput = true,
       singleAgentSession = false,
       readOnlyIdle = true,
       fileMutating = true,
@@ -29,11 +29,6 @@ internal class VerifyFindingsStep : PhaseStepHooks {
     context: PhaseAttemptLaunchHookContext,
     state: PhaseStepBinding,
   ): String = VerifyFindingsEvidence.launchSections(run, context, state.asVerifyFindingsBinding())
-
-  override fun retainSchemaRejectedOutput(
-    state: PhaseStepBinding,
-    outputText: String,
-  ) = VerifyFindingsEvidence.retainCheckpoint(state.asVerifyFindingsBinding(), outputText)
 
   override fun checkValidatedOutput(
     run: PhaseRun,
@@ -49,6 +44,14 @@ internal class VerifyFindingsStep : PhaseStepHooks {
     state: PhaseAcceptedStepExecution,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? = VerifyFindingsEvidence.completionRejection(run, context, state.asVerifyFindingsBinding(), outputMap)
+
+  override fun interpretedOutput(
+    run: PhaseRun,
+    context: PhaseStepOutputContext,
+    state: PhaseAcceptedStepExecution,
+    output: NormalizedFeatureTaskRuntimePhaseOutput,
+  ): NormalizedFeatureTaskRuntimePhaseOutput =
+    VerifyFindingsEvidence.interpretedOutput(run, context, state.asVerifyFindingsBinding(), output)
 
   override fun recordAcceptedOutput(
     run: PhaseRun,

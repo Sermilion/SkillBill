@@ -9,7 +9,6 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
-import skillbill.engine.featuretask.slot.jsonValueContent
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -21,7 +20,6 @@ class AgentPreplanStrategy : PhaseStrategy() {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to
         PhaseStepPolicy(
           mutating = false,
-          relaunchOnInvalidOutput = true,
           singleAgentSession = false,
           readOnlyIdle = false,
           fileMutating = false,
@@ -51,7 +49,6 @@ class AgentPreplanStrategy : PhaseStrategy() {
         "Apply ${ceremonyScalingOf(inputs.briefing).preplanCeremony.promptLabel}. Keep the gate real: identify " +
           "concrete scope, affected boundaries, risks, and unknowns at the requested depth.",
       stepContext = if (inputs.suppressDecomposition) "" else featureSpecIntake,
-      valueContent = VALUE_CONTENT,
     )
 
   override fun runStep(
@@ -68,27 +65,11 @@ class AgentPreplanStrategy : PhaseStrategy() {
     private val featureSpecIntake: String by lazy { directiveResource(FEATURE_SPEC_INTAKE).trimEnd() }
 
     private const val DIRECTIVE: String =
-      "Produce the scaled pre-planning digest for the resolved feature size. Do not modify repository files " +
-        "during this phase. Emit produced_outputs with a non-blank value string carrying the preplanning_digest " +
-        "JSON (same fields as before, stuffed inside value); optional prompt may add a short directive when " +
-        "non-blank. Do not forward the complete preplan envelope, a generic summary, or progress diagnostics."
-
-    private val VALUE_CONTENT: String =
-      jsonValueContent(
-        innerJsonExample =
-          "{ \"projection_kind\": \"preplanning_digest\",\n" +
-            "  \"contract_version\": \"0.2\",\n" +
-            "  \"affected_boundaries\": [\"<module or boundary touched>\"], \"patterns_and_decisions\": [],\n" +
-            "  \"risks\": [\"<concrete risk>\"],\n" +
-            "  \"rollout\": { \"flag_required\": false, \"flag_pattern\": \"none\",\n" +
-            "    \"notes\": \"<rollout note, or N/A>\" },\n" +
-            "  \"validation_strategy\": [\"<how the change is validated>\"],\n" +
-            "  \"unresolved_questions\": [], \"evidence_refs\": [],\n" +
-            "  \"selected_boundary_headings\": [\"<heading_id copied verbatim from the boundary catalog>\"] }\n",
-        notes =
-          "flag_pattern is one of none, simple_conditional, di_switch, legacy. Walk boundary_memory " +
-            "headings for relevance; weave context into the stuffed object rather than listing headings only " +
-            "outside value.",
-      )
+      "Produce the scaled pre-planning digest for the resolved feature size, as prose. Do not modify repository " +
+        "files during this phase. Write what the plan phase needs: the boundaries the change touches, the " +
+        "patterns and decisions that apply, concrete risks, rollout and validation considerations, and open " +
+        "questions. Walk the boundary memory headings for relevance and weave their context into the prose; " +
+        "name a heading by its heading_id exactly as the boundary catalog spells it. Do not forward progress " +
+        "diagnostics or a generic summary."
   }
 }

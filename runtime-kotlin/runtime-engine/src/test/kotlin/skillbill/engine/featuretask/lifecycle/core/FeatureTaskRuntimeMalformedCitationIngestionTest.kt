@@ -2,7 +2,6 @@ package skillbill.engine.featuretask.lifecycle.core
 
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelReviewLaneStatus
-import skillbill.engine.envelope
 import skillbill.engine.featuretask.slot.codereview.InlineReviewCycle
 import skillbill.engine.featuretask.slot.codereview.InlineReviewEnvelope
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys

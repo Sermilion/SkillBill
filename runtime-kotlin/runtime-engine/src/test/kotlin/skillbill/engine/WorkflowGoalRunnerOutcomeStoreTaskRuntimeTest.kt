@@ -3,9 +3,7 @@ package skillbill.engine
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.testWorkflowSnapshotValidator
-import skillbill.engine.featuretask.lifecycle.core.AlwaysValidValidator
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
-import skillbill.engine.goalrunner.persist.OutcomeStoreTestArtifactPorts
 import skillbill.engine.goalrunner.status.liveLease
 import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
@@ -146,10 +144,6 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
       testWorkflowGoalRunnerOutcomeStore(
         database = FakeDatabaseSessionFactory(workflows),
         workflowSnapshotValidator = testWorkflowSnapshotValidator,
-        artifactPorts =
-          OutcomeStoreTestArtifactPorts(
-            phaseOutputValidator = AlwaysValidValidator,
-          ),
       )
 
     assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {

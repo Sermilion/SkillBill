@@ -211,7 +211,7 @@ internal class CompositionTestStrategy(
   override val optionalSteps: Set<String> = emptySet(),
   override val entryStep: String = steps.first(),
 ) : PhaseStrategy() {
-  var stepPolicy = PhaseStepPolicy(false, false, false, false, false, false)
+  var stepPolicy = PhaseStepPolicy(false, false, false, false, false)
 
   override fun policyFor(stepId: String) = stepPolicy
 
