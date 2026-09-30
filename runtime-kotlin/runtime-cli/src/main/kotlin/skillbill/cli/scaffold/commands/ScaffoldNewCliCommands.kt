@@ -14,13 +14,13 @@ import skillbill.cli.model.CliRunInputs
 import skillbill.cli.scaffold.payload.createAndFillResult
 import skillbill.cli.scaffold.payload.errorResult
 import skillbill.cli.scaffold.payload.newAddonPayload
+import skillbill.cli.scaffold.payload.retiredInteractiveModeMessage
 import skillbill.cli.scaffold.payload.runNativeScaffoldPayload
 import skillbill.cli.scaffold.payload.unsupportedNativeScaffoldResult
 import skillbill.cli.scaffold.wizard.runNativeAssistedScaffoldWizard
 import skillbill.cli.scaffold.wizard.runNativeScaffoldWizard
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
 import skillbill.ports.scaffold.ScaffoldGateway
-import skillbill.ports.scaffold.UnsupportedScaffoldGateway
 import java.time.Clock
 
 @Inject
@@ -153,7 +153,6 @@ class CreateAndFillCommand(
   private val inputs: CliRunInputs,
   private val clock: Clock,
   private val scaffoldGateway: ScaffoldGateway,
-  private val unsupportedScaffoldGateway: UnsupportedScaffoldGateway,
 ) : DocumentedCliCommand(
     "create-and-fill",
     "Scaffold one governed skill, then immediately author content.md and validate it.",
@@ -193,7 +192,6 @@ class CreateAndFillCommand(
           inputs = inputs,
           clock = clock,
           scaffoldGateway = scaffoldGateway,
-          unsupportedScaffoldGateway = unsupportedScaffoldGateway,
         ),
       )
   }
@@ -205,7 +203,6 @@ class NewAddonCommand(
   private val inputs: CliRunInputs,
   private val clock: Clock,
   private val scaffoldGateway: ScaffoldGateway,
-  private val unsupportedScaffoldGateway: UnsupportedScaffoldGateway,
   private val externalAddonOverlayService: ExternalAddonOverlayService,
 ) : DocumentedCliCommand(
     "new-addon",
@@ -241,10 +238,9 @@ class NewAddonCommand(
     state.result =
       if (interactive) {
         unsupportedNativeScaffoldResult(
-          unsupportedScaffoldGateway.retiredUnsupportedMessage(
+          retiredInteractiveModeMessage(
             "new-addon --interactive",
             "skill-bill new-addon --platform <platform> --name <name>",
-            editor = false,
           ),
           format,
         )

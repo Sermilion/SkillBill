@@ -672,7 +672,6 @@ object PrincipleEnforcementInventory {
       "telemetryLevelMutator",
       "telemetryService",
       "unaddressedFindingsLedgerService",
-      "unsupportedScaffoldGateway",
       "workListService",
       "workflowService",
     )

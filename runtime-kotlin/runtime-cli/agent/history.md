@@ -1,3 +1,15 @@
+## [2026-09-30] SKILL-386 — cross-module contract ownership seen from the CLI (subtask 2)
+Areas: runtime-kotlin/runtime-cli (scaffold, goal, agentaddon, kernel, system, workflow, featuretask), runtime-ports/scaffold, runtime-infra/{skills,launcher}, runtime-engine/goalrunner, runtime-contracts/agentaddon, runtime-core (RuntimeComponent, scaffold provides, architecture repoTests), ARCHITECTURE.md
+- Deleted the UnsupportedScaffoldGateway and its RuntimeComponent accessor; retired scaffold modes now fail with the exact baseline error text, pinned by CliAuthoringParityTest.
+- Goal pause/resume results carry typed status enums (pinned in the engine inbound API inventory) instead of raw strings; the CLI exit-code and presenter code consume the enums.
+- The agent-addon contract version is one contracts constant, reused by the launcher command builders and the CLI selection messages.
+- Continuation-candidate payload building lives in one kernel payload file shared by feature-task and workflow commands; malformed-JSON handling catches the single typed error.
+- reusable PATTERN: a CLI-visible wire string or version gets one owning-module constant or enum; adapters consume it and never re-declare the literal.
+- Repair: subtask 1 leftovers failing comment/KDoc and package-sibling-count architecture tests were fixed by removing comments and folding VerifyRuntimeResume into FeatureTaskRuntimeRunPreparation.
+- Known limitation: agnix was not run locally; CI validate-agent-configs covers it.
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented
+
 ## [2026-09-30] SKILL-386 — runtime-cli composition without dependency bags (subtask 1)
 Areas: runtime-kotlin/runtime-cli (featuretask, goal, install, nativeagent, learning, review, scaffold, workflow command groups), runtime-kotlin/runtime-core (InjectConstructorDefaultsArchitectureTest)
 - Replaced the feature-task run dependency bag with two injected CLI classes, run preparation and run execution, with all-private constructor params; the resolved workflow id is passed as a value, not a thunk.

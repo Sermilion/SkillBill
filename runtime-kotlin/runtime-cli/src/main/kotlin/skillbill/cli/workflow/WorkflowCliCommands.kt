@@ -26,6 +26,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningResult
 import skillbill.contracts.workflow.payload.WorkflowArtifactKeys
+import skillbill.error.core.MalformedJsonTextError
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.model.FeatureTaskRouteScope
@@ -234,7 +235,7 @@ private fun parseStepUpdatesStrict(rawValue: String): List<Map<String, Any?>> {
   val parsed =
     try {
       JsonCodec.parseValue(rawValue)
-    } catch (_: Exception) {
+    } catch (_: MalformedJsonTextError) {
       throw UsageError("--step-updates must be a JSON array of objects.")
     }
   val updates =

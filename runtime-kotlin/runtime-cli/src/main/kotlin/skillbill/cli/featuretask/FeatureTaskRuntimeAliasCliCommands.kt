@@ -46,8 +46,6 @@ class FeatureTaskRuntimeDeprecatedRunCommand(
   }
 }
 
-// Kept separate from FeatureTaskRuntimeResumeCommand only because the hidden alias help for specPath must stay
-// byte-identical to the baseline.
 @Inject
 class FeatureTaskRuntimeDeprecatedResumeCommand(
   private val preparation: FeatureTaskRuntimeRunPreparation,

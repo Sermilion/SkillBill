@@ -15,7 +15,6 @@ import skillbill.model.EnvironmentContext
 import skillbill.model.toPath
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
 import skillbill.ports.scaffold.ScaffoldGateway
-import skillbill.ports.scaffold.UnsupportedScaffoldGateway
 import skillbill.ports.scaffold.catalog.model.ScaffoldExplainResult
 import skillbill.ports.scaffold.catalog.model.ScaffoldExplainSkill
 import skillbill.ports.scaffold.catalog.model.ScaffoldListResult
@@ -289,19 +288,6 @@ private fun AgentAddonCatalogueEntry.toSkillStatus(
     consumers = consumers,
     manifestFile = manifestPath.toString(),
   )
-}
-
-@Inject
-class FileSystemUnsupportedScaffoldGateway : UnsupportedScaffoldGateway {
-  override fun retiredUnsupportedMessage(
-    command: String,
-    replacement: String,
-    editor: Boolean,
-  ) = if (editor) {
-    AuthoringOperations.retiredEditorMessage(command, replacement)
-  } else {
-    AuthoringOperations.retiredInteractiveMessage(command, replacement)
-  }
 }
 
 @Inject

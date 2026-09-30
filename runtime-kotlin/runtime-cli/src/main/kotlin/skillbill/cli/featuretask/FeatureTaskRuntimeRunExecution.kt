@@ -25,7 +25,6 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.minutes
 
-/** Workflow execution for a prepared runtime run: resolve or open the workflow id, then run the phase loop. */
 @Inject
 class FeatureTaskRuntimeRunExecution(
   private val runner: FeatureTaskRuntimeRunner,

@@ -13,6 +13,7 @@ import skillbill.cli.model.CliRunInputs
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver
+import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
@@ -20,10 +21,10 @@ import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
+import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
-/** Pre-launch work for a runtime run: spec resolution, option validation, and resume verification. */
 @Inject
 class FeatureTaskRuntimeRunPreparation(
   private val specPathResolver: FeatureSpecPathResolverPort,
@@ -157,5 +158,58 @@ class FeatureTaskRuntimeRunPreparation(
       goalContinuation,
       operatorDecision,
     )
+  }
+}
+
+private fun verifyRuntimeResume(args: VerifyRuntimeResumeArgs) {
+  val effectiveRoot = args.repoRoot
+  val identity = args.repositoryEnclosingRootPort.repositoryIdentity(effectiveRoot)
+  val result =
+    if (args.goalChild) {
+      args.lookupService.lookupGoalChild(args.issueKey, identity, args.workflowId)
+    } else {
+      args.lookupService.lookup(args.issueKey, identity, args.workflowId)
+    }
+  val candidate = resumableRuntimeCandidate(args.workflowId, result)
+  requireRuntimeMode(args.workflowId, candidate.mode)
+  requireMatchingGovernedSpec(args, candidate.governedSpecPath, effectiveRoot, Path.of(args.specPath))
+}
+
+private fun resumableRuntimeCandidate(
+  workflowId: String,
+  result: FeatureTaskContinuationLookupResult,
+) = when (result) {
+  is FeatureTaskContinuationLookupResult.Resumable -> result.candidate
+  is FeatureTaskContinuationLookupResult.AlreadyRunning -> result.candidate
+  is FeatureTaskContinuationLookupResult.TerminalOnly ->
+    throw UsageError("Workflow '$workflowId' is terminal and cannot be resumed; no phase was launched.")
+  FeatureTaskContinuationLookupResult.NoMatch,
+  is FeatureTaskContinuationLookupResult.Ambiguous,
+  is FeatureTaskContinuationLookupResult.GoalContinuation,
+  is FeatureTaskContinuationLookupResult.NeedsIdentityRepair,
+  -> throw UsageError("Workflow '$workflowId' is not a resumable runtime workflow.")
+}
+
+private fun requireRuntimeMode(
+  workflowId: String,
+  mode: FeatureTaskWorkflowMode,
+) {
+  if (mode != FeatureTaskWorkflowMode.RUNTIME) {
+    throw UsageError("Workflow '$workflowId' was persisted in ${mode.wireValue} mode.")
+  }
+}
+
+private fun requireMatchingGovernedSpec(
+  args: VerifyRuntimeResumeArgs,
+  persistedPath: String,
+  effectiveRoot: Path,
+  specPath: Path,
+) {
+  val workflowId = args.workflowId
+  if (
+    persistedPath !=
+    args.repositoryEnclosingRootPort.governedSpecPathForCli(effectiveRoot, specPath)
+  ) {
+    throw UsageError("Workflow '$workflowId' was persisted with a different governed spec path.")
   }
 }

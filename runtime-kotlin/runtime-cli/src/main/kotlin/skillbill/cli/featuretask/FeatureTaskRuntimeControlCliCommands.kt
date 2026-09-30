@@ -4,7 +4,6 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.continuation.model.GoalContinuationCandidate
 import skillbill.application.workflow.model.RepairFeatureTaskRuntimeIdentityArgs
 import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.application.workflow.service.WorkflowService
@@ -12,12 +11,13 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.formatOption
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
+import skillbill.cli.kernel.payload.toFeatureTaskContinuationCliMap
+import skillbill.cli.kernel.payload.toGoalContinuationCliMap
 import skillbill.cli.kernel.payload.toPayload
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
-import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationCandidate
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
@@ -59,15 +59,16 @@ class FeatureTaskLookupCommand(
 private fun FeatureTaskContinuationLookupResult.toCliPayload(): Map<String, Any?> =
   when (this) {
     FeatureTaskContinuationLookupResult.NoMatch -> mapOf("result" to "no_match")
-    is FeatureTaskContinuationLookupResult.Resumable -> mapOf("result" to "resumable", "candidate" to candidate.toMap())
+    is FeatureTaskContinuationLookupResult.Resumable ->
+      mapOf("result" to "resumable", "candidate" to candidate.toFeatureTaskContinuationCliMap())
     is FeatureTaskContinuationLookupResult.AlreadyRunning ->
-      mapOf("result" to "already_running", "candidate" to candidate.toMap())
+      mapOf("result" to "already_running", "candidate" to candidate.toFeatureTaskContinuationCliMap())
     is FeatureTaskContinuationLookupResult.Ambiguous ->
-      mapOf("result" to "ambiguous", "candidates" to candidates.map { it.toMap() })
+      mapOf("result" to "ambiguous", "candidates" to candidates.map { it.toFeatureTaskContinuationCliMap() })
     is FeatureTaskContinuationLookupResult.TerminalOnly ->
-      mapOf("result" to "terminal_only", "candidates" to candidates.map { it.toMap() })
+      mapOf("result" to "terminal_only", "candidates" to candidates.map { it.toFeatureTaskContinuationCliMap() })
     is FeatureTaskContinuationLookupResult.GoalContinuation ->
-      mapOf("result" to "goal_continuation", "goal" to candidate.toMap())
+      mapOf("result" to "goal_continuation", "goal" to candidate.toGoalContinuationCliMap())
     is FeatureTaskContinuationLookupResult.NeedsIdentityRepair ->
       mapOf(
         "result" to "needs_identity_repair",
@@ -75,39 +76,6 @@ private fun FeatureTaskContinuationLookupResult.toCliPayload(): Map<String, Any?
         SharedPayloadKeys.SUMMARY to summary,
       )
   }
-
-private fun GoalContinuationCandidate.toMap(): Map<String, Any?> =
-  mapOf(
-    "parent_workflow_id" to parentWorkflowId,
-    SharedPayloadKeys.ISSUE_KEY to issueKey,
-    SharedPayloadKeys.STATUS to status,
-    "current_subtask_id" to currentSubtaskId,
-    "current_action" to currentAction,
-    "complete_count" to completeCount,
-    "pending_count" to pendingCount,
-    "blocked_count" to blockedCount,
-    "updated_at" to updatedAt,
-    SharedPayloadKeys.SUMMARY to summary,
-  )
-
-private fun FeatureTaskContinuationCandidate.toMap(): Map<String, Any?> =
-  mapOf(
-    SharedPayloadKeys.WORKFLOW_ID to workflowId,
-    "mode" to mode.wireValue,
-    SharedPayloadKeys.STATUS to status,
-    "current_step" to currentStep,
-    "governed_spec_path" to governedSpecPath,
-    "updated_at" to updatedAt,
-    "liveness" to
-      liveness?.let {
-        mapOf(
-          "classification" to it.classification,
-          "last_evidence_at" to it.lastEvidenceAt,
-          "evidence" to it.evidence,
-        )
-      },
-    SharedPayloadKeys.SUMMARY to summary,
-  )
 
 @Inject
 class FeatureTaskRuntimeStatusCommand(
