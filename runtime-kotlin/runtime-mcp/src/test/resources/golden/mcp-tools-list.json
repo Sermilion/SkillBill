@@ -59,7 +59,7 @@
     },
     {
       "name": "feature_task_phase_block",
-      "description": "Durable-block a prose feature-task phase (preplan|plan|implement|simplify|audit|validate|write_history|pr).",
+      "description": "Durable-block a prose feature-task phase.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -82,6 +82,7 @@
               "implement",
               "simplify",
               "audit",
+              "audit_implement_fix",
               "validate",
               "write_history",
               "pr"
@@ -114,7 +115,7 @@
     },
     {
       "name": "feature_task_phase_complete",
-      "description": "Complete a prose feature-task phase (preplan|plan|implement|simplify|audit|validate|write_history|pr) via durable settlement.",
+      "description": "Complete a prose feature-task phase via durable settlement.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -137,6 +138,7 @@
               "implement",
               "simplify",
               "audit",
+              "audit_implement_fix",
               "validate",
               "write_history",
               "pr"

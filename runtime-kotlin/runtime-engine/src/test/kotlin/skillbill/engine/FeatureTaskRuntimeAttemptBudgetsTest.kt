@@ -1,7 +1,6 @@
 package skillbill.engine
 
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
-import skillbill.engine.featuretask.slot.audit.AcceptanceAuditRound
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -16,13 +15,6 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
     assertEquals(1, FeatureTaskRuntimeAttemptBudgets.MAX_OUTPUT_GATE_RETRY_ATTEMPTS)
     assertEquals(1, FeatureTaskRuntimeAttemptBudgets.MAX_FORMAT_RETRY_ATTEMPTS)
     assertEquals(3, FeatureTaskRuntimeAttemptBudgets.MAX_PROCESS_FAILURE_ATTEMPTS)
-  }
-
-  @Test
-  fun `the same remaining-criteria list as the prior audit session is a stall not another retry`() {
-    val reason = AcceptanceAuditRound.auditRemainingUnchangedBlockReason()
-    assertContains(reason, "same remaining-criteria")
-    assertContains(reason, "no progress")
   }
 
   @Test
@@ -53,20 +45,12 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
   }
 
   @Test
-  fun `validate malformed envelopes retry twice then block`() {
+  fun `validate malformed output blocks after its single session`() {
     val phase = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
     val policy = productionPolicy(phase)
-    assertEquals(null, FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, policy, 1))
-    val blocked = requireNotNull(FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, policy, 2))
-    assertContains(blocked, "cap=2")
-    assertContains(blocked, "2 attempts")
-  }
-
-  @Test
-  fun `the same remaining check failures as the prior validate repair is a stall`() {
-    val reason = FeatureTaskRuntimeAttemptBudgets.validateRemainingUnchangedBlockReason("validate")
-    assertContains(reason, "leftover set did not shrink")
-    assertContains(reason, "no progress")
+    assertContains(requireNotNull(FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, policy, 1)), "cap=1")
+    assertEquals(false, policy.relaunchOnInvalidOutput)
+    assertEquals(true, policy.singleAgentSession)
   }
 
   @Test

@@ -31,7 +31,7 @@ class AcceptanceAuditVerdictRuleTest {
   }
 
   @Test
-  fun `an absent audit verdict word settles to the default and emits a diagnostics record`() {
+  fun `remaining criteria without a verdict route to repair without a fallback`() {
     val diagnostics = RecordingDiagnostics()
     val output =
       FeatureTaskRuntimeWorkflowArtifactMap.from(
@@ -44,7 +44,7 @@ class AcceptanceAuditVerdictRuleTest {
     val verdict = AcceptanceAuditVerdictRule(diagnostics).verdictFor(null, output)
 
     assertEquals(AcceptanceAuditVerdictRule.UNKNOWN_WORD_DEFAULT, verdict)
-    assertEquals(1, diagnostics.warnings.size)
+    assertEquals(0, diagnostics.warnings.size)
   }
 }
 

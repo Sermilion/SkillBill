@@ -14,6 +14,47 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimePhasePromptComposerContentTest {
   @Test
+  fun `implementation and audit may inspect new checkout contracts without replacing their settlement contract`() {
+    listOf("implement", "audit").forEach { phaseId ->
+      listOf<String?>(null, "Prior output was not an object").forEach { failure ->
+        val prompt =
+          composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(phaseId)) {
+            copy(priorSchemaFailure = failure)
+          }
+
+        assertContains(
+          prompt,
+          "Read and edit checkout schemas, Kotlin contract constants, test fixtures, and skill sources",
+        )
+        assertContains(prompt, "New implementation contracts may be absent from the installed runtime.")
+        assertContains(prompt, "block repository work or require permission to inspect the checkout.")
+        assertContains(prompt, "Keep this phase's output and settlement on the contract supplied by this briefing")
+        assertFalse(prompt.contains("never this checkout"))
+      }
+    }
+  }
+
+  @Test
+  fun `phase workers and retries cannot reopen the dispatcher update confirmation`() {
+    listOf("preplan", "plan", "implement", "audit", "review", "validate", "pr").forEach { phaseId ->
+      listOf<String?>(null, "Prior output was not an object").forEach { failure ->
+        val prompt =
+          composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(phaseId)) {
+            copy(priorSchemaFailure = failure)
+          }
+
+        assertContains(prompt, "The initial user-facing goal invocation owns update checks and launch confirmation.")
+        assertContains(
+          prompt,
+          "Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher",
+        )
+        assertContains(prompt, "including on retries and continuation.")
+        assertContains(prompt, "Reading the installed skill-bill skill does not make this phase a new invocation.")
+      }
+    }
+  }
+
+  @Test
   fun `each phase carries its own task directive`() {
     val preplanPrompt = composePromptForPhase("preplan")
     val planPrompt = composePromptForPhase("plan")
@@ -297,22 +338,26 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertAuditPromptNamesSignal(auditPrompt, "explicit empty list", "the remaining-criteria completion contract")
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "verdict: omit it unless every criterion is met, then set satisfied",
+      "Omit verdict unless the list is empty, then use satisfied",
       "the audit-specific verdict rule",
     )
   }
 
   @Test
-  fun `audit requires meaningful test coverage and repairs without execution or handoff`() {
+  fun `audit excludes explicit and mixed test requirements while inspecting production behavior`() {
     val prompt = composePromptForPhase("audit")
 
-    assertContains(prompt, "test cases whose assertions verify that behavior")
-    assertContains(prompt, "Missing implementation, missing tests")
-    assertContains(prompt, "mock-only interaction, or tautological assertion is not coverage")
-    assertContains(prompt, "Repair every fixable gap in this same agent session")
+    assertContains(prompt, "Exclude all test requirements from audit, even when the plan or a criterion")
+    assertContains(prompt, "For a mixed criterion, evaluate only its production behavior")
+    assertContains(prompt, "Omit test-only criteria from the remaining list")
+    assertContains(prompt, "including when only test requirements remain")
+    val repairPrompt = composePromptForPhase("audit_implement_fix")
+    assertContains(repairPrompt, "even when a persisted audit finding or the plan explicitly requests tests")
+    assertContains(repairPrompt, "record test-only findings as excluded from audit")
+    assertContains(prompt, "Audit is read-only: do not edit files or repair gaps")
     assertContains(prompt, "re-check the entire in-scope criterion list from the beginning")
-    assertContains(prompt, "Do not spawn subagents, invoke repair skills, or hand findings")
-    assertContains(prompt, "Validation owns test execution")
+    assertContains(prompt, "Do not spawn subagents or invoke repair skills")
+    assertContains(prompt, "validation owns test execution")
     assertTrue(!prompt.contains("TEST EXCLUSION"))
     assertTrue(!prompt.contains("free-form note prose"))
   }

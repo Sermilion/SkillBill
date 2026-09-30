@@ -12,7 +12,16 @@ question. Phase and operation forms run one command and relay its output.
 
 ## Update Check
 
-Call `mcp__skill-bill__update_check` before any other action.
+Only the initial, user-facing full-run invocation performs this automatic check.
+Call `mcp__skill-bill__update_check` once before full-run intake and preflight.
+Keep the selected runtime for the whole run, including every subtask and retry.
+
+Runtime-launched phase workers, goal children, retries, and continuations execute
+their supplied briefing. They must not call `mcp__skill-bill__update_check`, ask
+whether to update, or repeat this dispatcher's intake, preflight, or confirmation
+gate. Reading this skill during an active phase does not start a new invocation.
+Phase and operation forms skip the automatic check. An explicit
+`operation:update-check` still runs the requested check through its operation route.
 
 When the tool returns `status: "update_available"`:
 

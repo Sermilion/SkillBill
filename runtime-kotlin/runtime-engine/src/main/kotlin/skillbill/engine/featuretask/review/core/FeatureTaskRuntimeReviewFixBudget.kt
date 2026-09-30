@@ -28,7 +28,8 @@ fun auditGapIterationCount(ledger: List<FeatureTaskRuntimePhaseLedgerEntry>?): I
 private fun isAuditGapRound(entry: FeatureTaskRuntimePhaseLedgerEntry): Boolean =
   when (entry.action) {
     FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE ->
-      entry.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_GAP_LOOP_ID
+      entry.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_GAP_LOOP_ID ||
+        entry.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_REPAIR_LOOP_ID
     FeatureTaskRuntimePhaseLedgerAction.FIX_LOOP_ITERATION ->
       entry.phaseId in PhaseSlot.AUDIT.steps &&
         FeatureTaskRuntimeContinuationKind.fromLedgerDetail(entry.blockedReason) ==

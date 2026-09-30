@@ -8,8 +8,8 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
-import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.phase.ProsePhaseOutputSynthesizer
 import skillbill.workflow.taskruntime.phase.task.declaration
 
 const val STATUS_RUNNING = "running"
@@ -43,7 +43,7 @@ internal fun mutatingReconciliationGateReason(
   mutating: Boolean,
   outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
 ): String? {
-  if (phaseId in PhaseSlot.IMPLEMENTATION.steps) {
+  if (ProsePhaseOutputSynthesizer.isProsePhase(phaseId)) {
     return null
   }
   if (!mutating) return null

@@ -52,7 +52,7 @@ class PhaseValidationRunTest {
   }
 
   @Test
-  fun `standalone validation preserves remaining failures across progress and completes after repair`() {
+  fun `standalone validation does not launch a salvage session for partial progress`() {
     val remaining = "WidgetTest failed: expected 2 but got 3."
     val launcher =
       launcher { attempt ->
@@ -61,15 +61,15 @@ class PhaseValidationRunTest {
 
     val result = entry(launcher).run(validationRequest())
 
-    assertIs<PhaseRunResult.Completed>(result, result.toString())
-    assertEquals(listOf(PHASE_VALIDATE), result.completedStepIds)
-    assertEquals(2, launcher.requests.size)
-    assertContains(prompts(launcher).last(), remaining)
+    assertIs<PhaseRunResult.Blocked>(result, result.toString())
+    assertEquals(emptyList(), result.completedStepIds)
+    assertEquals(1, launcher.requests.size)
+    assertContains(prompts(launcher).single(), "Do not return a partial progress report")
     database.assertNoDurableWorkflowState()
   }
 
   @Test
-  fun `standalone validation blocks when failures stop shrinking`() {
+  fun `standalone validation retains a reported block without inventing a stall`() {
     val launcher = launcher { blockedOutput("WidgetTest still fails.", "no_progress") }
 
     val result = assertIs<PhaseRunResult.Blocked>(entry(launcher).run(validationRequest()))
@@ -77,7 +77,7 @@ class PhaseValidationRunTest {
     assertEquals(PHASE_VALIDATE, result.stepId)
     assertEquals(emptyList(), result.completedStepIds)
     assertEquals(1, launcher.requests.size)
-    assertContains(result.reason, "leftover set did not shrink")
+    assertContains(result.reason, "Project checks still fail")
     database.assertNoDurableWorkflowState()
   }
 
@@ -89,7 +89,7 @@ class PhaseValidationRunTest {
 
     assertEquals(PHASE_VALIDATE, result.stepId)
     assertEquals(emptyList(), result.completedStepIds)
-    assertEquals(2, launcher.requests.size)
+    assertEquals(1, launcher.requests.size)
     database.assertNoDurableWorkflowState()
   }
 

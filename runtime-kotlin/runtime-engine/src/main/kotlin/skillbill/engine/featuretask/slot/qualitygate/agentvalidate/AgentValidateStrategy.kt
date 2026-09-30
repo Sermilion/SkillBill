@@ -28,7 +28,11 @@ class AgentValidateStrategy(override val runner: PhaseRunner) : PhaseStrategySta
   private val policies: Map<String, PhaseStepPolicy> =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE to
-        QUALITY_GATE_STEP_POLICY.copy(outputGateAttempts = VALIDATE_OUTPUT_GATE_ATTEMPTS, extendsOwnedInventory = true),
+        QUALITY_GATE_STEP_POLICY.copy(
+          relaunchOnInvalidOutput = false,
+          singleAgentSession = true,
+          extendsOwnedInventory = true,
+        ),
     )
 
   override val slot: PhaseSlot = PhaseSlot.QUALITY_GATE
@@ -77,6 +81,5 @@ class AgentValidateStrategy(override val runner: PhaseRunner) : PhaseStrategySta
 
   companion object {
     const val ID = "agent-validate"
-    private const val VALIDATE_OUTPUT_GATE_ATTEMPTS = 2
   }
 }

@@ -6,6 +6,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.handoff.envelope.SettlementEnvelopeRequest
 import skillbill.workflow.taskruntime.model.handoff.envelope.SettlementStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR
@@ -22,6 +23,7 @@ object ProsePhaseOutputSynthesizer {
       PHASE_IMPLEMENT,
       PHASE_SIMPLIFY,
       PHASE_AUDIT,
+      PHASE_AUDIT_IMPLEMENT_FIX,
       PHASE_VALIDATE,
       PHASE_WRITE_HISTORY,
       PHASE_PR,

@@ -263,8 +263,9 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     assertFalse(prompt.contains("Do not run pack validation_gate argv"))
     assertContains(prompt, "Keep repairing in this same session")
     assertContains(prompt, "Settle completed only when every required check passes")
-    assertContains(prompt, "verdict progress")
-    assertContains(prompt, "no_progress")
+    assertContains(prompt, "Do not stop after reducing the failure count")
+    assertContains(prompt, "Do not return a partial progress report")
+    assertContains(prompt, "Settle blocked only for a concrete external obstacle")
     assertContains(prompt, "The runtime does not rerun the checks")
     assertContains(prompt, "## Required final output")
     assertFalse(prompt.contains("validated schema gate"))
@@ -461,7 +462,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
       }
       assertContains(
         prompt,
-        "Do not read orchestration/contracts",
+        "schemas, constants, fixtures, or skill instructions cannot replace that reporting contract.",
         false,
         "installed-runtime authority for $phaseId",
       )

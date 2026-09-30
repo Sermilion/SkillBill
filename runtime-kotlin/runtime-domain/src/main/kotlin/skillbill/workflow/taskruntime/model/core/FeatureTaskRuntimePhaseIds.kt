@@ -9,6 +9,7 @@ internal object FeatureTaskRuntimePhaseIds {
   const val REVIEW: String = "review"
   const val BUILD: String = "build"
   const val VERIFY_FINDINGS: String = "verify_findings"
+  const val AUDIT_IMPLEMENT_FIX: String = "audit_implement_fix"
   const val AUDIT: String = "audit"
   const val VALIDATE: String = "validate"
   const val WRITE_HISTORY: String = "write_history"
@@ -21,6 +22,7 @@ internal object FeatureTaskRuntimePhaseIds {
       PLAN,
       IMPLEMENT,
       SIMPLIFY,
+      AUDIT_IMPLEMENT_FIX,
       AUDIT,
       REVIEW,
       VERIFY_FINDINGS,

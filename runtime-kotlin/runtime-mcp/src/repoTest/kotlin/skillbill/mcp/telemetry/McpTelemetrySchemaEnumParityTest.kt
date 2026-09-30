@@ -12,6 +12,7 @@ import skillbill.mcp.core.McpToolRegistry
 import skillbill.testing.repoRootFromTest
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.phase.ProsePhaseOutputSynthesizer
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.verify.FeatureVerifyWorkflowDefinition
 import java.nio.file.Files
@@ -45,18 +46,10 @@ class McpTelemetrySchemaEnumParityTest {
       enumOnBranch(defs, "featureTaskPhaseBlockEvent", "failure_disposition"),
     )
     val settleablePhaseIds =
-      listOf(
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR,
-      )
-    assertEquals(settleablePhaseIds, enumOnBranch(defs, "featureTaskPhaseCompleteEvent", "phase_id"))
-    assertEquals(settleablePhaseIds, enumOnBranch(defs, "featureTaskPhaseBlockEvent", "phase_id"))
+      FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
+        .filter(ProsePhaseOutputSynthesizer::isProsePhase).sorted()
+    assertEquals(settleablePhaseIds, enumOnBranch(defs, "featureTaskPhaseCompleteEvent", "phase_id").sorted())
+    assertEquals(settleablePhaseIds, enumOnBranch(defs, "featureTaskPhaseBlockEvent", "phase_id").sorted())
     assertEquals(
       FeatureVerifyWorkflowDefinition.definition.workflowStatuses.toList().sorted(),
       enumOnBranch(defs, "featureVerifyWorkflowUpdateEvent", "workflow_status").sorted(),

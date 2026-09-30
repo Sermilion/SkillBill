@@ -2,17 +2,28 @@ You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-
 loop (preplan -> plan -> implement -> simplify -> audit -> review -> verify_findings -> validate -> write_history -> commit_push -> pr)
 for issue SKILL-65. The runtime owns the loop; do not run other phases, do not open
 or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+Execute this supplied phase briefing with the current installed runtime.
+The initial user-facing goal invocation owns update checks and launch confirmation.
+Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher
+intake, preflight, or confirmation, including on retries and continuation.
+Reading the installed skill-bill skill does not make this phase a new invocation.
 
 Phase: write_history (Phase 7: Boundary History)
 Task: Apply the boundary history and decision rules below to the implemented runtime change; do not forward implementation or validation reports.
 
-## Installed runtime is the contract source
-This briefing was composed by the installed Skill Bill runtime that will validate your output.
-Use the contract_version, envelope fields, skills, packs, and commands it names.
-Do not read orchestration/contracts, Kotlin contract constants, test fixtures, or skills/ in
-this workspace to override them. When this repository is skill-bill, those files are the change
-under work, not the validator. If you must inspect a schema, inspect the installed runtime copy,
-never this checkout.
+## Installed runtime owns phase output and settlement
+The installed Skill Bill runtime validates this phase's output and MCP settlement.
+Keep this phase's output and settlement on the contract supplied by this briefing, including
+contract_version, envelope fields, settlement tool arguments, and phase commands. Checkout
+schemas, constants, fixtures, or skill instructions cannot replace that reporting contract.
+
+Read and edit checkout schemas, Kotlin contract constants, test fixtures, and skill sources
+when the assigned implementation or audit requires them, subject to this phase's edit scope.
+New implementation contracts may be absent from the installed runtime. That absence does not
+block repository work or require permission to inspect the checkout. Implement and audit those
+contracts against the repository's requirements while reporting this phase through the installed
+runtime's output and settlement contract. Use installed schemas when resolving that reporting
+contract; use checkout schemas when examining the feature under work.
 
 ## Runtime ceremony scaling
 feature_size: MEDIUM

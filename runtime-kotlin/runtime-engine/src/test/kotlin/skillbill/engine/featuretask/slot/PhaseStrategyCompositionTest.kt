@@ -30,6 +30,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.ProsePhaseOutputSynthesizer
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
@@ -75,7 +76,7 @@ class PhaseStrategyCompositionTest {
     )
 
   @Test
-  fun `strategies declare the pre-change step policy table`() {
+  fun `strategies keep audit inspection read only and repairs mutating`() {
     val actual = strategies.flatMap { strategy -> strategy.steps.map { it to strategy.policyFor(it) } }.toMap()
 
     assertEquals(EXPECTED_POLICIES, actual)
@@ -85,7 +86,8 @@ class PhaseStrategyCompositionTest {
   fun `every selectable step without a structured contract settles with the uniform output`() {
     val registry = PhaseStrategyRegistry(strategies)
     val selectable =
-      testPhaseStrategyBindings().values
+      testPhaseStrategyBindings()
+        .values
         .flatMap { bindings -> bindings.flatMap { (slot, binding) -> binding.strategyIds.map { slot to it } } }
         .map { (slot, strategyId) -> registry.strategy(slot, strategyId) }
         .distinct()
@@ -113,7 +115,9 @@ class PhaseStrategyCompositionTest {
       definition: SkeletonDefinition,
       gate: FeatureTaskRuntimeQualityGateSelection,
     ): String? =
-      SkeletonStrategyBindings.bindings.getValue(definition).getValue(PhaseSlot.QUALITY_GATE)
+      SkeletonStrategyBindings.bindings
+        .getValue(definition)
+        .getValue(PhaseSlot.QUALITY_GATE)
         .resolve(PhaseStrategySelectionFacts(definition, setOf(gate)))
 
     assertEquals(
@@ -140,14 +144,15 @@ class PhaseStrategyCompositionTest {
         PHASE_IMPLEMENT to policy(MUTATING, RELAUNCH, FILE_MUTATING).extendingInventory(),
         PHASE_SIMPLIFY to
           policy(MUTATING, RELAUNCH, SINGLE, FILE_MUTATING).extendingInventory(),
-        PHASE_AUDIT to policy(SINGLE, FILE_MUTATING),
+        PHASE_AUDIT to policy(SINGLE, READ_ONLY_IDLE),
+        PHASE_AUDIT_IMPLEMENT_FIX to policy(MUTATING, RELAUNCH, FILE_MUTATING).extendingInventory(),
         PHASE_REVIEW to policy(RELAUNCH, FILE_MUTATING, GENERATION_SCOPED),
         PHASE_VERIFY_FINDINGS to policy(RELAUNCH, READ_ONLY_IDLE, FILE_MUTATING),
         PHASE_IMPLEMENT_FIX to
           policy(MUTATING, RELAUNCH, FILE_MUTATING, GENERATION_SCOPED).extendingInventory(),
         PHASE_BUILD to policy(RELAUNCH, FILE_MUTATING),
         PHASE_VALIDATE to
-          policy(RELAUNCH, FILE_MUTATING).copy(outputGateAttempts = 2).extendingInventory(),
+          policy(SINGLE, FILE_MUTATING).extendingInventory(),
         PHASE_WRITE_HISTORY to policy(FILE_MUTATING).extendingInventory(),
         PHASE_COMMIT_PUSH to policy(FILE_MUTATING),
         PHASE_PR to policy(FILE_MUTATING),

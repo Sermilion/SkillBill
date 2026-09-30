@@ -21,16 +21,28 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class AcceptanceAuditStrategy(override val runner: PhaseRunner) : PhaseStrategyStatusProjection() {
+class AcceptanceAuditStrategy(
+  override val runner: PhaseRunner,
+) : PhaseStrategyStatusProjection() {
   private val policies =
     mapOf(
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to
+        PhaseStepPolicy(
+          mutating = true,
+          relaunchOnInvalidOutput = true,
+          singleAgentSession = false,
+          readOnlyIdle = false,
+          fileMutating = true,
+          generationScoped = false,
+          extendsOwnedInventory = true,
+        ),
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to
         PhaseStepPolicy(
           mutating = false,
           relaunchOnInvalidOutput = false,
           singleAgentSession = true,
-          readOnlyIdle = false,
-          fileMutating = true,
+          readOnlyIdle = true,
+          fileMutating = false,
           generationScoped = false,
         ),
     )
@@ -44,7 +56,11 @@ class AcceptanceAuditStrategy(override val runner: PhaseRunner) : PhaseStrategyS
 
   override fun directiveFor(stepId: String): String {
     policies.policyOf(stepId)
-    return AcceptanceAuditPromptSections.DIRECTIVE
+    return if (stepId == entryStep) {
+      AcceptanceAuditPromptSections.DIRECTIVE
+    } else {
+      AuditImplementFixPromptSections.DIRECTIVE
+    }
   }
 
   override fun promptSections(
@@ -52,7 +68,11 @@ class AcceptanceAuditStrategy(override val runner: PhaseRunner) : PhaseStrategyS
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
   ): PhaseStepPromptSections {
     policies.policyOf(stepId)
-    return AcceptanceAuditPromptSections.sections(inputs)
+    return if (stepId == entryStep) {
+      AcceptanceAuditPromptSections.sections(inputs)
+    } else {
+      AuditImplementFixPromptSections.sections(inputs)
+    }
   }
 
   override fun runStep(
@@ -62,20 +82,26 @@ class AcceptanceAuditStrategy(override val runner: PhaseRunner) : PhaseStrategyS
 
   override fun stepHooks(stepId: String): PhaseStepHooks {
     policies.policyOf(stepId)
-    return AcceptanceAuditRound
+    return if (stepId == entryStep) AcceptanceAuditRound else AuditImplementFixStep
   }
 
   override fun verdictRule(
     stepId: String,
     diagnostics: RuntimeDiagnostics,
-  ): FeatureTaskRuntimeStepVerdictRule {
+  ): FeatureTaskRuntimeStepVerdictRule? {
     policies.policyOf(stepId)
-    return AcceptanceAuditVerdictRule(diagnostics)
+    return if (stepId ==
+      entryStep
+    ) {
+      AcceptanceAuditVerdictRule(diagnostics)
+    } else {
+      super.verdictRule(stepId, diagnostics)
+    }
   }
 
   override fun resumeRules(stepId: String): PhaseResumeRules {
     policies.policyOf(stepId)
-    return AcceptanceAuditResumeRules
+    return if (stepId == entryStep) AcceptanceAuditResumeRules else PhaseResumeRules.None
   }
 
   override val loopRules: PhaseLoopRules = AcceptanceAuditLoopRules

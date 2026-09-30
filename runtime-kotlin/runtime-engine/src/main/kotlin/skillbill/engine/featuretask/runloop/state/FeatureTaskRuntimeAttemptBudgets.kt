@@ -7,11 +7,6 @@ object FeatureTaskRuntimeAttemptBudgets {
   const val MAX_FORMAT_RETRY_ATTEMPTS: Int = MAX_OUTPUT_GATE_RETRY_ATTEMPTS
   const val MAX_PROCESS_FAILURE_ATTEMPTS: Int = 3
 
-  fun validateRemainingUnchangedBlockReason(phaseId: String): String =
-    "Phase '$phaseId' reported the same remaining check " +
-      "failures as the prior repair turn; the leftover set did not shrink, so the run blocks rather than " +
-      "repeating a session that made no progress."
-
   fun processFailureBlockReason(
     phaseId: String,
     policy: PhaseStepPolicy,

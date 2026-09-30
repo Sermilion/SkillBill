@@ -156,8 +156,6 @@ internal object PhaseAttemptSteps {
     val context = FixLoopBranchContext(run, attempt, loop, observability, agentId)
     val phaseAttempts = PhaseAttemptContinuations
     return attempt.settledOutcome ?: when {
-      attempt.auditRetryContinuation -> phaseAttempts.settleAuditRetry(observability, session, context)
-      attempt.validationRemainingDetail != null -> phaseAttempts.settleValidationRemaining(observability, context)
       attempt.incompleteWorkContinuationReason != null ->
         phaseAttempts.settleIncompleteWork(
           request,

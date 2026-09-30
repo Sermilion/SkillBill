@@ -394,7 +394,8 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     recorder: PhaseRunRecords,
     reviewStepId: String,
   ): String? =
-    recorder.loadDeliveredProjections(request.workflowId)
+    recorder
+      .loadDeliveredProjections(request.workflowId)
       ?.get(reviewStepId)
       ?.repositoryCheckpointFingerprint
 
@@ -500,7 +501,8 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
       it.phaseId == run.phaseId &&
         it.loopId == run.reentry?.loopId &&
         it.edgeIteration == run.reentry?.edgeIteration &&
-        it.status == FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE
+        it.status == FeatureTaskRuntimeImplementationAttemptStatus.INCOMPLETE &&
+        it.failureDisposition?.retryOnResume != true
     }
   }
 }

@@ -12,7 +12,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 internal class AcceptanceAuditVerdictRule(
   private val diagnostics: RuntimeDiagnostics,
 ) : FeatureTaskRuntimeStepVerdictRule {
-  private val recordedFallbacks: MutableSet<Map<String, Any?>> = mutableSetOf()
+  private val recordedFallbacks = mutableSetOf<String>()
 
   override fun verdictFor(
     wireVerdict: FeatureTaskRuntimeVerdict?,
@@ -25,25 +25,26 @@ internal class AcceptanceAuditVerdictRule(
       }
       return FeatureTaskRuntimeVerdict.ADVANCE
     }
-    if (wireVerdict == FeatureTaskRuntimeVerdict.SATISFIED) {
-      return FeatureTaskRuntimeVerdict.SATISFIED
-    }
-    if (
-      FeatureTaskRuntimeAuditRemainingAcInterpretation.interpret(auditProseValue(outputObject))
-        is FeatureTaskRuntimeAuditRemainingAcResult.EmptyRemainingList
-    ) {
-      return FeatureTaskRuntimeVerdict.SATISFIED
-    }
-    if (recordedFallbacks.add(outputObject?.toMap().orEmpty())) {
-      val observed =
-        wireVerdict?.let { "Audit verdict '${it.wireValue}' is not an audit verdict word" }
-          ?: "Audit phase output carries no verdict word"
+    if (wireVerdict == FeatureTaskRuntimeVerdict.SATISFIED) return FeatureTaskRuntimeVerdict.SATISFIED
+    val expected =
+      if (FeatureTaskRuntimeAuditRemainingAcInterpretation.interpret(auditProseValue(outputObject)) ==
+        FeatureTaskRuntimeAuditRemainingAcResult.EmptyRemainingList
+      ) {
+        FeatureTaskRuntimeVerdict.SATISFIED
+      } else {
+        FeatureTaskRuntimeVerdict.ADVANCE
+      }
+    if (wireVerdict != null && wireVerdict != expected && recordedFallbacks.add(wireVerdict.wireValue)) {
       diagnostics.warning(
-        "$observed (${FeatureTaskRuntimeVerdict.AUDIT_VERDICTS.joinToString { it.wireValue }}); it settles to " +
-          "'${UNKNOWN_WORD_DEFAULT.wireValue}'.",
+        "Audit verdict '${wireVerdict.wireValue}' conflicts with its remaining criteria; " +
+          "using '${expected.wireValue}'.",
       )
     }
-    return UNKNOWN_WORD_DEFAULT
+    return when (FeatureTaskRuntimeAuditRemainingAcInterpretation.interpret(auditProseValue(outputObject))) {
+      FeatureTaskRuntimeAuditRemainingAcResult.EmptyRemainingList -> FeatureTaskRuntimeVerdict.SATISFIED
+      is FeatureTaskRuntimeAuditRemainingAcResult.RemainingCriteriaText -> FeatureTaskRuntimeVerdict.ADVANCE
+      else -> UNKNOWN_WORD_DEFAULT
+    }
   }
 
   companion object {
@@ -53,7 +54,7 @@ internal class AcceptanceAuditVerdictRule(
       val wire = (outputMap[SharedPayloadKeys.VERDICT] as? String)?.trim()
       if (wire == FeatureTaskRuntimeVerdict.GAPS_FOUND.wireValue) {
         return "Feature-task-runtime verdict '${FeatureTaskRuntimeVerdict.GAPS_FOUND.wireValue}' is removed " +
-          "(audit phase output); repair gaps in this session and emit satisfied."
+          "(audit phase output); report remaining criteria without repairing them."
       }
       return null
     }

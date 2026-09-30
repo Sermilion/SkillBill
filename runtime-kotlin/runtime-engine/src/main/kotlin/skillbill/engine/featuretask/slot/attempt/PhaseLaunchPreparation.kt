@@ -40,7 +40,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHando
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseHandoff
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionFailureClassification
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 object PhaseLaunchPreparation {
   internal fun prepareLaunchForCapture(
@@ -408,10 +407,6 @@ object PhaseLaunchPreparation {
             )
           } else {
             null
-          },
-        auditRetryFocusHint =
-          session.auditRetryFocusHint?.takeIf {
-            run.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
           },
         mutating = run.policy.mutating,
         singleAgentSession = run.policy.singleAgentSession,

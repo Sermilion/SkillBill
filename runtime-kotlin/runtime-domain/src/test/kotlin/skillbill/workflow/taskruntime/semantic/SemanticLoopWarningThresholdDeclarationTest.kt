@@ -22,19 +22,17 @@ class SemanticLoopWarningThresholdDeclarationTest {
   }
 
   @Test
-  fun `no backward edge declares a warning threshold`() {
-    transitions.backwardEdges.forEach { edge ->
-      assertNull(
-        edge.warnAfterIterations,
-        "'${edge.loopId}' must not attach a threshold warning.",
-      )
-    }
+  fun `unbounded audit repair warns after three rounds`() {
+    val audit = transitions.backwardEdges.single { it.loopId == def.AUDIT_REPAIR_LOOP_ID }
+    assertEquals(3, audit.warnAfterIterations)
+    assertNull(audit.perEdgeCap)
   }
 
   @Test
   fun `the declared threshold is control-flow inert across every iteration`() {
     val cases =
       listOf(
+        def.PHASE_AUDIT to FeatureTaskRuntimeVerdict.ADVANCE,
         def.PHASE_VERIFY_FINDINGS to FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED,
       )
     cases.forEach { (phaseId, verdict) ->

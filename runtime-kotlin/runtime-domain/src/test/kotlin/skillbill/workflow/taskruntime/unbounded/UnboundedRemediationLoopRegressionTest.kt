@@ -58,15 +58,17 @@ class UnboundedRemediationLoopRegressionTest {
   }
 
   @Test
-  fun `review_fix is the only semantic remediation backward edge`() {
-    assertEquals(
-      setOf(def.REVIEW_FIX_LOOP_ID),
-      transitions.backwardEdges.map { it.loopId }.toSet(),
-    )
-    assertEquals(
-      1,
-      transitions.backwardEdges.single { it.loopId == def.REVIEW_FIX_LOOP_ID }.perEdgeCap,
-    )
+  fun `audit repair remains available until audit progress guard blocks`() {
+    val edge = transitions.backwardEdges.single { it.loopId == def.AUDIT_REPAIR_LOOP_ID }
+    assertEquals(null, edge.perEdgeCap)
+    val next =
+      transition(
+        def.PHASE_AUDIT,
+        FeatureTaskRuntimeVerdict.ADVANCE,
+        iteration = 1,
+      )
+    assertIs<FeatureTaskRuntimeNextPhase.Next>(next)
+    assertEquals(def.PHASE_AUDIT_IMPLEMENT_FIX, next.phaseId)
   }
 
   @Test

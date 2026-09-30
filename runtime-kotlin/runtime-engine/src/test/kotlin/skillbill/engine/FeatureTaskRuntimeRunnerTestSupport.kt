@@ -230,7 +230,7 @@ internal const val VALID_REVIEW_OUTPUT = """{"contract_version":"0.3","produced_
 internal const val VALID_AUDIT_OUTPUT =
   """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"audit",""" +
     """"status":"completed","summary":"Audit satisfied.","verdict":"satisfied",""" +
-    """"produced_outputs":{"value":"{\"gaps\":[],\"non_blocking_findings\":[]}"}}"""
+    """"produced_outputs":{"value":"[]"}}"""
 
 internal val VALID_VERIFY_FINDINGS_OUTPUT = verifyFindingsOutput()
 internal val PREPLAN_OUTPUT = seededProjectionEnvelope("preplan", PlanningProjectionFixtures.PREPLAN_DIGEST)

@@ -16,6 +16,11 @@ Non-negotiable contracts:
 - Missing manifests, wrong contract versions, missing content, and missing required sections fail loudly with typed errors.
 - Every fallback, degradation, or swallowed failure emits a record; see `docs/observability-policy.md`.
 
+## Active Fix Branch
+
+Until `base/SKILL-380-phase-slot-strategies` is merged, make all fixes on that
+branch. Use its worktree when a feature branch has implementation work in progress.
+
 ## Product Intent
 
 `/skill-bill` is the only listed skill. Its full-run form (`/skill-bill <intake>`) presents one confirmation gate, then delegates to the foreground runtime driver with durable state, telemetry, packs, add-ons, and native subagents. Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name>` forms run `skill-bill operation <name>`, relaying one operator confirmation. `skill-bill goal status` stays CLI-only; no skill wraps it.

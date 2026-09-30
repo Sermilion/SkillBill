@@ -17,6 +17,7 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
   const val PHASE_REVIEW: String = FeatureTaskRuntimePhaseIds.REVIEW
   const val PHASE_BUILD: String = FeatureTaskRuntimePhaseIds.BUILD
   const val PHASE_VERIFY_FINDINGS: String = FeatureTaskRuntimePhaseIds.VERIFY_FINDINGS
+  const val PHASE_AUDIT_IMPLEMENT_FIX: String = FeatureTaskRuntimePhaseIds.AUDIT_IMPLEMENT_FIX
   const val PHASE_AUDIT: String = FeatureTaskRuntimePhaseIds.AUDIT
   const val PHASE_VALIDATE: String = FeatureTaskRuntimePhaseIds.VALIDATE
   const val PHASE_WRITE_HISTORY: String = FeatureTaskRuntimePhaseIds.WRITE_HISTORY
@@ -29,6 +30,8 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
   const val DERIVED_CONTEXT_PR_BRANCH_DIFF: String = "pr_branch_diff"
 
   const val REVIEW_FIX_LOOP_ID: String = "review_fix"
+
+  const val AUDIT_REPAIR_LOOP_ID: String = "audit_repair"
 
   const val AUDIT_GAP_LOOP_ID: String = "audit_gap"
 

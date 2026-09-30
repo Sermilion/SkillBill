@@ -9,7 +9,6 @@ import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunTermination
-import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
@@ -70,54 +69,11 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
     val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
 
     assertEquals("validate", report.lastIncompletePhase)
-    assertEquals(2, harness.launchedPromptPhaseOrder().count { it == "validate" })
+    assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "validate" })
     assertFalse("write_history" in harness.launchedPromptPhaseOrder())
     val records = harness.recorder.loadPhaseRecords(WORKFLOW_ID).orEmpty()
     assertEquals(WorkflowStepStatus.BLOCKED, records["validate"]?.status)
     assertNull(records["commit_push"])
-  }
-
-  @Test
-  fun `a no_progress verdict blocks validate after one session`() {
-    val remaining = "detekt failed on LongMethod in RankingService."
-    val harness = validationHarness(blockedValidateOutput(remaining, "no_progress"))
-
-    val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
-
-    assertEquals("validate", report.lastIncompletePhase)
-    assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "validate" })
-    assertFalse("write_history" in harness.launchedPromptPhaseOrder())
-    assertContains(report.blockedReason, "leftover set did not shrink")
-  }
-
-  @Test
-  fun `an absent or unknown verdict counts as no_progress and records a diagnostic`() {
-    listOf(null to "no verdict", "shrinking" to "unknown verdict 'shrinking'").forEach { (verdict, detail) ->
-      val diagnostics = RecordingValidateDiagnostics()
-      val output = blockedValidateOutput("WidgetTest failed.", verdict)
-      val harness = validationHarness(diagnostics = diagnostics) { facts(output) }
-
-      val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
-
-      assertEquals("validate", report.lastIncompletePhase)
-      assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "validate" }, "verdict $verdict")
-      assertContains(report.blockedReason, "leftover set did not shrink")
-      assertEquals(
-        WorkflowStepStatus.BLOCKED,
-        harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("validate")?.status,
-      )
-      assertEquals(1, diagnostics.warnings.count { detail in it && "counted as no_progress" in it }, "$verdict")
-    }
-  }
-
-  @Test
-  fun `a no_progress verdict records no diagnostic`() {
-    val diagnostics = RecordingValidateDiagnostics()
-    val output = blockedValidateOutput("WidgetTest failed.", "no_progress")
-    val harness = validationHarness(diagnostics = diagnostics) { facts(output) }
-
-    assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
-    assertFalse(diagnostics.warnings.any { "counted as no_progress" in it })
   }
 
   @Test
@@ -138,44 +94,24 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
   }
 
   @Test
-  fun `a progress verdict reruns the phase and a later completed result advances`() {
-    val harness =
-      validationHarness { attempt ->
-        facts(
-          if (attempt == 1) {
-            blockedValidateOutput("WidgetTest failed: expected 2 but got 3.", "progress")
-          } else {
-            validJsonOutput("validate")
-          },
-        )
-      }
+  fun `legacy partial validation reports retain failures without launching a salvage session`() {
+    val remaining = "WidgetTest failed: expected 2 but got 3."
+    listOf("progress", "no_progress", null, "shrinking").forEach { verdict ->
+      val harness =
+        validationHarness { attempt ->
+          facts(if (attempt == 1) blockedValidateOutput(remaining, verdict) else validJsonOutput("validate"))
+        }
 
-    val report = harness.runner.run(harness.request())
-    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
-    assertEquals(2, harness.launchedPromptPhaseOrder().count { it == "validate" })
-    assertEquals(2, harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("validate")?.attemptCount)
-    val validationPrompts =
-      harness.launcher.requests.mapNotNull { it.skillRunRequest.promptOverride }
-        .filter { phaseIdFromPrompt(it) == "validate" }
-    assertContains(validationPrompts.last(), "WidgetTest failed: expected 2 but got 3.")
-  }
+      val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
 
-  @Test
-  fun `two progress verdicts then a completed result still advance`() {
-    val harness =
-      validationHarness { attempt ->
-        facts(
-          when (attempt) {
-            1 -> blockedValidateOutput("detekt failed on LongMethod A and LongMethod B.", "progress")
-            2 -> blockedValidateOutput("detekt failed on LongMethod B.", "progress")
-            else -> validJsonOutput("validate")
-          },
-        )
-      }
-
-    val report = harness.runner.run(harness.request())
-    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
-    assertEquals(3, harness.launchedPromptPhaseOrder().count { it == "validate" })
+      assertEquals("validate", report.lastIncompletePhase)
+      assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "validate" })
+      assertFalse("write_history" in harness.launchedPromptPhaseOrder())
+      val record = assertNotNull(harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("validate"))
+      assertEquals(WorkflowStepStatus.BLOCKED, record.status)
+      assertContains(assertNotNull(record.outputArtifact), remaining)
+      assertFalse(report.blockedReason.contains("leftover set did not shrink"))
+    }
   }
 
   @Test
@@ -228,13 +164,11 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
 
   private fun validationHarness(
     hasRuntimePack: Boolean = true,
-    diagnostics: RuntimeDiagnostics? = null,
     outcome: (Int) -> AgentRunLaunchOutcome,
   ): RunnerHarness {
     var validationAttempts = 0
     return runnerHarness(
       RuntimeHarnessConfig(
-        diagnostics = diagnostics,
         validationGatePlatformManifests = if (hasRuntimePack) listOf(kotlinPackWithValidationGate()) else emptyList(),
         validationGateRunner =
           object : ValidationGateRunner {
@@ -253,20 +187,4 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
       ),
     )
   }
-}
-
-private class RecordingValidateDiagnostics : RuntimeDiagnostics {
-  val warnings = mutableListOf<String>()
-
-  override fun warning(
-    message: String,
-    error: Throwable?,
-  ) {
-    warnings += message
-  }
-
-  override fun error(
-    message: String,
-    error: Throwable?,
-  ) = Unit
 }

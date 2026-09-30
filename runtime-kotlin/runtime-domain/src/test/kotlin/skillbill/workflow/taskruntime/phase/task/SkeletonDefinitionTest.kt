@@ -22,6 +22,7 @@ class SkeletonDefinitionTest {
       "plan",
       "implement",
       "simplify",
+      "audit_implement_fix",
       "audit",
       "review",
       "verify_findings",
@@ -47,6 +48,14 @@ class SkeletonDefinitionTest {
       backwardEdges =
         listOf(
           FeatureTaskRuntimeBackwardEdge(
+            "audit",
+            FeatureTaskRuntimeVerdict.ADVANCE,
+            "audit_implement_fix",
+            "audit_repair",
+            perEdgeCap = null,
+            warnAfterIterations = 3,
+          ),
+          FeatureTaskRuntimeBackwardEdge(
             fromPhaseId = "verify_findings",
             triggeringVerdict = FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED,
             destinationPhaseId = "implement_fix",
@@ -56,7 +65,7 @@ class SkeletonDefinitionTest {
             capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
           ),
         ),
-      loopOnlyPhaseIds = setOf("implement_fix", "build"),
+      loopOnlyPhaseIds = setOf("audit_implement_fix", "implement_fix", "build"),
       loopOnlySuccessors = emptyMap(),
     )
 
@@ -98,7 +107,12 @@ class SkeletonDefinitionTest {
     val declaration = SkeletonDefinition.REVIEW.declaration()
 
     assertEquals(listOf("review", "verify_findings", "implement_fix"), declaration.forwardPhaseIds)
-    assertEquals(todaysDeclaration(goalChildForward).backwardEdges, declaration.backwardEdges)
+    assertEquals(
+      todaysDeclaration(goalChildForward).backwardEdges.filter {
+        it.loopId == "review_fix"
+      },
+      declaration.backwardEdges,
+    )
     assertEquals(
       listOf(
         FeatureTaskRuntimePhaseEntryGate(
@@ -140,7 +154,13 @@ class SkeletonDefinitionTest {
         entryStepIds = setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD),
       )
 
-    assertEquals(setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX), traversal.loopOnlyPhaseIds)
+    assertEquals(
+      setOf(
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
+      ),
+      traversal.loopOnlyPhaseIds,
+    )
     assertEquals(
       listOf(
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,

@@ -599,8 +599,6 @@ object PhaseOutputGate {
     when (check) {
       is PhaseStepOutputCheck.Reject -> reject(check.rule, check.reason)
       is PhaseStepOutputCheck.Redeliver -> AttemptResult.boundaryBodyDelivery(check.reason, capture.fileManifest)
-      is PhaseStepOutputCheck.ContinueRepair ->
-        AttemptResult.validationRemaining(check.previousValue, capture.fileManifest)
       is PhaseStepOutputCheck.Block ->
         AttemptResult.settled(
           FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
@@ -735,7 +733,12 @@ object PhaseOutputGate {
         args.capture,
         args.reject,
       )
-      ?: stepHooks(run).settleCompletedRound(this, args.capture, args.attested.envelopeWireMap())
+      ?: stepHooks(run).settleCompletedRound(
+        this,
+        args.capture,
+        args.attested,
+        args.attested.envelopeWireMap(),
+      )
       ?: finalizeValidatedOutputAcceptance(
         FinalizeValidatedOutputAcceptanceArgs(
           capture = args.capture,

@@ -4,8 +4,12 @@ import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheck
 import skillbill.engine.featuretask.slot.PhaseForwardCheckpoint
 import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal object AcceptanceAuditLoopRules : PhaseLoopRules {
+  override fun resumesInFlightReentry(loopId: String): Boolean =
+    loopId == FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_REPAIR_LOOP_ID
+
   private val auditedImplementation =
     PhaseForwardCheckpoint(
       intent = FeatureTaskRuntimeCheckpointMessage.INTENT_AUDITED_IMPLEMENTATION,

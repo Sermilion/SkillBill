@@ -243,7 +243,7 @@ $defs:
     if:
       properties:
         phase_id:
-          enum: [preplan, plan, implement, simplify, audit, validate, write_history, pr]
+          enum: [preplan, plan, implement, simplify, audit, audit_implement_fix, validate, write_history, pr]
       required: [phase_id]
     then:
       properties:
@@ -325,8 +325,9 @@ properties:
       `review` the values are `approved` (no unresolved advance-blocking findings)
       or `changes_requested` (one or more unresolved Blocker or Major findings
       present). A uniform step may settle with a verdict too, for example a
-      blocked `validate` with `progress` or `no_progress`, or a completed `audit`
-      with `satisfied`. The schema does not interpret the word for uniform steps.
+      completed `audit` with `satisfied`. Historical blocked `validate` outputs
+      may carry `progress` or `no_progress`; those words do not start another
+      validation session. The schema does not interpret the word for uniform steps.
       Either absent (not set) or a non-empty string; `null` is not a valid value.
     type: string
     minLength: 1

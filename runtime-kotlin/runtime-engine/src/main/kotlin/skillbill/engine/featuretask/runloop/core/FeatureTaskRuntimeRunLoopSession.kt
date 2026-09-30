@@ -24,7 +24,6 @@ internal class FeatureTaskRuntimeRunLoopSession(
   private var pendingReentryStorage: PendingReentry? = initialPendingReentry
   private var activeReentryStorage: PendingReentry? = initialPendingReentry
   private var recordRejectionSettlementPendingStorage: Boolean = false
-  private var auditRetryFocusHintStorage: String? = null
 
   internal fun recordPhaseContentIdentities(
     phaseId: String,
@@ -53,9 +52,6 @@ internal class FeatureTaskRuntimeRunLoopSession(
 
   internal val recordRejectionSettlementPending: Boolean
     get() = recordRejectionSettlementPendingStorage
-
-  internal val auditRetryFocusHint: String?
-    get() = auditRetryFocusHintStorage
 
   internal val blocked: FeatureTaskRuntimeRunReport.Blocked?
     get() = (terminalOutcome as? FeatureTaskRuntimeRunLoopTerminalOutcome.Blocked)?.report
@@ -118,9 +114,5 @@ internal class FeatureTaskRuntimeRunLoopSession(
 
   internal fun clearRecordRejectionSettlementPending() {
     recordRejectionSettlementPendingStorage = false
-  }
-
-  internal fun transitionAuditRetryFocusHint(hint: String?) {
-    auditRetryFocusHintStorage = hint
   }
 }

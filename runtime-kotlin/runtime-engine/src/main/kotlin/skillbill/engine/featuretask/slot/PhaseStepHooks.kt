@@ -84,6 +84,7 @@ internal interface PhaseStepHooks : PhaseStepLaunchHooks {
   fun settleCompletedRound(
     context: PhaseAttemptEnvironment,
     capture: ValidatedOutputCapture,
+    attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): AttemptResult? = null
 
@@ -187,9 +188,6 @@ internal sealed interface PhaseStepOutputCheck {
     val reason: String,
     val disposition: FeatureTaskRuntimeFailureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
   ) : PhaseStepOutputCheck
-
-  /** The step keeps repairing in its session; [previousValue] is handed to the next attempt. */
-  data class ContinueRepair(val previousValue: String) : PhaseStepOutputCheck
 
   companion object {
     const val OUTPUT_VERIFICATION_RULE = "output-verification"

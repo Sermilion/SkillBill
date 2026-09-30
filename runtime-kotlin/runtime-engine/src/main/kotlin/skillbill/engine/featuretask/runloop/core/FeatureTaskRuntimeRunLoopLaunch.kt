@@ -37,7 +37,9 @@ object FeatureTaskRuntimeRunLoopLaunch {
 }
 
 internal sealed interface AttemptResult {
-  data class Settled(val outcome: PhaseOutcome) : AttemptResult
+  data class Settled(
+    val outcome: PhaseOutcome,
+  ) : AttemptResult
 
   data class SchemaInvalid(
     val operatorReason: String,
@@ -60,20 +62,11 @@ internal sealed interface AttemptResult {
     val retryReason: String,
     override val fileManifest: FeatureTaskRuntimePhaseFileManifest,
     val failureDisposition: FeatureTaskRuntimeFailureDisposition,
+    val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput? = null,
   ) : AttemptResult
 
   data class BoundaryBodyDelivery(
     val continuationReason: String,
-    override val fileManifest: FeatureTaskRuntimePhaseFileManifest,
-  ) : AttemptResult
-
-  data class AuditRetry(
-    val focusHint: String,
-    override val fileManifest: FeatureTaskRuntimePhaseFileManifest,
-  ) : AttemptResult
-
-  data class ValidationRemaining(
-    val remainingDetail: String,
     override val fileManifest: FeatureTaskRuntimePhaseFileManifest,
   ) : AttemptResult
 
@@ -88,8 +81,6 @@ internal sealed interface AttemptResult {
         is IncompleteWork -> fileManifest
         is RetryableTerminal -> fileManifest
         is BoundaryBodyDelivery -> fileManifest
-        is AuditRetry -> fileManifest
-        is ValidationRemaining -> fileManifest
       }
   val rejectedOutput: String? get() = (this as? SchemaInvalid)?.rejectedOutput
   val malformedOutput: Boolean get() = (this as? SchemaInvalid)?.malformedOutput == true
@@ -104,8 +95,6 @@ internal sealed interface AttemptResult {
         is IncompleteWork -> operatorReason
         is RetryableTerminal -> operatorReason
         is BoundaryBodyDelivery -> null
-        is AuditRetry -> null
-        is ValidationRemaining -> remainingDetail
       }
 
   val semanticRetryReason: String?
@@ -116,8 +105,6 @@ internal sealed interface AttemptResult {
         is IncompleteWork -> null
         is RetryableTerminal -> null
         is BoundaryBodyDelivery -> null
-        is AuditRetry -> null
-        is ValidationRemaining -> remainingDetail
       }
 
   val retryableTerminalRetryReason: String? get() = (this as? RetryableTerminal)?.retryReason
@@ -125,17 +112,14 @@ internal sealed interface AttemptResult {
   val retryableTerminalDisposition: FeatureTaskRuntimeFailureDisposition?
     get() = (this as? RetryableTerminal)?.failureDisposition
 
+  val retryableTerminalOutput: NormalizedFeatureTaskRuntimePhaseOutput?
+    get() = (this as? RetryableTerminal)?.normalizedOutput
+
   val incompleteWorkContinuationReason: String? get() = (this as? IncompleteWork)?.continuationReason
   val incompleteWorkOutput: NormalizedFeatureTaskRuntimePhaseOutput?
     get() = (this as? IncompleteWork)?.normalizedOutput
   val boundaryBodyDeliveryContinuationReason: String?
     get() = (this as? BoundaryBodyDelivery)?.continuationReason
-
-  val auditRetryFocusHint: String? get() = (this as? AuditRetry)?.focusHint
-
-  val auditRetryContinuation: Boolean get() = this is AuditRetry
-
-  val validationRemainingDetail: String? get() = (this as? ValidationRemaining)?.remainingDetail
 
   companion object {
     fun settled(outcome: PhaseOutcome): AttemptResult = Settled(outcome)
@@ -152,21 +136,13 @@ internal sealed interface AttemptResult {
       normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
     ): AttemptResult = IncompleteWork(operatorReason, continuationReason, fileManifest, normalizedOutput)
 
-    fun auditRetry(
-      focusHint: String,
-      fileManifest: FeatureTaskRuntimePhaseFileManifest,
-    ): AttemptResult = AuditRetry(focusHint, fileManifest)
-
-    fun validationRemaining(
-      remainingDetail: String,
-      fileManifest: FeatureTaskRuntimePhaseFileManifest,
-    ): AttemptResult = ValidationRemaining(remainingDetail, fileManifest)
-
     fun retryableTerminal(
       operatorReason: String,
       fileManifest: FeatureTaskRuntimePhaseFileManifest,
       failureDisposition: FeatureTaskRuntimeFailureDisposition,
-    ): AttemptResult = RetryableTerminal(operatorReason, operatorReason, fileManifest, failureDisposition)
+      normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput? = null,
+    ): AttemptResult =
+      RetryableTerminal(operatorReason, operatorReason, fileManifest, failureDisposition, normalizedOutput)
 
     fun schemaInvalid(
       operatorReason: String,
@@ -187,13 +163,21 @@ internal sealed interface AttemptResult {
 }
 
 internal sealed interface PhaseOutcome {
-  data class Completed(val output: FeatureTaskRuntimePhaseOutput) : PhaseOutcome
+  data class Completed(
+    val output: FeatureTaskRuntimePhaseOutput,
+  ) : PhaseOutcome
 
-  data class Blocked(val reason: String) : PhaseOutcome
+  data class Blocked(
+    val reason: String,
+  ) : PhaseOutcome
 
-  data class Paused(val reason: String) : PhaseOutcome
+  data class Paused(
+    val reason: String,
+  ) : PhaseOutcome
 
-  data class RegenerateProducer(val producerPhaseId: String) : PhaseOutcome
+  data class RegenerateProducer(
+    val producerPhaseId: String,
+  ) : PhaseOutcome
 
   val completedOutput: FeatureTaskRuntimePhaseOutput? get() = (this as? Completed)?.output
 

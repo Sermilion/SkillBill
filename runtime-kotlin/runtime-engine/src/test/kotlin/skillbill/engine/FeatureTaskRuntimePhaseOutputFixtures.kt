@@ -187,7 +187,9 @@ private val STATIC_PRODUCED_OUTPUTS: Map<String, String> =
     "simplify" to PlanningProjectionFixtures.SIMPLIFY_PROSE,
     "implement_fix" to implementFixProducedOutputs(),
     "review" to """{"findings": []}""",
-    "audit" to """{"value": "{\"gaps\":[],\"non_blocking_findings\":[]}"}""",
+    "audit_implement_fix" to
+      """{"value": "Repaired the reported audit criteria.\naudit_repair_complete: true"}""",
+    "audit" to """{"value": "[]"}""",
     "verify_findings" to """{"finding_dispositions": []}""",
     "pr" to """{"value": "Opened the pull request for the branch."}""",
   )

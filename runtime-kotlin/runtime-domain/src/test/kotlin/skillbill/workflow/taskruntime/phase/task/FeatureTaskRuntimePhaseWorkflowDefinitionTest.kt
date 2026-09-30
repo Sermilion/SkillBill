@@ -122,6 +122,7 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS,
@@ -140,7 +141,8 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to "Phase 2: Plan",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to "Phase 3: Implement",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to "Phase 3b: Simplify",
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to "Phase 4: Completeness Audit",
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to "Phase 4a: Completeness Audit",
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to "Phase 4b: Implement Fix",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW to "Phase 5: Code Review",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS to "Phase 5a: Verify Findings",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX to "Phase 5b: Implement Fix",
@@ -181,7 +183,10 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
   fun `implement_fix is reached only by the bounded review_fix edge`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     val transitions = def.transitions
-    assertEquals(setOf(def.PHASE_IMPLEMENT_FIX, def.PHASE_BUILD), transitions.loopOnlyPhaseIds)
+    assertEquals(
+      setOf(def.PHASE_AUDIT_IMPLEMENT_FIX, def.PHASE_IMPLEMENT_FIX, def.PHASE_BUILD),
+      transitions.loopOnlyPhaseIds,
+    )
     assertEquals(emptyMap(), transitions.loopOnlySuccessors)
     val edge = transitions.backwardEdges.single { it.loopId == def.REVIEW_FIX_LOOP_ID }
     assertEquals(def.PHASE_VERIFY_FINDINGS, edge.fromPhaseId)
@@ -210,14 +215,6 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
   }
 
   @Test
-  fun `audit has no backward edge and only review_fix remains`() {
-    val def = FeatureTaskRuntimePhaseWorkflowDefinition
-    val transitions = def.transitions
-    assertEquals(1, transitions.backwardEdges.size)
-    assertTrue(transitions.backwardEdges.none { it.loopId == def.AUDIT_GAP_LOOP_ID })
-  }
-
-  @Test
   fun `phase projections omit audit completion dependencies and pr owns its diff key`() {
     val declarations = FeatureTaskRuntimePhaseWorkflowDefinition.phaseDeclarations
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
@@ -232,7 +229,10 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
             )
           else -> declarations.getValue(phaseId)
         }
-      val projectedDependencies = phaseWorkflowDependenciesOf(phaseId).filterNot { it == def.PHASE_AUDIT }
+      val projectedDependencies =
+        phaseWorkflowDependenciesOf(phaseId).filterNot {
+          it == def.PHASE_AUDIT && phaseId != def.PHASE_AUDIT_IMPLEMENT_FIX
+        }
       assertEquals(projectedDependencies, declaration.consumedUpstreamPhaseIds, phaseId)
     }
     assertEquals(

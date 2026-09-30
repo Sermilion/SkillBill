@@ -24,9 +24,11 @@ internal fun runtimeOwnedValidateAgentPhaseTask(): String {
     "also declares them. Do not recursively invoke `skill-bill phase validation`. " +
     "Keep repairing in this same session until every required project check passes. Do not spawn delegated " +
     "subagents. Settle completed only when every required check passes, with the checks run as the value. " +
-    "When checks still fail, settle blocked with the remaining failure details as the value and verdict " +
-    "progress when that remaining-failure set shrank against the previous attempt, or no_progress when it " +
-    "did not. The runtime continues on progress and blocks on no_progress. Wall-clock timeout still stops " +
+    "Test failures, static-analysis findings, formatting failures, and outdated fixtures are repair work. " +
+    "Do not stop after reducing the failure count or return a partial progress report. Keep fixing and " +
+    "rerunning the required checks in this session until they all pass. " +
+    "Settle blocked only for a concrete external obstacle you cannot resolve, and describe the obstacle, " +
+    "the required operator action, and any remaining failures in the value. Wall-clock timeout still stops " +
     "the subtask. The runtime does not rerun the checks itself. Never silence findings with annotations, " +
     "baselines, disabled rules, weakened configuration, or skipped tests; fix root causes instead."
 }
@@ -146,8 +148,9 @@ internal fun buildGateFindingsDirective(
 
 internal const val VALIDATE_VALUE_CONTENT: String =
   "Settle completed only when every required project check passed, with a non-blank value of checks run.\n" +
-    "When checks still fail, settle blocked with the remaining failures as the value and verdict\n" +
-    "progress when they shrank against the previous attempt, or no_progress when they did not.\n" +
+    "Fix every check failure in this session before returning a final result.\n" +
+    "Do not return a partial progress report. " +
+    "Settle blocked only for an external obstacle requiring operator action.\n" +
     "Do not emit validation_evidence, validation_result, gate_run_count, or gate_runs.\n" +
     "Never introduce suppressions, baselines, disabled rules, or skipped tests to silence findings."
 

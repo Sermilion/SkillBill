@@ -4,7 +4,6 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdgeCapScope
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCapExhaustionBehavior
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseEntryGate
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePlanningProjectionContract
@@ -195,19 +194,6 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionProjectionTest {
   }
 
   @Test
-  fun `all backward edges declare PER_SUBTASK capScope explicitly`() {
-    val edges = FeatureTaskRuntimePhaseWorkflowDefinition.transitions.backwardEdges
-    assertEquals(1, edges.size, "expected exactly one declared backward edge: ${edges.map { it.loopId }}")
-    edges.forEach { edge ->
-      assertEquals(
-        FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
-        edge.capScope,
-        "backward edge '${edge.loopId}' must explicitly declare PER_SUBTASK capScope",
-      )
-    }
-  }
-
-  @Test
   fun `review and audit both declare the shared review evidence projection`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     listOf(def.PHASE_REVIEW, def.PHASE_AUDIT).forEach { phaseId ->
@@ -280,6 +266,7 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionProjectionTest {
     val semantic = transitions.backwardEdges.filterNot { def.isRegenerationLoopId(it.loopId) }
     assertEquals(
       listOf(
+        Triple(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.ADVANCE, def.PHASE_AUDIT_IMPLEMENT_FIX),
         Triple(def.PHASE_VERIFY_FINDINGS, FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED, def.PHASE_IMPLEMENT_FIX),
       ),
       semantic.map { Triple(it.fromPhaseId, it.triggeringVerdict, it.destinationPhaseId) },

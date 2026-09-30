@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phase.briefing
 
-import skillbill.workflow.taskruntime.model.audit.canonicalAcceptanceCriterionRef
+import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
+import skillbill.workflow.taskruntime.model.audit.acceptanceCriterionIdentity
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseHandoff
@@ -75,17 +76,15 @@ fun StringBuilder.appendAllowlistedRunInvariants(
   }
 }
 
-private val EXISTING_ACCEPTANCE_CRITERION_PREFIX = Regex("^AC-[0-9]+[.: ]")
-
 fun StringBuilder.appendAcceptanceCriteria(handoff: FeatureTaskRuntimePhaseHandoff) {
   appendLine("acceptance_criteria:")
   handoff.runInvariants.acceptanceCriteria.forEachIndexed { index, criterion ->
     val identified =
-      if (EXISTING_ACCEPTANCE_CRITERION_PREFIX.containsMatchIn(criterion)) {
-        criterion
-      } else {
-        "${canonicalAcceptanceCriterionRef(index + 1)}. $criterion"
-      }
+      acceptanceCriterionIdentity(criterion, index + 1)?.identifiedText(criterion)
+        ?: throw InvalidFeatureTaskRuntimePhaseHandoffSchemaError(
+          "acceptance_criteria",
+          "Invalid criterion identity at ordinal ${index + 1}.",
+        )
     appendLine("  $identified")
   }
 }

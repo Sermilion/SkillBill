@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.runloop.output
 
 import skillbill.application.decomposition.baseBranch
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.checkpoint.goalScopedBaselinePaths
 import skillbill.engine.featuretask.lifecycle.continuation.matches
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
@@ -91,10 +92,11 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         args.normalizedOutput.envelopeWireMap(),
         phaseGates.planningProjectionValidator,
       )?.let { "producer-projection" to it }
-        ?: FeatureTaskRuntimeRunLoopOutputVerification.immediateConsumerProjectionGateReason(
-          context = context,
-          args = args,
-        )?.let { "consumer-projection" to it }
+        ?: FeatureTaskRuntimeRunLoopOutputVerification
+          .immediateConsumerProjectionGateReason(
+            context = context,
+            args = args,
+          )?.let { "consumer-projection" to it }
     }
 
   internal fun firstValidatedOutputRejection(
@@ -140,7 +142,10 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       val outputs = state.outputs().filterNot { it.phaseId == run.phaseId } + currentOutput
       val resolvedFingerprint =
         repositoryFingerprint?.takeIf(String::isNotBlank)
-          ?: phaseGates.gitOperations.repositoryFingerprint(run.request.repoRoot).value.takeIf(String::isNotBlank)
+          ?: phaseGates.gitOperations
+            .repositoryFingerprint(run.request.repoRoot)
+            .value
+            .takeIf(String::isNotBlank)
       val checkpoint =
         resolvedFingerprint
           ?.let(::FeatureTaskRuntimeRepositoryCheckpoint)
@@ -154,7 +159,8 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
             expectedRepositoryCheckpoint = checkpoint,
             branchIdentity = session.resolvedBranch,
             baseBranch =
-              recorder.loadResolvedBranch(run.request.workflowId)
+              recorder
+                .loadResolvedBranch(run.request.workflowId)
                 ?.baseBranch
                 ?: "main",
           ),
@@ -217,12 +223,19 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     val repairEvidence = args.repairEvidence
     val observability = args.observability
     val fileManifest = args.fileManifest
-    val disposition = FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(outputMap, blockedDisposition)
+    val disposition =
+      FeatureTaskRuntimePhaseSafetyPolicy.dispositionForTerminalOutput(
+        outputMap,
+        blockedDisposition,
+      )
     return if (
       disposition.retryOnResume &&
       run.policy.relaunchOnInvalidOutput
     ) {
-      AttemptResult.retryableTerminal(reason, fileManifest, disposition)
+      val producedOutputs = outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS] as? Map<*, *>
+      val value = producedOutputs?.get(SharedPayloadKeys.VALUE) as? String
+      val continuationOutput = normalizedOutput.takeIf { run.policy.mutating && !value.isNullOrBlank() }
+      AttemptResult.retryableTerminal(reason, fileManifest, disposition, continuationOutput)
     } else {
       AttemptResult.settled(
         FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
@@ -235,7 +248,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
             attemptCount = iteration,
             reason = reason,
             observability = observability,
-            payload = BlockAndPersistPayload(fileManifest = fileManifest),
+            payload = BlockAndPersistPayload(fileManifest = fileManifest, normalizedOutput = normalizedOutput),
             failureDisposition = disposition,
           ),
         ),
@@ -311,22 +324,23 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
           outputText,
         )
       }
-      FeatureTaskRuntimeRunLoopOutputVerification.persistStandardAcceptedOutput(
-        context,
-        PersistStandardAcceptedOutputArgs(
-          accepted =
-            PersistAcceptedOutputArgs(
-              run = run,
-              iteration = iteration,
-              normalizedOutput = normalizedOutput,
-              repairEvidence = repairEvidence,
-              observability = observability,
-              fileManifest = fileManifest,
-              repositoryFingerprint = repositoryFingerprint,
-            ),
-          outputText = outputText,
-        ),
-      )?.let { return it }
+      FeatureTaskRuntimeRunLoopOutputVerification
+        .persistStandardAcceptedOutput(
+          context,
+          PersistStandardAcceptedOutputArgs(
+            accepted =
+              PersistAcceptedOutputArgs(
+                run = run,
+                iteration = iteration,
+                normalizedOutput = normalizedOutput,
+                repairEvidence = repairEvidence,
+                observability = observability,
+                fileManifest = fileManifest,
+                repositoryFingerprint = repositoryFingerprint,
+              ),
+            outputText = outputText,
+          ),
+        )?.let { return it }
       observability.completedEvent(run.phaseId, run.resolvedAgent.resolvedAgentId, iteration)
       return completedAttemptResult(run, iteration, outputText, normalizedOutput, repairEvidence)
     }
@@ -360,12 +374,15 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         revisions = revisions,
       ) ?: return null
     val fingerprint =
-      args.phaseGates.gitOperations.repositoryCheckpointFingerprint(
-        run.request.repoRoot,
-        revisions.base,
-        revisions.head,
-        ownedPaths,
-      ).takeIf { it is WorkflowGitOperationResult.Ok }?.value?.takeIf(String::isNotBlank) ?: return null
+      args.phaseGates.gitOperations
+        .repositoryCheckpointFingerprint(
+          run.request.repoRoot,
+          revisions.base,
+          revisions.head,
+          ownedPaths,
+        ).takeIf { it is WorkflowGitOperationResult.Ok }
+        ?.value
+        ?.takeIf(String::isNotBlank) ?: return null
     return FeatureTaskRuntimeRepositoryCheckpoint(
       fingerprint = fingerprint,
       baseRef = revisions.base,
@@ -388,17 +405,17 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         baselineOwnedPaths,
       ) ?: return null
     val committedPaths =
-      revisions.base?.let { base ->
-        (
-          args.phaseGates.gitOperations
-            .runtimePhaseChangedPathsBetweenCommits(run.request.repoRoot, base, revisions.head)
-            as? WorkflowGitNameListResult.Listed
-        )
-          ?.names
-          ?.distinct()
-          ?.sorted()
-          ?: return null
-      }.orEmpty()
+      revisions.base
+        ?.let { base ->
+          (
+            args.phaseGates.gitOperations
+              .runtimePhaseChangedPathsBetweenCommits(run.request.repoRoot, base, revisions.head)
+              as? WorkflowGitNameListResult.Listed
+          )?.names
+            ?.distinct()
+            ?.sorted()
+            ?: return null
+        }.orEmpty()
     val durableInventory = persistedOwnedPaths.orEmpty().filter(String::isNotBlank)
     val discovered =
       if (args.session.checkpointOwnershipDecided && durableInventory.isNotEmpty()) {
@@ -429,15 +446,24 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     baseRevision: String?,
   ): CheckpointRevisions? {
     val immutableHead =
-      phaseGates.gitOperations.resolveCommit(run.request.repoRoot, headRevision)
-        .takeIf { it is WorkflowGitOperationResult.Ok }?.value?.takeIf(String::isNotBlank)
-        ?: phaseGates.gitOperations.headCommitSha(run.request.repoRoot)
-          .takeIf { it is WorkflowGitOperationResult.Ok }?.value?.takeIf(String::isNotBlank)
+      phaseGates.gitOperations
+        .resolveCommit(run.request.repoRoot, headRevision)
+        .takeIf { it is WorkflowGitOperationResult.Ok }
+        ?.value
+        ?.takeIf(String::isNotBlank)
+        ?: phaseGates.gitOperations
+          .headCommitSha(run.request.repoRoot)
+          .takeIf { it is WorkflowGitOperationResult.Ok }
+          ?.value
+          ?.takeIf(String::isNotBlank)
         ?: return null
     val immutableBase =
       baseRevision?.let { revision ->
-        phaseGates.gitOperations.resolveCommit(run.request.repoRoot, revision)
-          .takeIf { it is WorkflowGitOperationResult.Ok }?.value?.takeIf(String::isNotBlank)
+        phaseGates.gitOperations
+          .resolveCommit(run.request.repoRoot, revision)
+          .takeIf { it is WorkflowGitOperationResult.Ok }
+          ?.value
+          ?.takeIf(String::isNotBlank)
           ?: revision.takeIf { it.matches(Regex("^[0-9a-fA-F]{40,64}$")) }
       }
     if (baseRevision != null && immutableBase == null) return null
