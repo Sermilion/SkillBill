@@ -72,6 +72,9 @@ object NoopRuntimePhaseFileManifestGitOperations : RuntimePhaseFileManifestGitOp
 object UnavailableRepositoryOwnedPathsGitOperations : RepositoryOwnedPathsGitOperations {
   override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult =
     error("WorkflowGitOperations must provide a repository owned-paths implementation.")
+
+  override fun trackedPaths(repoRoot: Path): WorkflowGitNameListResult =
+    error("WorkflowGitOperations must provide a repository tracked-paths implementation.")
 }
 
 object UnavailableReadinessTreeIdentityGitOperations : ReadinessTreeIdentityGitOperations {

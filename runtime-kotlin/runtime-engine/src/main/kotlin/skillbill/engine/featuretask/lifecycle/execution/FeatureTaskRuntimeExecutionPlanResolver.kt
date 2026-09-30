@@ -75,12 +75,10 @@ class FeatureTaskRuntimeExecutionPlanResolver(
       requireRequestedSettings(plan, qualityGate, validationDepth, timeout)
       return resolveRecordedInputs(repoRoot, plan)
     }
-    val paths =
-      when (val inventory = git.repositoryOwnedPaths(repoRoot)) {
-        is WorkflowGitNameListResult.Listed -> inventory.names
-        is WorkflowGitNameListResult.Failed -> incompatible()
+    val resolution =
+      gateResolver.resolveWithRepositoryFallback(listedPaths(git.repositoryOwnedPaths(repoRoot))) {
+        listedPaths(git.trackedPaths(repoRoot))
       }
-    val resolution = gateResolver.resolve(paths)
     val pack =
       when (resolution) {
         is ValidationGateResolution.Declared -> resolution.packSlug
@@ -164,6 +162,12 @@ class FeatureTaskRuntimeExecutionPlanResolver(
       incompatible()
     }
   }
+
+  private fun listedPaths(inventory: WorkflowGitNameListResult): List<String> =
+    when (inventory) {
+      is WorkflowGitNameListResult.Listed -> inventory.names
+      is WorkflowGitNameListResult.Failed -> incompatible()
+    }
 
   private fun incompatible(): Nothing = throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
 }

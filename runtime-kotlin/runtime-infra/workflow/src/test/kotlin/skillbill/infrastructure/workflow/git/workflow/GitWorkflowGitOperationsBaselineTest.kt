@@ -63,6 +63,23 @@ class GitWorkflowGitOperationsBaselineTest {
   }
 
   @Test
+  fun `tracked paths list committed files and exclude untracked ones`() {
+    val repoRoot = Files.createTempDirectory("skillbill-git-tracked-paths")
+    git(repoRoot, "init")
+    git(repoRoot, "config", "user.email", "skill-bill@example.test")
+    git(repoRoot, "config", "user.name", "Skill Bill")
+    Files.createDirectories(repoRoot.resolve("src"))
+    Files.writeString(repoRoot.resolve("src/Main file.kt"), "fun main() {}\n")
+    git(repoRoot, "add", ".")
+    git(repoRoot, "commit", "-m", "initial")
+    Files.writeString(repoRoot.resolve("scratch.txt"), "untracked\n")
+
+    val result = assertIs<WorkflowGitNameListResult.Listed>(GitWorkflowGitOperations().trackedPaths(repoRoot))
+
+    assertEquals(listOf("src/Main file.kt"), result.names)
+  }
+
+  @Test
   fun `repository owned paths carry a filename with a space as one entry`() {
     val repoRoot = Files.createTempDirectory("skillbill-git-owned-paths-spaces")
     git(repoRoot, "init")
