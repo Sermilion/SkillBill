@@ -9,6 +9,7 @@ import java.sql.Connection
 
 internal class FeatureTaskRuntimeWorkerStore(
   private val connection: Connection,
+  private val transactionActive: Boolean = false,
 ) : FeatureTaskRuntimeWorkerRepository {
   override fun getFeatureTaskRuntimeWorkerOwnership(workflowId: String): FeatureTaskRuntimeWorkerOwnership? =
     connection.featureTaskRuntimeWorkerOwnership(workflowId)
@@ -17,28 +18,37 @@ internal class FeatureTaskRuntimeWorkerStore(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     expectedUpdatedAt: String?,
   ): Boolean =
-    connection.inNestedWriteTransaction {
-      val claimed =
-        prepareStatement(
-          """
-          UPDATE feature_task_workflows
-          SET workflow_status = 'running', updated_at = CURRENT_TIMESTAMP
-          WHERE workflow_id = ?
-            AND mode = 'runtime'
-            AND workflow_status NOT IN ('completed', 'failed', 'abandoned')
-            AND NOT EXISTS (
-              SELECT 1 FROM feature_task_runtime_worker_leases lease
-              WHERE lease.workflow_id = feature_task_workflows.workflow_id
-            )
-            AND ((updated_at IS NULL AND ? IS NULL) OR updated_at = ?)
-          """.trimIndent(),
-        ).use { statement ->
-          statement.bindAll(ownership.workflowId, expectedUpdatedAt, expectedUpdatedAt)
-          statement.executeUpdate() == 1
-        }
-      if (claimed) insertWorkerOwnership(ownership)
-      claimed
+    if (transactionActive) {
+      acquireInTransaction(ownership, expectedUpdatedAt)
+    } else {
+      connection.inNestedWriteTransaction { acquireInTransaction(ownership, expectedUpdatedAt) }
     }
+
+  private fun acquireInTransaction(
+    ownership: FeatureTaskRuntimeWorkerOwnership,
+    expectedUpdatedAt: String?,
+  ): Boolean {
+    val claimed =
+      connection.prepareStatement(
+        """
+        UPDATE feature_task_workflows
+        SET workflow_status = 'running', updated_at = CURRENT_TIMESTAMP
+        WHERE workflow_id = ?
+          AND mode = 'runtime'
+          AND workflow_status NOT IN ('completed', 'failed', 'abandoned')
+          AND NOT EXISTS (
+            SELECT 1 FROM feature_task_runtime_worker_leases lease
+            WHERE lease.workflow_id = feature_task_workflows.workflow_id
+          )
+          AND ((updated_at IS NULL AND ? IS NULL) OR updated_at = ?)
+        """.trimIndent(),
+      ).use { statement ->
+        statement.bindAll(ownership.workflowId, expectedUpdatedAt, expectedUpdatedAt)
+        statement.executeUpdate() == 1
+      }
+    if (claimed) connection.insertWorkerOwnership(ownership)
+    return claimed
+  }
 
   override fun reserveFeatureTaskRuntimeWorkerTakeover(
     workflowId: String,
@@ -50,6 +60,12 @@ internal class FeatureTaskRuntimeWorkerStore(
       UPDATE feature_task_runtime_worker_leases
       SET lease_state = 'takeover_reserved'
       WHERE workflow_id = ? AND owner_token = ? AND generation = ? AND lease_state = 'active'
+        AND EXISTS (
+          SELECT 1 FROM feature_task_workflows workflow
+          WHERE workflow.workflow_id = feature_task_runtime_worker_leases.workflow_id
+            AND workflow.mode = 'runtime'
+            AND workflow.workflow_status NOT IN ('completed', 'failed', 'abandoned')
+        )
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(workflowId, expectedOwnerToken, expectedGeneration)
@@ -68,6 +84,12 @@ internal class FeatureTaskRuntimeWorkerStore(
         pid = ?, process_birth_token = ?, lease_state = ?, heartbeat_at = ?, expires_at = ?,
         phase_id = ?, phase_attempt = ?
       WHERE workflow_id = ? AND owner_token = ? AND generation = ? AND lease_state = 'takeover_reserved'
+        AND EXISTS (
+          SELECT 1 FROM feature_task_workflows workflow
+          WHERE workflow.workflow_id = feature_task_runtime_worker_leases.workflow_id
+            AND workflow.mode = 'runtime'
+            AND workflow.workflow_status NOT IN ('completed', 'failed', 'abandoned')
+        )
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(
@@ -149,6 +171,7 @@ internal class FeatureTaskRuntimeWorkerStore(
         ON lease.workflow_id = workflows.workflow_id
       WHERE workflows.mode = 'runtime'
         AND workflows.workflow_status = 'running'
+        AND lease.lease_state = 'active'
         AND lease.expires_at < ?
       ORDER BY workflows.workflow_id
       """.trimIndent(),
@@ -183,6 +206,12 @@ internal class FeatureTaskRuntimeWorkerStore(
         """
         DELETE FROM feature_task_runtime_worker_leases
         WHERE workflow_id = ? AND owner_token = ? AND generation = ? AND expires_at < ?
+          AND lease_state = 'active'
+          AND EXISTS (
+            SELECT 1 FROM feature_task_workflows workflow
+            WHERE workflow.workflow_id = feature_task_runtime_worker_leases.workflow_id
+              AND workflow.mode = 'runtime' AND workflow.workflow_status = 'running'
+          )
         """.trimIndent(),
       ).use { statement ->
         statement.bindAll(workflowId, ownerToken, generation, nowInstant)

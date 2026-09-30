@@ -182,6 +182,11 @@ governedResources {
     "SKILL-150: canonical checkpoint-identity schema",
   )
   copy(
+    "copyFeatureTaskRuntimeExecutionPlanSchema",
+    "feature-task-runtime-execution-plan.yaml",
+    "SKILL-384: canonical execution-plan schema",
+  )
+  copy(
     "copyFeatureTaskRuntimeQuarantineSchema",
     "feature-task-runtime-quarantine-schema.yaml",
     "SKILL-140: canonical quarantine schema",

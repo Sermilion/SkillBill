@@ -3,6 +3,7 @@ package skillbill.infrastructure.contracts.workflow.featuretask
 import com.fasterxml.jackson.databind.JsonNode
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_BUILD_RECEIPT_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_HANDOFF_CONTRACT_VERSION
@@ -28,6 +29,7 @@ import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvi
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeSharedEvidenceProjectionSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeValidationEvidenceSchemaPaths
 import skillbill.infrastructure.contracts.review.offendingValue
+import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
 
 private const val MAX_REPORTED_SCHEMA_FAILURES = 3
 
@@ -145,6 +147,19 @@ object FeatureTaskRuntimeBuildReceiptSchemaValidator {
         sourceLabel = sourceLabel,
         reason = reasons.valueBearing,
         payloadFreeReason = reasons.payloadFree,
+      )
+    }
+    try {
+      decodeValidationGateExecutionEvidenceFromArtifact(
+        payload.filterKeys { it != SharedPayloadKeys.CONTRACT_VERSION },
+        sourceLabel,
+      )
+    } catch (error: InvalidFeatureTaskRuntimeValidationEvidenceSchemaError) {
+      throw InvalidFeatureTaskRuntimeBuildReceiptSchemaError(
+        sourceLabel = sourceLabel,
+        reason = error.message.orEmpty(),
+        payloadFreeReason = error.message.orEmpty(),
+        cause = error,
       )
     }
   }

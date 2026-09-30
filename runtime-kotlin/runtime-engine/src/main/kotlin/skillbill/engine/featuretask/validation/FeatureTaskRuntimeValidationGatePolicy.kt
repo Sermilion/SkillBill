@@ -1,7 +1,7 @@
 package skillbill.engine.featuretask.validation
 
 import skillbill.config.model.applyValidationGateGradleWrapper
-import skillbill.engine.featuretask.validation.model.ValidationGateCyclePhase
+import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
 import skillbill.scaffold.model.ValidationGateDeclaration

@@ -25,6 +25,7 @@ import skillbill.ports.goalrunner.runner.model.GoalRunnerWorkflowProgress
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -34,6 +35,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.goalreview.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
@@ -171,7 +173,16 @@ class WorkflowGoalRunnerOutcomeStore
       workflowId: String,
       preferredPhaseId: String,
       reason: String,
-    ): Boolean = blocks.reopenBlockedPhaseForOperatorResume(workflowId, preferredPhaseId, reason)
+      expectedIdentity: FeatureTaskExecutionIdentity,
+      expectedExecutionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
+    ): Boolean =
+      blocks.reopenBlockedPhaseForOperatorResume(
+        workflowId,
+        preferredPhaseId,
+        reason,
+        expectedIdentity,
+        expectedExecutionPlan,
+      )
 
     override fun readAttemptLedgerSummary(issueKey: String): GoalRunnerAttemptLedgerSummary =
       progressRecording.readAttemptLedgerSummary(issueKey)
@@ -376,8 +387,18 @@ internal class WorkflowGoalRunnerBlockBridge(
     workflowId: String,
     preferredPhaseId: String,
     reason: String,
-  ): Boolean =
-    database.transaction { unitOfWork ->
-      blockWrites.reopenBlockedPhaseForOperatorResume(unitOfWork, workflowId, preferredPhaseId, reason)
+    expectedIdentity: FeatureTaskExecutionIdentity,
+    expectedExecutionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
+  ): Boolean {
+    require(workflowId == expectedIdentity.workflowId) { "Operator resume identity belongs to another workflow." }
+    return database.transaction { unitOfWork ->
+      blockWrites.reopenBlockedPhaseForOperatorResume(
+        unitOfWork,
+        preferredPhaseId,
+        reason,
+        expectedIdentity,
+        expectedExecutionPlan,
+      )
     }
+  }
 }

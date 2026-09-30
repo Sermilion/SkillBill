@@ -11,11 +11,13 @@ import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecordFor
+import skillbill.engine.featuretask.runloop.state.REVIEW_INVALIDATION_AGENT_ID
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.review.model.ReviewFindingVerdict
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
@@ -41,6 +43,7 @@ internal class InMemoryPhaseRunRecords(
   private val unaddressedLedger = mutableListOf<UnaddressedFinding>()
   private var verificationCheckpoint: List<FeatureTaskRuntimeFindingVerificationDisposition>? = null
   private var verificationBoundary: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>? = null
+  private var reviewGeneration: Int = 0
 
   override fun recordRejectedOutput(
     request: RejectedOutputDiagnosticRequest,
@@ -65,7 +68,7 @@ internal class InMemoryPhaseRunRecords(
   }
 
   override fun retainProducerOutput(evidence: ProducerOutputEvidence) {
-    producerOutputs += evidence
+    producerOutputs += evidence.detached()
   }
 
   override fun producerOutput(args: ProducerOutputQueryArgs): FeatureTaskRuntimeProducerOutputRead =
@@ -74,12 +77,16 @@ internal class InMemoryPhaseRunRecords(
         evidence.attempt == args.attempt &&
         evidence.agentId == args.agentId &&
         evidence.generation == args.generation
-    }?.let(FeatureTaskRuntimeProducerOutputRead::Found) ?: FeatureTaskRuntimeProducerOutputRead.Absent
+    }?.detached()?.let(FeatureTaskRuntimeProducerOutputRead::Found) ?: FeatureTaskRuntimeProducerOutputRead.Absent
 
   override fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean {
     phaseRecords[request.phaseId] =
-      featureTaskRuntimePhaseRecordFor(request, phaseRecords[request.phaseId], clock.instant())
+      featureTaskRuntimePhaseRecordFor(request, phaseRecords[request.phaseId], clock.instant()).detached()
     return true
+  }
+
+  override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest) {
+    recordPhaseState(request)
   }
 
   override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean = recordPhaseState(request)
@@ -89,7 +96,8 @@ internal class InMemoryPhaseRunRecords(
   override fun loadImplementationAttempts(workflowId: String): List<FeatureTaskRuntimeImplementationAttempt> =
     emptyList()
 
-  override fun loadPhaseRecords(workflowId: String): Map<String, FeatureTaskRuntimePhaseRecord> = phaseRecords.toMap()
+  override fun loadPhaseRecords(workflowId: String): Map<String, FeatureTaskRuntimePhaseRecord> =
+    phaseRecords.mapValues { (_, record) -> record.detached() }.toMap()
 
   override fun completeGoalReviewPhase(completion: GoalReviewPhaseCompletionRequest): Boolean =
     recordCompletedPhase(completion.phaseState)
@@ -97,7 +105,22 @@ internal class InMemoryPhaseRunRecords(
   override fun persistReviewGenerationInvalidation(
     workflowId: String,
     reviewStepId: String,
-  ): Int? = null
+  ): Int? {
+    val previousReview = phaseRecords[reviewStepId] ?: return reviewGeneration
+    val tombstone =
+      FeatureTaskRuntimePhaseRecord(
+        phaseId = reviewStepId,
+        status = WorkflowStepStatus.RUNNING,
+        attemptCount = previousReview.attemptCount,
+        startedAt = previousReview.startedAt,
+        firstStartedAt = previousReview.firstStartedAt,
+        resolvedAgentId = REVIEW_INVALIDATION_AGENT_ID,
+      ).detached()
+    phaseRecords[reviewStepId] = tombstone
+    reviewGeneration += 1
+    unaddressedLedger.clear()
+    return reviewGeneration
+  }
 
   override fun invalidateQuarantinedProducerRecord(
     workflowId: String,
@@ -108,29 +131,31 @@ internal class InMemoryPhaseRunRecords(
 
   override fun recordedFindingVerdicts(output: Map<String, Any?>): List<ReviewFindingVerdict> = emptyList()
 
-  override fun fetchUnaddressedLedger(workflowId: String): List<UnaddressedFinding> = unaddressedLedger.toList()
+  override fun fetchUnaddressedLedger(workflowId: String): List<UnaddressedFinding> =
+    unaddressedLedger.map { finding -> finding.copy(citations = finding.citations.toList()) }
 
   override fun appendRejectedVerificationFindings(
     workflowId: String,
     passNumber: Int,
     rejected: List<UnaddressedFinding>,
   ) {
-    unaddressedLedger += rejected
+    unaddressedLedger += rejected.map { it.copy(citations = it.citations.toList()) }
   }
 
   override fun loadFindingVerificationCheckpoint(
     workflowId: String,
-  ): List<FeatureTaskRuntimeFindingVerificationDisposition>? = verificationCheckpoint
+  ): List<FeatureTaskRuntimeFindingVerificationDisposition>? = verificationCheckpoint?.detachedDispositions()
 
   override fun loadFindingVerificationBoundarySelection(
     workflowId: String,
-  ): Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>? = verificationBoundary
+  ): Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>? =
+    verificationBoundary?.detachedBoundary()
 
   override fun persistFindingVerificationBoundarySelection(
     workflowId: String,
     selections: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>,
   ): Boolean {
-    verificationBoundary = selections
+    verificationBoundary = selections.detachedBoundary()
     return true
   }
 
@@ -138,7 +163,7 @@ internal class InMemoryPhaseRunRecords(
     workflowId: String,
     dispositions: List<FeatureTaskRuntimeFindingVerificationDisposition>,
   ): Boolean {
-    verificationCheckpoint = dispositions
+    verificationCheckpoint = dispositions.detachedDispositions()
     return true
   }
 
@@ -146,7 +171,8 @@ internal class InMemoryPhaseRunRecords(
     workflowId: String,
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
-  ): Boolean = true
+    attempt: Int,
+  ) = Unit
 
   override fun recordProjectionRejection(
     workflowId: String,
@@ -163,23 +189,23 @@ internal class InMemoryPhaseRunRecords(
     emptyMap()
 
   override fun loadValidationGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
-    validationGateProgress[workflowId]
+    validationGateProgress[workflowId]?.detached()
 
   override fun persistValidationGateProgress(
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   ) {
-    validationGateProgress[workflowId] = progress
+    validationGateProgress[workflowId] = progress.detached()
   }
 
   override fun loadBuildGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
-    buildGateProgress[workflowId]
+    buildGateProgress[workflowId]?.detached()
 
   override fun persistBuildGateProgress(
     workflowId: String,
     progress: FeatureTaskRuntimeValidationGateProgress,
   ) {
-    buildGateProgress[workflowId] = progress
+    buildGateProgress[workflowId] = progress.detached()
   }
 
   override fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean = true
@@ -212,3 +238,26 @@ internal class InMemoryPhaseRunRecords(
     planStepId: String,
   ): Boolean = true
 }
+
+private fun ProducerOutputEvidence.detached(): ProducerOutputEvidence = copy(payload = payload?.copyOf())
+
+private fun FeatureTaskRuntimePhaseRecord.detached(): FeatureTaskRuntimePhaseRecord =
+  copy(
+    fileManifestBefore = fileManifestBefore.toList(),
+    fileManifestAfter = fileManifestAfter.toList(),
+    fileManifestIntroduced = fileManifestIntroduced.toList(),
+  )
+
+private fun List<FeatureTaskRuntimeFindingVerificationDisposition>.detachedDispositions() =
+  map { disposition -> disposition.copy(selectedBoundaryHeadings = disposition.selectedBoundaryHeadings.toList()) }
+
+private fun Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>.detachedBoundary() =
+  mapValues { (_, headings) -> headings.toList() }
+
+private fun FeatureTaskRuntimeValidationGateProgress.detached() =
+  copy(
+    gateRuns = gateRuns.map { run -> run.copy(executedChecks = run.executedChecks.toList()) },
+    remainingFindings = remainingFindings.map { it.toMap() },
+    completeFindings = completeFindings.map { it.toMap() },
+    lastAgentUnfixedCriteria = lastAgentUnfixedCriteria.toList(),
+  )

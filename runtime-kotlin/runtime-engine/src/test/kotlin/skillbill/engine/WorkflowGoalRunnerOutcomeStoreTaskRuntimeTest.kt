@@ -15,12 +15,14 @@ import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestRejectionReason
 import skillbill.ports.goalrunner.runner.model.GoalAttemptLedgerEntryDraft
 import skillbill.ports.goalrunner.runner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReconcileGate
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.phaseRecordsFromWorkflowArtifacts
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -366,6 +368,9 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
   fun `operator resume reopens a running review phase left on a blocked child`() {
     val workflows = InMemoryWorkflowStates()
     workflows.saveFeatureTaskWorkflow(tornBlockedReviewRecord("wftr-torn-review"), RUNTIME)
+    val execution =
+      ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD)
+    execution.seed(workflows, "wftr-torn-review")
     val store =
       testWorkflowGoalRunnerOutcomeStore(
         FakeDatabaseSessionFactory(workflows),
@@ -377,6 +382,8 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
         workflowId = "wftr-torn-review",
         preferredPhaseId = "review",
         reason = "Operator resumed the goal after a blocked stop at subtask 9.",
+        expectedIdentity = execution.identity("wftr-torn-review"),
+        expectedExecutionPlan = ValidatedFeatureTaskRuntimeExecutionPlan.read(execution.encoded, execution.validator),
       ),
     )
 

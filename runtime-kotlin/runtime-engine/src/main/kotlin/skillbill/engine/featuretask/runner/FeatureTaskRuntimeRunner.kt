@@ -1,7 +1,6 @@
 package skillbill.engine.featuretask.runner
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeProbeWriters
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePreparation
@@ -13,8 +12,11 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
+import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
@@ -39,21 +41,48 @@ class FeatureTaskRuntimeRunner(
   val worktreeEditJournalWriter get() = probeWriters.worktreeEditJournalWriter
 
   fun run(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport {
+    foreignModeWorkflowBlock(request)?.let { return it }
+    recorder.phaseQuery.terminalWorkflow(request.workflowId)?.let { terminal ->
+      return FeatureTaskRuntimeRunReport.Blocked(
+        issueKey = request.issueKey,
+        workflowId = request.workflowId,
+        featureSize = request.runInvariants.featureSize.name,
+        lastIncompletePhase = terminal.currentStepId,
+        blockedReason = "Terminal workflows cannot resume execution or regenerate receipts.",
+        completedPhaseIds = emptyList(),
+        resolvedBranch = null,
+      )
+    }
+    val admittedRequest = request.copy(admittedExecution = startup.executionEntry.admit(request))
+    validateAdmittedRequest(admittedRequest)
     val reconciliation = crashReconciler.reconcile()
-    return when (val preparation = prepareRun(request)) {
+    return when (val preparation = prepareRun(admittedRequest)) {
       is FeatureTaskRuntimePreparation.PreparationBlocked -> preparation.report
       is FeatureTaskRuntimePreparation.Prepared -> executePreparedRun(preparation.request, reconciliation)
     }
   }
 
+  private fun validateAdmittedRequest(request: FeatureTaskRuntimeRunRequest) {
+    val admitted = requireNotNull(request.admittedExecution)
+    val identity = admitted.identity
+    if (identity.workflowId != request.workflowId ||
+      identity.normalizedIssueKey != request.issueKey.trim().uppercase() ||
+      (identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD) != (request.goalContinuation != null)
+    ) {
+      throw InvalidFeatureTaskExecutionIdentitySchemaError(request.workflowId, "admission does not match run request")
+    }
+    if (request.transitionsOverride != null && request.transitionsOverride != admitted.plan.traversal) {
+      throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+    }
+  }
+
   private fun prepareRun(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimePreparation =
-    foreignModeWorkflowBlock(request)?.let(FeatureTaskRuntimePreparation::PreparationBlocked)
-      ?: FeatureTaskRuntimeRunPreparation(
-        recorder,
-        goalContinuationRecorder,
-        runInvariantsStore,
-        strategies,
-      ).prepare(request)
+    FeatureTaskRuntimeRunPreparation(
+      recorder,
+      goalContinuationRecorder,
+      runInvariantsStore,
+      strategies,
+    ).prepare(request)
 
   private fun foreignModeWorkflowBlock(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeRunReport.Blocked? {
     val existingMode = recorder.existingWorkflowMode(request.workflowId)

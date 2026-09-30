@@ -4,34 +4,32 @@ import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.CheckpointCommitMessageArgs
 import skillbill.engine.featuretask.runloop.core.CommitCheckpointArgs
 import skillbill.engine.featuretask.runloop.core.RecordCheckpointIdentityArgs
-import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshot
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshotResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 
 object FeatureTaskRuntimeRunLoopRepairReceipt {
   internal fun blockRemediationBaseSha(
-    context: PhaseAttemptEnvironment,
+    context: PhaseCheckpointRemediationContext,
     precedingPhaseId: String,
     reenteredStepId: String,
     error: String,
   ): Boolean {
-    FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(
+    context.coupledRunTransitions.transitionCheckpointRemediationBlock(
       context.request,
-      context.state,
-      context.session,
       precedingPhaseId,
       "Feature-task-runtime could not record the pre-fix remediation base sha before re-entering " +
         reenteredStepId + (if (error.isBlank()) "." else " ($error).") +
         " Without it the reserved remediation pass would silently review the full base-to-current " +
         "delta instead of the remediation delta.",
+      context.session.resolvedBranch,
     )
     return false
   }
 
   private fun blockCheckpointAfterIndexMutation(
-    context: PhaseAttemptEnvironment,
+    context: PhaseCheckpointRemediationContext,
     args: CommitCheckpointArgs,
     error: String,
     indexSnapshot: WorkflowGitIndexSnapshot,
@@ -53,7 +51,7 @@ object FeatureTaskRuntimeRunLoopRepairReceipt {
     }
 
   internal fun commitCheckpoint(
-    context: PhaseAttemptEnvironment,
+    context: PhaseCheckpointRemediationContext,
     args: CommitCheckpointArgs,
   ): Boolean {
     with(context) {
@@ -101,7 +99,7 @@ object FeatureTaskRuntimeRunLoopRepairReceipt {
   }
 
   private fun stageAndWriteCheckpoint(
-    context: PhaseAttemptEnvironment,
+    context: PhaseCheckpointRemediationContext,
     args: CommitCheckpointArgs,
   ): CheckpointCommitAttempt {
     with(context) {
@@ -113,7 +111,7 @@ object FeatureTaskRuntimeRunLoopRepairReceipt {
       val message =
         FeatureTaskRuntimeRunLoopCheckpoint.checkpointCommitMessage(
           request,
-          state,
+          progress,
           diagnostics,
           CheckpointCommitMessageArgs(
             branch = args.branch,

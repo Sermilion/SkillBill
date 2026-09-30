@@ -6,7 +6,10 @@ import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 
@@ -18,6 +21,12 @@ class FeatureTaskRuntimePhaseQuery
     fun existingWorkflowMode(workflowId: String): FeatureTaskWorkflowMode? =
       database.read { unitOfWork ->
         unitOfWork.workflowStates.getFeatureTaskWorkflow(workflowId)?.mode
+      }
+
+    internal fun terminalWorkflow(workflowId: String): WorkflowStateRecord? =
+      database.read { unitOfWork ->
+        unitOfWork.workflowStates.getFeatureTaskWorkflow(workflowId)
+          ?.takeIf { it.workflowStatus.workflowStatus() in WorkflowStatus.terminalStatuses }
       }
 
     fun workerOwnership(workflowId: String): FeatureTaskRuntimeWorkerOwnership? =

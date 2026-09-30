@@ -41,15 +41,22 @@ class GoalRunner(
 
   fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport {
     val loadedState =
-      manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
+      manifestStore.loadDurableByIssueKey(request.issueKey)?.copy(repoRoot = request.repoRoot)
+        ?: manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
         ?: return unknownGoal(request.issueKey)
+    val childAdmission = runPreparation.existingChildExecutionPlanAdmission(loadedState, request)
     return try {
-      executionCoordinator.runOwned(loadedState.parentWorkflowId) {
+      val execute = {
         val state = reconcileStateBeforeRun(loadedState)
         when (val preparation = runPreparation.prepareRun(state, request)) {
           is GoalRunPreparation.PreparationBlocked -> preparation.report
           is GoalRunPreparation.Prepared -> runPrepared(preparation)
         }
+      }
+      if (childAdmission == null) {
+        executionCoordinator.runOwned(loadedState.parentWorkflowId, execute)
+      } else {
+        executionCoordinator.runOwnedWithChildAdmission(loadedState.parentWorkflowId, childAdmission, execute)
       }
     } catch (alreadyRunning: GoalRunnerExecutionAlreadyRunningException) {
       stopped(

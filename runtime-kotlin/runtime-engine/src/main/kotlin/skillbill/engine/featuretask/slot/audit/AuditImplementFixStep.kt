@@ -1,10 +1,11 @@
 package skillbill.engine.featuretask.slot.audit
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.slot.PhaseStepHooks
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -12,7 +13,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 
 internal object AuditImplementFixStep : PhaseStepHooks {
   override fun settleCompletedRound(
-    context: PhaseAttemptEnvironment,
+    context: PhaseStepOutputContext,
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
@@ -20,7 +21,7 @@ internal object AuditImplementFixStep : PhaseStepHooks {
     if ((outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() != WorkflowStepStatus.COMPLETED) {
       return null
     }
-    val value = AcceptanceAuditVerdictRule.auditProseValue(outputMap).orEmpty()
+    val value = auditProseValue(outputMap).orEmpty()
     return if (AuditImplementFixPromptSections.endsWithCompletionMarker(value)) {
       null
     } else {

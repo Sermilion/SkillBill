@@ -16,8 +16,12 @@ import skillbill.engine.featuretask.slot.PhaseLaunchReviewTier
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepHooks
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseReviewExecutionContext
+import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
+import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.error.shellcontent.InvalidReviewContextSchemaError
 import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
@@ -43,12 +47,27 @@ internal class CodeReviewStep(
 ) : PhaseStepHooks {
   fun run(
     requestedRun: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
+    prompt: PhaseStepPromptSource,
+  ): PhaseOutcome {
+    val iteration = state.nextStepIteration()
+    return try {
+      state.startReviewStep(requestedRun, iteration)
+        ?: runAfterStart(requestedRun, context, state, prompt)
+    } catch (rejection: RequiredPhaseWriteRejected) {
+      state.blockRequiredReviewWrite(rejection)
+    }
+  }
+
+  private fun runAfterStart(
+    requestedRun: PhaseRun,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
     prompt: PhaseStepPromptSource,
   ): PhaseOutcome {
     val run =
-      when (val phaseRun = phaseReviewRun(requestedRun, context)) {
+      when (val phaseRun = phaseReviewRun(requestedRun, context, state)) {
         is PhaseReviewRun.Resolved -> phaseRun.run
         is PhaseReviewRun.Unresolved -> {
           state.blockReviewPreparation(1, phaseRun.reason, FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION)
@@ -61,18 +80,20 @@ internal class CodeReviewStep(
         is InlineReviewPrepared.Settled -> return prepared.outcome
       }
     val iteration = state.nextStepIteration()
-    val passNumber = state.reviewPassNumber()
+    val passNumber = state.reviewPassNumber
     val resolution =
       FeatureTaskRuntimeReviewPassSequence.resolveForPass(run.request.runInvariants.codeReviewMode, passNumber)
     val reviewRunId =
       state.recordedReviewRunId(passNumber)
-        ?: run.request.reviewInvocation?.reviewRunId?.takeIf { passNumber == 1 }
+        ?: run.request.reviewInvocation
+          ?.reviewRunId
+          ?.takeIf { passNumber == 1 }
         ?: InlineReviewEnvelope.mintReviewRunId(context.clock)
     state.startReview(iteration, reviewRunId)
     val fingerprint =
       repositoryFingerprint(run, context)
         ?: return PhaseOutcome.blocked("Runtime-owned review could not resolve a repository checkpoint fingerprint.")
-    state.prepareReviewBriefing(prompt, input)
+    state.prepareReviewBriefing(iteration, prompt, input)
     state.reviewLaunched(iteration)
     val pass =
       ReviewPassRun(
@@ -95,19 +116,20 @@ internal class CodeReviewStep(
 
   override fun launchReviewTier(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseReviewPassState,
   ): PhaseLaunchReviewTier {
-    val passNumber = state.reviewPassNumber()
+    val reviewState = state as PhaseReviewStepBinding
+    val passNumber = reviewState.reviewPassNumber
     val resolution =
       FeatureTaskRuntimeReviewPassSequence.resolveForPass(run.request.runInvariants.codeReviewMode, passNumber)
-    state.persistResolvedReviewTier(resolution)
+    reviewState.persistResolvedReviewTier(resolution)
     return PhaseLaunchReviewTier(passNumber, resolution, reviewPass.executedTier(resolution.resolvedTier))
   }
 
   override fun completionRejection(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseAcceptedStepExecution,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? {
     val hasVerdict = (outputMap[FeatureTaskRuntimeVerificationSignalKeys.VERDICT] as? String)?.isNotBlank() == true
@@ -126,12 +148,12 @@ internal class CodeReviewStep(
 
   private fun launchAndSettle(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
     input: GoalSubtaskReviewInput,
     pass: ReviewPassRun,
   ): PhaseOutcome {
-    val gitOperations = context.phaseGates.gitOperations
+    val gitOperations = context.gitOperations
     val repoRoot = run.request.repoRoot
     val before = gitOperations.worktreeStatus(repoRoot)
     if (before !is WorkflowGitOperationResult.Ok) {
@@ -156,13 +178,13 @@ internal class CodeReviewStep(
 
   private fun recordAndSettle(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
     reviewed: ReviewedPass,
   ): PhaseOutcome {
     val pass = reviewed.pass
     state.recordReviewContentIdentities()
-    context.runState.recordReviewRun(pass.reviewRunId, reviewed.result, reviewPass.recordsLaneTelemetry)
+    state.recordReviewRun(pass.reviewRunId, reviewed.result, reviewPass.recordsLaneTelemetry)
     failedLaneReason(reviewed.result)?.let { reason ->
       return blockStep(state, pass.iteration, reason, FeatureTaskRuntimeFailureDisposition.RETRYABLE)
     }
@@ -173,7 +195,7 @@ internal class CodeReviewStep(
 
   private fun launch(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseReviewStepBinding,
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
   ): ReviewPassLaunch {
@@ -184,8 +206,8 @@ internal class CodeReviewStep(
 
   private fun settle(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
     reviewed: ReviewedPass,
   ): PhaseOutcome {
     val pass = reviewed.pass
@@ -193,7 +215,8 @@ internal class CodeReviewStep(
     val initialText = InlineReviewEnvelope.assemble(reviewed.result, pass.reviewRunId, pass.cycle)
     val accepted =
       runCatching {
-        context.outputValidator.validatePhaseOutput(initialText, sourceLabel = run.phaseId)
+        context.outputValidator
+          .validatePhaseOutput(initialText, sourceLabel = run.phaseId)
           .requireAcceptedOutput(run.phaseId)
       }.getOrElse { error ->
         return blockStep(
@@ -220,8 +243,8 @@ internal class CodeReviewStep(
 
   private fun settleAmended(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
     reviewed: ReviewedPass,
     accepted: AcceptedFeatureTaskRuntimePhaseOutput,
   ): PhaseOutcome {
@@ -253,7 +276,7 @@ internal class CodeReviewStep(
 
   private fun complete(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseReviewStepBinding,
     reviewed: ReviewedPass,
     outputText: String,
     output: AcceptedFeatureTaskRuntimePhaseOutput,
@@ -269,7 +292,7 @@ internal class CodeReviewStep(
 
   private fun blockerDispositions(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseReviewStepBinding,
     result: ParallelCodeReviewResult,
     pass: ReviewPassRun,
   ): List<GoalSubtaskBlockerDisposition> {
@@ -304,10 +327,11 @@ internal class CodeReviewStep(
 
   private fun phaseReviewRun(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
   ): PhaseReviewRun {
     val invocation = run.request.reviewInvocation ?: return PhaseReviewRun.Resolved(run)
-    val gitOperations = context.phaseGates.gitOperations
+    val gitOperations = context.gitOperations
     val repoRoot = run.request.repoRoot
     val status = gitOperations.worktreeStatus(repoRoot)
     if (status !is WorkflowGitOperationResult.Ok) {
@@ -317,7 +341,7 @@ internal class CodeReviewStep(
       )
     }
     val target =
-      context.runState.pinnedReviewTarget {
+      state.pinnedReviewTarget {
         ReviewTargetResolver.resolve(invocation.target, status.value.orEmpty()).also { target ->
           if (target is ReviewTarget.Commit) {
             val resolved = gitOperations.resolveCommit(repoRoot, target.sha)
@@ -330,12 +354,15 @@ internal class CodeReviewStep(
 
   private fun repositoryFingerprint(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
+    context: PhaseReviewExecutionContext,
   ): String? =
-    context.phaseGates.gitOperations.repositoryFingerprint(run.request.repoRoot).value.takeIf(String::isNotBlank)
+    context.gitOperations
+      .repositoryFingerprint(run.request.repoRoot)
+      .value
+      .takeIf(String::isNotBlank)
 
   private fun blockStep(
-    state: PhaseStepState,
+    state: PhaseReviewStepBinding,
     iteration: Int,
     reason: String,
     disposition: FeatureTaskRuntimeFailureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
@@ -364,13 +391,19 @@ private data class ReviewedPass(
 )
 
 private sealed interface PhaseReviewRun {
-  data class Resolved(val run: PhaseRun) : PhaseReviewRun
+  data class Resolved(
+    val run: PhaseRun,
+  ) : PhaseReviewRun
 
-  data class Unresolved(val reason: String) : PhaseReviewRun
+  data class Unresolved(
+    val reason: String,
+  ) : PhaseReviewRun
 }
 
 private sealed interface ReviewPassLaunch {
-  data class Reviewed(val result: ParallelCodeReviewResult) : ReviewPassLaunch
+  data class Reviewed(
+    val result: ParallelCodeReviewResult,
+  ) : ReviewPassLaunch
 
   data class Failed(
     val reason: String,
@@ -388,7 +421,7 @@ internal fun failedLaneReason(result: ParallelCodeReviewResult): String? {
 private fun launchFailure(error: Throwable): ReviewPassLaunch.Failed? {
   val message = error.message.orEmpty()
   return when (error) {
-    is CancellationException -> null
+    is CancellationException, is RequiredPhaseWriteRejected -> null
     is DiffResolutionException ->
       ReviewPassLaunch.Failed("Runtime-owned review could not resolve the child-owned diff: $message")
     is UsageValidationException, is StackDetectionException ->

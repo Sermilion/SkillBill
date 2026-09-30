@@ -1,15 +1,21 @@
 package skillbill.engine.goalrunner.execution.core
 
+import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.realPlanningProjectionValidator
 import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
 import skillbill.application.telemetry.lifecycle.noopGoalLifecycleTelemetryEmitter
+import skillbill.engine.ExecutionPlanAdmissionFixture
+import skillbill.engine.InMemoryRuntimeWorkflowRepository
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.slot.goalPlanningPhaseStrategies
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.GoalRunner
+import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.GoalRunnerSubtaskLaunchPrepare
@@ -27,6 +33,7 @@ import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepCheckpointBou
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepLaunchBoundaries
 import skillbill.engine.goalrunner.planning.sweep.PREPARE_ALL_GOAL_PLANNING_SWEEP
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
+import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.ports.db.DatabaseSessionFactory
@@ -60,6 +67,9 @@ import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.specscratch.SpecScratchStore
 import skillbill.ports.workflow.specscratch.UnavailableSpecScratchStore
+import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import java.time.Clock
 import kotlin.random.Random
@@ -196,6 +206,7 @@ internal fun goalRunnerDeps(
 internal fun testGoalRunner(deps: GoalRunnerTestInputs): GoalRunner = testGoalRunner(deps.toWiring())
 
 internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
+  val executionPlans = goalRunnerExecutionPlans(wiring)
   val progressReader = GoalRunnerProgressReader(wiring.runBoundaries.outcomeStore)
   val finalization = GoalRunnerFinalization(wiring.finalizationBoundaries, progressReader)
   val workerRequestHandler =
@@ -220,6 +231,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
       TestRepositoryEnclosingRoot,
       wiring.runBoundaries.clock,
       Random(GOAL_RUNNER_TEST_WORKFLOW_ID_SEED),
+      executionPlans,
     )
   val perRunLoopAssembler =
     GoalRunnerPerRunLoopAssembler(
@@ -234,7 +246,12 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
     )
   return GoalRunner(
     runBoundaries = wiring.runBoundaries,
-    runPreparation = GoalRunnerRunPreparation(wiring.runBoundaries.manifestStore, TestRepositoryEnclosingRoot),
+    runPreparation =
+      GoalRunnerRunPreparation(
+        wiring.runBoundaries.manifestStore,
+        TestRepositoryEnclosingRoot,
+        executionPlans,
+      ),
     perRunLoopAssembler = perRunLoopAssembler,
     pauseBoundary = pauseBoundary,
   )
@@ -297,6 +314,7 @@ internal fun testDefaultGoalPlanningSweep(
   DefaultGoalPlanningSweep(checkpointBoundaries, launchBoundaries, repositoryEnclosingRootPort)
 
 internal data class GoalPlanningSweepPortsParams(
+  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
   val checkpoint: GoalPlanningPreparationCheckpoint,
   val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   val subtaskLauncher: GoalRunnerSubtaskLauncher,
@@ -341,7 +359,7 @@ internal fun testGoalPlanningSweepPorts(params: GoalPlanningSweepPortsParams): D
         goalPlanningPhaseStrategies(params.subtaskLauncher, params.fanOutPort, params.burstSchedule.planFanOutCap),
       clock = Clock.systemUTC(),
       diagnostics = NoopRuntimeDiagnostics,
-      runLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+      runLoopEntry = params.runLoopEntry,
     ),
     repositoryEnclosingRootPort = params.repositoryEnclosingRootPort,
   )
@@ -377,3 +395,28 @@ internal fun testGoalPlanningContextDiscovery(
       )
     }
   }
+
+private fun goalRunnerExecutionPlans(wiring: GoalRunnerTestWiring): FeatureTaskRuntimeExecutionPlanResolver {
+  val states = InMemoryRuntimeWorkflowRepository()
+  val database = FakeDatabaseSessionFactory(states)
+  val fixture = ExecutionPlanAdmissionFixture(database = database)
+  val resolver = fixture.creationResolver()
+  val store = wiring.runBoundaries.manifestStore as? InMemoryGoalManifestStore ?: return resolver
+  val manifest = store.manifest
+  manifest.subtasks.forEach { subtask ->
+    val workflowId = subtask.workflowId ?: return@forEach
+    val descriptor =
+      resolver.resolveCreation(
+        FeatureTaskRuntimeExecutionPlanCreationRequest(
+          Path.of("/tmp/skillbill-goal-runner"),
+          SkeletonDefinition.GOAL_CHILD,
+          CodeReviewExecutionMode.DEFAULT,
+          GoalRunnerQualityGateSelectionResolver.resolve(manifest, subtask.id),
+          ValidationDepth.FULL,
+          null,
+        ),
+      )
+    fixture.seed(states, workflowId, manifest.issueKey, fixture.validator.read(descriptor.encoded(), "goal fixture"))
+  }
+  return resolver
+}

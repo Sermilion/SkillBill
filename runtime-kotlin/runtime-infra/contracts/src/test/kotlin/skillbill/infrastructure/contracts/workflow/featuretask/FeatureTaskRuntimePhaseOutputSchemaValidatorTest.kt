@@ -825,10 +825,11 @@ class FeatureTaskRuntimePhaseOutputWireSchemaEnvelopeTest {
     val envelope =
       buildPhaseEnvelope(
         buildReceipt =
-          """{"contract_version":"0.1","validation_status":"passed","checks":[],""" +
+          """{"contract_version":"0.2","validation_status":"passed","checks":[],""" +
             """"repository_checkpoint":{"fingerprint":"fp"},"gate_run_count":1,""" +
             """"gate_runs":[{"duration_ms":1,"outcome":"passed","cache_mode":"cache_eligible",""" +
-            """"executed_work_units":1}]}""",
+            """"executed_work_units":1,"executed_checks":[],"command":"./gradlew compileKotlin",""" +
+            """"exit_code":0,"repository_checkpoint":"fp"}]}""",
       )
     FeatureTaskRuntimePhaseOutputSchemaValidator().validatePhaseOutputText(envelope, "build")
   }
@@ -838,7 +839,7 @@ class FeatureTaskRuntimePhaseOutputWireSchemaEnvelopeTest {
     val envelope =
       buildPhaseEnvelope(
         buildReceipt =
-          """{"contract_version":"0.1","validation_status":"passed","checks":[],""" +
+          """{"contract_version":"0.2","validation_status":"passed","checks":[],""" +
             """"repository_checkpoint":{"fingerprint":"fp"}}""",
       )
     val result = FeatureTaskRuntimePhaseOutputSchemaValidator().validatePhaseOutput(envelope, "build")

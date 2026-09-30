@@ -37,4 +37,5 @@ data class ValidationGateRunResult(
   val executedCheckIdentities: List<String>,
   val findings: List<ValidationGateFinding>,
   val stdout: String = "",
+  val command: String = "",
 )

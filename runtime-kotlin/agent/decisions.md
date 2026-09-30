@@ -17,6 +17,17 @@ This file records architectural and implementation decisions that span the
 `runtime-kotlin/` boundary. Each entry is dated and explains the trade-off,
 not the implementation detail.
 
+## [2026-09-29] Store execution semantics in the workflow creation transaction, SKILL-384
+Context: New standalone workflows and goal children need the same semantic authority before launch, including children with imported planning state.
+Decision: Store exactly one governed execution-plan descriptor in the workflow's database artifacts within its creation transaction. Pass validated resolved data through creation inputs, keep registry dependencies in the engine, and retain FeatureTaskExecutionIdentity for repository and spec lookup. Reject later descriptor replacement or removal.
+Reason: Atomic creation prevents a durable run from existing without its execution semantics. One artifact avoids competing graphs in identity rows or phase records, and passing resolved data preserves inward dependency direction.
+Alternatives considered: A separate table, per-phase descriptor copies, and a graph in the route identity would create additional authorities, so the spec excludes them.
+
+## [2026-09-29] Retain complete agent process output
+Context: The previous 1 MiB retention limit discarded output and blocked a completed review on SKILL-384.
+Decision: Retain and forward complete agent stdout and stderr through process completion. Preserve incomplete-drain, cancellation, and cleanup failures. Keep the truncation result field for adapter compatibility and historical evidence, but the JVM launcher no longer sets it.
+Reason: Discarding output can remove the completion marker and turn completed work into a blocked review. Complete capture preserves that evidence, including multibyte UTF-8 text.
+
 ## [2026-09-28] SKILL-383: skill-bill is the only listed skill; retired names stay on the wire
 Context: After SKILL-380 and SKILL-382, every capability of the other listed skills already existed as a phase, a strategy, an operation, or the `/skill-bill` dispatcher. The other listed skills duplicated those routes, and pack specialists installed as sidecars of `bill-code-review`.
 Decision: (1) `skill-bill` is the only listed skill. The `bill-feature`, `bill-feature-spec`, `bill-code-review`, `bill-code-review-inline`, `bill-code-check`, `bill-pr-description`, `bill-boundary-history`, `bill-boundary-decisions`, `bill-pr-review-fix`, `bill-unit-test-value-check`, `bill-update-check`, `bill-release`, `bill-feature-verify`, `bill-feature-guard`, `bill-feature-guard-cleanup`, and `bill-monitor` trees are deleted. Phases are reached as `phase:<name>` and operations as `operation:<name>` through `/skill-bill`. (2) Each deleted `content.md` body moved verbatim into `skills/skill-bill/content.md` or a directive resource its owner loads; Kotlin constants keep only output-contract text. (3) `bill-monitor` moved nowhere; `skill-bill goal status` stays CLI-only. (4) The `ParallelCodeReviewRunner` inline lane shape and `PARALLEL_REVIEW_INLINE_NATIVE_WORKER` are deleted: the SKILL-380 subtask 8 census found no production caller, and `DelegatedReviewStrategy` is the only request builder. An inline request now fails with `InlineParallelReviewUnsupportedError`. `attributeInlineFindings` runs on every lane, so it is renamed `attributeLaneFindings`, not deleted. (5) Pack specialists install as `internal-for: skill-bill` sidecars. Every deleted name is in `InstallLegacySkillNames`, so an install over an old home removes the stale links and copies. (6) These wire labels keep their retired values: telemetry `skill` values (`LifecycleTelemetryPayloads`, `TelemetrySettingsLoading`, `ReviewStatsContractWorkflowPayloadMappers`, `McpAdapterContracts`), the feature-verify `workflow_name` default `bill-feature-verify` and its migration, the workflow skill label `WorkflowStateWrites` writes, and the quality-check `routed_skill` `bill-code-check`.
@@ -2364,3 +2375,61 @@ Decision: `VerifyOperation` is a `SelfConfirmingOperation`. The executor hands `
 Reason: The workflow row already holds the parked criteria and the resume point, so a second proposal store would be a second source for the same state. The skill's fix offer needs editing steps and a push policy that belong to `pr-review-fix`.
 Alternatives considered: Store the criteria in `operation_proposals` and open the workflow on confirm (rejected: two stores, and the parked row could not resume). Keep the fix and PR-comment offer (rejected: it makes a read-only report an editing operation).
 Revisit when: verify needs to post its report, or a second operation needs a self-owned workflow token.
+
+## [2026-09-28] Remediation refusal preserves the original checkpoint record (SKILL-384)
+
+Context: Remediation recovery removed an unsupported checkpoint artifact into quarantine and returned a coherent result. That result let execution proceed without an admitted semantic plan or evidence of a safe regeneration boundary.
+Decision: Refuse unsupported checkpoint records without writing artifacts. Checkpoint append reads the existing history inside its write transaction and propagates version refusal without clearing that history. Refuse terminal workflows before reading recovery inputs or calling Git. Check remediation recovery before reopening stale settled review steps. Keep the original workflow, attempts, outputs, checkpoint records, and finalization evidence available for inspection with a compatible runtime or a separately reviewed semantic mapping.
+Reason: An unreadable checkpoint cannot establish that irreversible work has not begun. Moving it out of the active artifact made the next read look like missing evidence and concealed that uncertainty.
+Revisit when: Durable semantic admission supplies a recorded resume policy and proves a safe recovery boundary. These refusal checks do not implement that admission or authorize receipt regeneration.
+
+## [2026-09-28] Execution-plan canonicalization and coherence, SKILL-384
+
+Context: The execution-plan reader checked step coverage but allowed two strategies in one slot, entries owned by another strategy, reversed entry gates, and unreachable remediation cycles.
+Decision: Check those relationships after schema validation. Canonicalize object keys, strategy declarations by slot and identity, per-step declarations by step, and the loop-only set by step. Preserve selected-step order and all ordered traversal arrays. Preserve absent, empty, and null values as distinct inputs.
+Reason: Named collection order must not change descriptor equality. Traversal order can change execution, so sorting every array would hide a behavioral change.
+Revisit when: The domain codec records the remaining effective policies. These checks do not establish semantic compatibility or authorize durable continuation.
+
+## [2026-09-28] Worker takeover and terminal recovery fences, SKILL-384
+
+Context: A takeover contender could terminate an exact live worker before reserving its lease. Crash repair could remove a lease after another transaction made the workflow terminal or reserved takeover.
+Decision: Reserve takeover with the recorded token and generation before terminating the worker. Reservation and transfer require a nonterminal runtime workflow. Crash candidate discovery and repair require an active lease and a running workflow. A failed or interrupted takeover retains its reservation as evidence. Direct runner entry refuses terminal workflows before crash reconciliation, preparation, or reconstruction.
+Reason: Process identity proves which process would be stopped. The database reservation proves which contender owns the takeover. A terminal transition or reserved takeover invalidates a prior crash candidate, so repair must recheck those facts before deleting its lease.
+Revisit when: Durable semantic admission can share these transactions. The ownership fences and terminal refusal do not establish descriptor compatibility or a safe receipt regeneration boundary.
+
+## [2026-09-28] Resolved-plan encoding and composition compatibility, SKILL-384
+
+Context: The descriptor validator accepted maps, but execution had no codec for restoring an immutable resolved plan. The previous boundary test hand-built a descriptor and never reconstructed the plan.
+
+Decision: Keep the codec and composition compatibility checks in the engine. The codec delegates wire validation to the validator port and restores domain data without runners. Policy digests cover the JSON string encoding of each recorded identity. Compatibility compares the recorded selections and policy references with supported implementations without substituting a newly selected plan. A supported composition alone cannot authorize durable execution.
+
+Reason: Artifact shape, supported composition, and transactional admission have different owners. The reader must report unsupported versions and policy mismatches without leaking descriptor bodies or modifying their evidence.
+
+Revisit when: Effective execution policies and durable creation, claim, and recovery callers use this boundary. Until then, codec round-trip tests and composition refusal tests do not prove durable admission or safe receipt regeneration.
+
+## [2026-09-28] Quarantined producer invalidation retains irreversible evidence, SKILL-384
+
+Context: The producer invalidation transaction could clear a completed output after commit or PR work had started. It also treated an absent producer record as permission to continue regeneration.
+Decision: Refuse invalidation inside the transaction for terminal workflows, gate producers whose recorded semantics remain unproven, missing producer records, and any commit or PR phase record or ledger entry. Pending finalization records still count as evidence because their attempts have already started. The backward-edge caller waits for durable invalidation before changing its in-memory completion state and refuses a missing workflow. Recovery guidance directs operators to retain evidence and use a compatible runtime or a separately reviewed semantic mapping.
+Reason: A missing receipt does not prove that an external side effect never happened. Keeping the check beside the destructive write also protects direct recorder callers.
+Revisit when: Admission supplies a recorded plan and proves a safe boundary before checkpoints or other recovery work. These refusal checks do not grant semantic admission or permit gate receipt regeneration. QuarantinedProducerRecoveryRefusalTest covers retained SQLite rows, attempts, outputs, ledger entries, and checkpoints. This audit authored the test without executing it.
+
+## [2026-09-28] Effective execution policy descriptors, SKILL-384
+
+Context: Composition identity did not cover resolved gate commands or the shared rules that interpret receipts, budgets, checkpoints, and finalization.
+
+Decision: Add immutable effective-policy descriptors with named identities, semantic revisions, and bounded input digests. Hash command argv after the existing wrapper resolver. Include command family, discovery or verification role, cache mode, findings settings, pack identity, validation depth, and timeout. Keep argv order and absent values. Compare the complete supported policy set separately from composition. Durable compatibility accepts only the definition's exact traversal until an explicit mapping has behavioral coverage.
+
+Reason: An unchanged strategy id cannot prove that its command or recovery behavior is unchanged. Source hashes would also refuse harmless edits. Semantic revisions name supported behavior, while effective-input digests detect changed execution settings.
+
+Revisit when: Creation and admission resolve these inputs and pass the accepted plan to execution. The codec and effective-policy comparison still have no durable callers. Their tests cover encoding and compatibility, not transaction rollback, lease fencing, or recovery authorization.
+
+## [2026-09-28] Continuation claim admits the persisted descriptor, SKILL-384
+
+Context: Continuation claim checked only the lookup timestamp. A descriptor could change after lookup without changing that timestamp, and a successful claim returned no execution plan.
+
+Decision: Re-read the workflow, route identity, ownership, and descriptor inside the existing claim transaction. Compare the descriptor with supported composition and caller-supplied effective inputs before the status write. Return the recorded immutable plan only when the timestamp claim succeeds. Refuse changed ownership, reserved takeover, terminal status, and a definition that conflicts with the route scope. Record bounded semantic refusal diagnostics outside the rolled-back transaction and preserve the primary exception if diagnostics fail. The execution encoder also rejects traversal overrides that have no supported mapping.
+
+Reason: Lookup is advisory. Claim must check the authoritative descriptor under the same transaction as its mutation, and its consumer needs the plan that passed that check. FeatureTaskContinuationAdmissionTest exercises SQLite preservation, distinct descriptor refusals, same-timestamp descriptor changes, stale ownership, cosmetic ordering, and diagnostic failure without launching phases.
+
+Revisit when: Production launchers resolve effective inputs and consume the returned plan. Worker acquisition, creation, runner preparation, and recovery remain separate admission gaps. This change does not authorize those boundaries or gate receipt regeneration.

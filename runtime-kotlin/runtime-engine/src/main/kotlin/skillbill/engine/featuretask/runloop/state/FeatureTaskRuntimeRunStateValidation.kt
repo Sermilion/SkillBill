@@ -6,6 +6,7 @@ import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadK
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.goalrunner.status.completed
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.decodeValidationEvidenceFromArtifact
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
@@ -71,13 +72,25 @@ internal fun invalidateUnsettledResumedCompletions(
   state: ValidationSettlementState,
   validation: ValidationSettlementValidation,
 ) {
+  val gateOutputs =
+    state.initialRecords.values
+      .filter {
+        validation.resumeRules(
+          it.phaseId,
+        ).requiresValidCompletedOutput && it.status == WorkflowStepStatus.COMPLETED
+      }
+      .associate { it.phaseId to validation.validatedRecordToOutput(it) }
   state.completed.sortedBy(state.transitions.forwardPhaseIds::indexOf).forEach { stepId ->
     if (stepId !in state.completed) return@forEach
     val record = state.initialRecords[stepId] ?: return@forEach
     val output = {
       try {
-        validation.validatedRecordToOutput(record)
-      } catch (_: InvalidFeatureTaskRuntimePhaseOutputSchemaError) {
+        if (stepId in gateOutputs) gateOutputs[stepId] else validation.validatedRecordToOutput(record)
+      } catch (error: InvalidFeatureTaskRuntimePhaseOutputSchemaError) {
+        if (validation.resumeRules(stepId).requiresValidCompletedOutput
+        ) {
+          throw error
+        }
         null
       }
     }

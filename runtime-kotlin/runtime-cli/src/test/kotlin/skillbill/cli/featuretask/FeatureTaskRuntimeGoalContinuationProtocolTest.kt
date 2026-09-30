@@ -7,7 +7,10 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinua
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.ports.agentrun.ExecutableLookup
+import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
@@ -37,6 +40,10 @@ class FeatureTaskRuntimeGoalContinuationProtocolTest {
           repositoryRoot = fixture.repositoryRoot,
           userHome = fixture.home,
           executableLookup = ExecutableLookup { true },
+          workflowGitOperations =
+            object : WorkflowGitOperations by NoopWorkflowGitOperations {
+              override fun repositoryOwnedPaths(repoRoot: Path) = WorkflowGitNameListResult.Listed(listOf("Main.kt"))
+            },
           featureTaskRuntimeRunOverride = { request ->
             captured = request
             FeatureTaskRuntimeRunReport.Completed(

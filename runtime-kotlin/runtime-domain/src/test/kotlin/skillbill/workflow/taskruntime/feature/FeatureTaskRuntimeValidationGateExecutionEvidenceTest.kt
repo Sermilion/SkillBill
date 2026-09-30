@@ -10,7 +10,6 @@ import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeValidationGateExecutionEvidenceTest {
@@ -79,7 +78,7 @@ class FeatureTaskRuntimeValidationGateExecutionEvidenceTest {
   }
 
   @Test
-  fun `legacy gate run without executed_checks decodes as absent evidence`() {
+  fun `passed evidence without complete command execution facts is rejected`() {
     val legacy =
       evidenceArtifact(
         checks = emptyList(),
@@ -93,10 +92,9 @@ class FeatureTaskRuntimeValidationGateExecutionEvidenceTest {
             ),
           ),
       )
-    val decoded = FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(legacy, "validate")
-    assertFalse(decoded.evidenceRecorded)
-    assertFalse(decoded.zeroWork)
-    assertEquals(emptyList(), decoded.checks)
+    assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+      FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(legacy, "validate")
+    }
   }
 
   @Test
@@ -114,6 +112,32 @@ class FeatureTaskRuntimeValidationGateExecutionEvidenceTest {
             ),
         ),
         "validate",
+      )
+    }
+  }
+
+  @Test
+  fun `zero gate runs and failed terminal verification cannot prove success`() {
+    assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+      FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(
+        evidenceArtifact(checks = emptyList(), gateRuns = emptyList()),
+        "empty-gate-success",
+      )
+    }
+    assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+      FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(
+        evidenceArtifact(
+          checks = listOf("runtime-engine|compileKotlin"),
+          gateRuns =
+            listOf(
+              gateRun(outcome = ValidationGateRunOutcome.PASSED).toArtifactMap(),
+              gateRun(
+                cacheMode = ValidationGateCacheMode.FORCED_FULL,
+                outcome = ValidationGateRunOutcome.FAILED,
+              ).toArtifactMap(),
+            ),
+        ),
+        "failed-terminal-verification",
       )
     }
   }
@@ -143,6 +167,46 @@ class FeatureTaskRuntimeValidationGateExecutionEvidenceTest {
     }
   }
 
+  @Test
+  fun eachMissingExecutionFactAndUnknownOutcomeFailsAtItsTypedBoundary() {
+    val original = gateRun().toArtifactMap()
+    val keys =
+      listOf(
+        ValidationEvidencePayloadKeys.COMMAND,
+        ValidationEvidencePayloadKeys.EXIT_CODE,
+        ValidationEvidencePayloadKeys.EXECUTED_CHECKS,
+        ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT,
+        ValidationEvidencePayloadKeys.OUTCOME,
+        ValidationEvidencePayloadKeys.CACHE_MODE,
+      )
+    val invalidRuns =
+      keys.map { key -> original - key } +
+        listOf(
+          original + (ValidationEvidencePayloadKeys.OUTCOME to "unknown"),
+          original + (ValidationEvidencePayloadKeys.EXIT_CODE to 1),
+        )
+    invalidRuns.forEach { run ->
+      assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+        FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(
+          evidenceArtifact(listOf("runtime-engine|compileKotlin"), listOf(run)),
+          "validate",
+        )
+      }
+    }
+    val valid = evidenceArtifact(listOf("runtime-engine|compileKotlin"), listOf(original))
+    listOf(
+      valid + (ValidationEvidencePayloadKeys.GATE_RUN_COUNT to 2),
+      valid + (
+        ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT to
+          mapOf(ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT_FINGERPRINT to "unrelated")
+      ),
+    ).forEach { invalid ->
+      assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+        FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(invalid, "validate")
+      }
+    }
+  }
+
   private fun evidenceArtifact(
     checks: List<String>,
     gateRuns: List<Any>,
@@ -169,5 +233,8 @@ class FeatureTaskRuntimeValidationGateExecutionEvidenceTest {
       cacheMode = cacheMode,
       executedWorkUnits = executedWorkUnits,
       executedChecks = executedChecks,
+      command = "./gradlew check",
+      exitCode = if (outcome == ValidationGateRunOutcome.PASSED) 0 else 1,
+      repositoryCheckpoint = "checkpoint",
     )
 }

@@ -21,7 +21,7 @@ class FeatureTaskRuntimeValidationGateStatusProjectionTest {
     val workflowId = "wfl-gate-evidence-status"
     val harness = statusHarness()
     val recorder = harness.recorder
-    recorder.ensureWorkflowOpen(workflowId, "goal-gate-evidence")
+    recorder.openTestWorkflow(workflowId, "goal-gate-evidence")
     val output = gateEvidenceOutput()
     recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
@@ -78,6 +78,7 @@ class FeatureTaskRuntimeValidationGateStatusProjectionTest {
             executedChecks = listOf("runtime-engine|compileKotlin", "runtime-engine|test"),
             command = "./gradlew check --continue",
             exitCode = 0,
+            repositoryCheckpoint = "checkpoint",
           ),
         ),
       requiredCommand = "./gradlew check --continue",
@@ -100,7 +101,7 @@ class FeatureTaskRuntimeValidationGateStatusProjectionTest {
     val workflowId = "wfl-gate-evidence-zero-work"
     val harness = statusHarness()
     val recorder = harness.recorder
-    recorder.ensureWorkflowOpen(workflowId, "goal-gate-evidence-zero-work")
+    recorder.openTestWorkflow(workflowId, "goal-gate-evidence-zero-work")
     val output =
       FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
         phaseId = "validate",
@@ -115,6 +116,7 @@ class FeatureTaskRuntimeValidationGateStatusProjectionTest {
               executedChecks = emptyList(),
               command = "./gradlew check",
               exitCode = 0,
+              repositoryCheckpoint = "checkpoint",
             ),
           ),
         requiredCommand = "./gradlew check",

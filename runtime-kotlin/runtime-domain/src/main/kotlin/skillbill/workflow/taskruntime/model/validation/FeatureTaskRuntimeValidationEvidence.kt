@@ -43,15 +43,15 @@ data class FeatureTaskRuntimeValidationEvidence(
     sourceLabel: String,
   ): FeatureTaskRuntimeValidationCommandResult {
     val result =
-      results.lastOrNull { it.command == requiredCommand }
+      results.lastOrNull()?.takeIf { it.command == requiredCommand }
         ?: throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(
           sourceLabel,
-          "missing required validation command result '$requiredCommand'.",
+          "The terminal result must identify the required validation command.",
         )
     if (result.exitCode != 0) {
       throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(
         sourceLabel,
-        "required validation command '$requiredCommand' exited with ${result.exitCode}.",
+        "Required terminal validation command exited with ${result.exitCode}.",
       )
     }
     return result
@@ -67,7 +67,7 @@ data class FeatureTaskRuntimeValidationEvidence(
     if (result.exitCode != 0) {
       throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(
         sourceLabel,
-        "the final validation command '${result.command}' exited with ${result.exitCode}.",
+        "The final validation command exited with ${result.exitCode}.",
       )
     }
     return result
@@ -84,15 +84,14 @@ data class FeatureTaskRuntimeValidationEvidence(
           ValidationEvidencePayloadKeys.RESULTS,
         )
       val unknown = raw.keys - allowed
-      if (unknown.isNotEmpty()) invalid(sourceLabel, "unknown keys ${unknown.sorted()}.")
+      if (unknown.isNotEmpty()) invalid(sourceLabel, "Unknown validation evidence fields.")
       val version =
         raw[ValidationEvidencePayloadKeys.CONTRACT_VERSION] as? String
           ?: invalid(sourceLabel, "contract_version is missing.")
       if (version != FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION) {
         invalid(
           sourceLabel,
-          "unsupported contract_version '$version'; expected " +
-            "'$FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION'.",
+          "Unsupported validation evidence contract_version.",
         )
       }
       val rawResults =

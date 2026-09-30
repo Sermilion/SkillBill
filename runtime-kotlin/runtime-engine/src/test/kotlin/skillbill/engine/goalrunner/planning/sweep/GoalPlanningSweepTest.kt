@@ -14,6 +14,8 @@ import skillbill.engine.disposition
 import skillbill.engine.envelope
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimePhaseOutputTestValidator
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
@@ -121,6 +123,35 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+
+class GoalPlanningRequiredPersistenceTest {
+  @Test
+  fun rejectedPlanningStartAndBriefingNeverLaunchTheRejectedUnitOrPublishItsPlan() {
+    listOf("preplan", "plan").forEach { phase ->
+      RequiredPhaseWriteKind.entries.forEach { kind ->
+        val entry = RejectingPlanningRunLoopEntry(phase, kind)
+        val harness =
+          sweepHarness(SweepHarnessConfig(runLoopEntry = entry)) { launched, _, _ ->
+            validPhaseOutcome(launched)
+          }
+
+        val result =
+          assertIs<GoalPlanningSweepOutcome.Stopped>(
+            harness.sweep.prepare(harness.stateFor(manifest(subtaskCount = 2)), harness.request()),
+          )
+
+        assertEquals(phase, result.lastResumableStep)
+        assertTrue(result.blockedReason.contains("Required ${kind.wireValue} write rejected"))
+        assertEquals(0, harness.launcher.phases.count { it == phase })
+        assertEquals(0, harness.preparedCount())
+        assertTrue(
+          entry.terminalReasons.any { it?.contains("Required ${kind.wireValue} write rejected") == true },
+          "$phase $kind terminal reasons: ${entry.terminalReasons}",
+        )
+      }
+    }
+  }
+}
 
 class GoalPlanningSweepMigrateTest {
   @Test
@@ -3177,6 +3208,7 @@ private class SweepHarness(
 }
 
 private data class SweepHarnessConfig(
+  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
   val markPreparedThrows: Boolean = false,
   val planCheckpointThrows: Boolean = false,
   val outputValidator: FeatureTaskRuntimePhaseOutputValidator = FakePhaseOutputValidator(),
@@ -3285,6 +3317,7 @@ private fun sweepHarness(
         fanOutPort = config.fanOutPort,
         burstSchedule = config.burstSchedule,
         refreshLiveness = config.refreshLiveness,
+        runLoopEntry = config.runLoopEntry,
       ),
     )
   return SweepHarness(fixtures, launcher, sweep)

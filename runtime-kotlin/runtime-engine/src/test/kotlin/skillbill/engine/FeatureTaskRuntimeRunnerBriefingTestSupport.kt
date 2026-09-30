@@ -121,7 +121,7 @@ private fun inlineGoalContinuationHarness(
   commitPushOutput: String,
 ): RunnerHarness {
   val harness = goalContinuationHarness(repoRoot, git, goalContinuationLauncher(commitPushOutput))
-  harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+  harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
   check(
     harness.goalContinuationRecorder.recordGoalContinuationState(
       GoalContinuationStateRecordRequest(

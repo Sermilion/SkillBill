@@ -6,16 +6,18 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlemen
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepState
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
+import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaborationScope
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
@@ -23,10 +25,10 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
-import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 
 internal class FeatureTaskRuntimeRunLoopDurableState(
   private val facts: FeatureTaskRuntimeRunFacts,
@@ -34,14 +36,17 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
   override val session: FeatureTaskRuntimeRunLoopSession,
   override val telemetry: FeatureTaskRuntimeRunObservability,
   override val specSource: SpecSource,
-  override val transitions: FeatureTaskRuntimeTransitionDeclaration,
+  private val executionPlan: ResolvedPhaseExecutionPlan,
   private val runner: FeatureTaskRuntimeRunner,
 ) : PhaseRunState {
+  override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
+    FeatureTaskRuntimeRunLoopStepBindingCoordinator()
+  override val transitions: FeatureTaskRuntimeTransitionDeclaration = executionPlan.traversal
   private val workflowId = facts.workflowId
   private val repoRoot = facts.repoRoot
 
   override val records: PhaseRunRecords =
-    DurablePhaseRunRecords(runner.recorder, runner.phaseGates.decomposeTerminalRecorder)
+    DurablePhaseRunRecords(runner.recorder, runner.phaseGates.decomposeTerminalRecorder, facts.admittedExecution)
   override val goal: PhaseRunGoal = DurablePhaseRunGoal(runner.goalContinuationRecorder)
   override val settlements: PhaseRunSettlements = DurablePhaseRunSettlements(runner.phaseSettlementService)
   override val checkpoints: PhaseRunCheckpoints = DurablePhaseRunCheckpoints(runner.phaseGates.gitOperations)
@@ -50,19 +55,25 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
     PhaseAttemptCollaborators(runner.outputValidator, runner.clock, runner.diagnostics)
   override val phaseGates: FeatureTaskRuntimePhaseGates = runner.phaseGates
 
-  override fun strategyFor(stepId: String): PhaseStrategy =
-    runner.strategies.strategyFor(stepId, strategySelectionFacts(facts))
+  override fun strategyFor(stepId: String): PhaseStrategy = runner.strategies.strategyFor(stepId, executionPlan)
+
+  override fun runnerFor(stepId: String) = runner.strategies.runnerFor(stepId, executionPlan)
 
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? =
-    runner.strategies.selectedOwnerOf(stepId, strategySelectionFacts(facts))
+    runner.strategies.selectedOwnerOf(stepId, executionPlan)
 
-  override fun unselectedStepIds(): Set<String> = runner.strategies.unselectedStepIds(strategySelectionFacts(facts))
+  override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 
-  override fun step(run: PhaseRun): PhaseStepState =
-    FeatureTaskRuntimeRunLoopStepState(
-      PhaseAttemptScope(run.request, this),
+  override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
+    require(run.request === facts)
+    require(run.phaseId in executionPlan.selectedStepIds)
+    require(strategyFor(run.phaseId).policyFor(run.phaseId) == run.policy)
+    stepBinding.beginStepBinding(run)
+    return FeatureTaskRuntimeRunLoopStepBindings.create(
+      phaseAttemptLaunchCollaborationScope(PhaseAttemptRunHost(run.request, this, run.phaseId, this)),
       run,
     )
+  }
 
   override fun ensureFeatureBranch(guardPhase: String): FeatureTaskRuntimeBranchSetupOutcome =
     runner.phaseGates.branchSetupRunner.ensureFeatureBranch(facts, telemetry, guardPhase)
@@ -98,7 +109,8 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
     target: FeatureTaskRuntimePhaseSettlementTarget,
   ): PhaseSettledEnvelopeRead =
     try {
-      settlements.findEnvelope(target.workflowId, stepName, target.attempt)
+      settlements
+        .findEnvelope(target.workflowId, stepName, target.attempt)
         ?.let { PhaseSettledEnvelopeRead.Found(it.envelope) }
         ?: PhaseSettledEnvelopeRead.None
     } catch (error: InvalidFeatureTaskRuntimeValidationEvidenceSchemaError) {

@@ -1,15 +1,13 @@
 package skillbill.engine
 
-import skillbill.engine.featuretask.lifecycle.branch.Blocked
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 private val FEATURE_TASK_RUNTIME_QUARANTINED_RECORDS_ARTIFACT_KEY =
@@ -46,7 +44,7 @@ class FeatureTaskRuntimeQuarantineRegenerateTest {
   }
 
   @Test
-  fun `a rejected record whose producer the pipeline dropped blocks durably with a value-required reason`() {
+  fun `a traversal dropping a recorded producer is refused before recovery`() {
     val surviving =
       listOf(
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
@@ -74,11 +72,11 @@ class FeatureTaskRuntimeQuarantineRegenerateTest {
     harness.seedPhase("implement", "completed", 1, phaseAgent("implement"), legacyImplement)
     harness.seedPhase("simplify", "completed", 1, phaseAgent("simplify"), SIMPLIFY_OUTPUT)
 
-    val report = harness.runner.run(harness.request(truncated))
-
-    val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(report)
-    assertEquals("audit", blocked.lastIncompletePhase)
-    assertContains(blocked.blockedReason, "produced_outputs.value is required")
+    val records = harness.recorder.loadPhaseRecords(WORKFLOW_ID)
+    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+      harness.runner.run(harness.request(truncated))
+    }
+    assertEquals(records, harness.recorder.loadPhaseRecords(WORKFLOW_ID))
     assertTrue(
       harness.launchedPromptPhaseOrder().none { it == "implement" },
       "a dropped producer is never re-entered",
@@ -88,7 +86,7 @@ class FeatureTaskRuntimeQuarantineRegenerateTest {
   @Test
   fun `quarantine evidence is append-only retrievable in order and crash-replay idempotent`() {
     val harness = runnerHarness()
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     val first =
       FeatureTaskRuntimeQuarantineEntry(
         producingPhaseId = "implement",
@@ -124,7 +122,7 @@ class FeatureTaskRuntimeQuarantineRegenerateTest {
   @Test
   fun `a pre-change identity-bearing entry decodes with the identity unchanged`() {
     val harness = runnerHarness()
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     val identity = "rod_prechange_identity"
     val artifacts = harness.repository.taskRuntimeArtifacts(WORKFLOW_ID).toMutableMap()
     artifacts[FEATURE_TASK_RUNTIME_QUARANTINED_RECORDS_ARTIFACT_KEY] =

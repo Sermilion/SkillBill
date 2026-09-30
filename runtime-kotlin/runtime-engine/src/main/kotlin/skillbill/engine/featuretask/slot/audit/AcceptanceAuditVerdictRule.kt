@@ -1,7 +1,7 @@
 package skillbill.engine.featuretask.slot.audit
 
-import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -58,12 +58,5 @@ internal class AcceptanceAuditVerdictRule(
       }
       return null
     }
-
-    fun auditProseValue(outputObject: FeatureTaskRuntimeWorkflowArtifactMap?): String? =
-      outputObject?.get(SharedPayloadKeys.PRODUCED_OUTPUTS)
-        ?.let(JsonCodec::anyToStringAnyMap)
-        ?.get(SharedPayloadKeys.VALUE)
-        ?.toString()
-        ?.takeIf(String::isNotBlank)
   }
 }

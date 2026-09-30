@@ -2,7 +2,7 @@ package skillbill.engine.goalrunner.planning.model
 
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.slot.PhaseRunner
-import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
@@ -27,7 +27,7 @@ internal data class GoalPlanningAttemptScope(
 
 internal data class GoalPlanningLaunch(
   val runner: PhaseRunner,
-  val state: PhaseLaunchState,
+  val state: PhaseAcceptedStepExecution,
   val prompt: PhaseStepPromptSource,
   val policy: PhaseStepPolicy,
   val invariantFields: Set<FeatureTaskRuntimeRunInvariantPromptField>,
@@ -47,6 +47,7 @@ internal data class GoalPlanningProduceAttemptArgs(
   val phase: GoalPlanningPhaseContext,
   val recordedOutputs: List<FeatureTaskRuntimePhaseOutput>,
   val priorSchemaFailure: String? = null,
+  val attempt: Int = 1,
   val resolvedBodies: GoalPlanningResolvedBoundaryBodies = GoalPlanningResolvedBoundaryBodies(),
 )
 

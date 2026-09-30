@@ -57,7 +57,7 @@ class SQLiteDatabaseSessionFactory(
               diagnostics = diagnostics,
             ),
           ) {
-            block(unitOfWork(openDb))
+            block(unitOfWork(openDb, transactionActive = true))
           }
         }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
       } finally {
@@ -78,7 +78,7 @@ class SQLiteDatabaseSessionFactory(
               diagnostics = diagnostics,
             ),
           ) {
-            block(unitOfWork(openDb))
+            block(unitOfWork(openDb, transactionActive = true))
           }
         }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
       } finally {
@@ -107,13 +107,24 @@ class SQLiteDatabaseSessionFactory(
             diagnostics = diagnostics,
           ),
         ) {
-          block(unitOfWork(openDb))
+          block(unitOfWork(openDb, transactionActive = true))
         }
       }
     }
 
-  private fun unitOfWork(openDb: OpenDatabase): SQLiteUnitOfWork =
-    SQLiteUnitOfWork(openDb.connection, openDb.dbPath, clock, diagnostics, workflowSnapshotValidator, runtimeVersion)
+  private fun unitOfWork(
+    openDb: OpenDatabase,
+    transactionActive: Boolean = false,
+  ): SQLiteUnitOfWork =
+    SQLiteUnitOfWork(
+      openDb.connection,
+      openDb.dbPath,
+      clock,
+      diagnostics,
+      workflowSnapshotValidator,
+      runtimeVersion,
+      transactionActive,
+    )
 
   private fun <T> withWriteDatabase(block: (OpenDatabase) -> T): T {
     val dbPath = resolveDbPath()

@@ -290,7 +290,10 @@ class PhaseReviewRunTest {
     config: RuntimeHarnessConfig,
     runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
   ): PhaseRunEntry {
-    val runner = telemetryRunnerHarness(runtimeConfig = config, databaseFactory = { database }).runner
+    val runner =
+      telemetryRunnerHarness(runtimeConfig = config.copy(seedDurableWorkflow = false), databaseFactory = {
+        database
+      }).runner
     return phaseRunEntry(runner, database, clock, runLoopEntry)
   }
 

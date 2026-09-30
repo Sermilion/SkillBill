@@ -55,8 +55,16 @@ internal class GoalRunnerControlCoordinator(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
     expectedOwnerToken: String?,
+    beforeMutation: (UnitOfWork) -> Unit = {},
   ): Boolean =
     database.transaction { unitOfWork ->
+      if (unitOfWork.goalRunnerControls.controlState(
+          parentWorkflowId,
+        ).executionLease?.ownerToken != expectedOwnerToken
+      ) {
+        return@transaction false
+      }
+      beforeMutation(unitOfWork)
       reconcileControlStateForManifest(unitOfWork, parentWorkflowId)
       unitOfWork.goalRunnerControls.acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken)
     }

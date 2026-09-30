@@ -21,6 +21,9 @@ class FeatureTaskRuntimeBuildGateReceiptProjectionTest {
               cacheMode = "cache_eligible",
               executedWorkUnits = 1,
               executedChecks = listOf("runtime-engine|compileKotlin"),
+              command = "./gradlew compileKotlin",
+              exitCode = 0,
+              repositoryCheckpoint = "checkpoint-fp",
             ),
           ),
       )

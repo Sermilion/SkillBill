@@ -2,11 +2,13 @@ package skillbill.engine.featuretask.validation
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
+import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateProgressFromArtifact
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRepairWindowPhase
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
 class FeatureTaskRuntimeValidationGateTest {
@@ -61,6 +63,24 @@ class FeatureTaskRuntimeValidationGateTest {
     assertEquals(3, decodedWithRepairsUsed.repairsUsed)
   }
 
+  @Test
+  fun persistedProgressRejectsUnsupportedVersionsAndMissingExecutionFacts() {
+    val progress = progressArtifact(1, "passed", "cache_eligible", emptyMap())
+    val run = (progress.getValue("gate_runs") as List<*>).single() as Map<*, *>
+    val invalid =
+      listOf(
+        progress - "contract_version",
+        progress + ("contract_version" to "unsupported"),
+        progress + ("gate_run_count" to 2),
+        progress + ("gate_runs" to listOf(run - "command")),
+        progress + ("gate_runs" to listOf(run - "executed_checks")),
+        progress + ("gate_runs" to listOf(run + ("outcome" to "unknown"))),
+      )
+    invalid.forEach { artifact ->
+      assertFailsWith<InvalidWorkflowStateSchemaError> { decodeValidationGateProgressFromArtifact(artifact) }
+    }
+  }
+
   private fun validationFinding(
     module: String,
     rule: String,
@@ -108,14 +128,18 @@ class FeatureTaskRuntimeValidationGateTest {
       "contract_version" to FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION,
       "gate_run_count" to gateRunCount,
       "gate_runs" to
-        listOf(
+        List(gateRunCount) {
           mapOf(
             "duration_ms" to 1L,
             "outcome" to outcome,
             "cache_mode" to cacheMode,
             "executed_work_units" to 1,
-          ),
-        ),
+            "executed_checks" to emptyList<String>(),
+            "command" to "echo gate",
+            "exit_code" to if (outcome == "passed") 0 else 1,
+            "repository_checkpoint" to "checkpoint",
+          )
+        },
       "remaining_findings" to emptyList<Map<String, String?>>(),
     ) + extra
 }

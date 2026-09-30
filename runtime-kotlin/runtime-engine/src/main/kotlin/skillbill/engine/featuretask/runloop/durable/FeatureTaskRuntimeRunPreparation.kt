@@ -22,7 +22,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunIn
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationFieldAdoption
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 class FeatureTaskRuntimeRunPreparation(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
@@ -31,6 +30,7 @@ class FeatureTaskRuntimeRunPreparation(
   private val strategies: PhaseStrategyLookup,
 ) {
   fun prepare(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimePreparation {
+    requireNotNull(request.admittedExecution) { "Durable preparation requires transactional execution admission." }
     val persistedInvariants =
       try {
         runInvariantsStore.resolve(request.workflowId)
@@ -39,8 +39,9 @@ class FeatureTaskRuntimeRunPreparation(
           recorder.loadPhaseRecords(request.workflowId).orEmpty().values
             .filter { it.status == WorkflowStepStatus.COMPLETED }
             .map { it.phaseId }
-        val transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions
-        val resumeRules = strategies.resumeRules()
+        val plan = requireNotNull(request.admittedExecution).plan
+        val transitions = plan.traversal
+        val resumeRules = strategies.resumeRules(plan)
         val phase =
           transitions.forwardPhaseIds.firstOrNull {
             it !in completedPhases && it !in transitions.loopOnlyPhaseIds

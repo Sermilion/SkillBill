@@ -71,6 +71,7 @@ class FileSystemValidationGateRunner(
         executedCheckIdentities = executedCheckIdentities,
         findings = finalizeFindings(request, parsedFindings, exitCode, outcome, stdout),
         stdout = stdout,
+        command = request.argv.joinToString(" "),
       )
     } finally {
       runCatching { Files.deleteIfExists(outputFile) }

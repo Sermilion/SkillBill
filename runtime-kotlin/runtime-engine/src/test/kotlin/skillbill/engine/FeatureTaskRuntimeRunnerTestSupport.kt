@@ -27,6 +27,8 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconc
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimePhaseOutputTestValidator
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeProbeWriters
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionEntry
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
@@ -55,6 +57,7 @@ import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunStartup
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.slot.ApprovingReviewPhaseRunner
 import skillbill.engine.featuretask.slot.PhaseRunner
+import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.UnavailablePullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.testPhaseStrategies
@@ -104,6 +107,7 @@ import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.review.repository.ReviewRepository
@@ -136,6 +140,7 @@ import skillbill.ports.workflow.WorkflowStateRepositoryDefaults
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.model.FeatureTaskWorkflowCandidate
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
@@ -161,6 +166,7 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
+import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -178,6 +184,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputR
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputSourceLocation
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputValidationResult
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode.CACHE_ELIGIBLE
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome.FAILED
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome.PASSED
@@ -407,7 +414,7 @@ internal class RunnerHarness(
     agentId: String,
     outputArtifact: String?,
   ) {
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     recorder.recordPhaseStateForTest(phaseId, status, attemptCount, agentId, outputArtifact)
   }
 
@@ -417,7 +424,7 @@ internal class RunnerHarness(
     outputArtifact: String?,
     reviewPassNumber: Int,
   ) {
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = WORKFLOW_ID,
@@ -465,7 +472,7 @@ internal class RunnerHarness(
   }
 
   private fun seedCheckpointIdentityStore(store: Map<String, Any?>) {
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     repository.replaceTaskRuntimeArtifacts(
       WORKFLOW_ID,
       LinkedHashMap(repository.taskRuntimeArtifacts(WORKFLOW_ID)).apply {
@@ -499,7 +506,7 @@ internal class RunnerHarness(
     baseBranch: String?,
     created: Boolean,
   ) {
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     recorder.recordResolvedBranch(
       WORKFLOW_ID,
       FeatureTaskRuntimeResolvedBranch(
@@ -518,7 +525,7 @@ internal class RunnerHarness(
     blockedReason: String,
     failureDisposition: FeatureTaskRuntimeFailureDisposition? = null,
   ) {
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = WORKFLOW_ID,
@@ -535,7 +542,7 @@ internal class RunnerHarness(
   }
 
   fun seedReentryPhase(seed: SeedReentryPhaseSeed) {
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = WORKFLOW_ID,
@@ -556,7 +563,7 @@ internal class RunnerHarness(
     loopId: String,
     edgeIteration: Int,
   ) {
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     recorder.appendLedgerEntry(
       FeatureTaskRuntimePhaseLedgerRequest(
         workflowId = WORKFLOW_ID,
@@ -574,7 +581,7 @@ internal class RunnerHarness(
     phaseId: String,
     blockedReason: String,
   ) {
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = WORKFLOW_ID,
@@ -620,6 +627,7 @@ internal data class BranchSetupTestConfig(
 )
 
 internal data class RuntimeHarnessConfig(
+  val seedDurableWorkflow: Boolean = true,
   val branchSetup: BranchSetupTestConfig = BranchSetupTestConfig(),
   val repoRoot: Path = Path.of("/tmp/repo"),
   val environment: Map<String, String> = emptyMap(),
@@ -641,6 +649,7 @@ internal data class RuntimeHarnessConfig(
       ): String? = null
     },
   val validationGateRunner: ValidationGateRunner? = null,
+  val gateRepoLocalConfig: RepoLocalConfigPort = defaultRepoLocalConfigPort(),
   val validationGatePlatformManifests: List<PlatformManifest> = listOf(kotlinPackWithValidationGate()),
   val reviewRunner: PhaseRunner? = ApprovingReviewPhaseRunner,
   val launcher: RuntimeRecordingLauncher? = null,
@@ -678,6 +687,7 @@ private data class RuntimePhaseGatesDeps(
     },
   val recorder: FeatureTaskRuntimePhaseRecorder,
   val validationGateRunnerOverride: ValidationGateRunner? = null,
+  val gateRepoLocalConfig: RepoLocalConfigPort = defaultRepoLocalConfigPort(),
   val validationGatePlatformManifests: List<PlatformManifest> = listOf(kotlinPackWithValidationGate()),
 )
 
@@ -696,6 +706,7 @@ private fun runtimePhaseGates(deps: RuntimePhaseGatesDeps): FeatureTaskRuntimePh
             executedWorkUnits = 1,
             executedCheckIdentities = emptyList(),
             findings = emptyList(),
+            command = request.argv.joinToString(" "),
           )
       }
   return FeatureTaskRuntimePhaseGates(
@@ -740,7 +751,7 @@ private fun validationGateBoundaries(
       FeatureTaskRuntimeBuildGateCoordinator(
         validationGateResolver,
         validationGateRunner,
-        defaultRepoLocalConfigPort(),
+        deps.gateRepoLocalConfig,
         NoopRuntimeDiagnostics,
       ),
     sharedEvidenceResolver = deps.sharedEvidenceResolver,
@@ -884,13 +895,17 @@ private fun harnessWorkflowParts(database: DatabaseSessionFactory): RunnerHarnes
 private fun harnessCrashReconciler(
   database: DatabaseSessionFactory,
   supervisor: FeatureTaskRuntimeWorkerSupervisor,
-): FeatureTaskRuntimeCrashReconciler =
-  FeatureTaskRuntimeCrashReconciler(
+): FeatureTaskRuntimeCrashReconciler {
+  val execution = ExecutionPlanAdmissionFixture()
+  return FeatureTaskRuntimeCrashReconciler(
     database,
     supervisor,
     NoopRuntimeDiagnostics,
     testHarnessClock,
+    execution.compatibility,
+    execution.recoveryResolver(),
   )
+}
 
 private fun harnessPhaseSettlement(): FeatureTaskPhaseSettlementService =
   FeatureTaskPhaseSettlementService(
@@ -998,11 +1013,13 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
           recorder = deps.recorder,
           validationGateRunnerOverride = deps.runtimeConfig.validationGateRunner,
           validationGatePlatformManifests = deps.runtimeConfig.validationGatePlatformManifests,
+          gateRepoLocalConfig = deps.runtimeConfig.gateRepoLocalConfig,
         ),
       ),
     startup =
       FeatureTaskRuntimeRunStartup(
         crashReconciler = harnessCrashReconciler(deps.database, deps.crashSupervisor),
+        executionEntry = runnerExecutionEntry(deps.database, deps.runtimeConfig),
         runInvariantsStore = deps.runInvariantsStore,
       ),
     phaseSettlementService = harnessPhaseSettlement(),
@@ -1038,7 +1055,7 @@ internal class TelemetryRunnerHarness(
     agentId: String,
     outputArtifact: String?,
   ) {
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     recorder.recordPhaseStateForTest(phaseId, status, attemptCount, agentId, outputArtifact)
   }
 }
@@ -1137,6 +1154,7 @@ private fun telemetryHarnessRunner(
     startup =
       FeatureTaskRuntimeRunStartup(
         crashReconciler = harnessCrashReconciler(database, NoopFeatureTaskRuntimeWorkerSupervisor),
+        executionEntry = runnerExecutionEntry(database, runtimeConfig),
         runInvariantsStore = workflow.runInvariantsStore,
       ),
     phaseSettlementService = harnessPhaseSettlement(),
@@ -1154,6 +1172,79 @@ private fun harnessReviewRunner(
   harnessReviewRunnerSyncingPendingVerifyFindings(
     runtimeConfig.reviewRunner ?: DefaultPhaseRunner(launcher, runtimeConfig.harnessGitOperations),
   )
+
+private fun runnerExecutionEntry(
+  database: DatabaseSessionFactory,
+  config: RuntimeHarnessConfig,
+): FeatureTaskRuntimeExecutionEntry {
+  val repositoryIdentity = "repo-root-realpath-v1:/tmp/admission-repository"
+  val fixture =
+    ExecutionPlanAdmissionFixture(
+      selectedStrategies =
+        testPhaseStrategies(
+          config.launcher ?: RuntimeRecordingLauncher { facts(defaultPhaseOutput(it)) },
+          config.harnessGitOperations,
+          delegatedReviewRunner = config.delegatedReviewRunner,
+        ),
+      repository = repositoryIdentity,
+      specPath = config.branchSetup.specReference,
+    )
+  val repositories = runnerRepositoryPaths(repositoryIdentity)
+  val resolver =
+    FeatureTaskRuntimeExecutionPlanResolver(
+      fixture.strategies,
+      fixture.codec,
+      fixture.validator,
+      ValidationGateResolver { config.validationGatePlatformManifests },
+      object : WorkflowGitOperations by config.harnessGitOperations {
+        override fun repositoryOwnedPaths(repoRoot: Path) = WorkflowGitNameListResult.Listed(listOf("src/Main.kt"))
+      },
+      config.gateRepoLocalConfig,
+      database,
+      fixture.compatibility,
+    )
+  if (!config.seedDurableWorkflow) {
+    return FeatureTaskRuntimeExecutionEntry(
+      database,
+      fixture.admission,
+      resolver,
+      repositories,
+    )
+  }
+  val definition = SkeletonDefinition.forRun(config.goalContinuation != null)
+  val facts =
+    PhaseStrategySelectionFacts(
+      definition,
+      setOfNotNull(config.codeReviewMode, config.goalContinuation?.qualityGateSelection),
+    )
+  val inputs =
+    resolver.resolveInputs(
+      config.repoRoot,
+      config.goalContinuation?.qualityGateSelection,
+      config.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
+      null,
+    )
+  val descriptor =
+    fixture.validator.read(
+      fixture.codec.encodeExecution(fixture.strategies.executionPlan(facts), inputs),
+      "runner fixture",
+    )
+  database.transaction { unit ->
+    if (unit.workflowStates.getFeatureTaskWorkflow(WORKFLOW_ID) == null) {
+      fixture.seed(
+        unit.workflowStates,
+        WORKFLOW_ID,
+        ISSUE_KEY,
+        descriptor,
+        fixture.identity(WORKFLOW_ID, ISSUE_KEY).copy(
+          routeScope =
+            if (config.goalContinuation == null) FeatureTaskRouteScope.STANDALONE else FeatureTaskRouteScope.GOAL_CHILD,
+        ),
+      )
+    }
+  }
+  return FeatureTaskRuntimeExecutionEntry(database, fixture.admission, resolver, repositories)
+}
 
 private fun telemetryRunnerPhaseGates(
   runtimeConfig: RuntimeHarnessConfig,
@@ -1181,6 +1272,7 @@ private fun telemetryRunnerPhaseGates(
       recorder = workflow.recorder,
       validationGateRunnerOverride = runtimeConfig.validationGateRunner,
       validationGatePlatformManifests = runtimeConfig.validationGatePlatformManifests,
+      gateRepoLocalConfig = runtimeConfig.gateRepoLocalConfig,
     ),
   )
 
@@ -1436,6 +1528,7 @@ internal fun failThenPassValidationGateRunner(gateCalls: AtomicInteger): Validat
           } else {
             emptyList()
           },
+        command = request.argv.joinToString(" "),
       )
     }
   }
@@ -2026,7 +2119,7 @@ private fun FeatureTaskRuntimeWorkerOwnership.matchesActiveOwnership(
     leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE
 
 internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaults() {
-  private var workerOwnership: FeatureTaskRuntimeWorkerOwnership? = null
+  private val workerOwnership = mutableMapOf<String, FeatureTaskRuntimeWorkerOwnership>()
   private val goalChildWorkflowIds = mutableMapOf<String, List<String>>()
 
   fun seedGoalChildWorkflowIds(
@@ -2040,19 +2133,23 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
     synchronized(this) { goalChildWorkflowIds[parentWorkflowId].orEmpty() }
 
   fun seedWorkerOwnership(ownership: FeatureTaskRuntimeWorkerOwnership) {
-    workerOwnership = ownership
+    workerOwnership[ownership.workflowId] = ownership
   }
 
   override fun getFeatureTaskRuntimeWorkerOwnership(workflowId: String) =
-    synchronized(this) { workerOwnership?.takeIf { it.workflowId == workflowId } }
+    synchronized(this) { workerOwnership[workflowId] }
 
   override fun acquireFeatureTaskRuntimeWorker(
     ownership: FeatureTaskRuntimeWorkerOwnership,
     expectedUpdatedAt: String?,
   ): Boolean =
     synchronized(this) {
-      if (workerOwnership != null || taskRuntimeRows[ownership.workflowId]?.updatedAt != expectedUpdatedAt) return false
-      workerOwnership = ownership
+      if (workerOwnership[ownership.workflowId] != null ||
+        taskRuntimeRows[ownership.workflowId]?.updatedAt != expectedUpdatedAt
+      ) {
+        return false
+      }
+      workerOwnership[ownership.workflowId] = ownership
       true
     }
 
@@ -2062,9 +2159,9 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
     expectedGeneration: Long,
   ): Boolean =
     synchronized(this) {
-      val current = workerOwnership ?: return false
+      val current = workerOwnership[workflowId] ?: return false
       if (!current.matchesActiveOwnership(workflowId, expectedOwnerToken, expectedGeneration)) return false
-      workerOwnership =
+      workerOwnership[workflowId] =
         current.copy(
           leaseState = TAKEOVER_RESERVED,
         )
@@ -2077,22 +2174,22 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
     expectedGeneration: Long,
   ): Boolean =
     synchronized(this) {
-      val current = workerOwnership ?: return false
+      val current = workerOwnership[ownership.workflowId] ?: return false
       if (
         current.ownerToken != expectedOwnerToken || current.generation != expectedGeneration ||
         current.leaseState != TAKEOVER_RESERVED
       ) {
         return false
       }
-      workerOwnership = ownership
+      workerOwnership[ownership.workflowId] = ownership
       true
     }
 
   override fun heartbeatFeatureTaskRuntimeWorker(ownership: FeatureTaskRuntimeWorkerOwnership): Boolean =
     synchronized(this) {
-      val current = workerOwnership ?: return false
+      val current = workerOwnership[ownership.workflowId] ?: return false
       if (current.ownerToken != ownership.ownerToken || current.generation != ownership.generation) return false
-      workerOwnership = ownership
+      workerOwnership[ownership.workflowId] = ownership
       true
     }
 
@@ -2102,11 +2199,11 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
     generation: Long,
   ): Boolean =
     synchronized(this) {
-      val current = workerOwnership ?: return false
+      val current = workerOwnership[workflowId] ?: return false
       if (current.workflowId != workflowId || current.ownerToken != ownerToken || current.generation != generation) {
         return false
       }
-      workerOwnership = null
+      workerOwnership.remove(workflowId)
       true
     }
 
@@ -2114,18 +2211,22 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
     nowInstant: String,
   ): List<FeatureTaskRuntimeCrashReconciliationCandidate> =
     synchronized(this) {
-      val ownership = workerOwnership ?: return@synchronized emptyList()
-      val row = taskRuntimeRows[ownership.workflowId] ?: return@synchronized emptyList()
-      if (row.workflowStatus != "running" || !leaseExpiredBefore(ownership.expiresAt, nowInstant)) {
-        return@synchronized emptyList()
-      }
-      listOf(
+      workerOwnership.values.mapNotNull { ownership ->
+        val row = taskRuntimeRows[ownership.workflowId] ?: return@mapNotNull null
+        if (row.workflowStatus != "running" ||
+          !leaseExpiredBefore(
+            ownership.expiresAt,
+            nowInstant,
+          )
+        ) {
+          return@mapNotNull null
+        }
         FeatureTaskRuntimeCrashReconciliationCandidate(
           ownership = ownership,
           currentStepId = row.currentStepId,
           workflowStatus = row.workflowStatus,
-        ),
-      )
+        )
+      }
     }
 
   override fun reconcileFeatureTaskRuntimeCrashedWorker(
@@ -2136,14 +2237,14 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
     nowInstant: String,
   ): Boolean =
     synchronized(this) {
-      val current = workerOwnership ?: return@synchronized false
+      val current = workerOwnership[workflowId] ?: return@synchronized false
       if (current.workflowId != workflowId || current.ownerToken != ownerToken || current.generation != generation) {
         return@synchronized false
       }
       if (!leaseExpiredBefore(current.expiresAt, nowInstant)) return@synchronized false
       val row = taskRuntimeRows[workflowId] ?: return@synchronized false
       if (row.workflowStatus != "running") return@synchronized false
-      workerOwnership = null
+      workerOwnership.remove(workflowId)
       taskRuntimeRows[workflowId] = row.copy(workflowStatus = WorkflowStatus.PENDING.wireValue)
       reconciledInterruptionReasons[workflowId] = interruptionReason
       true
@@ -2345,3 +2446,14 @@ internal object HarnessDeadProcessSupervisor : FeatureTaskRuntimeWorkerSuperviso
 
   override fun pause(durationMillis: Long) = Unit
 }
+
+private fun runnerRepositoryPaths(repositoryIdentity: String): RepositoryEnclosingRootPort =
+  object : RepositoryEnclosingRootPort {
+    override fun enclosingRepositoryRoot(start: Path): Path = canonicalPath(start)
+
+    override fun canonicalPath(path: Path): Path = path.toAbsolutePath().normalize()
+
+    override fun optionalRealPath(path: Path): Path? = null
+
+    override fun repositoryIdentity(repoRoot: Path): String = repositoryIdentity
+  }

@@ -165,6 +165,7 @@ class PhasePullRequestRunTest {
       telemetryRunnerHarness(
         runtimeConfig =
           RuntimeHarnessConfig(
+            seedDurableWorkflow = false,
             repoRoot = repoRoot,
             launcher = launcher,
             pullRequestIdentityLookup = PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },

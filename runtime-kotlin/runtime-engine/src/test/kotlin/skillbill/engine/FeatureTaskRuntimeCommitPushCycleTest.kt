@@ -8,7 +8,7 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeCommitPushPa
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushReceipt
-import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitCycle
+import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopCommitCycle
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
@@ -26,12 +26,12 @@ class FeatureTaskRuntimeCommitPushCycleTest {
     val accepted =
       realFeatureTaskRuntimePhaseOutputValidator
         .validatePhaseOutput(
-          RuntimeCommitCycle.runtimeOwnedCommitPushOutput(
+          FeatureTaskRuntimeRunLoopCommitCycle.runtimeOwnedCommitPushOutput(
+            "commit_push",
             FeatureTaskRuntimeCommitPushReceipt(commitSha = sha, branch = "feat/x", baseBranch = "main", pushed = true),
           ),
           sourceLabel = "commit_push",
-        )
-        .requireAcceptedOutput("commit_push")
+        ).requireAcceptedOutput("commit_push")
     val produced = accepted.normalizedOutput.envelopeWireMap()[SharedPayloadKeys.PRODUCED_OUTPUTS] as Map<*, *>
     val result = produced[FeatureTaskRuntimeCommitPushPayloadKeys.COMMIT_PUSH_RESULT] as Map<*, *>
     assertEquals(sha, result[DecompositionManifestPayloadKeys.COMMIT_SHA])
@@ -72,7 +72,7 @@ class FeatureTaskRuntimeCommitPushCycleTest {
               agentAssignment = phasePerAgentAssignment(),
             ),
         )
-      harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+      harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
       harness.seedPhase("preplan", "completed", 1, phaseAgent("preplan"), PREPLAN_OUTPUT)
       harness.seedPhase("plan", "completed", 1, phaseAgent("plan"), PLAN_OUTPUT)
       harness.seedPhase("implement", "completed", 1, phaseAgent("implement"), IMPLEMENT_OUTPUT)
@@ -87,7 +87,12 @@ class FeatureTaskRuntimeCommitPushCycleTest {
 
       assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
       assertFalse("commit_push" in harness.launchedPromptPhaseOrder())
-      val output = harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("commit_push")?.outputArtifact.orEmpty()
+      val output =
+        harness.recorder
+          .loadPhaseRecords(WORKFLOW_ID)
+          ?.get("commit_push")
+          ?.outputArtifact
+          .orEmpty()
       assertTrue(output.contains("commit_sha"), output)
       assertTrue(
         git.createCommitMessages.any {

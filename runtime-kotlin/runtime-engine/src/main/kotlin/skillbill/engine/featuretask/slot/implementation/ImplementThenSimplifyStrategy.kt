@@ -5,13 +5,12 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.engine.featuretask.slot.state.isRetiredAuditGapLoop
 import skillbill.engine.featuretask.slot.state.recordEnvelope
 import skillbill.error.featuretask.UnknownPhaseStepError
@@ -21,7 +20,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class ImplementThenSimplifyStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
+class ImplementThenSimplifyStrategy : PhaseStrategy() {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to
@@ -76,7 +75,7 @@ class ImplementThenSimplifyStrategy(override val runner: PhaseRunner) : PhaseStr
 
   override fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome = runAgentStep(run, state)
 
   override fun resumeRules(stepId: String): PhaseResumeRules {
@@ -88,7 +87,7 @@ class ImplementThenSimplifyStrategy(override val runner: PhaseRunner) : PhaseStr
     }
   }
 
-  private object ImplementResumeRules : PhaseResumeRules {
+  internal object ImplementResumeRules : PhaseResumeRules {
     override fun resumedRecord(
       record: FeatureTaskRuntimePhaseRecord,
       stripped: FeatureTaskRuntimePhaseRecord,

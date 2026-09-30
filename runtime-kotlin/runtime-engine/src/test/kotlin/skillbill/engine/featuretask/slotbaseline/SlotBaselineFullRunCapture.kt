@@ -89,6 +89,7 @@ internal object SlotBaselineFullRunCapture {
       val git =
         committedRepoBranchSetup().gitOperations.also {
           it.currentBranchValue = GOAL_BRANCH
+          it.repositoryFingerprintValue = "slot-baseline-checkpoint"
           if (useBuildPack) it.changedPathsBetweenCommitsValue = listOf("src/Foo.kt")
         }
       val phaseLauncher = satisfiedAuditLauncher()
@@ -103,7 +104,8 @@ internal object SlotBaselineFullRunCapture {
             listOf(if (useBuildPack) kotlinPackWithBuildGate() else kotlinPackWithValidationGate()),
           validationGateRunner =
             object : ValidationGateRunner {
-              override fun run(request: ValidationGateRunRequest) = passed()
+              override fun run(request: ValidationGateRunRequest) =
+                passed().copy(command = request.argv.joinToString(" "))
             },
           validator = realFeatureTaskRuntimePhaseOutputValidator,
           launcher = phaseLauncher,

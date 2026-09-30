@@ -32,6 +32,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.core.AlwaysValidValidator
+import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerManifestStore
@@ -118,6 +119,7 @@ import skillbill.workflow.model.goalreview.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalProgressEventKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Files
 import java.nio.file.Path
@@ -141,6 +143,7 @@ private fun WorkflowService.openTestRuntime(
 ): WorkflowOpenResult =
   openFeatureTask(
     WorkflowServiceOpenFeatureTaskArgs(
+      executionPlan = testExecutionPlan(),
       kind = WorkflowFamilyKind.TASK_RUNTIME,
       sessionId = sessionId,
       currentStepId = currentStepId,
@@ -185,6 +188,7 @@ class WorkflowServiceTest {
       assertIs<WorkflowOpenResult.Ok>(
         service.openFeatureTask(
           WorkflowServiceOpenFeatureTaskArgs(
+            executionPlan = testExecutionPlan(),
             kind = WorkflowFamilyKind.TASK_RUNTIME,
             issueKey = "SKILL-120",
             repositoryIdentity = "repo-root-realpath-v1:/test/repository",
@@ -196,6 +200,7 @@ class WorkflowServiceTest {
       assertIs<WorkflowOpenResult.Ok>(
         service.openFeatureTask(
           WorkflowServiceOpenFeatureTaskArgs(
+            executionPlan = testExecutionPlan(),
             kind = WorkflowFamilyKind.TASK_RUNTIME,
             issueKey = "SKILL-120",
             repositoryIdentity = "repo-root-realpath-v1:/test/repository",
@@ -231,6 +236,7 @@ class WorkflowServiceTest {
       assertIs<WorkflowOpenResult.Ok>(
         service.openFeatureTask(
           WorkflowServiceOpenFeatureTaskArgs(
+            executionPlan = testExecutionPlan(),
             kind = WorkflowFamilyKind.TASK_RUNTIME,
             issueKey = "SKILL-120",
             repositoryIdentity = "repo-root-realpath-v1:/test/repository",
@@ -332,6 +338,7 @@ class WorkflowServiceTest {
       assertIs<WorkflowOpenResult.Ok>(
         service.openFeatureTask(
           WorkflowServiceOpenFeatureTaskArgs(
+            executionPlan = testExecutionPlan(),
             kind = WorkflowFamilyKind.TASK_RUNTIME,
             issueKey = "SKILL-141",
             repositoryIdentity = "repo-root-realpath-v1:/test/repository",
@@ -374,6 +381,7 @@ class WorkflowServiceTest {
       assertIs<WorkflowOpenResult.Ok>(
         service.openFeatureTask(
           WorkflowServiceOpenFeatureTaskArgs(
+            executionPlan = testExecutionPlan(),
             kind = WorkflowFamilyKind.TASK_RUNTIME,
             issueKey = "SKILL-120",
             repositoryIdentity = "repo-root-realpath-v1:/test/repository",
@@ -433,6 +441,7 @@ class WorkflowServiceTest {
       assertIs<WorkflowOpenResult.Ok>(
         service.openFeatureTask(
           WorkflowServiceOpenFeatureTaskArgs(
+            executionPlan = testExecutionPlan(),
             kind = WorkflowFamilyKind.TASK_RUNTIME,
             issueKey = "SKILL-120",
             repositoryIdentity = "repo-root-realpath-v1:/test/repository",
@@ -3931,6 +3940,7 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
     val opened =
       service.openFeatureTask(
         WorkflowServiceOpenFeatureTaskArgs(
+          executionPlan = testExecutionPlan(),
           kind = WorkflowFamilyKind.TASK_RUNTIME,
           issueKey = "SKILL-128",
           repositoryIdentity = REPOSITORY_IDENTITY,
@@ -4110,6 +4120,7 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
     fun setupFor(id: Int): GoalRunnerChildWorkflowSetup {
       val descriptor = descriptor(id)
       return GoalRunnerChildWorkflowSetup(
+        executionPlan = testExecutionPlan(SkeletonDefinition.GOAL_CHILD),
         subtaskId = id,
         workflowId = if (id == 1) CHILD_ID else "wfl-child-$id",
         goalBranch = "feat/SKILL-128",

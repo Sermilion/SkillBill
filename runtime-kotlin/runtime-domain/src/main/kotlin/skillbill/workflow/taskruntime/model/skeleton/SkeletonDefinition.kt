@@ -1,5 +1,6 @@
 package skillbill.workflow.taskruntime.model.skeleton
 
+import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.InvalidSkeletonDefinitionError
 import skillbill.error.featuretask.UnknownSkeletonDefinitionError
 
@@ -19,20 +20,29 @@ data class SkeletonDefinition(
   val slots: List<PhaseSlot>,
   val runStateKind: SkeletonRunStateKind = SkeletonRunStateKind.DURABLE,
   val intake: PhaseIntakeRequirement = PhaseIntakeRequirement.OPTIONAL,
+  val semanticRevision: Int = 1,
+  val stepIds: List<String> = slots.flatMap(PhaseSlot::steps),
 ) {
   init {
     val canonicalOrder = slots.zipWithNext().all { (previous, next) -> previous.ordinal < next.ordinal }
     if (slots.isEmpty() || !canonicalOrder) {
       throw InvalidSkeletonDefinitionError(id, slots.map(PhaseSlot::wireValue))
     }
+    require(semanticRevision > 0)
+    val available = slots.flatMap(PhaseSlot::steps)
+    if (stepIds.isEmpty() || stepIds != available.filter { it in stepIds }) {
+      throw InvalidPhaseStrategyCompositionError("definition $id has duplicate, reordered, or unowned steps")
+    }
   }
 
-  val stepIds: List<String> get() = slots.flatMap(PhaseSlot::steps)
-
   companion object {
-    val STANDALONE: SkeletonDefinition = SkeletonDefinition("standalone", PhaseSlot.entries)
+    val STANDALONE: SkeletonDefinition = SkeletonDefinition("standalone", PhaseSlot.entries, semanticRevision = 2)
     val GOAL_CHILD: SkeletonDefinition =
-      SkeletonDefinition("goal-child", PhaseSlot.entries.filter { it != PhaseSlot.PULL_REQUEST })
+      SkeletonDefinition(
+        "goal-child",
+        PhaseSlot.entries.filter { it != PhaseSlot.PULL_REQUEST },
+        semanticRevision = 2,
+      )
     val REVIEW: SkeletonDefinition =
       SkeletonDefinition("review", listOf(PhaseSlot.CODE_REVIEW), SkeletonRunStateKind.IN_MEMORY)
     val VALIDATION: SkeletonDefinition =

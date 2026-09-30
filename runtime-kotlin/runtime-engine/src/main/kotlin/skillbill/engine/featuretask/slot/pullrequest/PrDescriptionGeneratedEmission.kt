@@ -2,13 +2,13 @@ package skillbill.engine.featuretask.slot.pullrequest
 
 import skillbill.application.telemetry.model.PrDescriptionGeneratedRequest
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.state.PhasePullRequestContext
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 
 internal class PrDescriptionGeneratedEmission(
-  private val context: PhaseAttemptEnvironment,
+  private val context: PhasePullRequestContext,
   private val measurement: PullRequestMeasurement,
 ) {
   fun emit(
@@ -20,9 +20,8 @@ internal class PrDescriptionGeneratedEmission(
     runCatching { request(before, after, branch, baseBranch) }
       .onFailure { error ->
         RuntimeDiagnosticsBestEffortWarning.record(context.diagnostics, "$SKIPPED: measurement failed", error)
-      }
-      .getOrNull()
-      ?.let(context.phaseGates.lifecycleTelemetry::prDescriptionGenerated)
+      }.getOrNull()
+      ?.let(context.prDescriptionGenerated)
   }
 
   private fun request(
@@ -48,15 +47,19 @@ internal class PrDescriptionGeneratedEmission(
 
   private fun branchCounts(baseBranch: String): Pair<Int, Int>? {
     val repoRoot = context.request.repoRoot
-    val git = context.phaseGates.gitOperations
+    val git = context.gitOperations
     val base = "origin/$baseBranch"
     val commits =
       (git.commitCountAhead(repoRoot, base) as? WorkflowGitOperationResult.Ok)
-        ?.value?.trim()?.toIntOrNull()
+        ?.value
+        ?.trim()
+        ?.toIntOrNull()
         ?: return skip("$SKIPPED: could not count commits ahead of $base")
     val forkPoint =
       (git.mergeBaseWithHead(repoRoot, base) as? WorkflowGitOperationResult.Ok)
-        ?.value?.trim()?.takeIf(String::isNotEmpty)
+        ?.value
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
         ?: return skip("$SKIPPED: could not find the merge base of $base and $HEAD")
     val files =
       git.runtimePhaseChangedPathsBetweenCommits(repoRoot, forkPoint, HEAD) as? WorkflowGitNameListResult.Listed

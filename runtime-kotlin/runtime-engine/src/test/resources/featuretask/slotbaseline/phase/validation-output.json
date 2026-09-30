@@ -12,9 +12,39 @@
         "phase_id": "validate",
         "produced_outputs": {
             "validation_passed": true,
-            "value": "Project checks passed."
+            "validation_result": {
+                "checks": [],
+                "gate_run_count": 1,
+                "gate_runs": [
+                    {
+                        "cache_mode": "cache_eligible",
+                        "command": "echo collect-all",
+                        "duration_ms": "__NORMALIZED_DURATION__",
+                        "executed_checks": [],
+                        "executed_work_units": 1,
+                        "exit_code": 0,
+                        "outcome": "passed",
+                        "repository_checkpoint": "before-fix"
+                    }
+                ],
+                "repository_checkpoint": {
+                    "fingerprint": "before-fix"
+                },
+                "validation_evidence": {
+                    "contract_version": "0.2",
+                    "results": [
+                        {
+                            "command": "echo collect-all",
+                            "exit_code": 0
+                        }
+                    ]
+                },
+                "validation_status": "passed"
+            },
+            "value": "The runtime confirmed the pack validation gate passed."
         },
         "status": "completed",
-        "summary": "Phase produced a validated output."
+        "summary": "Validation satisfied by runtime-owned gate execution.",
+        "verdict": "satisfied"
     }
 }

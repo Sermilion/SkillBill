@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.review.core
 
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationRecorder
@@ -38,7 +39,15 @@ class FeatureTaskRuntimeReviewCheckpointRecorder(
     producerPhaseId: String,
     loopId: String,
     edgeIteration: Int,
-  ): Boolean = reviewGeneration.invalidateQuarantinedProducerRecord(workflowId, producerPhaseId, loopId, edgeIteration)
+    admitted: AdmittedFeatureTaskRuntimeExecution? = null,
+  ): Boolean =
+    reviewGeneration.invalidateQuarantinedProducerRecord(
+      workflowId,
+      producerPhaseId,
+      loopId,
+      edgeIteration,
+      admitted,
+    )
 
   fun recordedFindingVerdicts(output: Map<String, Any?>): List<ReviewFindingVerdict> =
     reviewGeneration.recordedFindingVerdicts(output)

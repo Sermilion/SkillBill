@@ -6,7 +6,6 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContex
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.runner.transitionsFor
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.planning.context.GoalPlanningSharedContextPacket
@@ -107,13 +106,14 @@ class DefaultGoalPlanningSweep(
       )
     val facts = GoalPlanningRunFacts(shared, request)
     val selection = strategySelectionFacts(facts)
+    val executionPlan = phaseStrategies.executionPlan(selection)
     val progress =
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
-        transitions = transitionsFor(facts),
+        transitions = executionPlan.traversal,
         outputValidator = outputValidator,
-        stepVerdictRule = slotStepVerdictRule(phaseStrategies, selection, diagnostics),
-        resumeRules = phaseStrategies.resumeRules(selection),
+        stepVerdictRule = slotStepVerdictRule(phaseStrategies, executionPlan, diagnostics),
+        resumeRulesFn = phaseStrategies.resumeRules(executionPlan),
       )
     val runState =
       GoalPlanningPhaseRunState(
@@ -121,6 +121,7 @@ class DefaultGoalPlanningSweep(
         progress = progress,
         planning = planning,
         strategies = phaseStrategies,
+        executionPlan = executionPlan,
         collaborators = PhaseAttemptCollaborators(outputValidator, clock, diagnostics),
         specSource = shared.specSource,
       )

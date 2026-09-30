@@ -13,6 +13,7 @@ import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
 import skillbill.engine.goalrunner.execution.support.withWorkflowId
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
+import skillbill.engine.openTestWorkflow
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.idestatus.model.WorktreeEditSource
 import skillbill.idestatus.model.WorktreeEditTick
@@ -174,7 +175,7 @@ class GoalRunnerStatusProjectionDegradationTest {
       }
     val phaseDatabase = FakeDatabaseSessionFactory(InMemoryWorkflowStates())
     val phaseRecorder = testPhaseRecorder(phaseDatabase, testWorkflowSnapshotValidator)
-    phaseRecorder.ensureWorkflowOpen(childWorkflowId, "session-measured")
+    phaseRecorder.openTestWorkflow(childWorkflowId, "session-measured")
     repeat(2) {
       phaseRecorder.appendLedgerEntry(
         FeatureTaskRuntimePhaseLedgerRequest(
@@ -220,7 +221,7 @@ class GoalRunnerStatusProjectionDegradationTest {
     val childWorkflowId = "wfl-child-unmeasured"
     val zeroRetryDatabase = FakeDatabaseSessionFactory(InMemoryWorkflowStates())
     val zeroRetryRecorder = testPhaseRecorder(zeroRetryDatabase, testWorkflowSnapshotValidator)
-    zeroRetryRecorder.ensureWorkflowOpen(childWorkflowId, "session-zero")
+    zeroRetryRecorder.openTestWorkflow(childWorkflowId, "session-zero")
     zeroRetryRecorder.appendLedgerEntry(
       FeatureTaskRuntimePhaseLedgerRequest(
         workflowId = childWorkflowId,

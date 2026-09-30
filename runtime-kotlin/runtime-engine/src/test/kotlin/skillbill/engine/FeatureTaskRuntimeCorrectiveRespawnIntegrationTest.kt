@@ -405,7 +405,7 @@ class FeatureTaskRuntimeCorrectiveRespawnIntegrationTest {
           agentAssignment = phasePerAgentAssignment(),
         ),
       )
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     harness.recorder.recordRejectedOutput(
       RejectedOutputDiagnosticRequest(
         workflowId = WORKFLOW_ID,
