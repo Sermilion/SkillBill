@@ -95,6 +95,7 @@ class InlineReviewDirectiveTest {
 
       assertTrue(directive.contains("\n## Review mode argument\n"), directive)
       assertFalse(directive.contains("## Depth\n"), "the inline worker body stays out of the delegated review")
+      assertFalse(directive.contains("Project authoring discipline"), "delegated review gets no authoring authority")
     } finally {
       home.toFile().deleteRecursively()
     }

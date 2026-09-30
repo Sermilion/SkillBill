@@ -6,12 +6,9 @@ import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
 
 internal object AcceptanceAuditPromptSections {
   const val AUDIT_READONLY_EVIDENCE_SENTENCE: String =
-    "Inspect production code without editing it. After implementation repairs, you may run the dominant " +
-      "pack's validation_gate.build_command only to check that the application compiles. Use only a " +
-      "compile-only command: do not run or compile test targets, full validation, lint, or a project-wide " +
-      "check. Report compilation failures as production gaps for audit_implement_fix and repeat the compile " +
-      "check after its repairs. A passing compile check does not prove test requirements; " +
-      "validation owns test execution and failures."
+    "Inspect production code without editing it. Run no compile, build, test, format, lint, or full-check " +
+      "command: build owns compilation and build proof, validate owns tests and failures, and audit reports " +
+      "gaps for audit_implement_fix."
 
   const val DIRECTIVE: String =
     "Verify the production behavior required by every acceptance criterion in the briefing against the " +

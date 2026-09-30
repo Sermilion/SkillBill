@@ -53,6 +53,14 @@ class InlineReviewLaunchParityTest {
     assertNotSame(AgentRunWorktreeEditObserver.NONE, review.worktreeEditObserver)
     assertFalse(review.readOnlyPhase)
     assertNull(review.progressIdleTimeout)
+    val reviewPrompt = requireNotNull(review.promptOverride)
+    assertTrue(reviewPrompt.contains("## Project authoring discipline (discover before write)"))
+    assertTrue(reviewPrompt.contains("authoring evidence record as leading prose before the findings register"))
+    val verifyPrompt =
+      launcher.requests
+        .mapNotNull { it.skillRunRequest.promptOverride }
+        .first { it.contains("Phase: verify_findings ") }
+    assertFalse(verifyPrompt.contains("Project authoring discipline"))
   }
 
   @Test

@@ -30,7 +30,11 @@ internal fun runtimeOwnedValidateAgentPhaseTask(): String {
     "Settle blocked only for a concrete external obstacle you cannot resolve, and describe the obstacle, " +
     "the required operator action, and any remaining failures in the value. Wall-clock timeout still stops " +
     "the subtask. The runtime does not rerun the checks itself. Never silence findings with annotations, " +
-    "baselines, disabled rules, weakened configuration, or skipped tests; fix root causes instead."
+    "baselines, disabled rules, weakened configuration, or skipped tests; fix root causes instead. " +
+    "Discover the applicable checks independently from your existing plan and current repository-scope inputs. " +
+    "Authoring phases may have run or deferred scoped formatter and analysis commands, but their reports are " +
+    "not delivered here in full and never clear a build or validation gate; deferred authoring checks are " +
+    "still discovered and run here."
 }
 
 internal fun validateGateTriagePhaseTask(): String =

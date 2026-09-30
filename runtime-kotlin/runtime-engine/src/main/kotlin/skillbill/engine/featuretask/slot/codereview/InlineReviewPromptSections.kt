@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.phase.prompt.directives.PhaseRetryShape
 import skillbill.engine.featuretask.phase.prompt.directives.ceremonyScalingOf
 import skillbill.engine.featuretask.phase.prompt.directives.envelopeContract
+import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
 import skillbill.review.model.ReviewIssueCategory
 import skillbill.workflow.model.goalreview.GoalSubtaskCommitFocusedAccounting
@@ -93,6 +94,7 @@ internal object InlineReviewPromptSections {
   fun implementFix(stepName: String): PhaseStepPromptSections =
     PhaseStepPromptSections(
       taskDirective = IMPLEMENT_FIX_DIRECTIVE,
+      authoringDiscipline = projectAuthoringDisciplineDirective(),
       testValueDiscipline = true,
       outputContract = envelopeContract(stepName, RECONCILIATION_REQUIREMENT + IMPLEMENT_FIX_SHAPE, ""),
     )
@@ -215,6 +217,8 @@ internal object InlineReviewPromptSections {
       "          \"contract_version\": \"$FEATURE_TASK_RUNTIME_REPAIR_RECEIPT_CONTRACT_VERSION\",\n" +
       "          \"entries\": [ { \"finding_id\": \"F-001\", \"outcome\": \"addressed\" } ] } }\n" +
       "      ```\n" +
-      "      Compilation and test execution belong exclusively to the validate phase. Do NOT build,\n" +
-      "      compile, run tests, or invoke `./gradlew check` / the pack collect-all gate here."
+      "      Build owns compile and build proof, and validate owns tests and full checks. Do NOT build,\n" +
+      "      compile, run tests, or invoke `./gradlew check` / the pack collect-all gate here. Safe scoped\n" +
+      "      authoring commands are allowed; put compact command and deferral evidence in the envelope\n" +
+      "      summary only, never as repair_receipt entries or findings."
 }

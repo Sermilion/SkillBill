@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.implementation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
 import skillbill.engine.featuretask.slot.jsonValueContent
 
 internal object ImplementationPromptSections {
@@ -22,8 +23,10 @@ internal object ImplementationPromptSections {
   const val SIMPLIFY_DIRECTIVE: String =
     "Within the current subtask scoped diff and owned paths only, apply high-confidence local simplifications: " +
       "dead feature-local code, one-use wrappers, unnecessary one-implementation abstractions, hand-rolled " +
-      "standard-library behavior, or equivalent local shrinkage. Do not perform whole-repository discovery, edit " +
-      "paths outside the boundary, run builds or tests, launch subagents, or delegate review. Never remove or " +
+      "standard-library behavior, or equivalent local shrinkage. Reading configuration and instructions that " +
+      "apply to owned paths is permitted narrow discovery; do not perform whole-repository search for " +
+      "simplification opportunities, edit paths outside the boundary, run builds or tests, launch subagents, " +
+      "or delegate review. Never remove or " +
       "weaken governed contracts, typed errors, loud-fail seams, parity tests, validator-backed rules, security " +
       "measures, accessibility requirements, or behavior the spec explicitly requires. Treat edits already " +
       "present as a no-op under the mutating-phase idempotency contract. Emit produced_outputs with a non-blank " +
@@ -36,8 +39,9 @@ internal object ImplementationPromptSections {
     """
     ## Simplify scope boundary
     The subtask_scope projection and repository checkpoint list the only owned paths and diff context
-    for this session. Work exclusively inside that boundary. Forbidden: repository-wide search for
-    complexity, edits outside listed paths, `./gradlew` build or check, test execution,
+    for this session. Work exclusively inside that boundary. Reading configuration and instructions that
+    apply to owned paths is permitted narrow discovery. Forbidden: repository-wide search for
+    simplification opportunities, edits outside listed paths, `./gradlew` build or check, test execution,
     `skill-bill phase review`, review subagents, delegated review, or spawning other agents.
     """.trimIndent()
 
@@ -56,7 +60,9 @@ internal object ImplementationPromptSections {
       notes =
         "Upstream plan value is structured prose carrying the executable_plan JSON; read and interpret it. " +
           "repository_checkpoint is runtime-owned: omit it entirely. Never invent a fingerprint. " +
-          "Compilation and test execution belong exclusively to the validate phase; tests_executed stays []. " +
+          "Compilation and build proof belong to build, and tests and full validation belong to validate; only " +
+          "the safe scoped authoring commands admitted above may run; tests_executed stays []. Record command " +
+          "outcomes and deferrals compactly in reconciliation_evidence.evidence, deviations, or unresolved_items. " +
           "changed_paths are repository-relative; deviations entries are objects { \"ref\", \"note\" }.",
     )
 
@@ -73,7 +79,9 @@ internal object ImplementationPromptSections {
           "  \"reconciled_state\": { \"reconciled\": true, \"evidence\": \"<tree at target>\" } }\n",
       notes =
         "Outcome on each reduction is no_edit, addressed, or unresolved. repository_checkpoint is " +
-          "runtime-owned: omit it entirely. Never invent a fingerprint. Do not run builds or tests here.",
+          "runtime-owned: omit it entirely. Never invent a fingerprint. Do not run builds or tests here. Record " +
+          "safe scoped command outcomes and deferrals compactly in reductions notes, reconciliation_evidence, " +
+          "or unresolved_items.",
     )
 
   fun implement(
@@ -82,6 +90,7 @@ internal object ImplementationPromptSections {
   ): PhaseStepPromptSections =
     PhaseStepPromptSections(
       taskDirective = IMPLEMENT_DIRECTIVE,
+      authoringDiscipline = projectAuthoringDisciplineDirective(),
       testValueDiscipline = true,
       continuation = continuationFor(stepId, inputs, SegmentKind.IMPLEMENTATION),
       valueContent = IMPLEMENT_VALUE_CONTENT,
@@ -94,6 +103,7 @@ internal object ImplementationPromptSections {
   ): PhaseStepPromptSections =
     PhaseStepPromptSections(
       taskDirective = SIMPLIFY_DIRECTIVE,
+      authoringDiscipline = projectAuthoringDisciplineDirective(),
       scopeBoundary = SIMPLIFY_SCOPE_BOUNDARY,
       continuation = continuationFor(stepId, inputs, SegmentKind.SIMPLIFICATION),
       valueContent = SIMPLIFY_VALUE_CONTENT,
