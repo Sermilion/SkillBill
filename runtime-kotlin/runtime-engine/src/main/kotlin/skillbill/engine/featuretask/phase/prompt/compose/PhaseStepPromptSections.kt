@@ -17,6 +17,7 @@ data class PhaseStepPromptSections(
   val ceremonyLine: String? = null,
   val runsValidationGate: Boolean = false,
   val runsBuildGate: Boolean = false,
+  val authoringDiscipline: String = "",
   val scopeBoundary: String = "",
   val testValueDiscipline: Boolean = false,
   val stepContext: String = "",

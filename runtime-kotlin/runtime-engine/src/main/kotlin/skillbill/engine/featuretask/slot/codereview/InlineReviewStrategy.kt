@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
@@ -154,12 +155,20 @@ object InlineReviewDirective {
           "Do not run `./gradlew check`, the pack collect-all gate, or `skill-bill phase validation`; " +
             "validate owns those.",
         )
+        appendLine()
+        appendLine(projectAuthoringDisciplineDirective())
+        appendLine()
         specPath?.let { path -> appendLine("Subtask spec path: `$path`.") }
         appendLine()
         append(CodeReviewDirectives.review)
         appendLine()
         append(CodeReviewDirectives.inlineReview)
         appendLine()
+        appendLine(
+          "Emit the bounded authoring evidence record as leading prose before the findings register and final " +
+            "verdict. Do not format evidence lines as `[F-NNN]` register lines or `verdict:` lines. The runtime " +
+            "retains only the first 2,000 characters as the summary, so state any evidence limitation explicitly.",
+        )
         appendLine("After fixes, emit remaining findings in this register shape, one per line:")
         appendLine("- [F-001] Blocker | High | path/File.kt:12 | remaining defect after your edits")
         appendLine("End with exactly one line: `verdict: approved` or `verdict: changes_requested`.")

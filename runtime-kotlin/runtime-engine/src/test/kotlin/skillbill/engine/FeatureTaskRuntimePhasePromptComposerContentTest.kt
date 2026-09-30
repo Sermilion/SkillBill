@@ -357,7 +357,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(prompt, "Audit is read-only: do not edit files or repair gaps")
     assertContains(prompt, "re-check the entire in-scope criterion list from the beginning")
     assertContains(prompt, "Do not spawn subagents or invoke repair skills")
-    assertContains(prompt, "validation owns test execution")
+    assertContains(prompt, "validate owns tests and failures")
     assertTrue(!prompt.contains("TEST EXCLUSION"))
     assertTrue(!prompt.contains("free-form note prose"))
   }

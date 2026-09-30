@@ -1,6 +1,6 @@
 # SKILL-385 Subtask 1 - Apply project authoring discipline across implementation and repair prompts
 
-Parent spec: [.feature-specs/SKILL-385-project-authoring-discipline/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-385-project-authoring-discipline/spec.md](spec.md)
 Issue key: SKILL-385
 
 ## Scope

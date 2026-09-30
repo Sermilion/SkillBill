@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeAuditTestExclusionTest {
   @Test
-  fun `audit permits application compilation after repairs and excludes test execution`() {
+  fun `audit inspects without compiling and excludes test execution`() {
     val repairAndAudit =
       listOf(
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
@@ -30,12 +30,11 @@ class FeatureTaskRuntimeAuditTestExclusionTest {
       "do not run builds or tests here",
     )
     val auditDirective = AcceptanceAuditPromptSections.DIRECTIVE
-    assertContains(auditDirective, "After implementation repairs")
-    assertContains(auditDirective, "validation_gate.build_command")
-    assertContains(auditDirective, "only to check that the application compiles")
-    assertContains(auditDirective, "do not run or compile test targets, full validation, lint")
-    assertContains(auditDirective, "Report compilation failures as production gaps")
-    assertContains(auditDirective, "validation owns test execution and failures")
+    assertContains(auditDirective, "without editing it")
+    assertTrue(!auditDirective.contains("validation_gate.build_command"), "audit must not grant a compile exception")
+    assertTrue(!auditDirective.contains("application compiles"), "audit must not grant a compile exception")
+    assertContains(auditDirective, "Run no compile, build, test, format, lint, or full-check command")
+    assertContains(auditDirective, "validate owns tests and failures")
     assertContains(auditDirective, "gaps")
   }
 
