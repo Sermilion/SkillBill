@@ -5,8 +5,8 @@
 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-4c1.svg)](LICENSE)
-![Latest release](https://img.shields.io/github/v/release/Sermilion/skill-bill?include_prereleases&sort=semver)
-![Validate agent configs](https://img.shields.io/github/actions/workflow/status/Sermilion/skill-bill/validate-agent-configs.yml?branch=main&label=validate)
+![Latest release](https://img.shields.io/github/v/release/Sermilion/SkillBill?include_prereleases&sort=semver)
+![Validate agent configs](https://img.shields.io/github/actions/workflow/status/Sermilion/SkillBill/validate-agent-configs.yml?branch=main&label=validate)
 
 Skill Bill takes feature work from an issue and acceptance criteria through planning, implementation, simplification, review, and a PR. A local runtime saves progress between phases, so interrupted work can continue from durable state.
 
@@ -19,7 +19,7 @@ Use it with Claude Code, Codex, or Cursor. One listed skill, `/skill-bill`, runs
 Install and authenticate your coding agent's CLI, then install Skill Bill:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Sermilion/skill-bill/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Sermilion/SkillBill/main/install.sh | bash
 ```
 
 Choose your agents, platform packs, and telemetry level when prompted. The installer downloads a self-contained runtime, renders the selected skills, links them into agent directories, and registers the MCP server. Prebuilt installs need no system JDK or Gradle.
@@ -49,7 +49,7 @@ Feature work also needs the target project's build tools and credentials for any
 To inspect the installer before running it:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Sermilion/skill-bill/main/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/Sermilion/SkillBill/main/install.sh -o install.sh
 less install.sh
 bash install.sh
 ```
@@ -63,8 +63,8 @@ export PATH="$HOME/.local/bin:$PATH"
 A full local checkout builds from source by default. Contributors can make that choice explicit:
 
 ```bash
-git clone https://github.com/Sermilion/skill-bill.git
-cd skill-bill
+git clone https://github.com/Sermilion/SkillBill.git
+cd SkillBill
 ./install.sh --from-source
 ```
 
