@@ -30,6 +30,13 @@ class AgentRunCommandBuildersTest {
   }
 
   @Test
+  fun `claude launches keep every tool call in the foreground`() {
+    val command = ClaudeAgentRunCommandBuilder().build(request())
+
+    assertEquals("1", command.environment["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"])
+  }
+
+  @Test
   fun `no compaction directive leaves the launch environment untouched`() {
     val command = ClaudeAgentRunCommandBuilder().build(request())
 

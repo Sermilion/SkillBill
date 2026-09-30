@@ -87,6 +87,9 @@ internal val CURSOR_PROVIDER_PASSTHROUGH_KEYS: Set<String> =
     "CURSOR_API_KEY",
   ) + PROXY_PASSTHROUGH_KEYS
 
+internal val CLAUDE_FOREGROUND_ONLY_ENVIRONMENT: Map<String, String> =
+  mapOf("CLAUDE_CODE_DISABLE_BACKGROUND_TASKS" to "1")
+
 internal fun compactionEnvironment(request: SkillRunRequest): Map<String, String> =
   request.compaction?.let { directive ->
     mapOf(
@@ -184,7 +187,8 @@ internal class ClaudeAgentRunCommandBuilder(
       workingDirectory = request.repoRoot,
       timeout = request.timeout,
       stdinText = launchPrompt(request),
-      environment = goalContinuationEnvironment(request) + compactionEnvironment(request),
+      environment =
+        CLAUDE_FOREGROUND_ONLY_ENVIRONMENT + goalContinuationEnvironment(request) + compactionEnvironment(request),
       inheritEnvironment = request.reviewEvidenceBroker == null,
       conversationIsolation = governedReviewConversationIsolation(request),
       idlePolicy =
