@@ -11,7 +11,6 @@ import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.runner.transitionsFor
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.featuretask.InMemorySkeletonDefinitionRequiredError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -43,19 +42,20 @@ class PhaseRunEntry(
     val branch = currentBranch(request)
     val intake = intakeResolver.resolve(definition, request, branch?.branch)
     val facts = InMemoryPhaseRunFacts(request, definition, intake)
-    val selection = strategySelectionFacts(facts)
+    val executionPlan = strategies.executionPlan(strategySelectionFacts(facts))
     val progress =
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
-        transitions = transitionsFor(facts),
+        transitions = executionPlan.traversal,
         outputValidator = outputValidator,
-        stepVerdictRule = slotStepVerdictRule(strategies, selection, diagnostics),
-        resumeRules = strategies.resumeRules(selection),
+        stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
+        resumeRulesFn = strategies.resumeRules(executionPlan),
       )
     val records = InMemoryPhaseRunRecords(clock, branch)
     val state =
       InMemoryPhaseRunState(
         facts = facts,
+        executionPlan = executionPlan,
         progress = progress,
         records = records,
         telemetry = FeatureTaskRuntimeRunObservability(records, facts, diagnostics),

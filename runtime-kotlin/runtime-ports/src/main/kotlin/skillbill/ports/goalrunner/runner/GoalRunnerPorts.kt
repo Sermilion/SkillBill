@@ -10,6 +10,7 @@ import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestRequest
 import skillbill.ports.goalrunner.runner.model.GoalPullRequestResult
+import skillbill.ports.goalrunner.runner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.ports.goalrunner.runner.model.GoalRunnerChildWorkflowSetup
 import skillbill.ports.goalrunner.runner.model.GoalRunnerCompletionPersistenceResult
 import skillbill.ports.goalrunner.runner.model.GoalRunnerLaunchAuthorization
@@ -79,6 +80,13 @@ interface GoalRunnerManifestExecutionCommands {
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
     expectedOwnerToken: String? = null,
+  ): Boolean
+
+  fun acquireExecutionLeaseWithChildAdmission(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+    expectedOwnerToken: String?,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission,
   ): Boolean
 
   fun heartbeatExecutionLease(

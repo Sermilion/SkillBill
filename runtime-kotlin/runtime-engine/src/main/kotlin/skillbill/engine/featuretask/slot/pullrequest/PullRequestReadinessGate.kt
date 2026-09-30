@@ -5,8 +5,8 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvid
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowReadinessTreeIdentityResult
+import skillbill.ports.workflow.gitops.readiness.ReadinessTreeIdentityGitOperations
 import java.nio.file.Path
 
 class PullRequestReadinessGate(
@@ -17,7 +17,7 @@ class PullRequestReadinessGate(
     workflowId: String,
     repoRoot: Path,
     baseBranch: String,
-    gitOperations: WorkflowGitOperations,
+    gitOperations: ReadinessTreeIdentityGitOperations,
   ): String? {
     val identity =
       (

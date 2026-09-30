@@ -64,7 +64,19 @@ class SkeletonDefinitionTest {
             capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.ADVANCE,
             capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
           ),
-        ),
+        ) +
+          listOf("build" to "regenerate_build_receipt", "validate" to "regenerate_validation_receipt").map {
+              (step, loop) ->
+            FeatureTaskRuntimeBackwardEdge(
+              fromPhaseId = "write_history",
+              triggeringVerdict = FeatureTaskRuntimeVerdict.RECORD_REJECTED,
+              destinationPhaseId = step,
+              loopId = loop,
+              perEdgeCap = 2,
+              capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+              capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+            )
+          },
       loopOnlyPhaseIds = setOf("audit_implement_fix", "implement_fix", "build"),
       loopOnlySuccessors = emptyMap(),
     )

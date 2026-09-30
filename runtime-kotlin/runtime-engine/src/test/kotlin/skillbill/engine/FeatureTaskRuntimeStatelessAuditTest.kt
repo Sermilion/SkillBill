@@ -59,7 +59,8 @@ class FeatureTaskRuntimeStatelessAuditTest {
       WORKFLOW_ID,
       harness.repository.taskRuntimeArtifacts(WORKFLOW_ID) + (retiredProgressKey to "unreadable old progress"),
     )
-    assertIs<FeatureTaskRuntimeRunReport.Completed>(harness.runner.run(harness.request()))
+    val terminalRetry = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
+    assertTrue(terminalRetry.blockedReason.contains("Terminal workflows"))
     assertEquals(auditLaunchCount, harness.launchedPromptPhaseOrder().count { it == "audit" })
     assertEquals(auditRecord, harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit"))
     assertEquals("unreadable old progress", harness.repository.taskRuntimeArtifacts(WORKFLOW_ID)[retiredProgressKey])
@@ -140,7 +141,7 @@ class FeatureTaskRuntimeStatelessAuditTest {
   fun `legacy blocked audit with only loop_id marker is discarded and relaunched fresh`() {
     val harness = runnerHarness(RuntimeHarnessConfig(launcher = satisfiedAuditLauncher()))
     seedPlanningUpstreamPhases(harness)
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     harness.recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = WORKFLOW_ID,
@@ -164,7 +165,7 @@ class FeatureTaskRuntimeStatelessAuditTest {
   fun `legacy blocked gaps_found audit is discarded and relaunched fresh`() {
     val harness = runnerHarness(RuntimeHarnessConfig(launcher = satisfiedAuditLauncher()))
     seedPlanningUpstreamPhases(harness)
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     harness.recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = WORKFLOW_ID,
@@ -188,7 +189,7 @@ class FeatureTaskRuntimeStatelessAuditTest {
   fun `legacy paused gaps_found audit is discarded and relaunched fresh`() {
     val harness = runnerHarness(RuntimeHarnessConfig(launcher = satisfiedAuditLauncher()))
     seedPlanningUpstreamPhases(harness)
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     harness.recorder.recordPhaseState(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = WORKFLOW_ID,
@@ -276,7 +277,7 @@ class FeatureTaskRuntimeStatelessAuditTest {
               )
             },
         )
-      harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+      harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
       recordReviewCap(harness)
       seedPlanningUpstreamPhases(harness)
 

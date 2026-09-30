@@ -16,6 +16,22 @@ internal object SlotBaselineSqlite {
       }
     }
 
+  fun updateFeatureTaskArtifacts(
+    databasePath: Path,
+    workflowId: String,
+    artifactsJson: String,
+  ) {
+    connect(databasePath) { connection ->
+      connection.prepareStatement(
+        "UPDATE feature_task_workflows SET artifacts_json = ? WHERE workflow_id = ?",
+      ).use { statement ->
+        statement.setString(1, artifactsJson)
+        statement.setString(2, workflowId)
+        check(statement.executeUpdate() == 1)
+      }
+    }
+  }
+
   fun tablesWithPrefix(
     databasePath: Path,
     prefix: String,

@@ -10,6 +10,8 @@ import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.int
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.workflow.model.WorkflowFamilyKind
+import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.cli.DocumentedCliCommand
@@ -18,11 +20,16 @@ import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.model.DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
-import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
+import skillbill.workflow.model.FeatureTaskWorkflowMode
+import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
+import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.minutes
@@ -123,20 +130,42 @@ abstract class FeatureTaskRuntimePhaseAgentCommand(
     help = "Already-resolved ordered agent add-on selection JSON. Raw agent-addon tokens are not accepted here.",
   )
 
-  protected fun resolveRunWorkflowId(
+  internal fun resolveRunWorkflowId(
     workflowService: WorkflowService,
+    deps: FeatureTaskRuntimeRunDependencies,
+    prepared: PreparedRuntimeRun,
     issueKey: String,
     specPath: String,
-    repoRoot: Path,
-    repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   ): String =
     explicitWorkflowId?.takeIf(String::isNotBlank)
       ?: workflowService.openRuntimeWorkflowId(
-        issueKey,
-        specPath,
-        repoRoot,
-        if (goalParentIssueKey != null) FeatureTaskRouteScope.GOAL_CHILD else FeatureTaskRouteScope.STANDALONE,
-        repositoryEnclosingRootPort,
+        WorkflowServiceOpenFeatureTaskArgs(
+          kind = WorkflowFamilyKind.TASK_RUNTIME,
+          sessionId = "",
+          currentStepId = null,
+          issueKey = issueKey,
+          repositoryIdentity = deps.inputs.repositoryEnclosingRootPort.repositoryIdentity(prepared.repoRoot),
+          governedSpecPath =
+            deps.inputs.repositoryEnclosingRootPort.governedSpecPathForCli(
+              prepared.repoRoot,
+              Path.of(specPath),
+            ),
+          routeScope =
+            if (goalParentIssueKey != null) FeatureTaskRouteScope.GOAL_CHILD else FeatureTaskRouteScope.STANDALONE,
+          executionPlan =
+            deps.executionPlans.resolveCreation(
+              FeatureTaskRuntimeExecutionPlanCreationRequest(
+                repoRoot = prepared.repoRoot,
+                definition = SkeletonDefinition.forRun(prepared.goalContinuation != null),
+                reviewMode =
+                  prepared.goalContinuation?.codeReviewMode ?: requestedCodeReviewMode()
+                    ?: deps.runInvariantsSource.read(Path.of(specPath)).codeReviewMode,
+                qualityGate = prepared.goalContinuation?.qualityGateSelection,
+                validationDepth = prepared.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
+                timeout = maxWallClockMinutes.takeIf { it > 0 }?.minutes,
+              ),
+            ),
+        ),
       )
 
   internal fun executeRuntimeRun(
@@ -149,15 +178,49 @@ abstract class FeatureTaskRuntimePhaseAgentCommand(
     val state = deps.state
     val resolvedWorkflowId = workflowId()
     val report =
-      deps.workerCoordinator.runOwned(resolvedWorkflowId) {
+      deps.workerCoordinator.runOwned(
+        resolvedWorkflowId,
+        deps.executionPlans.resolveInputs(
+          prepared.repoRoot,
+          prepared.goalContinuation?.qualityGateSelection,
+          prepared.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT,
+          maxWallClockMinutes.takeIf { it > 0 }?.minutes,
+          resolvedWorkflowId,
+        ),
+        FeatureTaskExecutionIdentity(
+          workflowId = resolvedWorkflowId,
+          normalizedIssueKey = issueKey.trim().uppercase(),
+          repositoryIdentity = deps.inputs.repositoryEnclosingRootPort.repositoryIdentity(prepared.repoRoot),
+          governedSpecPath =
+            deps.inputs.repositoryEnclosingRootPort.governedSpecPathForCli(
+              prepared.repoRoot,
+              Path.of(specPath),
+            ),
+          mode = FeatureTaskWorkflowMode.RUNTIME,
+          routeScope =
+            if (prepared.goalContinuation != null) {
+              FeatureTaskRouteScope.GOAL_CHILD
+            } else {
+              FeatureTaskRouteScope.STANDALONE
+            },
+        ),
+        requestedReviewSelection =
+          (prepared.goalContinuation?.codeReviewMode ?: requestedCodeReviewMode())
+            ?.let { RuntimeReviewSelection.valueOf(it.name) },
+      ) { admittedExecution ->
+        val sourceInvariants = deps.runInvariantsSource.read(Path.of(specPath))
         val request =
           FeatureTaskRuntimeRunRequest(
             issueKey = issueKey,
             workflowId = resolvedWorkflowId,
+            admittedExecution = admittedExecution,
             sessionId =
               "${FeatureTaskRuntimePhaseWorkflowDefinition.definition.defaultSessionPrefix}-$resolvedWorkflowId",
             runInvariants =
-              deps.runInvariantsSource.read(Path.of(specPath)).copy(
+              sourceInvariants.copy(
+                codeReviewMode =
+                  admittedExecution.reviewMode
+                    ?: sourceInvariants.codeReviewMode,
                 agentAddonSelection = prepared.agentAddonSelection.persisted,
               ),
             invokedAgentId = prepared.invokedAgentId,
@@ -255,10 +318,10 @@ class FeatureTaskRuntimeRunCommand(
       workflowId = {
         resolveRunWorkflowId(
           workflowService,
+          deps,
+          prepared,
           runIssueKey,
           runSpecPath,
-          prepared.repoRoot,
-          deps.inputs.repositoryEnclosingRootPort,
         )
       },
     )
@@ -288,10 +351,10 @@ class FeatureTaskRuntimeExplicitRunCommand(
       workflowId = {
         resolveRunWorkflowId(
           workflowService,
+          deps,
+          prepared,
           issueKey,
           runSpecPath,
-          prepared.repoRoot,
-          deps.inputs.repositoryEnclosingRootPort,
         )
       },
     )

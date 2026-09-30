@@ -3,6 +3,8 @@ package skillbill.ports.goalrunner.runner
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReconcileGate
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import java.nio.file.Path
 
 interface GoalRunnerWorkflowOutcomeMutationStore {
@@ -26,5 +28,7 @@ interface GoalRunnerWorkflowOutcomeMutationStore {
     workflowId: String,
     preferredPhaseId: String,
     reason: String,
+    expectedIdentity: FeatureTaskExecutionIdentity,
+    expectedExecutionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
   ): Boolean
 }

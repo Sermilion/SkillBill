@@ -5,6 +5,7 @@ import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
+import skillbill.ports.goalrunner.runner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.ports.goalrunner.runner.model.GoalRunnerChildWorkflowSetup
 import skillbill.ports.goalrunner.runner.model.GoalRunnerCompletionPersistenceResult
 import skillbill.ports.goalrunner.runner.model.GoalRunnerLaunchAuthorization
@@ -48,6 +49,13 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
   override fun resume(parentWorkflowId: String): GoalRunnerManifestState? = null
 
   override fun pauseAtBoundary(state: GoalRunnerManifestState): GoalRunnerManifestState = state
+
+  override fun acquireExecutionLeaseWithChildAdmission(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+    expectedOwnerToken: String?,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission,
+  ): Boolean = acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken)
 
   override fun executionLease(parentWorkflowId: String): GoalRunnerExecutionLease? = null
 

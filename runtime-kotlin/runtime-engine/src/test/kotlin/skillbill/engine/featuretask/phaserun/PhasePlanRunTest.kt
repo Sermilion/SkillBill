@@ -135,6 +135,7 @@ class PhasePlanRunTest {
       telemetryRunnerHarness(
         runtimeConfig =
           RuntimeHarnessConfig(
+            seedDurableWorkflow = false,
             branchSetup = committedRepoBranchSetup(),
             repoRoot = repoRoot,
             launcher = launcher,

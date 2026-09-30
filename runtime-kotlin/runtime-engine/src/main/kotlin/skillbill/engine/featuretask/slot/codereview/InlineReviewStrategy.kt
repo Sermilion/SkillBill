@@ -11,14 +11,16 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -35,7 +37,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path
 
 class InlineReviewStrategy(
-  override val runner: PhaseRunner,
+  runner: PhaseRunner,
 ) : PhaseStrategyStatusProjection() {
   private val codeReview = CodeReviewSlot(runner, InlineReviewPass)
 
@@ -43,6 +45,8 @@ class InlineReviewStrategy(
   override val strategyId: String = ID
   override val steps: List<String> = codeReview.steps
   override val entryStep: String = codeReview.entryStep
+
+  override fun executionBindingKind(stepId: String): PhaseExecutionBindingKind = codeReview.executionBindingKind(stepId)
 
   override fun policyFor(stepId: String): PhaseStepPolicy = codeReview.policyFor(stepId)
 
@@ -58,7 +62,7 @@ class InlineReviewStrategy(
 
   override fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome = codeReview.runStep(this, run, state)
 
   override fun stepHooks(stepId: String): PhaseStepHooks = codeReview.stepHooks(stepId)
@@ -105,7 +109,7 @@ internal object InlineReviewPass : CodeReviewPass {
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
     runner: PhaseRunner,
-    state: PhaseStepState,
+    state: PhaseReviewStepBinding,
   ): ParallelCodeReviewResult {
     val directive =
       InlineReviewDirective.compose(
@@ -115,7 +119,7 @@ internal object InlineReviewPass : CodeReviewPass {
         specPath = reviewSpecPath(run),
         agentAddonsSection = AgentAddonPromptFormatter.format(run.request.agentAddonSelection),
       )
-    val output = runner.run(reviewStepInput(run, directive), state)
+    val output = runner.run(reviewStepInput(run, directive), state.launchState)
     return InlineReviewResultDecoder.decode(run.resolvedAgent.resolvedAgentId, output)
       .copy(reviewSessionId = run.request.reviewInvocation?.reviewSessionId)
   }

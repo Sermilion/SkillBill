@@ -11,6 +11,10 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
  * shapes and resume decisions a step owns live with the step instead of in the shared reconstruction.
  */
 internal interface PhaseResumeRules {
+  /** Whether a completed receipt must validate before reconstruction can change any completion. */
+  val requiresValidCompletedOutput: Boolean
+    get() = false
+
   /** Whether this step records review passes, so the run state tracks its pass numbers and invalidation tombstone. */
   val tracksReviewPasses: Boolean
     get() = false

@@ -41,9 +41,14 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
 
   const val MAX_RECORD_REGENERATION_ATTEMPTS: Int = 2
 
-  val REGENERATION_LOOP_ID_BY_PRODUCER: Map<String, String> = emptyMap()
+  val REGENERATION_LOOP_ID_BY_PRODUCER: Map<String, String> =
+    mapOf(
+      PHASE_BUILD to "regenerate_build_receipt",
+      PHASE_VALIDATE to "regenerate_validation_receipt",
+    )
 
-  val REGENERATION_PRODUCER_BY_CONSUMER: Map<String, String> = emptyMap()
+  val REGENERATION_PRODUCER_BY_CONSUMER: Map<String, Set<String>> =
+    mapOf(PHASE_WRITE_HISTORY to REGENERATION_LOOP_ID_BY_PRODUCER.keys.toSet())
 
   val REGENERATION_LOOP_IDS: Set<String> = REGENERATION_LOOP_ID_BY_PRODUCER.values.toSet()
 

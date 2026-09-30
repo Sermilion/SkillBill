@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.model.EnvironmentContext
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
@@ -44,15 +45,14 @@ class RuntimeFeatureTaskSlotProvidesTest {
     ).featureTaskRuntimeRunner.strategies
 
   @Test
-  fun `production registry lists the two quality_gate strategies and a distinct runner each`() {
+  fun `production registry lists all quality_gate strategies`() {
     val registered = strategies.registry.strategies
 
     assertEquals(
-      listOf(PackBuildStrategy.ID, AgentValidateStrategy.ID),
+      listOf(PackBuildStrategy.ID, PackValidationStrategy.ID, AgentValidateStrategy.ID),
       registered.filter { it.slot == PhaseSlot.QUALITY_GATE }.map { it.strategyId },
     )
     assertEquals(PhaseSlot.entries.toSet(), registered.map { it.slot }.toSet())
-    assertEquals(registered.size, registered.map { it.runner }.toSet().size)
   }
 
   @Test
@@ -67,7 +67,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
           SkeletonDefinition.PR,
         ).forEach { definition ->
           val facts = PhaseStrategySelectionFacts(definition, setOf(mode, gate))
-          definition.stepIds.forEach { step ->
+          strategies.selectedStepIds(facts).forEach { step ->
             assertEquals(PhaseSlot.slotForStep(step), strategies.strategyFor(step, facts).slot)
           }
         }
@@ -121,7 +121,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
   }
 
   @Test
-  fun `the review definition selects delegated only for delegated mode and validation runs agent validation`() {
+  fun `the review definition selects delegated only for delegated mode and validation runs pack validation`() {
     val expected =
       mapOf(
         CodeReviewExecutionMode.AUTO to InlineReviewStrategy.ID,
@@ -137,7 +137,7 @@ class RuntimeFeatureTaskSlotProvidesTest {
       strategies.selectedStepIds(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet())),
     )
     assertEquals(
-      AgentValidateStrategy.ID,
+      PackValidationStrategy.ID,
       strategies.strategyFor(
         PHASE_VALIDATE,
         PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()),

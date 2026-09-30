@@ -5,7 +5,8 @@ import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
-import skillbill.engine.featuretask.runner.transitionsFor
+import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
+import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.infrastructure.workflow.github.GitHubPullRequestCheckDiscovery
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.validation.PrCheckDiscovery
@@ -58,7 +59,10 @@ class FeatureTaskRuntimeReadinessGateCoordinatorTest {
             reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
           ),
       )
-    val phases = transitionsFor(request).forwardPhaseIds
+    val phases =
+      statusProjectionPhaseStrategies().executionPlan(
+        strategySelectionFacts(request),
+      ).traversal.forwardPhaseIds
     assertFalse(phases.contains(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR))
     assertTrue(phases.contains(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH))
   }

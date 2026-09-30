@@ -7,6 +7,7 @@ import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
+import skillbill.ports.goalrunner.runner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.ports.process.DaemonThreadPort
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.process.ShutdownHookPort
@@ -23,6 +24,12 @@ import java.time.Duration
 interface GoalRunnerExecutionCoordinator {
   fun <T> runOwned(
     parentWorkflowId: String,
+    block: () -> T,
+  ): T
+
+  fun <T> runOwnedWithChildAdmission(
+    parentWorkflowId: String,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission,
     block: () -> T,
   ): T
 }
@@ -59,16 +66,42 @@ class DefaultGoalRunnerExecutionCoordinator(
   override fun <T> runOwned(
     parentWorkflowId: String,
     block: () -> T,
+  ): T = runOwned(parentWorkflowId, null, block)
+
+  override fun <T> runOwnedWithChildAdmission(
+    parentWorkflowId: String,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission,
+    block: () -> T,
+  ): T = runOwned(parentWorkflowId, childAdmission, block)
+
+  private fun <T> runOwned(
+    parentWorkflowId: String,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission?,
+    block: () -> T,
   ): T {
-    val lease = acquireLease(parentWorkflowId)
+    val lease = acquireLease(parentWorkflowId, childAdmission)
     return runWithLease(parentWorkflowId, lease, block)
   }
 
-  private fun acquireLease(parentWorkflowId: String): GoalRunnerExecutionLease {
+  private fun acquireLease(
+    parentWorkflowId: String,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission?,
+  ): GoalRunnerExecutionLease {
     val existing = manifestStore.executionLease(parentWorkflowId)
     val expectedOwnerToken = existing?.let { reclaimableOwnerToken(parentWorkflowId, it) }
     val lease = newLease(existing, supervisor.currentProcess())
-    if (!manifestStore.acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken)) {
+    val acquired =
+      if (childAdmission == null) {
+        manifestStore.acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken)
+      } else {
+        manifestStore.acquireExecutionLeaseWithChildAdmission(
+          parentWorkflowId,
+          lease,
+          expectedOwnerToken,
+          childAdmission,
+        )
+      }
+    if (!acquired) {
       throw GoalRunnerExecutionAlreadyRunningException(
         parentWorkflowId,
         "another goal runner claimed the execution lease before this run could start",

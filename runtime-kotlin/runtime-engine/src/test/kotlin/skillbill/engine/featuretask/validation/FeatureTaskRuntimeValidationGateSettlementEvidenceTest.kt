@@ -36,6 +36,7 @@ class FeatureTaskRuntimeValidationGateSettlementEvidenceTest {
                 ),
               command = "./gradlew check --continue",
               exitCode = 0,
+              repositoryCheckpoint = "checkpoint",
             ),
           ),
         requiredCommand = "./gradlew check --continue",
@@ -133,6 +134,7 @@ class FeatureTaskRuntimeValidationGateSettlementEvidenceTest {
       executedChecks = fixture.execution.checks,
       command = fixture.command,
       exitCode = fixture.exitCode,
+      repositoryCheckpoint = "checkpoint",
     )
 
   private data class GateRunFixture(

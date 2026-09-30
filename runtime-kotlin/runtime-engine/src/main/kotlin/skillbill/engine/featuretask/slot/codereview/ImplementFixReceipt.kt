@@ -11,8 +11,8 @@ import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeReme
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptSettleRejection
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptShapeRejection
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
+import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
 import skillbill.goalrunner.model.UNADDRESSED_FINDING_REJECTED_DISPOSITION
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
@@ -25,8 +25,8 @@ internal object ImplementFixReceipt {
     "the review persistence.state could not be updated with the repair receipt."
 
   fun settle(
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseImplementFixStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck {
     val produced = completedProducedOutputs(outputMap) ?: return PhaseStepOutputCheck.Accept
@@ -51,12 +51,11 @@ internal object ImplementFixReceipt {
     outputMap
       .takeIf {
         (it[SharedPayloadKeys.STATUS] as? String)?.let(WorkflowStepStatus::fromWire) == WorkflowStepStatus.COMPLETED
-      }
-      ?.let { JsonCodec.anyToStringAnyMap(it[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty() }
+      }?.let { JsonCodec.anyToStringAnyMap(it[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty() }
 
   private fun settleValid(
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseImplementFixStepBinding,
     receipt: FeatureTaskRuntimeRepairReceipt,
     reviewState: GoalSubtaskReviewState,
   ): PhaseStepOutputCheck =
@@ -64,14 +63,13 @@ internal object ImplementFixReceipt {
       receipt,
       reviewState,
       refutedCarriedFindingIds(context, state, reviewState),
-    )
-      ?.let { detail -> rejected(detail) }
+    )?.let { detail -> rejected(detail) }
       ?: persist(context, state, receipt)?.let { reason -> PhaseStepOutputCheck.Block(reason) }
       ?: PhaseStepOutputCheck.Accept
 
   private fun persist(
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseImplementFixStepBinding,
     receipt: FeatureTaskRuntimeRepairReceipt,
   ): String? =
     runCatching { state.recordRepairReceipt(receipt) }.fold(
@@ -88,13 +86,14 @@ internal object ImplementFixReceipt {
     )
 
   private fun refutedCarriedFindingIds(
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseImplementFixStepBinding,
     reviewState: GoalSubtaskReviewState,
   ): Set<String> {
     val passNumber = reviewState.passResults.lastOrNull()?.passNumber ?: return emptySet()
     return runCatching {
-      state.unaddressedReviewFindings()
+      state
+        .unaddressedReviewFindings()
         .asSequence()
         .filter { finding -> finding.reviewPassNumber == passNumber }
         .filter { finding -> finding.verificationDisposition == UNADDRESSED_FINDING_REJECTED_DISPOSITION }
@@ -113,7 +112,7 @@ internal object ImplementFixReceipt {
   }
 
   private fun anchor(
-    context: PhaseAttemptEnvironment,
+    context: PhaseStepOutputContext,
     reviewState: GoalSubtaskReviewState,
   ): ReceiptAnchor? {
     val baseSha = reviewState.remediationBaseSha
@@ -140,5 +139,8 @@ internal object ImplementFixReceipt {
 
   private fun rejected(detail: String): PhaseStepOutputCheck = PhaseStepOutputCheck.Reject(detail, REPAIR_RECEIPT_RULE)
 
-  private data class ReceiptAnchor(val baseSha: String, val roundNumber: Int)
+  private data class ReceiptAnchor(
+    val baseSha: String,
+    val roundNumber: Int,
+  )
 }

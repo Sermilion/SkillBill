@@ -16,6 +16,8 @@ import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.operatorBlockRetryFromWorkflowArtifacts
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.validateImplementationAttemptRecord
@@ -48,6 +50,17 @@ class FeatureTaskRuntimePhaseStateRecorder(
   val implementationAttemptValidator: FeatureTaskRuntimeWireArtifactValidator,
   val clock: Clock,
 ) {
+  fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest) {
+    if (!recordPhaseState(request)) {
+      throw RequiredPhaseWriteRejected(
+        writeKind = RequiredPhaseWriteKind.START,
+        workflowId = request.workflowId,
+        phaseId = request.phaseId,
+        attempt = request.attemptCount,
+      )
+    }
+  }
+
   fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
     database.transaction { unitOfWork ->
       val record =

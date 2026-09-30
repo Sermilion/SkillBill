@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.model.continuation
 
 import skillbill.application.continuation.model.GoalContinuationCandidate
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 
 sealed interface FeatureTaskContinuationLookupResult {
@@ -33,6 +34,7 @@ sealed interface FeatureTaskContinuationLookupResult {
 }
 
 data class FeatureTaskContinuationCandidate(
+  val executionIdentity: FeatureTaskExecutionIdentity,
   val workflowId: String,
   val mode: FeatureTaskWorkflowMode,
   val status: String,

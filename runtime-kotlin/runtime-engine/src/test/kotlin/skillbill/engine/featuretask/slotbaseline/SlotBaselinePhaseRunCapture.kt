@@ -180,6 +180,7 @@ internal class SlotBaselinePhaseRunHarness private constructor(
     val delegated = mode == CodeReviewExecutionMode.DELEGATED
     return entryFor(
       RuntimeHarnessConfig(
+        seedDurableWorkflow = false,
         branchSetup = BranchSetupTestConfig(gitOperations = git),
         repoRoot = repoRoot,
         launcher = fixLauncher(),
@@ -197,6 +198,7 @@ internal class SlotBaselinePhaseRunHarness private constructor(
     git.ownedPathsValue = listOf(DELEGATED_REVIEWED_PATH)
     return entryFor(
       RuntimeHarnessConfig(
+        seedDurableWorkflow = false,
         branchSetup = BranchSetupTestConfig(gitOperations = git),
         repoRoot = repoRoot,
         validationGatePlatformManifests = listOf(kotlinPackWithBuildGate()),
@@ -209,6 +211,7 @@ internal class SlotBaselinePhaseRunHarness private constructor(
   fun agentEntry(launcher: RuntimeRecordingLauncher): PhaseRunEntry =
     entryFor(
       RuntimeHarnessConfig(
+        seedDurableWorkflow = false,
         branchSetup = BranchSetupTestConfig(gitOperations = git),
         repoRoot = repoRoot,
         launcher = launcher,
@@ -222,7 +225,10 @@ internal class SlotBaselinePhaseRunHarness private constructor(
   fun outboxRows(): List<Map<String, Any?>> = SlotBaselineSqlite.rows(database.resolveDbPath(), "telemetry_outbox")
 
   private fun entryFor(config: RuntimeHarnessConfig): PhaseRunEntry {
-    val runner = telemetryRunnerHarness(runtimeConfig = config, databaseFactory = { database }).runner
+    val runner =
+      telemetryRunnerHarness(runtimeConfig = config.copy(seedDurableWorkflow = false), databaseFactory = {
+        database
+      }).runner
     return phaseRunEntry(runner, database, SlotBaselineFullRunCapture.sqliteClock)
   }
 

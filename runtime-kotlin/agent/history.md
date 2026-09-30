@@ -1,3 +1,15 @@
+## [2026-09-29] SKILL-384 subtask 2: resolve composition once and preserve its semantics on durable resume
+Areas: runtime-kotlin/runtime-{engine,domain,application,ports,contracts,core,cli}, runtime-kotlin/runtime-infra/{contracts,sqlite,launcher}, orchestration/contracts
+- One immutable resolved plan owns selected strategies, steps, traversal, and effective execution policies. Composition rejects ambiguous selections, invalid ownership, and incoherent traversal before execution.
+- Durable workflow creation stores one bounded execution-plan artifact atomically with route identity and imported planning. SQLite rejects descriptor replacement or removal; in-memory phases keep their plan ephemeral.
+- Continuation, worker takeover, parent mutation, and runner entry check recorded semantics before execution-state changes. Recovery preserves attempts, outputs, checkpoints, terminal history, and uncertain commit/push evidence.
+- The execution-plan codec, semantic compatibility checks, and transactional admission are reusable. Historical-step interpretation stays separate from executable dispatch.
+- Gate receipt regeneration requires admitted semantics, retained producer evidence, and a proven safe boundary. Semantic revisions and effective-input digests detect behavioral changes without rejecting cosmetic source edits.
+- Agent process capture retains complete stdout and stderr beyond the former 1 MiB limit while preserving drain and cleanup failures.
+- Limits: identity-less legacy workflows have no adoption mapping. Missing, malformed, unsupported, or incompatible descriptors refuse execution; operators must retain evidence and use a compatible runtime or a separately reviewed mapping.
+Feature flag: N/A
+Acceptance criteria: 11/11 implemented
+
 ## [2026-09-28] SKILL-383 subtask 2 — single-skill catalog
 Areas: runtime-kotlin/{engine,application,cli,contracts,core,domain,infra}, skills, orchestration, platform-packs, docs, scripts
 - `/skill-bill` is now the only listed skill. Legacy `bill-*` trees, including `bill-monitor`, are removed; phases and operations use dispatcher routes.

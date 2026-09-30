@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.validation
 
-import skillbill.engine.featuretask.validation.model.ValidationGateCyclePhase
+import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.scaffold.model.ValidationGateCompilerDiagnosticsFormat.GRADLE_KOTLIN_COMPILER_STDOUT
 import skillbill.scaffold.model.ValidationGateCompilerDiagnosticsLocator
 import skillbill.scaffold.model.ValidationGateDeclaration

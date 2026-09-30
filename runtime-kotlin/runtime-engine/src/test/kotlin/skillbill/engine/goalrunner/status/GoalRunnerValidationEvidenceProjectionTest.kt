@@ -11,6 +11,7 @@ import skillbill.engine.goalrunner.execution.core.goalRunnerDefaultPhaseRecorder
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
+import skillbill.engine.openTestWorkflow
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -38,7 +39,7 @@ class GoalRunnerValidationEvidenceProjectionTest {
     ).forEach { case ->
       val workflowId = "wfl-validation-result"
       val recorder = goalRunnerDefaultPhaseRecorder()
-      recorder.ensureWorkflowOpen(workflowId, "goal-validation-result")
+      recorder.openTestWorkflow(workflowId, "goal-validation-result")
       val produced =
         buildMap<String, Any?> {
           put(SharedPayloadKeys.VALUE, "Project validation result.")

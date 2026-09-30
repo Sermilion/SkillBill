@@ -3,21 +3,76 @@ package skillbill.engine.featuretask.runloop.core
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
+import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunEvidenceOwnership
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.coupledProgress
+import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
+import skillbill.engine.featuretask.runloop.state.coupledSession
+import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunLoopCollaborators
+import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
+import skillbill.engine.featuretask.slot.state.PhaseRunGoal
+import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
+import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
+import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import java.nio.file.Path
 
 internal data class FeatureTaskRuntimeRunLoopContext(
   override val request: FeatureTaskRuntimeRunFacts,
-  override val runState: PhaseRunState,
+  val runState: PhaseRunState,
   val strategies: PhaseStrategyLookup,
-) : PhaseAttemptEnvironment
+) : PhaseAttemptRunLoopCollaborators {
+  override val progress get() = runState.coupledProgress().progressSnapshot
+
+  internal val state: FeatureTaskRuntimeRunState get() = runState.coupledProgress()
+  override val session get() = runState.coupledSession().sessionSnapshot()
+  override val observability: FeatureTaskRuntimeRunObservability get() = runState.telemetry
+  override val recorder: PhaseRunRecords get() = runState.records
+  override val phaseGates: FeatureTaskRuntimePhaseGates get() = runState.phaseGates
+  override val transitions: FeatureTaskRuntimeTransitionDeclaration get() = runState.transitions
+
+  override val transitionDeclaration: FeatureTaskRuntimeTransitionDeclaration get() = runState.transitions
+  override val goalContinuationRecorder: PhaseRunGoal get() = runState.goal
+  override val phaseSettlementService: PhaseRunSettlements get() = runState.settlements
+  override val checkpoints: PhaseRunCheckpoints get() = runState.checkpoints
+  override val outputValidator: FeatureTaskRuntimePhaseOutputValidator
+    get() = runState.collaborators.outputValidator
+  override val diagnostics: RuntimeDiagnostics get() = runState.collaborators.diagnostics
+  override val clock get() = runState.collaborators.clock
+  override val specSource: SpecSource get() = runState.specSource
+
+  override val coupledRunTransitions get() = runState.coupledRunTransitions
+
+  override fun strategyFor(stepId: String): PhaseStrategy {
+    if (runState.selectedOwnerOf(stepId) == null) {
+      error("Step '$stepId' is not in the accepted execution plan.")
+    }
+    return runState.strategyFor(stepId)
+  }
+
+  fun stepHooks(run: PhaseRun): PhaseStepHooks = strategyFor(run.phaseId).stepHooks(run.phaseId)
+
+  override fun acceptedStepPolicy(stepId: String) =
+    runState.selectedOwnerOf(stepId)?.policyFor(stepId)
+      ?: error("Step '$stepId' is not in the accepted execution plan.")
+
+  override fun unselectedStepIds(): Set<String> = runState.unselectedStepIds()
+
+  override fun extendsOwnedInventory(stepId: String): Boolean =
+    runState.selectedOwnerOf(stepId)?.policyFor(stepId)?.extendsOwnedInventory == true
+}
 
 internal data class LaunchRejectionAttribution(
   val projectionContractId: String,
@@ -69,15 +124,17 @@ fun reconcileCheckpointPathInventory(
   paths: List<String>,
 ): List<String> {
   val specPath =
-    Path.of(specReference)
+    Path
+      .of(specReference)
       .let { path -> if (path.isAbsolute) repoRoot.relativize(path) else path }
       .normalize()
       .toString()
-  return paths.filterNot { path ->
-    path == specPath ||
-      isFeatureSpecPathForIssue(path, issueKey) ||
-      FeatureTaskRuntimeRunEvidenceOwnership.isOwnedByRun(path, workflowId)
-  }.distinct()
+  return paths
+    .filterNot { path ->
+      path == specPath ||
+        isFeatureSpecPathForIssue(path, issueKey) ||
+        FeatureTaskRuntimeRunEvidenceOwnership.isOwnedByRun(path, workflowId)
+    }.distinct()
 }
 
 fun resolveReviewPassNumber(
@@ -109,11 +166,11 @@ open class FeatureTaskRuntimeRunLoopEntry {
 class FeatureTaskRuntimeRunLoop internal constructor(
   internal val context: FeatureTaskRuntimeRunLoopContext,
 ) {
-  internal val session = context.session
+  internal val session = context.runState.coupledSession()
 
   init {
     val resumed = FeatureTaskRuntimeRunLoopDrive.resumedReentry(context)
-    session.transitionReentryPair(resumed, resumed)
+    context.runState.coupledRunTransitions.establishResumedReentryPair(resumed)
   }
 
   fun drive() {
@@ -157,7 +214,7 @@ class FeatureTaskRuntimeRunLoop internal constructor(
       issueKey = context.request.issueKey,
       workflowId = context.request.workflowId,
       featureSize = context.request.runInvariants.featureSize.name,
-      completedPhaseIds = context.state.completedPhaseIds(),
+      completedPhaseIds = context.state.completedPhaseIds,
       resolvedBranch = branch,
     )
   }

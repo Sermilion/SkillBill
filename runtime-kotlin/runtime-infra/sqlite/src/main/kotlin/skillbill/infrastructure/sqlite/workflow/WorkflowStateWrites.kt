@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.workflow
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.workflow.featuretask.requireUnchangedExecutionPlan
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
@@ -91,6 +92,7 @@ internal fun Connection.upsertFeatureTaskWorkflowRow(
   row: WorkflowStateRecord,
   request: FeatureTaskWorkflowUpsertRequest,
 ) {
+  requireUnchangedExecutionPlan(getFeatureTaskWorkflowRow(row.workflowId), row)
   request.workflowSnapshotValidator.validate(row.toSnapshot(), row.workflowName)
   val transitionTimestamp = nextStateEnteredAtSql("feature_task_workflows")
   val insertionTimestamp = row.startedAt.orInsertionTimestamp(request.clock)

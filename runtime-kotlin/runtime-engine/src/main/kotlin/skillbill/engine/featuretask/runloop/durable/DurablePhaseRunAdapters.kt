@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.lifecycle.continuation.reviewState
 import skillbill.engine.featuretask.lifecycle.remediation.RemediationDegradationSignal
 import skillbill.engine.featuretask.lifecycle.subtask.SubtaskCommitPreservationRequest
 import skillbill.engine.featuretask.lifecycle.subtask.writeSubtaskCommitPreservingHistory
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementEnvelope
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
@@ -53,6 +54,7 @@ import java.nio.file.Path
 internal class DurablePhaseRunRecords(
   private val recorder: FeatureTaskRuntimePhaseRecorder,
   private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
+  private val admitted: AdmittedFeatureTaskRuntimeExecution? = null,
 ) : PhaseRunRecords {
   override fun recordRejectedOutput(
     request: RejectedOutputDiagnosticRequest,
@@ -66,6 +68,9 @@ internal class DurablePhaseRunRecords(
 
   override fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
     recorder.recordPhaseState(request)
+
+  override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest) =
+    recorder.recordRequiredPhaseStart(request)
 
   override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
     recorder.recordCompletedPhase(request)
@@ -92,7 +97,14 @@ internal class DurablePhaseRunRecords(
     producerPhaseId: String,
     loopId: String,
     edgeIteration: Int,
-  ): Boolean = recorder.invalidateQuarantinedProducerRecord(workflowId, producerPhaseId, loopId, edgeIteration)
+  ): Boolean =
+    recorder.invalidateQuarantinedProducerRecord(
+      workflowId,
+      producerPhaseId,
+      loopId,
+      edgeIteration,
+      admitted,
+    )
 
   override fun recordedFindingVerdicts(output: Map<String, Any?>): List<ReviewFindingVerdict> =
     recorder.recordedFindingVerdicts(output)
@@ -129,7 +141,8 @@ internal class DurablePhaseRunRecords(
     workflowId: String,
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
-  ): Boolean = recorder.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement)
+    attempt: Int,
+  ) = recorder.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement, attempt)
 
   override fun recordProjectionRejection(
     workflowId: String,

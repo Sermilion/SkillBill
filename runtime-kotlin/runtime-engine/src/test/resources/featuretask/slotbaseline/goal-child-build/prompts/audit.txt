@@ -88,7 +88,7 @@ acceptance_criteria:
   - AC-2
 
 ## Repository checkpoint (layer 2, resolved)
-fingerprint: repository-checkpoint-32cbcf3c
+fingerprint: slot-baseline-checkpoint
 base_ref: __NORMALIZED_SHA40__
 head_ref: __NORMALIZED_SHA40__
 scoped_owned_paths:

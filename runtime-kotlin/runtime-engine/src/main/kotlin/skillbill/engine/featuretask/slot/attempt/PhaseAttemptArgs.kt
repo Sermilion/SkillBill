@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.attempt
 
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.runloop.core.CapturedPhaseOutput
@@ -8,17 +9,40 @@ import skillbill.engine.featuretask.runloop.core.PhaseAttemptContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptLoopState
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
-import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepDescription
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+
+/** Accepted-step launch surface exposed to one prepared step call; not a full step binding. */
+internal interface PhaseAcceptedStepCallTarget {
+  val launchState: PhaseLaunchState
+
+  fun nextStepIteration(): Int
+
+  fun requireAcceptedAttempt(
+    run: PhaseRun,
+    call: PhaseStepCall,
+  )
+
+  fun requireAcceptedStep(
+    run: PhaseRun,
+    strategyId: String,
+  )
+}
 
 internal data class PhaseStepCall(
   val description: PhaseStepDescription,
-  val runner: PhaseRunner,
-  val state: PhaseStepState,
-)
+  private val acceptedStep: PhaseAcceptedStepCallTarget,
+  val request: FeatureTaskRuntimeRunFacts,
+  val strategyId: String,
+) : PhaseAcceptedStepCallTarget by acceptedStep {
+  internal val acceptedExecution: PhaseAcceptedStepExecution
+    get() =
+      acceptedStep as? PhaseAcceptedStepExecution
+        ?: error("Step call is not backed by an accepted execution binding.")
+}
 
 internal data class RecordRejectionAttemptArgs(
   val context: PhaseAttemptContext,
@@ -41,30 +65,15 @@ internal class GateOutput(
   val settledEnvelope: PhaseSettledEnvelopeRead,
   val call: PhaseStepCall,
   val outputGateFailuresBefore: Int? = null,
-  val settlementContext: PhaseAttemptEnvironment,
+  val settlementContext: PhaseOutputSettlementContext,
+  val stepHooks: PhaseStepHooks,
 ) {
-  val request get() = settlementContext.request
-  val state get() = settlementContext.state
-  val recorder get() = settlementContext.recorder
-  val outputValidator get() = settlementContext.outputValidator
-  val phaseGates get() = settlementContext.phaseGates
-  val clock get() = settlementContext.clock
-  val diagnostics get() = settlementContext.diagnostics
-  val goalContinuationRecorder get() = settlementContext.goalContinuationRecorder
-  val phaseSettlementService get() = settlementContext.phaseSettlementService
-  val observability get() = settlementContext.observability
-
   val rejectionExhaustsFixLoop: Boolean?
     get() =
       outputGateFailuresBefore?.let {
         FeatureTaskRuntimeAttemptBudgets.outputGateRejectionExhaustsBudget(run.phaseId, run.policy, it)
       }
 }
-
-internal fun PhaseAttemptEnvironment.stepHooks(run: PhaseRun): PhaseStepHooks =
-  strategyFor(run.phaseId).stepHooks(run.phaseId)
-
-internal fun PhaseAttemptEnvironment.stepState(run: PhaseRun): PhaseStepState = runState.step(run)
 
 internal fun recordRejectionAttemptArgs(
   context: PhaseAttemptContext,

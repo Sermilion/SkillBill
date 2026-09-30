@@ -73,6 +73,7 @@ internal class SQLiteUnitOfWork(
   private val diagnostics: RuntimeDiagnostics,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val runtimeVersion: String,
+  transactionActive: Boolean = false,
 ) : UnitOfWork {
   private val phaseSettlementStore = SqliteFeatureTaskPhaseSettlementStore(connection)
 
@@ -90,7 +91,7 @@ internal class SQLiteUnitOfWork(
     )
   override val telemetryOutbox: TelemetryOutboxRepository = TelemetryOutboxStore(connection, runtimeVersion)
   override val workflowStates: WorkflowStateRepository =
-    WorkflowStateStore(connection, clock, workflowSnapshotValidator)
+    WorkflowStateStore(connection, clock, workflowSnapshotValidator, transactionActive)
   override val workList: WorkListRepository = SQLiteWorkListRepository(connection)
   override val goalPlanningPreparations: GoalPlanningPreparationRepository =
     GoalPlanningPreparationStore(connection)

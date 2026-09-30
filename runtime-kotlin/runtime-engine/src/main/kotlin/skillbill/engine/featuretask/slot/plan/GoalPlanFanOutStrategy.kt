@@ -4,12 +4,12 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseFanOutUnits
+import skillbill.engine.featuretask.slot.state.PhasePlanningStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
-import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
@@ -18,19 +18,22 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 class GoalPlanFanOutStrategy(
-  private val runnerFactory: () -> PhaseRunner,
   private val fanOutPort: BoundedWorkFanOutPort,
   private val planFanOutCap: Int,
 ) : PhaseStrategy() {
-  private val plan = AgentPlanStrategy(runnerFactory())
+  private val plan = AgentPlanStrategy()
+
+  override val plansInFanOut: Boolean = true
 
   override val slot: PhaseSlot = PhaseSlot.PLAN
   override val strategyId: String = ID
   override val steps: List<String> = plan.steps
   override val entryStep: String = plan.entryStep
-  override val runner: PhaseRunner = plan.runner
 
   override fun policyFor(stepId: String): PhaseStepPolicy = plan.policyFor(stepId)
+
+  internal override fun acceptsAttemptStrategy(attemptStrategyId: String): Boolean =
+    attemptStrategyId == plan.strategyId
 
   override fun directiveFor(stepId: String): String = plan.directiveFor(stepId)
 
@@ -46,9 +49,22 @@ class GoalPlanFanOutStrategy(
 
   override fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome {
-    val fanOut = state.fanOut(run.phaseId)
+    val planning = state as PhasePlanningStepBinding
+    val fanOut = planning.fanOut(run.phaseId)
+    planning.authorizeFanOutWave(run)
+    return try {
+      runFanOutStep(run, fanOut)
+    } finally {
+      planning.releaseFanOutWave(run)
+    }
+  }
+
+  private fun runFanOutStep(
+    run: PhaseRun,
+    fanOut: PhaseRunFanOut,
+  ): PhaseOutcome {
     val pending =
       when (val units = fanOut.pendingUnits()) {
         is PhaseFanOutUnits.Stopped -> return units.outcome
@@ -82,9 +98,11 @@ class GoalPlanFanOutStrategy(
     unitId: Int,
   ): PhaseOutcome {
     val sink = UnitAttributedOutputSink(fanOutPort, fanOut.outputSink, unitId)
+    val state = fanOut.unitState(unitId, sink)
     return try {
-      AgentPlanStrategy(runnerFactory()).runStep(run, fanOut.unitState(run, unitId, sink))
+      plan.runStep(run, state)
     } finally {
+      state.finishStepExecution()
       sink.flushTrailingLines()
     }
   }

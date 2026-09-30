@@ -3,9 +3,8 @@ package skillbill.engine.featuretask.runloop.core
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.install.model.SupportedAgent
-import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
-import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -14,16 +13,11 @@ import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeCorrec
 object FeatureTaskRuntimeRunLoopLaunch {
   internal fun capturePhaseContentIdentities(
     request: FeatureTaskRuntimeRunFacts,
-    session: FeatureTaskRuntimeRunLoopSession,
+    coupledTransitions: FeatureTaskRuntimeRunTransitionOwner,
     phaseGates: FeatureTaskRuntimePhaseGates,
     phaseId: String,
   ) {
-    val owned = phaseGates.gitOperations.repositoryOwnedPaths(request.repoRoot)
-    if (owned !is WorkflowGitNameListResult.Listed) return
-    val paths = owned.names.map(String::trim).filter(String::isNotBlank)
-    val identities = phaseGates.gitOperations.pathContentIdentities(request.repoRoot, paths)
-    if (identities !is WorkflowPathContentIdentitiesResult.Resolved) return
-    session.recordPhaseContentIdentities(phaseId, identities.identities)
+    coupledTransitions.recordPhaseContentIdentities(request, phaseGates, phaseId)
   }
 
   internal fun launchedModelDirective(run: PhaseRun): LaunchedModelDirective {

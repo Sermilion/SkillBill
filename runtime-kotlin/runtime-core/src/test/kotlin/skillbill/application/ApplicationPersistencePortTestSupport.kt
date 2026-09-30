@@ -26,6 +26,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerReq
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.MissingCompositionLayerError
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
@@ -176,6 +177,7 @@ internal fun WorkflowService.openTestFeatureTask(
 ): WorkflowOpenResult =
   openFeatureTask(
     WorkflowServiceOpenFeatureTaskArgs(
+      executionPlan = testExecutionPlan(),
       kind = kind,
       sessionId = sessionId,
       currentStepId = currentStepId,

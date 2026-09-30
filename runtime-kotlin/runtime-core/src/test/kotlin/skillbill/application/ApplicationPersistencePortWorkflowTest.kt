@@ -172,7 +172,7 @@ class ApplicationPersistencePortWorkflowTest {
     val recorder = testPhaseRecorder(database)
     val workflowId = openTaskRuntimeWorkflow(database)
 
-    assertTrue(recorder.recordPhaseBriefing(workflowId, handoffBriefing()))
+    recorder.recordPhaseBriefing(workflowId, handoffBriefing())
 
     val artifacts =
       decodeArtifactsForTest(
@@ -183,7 +183,7 @@ class ApplicationPersistencePortWorkflowTest {
     assertEquals(handoffBriefing().handoffEnvelope, requireNotNull(delivered).envelope)
     assertEquals(1, delivered.iteration)
 
-    assertTrue(recorder.recordPhaseBriefing(workflowId, handoffBriefing()))
+    recorder.recordPhaseBriefing(workflowId, handoffBriefing())
     assertEquals(2, requireNotNull(recorder.loadDeliveredProjections(workflowId))["implement"]?.iteration)
     val afterSecondDelivery =
       decodeArtifactsForTest(
@@ -252,7 +252,7 @@ class ApplicationPersistencePortWorkflowTest {
     val database = FakeDatabaseSessionFactory(workflows = workflowRepository)
     val recorder = testPhaseRecorder(database)
     val workflowId = openTaskRuntimeWorkflow(database)
-    assertTrue(recorder.recordPhaseBriefing(workflowId, handoffBriefing()))
+    recorder.recordPhaseBriefing(workflowId, handoffBriefing())
 
     corruptDurableEnvelope(workflowRepository, workflowId) { envelope ->
       envelope + ("upstream_outputs_by_phase_id" to mapOf("plan" to "raw payload"))
@@ -271,7 +271,7 @@ class ApplicationPersistencePortWorkflowTest {
     val database = FakeDatabaseSessionFactory(workflows = workflowRepository)
     val recorder = testPhaseRecorder(database)
     val workflowId = openTaskRuntimeWorkflow(database)
-    assertTrue(recorder.recordPhaseBriefing(workflowId, handoffBriefing()))
+    recorder.recordPhaseBriefing(workflowId, handoffBriefing())
 
     corruptDurableEnvelope(workflowRepository, workflowId) { it + ("contract_version" to "9.9") }
 

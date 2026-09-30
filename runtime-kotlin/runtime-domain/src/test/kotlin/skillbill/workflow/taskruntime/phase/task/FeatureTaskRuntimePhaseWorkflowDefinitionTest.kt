@@ -207,11 +207,11 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
   }
 
   @Test
-  fun `record regeneration loops are empty after implement prose migration`() {
+  fun `audit repair remains unbounded and review_fix remains bounded`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
-
-    assertEquals(emptySet(), def.REGENERATION_LOOP_IDS)
-    assertTrue(def.transitions.backwardEdges.none { def.isRegenerationLoopId(it.loopId) })
+    val transitions = def.transitions
+    assertEquals(2, transitions.backwardEdges.count { !def.isRegenerationLoopId(it.loopId) })
+    assertEquals(null, transitions.backwardEdges.single { it.fromPhaseId == def.PHASE_AUDIT }.perEdgeCap)
   }
 
   @Test

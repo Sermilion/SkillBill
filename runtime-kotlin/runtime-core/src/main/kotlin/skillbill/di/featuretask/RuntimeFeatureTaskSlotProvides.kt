@@ -5,6 +5,7 @@ import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.engine.featuretask.slot.PhaseStrategyRegistration
 import skillbill.engine.featuretask.slot.PhaseStrategyRegistry
 import skillbill.engine.featuretask.slot.PhaseStrategySelection
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
@@ -19,6 +20,7 @@ import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
@@ -39,21 +41,18 @@ internal interface RuntimeFeatureTaskSlotProvides {
 
   @Provides
   fun goalPlanFanOutStrategy(
-    runner: () -> PhaseRunner,
     fanOutPort: BoundedWorkFanOutPort,
     burstSchedule: GoalPlanningBurstSchedule,
-  ): GoalPlanFanOutStrategy = GoalPlanFanOutStrategy(runner, fanOutPort, burstSchedule.planFanOutCap)
+  ): GoalPlanFanOutStrategy = GoalPlanFanOutStrategy(fanOutPort, burstSchedule.planFanOutCap)
 
   @Provides
   fun prDescriptionStrategy(
-    runner: () -> PhaseRunner,
     pullRequestIdentityLookup: PullRequestIdentityLookup,
     readinessEvidence: FeatureTaskRuntimeReadinessEvidencePort,
     diagnostics: RuntimeDiagnostics,
     templateFiles: PullRequestTemplateFiles,
   ): PrDescriptionStrategy =
     PrDescriptionStrategy(
-      runner(),
       pullRequestIdentityLookup,
       PullRequestReadinessGate(readinessEvidence, diagnostics),
       templateFiles,
@@ -65,23 +64,30 @@ internal interface RuntimeFeatureTaskSlotProvides {
     reviewRunner: ParallelCodeReviewRunner,
     goalPlanFanOut: GoalPlanFanOutStrategy,
     prDescription: PrDescriptionStrategy,
-  ): PhaseStrategyRegistry =
-    PhaseStrategyRegistry(
+  ): PhaseStrategyRegistry {
+    val inlineReviewRunner = runner()
+    val delegatedReviewRunner = runner()
+    return PhaseStrategyRegistry(
       listOf(
-        AgentPreplanStrategy(runner()),
-        AgentPlanStrategy(runner()),
-        goalPlanFanOut,
-        ImplementThenSimplifyStrategy(runner()),
-        AcceptanceAuditStrategy(runner()),
-        InlineReviewStrategy(runner()),
-        DelegatedReviewStrategy(runner(), reviewRunner),
-        PackBuildStrategy(runner()),
-        AgentValidateStrategy(runner()),
-        BoundaryHistoryStrategy(runner()),
-        RuntimeCommitStrategy(runner()),
-        prDescription,
+        PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
+        PhaseStrategyRegistration(AgentPlanStrategy(), runner()),
+        PhaseStrategyRegistration(goalPlanFanOut, runner()),
+        PhaseStrategyRegistration(ImplementThenSimplifyStrategy(), runner()),
+        PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner()),
+        PhaseStrategyRegistration(InlineReviewStrategy(inlineReviewRunner), inlineReviewRunner),
+        PhaseStrategyRegistration(
+          DelegatedReviewStrategy(delegatedReviewRunner, reviewRunner),
+          delegatedReviewRunner,
+        ),
+        PhaseStrategyRegistration(PackBuildStrategy(), runner()),
+        PhaseStrategyRegistration(PackValidationStrategy(), runner()),
+        PhaseStrategyRegistration(AgentValidateStrategy(), runner()),
+        PhaseStrategyRegistration(BoundaryHistoryStrategy(), runner()),
+        PhaseStrategyRegistration(RuntimeCommitStrategy(), runner()),
+        PhaseStrategyRegistration(prDescription, runner()),
       ),
     )
+  }
 
   @Provides
   fun phaseStrategySelection(registry: PhaseStrategyRegistry): PhaseStrategySelection =

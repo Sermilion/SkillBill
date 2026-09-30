@@ -51,6 +51,7 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
 import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
+import skillbill.engine.openTestWorkflow
 import skillbill.engine.ownership
 import skillbill.error.goalrunner.GoalRunnerLaunchAuthorizationDeniedException
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
@@ -128,6 +129,7 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatPlan
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeHeartbeatTick
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
@@ -4666,6 +4668,8 @@ internal class RecordingOutcomeStore : GoalRunnerWorkflowOutcomeStore {
     workflowId: String,
     preferredPhaseId: String,
     reason: String,
+    expectedIdentity: FeatureTaskExecutionIdentity,
+    expectedExecutionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
   ): Boolean {
     reopenBlockedPhaseCalls += ReopenBlockedPhaseCall(workflowId, preferredPhaseId, reason)
     return true
@@ -5287,7 +5291,7 @@ private class GoalStatusPhaseLedgerHarness {
   val ownershipWriteCount: Int get() = repository.ownershipWriteCount
 
   fun openRuntimeWorkflow(workflowId: String) {
-    recorder.ensureWorkflowOpen(workflowId, sessionId = "goal-status-test")
+    recorder.openTestWorkflow(workflowId, sessionId = "goal-status-test")
   }
 
   fun seedOwnership(
@@ -5686,12 +5690,13 @@ class GoalRunnerOperatorBlockedResumeTest {
 
     assertIs<GoalRunnerRunReport.Completed>(report)
     assertEquals(listOf(1), launcher.requests.map { it.skillRunRequest.subtaskId })
-    assertEquals(listOf("wfl-1"), outcomes.reopenBlockedPhaseCalls.map { it.workflowId })
-    assertEquals(listOf("validate"), outcomes.reopenBlockedPhaseCalls.map { it.preferredPhaseId })
+    val resumed = store.newChildWorkflowSetups.single()
+    assertEquals("wfl-1", resumed.workflowId)
+    assertEquals("validate", resumed.operatorResumePhaseId)
     assertEquals("validate", launcher.requests.single().skillRunRequest.goalContinuation?.lastResumableStep)
     assertTrue(
-      outcomes.reopenBlockedPhaseCalls.single().reason.contains("Operator resumed the goal"),
-      outcomes.reopenBlockedPhaseCalls.single().reason,
+      resumed.operatorResumeReason.orEmpty().contains("Operator resumed the goal"),
+      resumed.operatorResumeReason.orEmpty(),
     )
   }
 

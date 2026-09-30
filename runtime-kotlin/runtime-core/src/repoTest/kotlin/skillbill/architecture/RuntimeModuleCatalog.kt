@@ -174,7 +174,14 @@ object RuntimeModuleCatalog {
         ),
       "runtime-contracts" to emptySet(),
       "runtime-core" to emptySet(),
-      "runtime-engine" to setOf("runtime-application", "runtime-domain", "runtime-infra:sqlite", "runtime-ports"),
+      "runtime-engine" to
+        setOf(
+          "runtime-application",
+          "runtime-domain",
+          "runtime-infra:contracts",
+          "runtime-infra:sqlite",
+          "runtime-ports",
+        ),
       "runtime-domain" to emptySet(),
       "runtime-infra" to emptySet(),
       "runtime-infra:host" to setOf("runtime-ports"),

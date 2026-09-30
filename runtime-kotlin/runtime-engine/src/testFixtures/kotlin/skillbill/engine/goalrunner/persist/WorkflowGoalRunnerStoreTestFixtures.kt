@@ -2,12 +2,18 @@ package skillbill.engine.goalrunner.persist
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
+import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestStore
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
 import skillbill.engine.goalrunner.repair.WorkflowGoalRunnerChildRepairStore
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.decomposition.DecompositionManifestProjectionWriter
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.persistence.GoalChildPlanningHydratorPort
 import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -41,6 +47,7 @@ fun engineWorkflowGoalRunnerManifestStore(
   repositoryRoot: RepositoryRoot,
   planningHydrator: GoalChildPlanningHydratorPort,
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+  executionPlanCompatibility: FeatureTaskRuntimeExecutionPlanCompatibility = testExecutionPlanCompatibility(),
 ): GoalRunnerManifestStore =
   WorkflowGoalRunnerManifestStore(
     database = database,
@@ -53,7 +60,16 @@ fun engineWorkflowGoalRunnerManifestStore(
     repositoryRoot = repositoryRoot,
     planningHydrator = planningHydrator,
     repositoryEnclosingRootPort = repositoryEnclosingRootPort,
+    executionAdmission = FeatureTaskRuntimeExecutionAdmission(executionPlanCompatibility, NoopRuntimeDiagnostics),
   )
+
+private fun testExecutionPlanCompatibility(): FeatureTaskRuntimeExecutionPlanCompatibility {
+  val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
+  return FeatureTaskRuntimeExecutionPlanCompatibility(
+    FeatureTaskRuntimeExecutionPlanCodec(validator),
+    statusProjectionPhaseStrategies(),
+  )
+}
 
 fun engineWorkflowGoalRunnerOutcomeStore(
   database: DatabaseSessionFactory,

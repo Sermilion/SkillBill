@@ -406,7 +406,7 @@
         ],
         "workflow_id": "wftr-20260602-test-0001"
     },
-    "wftr-20260602-test-0001|review|1|review#1|repository-checkpoint-32cbcf3c": {
+    "wftr-20260602-test-0001|review|1|review#1|slot-baseline-checkpoint": {
         "consumer_delivery_iteration": 1,
         "consumer_phase_id": "review",
         "contract_version": "0.2",
@@ -495,7 +495,7 @@
             ],
             "repository_checkpoint": {
                 "base_ref": "__NORMALIZED_SHA40__",
-                "fingerprint": "repository-checkpoint-32cbcf3c",
+                "fingerprint": "slot-baseline-checkpoint",
                 "head_ref": "__NORMALIZED_SHA40__",
                 "working_tree_owned_paths": [
                     "src/Foo.kt"
@@ -504,7 +504,7 @@
         },
         "record_kind": "delivered_projection",
         "repository_checkpoint": {
-            "fingerprint": "repository-checkpoint-32cbcf3c"
+            "fingerprint": "slot-baseline-checkpoint"
         },
         "source_producer_iterations": [
             {
@@ -514,7 +514,7 @@
         ],
         "workflow_id": "wftr-20260602-test-0001"
     },
-    "wftr-20260602-test-0001|verify_findings|1|review#1,verify_findings#1|repository-checkpoint-32cbcf3c": {
+    "wftr-20260602-test-0001|verify_findings|1|review#1,verify_findings#1|slot-baseline-checkpoint": {
         "consumer_delivery_iteration": 1,
         "consumer_phase_id": "verify_findings",
         "contract_version": "0.2",
@@ -533,7 +533,7 @@
                             "kind": "compact_reference",
                             "name": "repository_checkpoint",
                             "reference_kind": "repository_checkpoint",
-                            "reference_value": "repository-checkpoint-32cbcf3c+producer-claimed:repository-checkpoint-32cbcf3c"
+                            "reference_value": "slot-baseline-checkpoint+producer-claimed:slot-baseline-checkpoint"
                         }
                     ],
                     "producer_iteration": {
@@ -648,7 +648,7 @@
             ],
             "repository_checkpoint": {
                 "base_ref": "__NORMALIZED_SHA40__",
-                "fingerprint": "repository-checkpoint-32cbcf3c",
+                "fingerprint": "slot-baseline-checkpoint",
                 "head_ref": "__NORMALIZED_SHA40__",
                 "working_tree_owned_paths": [
                     "src/Foo.kt"
@@ -657,7 +657,7 @@
         },
         "record_kind": "delivered_projection",
         "repository_checkpoint": {
-            "fingerprint": "repository-checkpoint-32cbcf3c"
+            "fingerprint": "slot-baseline-checkpoint"
         },
         "source_producer_iterations": [
             {
@@ -671,7 +671,7 @@
         ],
         "workflow_id": "wftr-20260602-test-0001"
     },
-    "wftr-20260602-test-0001|write_history|1|build#1,implement#1,write_history#1|repository-checkpoint-32cbcf3c": {
+    "wftr-20260602-test-0001|write_history|1|build#1,implement#1,write_history#1|slot-baseline-checkpoint": {
         "consumer_delivery_iteration": 1,
         "consumer_phase_id": "write_history",
         "contract_version": "0.2",
@@ -740,7 +740,7 @@
                             "kind": "compact_reference",
                             "name": "repository_checkpoint",
                             "reference_kind": "repository_checkpoint",
-                            "reference_value": "repository-checkpoint-32cbcf3c+producer-claimed:repository-fingerprint-6"
+                            "reference_value": "slot-baseline-checkpoint+producer-claimed:slot-baseline-checkpoint"
                         },
                         {
                             "kind": "text",
@@ -749,7 +749,7 @@
                         },
                         {
                             "items": [
-                                "{\"duration_ms\":1,\"outcome\":\"passed\",\"cache_mode\":\"cache_eligible\",\"executed_work_units\":1,\"executed_checks\":[]}"
+                                "{\"duration_ms\":1,\"outcome\":\"passed\",\"cache_mode\":\"cache_eligible\",\"executed_work_units\":1,\"executed_checks\":[],\"command\":\"echo build\",\"exit_code\":0,\"repository_checkpoint\":\"slot-baseline-checkpoint\"}"
                             ],
                             "kind": "text_list",
                             "name": "gate_runs"
@@ -864,7 +864,7 @@
             ],
             "repository_checkpoint": {
                 "base_ref": "__NORMALIZED_SHA40__",
-                "fingerprint": "repository-checkpoint-32cbcf3c",
+                "fingerprint": "slot-baseline-checkpoint",
                 "head_ref": "__NORMALIZED_SHA40__",
                 "working_tree_owned_paths": [
                     "src/Foo.kt"
@@ -873,7 +873,7 @@
         },
         "record_kind": "delivered_projection",
         "repository_checkpoint": {
-            "fingerprint": "repository-checkpoint-32cbcf3c"
+            "fingerprint": "slot-baseline-checkpoint"
         },
         "source_producer_iterations": [
             {

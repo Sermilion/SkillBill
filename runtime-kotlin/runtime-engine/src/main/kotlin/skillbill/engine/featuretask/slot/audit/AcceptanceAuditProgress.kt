@@ -1,38 +1,30 @@
 package skillbill.engine.featuretask.slot.audit
 
-import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
-import skillbill.workflow.taskruntime.artifact.envelopeWireMap
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-
 internal object AcceptanceAuditProgress {
   fun rejectionReason(
-    context: PhaseAttemptEnvironment,
-    run: PhaseRun,
+    criteria: List<String>,
     text: String,
+    priorText: String?,
+    repaired: Boolean,
+    operatorReopened: Boolean,
   ): String? {
-    val catalog = AcceptanceAuditCatalog.create(context.request.runInvariants.acceptanceCriteria)
+    val catalog = AcceptanceAuditCatalog.create(criteria)
     if (catalog is AcceptanceAuditCatalog.Unusable) return catalog.reason
     catalog as AcceptanceAuditCatalog.Known
     val current = AcceptanceAuditRemainingCriteriaParser.parse(text, catalog)
     if (current is AcceptanceAuditRemainingCriteria.Unusable) return current.reason
     current as AcceptanceAuditRemainingCriteria.Known
-    return comparisonRejection(context, run, catalog, current)
+    return comparisonRejection(catalog, current, priorText, repaired, operatorReopened)
   }
 
   private fun comparisonRejection(
-    context: PhaseAttemptEnvironment,
-    run: PhaseRun,
     catalog: AcceptanceAuditCatalog.Known,
     current: AcceptanceAuditRemainingCriteria.Known,
+    priorText: String?,
+    repaired: Boolean,
+    operatorReopened: Boolean,
   ): String? {
-    if (FeatureTaskRuntimeRunLoopPhaseBlocking.operatorReopenedPhase(context.session, run.phaseId)) return null
-    val priorOutput = context.state.outputFor(run.phaseId)?.normalizedOutput?.envelopeWireMap()
-    val priorText = AcceptanceAuditVerdictRule.auditProseValue(priorOutput)
-    val repaired =
-      context.state.hasPriorRecord(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX) ||
-        context.state.edgeIterationCount(FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_REPAIR_LOOP_ID) > 0
+    if (operatorReopened) return null
     if (priorText == null) {
       return if (repaired) {
         "Audit comparison baseline is missing after repair; refusing another automatic repair."

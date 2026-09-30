@@ -38,6 +38,82 @@ parameter into a context, callback bag, or role interface does not narrow access
 Reconstruction from durable records must preserve the same invariants as live
 execution, including retry consumption, checkpoint ownership, and phase order.
 
+Finding observations are shared by review, verification and remediation. Verification checkpoint
+and boundary writes belong to `PhaseFindingVerificationState`; repair receipts belong to
+`PhaseRepairReceiptState`. These roles check the active binding and accepted writer phase.
+Planning briefing writes exist only on preplan/plan bindings and check the briefing phase.
+
+Strategies receive `PhaseAcceptedStepExecution` and a private implementation for the accepted
+step. Agent and review bindings implement `PhaseAgentExecution` for current-step launch. Gate and commit
+bindings expose their owned cycle operations and do not implement the agent launch capability.
+All bindings provide detached observations and admission checks. Planning,
+review, quality-gate, commit and PR bindings add only their role operations. The coordinator
+checks request identity, selected step and policy, authorizes dispatch, and closes each binding
+when the strategy returns. Planning unit bindings require an authorized wave and keep separate
+progress, session and records.
+
+`PhaseStepCall` carries accepted metadata and its bound target. It has no runner callback or
+prepared-launch operation. `PhaseStrategyRegistration` pairs each strategy with its runner in the
+registry. The accepted attempt host resolves that runner only after required persistence. Ordinary
+and gate strategies receive no raw runner. Goal planning resolves a runner for its accepted
+planning call after required start persistence; its phase-bound launch state rejects another step.
+Review strategies retain their review launch dependency inside the review slot. Strategies cannot
+recover the host, records, gate context or finalization context from a binding. Runtime gate cycles and commit cycles live under `runloop.qualitygate`
+and `runloop.finalization`; bindings invoke the selected operation rather than return its context.
+
+`PhaseAttemptEnvironment` contains request facts only. Strategy hooks receive detached
+progress/session observations and private role views. Audit settlement, planning stop, commit
+upstream recovery and PR pre-launch push are named runtime operations. PR push resolves the
+owned branch internally. Loop rules receive a readonly `PhaseLoopContext`; review and PR reads
+use `PhaseRepositoryObservations`, whose private adapter exposes no Git writes. PR measurement
+receives a single telemetry emitter instead of lifecycle terminal authority.
+
+`FeatureTaskRuntimeRunTransitionOwner` owns coupled progress, session, accounting,
+completion, re-entry, evidence and checkpoint state transitions. Each `FeatureTaskRuntimeRunState`
+stores one owner paired with one session; a second session is rejected. Durable completion and
+review tombstone writes precede corresponding in-memory changes. Required phase-start writes
+precede attempt accounting and review reservations. Runtime checkpoint machinery retains its
+storage and Git collaborators behind the owner operations. Durable and ephemeral records keep
+their storage policies, including ephemeral audit briefings.
+
+Progress and session getters return private wrappers over detached copies. Phase and loop reads
+return `PhaseProgressObservation` and `LoopProgressObservation` values. Their collections,
+buffers and terminal reports do not alias live storage, and casting an observation cannot recover
+the live owner. Settlement coupling receives the owner directly from runtime context; it does
+not reconstruct mutation authority from observations.
+
+Selected strategies declare their execution binding role, and selected hooks declare their context role.
+`FeatureTaskRuntimeRunLoopStepBindings` and `FeatureTaskRuntimeRunLoopHookViews` create private views for
+that accepted step. Shared code does not select those views through phase-name constants. Review writes
+recheck the active binding and selected review role. These role declarations do not change selection,
+step identity, execution-plan digests or durable formats.
+
+SQLite worker acquisition participates in the caller's admission transaction when present. Its
+standalone adapter still owns a write transaction. A rejected admission rolls back the workflow
+advance and worker lease together.
+
+`StrategyCapabilityBoundaryArchitectureTest` uses Kotlin PSI to build a declaration graph across
+all engine source. It follows consumer roots through helpers, extensions, aliases, constructors,
+properties, factories and used parameter/return types. Same-name overload declarations are
+combined conservatively so each candidate edge remains reachable. Extension functions with an
+implicit run-state receiver are included in primitive-writer checks. Attempt and state folders
+remain in the transitive catalog. Skeleton composition wiring is excluded as a consumer root.
+Runtime runner implementations, registry, lookup and selection are also excluded as consumer roots,
+and remain traversable when a consumer reaches them. Package-qualified helper calls, wildcard
+imports and companion members contribute declaration edges. Wildcard imports retain all indexed
+candidates, and value receivers shadow imported names.
+Unresolved governed edges fail. Raw state and raw `PhaseRunner` authority are forbidden to
+ordinary and gate strategy consumers; review authority is forbidden to non-review consumers.
+Review consumers may reach the review launch runner through their review slot. Runtime registrations
+retain other runners outside strategy objects, and the attempt host resolves the selected runner
+through run state after admission. A typed primitive-writer inventory also checks helpers outside the consumer graph. Synthetic
+allowed and violating cases prove these boundaries, and runtime binding checks prove accepted-step
+admission. The rule is registered in
+`PrincipleEnforcementInventory.enforceableRules`.
+
+The operation-level inventory and retained runtime collaborator dispositions are in
+`../.feature-specs/done/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership`.
+
 #### Feature-task run-loop helper inputs (SKILL-247 subtask 3)
 
 Investigation F-005 counted 122 `FeatureTaskRuntimeRunLoopContext` extension
@@ -75,8 +151,12 @@ goalContinuationRecorder/phaseSettlementService ports those paths use.
 audit/checkpoint and accepted-output persistence tail inside
 `settleValidatedOutputAfterFingerprint`; implement-fix repair-receipt settlement
 and commit finalisation now receive their request/state/recorder/goal-recorder/
-diagnostics ports directly. Review runs in `InlineReviewStrategy` and reaches
-durable state only through `PhaseRunState`.
+diagnostics ports directly. Review runs in `InlineReviewStrategy` and reaches review-owned persistence
+through the accepted step binding (`PhaseReviewStepBinding` on the active
+`PhaseStepCall`), not by reopening step state from `PhaseRunState.step`.
+SKILL-384 closes the review boundary with private bindings for each step role.
+`GateOutput` retains a runtime-only `PhaseOutputSettlementContext`; strategy hooks receive
+separate detached views.
 PhaseAttempts keeps `blockAndPersist` context and top-level overloads; governed
 block paths prefer the top-level `blockAndPersist(request, state, recorder,
 goalContinuationRecorder, args)` seam. `FeatureTaskRuntimeRunLoop` exposes only
@@ -106,10 +186,12 @@ inputs:
   audit/checkpoint and accepted-output persistence tail retains
   `settlementContext`.
 - Review preparation and the review step live in the `code_review` slot
-  (`slot.codereview`). They reach durable run state, git operations, the
-  output validator, and the clock only through `PhaseStepState` and its
-  attempt scope. Since SKILL-380 subtask 7, no slot class takes the run-loop
-  context.
+  (`slot.codereview`). Their binding admits each review mutation only while
+  the accepted step is active. `PhaseReviewExecutionContext` supplies repository
+  observations, the output validator, and the clock; it has no git writer or
+  attempt scope. Review launch and persistence pass through the accepted-step
+  binding and its owning recorder operations. Since SKILL-380 subtask 7, no
+  slot class takes the run-loop context.
 - PhaseAttempts exposes top-level block/pause seams with request/state/
   recorder/goal-recorder/observability arguments; its context overloads remain
   only for the generic attempt-loop adjacency.
@@ -1076,33 +1158,79 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   settled envelope, typed launch failure). `DefaultPhaseRunner` is the only
   implementation, and it is the only featuretask type that depends on
   `GoalRunnerSubtaskLauncher`.
-- The run state sits behind three ports. `PhaseLaunchState` is what a
-  `PhaseRunner` reads and writes around one launch: the settlement target,
-  launch observation, token accounting, and the settled envelope.
-  `PhaseRunState` extends it with everything one run reads and writes: the
-  in-memory progress, the session, telemetry, the attempt loop, strategy
-  selection, and the sub-ports in `slot.state` (`PhaseRunRecords`,
-  `PhaseRunGoal`, `PhaseRunSettlements`, `PhaseRunCheckpoints`).
-  `PhaseStepState` is the per-call port `runStep` receives. It adds the
-  review members of the `code_review` strategy. The run loop's entry takes
-  (definition, `PhaseRunState`, facts). `FeatureTaskRuntimeRunRequest` is
-  only the durable entry's input. The runner builds `DurablePhaseRunState`
-  and `DurablePhaseStepState` (`runloop.durable`). They are the only
-  run-loop and slot classes that hold the durable stores, writers, and
-  checkpoint git operations.
-- Strategies are context-free. No slot class references
-  `FeatureTaskRuntimeRunLoopContext`. A strategy builds its
-  `PhaseAttemptScope` (the run request and the run state) from the
-  `PhaseRun` and `PhaseStepState` it receives. Hooks and loop rules take a
-  `PhaseAttemptEnvironment`.
-- Shared code never names a step. It asks
-  `PhaseStrategyLookup.resumeRules(facts)` for the owning strategy's
-  `PhaseResumeRules` (tracks review passes, resumes past completion,
-  persisted-block retry). It asks a status projection's `reportedGate(stepId)`
-  (`BUILD` or `VALIDATION`) which step reports a gate. It reads entry and
-  loop steps from the transition declaration. The validation and readiness
-  gates and the review-generation writes take the step id from the calling
-  strategy.
+- `PhaseRunState` exposes progress, session, attempt execution, strategy
+  selection, records, goal continuation, settlements, checkpoints, and phase
+  gates. Ordinary steps receive `PhaseAgentStepBinding` at dispatch; review steps
+  receive `PhaseReviewStepBinding` (review interfaces in `PhaseStepState.kt`, not
+  a `PhaseRunState` inheritance chain). `FeatureTaskRuntimeRunLoopStepState`
+  implements those review interfaces only on review bindings. `FeatureTaskRuntimeRunLoopDurableState`
+  (`runloop.durable`) adapts durable services to `FeatureTaskRuntimeRunLoopStepState`
+  (`runloop.state`), while `InMemoryPhaseRunState` and
+  `GoalPlanningPhaseRunState` use the same step-state adapter with in-memory
+  records. Goal planning fan-out units run on `GoalPlanningUnitRunState` with
+  isolated progress, session, records, telemetry, and step binding. Durable
+  and in-memory storage remain distinct.
+- `PhaseAttemptEnvironment` supplies request facts only. Runtime scopes retain storage and effect
+  collaborators privately. Strategy hooks receive detached observations and bound role operations;
+  review/PR/loop helpers receive readonly repository inspection. Step factories require coordinator
+  dispatch, request identity, selected membership and policy. Attempt launch selects the admitted
+  owner's runner after required persistence. The transition owner coordinates progress, session,
+  evidence, retry and checkpoint state, with durable acknowledgement before in-memory advancement.
+- Execution lookup requires membership in `ResolvedPhaseExecutionPlan` and
+  checks the selected strategy revision, step policy identity, and resume
+  interpretation identity before returning a strategy. Durable run state reads
+  traversal from that same plan. `PhaseStrategyLookup.resumeRules(plan)` uses
+  selected strategy rules for execution and the explicit revision-one history
+  policy for unselected records.
+- `FeatureTaskRuntimeExecutionPlanCodec` maps resolved plans to the bounded
+  artifact through `FeatureTaskRuntimeExecutionPlanValidator`. Decoding restores
+  immutable domain data and checks policy digests. It does not select strategies
+  or launch runners. `FeatureTaskRuntimeExecutionPlanCompatibility` compares
+  recorded composition with supported definitions, registrations, and policies.
+  It returns the recorded plan and reports distinct missing, corrupt,
+  unsupported, and incompatible failures with payload-free recovery guidance.
+  This composition check does not establish durable execution admission.
+  `encodeExecution` adds revision-one descriptors for gate commands, receipt
+  interpretation, retry and resume budgets, audit behavior, review invalidation,
+  checkpoint ownership, and finalization. `requireSupportedExecution` requires
+  the complete supported policy set and compares its effective inputs. Command
+  identity uses argv after wrapper resolution, command family and role, cache
+  mode, findings settings, validation depth, pack identity, and phase timeout.
+  It preserves argv order and absent values. Artifact bodies contain digests,
+  not command payloads. Policy input encoding and the artifact each have a
+  65536-byte limit. The combined policy families have a 256-descriptor limit.
+  Semantic changes require a revision bump; cosmetic source changes do not.
+  Durable traversal compatibility currently accepts the definition's exact
+  traversal. There are no cross-revision or traversal-override mappings.
+  In-memory override validation does not grant durable compatibility.
+  The execution encoder rejects traversal overrides before producing a durable
+  descriptor. `FeatureTaskContinuationLookupService.claim` re-reads the row,
+  route identity, worker ownership, and descriptor in its claim transaction.
+  It checks effective policies before changing status and returns the immutable
+  recorded plan. Refusal diagnostics contain a bounded workflow id and reason
+  code. Diagnostic failure does not replace the refusal.
+  `FeatureTaskRuntimeExecutionPlanResolver` resolves the repository-owned path
+  inventory through installed pack routing, reads the repository wrapper setting,
+  and encodes the chosen command family, validation depth, and phase timeout.
+  Standalone CLI creation and goal-child launch preparation supply this descriptor
+  to their existing creation transactions. Build selection refuses a missing
+  discovery or verification build command before child creation.
+  `FeatureTaskRuntimeExecutionAdmission` checks the authoritative identity and
+  descriptor inside worker acquisition, takeover reservation, and ownership
+  transfer transactions. Transfer checks the identity admitted at reservation.
+  Admission failure retains workflow and lease evidence and emits a bounded
+  diagnostic. The worker hands the admitted immutable plan to the CLI's runner
+  request. Preparation and execution use that plan when supplied.
+  Direct runner entry still permits requests without admission. Creation adapters
+  still accept omitted descriptors, goal-child reuse still compares raw values,
+  and crash recovery and receipt regeneration still need transactional admission.
+  Gate execution must also consume the checked effective inputs rather than
+  resolving commands again from current configuration.
+- `PhaseHistoricalInterpreter` owns revision-one record interpretation and
+  status metadata. It has no strategy registry, runner, or persistence port.
+  Unknown steps retain their raw records during status inspection and cannot
+  acquire resume rules. Recognizing a historical build step never selects its
+  build strategy. History inspection does not grant durable resume admission.
 - `ReviewTarget` is a per-call fact on `PhaseRun`: `LastCommit` (the full-run
   default), `Uncommitted`, `Commit(revision)` (a sha, branch, or tag), or
   `Scoped` (the base and head `skill-bill code-review` resolves). It composes
@@ -1124,8 +1252,10 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   schedule, over the run state's `PhaseRunFanOut`. The sweep drives it through
   `FeatureTaskRuntimeRunLoopEntry` over an in-memory
   `GoalPlanningPhaseRunState`, whose attempt loop keeps the planning attempt
-  gate, budget, and checkpoints, and writes no feature-task workflow row.
-  `PhaseStrategyLookup.unselectedStepIds` counts every canonical step a run
+  gate, budget, and checkpoints, and writes no feature-task workflow row. The
+  selected `goal-plan-fan-out` strategy authorizes `agent-plan` at the attempt
+  boundary while preserving the selected step policy and request checks.
+  `ResolvedPhaseExecutionPlan.unselectedStepIds` counts every canonical step a run
   does not select, including steps outside a short definition, so a step
   drops its projections from producers the definition never runs.
 - A phase run (`skillbill.engine.featuretask.phaserun`) drives one in-memory
@@ -1612,6 +1742,19 @@ review, implementation, validation, or history artifacts. The `build` phase
 compile/buildability proof and never invokes the collect-all validation gate.
 Default standalone runs skip `build` (`review -> validate`); goal continuation
 stamps which quality gate a child runs (subtask 2).
+
+`SkeletonDefinition.VALIDATION` binds `PackValidationStrategy` to `PHASE_VALIDATE`.
+It runs the dominant pack's `collect_all_full_gate_command`, repairs parsed
+findings in the same agent session, then runs
+`cache_bypassing_collect_all_full_gate_command` to verify. Goal-child `BUILD`
+stays on `PackBuildStrategy`, which uses only the two build commands. Each gate
+run records its effective argv, exit code, and repository checkpoint. A passed
+receipt requires a non-empty run list and a successful terminal required command;
+an earlier pass cannot cover a failed verification. Missing required declarations
+or command members block both durable and in-memory routes. Historical receipts
+without command semantics block recovery and remain available for inspection. The
+build receipt and validation evidence contracts are versioned independently; a
+reader rejects legacy evidence when it cannot prove current command semantics.
 
 **4. Phase-local instructions.** Run identity remains durable state on every
 briefing, but prompt rendering is selected per phase by

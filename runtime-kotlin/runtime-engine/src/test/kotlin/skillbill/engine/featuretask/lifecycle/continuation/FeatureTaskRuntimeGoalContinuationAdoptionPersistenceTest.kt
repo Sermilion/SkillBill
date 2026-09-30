@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.lifecycle.continuation
 import skillbill.application.testHarnessClock
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.contracts.JsonCodec
+import skillbill.engine.ExecutionPlanAdmissionFixture
 import skillbill.engine.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
@@ -39,6 +40,7 @@ import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalCo
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.BUILD
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.VALIDATE
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
@@ -97,7 +99,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
         continuationMap = preContractContinuationMap().plus("subtask_id" to 2.7),
       )
 
-    val prepared = harness.preparation.prepare(resumeRequest(validationDepth = ValidationDepth.FULL))
+    val prepared = harness.prepare(resumeRequest(validationDepth = ValidationDepth.FULL))
 
     val blocked = assertIs<FeatureTaskRuntimePreparation.PreparationBlocked>(prepared)
     assertTrue(blocked.report.blockedReason.contains("malformed"))
@@ -113,7 +115,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
 
     val prepared =
       assertIs<FeatureTaskRuntimePreparation.Prepared>(
-        harness.preparation.prepare(resumeRequest(validationDepth = ValidationDepth.FULL)),
+        harness.prepare(resumeRequest(validationDepth = ValidationDepth.FULL)),
       )
 
     assertEquals(ValidationDepth.FULL, prepared.request.goalContinuation?.validationDepth)
@@ -148,7 +150,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
 
     val prepared =
       assertIs<FeatureTaskRuntimePreparation.Prepared>(
-        harness.preparation.prepare(
+        harness.prepare(
           resumeRequest(
             validationDepth = ValidationDepth.FULL,
             qualityGateSelection = BUILD,
@@ -190,7 +192,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
 
     val prepared =
       assertIs<FeatureTaskRuntimePreparation.Prepared>(
-        harness.preparation.prepare(resumeRequest(validationDepth = ValidationDepth.FULL)),
+        harness.prepare(resumeRequest(validationDepth = ValidationDepth.FULL)),
       )
 
     assertEquals(ValidationDepth.FULL, prepared.request.goalContinuation?.validationDepth)
@@ -216,7 +218,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
 
     val prepared =
       assertIs<FeatureTaskRuntimePreparation.Prepared>(
-        harness.preparation.prepare(
+        harness.prepare(
           resumeRequest(
             validationDepth = ValidationDepth.FULL,
             qualityGateSelection = BUILD,
@@ -352,5 +354,18 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
   private data class AdoptionHarness(
     val repository: InMemoryRuntimeWorkflowRepository,
     val preparation: FeatureTaskRuntimeRunPreparation,
-  )
+  ) {
+    fun prepare(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimePreparation {
+      val fixture =
+        ExecutionPlanAdmissionFixture(
+          definition = SkeletonDefinition.GOAL_CHILD,
+          repository = "repo-root-realpath-v1:${request.repoRoot}",
+          specPath = request.runInvariants.specReference,
+          qualityGate = request.goalContinuation?.qualityGateSelection,
+        )
+      fixture.seed(repository, request.workflowId, request.issueKey)
+      val admitted = fixture.admission.admit(repository, request.workflowId, fixture.inputs)
+      return preparation.prepare(request.copy(admittedExecution = admitted))
+    }
+  }
 }

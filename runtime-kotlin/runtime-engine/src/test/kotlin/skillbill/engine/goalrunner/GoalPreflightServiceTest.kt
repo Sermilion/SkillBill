@@ -14,6 +14,7 @@ import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.specSource
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.engine.ExecutionPlanAdmissionFixture
 import skillbill.engine.decomposition.encodeDecompositionManifestYaml
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.goalrunner.model.GoalPreflightRequest
@@ -27,6 +28,7 @@ import skillbill.ports.agentaddon.AgentAddonSelectionPort
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
 import skillbill.ports.agentaddon.model.ExternalAgentAddonSourceConfigRequest
 import skillbill.ports.agentaddon.model.ExternalAgentAddonSourceConfigResult
+import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerManifestStoreDefaults
 import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
@@ -291,6 +293,8 @@ class GoalPreflightServiceTest {
         FeatureTaskContinuationLookupService(
           database,
           testWorkflowSnapshotValidator,
+          ExecutionPlanAdmissionFixture().compatibility,
+          NoopRuntimeDiagnostics,
         ),
       manifestStore = TestManifestStore(manifestState, persistedReviewPolicy),
       agentAddonSelectionPort = TestAgentAddonSelectionPort,

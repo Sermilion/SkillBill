@@ -1,11 +1,15 @@
 package skillbill.engine.goalrunner.persist
 
+import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
+import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.goalrunner.toPersistenceWire
 import skillbill.ports.goalrunner.persistence.model.GoalRunnerBlockWrite
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
@@ -15,6 +19,10 @@ import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.engine.model.isTerminalStatus
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import skillbill.workflow.model.FeatureTaskRouteScope
+import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
@@ -97,12 +105,32 @@ internal class WorkflowGoalRunnerBlockWrites(
 
   fun reopenBlockedPhaseForOperatorResume(
     unitOfWork: UnitOfWork,
-    workflowId: String,
     preferredPhaseId: String,
     reason: String,
+    expectedIdentity: FeatureTaskExecutionIdentity,
+    expectedExecutionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
   ): Boolean {
+    val workflowId = expectedIdentity.workflowId
     val family = WorkflowFamily.TASK_RUNTIME
     val existing = unitOfWork.workflowStates.get(family, workflowId) ?: return false
+    val identity =
+      unitOfWork.workflowStates.getFeatureTaskExecutionIdentity(workflowId)
+        ?: missingPlan()
+    FeatureTaskExecutionIdentityPolicy.validate(identity)
+    if (identity != expectedIdentity || identity.mode != FeatureTaskWorkflowMode.RUNTIME ||
+      identity.routeScope != FeatureTaskRouteScope.GOAL_CHILD
+    ) {
+      incompatiblePlan()
+    }
+    val storedPlan =
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(existing.artifacts)
+        ?: missingPlan()
+    if (storedPlan != JsonCodec.parseValue(expectedExecutionPlan.encoded().toString(Charsets.UTF_8))) {
+      incompatiblePlan()
+    }
+    if (unitOfWork.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId) != null) {
+      incompatiblePlan()
+    }
     if (family.definition.isTerminalStatus(existing.workflowStatus)) {
       return false
     }
@@ -200,4 +228,8 @@ internal class WorkflowGoalRunnerBlockWrites(
       sessionId = "",
     )
   }
+
+  private fun missingPlan(): Nothing = throw MissingFeatureTaskRuntimeExecutionPlanError()
+
+  private fun incompatiblePlan(): Nothing = throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
 }

@@ -14,6 +14,7 @@ dependencies {
   testFixturesImplementation(project(":runtime-domain"))
   testFixturesImplementation(project(":runtime-ports"))
   testFixturesImplementation(project(":runtime-infra:sqlite"))
+  testFixturesImplementation(project(":runtime-infra:contracts"))
   testFixturesImplementation(testFixtures(project(":runtime-application")))
   testFixturesImplementation(testFixtures(project(":runtime-ports")))
   testFixturesImplementation(testFixtures(project(":runtime-domain")))

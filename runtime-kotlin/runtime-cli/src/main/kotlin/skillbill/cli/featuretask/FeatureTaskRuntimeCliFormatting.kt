@@ -2,7 +2,6 @@ package skillbill.cli.featuretask
 
 import com.github.ajalt.clikt.core.UsageError
 import skillbill.application.workflow.model.FeatureTaskGovernedSpecPathResult
-import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
 import skillbill.application.workflow.persist.openFeatureTask
@@ -13,7 +12,6 @@ import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuati
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.ports.repository.RepositoryEnclosingRootPort
-import skillbill.workflow.model.FeatureTaskRouteScope
 import java.nio.file.Path
 
 internal fun RepositoryEnclosingRootPort.governedSpecPathForCli(
@@ -30,32 +28,10 @@ internal fun RepositoryEnclosingRootPort.governedSpecPathForCli(
       throw UsageError("Governed spec path must be Markdown beneath .feature-specs/.")
   }
 
-internal fun WorkflowService.openRuntimeWorkflowId(
-  issueKey: String?,
-  specPath: String,
-  repoRoot: Path,
-  routeScope: FeatureTaskRouteScope,
-  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
-): String =
-  when (
-    val opened =
-      openFeatureTask(
-        WorkflowServiceOpenFeatureTaskArgs(
-          kind = WorkflowFamilyKind.TASK_RUNTIME,
-          sessionId = "",
-          currentStepId = null,
-          issueKey = requireNotNull(issueKey),
-          repositoryIdentity = repositoryEnclosingRootPort.repositoryIdentity(repoRoot),
-          governedSpecPath =
-            repositoryEnclosingRootPort.governedSpecPathForCli(repoRoot, Path.of(specPath)),
-          routeScope = routeScope,
-        ),
-      )
-  ) {
+internal fun WorkflowService.openRuntimeWorkflowId(args: WorkflowServiceOpenFeatureTaskArgs): String =
+  when (val opened = openFeatureTask(args)) {
     is WorkflowOpenResult.Ok -> opened.workflowId
-    is WorkflowOpenResult.Error -> throw UsageError(
-      "Could not open a feature-task workflow: ${opened.error}",
-    )
+    is WorkflowOpenResult.Error -> throw UsageError("Could not open a feature-task workflow: ${opened.error}")
   }
 
 internal data class VerifyRuntimeResumeArgs(

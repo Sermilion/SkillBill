@@ -12,6 +12,7 @@ import skillbill.contracts.telemetry.TelemetryProxyPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.infrastructure.contracts.locator.DecompositionManifestBundleJournalSchemaPaths
 import skillbill.infrastructure.contracts.locator.DecompositionManifestSchemaPaths
+import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeExecutionPlanSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimePhaseOutputSchemaPaths
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvidenceSchemaPaths
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
@@ -30,6 +31,11 @@ internal data class GovernedPayloadSeam(
 internal object WireVocabularyGovernedSeamInventory {
   val seams: List<GovernedPayloadSeam> =
     listOf(
+      GovernedPayloadSeam(
+        seamId = "feature-task-runtime-execution-plan",
+        schemaRepoRelativePath = FeatureTaskRuntimeExecutionPlanSchemaPaths.REPO_RELATIVE_PATH,
+        governedRelativePathMarkers = listOf("FeatureTaskRuntimeExecutionPlan", "FeatureTaskExecutionPlan"),
+      ),
       GovernedPayloadSeam(
         seamId = "decomposition-manifest",
         schemaRepoRelativePath = DecompositionManifestSchemaPaths.REPO_RELATIVE_PATH,
@@ -150,11 +156,19 @@ internal object WireVocabularyGovernedSeamInventory {
         readinessEvidenceGovernedKeys(
           loadRepoSchema(schemaRepoRelativePath),
         )
+      FeatureTaskRuntimeExecutionPlanSchemaPaths.REPO_RELATIVE_PATH ->
+        executionPlanGovernedKeys(loadRepoSchema(schemaRepoRelativePath))
       GOAL_CONTINUATION_ARTIFACT_SCHEMA_AUTHORITY -> goalContinuationArtifactGovernedKeys()
       SQLITE_TELEMETRY_MATERIALIZATION_AUTHORITY -> sqliteTelemetryMaterializationGovernedKeys()
       SQLITE_REVIEW_TELEMETRY_AUTHORITY -> sqliteReviewTelemetryGovernedKeys()
       TELEMETRY_PROXY_AUTHORITY -> telemetryProxyGovernedKeys()
       else -> emptySet()
+    }
+
+  private fun executionPlanGovernedKeys(node: JsonNode): Set<String> =
+    buildSet {
+      if (node.isObject) addAll(propertyNames(node.path("properties")))
+      if (node.isContainerNode) node.elements().forEachRemaining { addAll(executionPlanGovernedKeys(it)) }
     }
 
   private fun telemetryProxyGovernedKeys(): Set<String> =

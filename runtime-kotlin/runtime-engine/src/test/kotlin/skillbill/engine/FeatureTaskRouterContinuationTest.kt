@@ -17,6 +17,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
+import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
@@ -55,11 +56,14 @@ class FeatureTaskRouterContinuationTest {
       FeatureTaskContinuationLookupService(
         database,
         testWorkflowSnapshotValidator,
+        ExecutionPlanAdmissionFixture().compatibility,
+        NoopRuntimeDiagnostics,
       )
     val opened =
       assertIs<WorkflowOpenResult.Ok>(
         service.openFeatureTask(
           WorkflowServiceOpenFeatureTaskArgs(
+            executionPlan = testExecutionPlan(),
             kind = WorkflowFamilyKind.TASK_RUNTIME,
             issueKey = "SKILL-120",
             repositoryIdentity = REPOSITORY_IDENTITY,

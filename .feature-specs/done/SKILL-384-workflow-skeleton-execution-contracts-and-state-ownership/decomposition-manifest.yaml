@@ -1,0 +1,62 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-384"
+feature_name: "workflow-skeleton-execution-contracts-and-state-ownership"
+parent_spec_path: ".feature-specs/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "base/SKILL-380-phase-slot-strategies"
+feature_branch: "feature/SKILL-384-workflow-skeleton-execution-contracts"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "Require truthful gate evidence and persistence before execution"
+  spec_path: "/home/sermilion/StudioProjects/skill-bill/.feature-specs/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership/spec_subtask_1_require-truthful-gate-evidence-and-persistence-before-execution.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260928-112314-pd9q"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 2
+  name: "Resolve composition once and preserve its semantics on durable resume"
+  spec_path: "/home/sermilion/StudioProjects/skill-bill/.feature-specs/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership/spec_subtask_2_resolve-composition-once-and-preserve-its-semantics-on-durable-resume.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260928-125330-rqcb"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false
+- id: 3
+  name: "Restrict strategy capabilities and centralize coupled transitions"
+  spec_path: "/home/sermilion/StudioProjects/skill-bill/.feature-specs/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership/spec_subtask_3_restrict-strategy-capabilities-and-centralize-coupled-transitions.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260929-182426-w78b"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false
+  - subtask_id: 2
+    optional: false
+    skipped: false

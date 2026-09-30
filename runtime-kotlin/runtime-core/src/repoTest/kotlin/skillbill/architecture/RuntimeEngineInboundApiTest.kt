@@ -86,6 +86,7 @@ class RuntimeEngineInboundApiTest {
 
     val PINNED_ENGINE_INBOUND_API_TYPES: Set<String> =
       setOf(
+        "skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest",
         "skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService",
         "skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService",
         "skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder",
@@ -93,6 +94,7 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetup",
         "skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver",
         "skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner",
+        "skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver",
         "skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService",
         "skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator",
         "skillbill.engine.featuretask.runner.OPERATOR_DECISION_QUALITY_GATE_PHASE_IDS",

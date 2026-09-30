@@ -3,7 +3,8 @@ package skillbill.engine
 import skillbill.engine.featuretask.lifecycle.core.AlwaysValidValidator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditVerdictRule
-import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
+import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
 import skillbill.engine.goalrunner.execution.support.GoalRunnerChildProgressRead
@@ -22,7 +23,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
-private val RESUME_RULES = statusProjectionPhaseStrategies().resumeRules()
+private val RESUME_RULES = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)::resumeRules
 
 class AmbientInputsAndLoudFailSeamsTest {
   @Test
@@ -55,7 +56,7 @@ class AmbientInputsAndLoudFailSeamsTest {
           AcceptanceAuditVerdictRule(SilentDiagnostics)
             .takeIf { stepId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT }
         },
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
 
     val start = state.explicitResumeStart(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
@@ -63,9 +64,9 @@ class AmbientInputsAndLoudFailSeamsTest {
     assertTrue(start.reopen)
     state.reopenFromExplicitResume(start.phaseId)
 
-    assertTrue(state.isComplete(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT))
-    assertTrue(state.isComplete(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW))
-    assertFalse(state.isComplete(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY))
+    assertTrue(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT).completed)
+    assertTrue(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW).completed)
+    assertFalse(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY).completed)
   }
 
   @Test
@@ -92,7 +93,7 @@ class AmbientInputsAndLoudFailSeamsTest {
           ),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
 
     val start = state.explicitResumeStart(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
@@ -100,8 +101,8 @@ class AmbientInputsAndLoudFailSeamsTest {
     assertTrue(start.reopen)
     state.reopenFromExplicitResume(start.phaseId)
 
-    assertTrue(state.isComplete(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT))
-    assertFalse(state.isComplete(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW))
+    assertTrue(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT).completed)
+    assertFalse(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW).completed)
   }
 
   @Test
@@ -123,7 +124,7 @@ class AmbientInputsAndLoudFailSeamsTest {
           ),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
 
     val start = state.explicitResumeStart(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
@@ -141,7 +142,7 @@ class AmbientInputsAndLoudFailSeamsTest {
             listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT),
           ),
         outputValidator = ThrowingValidator(setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT)),
-        resumeRules = RESUME_RULES,
+        resumeRulesFn = RESUME_RULES,
       )
     val output =
       FeatureTaskRuntimePhaseOutput(

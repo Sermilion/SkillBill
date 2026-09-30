@@ -6,6 +6,7 @@ import skillbill.engine.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
+import skillbill.engine.openTestWorkflow
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
@@ -28,7 +29,7 @@ class FeatureTaskRuntimeBuildGateProgressStoreIsolationTest {
         NoopRuntimeDiagnostics,
       )
     val workflowId = "wf-build-gate-isolation"
-    recorder.ensureWorkflowOpen(workflowId, "session-1")
+    recorder.openTestWorkflow(workflowId, "session-1")
 
     val validationProgress =
       FeatureTaskRuntimeValidationGateProgress(
@@ -62,5 +63,8 @@ class FeatureTaskRuntimeBuildGateProgressStoreIsolationTest {
       outcome = outcome,
       cacheMode = "warm",
       executedWorkUnits = 1,
+      command = "./gradlew check",
+      exitCode = if (outcome == "passed") 0 else 1,
+      repositoryCheckpoint = "checkpoint",
     )
 }

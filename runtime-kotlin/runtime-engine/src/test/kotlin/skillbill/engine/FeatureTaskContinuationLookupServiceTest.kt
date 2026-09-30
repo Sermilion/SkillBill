@@ -19,6 +19,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
+import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.engine.goalrunner.manifest
 import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.error.shellcontent.LegacyProseWorkflowError
@@ -46,8 +47,9 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private val DECOMPOSITION_RUNTIME_ARTIFACT_KEY =
@@ -125,13 +127,29 @@ class FeatureTaskContinuationLookupServiceTest {
         sessionId = "",
       ),
     )
+    val row = requireNotNull(fixture.states.getFeatureTaskWorkflow(opened.workflowId))
+    val artifacts = requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(row.artifactsJson)))
+    fixture.states.saveFeatureTaskWorkflow(
+      row.copy(
+        artifactsJson =
+          JsonCodec.mapToJsonString(
+            artifacts +
+              mapOf(
+                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
+                  ExecutionPlanAdmissionFixture().descriptor(),
+                ),
+              ),
+          ),
+      ),
+      RUNTIME,
+    )
     val candidate =
       assertIs<FeatureTaskContinuationLookupResult.Resumable>(
         fixture.lookup.lookup("SKILL-120", REPOSITORY_A),
       ).candidate
 
-    assertTrue(fixture.lookup.claim(candidate))
-    assertFalse(fixture.lookup.claim(candidate))
+    assertNotNull(fixture.lookup.claim(candidate, ExecutionPlanAdmissionFixture().inputs))
+    assertNull(fixture.lookup.claim(candidate, ExecutionPlanAdmissionFixture().inputs))
     val running =
       assertIs<FeatureTaskContinuationLookupResult.AlreadyRunning>(
         fixture.lookup.lookup("SKILL-120", REPOSITORY_A, candidate.workflowId),
@@ -147,6 +165,7 @@ class FeatureTaskContinuationLookupServiceTest {
     assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
       fixture.service.openFeatureTask(
         WorkflowServiceOpenFeatureTaskArgs(
+          executionPlan = testExecutionPlan(),
           kind = WorkflowFamilyKind.TASK_RUNTIME,
           issueKey = "SKILL-120",
           repositoryIdentity = "not-a-repository",
@@ -219,6 +238,7 @@ class FeatureTaskContinuationLookupServiceTest {
       assertIs<WorkflowOpenResult.Ok>(
         fixture.service.openFeatureTask(
           WorkflowServiceOpenFeatureTaskArgs(
+            executionPlan = testExecutionPlan(),
             kind = WorkflowFamilyKind.TASK_RUNTIME,
             issueKey = "SKILL-120",
             repositoryIdentity = REPOSITORY_A,
@@ -320,6 +340,7 @@ class FeatureTaskContinuationLookupServiceTest {
     assertIs<WorkflowOpenResult.Ok>(
       fixture.service.openFeatureTask(
         WorkflowServiceOpenFeatureTaskArgs(
+          executionPlan = testExecutionPlan(),
           kind = WorkflowFamilyKind.TASK_RUNTIME,
           issueKey = "SKILL-120",
           repositoryIdentity = REPOSITORY_B,
@@ -360,6 +381,8 @@ class FeatureTaskContinuationLookupServiceTest {
         FeatureTaskContinuationLookupService(
           database,
           testWorkflowSnapshotValidator,
+          ExecutionPlanAdmissionFixture().compatibility,
+          NoopRuntimeDiagnostics,
         ),
     )
   }
@@ -513,6 +536,7 @@ class FeatureTaskContinuationLookupServiceTest {
       assertIs(
         service.openFeatureTask(
           WorkflowServiceOpenFeatureTaskArgs(
+            executionPlan = testExecutionPlan(),
             kind = WorkflowFamilyKind.TASK_RUNTIME,
             issueKey = "SKILL-120",
             repositoryIdentity = repositoryIdentity,

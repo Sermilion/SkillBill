@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot
 
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
@@ -7,8 +8,8 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
@@ -20,11 +21,32 @@ abstract class PhaseStrategy {
 
   abstract val strategyId: String
 
+  open val semanticRevision: Int = 1
+
+  open fun stepPolicyIdentity(stepId: String): String =
+    policyFor(stepId).semanticIdentity(strategyId, semanticRevision, stepId)
+
+  open fun resumeInterpretationIdentity(stepId: String): String = "$strategyId/$semanticRevision:$stepId"
+
+  internal open fun executionBindingKind(stepId: String): PhaseExecutionBindingKind {
+    policyFor(stepId)
+    return when (slot) {
+      PhaseSlot.PREPLAN, PhaseSlot.PLAN -> PhaseExecutionBindingKind.PLANNING
+      else -> PhaseExecutionBindingKind.AGENT
+    }
+  }
+
+  internal open val plansInFanOut: Boolean = false
+
+  internal open val qualityGateOperation: PhaseQualityGateOperation? = null
+
+  internal open fun acceptsAttemptStrategy(attemptStrategyId: String): Boolean = attemptStrategyId == strategyId
+
   abstract val steps: List<String>
 
-  abstract val entryStep: String
+  open val optionalSteps: Set<String> = emptySet()
 
-  abstract val runner: PhaseRunner
+  abstract val entryStep: String
 
   abstract fun policyFor(stepId: String): PhaseStepPolicy
 
@@ -40,7 +62,7 @@ abstract class PhaseStrategy {
 
   internal abstract fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome
 
   internal open fun stepHooks(stepId: String): PhaseStepHooks = PhaseStepHooks.None
@@ -77,3 +99,13 @@ internal fun jsonValueContent(
     innerJsonExample +
     "```\n" +
     notes
+
+internal sealed interface PhaseQualityGateOperation {
+  data class PackGate(
+    val commandFamily: ValidationGateCommandFamily,
+  ) : PhaseQualityGateOperation
+
+  data object AgentValidation : PhaseQualityGateOperation
+}
+
+internal enum class PhaseExecutionBindingKind { AGENT, PLANNING, REVIEW, FINDING_VERIFICATION, REPAIR_RECEIPT }

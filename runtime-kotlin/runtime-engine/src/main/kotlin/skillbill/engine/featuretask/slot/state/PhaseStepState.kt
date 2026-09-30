@@ -1,56 +1,24 @@
 package skillbill.engine.featuretask.slot.state
 
+import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparation
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
+import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
+import skillbill.engine.featuretask.slot.PhaseRepositoryObservations
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.goalreview.ReviewPassResolution
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
-
-/**
- * The run state a strategy reads and writes for one call of its step: the run-level [PhaseRunState] plus the step
- * iteration and the review pass, checkpoint, and completion facts a code_review strategy persists for that step.
- */
-internal interface PhaseStepState :
-  PhaseRunState,
-  PhaseReviewPassState,
-  PhaseReviewSettlementState,
-  PhaseFindingVerificationState,
-  PhaseReviewGenerationState {
-  /** The iteration the current step's next attempt records. */
-  fun nextStepIteration(): Int
-
-  /** The durable resolved branch of this workflow, if recorded. */
-  fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch?
-
-  /** The normalized envelope recorded for completed [stepId], if any. */
-  fun completedStepEnvelope(stepId: String): FeatureTaskRuntimeWorkflowArtifactMap?
-
-  /** The raw payload recorded for completed [stepId], if any. */
-  fun completedStepPayload(stepId: String): String?
-
-  /** The branch the run resolved in this session, if any. */
-  fun resolvedBranchName(): String?
-
-  /** Records the completed step for [iteration]. */
-  fun stepCompleted(iteration: Int)
-
-  /** Whether [stepId] is complete in this run. */
-  fun isStepCompleted(stepId: String): Boolean
-
-  /** Whether the run state marked the durable evidence of [stepId] stale. */
-  fun isEvidenceInvalidated(stepId: String): Boolean
-}
+import java.time.Clock
 
 /** The review pass reservation, launch, and tier facts a code_review step records before its review settles. */
 internal interface PhaseReviewPassState {
@@ -64,7 +32,7 @@ internal interface PhaseReviewPassState {
   ): GoalSubtaskReviewInputPreparation
 
   /** The review pass number the current review attempt runs as. */
-  fun reviewPassNumber(): Int
+  val reviewPassNumber: Int
 
   /** The review run id the durable record holds for [passNumber], if any. */
   fun recordedReviewRunId(passNumber: Int): String?
@@ -77,6 +45,7 @@ internal interface PhaseReviewPassState {
 
   /** Records the review briefing for [input] and the resolved review tier ahead of the launch. */
   fun prepareReviewBriefing(
+    iteration: Int,
     prompt: PhaseStepPromptSource,
     input: GoalSubtaskReviewInput,
   )
@@ -91,7 +60,20 @@ internal interface PhaseReviewPassState {
   fun persistResolvedReviewTier(resolution: ReviewPassResolution)
 
   /** The goal review passes the durable review state completed, if any review state is recorded. */
-  fun completedReviewPassCount(): Int?
+  val completedReviewPassCount: Int?
+
+  /** Records the review run and its lane telemetry when the strategy did not already record it. */
+  fun recordReviewRun(
+    reviewRunId: String,
+    result: ParallelCodeReviewResult,
+    laneTelemetryRecorded: Boolean,
+  )
+
+  /**
+   * The target every review pass reviews: [resolve] runs on the first pass and pinned state returns that result on
+   * later passes.
+   */
+  fun pinnedReviewTarget(resolve: () -> ReviewTarget): ReviewTarget
 }
 
 /** The completion, carry-forward, and block writes that settle a code_review step. */
@@ -151,14 +133,20 @@ internal interface PhaseReviewSettlementState {
   fun settleCarriedForwardReview(output: AcceptedFeatureTaskRuntimePhaseOutput)
 }
 
-/** The finding ledger, verdicts, verification checkpoint, and repair receipts the review loop reads and writes. */
-internal interface PhaseFindingVerificationState {
+/** Finding and goal-review observations shared by the review and remediation steps. */
+internal interface PhaseReviewFindingObservations {
   /** The unaddressed findings earlier review passes left in the ledger. */
   fun unaddressedReviewFindings(): List<UnaddressedFinding>
 
   /** The finding verdicts recorded for the findings in [envelope]. */
   fun recordedFindingVerdicts(envelope: Map<String, Any?>): List<ReviewFindingVerdict>
 
+  /** The durable goal review state of a goal-continuation run, or null outside a goal continuation. */
+  fun goalReviewState(): GoalSubtaskReviewState?
+}
+
+/** The checkpoint and boundary selection written by the accepted verify_findings step. */
+internal interface PhaseFindingVerificationState : PhaseReviewFindingObservations {
   /** The in-flight verify_findings dispositions the durable checkpoint holds, if any. */
   fun findingVerificationCheckpoint(): List<FeatureTaskRuntimeFindingVerificationDisposition>?
 
@@ -180,10 +168,10 @@ internal interface PhaseFindingVerificationState {
     passNumber: Int,
     rejected: List<UnaddressedFinding>,
   )
+}
 
-  /** The durable goal review state of a goal-continuation run, or null outside a goal continuation. */
-  fun goalReviewState(): GoalSubtaskReviewState?
-
+/** The repair receipt written by the accepted implement_fix step. */
+internal interface PhaseRepairReceiptState : PhaseReviewFindingObservations {
   /** Upserts the implement_fix repair [receipt] into the goal review state. Returns whether it was recorded. */
   fun recordRepairReceipt(receipt: FeatureTaskRuntimeRepairReceipt): Boolean
 }
@@ -193,19 +181,15 @@ internal interface PhaseReviewGenerationState {
   /** The repository checkpoint fingerprint the delivered projection of [reviewStepId] judged, if recorded. */
   fun reviewedCheckpointFingerprint(reviewStepId: String): String?
 
-  /**
-   * Durably invalidates the review generation by tombstoning [reviewStepId]. Returns the new generation, or null
-   * when it could not persist.
-   */
-  fun persistReviewGenerationInvalidation(reviewStepId: String): Int?
-
-  /**
-   * Advances the in-memory review generation to [generation], resets the loop state the invalidated
-   * [reviewStepId] left, and drops a pending re-entry of [reentryLoopId].
-   */
-  fun advanceReviewGeneration(
-    generation: Int,
-    reentryLoopId: String,
+  /** Persists the review tombstone before updating generation, invalidated state, and matching [reentryLoopId]. */
+  fun invalidateReviewGeneration(
     reviewStepId: String,
-  )
+    reentryLoopId: String,
+  ): Int?
 }
+
+internal data class PhaseReviewExecutionContext(
+  val gitOperations: PhaseRepositoryObservations,
+  val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
+  val clock: Clock,
+)

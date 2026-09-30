@@ -7,6 +7,7 @@ import skillbill.application.decomposition.specSource
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.planning.attempt.producePhase
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLaunch
@@ -25,6 +26,7 @@ import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.text.sha256HexUtf8
 import java.nio.file.Path
+import java.util.concurrent.CancellationException
 
 internal fun produceSharedPreplan(
   sweep: DefaultGoalPlanningSweep,
@@ -35,6 +37,8 @@ internal fun produceSharedPreplan(
 ): Result<SharedGoalPreplanCheckpoint> =
   produceSharedPreplanCheckpoint(sweep, shared, request, provenance, launch).mapCatching { produced ->
     produced.also { sweep.checkpoint.recheckpointSharedPreplan(it) }
+  }.onFailure { error ->
+    if (error is RequiredPhaseWriteRejected || error is CancellationException) throw error
   }
 
 internal fun produceSharedPreplanCheckpoint(

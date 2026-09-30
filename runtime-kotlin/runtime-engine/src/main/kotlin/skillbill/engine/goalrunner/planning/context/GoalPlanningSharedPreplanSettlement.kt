@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.planning.context
 
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.model.RefreshStaleSharedPreplanArgs
@@ -19,6 +20,7 @@ import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
 import skillbill.goalrunner.planning.cascadeEligiblePlanSubtaskIds
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
+import java.util.concurrent.CancellationException
 
 internal sealed class SharedPreplanSettlement {
   class Ready(
@@ -260,4 +262,6 @@ internal fun DefaultGoalPlanningSweep.refreshStaleSharedPreplan(
         )
       RefreshedSharedPreplan(currentProvenance, replaced)
     }
+  }.onFailure { error ->
+    if (error is RequiredPhaseWriteRejected || error is CancellationException) throw error
   }

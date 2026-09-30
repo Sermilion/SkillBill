@@ -14,7 +14,7 @@ class FeatureTaskRuntimeReviewFixBudgetTest {
   @Test
   fun `a repair round that later completed spent no budget and an exhaustion stays readable after a resume`() {
     val harness = runnerHarness()
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     harness.appendLoopEdge(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID, edgeIteration = 1)
 
     assertEquals(
@@ -36,7 +36,7 @@ class FeatureTaskRuntimeReviewFixBudgetTest {
 
   @Test
   fun `a run with no durable ledger reports both measurements unavailable rather than intact`() {
-    val harness = runnerHarness()
+    val harness = runnerHarness(runtimeConfig = RuntimeHarnessConfig(seedDurableWorkflow = false))
 
     assertNull(harness.runner.reviewFixCapExhaustion(WORKFLOW_ID))
     assertNull(harness.runner.auditGapIterationCount(WORKFLOW_ID))
@@ -45,7 +45,7 @@ class FeatureTaskRuntimeReviewFixBudgetTest {
   @Test
   fun `a relaunched stateless audit counts as a gap round and a satisfied first audit stays a measured zero`() {
     val harness = runnerHarness()
-    harness.recorder.ensureWorkflowOpen(WORKFLOW_ID, SESSION_ID)
+    harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
     harness.appendLoopEdge(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID, edgeIteration = 1)
     harness.appendAuditContinuation(FeatureTaskRuntimeContinuationKind.IMPLEMENTATION_CONTINUATION)
 

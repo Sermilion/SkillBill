@@ -169,7 +169,10 @@ object PrincipleEnforcementInventory {
       "runtime-kotlin/runtime-core/src/main/kotlin/skillbill/di/core/RuntimeBootstrapBindings.kt",
     )
 
-  data class EnforcedRule(val rule: String, val test: KClass<*>)
+  data class EnforcedRule(
+    val rule: String,
+    val test: KClass<*>,
+  )
 
   val enforceableRules: List<EnforcedRule> =
     listOf(
@@ -177,6 +180,12 @@ object PrincipleEnforcementInventory {
         "Wire vocabulary and contract-key declarations are unique, dynamically indexed, and referenced " +
           "without local token collections or literal payload-key accesses.",
         WireVocabularyArchitectureTest::class,
+      ),
+      EnforcedRule(
+        "Strategy capability boundary: consumer authority stays closed through transitive helpers and " +
+          "extensions; non-review consumers cannot acquire review mutation; coupled primitive writes " +
+          "belong to the transition owner; unresolved governed edges fail.",
+        StrategyCapabilityBoundaryArchitectureTest::class,
       ),
       EnforcedRule(
         "Package clustering: loose files in a subpackaged area do not belong to a sibling area cluster.",
@@ -296,6 +305,47 @@ object PrincipleEnforcementInventory {
 
   val parseBoundarySites: List<ArchitectureScanSupport.ParseBoundarySite> =
     listOf(
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/execution/" +
+            "FeatureTaskRuntimeExecutionPlanCodec.kt",
+        functionNames = setOf("decode"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/execution/" +
+            "FeatureTaskRuntimeExecutionPlanDecode.kt",
+        functionNames =
+          setOf(
+            "decodeExecutionPlan",
+            "decodePolicies",
+            "planSlot",
+            "planRevision",
+            "planString",
+            "planObject",
+            "planObjects",
+            "planStrings",
+            "invalidPlanValue",
+          ),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/execution/" +
+            "FeatureTaskRuntimeExecutionPlanTraversalCodec.kt",
+        functionNames = setOf("decodeExecutionPlanTraversal"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
+            "workflow/featuretask/FeatureTaskRuntimeExecutionPlanSchemaValidator.kt",
+        functionNames = setOf("read", "write", "validate", "validateInstance", "requireBoundedBytes"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
+            "workflow/featuretask/FeatureTaskRuntimeExecutionPlanCoherence.kt",
+        functionNames = setOf("validateExecutionPlanCoherence", "validateExecutionPlanTraversal", "incoherentPlan"),
+      ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:sqlite")}/src/main/kotlin/" +
@@ -584,6 +634,7 @@ object PrincipleEnforcementInventory {
       "featureTaskPhaseSettlementService",
       "featureTaskRuntimeRunInvariantsSource",
       "featureTaskRuntimeRunner",
+      "featureTaskRuntimeExecutionPlanResolver",
       "featureTaskRuntimeStatusService",
       "featureTaskRuntimeWorkerCoordinator",
       "goalOperatorDecisionService",
