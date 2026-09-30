@@ -28,6 +28,7 @@ fun phasePromptLeadingSections(
     minimalismDisciplineDirective(inputs.mutating),
     sections.scopeBoundary,
     testValueDisciplineDirective(sections.testValueDiscipline),
+    sections.authoringDiscipline,
   )
 
 fun phasePromptMiddleSections(

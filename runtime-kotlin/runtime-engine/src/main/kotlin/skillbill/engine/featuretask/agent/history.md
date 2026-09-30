@@ -1,5 +1,17 @@
 # featuretask runtime boundary history
 
+## [2026-09-30] SKILL-385 subtask 1 - Apply project authoring discipline across implementation and repair prompts
+Areas: runtime-engine featuretask (phase/prompt/compose, phase/prompt/directives, slot/implementation, slot/audit, slot/codereview, slot/qualitygate, agent), runtime-engine tests and slotbaseline fixtures
+- One strategy-supplied project-authoring guidance owner now reaches implement, simplify, audit_implement_fix, implement_fix and inline review's direct launch. Verify_findings and other read-only phases receive none. reusable
+- The guidance admits safe file-scoped formatter and standalone static-analysis commands after scope and safety proof, and defers with a concrete reason otherwise. Evidence reuses existing output fields; no executor, schema or telemetry was added.
+- Audit lost its compile-only exception and runs no commands. Build keeps compile proof; validate keeps tests, full checks and independent discovery.
+- The guidance sits in the leading prompt sections after test-value discipline, so retries and continuations keep it.
+- Prompt fixtures under slotbaseline were regenerated with the README capture command; the README records the SKILL-385 policy-text change.
+- Tests cover delivery per phase, retention, negative read-only phases, platform neutrality and a synthetic mixed-language context.
+- Limits: the agent must discover project rules itself; agnix was not run locally and stays with CI.
+Feature flag: N/A
+Acceptance criteria: 10/10 implemented
+
 ## [2026-09-30] SKILL-384 subtask 3 - Restrict strategy capabilities and centralize coupled transitions
 Areas: runtime-engine featuretask and goalrunner, runtime-core architecture guards and DI, runtime-domain taskruntime, runtime-application workflow persistence, runtime-ports, runtime-contracts, runtime-cli, runtime-infra contracts and SQLite, runtime-kotlin architecture, feature specs
 - Strategies and hooks receive private accepted-step bindings and detached observations. Review, planning fan-out, gate, commit and PR operations stay with their owning roles; ordinary and gate strategies cannot obtain raw runners or run state.

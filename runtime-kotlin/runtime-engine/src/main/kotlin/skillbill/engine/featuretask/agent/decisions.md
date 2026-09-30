@@ -1,4 +1,14 @@
+## [2026-09-30] Authoring sessions run safe scoped project checks; audit loses its compile exception (SKILL-385)
+
+Context: Authoring prompts banned every command, so formatter and static-analysis findings surfaced only at validate, while audit alone could compile.
+Decision: One strategy-supplied project-authoring guidance owner reaches implement, simplify, audit_implement_fix, implement_fix and inline review's direct launch. It admits safe file-scoped formatter and standalone analysis commands after scope and safety proof, and defers with a concrete reason otherwise. Build keeps compile proof, validate keeps tests and full checks, and audit runs no commands. Evidence stays in existing output fields.
+Reason: Project rules are discovered by the agent from the repository, so the runtime stays platform-neutral and adds no executor, schema or telemetry.
+Alternatives considered: A runtime discovery executor or a new evidence field would add authority and contract surface without narrowing what the agent must prove.
+Supersedes: [2026-09-29] Audit may check application compilation after repairs.
+
 ## [2026-09-29] Audit may check application compilation after repairs
+
+Superseded by [2026-09-30] Authoring sessions run safe scoped project checks; audit loses its compile exception (SKILL-385).
 
 Audit remains responsible for production criteria and sends repairs to `audit_implement_fix`. After repairs it may run the dominant pack's compile-only `validation_gate.build_command`. Compilation failures return to the repair step as production gaps. Audit does not run or compile test targets, lint, or full validation, and a passing compile check does not satisfy test requirements.
 
