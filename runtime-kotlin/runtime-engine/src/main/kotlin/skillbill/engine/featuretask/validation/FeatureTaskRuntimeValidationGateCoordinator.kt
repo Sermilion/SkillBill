@@ -45,8 +45,10 @@ class FeatureTaskRuntimeValidationGateCoordinator {
     }
 
   companion object {
-    private fun invalidValidationEvidence(phaseId: String, reason: String): Nothing =
-      throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(phaseId, reason)
+    private fun invalidValidationEvidence(
+      phaseId: String,
+      reason: String,
+    ): Nothing = throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(phaseId, reason)
 
     fun runtimeOwnedValidationOutput(
       phaseId: String,

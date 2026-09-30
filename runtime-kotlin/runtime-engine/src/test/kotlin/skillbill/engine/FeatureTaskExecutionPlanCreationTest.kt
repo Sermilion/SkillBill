@@ -1,6 +1,5 @@
 package skillbill.engine
 
-import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testHarnessClock
@@ -16,6 +15,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.core.AlwaysValidValidator
+import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
@@ -91,14 +91,16 @@ class FeatureTaskExecutionPlanCreationTest {
     withDatabase { database ->
       val execution = ExecutionPlanAdmissionFixture()
       val descriptor =
-        execution.creationResolver().resolveCreation(FeatureTaskRuntimeExecutionPlanCreationRequest(
-          testRepositoryRoot.path,
-          SkeletonDefinition.STANDALONE,
-          CodeReviewExecutionMode.INLINE,
-          null,
-          ValidationDepth.FULL,
-          null,
-        ))
+        execution.creationResolver().resolveCreation(
+          FeatureTaskRuntimeExecutionPlanCreationRequest(
+            testRepositoryRoot.path,
+            SkeletonDefinition.STANDALONE,
+            CodeReviewExecutionMode.INLINE,
+            null,
+            ValidationDepth.FULL,
+            null,
+          ),
+        )
       val rejecting = RejectDescriptorWrites(database)
       assertFailsWith<DescriptorWriteRejected> { service(rejecting).openFeatureTask(openArgs(descriptor)) }
       val rejectedId = assertNotNull(rejecting.rejectedId)
@@ -511,14 +513,16 @@ class FeatureTaskExecutionPlanCreationTest {
         reviewPolicy = GoalRunnerReviewPolicy(CodeReviewExecutionMode.INLINE),
         planningHydration = GoalChildPlanningHydrationRequest(identity, provenance, descriptor),
         executionPlan =
-          execution.creationResolver().resolveCreation(FeatureTaskRuntimeExecutionPlanCreationRequest(
-            testRepositoryRoot.path,
-            SkeletonDefinition.GOAL_CHILD,
-            CodeReviewExecutionMode.INLINE,
-            FeatureTaskRuntimeQualityGateSelection.VALIDATE,
-            ValidationDepth.FULL,
-            null,
-          )),
+          execution.creationResolver().resolveCreation(
+            FeatureTaskRuntimeExecutionPlanCreationRequest(
+              testRepositoryRoot.path,
+              SkeletonDefinition.GOAL_CHILD,
+              CodeReviewExecutionMode.INLINE,
+              FeatureTaskRuntimeQualityGateSelection.VALIDATE,
+              ValidationDepth.FULL,
+              null,
+            ),
+          ),
       )
     private val engine = WorkflowEngine()
     private val persistence =
@@ -693,98 +697,106 @@ class FeatureTaskExecutionPlanCreationTest {
         ),
       )
   }
-  private fun corruptChildArtifacts(database: DatabaseSessionFactory, fixture: ChildCreation, invalidKind: String): String {
-        return database.transaction { unit ->
-            val row = assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, CHILD))
-            val stored = assertNotNull(JsonCodec.anyToStringAnyMap(family.value(row.artifacts)))
-            val replacement =
-              when (invalidKind) {
-                "missing" -> null
-                "corrupt" -> stored - Keys.SELECTED_STRATEGIES
-                "unsupported-version" -> stored + (Keys.CONTRACT_VERSION to "99.0")
-                "unsupported" ->
-                  (
-                    stored + (
-                      Keys.SELECTED_STRATEGIES to
-                        (stored[Keys.SELECTED_STRATEGIES] as List<*>).map {
-                          requireNotNull(
-                            JsonCodec.anyToStringAnyMap(it),
-                          )
-                        }.map { strategy ->
-                          strategy + (Keys.SEMANTIC_REVISION to 99)
-                        }
+
+  private fun corruptChildArtifacts(
+    database: DatabaseSessionFactory,
+    fixture: ChildCreation,
+    invalidKind: String,
+  ): String {
+    return database.transaction { unit ->
+      val row = assertNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, CHILD))
+      val stored = assertNotNull(JsonCodec.anyToStringAnyMap(family.value(row.artifacts)))
+      val replacement =
+        when (invalidKind) {
+          "missing" -> null
+          "corrupt" -> stored - Keys.SELECTED_STRATEGIES
+          "unsupported-version" -> stored + (Keys.CONTRACT_VERSION to "99.0")
+          "unsupported" ->
+            (
+              stored + (
+                Keys.SELECTED_STRATEGIES to
+                  (stored[Keys.SELECTED_STRATEGIES] as List<*>).map {
+                    requireNotNull(
+                      JsonCodec.anyToStringAnyMap(it),
                     )
-                  ).let { selected ->
-                    selected + (
-                      Keys.DISPATCH_OWNERSHIP to
-                        (stored[Keys.DISPATCH_OWNERSHIP] as List<*>).map {
-                          requireNotNull(
-                            JsonCodec.anyToStringAnyMap(it),
-                          )
-                        }.map { dispatch ->
-                          dispatch + (Keys.SEMANTIC_REVISION to 99)
-                        }
-                    )
+                  }.map { strategy ->
+                    strategy + (Keys.SEMANTIC_REVISION to 99)
                   }
-                else ->
-                  fixture.execution.codec.encodeExecution(
-                    fixture.execution.plan,
-                    fixture.execution.inputs.copy(phaseTimeoutMillis = 1),
-                  ).let { fixture.execution.validator.read(it, "changed execution policy") }
-              }
-            JsonCodec.mapToJsonString(
-              if (replacement == null) {
-                row.artifacts.toMutableMap().also(
-                  family::removeFrom,
-                )
-              } else {
-                row.artifacts + family.entry(replacement)
-              },
-            )
-          }
-
-  }
-
-  private fun changeBlockedChildAdmission(database: DatabaseSessionFactory, databasePath: Path, execution: ExecutionPlanAdmissionFixture, workflowId: String, changedFact: String) {
-        if (changedFact == "descriptor") {
-          val row = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
-          val descriptor =
-            execution.descriptor().toMutableMap().apply {
-              val policies =
-                (
-                  get(
-                    Keys.EFFECTIVE_POLICIES,
-                  ) as List<*>
-                ).map { requireNotNull(JsonCodec.anyToStringAnyMap(it)) }
-              put(
-                Keys.EFFECTIVE_POLICIES,
-                policies.map { policy ->
-                  if (policy[Keys.ID] == "gate-commands") policy + (Keys.SEMANTIC_DIGEST to "0".repeat(64)) else policy
-                },
+              )
+            ).let { selected ->
+              selected + (
+                Keys.DISPATCH_OWNERSHIP to
+                  (stored[Keys.DISPATCH_OWNERSHIP] as List<*>).map {
+                    requireNotNull(
+                      JsonCodec.anyToStringAnyMap(it),
+                    )
+                  }.map { dispatch ->
+                    dispatch + (Keys.SEMANTIC_REVISION to 99)
+                  }
               )
             }
-          SlotBaselineSqlite.updateFeatureTaskArtifacts(
-            databasePath,
-            workflowId,
-            JsonCodec.mapToJsonString(row.toSnapshot().artifacts + family.entry(descriptor)),
+          else ->
+            fixture.execution.codec.encodeExecution(
+              fixture.execution.plan,
+              fixture.execution.inputs.copy(phaseTimeoutMillis = 1),
+            ).let { fixture.execution.validator.read(it, "changed execution policy") }
+        }
+      JsonCodec.mapToJsonString(
+        if (replacement == null) {
+          row.artifacts.toMutableMap().also(
+            family::removeFrom,
           )
         } else {
-          database.selfManagedWrite { unit ->
-            val row = assertNotNull(unit.workflowStates.getFeatureTaskWorkflow(workflowId))
-            assertTrue(
-              unit.workflowStates.acquireFeatureTaskRuntimeWorker(
-                FeatureTaskRuntimeWorkerOwnership(
-                  workflowId = workflowId, generation = 1, ownerToken = "owner-token-child-0001",
-                  hostIdentity = "host", bootIdentity = "boot", pid = 4242, processBirthToken = "birth",
-                  leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE, heartbeatAt = "2026-09-28T00:00:00Z",
-                  expiresAt = "2026-09-28T00:00:30Z", phaseId = "implement", phaseAttempt = 1,
-                ),
-                row.updatedAt,
-              ),
-            )
-          }
-        }
-
+          row.artifacts + family.entry(replacement)
+        },
+      )
+    }
   }
 
+  private fun changeBlockedChildAdmission(
+    database: DatabaseSessionFactory,
+    databasePath: Path,
+    execution: ExecutionPlanAdmissionFixture,
+    workflowId: String,
+    changedFact: String,
+  ) {
+    if (changedFact == "descriptor") {
+      val row = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
+      val descriptor =
+        execution.descriptor().toMutableMap().apply {
+          val policies =
+            (
+              get(
+                Keys.EFFECTIVE_POLICIES,
+              ) as List<*>
+            ).map { requireNotNull(JsonCodec.anyToStringAnyMap(it)) }
+          put(
+            Keys.EFFECTIVE_POLICIES,
+            policies.map { policy ->
+              if (policy[Keys.ID] == "gate-commands") policy + (Keys.SEMANTIC_DIGEST to "0".repeat(64)) else policy
+            },
+          )
+        }
+      SlotBaselineSqlite.updateFeatureTaskArtifacts(
+        databasePath,
+        workflowId,
+        JsonCodec.mapToJsonString(row.toSnapshot().artifacts + family.entry(descriptor)),
+      )
+    } else {
+      database.selfManagedWrite { unit ->
+        val row = assertNotNull(unit.workflowStates.getFeatureTaskWorkflow(workflowId))
+        assertTrue(
+          unit.workflowStates.acquireFeatureTaskRuntimeWorker(
+            FeatureTaskRuntimeWorkerOwnership(
+              workflowId = workflowId, generation = 1, ownerToken = "owner-token-child-0001",
+              hostIdentity = "host", bootIdentity = "boot", pid = 4242, processBirthToken = "birth",
+              leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE, heartbeatAt = "2026-09-28T00:00:00Z",
+              expiresAt = "2026-09-28T00:00:30Z", phaseId = "implement", phaseAttempt = 1,
+            ),
+            row.updatedAt,
+          ),
+        )
+      }
+    }
+  }
 }

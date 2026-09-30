@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slot.attempt
 
-import skillbill.engine.featuretask.runloop.core.RepositoryCheckpointResolutionArgs
 import skillbill.engine.featuretask.runloop.attempt.RunLoopSettlementCoupling
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptContext
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
@@ -9,6 +8,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.PhaseStateRequestArgs
 import skillbill.engine.featuretask.runloop.core.PhaseStateRequestAttachments
 import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
+import skillbill.engine.featuretask.runloop.core.RepositoryCheckpointResolutionArgs
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
@@ -33,14 +33,16 @@ internal fun PhaseQualityGateCycleContext.gateCheckpoint(run: PhaseRun): String?
 
 internal fun PhaseQualityGateCycleContext.gateChangedPaths(run: PhaseRun): List<String> =
   FeatureTaskRuntimeRunLoopValidationScope
-    .validationChangedPaths(RepositoryCheckpointResolutionArgs(
+    .validationChangedPaths(
+      RepositoryCheckpointResolutionArgs(
         phaseGates = phaseGates,
         recorder = recorder,
         goalContinuationRecorder = goalContinuationRecorder,
         coupledRunTransitions = coupledRunTransitions,
         session = session,
         run = run,
-      )).orEmpty()
+      ),
+    ).orEmpty()
 
 internal fun PhaseQualityGateCycleContext.persistGateRequiredRunning(
   run: PhaseRun,

@@ -79,12 +79,12 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
       setup.operatorResumePhaseId?.let { phaseId ->
         check(
           blockWrites.reopenBlockedPhaseForOperatorResume(
-    unitOfWork,
-    phaseId,
-    requireNotNull(setup.operatorResumeReason),
-    expectedIdentity,
-    requireNotNull(setup.executionPlan),
-  ),
+            unitOfWork,
+            phaseId,
+            requireNotNull(setup.operatorResumeReason),
+            expectedIdentity,
+            requireNotNull(setup.executionPlan),
+          ),
         ) { "Goal child '${setup.workflowId}' could not be reopened for operator resume." }
       }
     }
@@ -320,6 +320,6 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
         ),
       )
     }
-  private fun missingPlan(): Nothing = throw MissingFeatureTaskRuntimeExecutionPlanError()
 
+  private fun missingPlan(): Nothing = throw MissingFeatureTaskRuntimeExecutionPlanError()
 }

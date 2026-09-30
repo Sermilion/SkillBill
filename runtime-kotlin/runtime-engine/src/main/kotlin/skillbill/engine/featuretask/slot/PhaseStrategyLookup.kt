@@ -247,8 +247,10 @@ class PhaseStrategyLookup(
     }
   }
 
-  private fun unselectedRemediationTarget(destination: String, selected: Set<String>): Boolean =
-    destination !in selected && !isUnselectedRegenerationAlternative(destination, selected)
+  private fun unselectedRemediationTarget(
+    destination: String,
+    selected: Set<String>,
+  ): Boolean = destination !in selected && !isUnselectedRegenerationAlternative(destination, selected)
 
   private fun isUnselectedRegenerationAlternative(
     destinationStepId: String,
@@ -289,6 +291,6 @@ class PhaseStrategyLookup(
     val semanticRevision: Int,
     val facts: List<String>,
   )
-  private fun invalidComposition(reason: String): Nothing = throw InvalidPhaseStrategyCompositionError(reason)
 
+  private fun invalidComposition(reason: String): Nothing = throw InvalidPhaseStrategyCompositionError(reason)
 }

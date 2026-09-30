@@ -76,10 +76,21 @@ precede attempt accounting and review reservations. Runtime checkpoint machinery
 storage and Git collaborators behind the owner operations. Durable and ephemeral records keep
 their storage policies, including ephemeral audit briefings.
 
-Progress and session getters return private wrappers over detached copies. Their collections,
+Progress and session getters return private wrappers over detached copies. Phase and loop reads
+return `PhaseProgressObservation` and `LoopProgressObservation` values. Their collections,
 buffers and terminal reports do not alias live storage, and casting an observation cannot recover
 the live owner. Settlement coupling receives the owner directly from runtime context; it does
 not reconstruct mutation authority from observations.
+
+Selected strategies declare their execution binding role, and selected hooks declare their context role.
+`FeatureTaskRuntimeRunLoopStepBindings` and `FeatureTaskRuntimeRunLoopHookViews` create private views for
+that accepted step. Shared code does not select those views through phase-name constants. Review writes
+recheck the active binding and selected review role. These role declarations do not change selection,
+step identity, execution-plan digests or durable formats.
+
+SQLite worker acquisition participates in the caller's admission transaction when present. Its
+standalone adapter still owns a write transaction. A rejected admission rolls back the workflow
+advance and worker lease together.
 
 `StrategyCapabilityBoundaryArchitectureTest` uses Kotlin PSI to build a declaration graph across
 all engine source. It follows consumer roots through helpers, extensions, aliases, constructors,
@@ -101,7 +112,7 @@ admission. The rule is registered in
 `PrincipleEnforcementInventory.enforceableRules`.
 
 The operation-level inventory and retained runtime collaborator dispositions are in
-`.feature-specs/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership/capability-census.md`.
+`../.feature-specs/done/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership`.
 
 #### Feature-task run-loop helper inputs (SKILL-247 subtask 3)
 

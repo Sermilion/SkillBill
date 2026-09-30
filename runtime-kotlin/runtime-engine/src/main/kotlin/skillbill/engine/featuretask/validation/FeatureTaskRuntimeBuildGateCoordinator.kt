@@ -78,9 +78,10 @@ class FeatureTaskRuntimeBuildGateCoordinator(
             (resolution.routedPackSlug?.let { " from dominant pack '${it.take(PACK_LABEL_LIMIT)}'." } ?: "."),
           failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
         )
-      is ValidationGateResolution.Incompatible -> terminalBlockedResult(
-        resolution.reason.take(GATE_FAILURE_DETAIL_LIMIT),
-      )
+      is ValidationGateResolution.Incompatible ->
+        terminalBlockedResult(
+          resolution.reason.take(GATE_FAILURE_DETAIL_LIMIT),
+        )
       is ValidationGateResolution.Declared -> {
         val declaration = resolution.declaration
         if (requiredCommandsMissing(declaration, cycle.commandFamily)) {
@@ -138,29 +139,30 @@ class FeatureTaskRuntimeBuildGateCoordinator(
       return completedResult(cycle, declaration, measurements)
     }
     val triage = runBuildTriageIfNeeded(cycle, discoveryFindings)
-    return if (triage is ValidationGateTriageResult.Stopped) ValidationGateCycleResult.Terminal(triage.outcome)
-    else {
-    val triagePlan = (triage as? ValidationGateTriageResult.Captured)?.validationRepairPlan
-    if (triagePlan != null) {
-      persistProgress(
+    return if (triage is ValidationGateTriageResult.Stopped) {
+      ValidationGateCycleResult.Terminal(triage.outcome)
+    } else {
+      val triagePlan = (triage as? ValidationGateTriageResult.Captured)?.validationRepairPlan
+      if (triagePlan != null) {
+        persistProgress(
+          state = state,
+          write =
+            ValidationGateProgressWrite(
+              repairWindowPhase = FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN,
+              remainingFindings = null,
+              completeFindings = discoveryFindings,
+              repairsUsed = 0,
+              capturedTriagePlan = triagePlan,
+            ),
+        )
+      }
+      repairLoop(
         state = state,
-        write =
-          ValidationGateProgressWrite(
-            repairWindowPhase = FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN,
-            remainingFindings = null,
-            completeFindings = discoveryFindings,
-            repairsUsed = 0,
-            capturedTriagePlan = triagePlan,
-          ),
+        declaration = declaration,
+        openFindings = discoveryFindings,
+        initialRepairsUsed = 0,
+        triagePlan = triagePlan,
       )
-    }
-    repairLoop(
-      state = state,
-      declaration = declaration,
-      openFindings = discoveryFindings,
-      initialRepairsUsed = 0,
-      triagePlan = triagePlan,
-    )
     }
   }
 
@@ -348,20 +350,20 @@ class FeatureTaskRuntimeBuildGateCoordinator(
     ) {
       terminalBlockedResult("Terminal required gate command evidence does not match its configured invocation.")
     } else {
-    val output =
-      when (cycle.commandFamily) {
-        ValidationGateCommandFamily.BUILD ->
-          runtimeOwnedBuildOutput(cycle.phaseId, checkpoint, measurements)
-        ValidationGateCommandFamily.VALIDATION -> {
-          FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
-            phaseId = cycle.phaseId,
-            repositoryCheckpoint = checkpoint,
-            measurements = measurements,
-            requiredCommand = requiredCommand,
-          )
+      val output =
+        when (cycle.commandFamily) {
+          ValidationGateCommandFamily.BUILD ->
+            runtimeOwnedBuildOutput(cycle.phaseId, checkpoint, measurements)
+          ValidationGateCommandFamily.VALIDATION -> {
+            FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
+              phaseId = cycle.phaseId,
+              repositoryCheckpoint = checkpoint,
+              measurements = measurements,
+              requiredCommand = requiredCommand,
+            )
+          }
         }
-      }
-    ValidationGateCycleResult.Terminal(ValidationGateCycleTerminalOutcome.Completed(output))
+      ValidationGateCycleResult.Terminal(ValidationGateCycleTerminalOutcome.Completed(output))
     }
   }
 

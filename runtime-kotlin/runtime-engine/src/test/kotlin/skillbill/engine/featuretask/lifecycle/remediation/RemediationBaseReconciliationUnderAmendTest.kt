@@ -394,26 +394,28 @@ class RemediationBaseReconciliationUnderAmendTest {
             recorderWith(
               state = remediationState(remediationBaseSha = null),
               checkpointIdentities = listOf(reviewFixIdentity(1, "a".repeat(40), "b".repeat(40))),
-              legacyCheckpointRecord =
-                if (legacy) {
-                  assertNotNull(
-                    JsonCodec.anyToStringAnyMap(
-                      JsonCodec.parseValue(
-                        """{"contract_version":"0.1","checkpoints":[{"commit_sha":"retained-legacy-evidence"}]}""",
-                      ),
-                    ),
-                  )
-                } else {
-                  null
-                },
               database = database,
-              seed = ReconciliationWorkflowSeed(status,
-                stepUpdates =
-                listOf(
-                  FeatureTaskRuntimePhaseStepWireUpdate("review", "completed", 3),
-                  FeatureTaskRuntimePhaseStepWireUpdate("commit_push", finalizationStatus, 2),
+              seed =
+                ReconciliationWorkflowSeed(
+                  status,
+                  legacyCheckpointRecord =
+                    if (legacy) {
+                      assertNotNull(
+                        JsonCodec.anyToStringAnyMap(
+                          JsonCodec.parseValue(
+                            """{"contract_version":"0.1","checkpoints":[{"commit_sha":"retained-legacy-evidence"}]}""",
+                          ),
+                        ),
+                      )
+                    } else {
+                      null
+                    },
+                  stepUpdates =
+                    listOf(
+                      FeatureTaskRuntimePhaseStepWireUpdate("review", "completed", 3),
+                      FeatureTaskRuntimePhaseStepWireUpdate("commit_push", finalizationStatus, 2),
+                    ),
                 ),
-              ),
             )
           val before = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
           val git = RecordingWorkflowGitOperations().also { it.headCommitShaValue = "a".repeat(40) }
@@ -444,6 +446,7 @@ class RemediationBaseReconciliationUnderAmendTest {
 
   private data class ReconciliationWorkflowSeed(
     val status: WorkflowStatus = WorkflowStatus.RUNNING,
+    val legacyCheckpointRecord: Map<String, Any?>? = null,
     val stepUpdates: List<FeatureTaskRuntimePhaseStepWireUpdate>? = null,
   )
 
@@ -451,7 +454,6 @@ class RemediationBaseReconciliationUnderAmendTest {
     state: GoalSubtaskReviewState,
     checkpointIdentities: List<FeatureTaskRuntimeCheckpointIdentity>,
     repository: FeatureTaskGitIntegrationWorkflowRepository = FeatureTaskGitIntegrationWorkflowRepository(),
-    legacyCheckpointRecord: Map<String, Any?>? = null,
     database: DatabaseSessionFactory = FeatureTaskGitIntegrationDatabase(repository),
     seed: ReconciliationWorkflowSeed = ReconciliationWorkflowSeed(),
   ): FeatureTaskRuntimeGoalContinuationRecorder {
@@ -478,7 +480,7 @@ class RemediationBaseReconciliationUnderAmendTest {
       artifactsPatch[FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES_ARTIFACT_KEY] =
         checkpointIdentities.asCheckpointIdentitiesArtifactEntry()
     }
-    legacyCheckpointRecord?.let { artifactsPatch[FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES_ARTIFACT_KEY] = it }
+    seed.legacyCheckpointRecord?.let { artifactsPatch[FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES_ARTIFACT_KEY] = it }
     val seeded =
       engine.updateRecord(
         definition,
@@ -487,7 +489,10 @@ class RemediationBaseReconciliationUnderAmendTest {
           terminalInstant = Instant.EPOCH,
           workflowStatus = seed.status,
           currentStepId = "review",
-          stepUpdates = WorkflowStepUpdates.from(seed.stepUpdates?.map(FeatureTaskRuntimePhaseStepWireUpdate::toWireMap)),
+          stepUpdates =
+            WorkflowStepUpdates.from(
+              seed.stepUpdates?.map(FeatureTaskRuntimePhaseStepWireUpdate::toWireMap),
+            ),
           artifactsPatch = WorkflowArtifactPatch.from(artifactsPatch),
           sessionId = "fis-001",
         ),

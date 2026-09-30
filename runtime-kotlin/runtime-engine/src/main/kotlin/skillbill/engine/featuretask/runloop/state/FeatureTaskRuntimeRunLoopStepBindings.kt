@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.runloop.state
 
-import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation.prepareLaunchForCapture
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
@@ -36,12 +35,13 @@ import skillbill.engine.featuretask.runloop.qualitygate.AgentValidateGateCycle
 import skillbill.engine.featuretask.runloop.qualitygate.PackBuildGateCycle
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
+import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 import skillbill.engine.featuretask.slot.PhaseQualityGateOperation
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchCollaborationScope
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptOnce
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRemediationCollaborationScope
-import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation
+import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation.prepareLaunchForCapture
 import skillbill.engine.featuretask.slot.attempt.PhaseQualityGateCycleScope
 import skillbill.engine.featuretask.slot.attempt.PhaseRuntimeFinalizationScope
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
@@ -77,7 +77,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhase
 import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
-import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 
 private open class FeatureTaskRuntimeRunLoopAgentStepBinding(
   protected val environment: PhaseAttemptLaunchCollaborationScope,
@@ -604,11 +603,11 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     requireActiveReviewBinding()
     val coupling = environment.settlementCoupling()
     FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersist(
-    coupling.progress,
-    coupling.transitions,
-    environment.recorder,
-    environment.goalContinuationRecorder.takeIf { isGoalReviewRun(run, coupling.progress) },
-    BlockAndPersistArgs(
+      coupling.progress,
+      coupling.transitions,
+      environment.recorder,
+      environment.goalContinuationRecorder.takeIf { isGoalReviewRun(run, coupling.progress) },
+      BlockAndPersistArgs(
         run = run,
         attemptCount = attemptCount,
         reason = reason,
@@ -625,7 +624,7 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
             )
           } ?: BlockAndPersistPayload(),
       ),
-  )
+    )
   }
 
   override fun blockReviewStep(
@@ -637,10 +636,10 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     requireActiveReviewBinding()
     val coupling = environment.settlementCoupling()
     FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-    coupling.progress,
-    coupling.transitions,
-    environment.recorder,
-    PhaseBlockRequest(
+      coupling.progress,
+      coupling.transitions,
+      environment.recorder,
+      PhaseBlockRequest(
         run = run,
         attemptCount = iteration,
         reason = reason,
@@ -648,7 +647,7 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
         payload = BlockAndPersistPayload(fileManifest = fileManifest?.toPhaseManifest()),
         failureDisposition = disposition,
       ),
-  )
+    )
   }
 
   override fun reviewedCheckpointFingerprint(reviewStepId: String): String? {
@@ -666,10 +665,8 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     reentryLoopId: String,
   ): Int? {
     requireActiveReviewBinding()
-    check(
-      reviewStepId == acceptedPhaseId &&
-        environment.runLoopBinding.selectedOwnerOf(acceptedPhaseId)?.loopRules?.resumesInFlightReentry(reentryLoopId) == true,
-    )
+    val loopRules = environment.runLoopBinding.selectedOwnerOf(acceptedPhaseId)?.loopRules
+    check(reviewStepId == acceptedPhaseId && loopRules?.resumesInFlightReentry(reentryLoopId) == true)
     return environment.coupledRunTransitions.persistReviewGenerationInvalidation(
       recorder = environment.recorder,
       workflowId = workflowId,
@@ -756,8 +753,10 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
 
   private fun requireActiveReviewBinding() {
     bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
-    check(environment.runLoopBinding.selectedOwnerOf(acceptedPhaseId)?.executionBindingKind(acceptedPhaseId) ==
-      PhaseExecutionBindingKind.REVIEW) {
+    check(
+      environment.runLoopBinding.selectedOwnerOf(acceptedPhaseId)?.executionBindingKind(acceptedPhaseId) ==
+        PhaseExecutionBindingKind.REVIEW,
+    ) {
       "Review operations belong to the accepted review step."
     }
   }
@@ -796,75 +795,74 @@ private class FeatureTaskRuntimeRunLoopImplementFixStepBinding(
   )
 
 internal object FeatureTaskRuntimeRunLoopStepBindings {
-fun create(
-  launchEnvironment: PhaseAttemptLaunchCollaborationScope,
-  run: PhaseRun,
-  fanOutUnitId: Int? = null,
-  bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
-    launchEnvironment.runLoopBinding.stepBinding,
-): PhaseAcceptedStepExecution {
-  val owner = launchEnvironment.runLoopBinding.selectedOwnerOf(run.phaseId)
-  return when {
-    owner?.slot == PhaseSlot.CODE_REVIEW ->
-      when (owner.executionBindingKind(run.phaseId)) {
-        PhaseExecutionBindingKind.REVIEW -> {
-          val remediationEnvironment = remediationCollaborationScope(launchEnvironment)
-          FeatureTaskRuntimeRunLoopReviewStepBinding(
-            remediationEnvironment,
-            run,
-            fanOutUnitId,
-            bindingCoordinator,
-          )
+  fun create(
+    launchEnvironment: PhaseAttemptLaunchCollaborationScope,
+    run: PhaseRun,
+    fanOutUnitId: Int? = null,
+    bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
+      launchEnvironment.runLoopBinding.stepBinding,
+  ): PhaseAcceptedStepExecution {
+    val owner = launchEnvironment.runLoopBinding.selectedOwnerOf(run.phaseId)
+    return when {
+      owner?.slot == PhaseSlot.CODE_REVIEW ->
+        when (owner.executionBindingKind(run.phaseId)) {
+          PhaseExecutionBindingKind.REVIEW -> {
+            val remediationEnvironment = remediationCollaborationScope(launchEnvironment)
+            FeatureTaskRuntimeRunLoopReviewStepBinding(
+              remediationEnvironment,
+              run,
+              fanOutUnitId,
+              bindingCoordinator,
+            )
+          }
+          PhaseExecutionBindingKind.FINDING_VERIFICATION -> {
+            val remediationEnvironment = remediationCollaborationScope(launchEnvironment)
+            FeatureTaskRuntimeRunLoopVerifyFindingsStepBinding(
+              remediationEnvironment,
+              run,
+              fanOutUnitId,
+              bindingCoordinator,
+            )
+          }
+          PhaseExecutionBindingKind.REPAIR_RECEIPT -> {
+            val remediationEnvironment = remediationCollaborationScope(launchEnvironment)
+            FeatureTaskRuntimeRunLoopImplementFixStepBinding(
+              remediationEnvironment,
+              run,
+              fanOutUnitId,
+              bindingCoordinator,
+            )
+          }
+          else ->
+            FeatureTaskRuntimeRunLoopMarkedAgentStepBinding(
+              launchEnvironment,
+              run,
+              fanOutUnitId,
+              bindingCoordinator,
+            )
         }
-        PhaseExecutionBindingKind.FINDING_VERIFICATION -> {
-          val remediationEnvironment = remediationCollaborationScope(launchEnvironment)
-          FeatureTaskRuntimeRunLoopVerifyFindingsStepBinding(
-            remediationEnvironment,
-            run,
-            fanOutUnitId,
-            bindingCoordinator,
-          )
-        }
-        PhaseExecutionBindingKind.REPAIR_RECEIPT -> {
-          val remediationEnvironment = remediationCollaborationScope(launchEnvironment)
-          FeatureTaskRuntimeRunLoopImplementFixStepBinding(
-            remediationEnvironment,
-            run,
-            fanOutUnitId,
-            bindingCoordinator,
-          )
-        }
-        else ->
-          FeatureTaskRuntimeRunLoopMarkedAgentStepBinding(
-            launchEnvironment,
-            run,
-            fanOutUnitId,
-            bindingCoordinator,
-          )
-      }
-    owner?.qualityGateOperation != null ->
-      FeatureTaskRuntimeRunLoopQualityGateStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
-    owner?.slot == PhaseSlot.PULL_REQUEST ->
-      FeatureTaskRuntimeRunLoopPullRequestStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
-    owner?.slot == PhaseSlot.COMMIT_PUSH ->
-      FeatureTaskRuntimeRunLoopFinalizationStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
-    owner?.plansInFanOut == true && fanOutUnitId == null ->
-      FeatureTaskRuntimeRunLoopPlanningStepBinding(
-        launchEnvironment,
-        run,
-        fanOutUnitId,
-        bindingCoordinator,
-      )
-    owner?.executionBindingKind(run.phaseId) == PhaseExecutionBindingKind.PLANNING ->
-      FeatureTaskRuntimeRunLoopPlanningAgentStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
-    else ->
-      FeatureTaskRuntimeRunLoopMarkedAgentStepBinding(
-        launchEnvironment,
-        run,
-        fanOutUnitId,
-        bindingCoordinator,
-      )
+      owner?.qualityGateOperation != null ->
+        FeatureTaskRuntimeRunLoopQualityGateStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
+      owner?.slot == PhaseSlot.PULL_REQUEST ->
+        FeatureTaskRuntimeRunLoopPullRequestStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
+      owner?.slot == PhaseSlot.COMMIT_PUSH ->
+        FeatureTaskRuntimeRunLoopFinalizationStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
+      owner?.plansInFanOut == true && fanOutUnitId == null ->
+        FeatureTaskRuntimeRunLoopPlanningStepBinding(
+          launchEnvironment,
+          run,
+          fanOutUnitId,
+          bindingCoordinator,
+        )
+      owner?.executionBindingKind(run.phaseId) == PhaseExecutionBindingKind.PLANNING ->
+        FeatureTaskRuntimeRunLoopPlanningAgentStepBinding(launchEnvironment, run, fanOutUnitId, bindingCoordinator)
+      else ->
+        FeatureTaskRuntimeRunLoopMarkedAgentStepBinding(
+          launchEnvironment,
+          run,
+          fanOutUnitId,
+          bindingCoordinator,
+        )
+    }
   }
-}
-
 }

@@ -437,7 +437,13 @@ class PhaseStrategyCompositionTest {
         setOf(CodeReviewExecutionMode.INLINE, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
       )
     val resolved = lookup.executionPlan(facts)
-    val override = resolved.traversal.copy(backwardEdges = resolved.traversal.backwardEdges.take(1))
+    val override =
+      resolved.traversal.copy(
+        backwardEdges =
+          resolved.traversal.backwardEdges.filter {
+            it.triggeringVerdict != FeatureTaskRuntimeVerdict.RECORD_REJECTED
+          },
+      )
     val accepted = resolved.withTraversal(lookup.validateTraversalOverride(facts, override))
 
     assertEquals(override, accepted.traversal)
@@ -484,61 +490,65 @@ class PhaseStrategyCompositionTest {
   }
 
   private enum class PolicyTrait { MUTATING, RELAUNCH, SINGLE, READ_ONLY_IDLE, FILE_MUTATING, GENERATION_SCOPED }
-  private fun assertSelectedComposition(registry: PhaseStrategyRegistry, lookup: PhaseStrategyLookup, facts: PhaseStrategySelectionFacts) {
+
+  private fun assertSelectedComposition(
+    registry: PhaseStrategyRegistry,
+    lookup: PhaseStrategyLookup,
+    facts: PhaseStrategySelectionFacts,
+  ) {
     val definition = facts.definition
     val reviewMode = facts.values.filterIsInstance<CodeReviewExecutionMode>().singleOrNull()
     val qualityGate = facts.values.filterIsInstance<FeatureTaskRuntimeQualityGateSelection>().singleOrNull()
-          val plan = lookup.executionPlan(facts)
+    val plan = lookup.executionPlan(facts)
 
-          val excludedGate =
-            if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD) PHASE_VALIDATE else PHASE_BUILD
-          val expectedSteps = definition.stepIds - excludedGate
-          assertEquals(expectedSteps.toSet(), plan.selectedStepIds, definition.id)
-          assertEquals(expectedSteps, plan.traversal.forwardPhaseIds, definition.id)
-          assertEquals(definition.slots, plan.selectedSlots, definition.id)
-          if (definition == SkeletonDefinition.STANDALONE || definition == SkeletonDefinition.GOAL_CHILD) {
-            val recoveryEdges =
-              plan.traversal.backwardEdges.filter {
-                it.triggeringVerdict == FeatureTaskRuntimeVerdict.RECORD_REJECTED
-              }
-            assertEquals(1, recoveryEdges.size, definition.id)
-            assertEquals(
-              if (excludedGate == PHASE_BUILD) PHASE_VALIDATE else PHASE_BUILD,
-              recoveryEdges.single().destinationPhaseId,
-            )
-            assertEquals(2, recoveryEdges.single().perEdgeCap)
-          }
-          val expectedGate =
-            when {
-              definition == SkeletonDefinition.VALIDATION -> PackValidationStrategy.ID
-              qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD -> PackBuildStrategy.ID
-              else -> AgentValidateStrategy.ID
-            }
-          if (PhaseSlot.QUALITY_GATE in definition.slots) {
-            val selectedGate = if (excludedGate == PHASE_BUILD) PHASE_VALIDATE else PHASE_BUILD
-            assertEquals(expectedGate, lookup.strategyFor(selectedGate, plan).strategyId)
-          }
-          if (definition == SkeletonDefinition.REVIEW) {
-            assertEquals(
-              if (reviewMode == CodeReviewExecutionMode.DELEGATED) {
-                DelegatedReviewStrategy.ID
-              } else {
-                InlineReviewStrategy.ID
-              },
-              lookup.strategyFor(PHASE_REVIEW, plan).strategyId,
-            )
-          }
-          if (definition == SkeletonDefinition.GOAL_PLANNING) {
-            assertEquals(GoalPlanFanOutStrategy.ID, lookup.strategyFor(PHASE_PLAN, plan).strategyId)
-          }
-          plan.selectedStrategies.forEach { identity ->
-            identity.steps.forEach { step ->
-              assertSame(registry.strategy(identity.slot, identity.strategyId), lookup.strategyFor(step, plan))
-            }
-          }
+    val excludedGate =
+      if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD) PHASE_VALIDATE else PHASE_BUILD
+    val expectedSteps = definition.stepIds - excludedGate
+    assertEquals(expectedSteps.toSet(), plan.selectedStepIds, definition.id)
+    assertEquals(expectedSteps, plan.traversal.forwardPhaseIds, definition.id)
+    assertEquals(definition.slots, plan.selectedSlots, definition.id)
+    if (definition == SkeletonDefinition.STANDALONE || definition == SkeletonDefinition.GOAL_CHILD) {
+      val recoveryEdges =
+        plan.traversal.backwardEdges.filter {
+          it.triggeringVerdict == FeatureTaskRuntimeVerdict.RECORD_REJECTED
+        }
+      assertEquals(1, recoveryEdges.size, definition.id)
+      assertEquals(
+        if (excludedGate == PHASE_BUILD) PHASE_VALIDATE else PHASE_BUILD,
+        recoveryEdges.single().destinationPhaseId,
+      )
+      assertEquals(2, recoveryEdges.single().perEdgeCap)
+    }
+    val expectedGate = expectedQualityGate(definition, qualityGate)
+    if (PhaseSlot.QUALITY_GATE in definition.slots) {
+      val selectedGate = if (excludedGate == PHASE_BUILD) PHASE_VALIDATE else PHASE_BUILD
+      assertEquals(expectedGate, lookup.strategyFor(selectedGate, plan).strategyId)
+    }
+    if (definition == SkeletonDefinition.REVIEW) {
+      assertEquals(
+        if (reviewMode == CodeReviewExecutionMode.DELEGATED) {
+          DelegatedReviewStrategy.ID
+        } else {
+          InlineReviewStrategy.ID
+        },
+        lookup.strategyFor(PHASE_REVIEW, plan).strategyId,
+      )
+    }
+    if (definition == SkeletonDefinition.GOAL_PLANNING) {
+      assertEquals(GoalPlanFanOutStrategy.ID, lookup.strategyFor(PHASE_PLAN, plan).strategyId)
+    }
+    plan.selectedStrategies.forEach { identity ->
+      identity.steps.forEach { step ->
+        assertSame(registry.strategy(identity.slot, identity.strategyId), lookup.strategyFor(step, plan))
+      }
+    }
   }
 
-  private fun assertUnsupportedSelections(original: Map<String, Any?>, compatibility: FeatureTaskRuntimeExecutionPlanCompatibility, validator: FeatureTaskRuntimeExecutionPlanSchemaValidator) {
+  private fun assertUnsupportedSelections(
+    original: Map<String, Any?>,
+    compatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
+    validator: FeatureTaskRuntimeExecutionPlanSchemaValidator,
+  ) {
     val definition = requireNotNull(JsonCodec.anyToStringAnyMap(original[Keys.DEFINITION]))
     assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
       compatibility.requireSupportedComposition(
@@ -560,7 +570,15 @@ class PhaseStrategyCompositionTest {
         validator.write(changedStrategyRevision, "unsupported strategy revision"),
       )
     }
-
   }
 
+  private fun expectedQualityGate(
+    definition: SkeletonDefinition,
+    qualityGate: FeatureTaskRuntimeQualityGateSelection?,
+  ): String =
+    when {
+      definition == SkeletonDefinition.VALIDATION -> PackValidationStrategy.ID
+      qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD -> PackBuildStrategy.ID
+      else -> AgentValidateStrategy.ID
+    }
 }

@@ -34,13 +34,15 @@ internal fun requireAdmittedGateRegenerationBoundary(
       latestConsumer?.action != FeatureTaskRuntimePhaseLedgerAction.COMPLETE &&
       checkpoints.none { it.phaseId == consumer }
   val downstreamBeyondConsumer = downstream - consumer
-  val producerIsProven = records[producer]?.status == WorkflowStepStatus.COMPLETED &&
-    latest?.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE &&
-    latest.attemptCount == records[producer]?.attemptCount
+  val producerIsProven =
+    records[producer]?.status == WorkflowStepStatus.COMPLETED &&
+      latest?.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE &&
+      latest.attemptCount == records[producer]?.attemptCount
   val retainedProducerCheckpoint = checkpoints.any { it.phaseId in order.take(position + 1) }
-  val untouchedDownstream = records.keys.none { it in downstreamBeyondConsumer } &&
-    ledger.none { it.phaseId in downstreamBeyondConsumer } &&
-    checkpoints.none { it.phaseId in downstreamBeyondConsumer }
+  val untouchedDownstream =
+    records.keys.none { it in downstreamBeyondConsumer } &&
+      ledger.none { it.phaseId in downstreamBeyondConsumer } &&
+      checkpoints.none { it.phaseId in downstreamBeyondConsumer }
   val provenBoundary = position >= 0 && consumerIsSafeBoundary && producerIsProven
   if (!provenBoundary || !retainedProducerCheckpoint || !untouchedDownstream) {
     throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS)

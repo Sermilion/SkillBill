@@ -1,9 +1,9 @@
 package skillbill.engine.goalrunner.execution.core
 
-import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -63,15 +63,17 @@ class GoalRunnerRunPreparation(
       manifestStore.reviewPolicy(state.parentWorkflowId)?.codeReviewMode
         ?: effectiveGoalRunnerReviewPolicy(request.codeReviewMode, null).codeReviewMode
     val plan =
-      executionPlans.resolveCreation(FeatureTaskRuntimeExecutionPlanCreationRequest(
-        repoRoot = request.repoRoot,
-        definition = SkeletonDefinition.GOAL_CHILD,
-        reviewMode = reviewMode,
-        qualityGate = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, subtaskId),
-        validationDepth = ValidationDepth.FULL,
-        timeout = request.timeout,
-        workflowId = workflowId,
-      ))
+      executionPlans.resolveCreation(
+        FeatureTaskRuntimeExecutionPlanCreationRequest(
+          repoRoot = request.repoRoot,
+          definition = SkeletonDefinition.GOAL_CHILD,
+          reviewMode = reviewMode,
+          qualityGate = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, subtaskId),
+          validationDepth = ValidationDepth.FULL,
+          timeout = request.timeout,
+          workflowId = workflowId,
+        ),
+      )
     return GoalRunnerChildExecutionPlanAdmission(workflowId, plan)
   }
 

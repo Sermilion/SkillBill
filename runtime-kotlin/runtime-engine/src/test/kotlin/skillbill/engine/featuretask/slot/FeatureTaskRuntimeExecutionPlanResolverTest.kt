@@ -1,10 +1,10 @@
 package skillbill.engine.featuretask.slot
 
-import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.engine.ExecutionPlanAdmissionFixture
 import skillbill.engine.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.featuretask.validation.kotlinPackWithoutGate
@@ -42,14 +42,16 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         7.minutes,
       )
     val descriptor =
-      resolver.resolveCreation(FeatureTaskRuntimeExecutionPlanCreationRequest(
-        root,
-        SkeletonDefinition.GOAL_CHILD,
-        CodeReviewExecutionMode.INLINE,
-        FeatureTaskRuntimeQualityGateSelection.BUILD,
-        ValidationDepth.FULL,
-        7.minutes,
-      ))
+      resolver.resolveCreation(
+        FeatureTaskRuntimeExecutionPlanCreationRequest(
+          root,
+          SkeletonDefinition.GOAL_CHILD,
+          CodeReviewExecutionMode.INLINE,
+          FeatureTaskRuntimeQualityGateSelection.BUILD,
+          ValidationDepth.FULL,
+          7.minutes,
+        ),
+      )
     val plan =
       fixture.execution.compatibility.requireSupportedExecution(
         fixture.execution.validator.write(descriptor.artifactValue, "created descriptor"),
@@ -80,14 +82,16 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
       )
     }
     val validation =
-      resolver.resolveCreation(FeatureTaskRuntimeExecutionPlanCreationRequest(
-        root,
-        SkeletonDefinition.STANDALONE,
-        CodeReviewExecutionMode.INLINE,
-        null,
-        ValidationDepth.FULL,
-        7.minutes,
-      ))
+      resolver.resolveCreation(
+        FeatureTaskRuntimeExecutionPlanCreationRequest(
+          root,
+          SkeletonDefinition.STANDALONE,
+          CodeReviewExecutionMode.INLINE,
+          null,
+          ValidationDepth.FULL,
+          7.minutes,
+        ),
+      )
     assertNotEquals(descriptor.artifactValue, validation.artifactValue)
   }
 
@@ -133,15 +137,17 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
     assertEquals(SkeletonDefinition.GOAL_CHILD.id, admitted.plan.definitionId)
     assertEquals(
       descriptor,
-      resolver.resolveCreation(FeatureTaskRuntimeExecutionPlanCreationRequest(
-        root,
-        SkeletonDefinition.GOAL_CHILD,
-        CodeReviewExecutionMode.INLINE,
-        FeatureTaskRuntimeQualityGateSelection.BUILD,
-        ValidationDepth.FULL,
-        7.minutes,
-        "wftr-clean",
-      )),
+      resolver.resolveCreation(
+        FeatureTaskRuntimeExecutionPlanCreationRequest(
+          root,
+          SkeletonDefinition.GOAL_CHILD,
+          CodeReviewExecutionMode.INLINE,
+          FeatureTaskRuntimeQualityGateSelection.BUILD,
+          ValidationDepth.FULL,
+          7.minutes,
+          "wftr-clean",
+        ),
+      ),
     )
     fixture.inventory = WorkflowGitNameListResult.Listed(listOf("ios/New.swift"))
     assertEquals(
@@ -209,14 +215,16 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
       )
 
     fun create() =
-      resolver().resolveCreation(FeatureTaskRuntimeExecutionPlanCreationRequest(
-        root,
-        SkeletonDefinition.GOAL_CHILD,
-        CodeReviewExecutionMode.INLINE,
-        FeatureTaskRuntimeQualityGateSelection.BUILD,
-        ValidationDepth.FULL,
-        7.minutes,
-      ))
+      resolver().resolveCreation(
+        FeatureTaskRuntimeExecutionPlanCreationRequest(
+          root,
+          SkeletonDefinition.GOAL_CHILD,
+          CodeReviewExecutionMode.INLINE,
+          FeatureTaskRuntimeQualityGateSelection.BUILD,
+          ValidationDepth.FULL,
+          7.minutes,
+        ),
+      )
   }
 
   private companion object {

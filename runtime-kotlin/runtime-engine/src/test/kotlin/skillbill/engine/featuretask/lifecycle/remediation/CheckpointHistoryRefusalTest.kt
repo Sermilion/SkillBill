@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
-import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.ExecutionPlanAdmissionFixture
@@ -12,6 +11,7 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.openTestWorkflow
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeCheckpointIdentityVersionError
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -83,37 +83,36 @@ class CheckpointHistoryRefusalTest {
       }
     }
   }
+
   private fun seedUnsupportedCheckpointHistory(
     database: DatabaseSessionFactory,
     workflowId: String,
     status: WorkflowStatus,
   ) {
-          database.transaction { unit ->
-            val row = assertNotNull(unit.workflowStates.getFeatureTaskWorkflow(workflowId))
-            val artifacts =
-              assertNotNull(
-                JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(row.artifactsJson)),
-              ).toMutableMap()
-            artifacts.putAll(
-              mapOf(
-                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.entry(
-                  mapOf(
-                    SharedPayloadKeys.CONTRACT_VERSION to "0.1",
-                    "checkpoints" to listOf("retained-checkpoint-evidence"),
-                  ),
-                ),
-              ),
-            )
-            unit.workflowStates.saveFeatureTaskWorkflow(
-              row.copy(
-                workflowStatus = status.wireValue,
-                artifactsJson = JsonCodec.mapToJsonString(artifacts),
-                finishedAt = "2026-09-28T00:00:00Z".takeIf { status in WorkflowStatus.terminalStatuses },
-              ),
-              FeatureTaskWorkflowMode.RUNTIME,
-            )
-          }
-
+    database.transaction { unit ->
+      val row = assertNotNull(unit.workflowStates.getFeatureTaskWorkflow(workflowId))
+      val artifacts =
+        assertNotNull(
+          JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(row.artifactsJson)),
+        ).toMutableMap()
+      artifacts.putAll(
+        mapOf(
+          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.entry(
+            mapOf(
+              SharedPayloadKeys.CONTRACT_VERSION to "0.1",
+              "checkpoints" to listOf("retained-checkpoint-evidence"),
+            ),
+          ),
+        ),
+      )
+      unit.workflowStates.saveFeatureTaskWorkflow(
+        row.copy(
+          workflowStatus = status.wireValue,
+          artifactsJson = JsonCodec.mapToJsonString(artifacts),
+          finishedAt = "2026-09-28T00:00:00Z".takeIf { status in WorkflowStatus.terminalStatuses },
+        ),
+        FeatureTaskWorkflowMode.RUNTIME,
+      )
+    }
   }
-
 }

@@ -78,7 +78,10 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
     return settle(run, iteration)
   }
 
-  internal fun runtimeOwnedCommitPushOutput(phaseId: String, receipt: FeatureTaskRuntimeCommitPushReceipt): String {
+  internal fun runtimeOwnedCommitPushOutput(
+    phaseId: String,
+    receipt: FeatureTaskRuntimeCommitPushReceipt,
+  ): String {
     val result = linkedMapOf<String, Any?>()
     receipt.commitSha?.trim()?.takeIf(String::isNotBlank)?.let { sha ->
       result[DecompositionManifestPayloadKeys.COMMIT_SHA] = sha
@@ -225,7 +228,7 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
         args.run,
         args.iteration,
         runtimeOwnedCommitPushOutput(
-        args.run.phaseId,
+          args.run.phaseId,
           FeatureTaskRuntimeCommitPushReceipt(
             commitSha = args.outcome.commitSha,
             branch = args.branch,
@@ -343,17 +346,17 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
     val normalizedOutput = accepted.normalizedOutput
     if (!persistCompleted(run, iteration, outputText, accepted)) {
       return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-    finalizationCoupledProgress(),
-    coupledRunTransitions,
-    recorder,
-    PhaseBlockRequest(
+        finalizationCoupledProgress(),
+        coupledRunTransitions,
+        recorder,
+        PhaseBlockRequest(
           run = run,
           attemptCount = iteration,
           reason = "Runtime-owned commit_push settlement could not be persisted.",
           observability = observability,
           failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
         ),
-  )
+      )
     }
     observability.completed(run.phaseId, run.resolvedAgent.resolvedAgentId, iteration)
     return PhaseOutcome.completed(

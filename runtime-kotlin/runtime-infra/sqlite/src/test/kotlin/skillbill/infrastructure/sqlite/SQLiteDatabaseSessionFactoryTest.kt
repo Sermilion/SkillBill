@@ -444,9 +444,10 @@ class SQLiteDatabaseSessionFactoryTest {
         it.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)?.updatedAt
       }
     val ownership = expiredOwnership(workflowId)
-    database.selfManagedWrite {
-      it.workflowStates.acquireFeatureTaskRuntimeWorker(ownership, updatedAt)
+    database.transaction {
+      assertTrue(it.workflowStates.acquireFeatureTaskRuntimeWorker(ownership, updatedAt))
     }
+    assertEquals(ownership, database.read { it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId) })
 
     val reconciled =
       database.transaction {
@@ -462,6 +463,27 @@ class SQLiteDatabaseSessionFactoryTest {
     assertTrue(reconciled)
     database.read {
       assertEquals("pending", it.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)?.workflowStatus)
+      assertNull(it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId))
+    }
+  }
+
+  @Test
+  fun `worker acquisition rolls back its workflow advance and lease with the enclosing admission transaction`() {
+    val root = Files.createTempDirectory("skillbill-sqlite-worker-admission-rollback")
+    val database = boundDatabase(root, root.resolve("metrics.db"))
+    val workflowId = "wftr-admission-rollback"
+    database.transaction {
+      it.workflowStates.saveFeatureTaskWorkflow(runtimeRow(workflowId).copy(workflowStatus = "pending"), RUNTIME)
+    }
+    val before = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
+    assertFailsWith<IllegalStateException> {
+      database.transaction {
+        assertTrue(it.workflowStates.acquireFeatureTaskRuntimeWorker(expiredOwnership(workflowId), before.updatedAt))
+        error("Admission aborted after acquisition")
+      }
+    }
+    database.read {
+      assertEquals(before, it.workflowStates.getFeatureTaskWorkflow(workflowId))
       assertNull(it.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId))
     }
   }

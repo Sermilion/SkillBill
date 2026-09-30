@@ -20,6 +20,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
@@ -45,6 +46,7 @@ internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPol
           PHASE_IMPLEMENT to ImplementResumeRules,
           PHASE_SIMPLIFY to PhaseResumeRules.None,
           PHASE_AUDIT to AcceptanceAuditResumeRules,
+          PHASE_AUDIT_IMPLEMENT_FIX to PhaseResumeRules.None,
           PHASE_REVIEW to CodeReviewResumeRules,
           PHASE_VERIFY_FINDINGS to PhaseResumeRules.None,
           PHASE_IMPLEMENT_FIX to PhaseResumeRules.None,
@@ -62,9 +64,9 @@ internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPol
 
   fun loopOnlyStepIds(gate: FeatureTaskRuntimeQualityGateSelection): Set<String> =
     if (gate == FeatureTaskRuntimeQualityGateSelection.BUILD) {
-      setOf(PHASE_IMPLEMENT_FIX)
+      setOf(PHASE_AUDIT_IMPLEMENT_FIX, PHASE_IMPLEMENT_FIX)
     } else {
-      setOf(PHASE_IMPLEMENT_FIX, PHASE_BUILD)
+      setOf(PHASE_AUDIT_IMPLEMENT_FIX, PHASE_IMPLEMENT_FIX, PHASE_BUILD)
     }
 
   fun gateReportedBy(stepId: String?): PhaseReportedGate? =

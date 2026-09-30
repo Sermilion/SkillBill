@@ -5,7 +5,6 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.checkpoint.goalScopedBaselinePaths
 import skillbill.engine.featuretask.lifecycle.continuation.matches
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeImplementationObligations
@@ -248,10 +247,10 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     } else {
       AttemptResult.settled(
         FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-    progress,
-    loopTransitions,
-    recorder,
-    PhaseBlockRequest(
+          progress,
+          loopTransitions,
+          recorder,
+          PhaseBlockRequest(
             run = run,
             attemptCount = iteration,
             reason = reason,
@@ -259,7 +258,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
             payload = BlockAndPersistPayload(fileManifest = fileManifest, normalizedOutput = normalizedOutput),
             failureDisposition = disposition,
           ),
-  ),
+        ),
       )
     }
   }
@@ -571,10 +570,10 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         val blockCoupling = context.settlementCoupling()
         return AttemptResult.settled(
           FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-    blockCoupling.progress,
-    blockCoupling.transitions,
-    recorder,
-    PhaseBlockRequest(
+            blockCoupling.progress,
+            blockCoupling.transitions,
+            recorder,
+            PhaseBlockRequest(
               run = run,
               attemptCount = iteration,
               reason = "Validated phase output could not be persisted to the authoritative workflow record.",
@@ -582,7 +581,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
               payload = BlockAndPersistPayload(fileManifest = fileManifest),
               failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
             ),
-  ),
+          ),
         )
       }
       return null

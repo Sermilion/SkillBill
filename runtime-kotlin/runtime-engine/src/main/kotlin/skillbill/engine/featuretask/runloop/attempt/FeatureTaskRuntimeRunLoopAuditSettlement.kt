@@ -1,16 +1,15 @@
 package skillbill.engine.featuretask.runloop.attempt
 
-import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
+import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
+import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
-import skillbill.engine.featuretask.slot.audit.AcceptanceAuditProgress
-import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.feature.FeatureTaskRuntimeAuditRemainingAcInterpretation
@@ -25,6 +24,7 @@ internal object FeatureTaskRuntimeRunLoopAuditSettlement {
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+    progressRejection: String?,
   ): AttemptResult? {
     val run = capture.run
     if ((outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() != WorkflowStepStatus.COMPLETED) {
@@ -36,8 +36,7 @@ internal object FeatureTaskRuntimeRunLoopAuditSettlement {
       FeatureTaskRuntimeAuditRemainingAcResult.WhitespaceOnlyFinalResponse,
       -> blockAuditWhitespaceOnlyFinalResponse(context, run, capture.iteration, capture.fileManifest)
       is FeatureTaskRuntimeAuditRemainingAcResult.RemainingCriteriaText -> {
-        val reason = AcceptanceAuditProgress.rejectionReason(context, run, finalResponse.orEmpty())
-        if (reason != null) blockAuditNoProgress(context, capture, attested, reason) else null
+        progressRejection?.let { blockAuditNoProgress(context, capture, attested, it) }
       }
       FeatureTaskRuntimeAuditRemainingAcResult.EmptyRemainingList -> null
     }
@@ -50,7 +49,8 @@ internal object FeatureTaskRuntimeRunLoopAuditSettlement {
     fileManifest: FeatureTaskRuntimePhaseFileManifest?,
   ): AttemptResult =
     AttemptResult.settled(
-      FeatureTaskRuntimeRunLoopPhaseBlocking.blockStepInPhase(context,
+      FeatureTaskRuntimeRunLoopPhaseBlocking.blockStepInPhase(
+        context,
         PhaseBlockRequest(
           run = run,
           attemptCount = iteration,
@@ -71,7 +71,8 @@ internal object FeatureTaskRuntimeRunLoopAuditSettlement {
     reason: String,
   ): AttemptResult =
     AttemptResult.settled(
-      FeatureTaskRuntimeRunLoopPhaseBlocking.blockStepInPhase(context,
+      FeatureTaskRuntimeRunLoopPhaseBlocking.blockStepInPhase(
+        context,
         PhaseBlockRequest(
           run = capture.run,
           attemptCount = capture.iteration,

@@ -4,10 +4,10 @@ import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHoo
 import skillbill.engine.featuretask.runloop.attempt.phaseAttemptContext
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.FixLoopBranchContext
+import skillbill.engine.featuretask.runloop.core.PhaseAttemptAccumulatorContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptLoopState
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.core.PhaseAttemptAccumulatorContext
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.observability.featureTaskRuntimeStartContinuationKind
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
@@ -153,26 +153,27 @@ internal object PhaseAttemptSteps {
     return attempt.settledOutcome ?: when {
       attempt.incompleteWorkContinuationReason != null ->
         phaseAttempts.settleIncompleteWork(
-    recorder,
-    context,
-  )
+          recorder,
+          context,
+        )
       attempt.boundaryBodyDeliveryContinuationReason != null ->
         phaseAttempts.settleBoundaryBodyDelivery(observability, context)
-      attempt.malformedOutput -> phaseAttempts.settleMalformedOutput(
-    recorder,
-    context,
-  )
+      attempt.malformedOutput ->
+        phaseAttempts.settleMalformedOutput(
+          recorder,
+          context,
+        )
       attempt.retryableTerminalRetryReason != null ->
         phaseAttempts.settleRetryableTerminal(
-    recorder,
-    context,
-  )
+          recorder,
+          context,
+        )
       else ->
         FeatureTaskRuntimeRunLoopPhaseBlocking.settleSemanticFailure(
-    recorder,
-    observability,
-    context,
-  )
+          recorder,
+          observability,
+          context,
+        )
     }
   }
 }

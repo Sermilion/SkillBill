@@ -242,6 +242,51 @@ class RuntimeEnginePublicTopLevelDeclarationArchitectureTest {
     )
   }
 
+  @Test
+  fun `unused step imports do not invent a run-loop dependency cycle`() {
+    val sources =
+      mapOf(
+        "Alpha.kt" to
+          """
+          package example
+          import example.FeatureTaskRuntimeRunLoopBeta
+          object FeatureTaskRuntimeRunLoopAlpha { fun value() = "alpha" }
+          """.trimIndent(),
+        "Beta.kt" to
+          """
+          package example
+          import example.FeatureTaskRuntimeRunLoopAlpha
+          object FeatureTaskRuntimeRunLoopBeta { fun value() = "beta" }
+          """.trimIndent(),
+      )
+    assertEquals(emptyList(), ArchitectureScanSupport.cyclicComponents(runLoopStepEdges(sources)))
+  }
+
+  @Test
+  fun `multiline run-loop constructors keep their body edges in the step graph`() {
+    val sources =
+      mapOf(
+        "Bindings.kt" to
+          """
+          package example
+          open class FeatureTaskRuntimeRunLoopBase
+          interface BoundRole
+          class FeatureTaskRuntimeRunLoopBound(
+            val value: String,
+          ) : FeatureTaskRuntimeRunLoopBase(),
+            BoundRole {
+            fun value() = FeatureTaskRuntimeRunLoopLeaf.value()
+          }
+          object FeatureTaskRuntimeRunLoopLeaf { fun value() = "leaf" }
+          """.trimIndent(),
+      )
+    assertEquals(
+      setOf("FeatureTaskRuntimeRunLoopBase", "FeatureTaskRuntimeRunLoopLeaf"),
+      runLoopStepEdges(sources).getValue("FeatureTaskRuntimeRunLoopBound"),
+    )
+    assertEquals(emptyList(), runLoopTopLevelStepCalls(sources))
+  }
+
   private fun runLoopTopLevelStepCalls(sources: Map<String, String>): List<String> {
     val segmentsByPath =
       sources.mapValues { (_, source) -> runLoopStepSegments(strippedRunLoopSource(source)) }

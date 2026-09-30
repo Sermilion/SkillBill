@@ -10,7 +10,6 @@ import java.util.Collections
 
 private const val PACK_IDENTITY_LENGTH_LIMIT = 128
 
-
 data class EffectiveGatePolicyInputs(
   val commandFamily: ValidationGateCommandFamily,
   val packSlug: String?,

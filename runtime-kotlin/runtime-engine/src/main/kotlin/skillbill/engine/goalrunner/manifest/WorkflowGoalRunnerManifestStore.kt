@@ -41,13 +41,9 @@ import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.clearDecompositionManifestProjectionFailure
-import skillbill.ports.workflow.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
 import skillbill.workflow.engine.WorkflowEngine
-import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import java.nio.file.Path
 import java.time.Clock
 import kotlin.random.Random
@@ -444,6 +440,4 @@ class WorkflowGoalRunnerManifestStore
         parentProjection.rewrite(unitOfWork, record)
         acceptance
       }
-
-
   }

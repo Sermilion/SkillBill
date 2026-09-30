@@ -1,6 +1,6 @@
 # SKILL-384 Subtask 2 - Resolve composition once and preserve its semantics on durable resume
 
-Parent spec: [.feature-specs/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership/spec.md](spec.md)
 Issue key: SKILL-384
 
 ## Scope

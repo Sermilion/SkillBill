@@ -145,9 +145,9 @@ This inventory replaces the accumulated repair notes with the current operation 
 | `FeatureTaskRuntimeRunState.transitionOwnerFor` | Owns one transition owner paired with one session. Rejects a different session. No global owner cache. | Coordinator composition -> named owner operations. | Progress owner; stored per run. |
 | `progressSnapshot`, `sessionSnapshot` | Private wrappers delegate to copied progress/session values. Collections, buffers and terminal reports are detached. Casts cannot recover the live owners. | Context/binding reads -> independent observations. | Progress/session owner; mutable storage is retained privately. |
 | `resumeInFlightReentry`, `claimResumedInFlightEdge`, `enterBackwardEdgeReentry`, `establishResumedReentryPair` | Coupled span reopening, edge accounting and re-entry pair. | Backward-edge/resume coordinator -> named transition. | Single transition owner. |
-| `enterExplicitResumeStart`, `consumeBriefingPendingReentry`, `clearMatchingReentry`, `discardStaleResumedReentry` | Resume and briefing consumption keep progress/session state consistent. | Resume/launch/drive -> owner. | Single transition owner. |
-| `acknowledgeRequiredPhaseStart`, `beginPhaseAttemptLaunchAfterRequiredStart`, `recordPhaseAttemptLaunch`, `restartAttemptBudgetForRelaunch` | Required write acknowledgement, attempt/budget accounting and session retry consumption. | Start persistence -> owner -> launch. | Single transition owner; primitive writers are guarded. |
-| `recordOutputSettlementRunningPhase`, `recordOutputSettlementRequiredStart` | Runtime running/start records with reservation/accounting updates. | Output settlement -> owner -> records and progress. | Single transition owner. |
+| `enterExplicitResumeStart`, `consumeBriefingPendingReentry`, `discardStaleResumedReentry` | Resume and briefing consumption keep progress/session state consistent. | Resume/launch/drive -> owner. | Single transition owner. |
+| `acknowledgeRequiredPhaseStart`, `beginPhaseAttemptLaunchAfterRequiredStart`, `restartAttemptBudgetForRelaunch` | Required write acknowledgement, attempt/budget accounting and session retry consumption. | Start persistence -> owner -> launch. | Single transition owner; primitive writers are guarded. |
+| Former `recordOutputSettlementRunningPhase` and `recordOutputSettlementRequiredStart` aliases | Removed. Settlement calls `acknowledgeRequiredPhaseStart`, which owns running/start acknowledgement and coupled accounting. | Output settlement -> named transition -> records and progress. | Single transition owner. |
 | `persistAuthoritativePhaseCompletion`, `persistGoalReviewPhaseCompletion`, `applyPersistedPhaseCompletion`, `recordForwardPhaseCompletion` | Evidence/manifest and durable completion precede in-memory completion. | Output/review/gate/commit settlement -> owner -> storage acknowledgement -> progress/session. | Single transition owner. |
 | `persistCarriedForwardPhaseCompletion`, `applyCarriedForwardInMemoryCompletion`, `recordSyntheticUpstreamCompletion` | Carried/imported output preserves intended durable or ephemeral policy. | Resume/planning/upstream recovery -> owner. | Single transition owner. |
 | `persistReviewGenerationInvalidation`, `applyPersistedReviewGenerationInvalidation`, `invalidateProducerOutputForRegeneration` | Durable tombstone before generation advancement and matching re-entry clearing. | Review/output invalidation -> owner. | Single transition owner; checkpoint preserved by owning machinery. |
@@ -171,3 +171,29 @@ The same guard resolves calls to registered progress/session primitive writers a
 `RunLoopObservationIsolationTest` checks frozen progress/session snapshots, terminal report list isolation and rejection of a second session owner. `RequiredPhasePersistenceTest` checks rejected start/briefing behavior and an audit binding's inability to obtain review/gate/commit/PR roles or launch another phase. Existing engine suites cover durable/in-memory execution, fan-out, remediation, checkpoints, cancellation and retry reconstruction.
 
 No durable schema, semantic identity, lease protocol, retry budget, phase ordering or audit briefing policy changes are introduced. Runtime scopes keep existing stores; detached observations and bound operations change who can reach them.
+
+### Validation repairs
+
+The final transition owner is `FeatureTaskRuntimeRunTransitionOwner`. Removed unused operations are
+`clearMatchingReentry` and `observeRemediationCheckpointBranch`. The former `recordPhaseAttemptLaunch`
+forwarder was removed. `beginPhaseAttemptLaunchAfterRequiredStart` now performs that owned mutation itself.
+Checkpoint blocking calls `transitionCheckpointRemediationBlock` directly instead of its former alias.
+
+`PhaseProgressObservation` and `LoopProgressObservation` are detached values for phase and loop facts.
+The broad readonly progress interface retains its storage-independent contract, while
+`FeatureTaskRuntimeProgressSnapshotAccess` adds coordinator-only resume metadata. Review pass counts and
+branch names are readonly properties. None returns mutation authority.
+
+Strategies declare `PhaseExecutionBindingKind` and hooks declare `PhaseStepHookContextKind`.
+These enums choose the private role view for the already accepted step. The dispatcher still verifies
+active run, accepted step, strategy and policy before effects. Review and finding writers verify the
+selected strategy's role. Shared code does not select behavior through phase-name constants.
+`FeatureTaskRuntimeRunLoopStepBindings` owns binding construction, and
+`FeatureTaskRuntimeRunLoopHookViews` owns hook-view construction. Their effects remain visible in the
+run-loop dependency graph. The graph ignores unused imports and retains multiline declaration bodies.
+
+The CLI passes `FeatureTaskRuntimeExecutionPlanCreationRequest`, an immutable creation request, to the
+existing resolver. This value carries settings across the CLI boundary and introduces no new port.
+Manifest projection persistence now owns projection-file writes and their database failure records.
+SQLite worker acquisition joins an enclosing admission transaction when present. Standalone acquisition
+keeps its own write transaction. Rollback preserves both the workflow row and lease.

@@ -343,8 +343,7 @@ internal fun PhaseRuntimeFinalizationContext.persistFinalizationCompleted(
   )
 }
 
-internal fun PhaseRuntimeFinalizationContext.finalizationCoupledProgress():
-  FeatureTaskRuntimeProgressSnapshotAccess =
+internal fun PhaseRuntimeFinalizationContext.finalizationCoupledProgress(): FeatureTaskRuntimeProgressSnapshotAccess =
   progress
 
 internal fun PhaseRuntimeFinalizationContext.finalizationAttemptHost(): PhaseAttemptRunHost =

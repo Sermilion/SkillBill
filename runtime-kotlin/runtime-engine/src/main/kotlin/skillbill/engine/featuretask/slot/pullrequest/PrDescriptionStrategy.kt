@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slot.pullrequest
 
-import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.lifecycle.branch.requirePublishableBranch
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
@@ -8,6 +7,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
+import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
@@ -55,7 +55,8 @@ class PrDescriptionStrategy(
 
   private val measuredHooks =
     object : PhaseStepHooks {
-    override val contextKind = PhaseStepHookContextKind.PULL_REQUEST
+      override val contextKind = PhaseStepHookContextKind.PULL_REQUEST
+
       override fun beforeAgentLaunch(
         run: PhaseRun,
         context: PhaseAttemptLaunchHookContext,

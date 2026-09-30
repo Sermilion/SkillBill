@@ -370,21 +370,23 @@ class FeatureTaskContinuationAdmissionTest {
     const val SPEC = ".feature-specs/SKILL-384/spec.md"
     val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN
   }
-  private fun seedContinuationIdentity(database: DatabaseSessionFactory, record: WorkflowStateRecord) {
-      database.transaction { unit ->
-        unit.workflowStates.saveFeatureTaskWorkflow(record, FeatureTaskWorkflowMode.RUNTIME)
-        unit.workflowStates.saveFeatureTaskExecutionIdentity(
-          FeatureTaskExecutionIdentity(
-            WORKFLOW_ID,
-            "SKILL-384",
-            REPOSITORY,
-            SPEC,
-            FeatureTaskWorkflowMode.RUNTIME,
-            FeatureTaskRouteScope.STANDALONE,
-          ),
-        )
-      }
 
+  private fun seedContinuationIdentity(
+    database: DatabaseSessionFactory,
+    record: WorkflowStateRecord,
+  ) {
+    database.transaction { unit ->
+      unit.workflowStates.saveFeatureTaskWorkflow(record, FeatureTaskWorkflowMode.RUNTIME)
+      unit.workflowStates.saveFeatureTaskExecutionIdentity(
+        FeatureTaskExecutionIdentity(
+          WORKFLOW_ID,
+          "SKILL-384",
+          REPOSITORY,
+          SPEC,
+          FeatureTaskWorkflowMode.RUNTIME,
+          FeatureTaskRouteScope.STANDALONE,
+        ),
+      )
+    }
   }
-
 }

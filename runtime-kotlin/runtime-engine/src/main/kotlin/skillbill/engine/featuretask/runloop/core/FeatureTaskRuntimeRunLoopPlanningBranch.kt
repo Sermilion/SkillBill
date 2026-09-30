@@ -45,10 +45,10 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       )
     val run = capExhaustionPhaseRun(context, phaseId)
     FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersist(
-    context.runState,
-    recorder,
-    goalContinuationRecorder,
-    BlockAndPersistArgs(
+      context.runState,
+      recorder,
+      goalContinuationRecorder,
+      BlockAndPersistArgs(
         run = run,
         attemptCount = state.phase(phaseId).nextIteration,
         reason = reason,
@@ -58,7 +58,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
         failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
         payload = BlockAndPersistPayload(outputArtifact = state.phase(phaseId).output?.payload),
       ),
-  )
+    )
     FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(request, state, session, phaseId, reason)
   }
 

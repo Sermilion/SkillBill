@@ -1,5 +1,17 @@
 # featuretask runtime boundary history
 
+## [2026-09-30] SKILL-384 subtask 3 - Restrict strategy capabilities and centralize coupled transitions
+Areas: runtime-engine featuretask and goalrunner, runtime-core architecture guards and DI, runtime-domain taskruntime, runtime-application workflow persistence, runtime-ports, runtime-contracts, runtime-cli, runtime-infra contracts and SQLite, runtime-kotlin architecture, feature specs
+- Strategies and hooks receive private accepted-step bindings and detached observations. Review, planning fan-out, gate, commit and PR operations stay with their owning roles; ordinary and gate strategies cannot obtain raw runners or run state.
+- FeatureTaskRuntimeRunTransitionOwner owns coupled progress, session, attempt accounting, completion, re-entry, evidence invalidation and checkpoint transitions. Required persistence precedes launch accounting and effects.
+- Accepted-plan admission and binding closure constrain every step operation. Durable and in-memory paths share transition semantics while retaining their storage policies, including ephemeral audit briefings.
+- Detached phase/loop observations, scoped repository reads and accepted-step operations are reusable. Gate and finalization cycles retain effect collaborators privately inside the shared run loop.
+- The preserved before/after capability census records operation ownership. The registered Kotlin PSI capability guard follows transitive helpers and checks primitive writers, with synthetic allowed and violating cases.
+- SQLite worker acquisition joins the owned admission transaction so workflow state and lease roll back together. Standalone acquisition keeps its own transaction; manifest projection persistence owns file writes and failure records.
+- Limits: the guard checks source-level authority; runtime admission checks enforce active-step identity. No durable wire format, semantic step identity, phase order, retry budget or lease protocol changed.
+Feature flag: N/A
+Acceptance criteria: 8/8 implemented
+
 ## [2026-09-28] SKILL-384 subtask 1 - Truthful gate evidence and persistence before execution
 Areas: runtime-engine featuretask and goalrunner planning, runtime-domain validation, runtime-ports validation, runtime-infra contracts/workflow/sqlite, runtime-contracts, runtime-core DI, runtime-cli, orchestration/contracts, docs
 - Standalone validation selects PackValidationStrategy with the dominant pack's full-validation command pair and wrapper overrides. Goal-child build keeps its build-only commands and build receipt.

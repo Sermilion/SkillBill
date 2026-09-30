@@ -4,8 +4,10 @@ import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRemediationCollaborationScope
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
+import skillbill.engine.featuretask.slot.attempt.runLoopBinding
 import skillbill.engine.featuretask.slot.state.PhaseFindingVerificationState
 import skillbill.engine.featuretask.slot.state.PhaseRepairReceiptState
 import skillbill.goalrunner.model.UnaddressedFinding
@@ -15,8 +17,6 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.goalreview.upsertRepairReceipt
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
-import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
-import skillbill.engine.featuretask.slot.attempt.runLoopBinding
 
 internal class FeatureTaskRuntimeRunLoopFindingVerificationState(
   private val environment: PhaseAttemptRemediationCollaborationScope,

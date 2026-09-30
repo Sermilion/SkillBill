@@ -1,7 +1,5 @@
 package skillbill.engine.featuretask.runloop.phase
 
-import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
-import skillbill.engine.featuretask.runloop.attempt.remediationCoupling
 import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.lifecycle.continuation.GoalContinuationStateRecordRequest
@@ -10,6 +8,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
+import skillbill.engine.featuretask.runloop.attempt.remediationCoupling
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistArgs
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistInPhaseArgs
@@ -33,8 +32,8 @@ import skillbill.engine.featuretask.runloop.observability.paused
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeNonOutputAttempt
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledProgress
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.BRANCH_SETUP_AGENT_ID
@@ -43,6 +42,7 @@ import skillbill.engine.featuretask.runner.STATUS_PAUSED
 import skillbill.engine.featuretask.runner.isProcessFailureBlockReason
 import skillbill.engine.featuretask.runner.nonRetryingPhaseSchemaBlockReason
 import skillbill.engine.featuretask.runner.withSchemaGateDetail
+import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptScope
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
@@ -55,7 +55,10 @@ import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementat
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
 object FeatureTaskRuntimeRunLoopPhaseBlocking {
-  internal fun blockStepInPhase(context: PhaseCheckpointRemediationContext, block: PhaseBlockRequest): PhaseOutcome {
+  internal fun blockStepInPhase(
+    context: PhaseCheckpointRemediationContext,
+    block: PhaseBlockRequest,
+  ): PhaseOutcome {
     val coupling = context.remediationCoupling()
     return blockInPhase(coupling.progress, coupling.transitions, context.recorder, block)
   }
@@ -75,10 +78,10 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
         block.payload,
       ).withDisposition(block.failureDisposition)
     return blockAndPersistCore(
-    progress,
-    recorder,
-    null,
-    BlockAndPersistArgs(
+      progress,
+      recorder,
+      null,
+      BlockAndPersistArgs(
         run = inPhase.run,
         attemptCount = inPhase.attemptCount,
         reason = inPhase.reason,
@@ -88,8 +91,8 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
         failureDisposition = inPhase.failureDisposition,
         payload = inPhase.payload,
       ),
-    transitions,
-  )
+      transitions,
+    )
   }
 
   internal fun blockInPhase(
@@ -98,21 +101,21 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     block: PhaseBlockRequest,
   ): PhaseOutcome =
     blockInPhase(
-    runState.coupledProgress(),
-    runState.coupledRunTransitions,
-    recorder,
-    block,
-  )
+      runState.coupledProgress(),
+      runState.coupledRunTransitions,
+      recorder,
+      block,
+    )
 
   internal fun PhaseRunLoopAttemptScope.blockAndPersist(args: BlockAndPersistArgs): PhaseOutcome {
     val coupling = settlementCoupling()
     return blockAndPersistCore(
-    coupling.progress,
-    recorder,
-    goalContinuationRecorder,
-    args,
-    coupling.transitions,
-  )
+      coupling.progress,
+      recorder,
+      goalContinuationRecorder,
+      args,
+      coupling.transitions,
+    )
   }
 
   internal fun blockAndPersist(
@@ -122,12 +125,12 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     args: BlockAndPersistArgs,
   ): PhaseOutcome =
     blockAndPersist(
-    runState.coupledProgress(),
-    runState.coupledRunTransitions,
-    recorder,
-    goalContinuationRecorder,
-    args,
-  )
+      runState.coupledProgress(),
+      runState.coupledRunTransitions,
+      recorder,
+      goalContinuationRecorder,
+      args,
+    )
 
   internal fun blockAndPersist(
     progress: FeatureTaskRuntimeProgressSnapshotAccess,
@@ -137,12 +140,12 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     args: BlockAndPersistArgs,
   ): PhaseOutcome =
     blockAndPersistCore(
-    progress,
-    recorder,
-    goalContinuationRecorder,
-    args,
-    transitions,
-  )
+      progress,
+      recorder,
+      goalContinuationRecorder,
+      args,
+      transitions,
+    )
 
   internal fun blockAndPersistInPhase(
     progress: FeatureTaskRuntimeProgressSnapshotAccess,
@@ -152,10 +155,10 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     args: BlockAndPersistInPhaseArgs,
   ): PhaseOutcome =
     blockAndPersistCore(
-    progress,
-    recorder,
-    goalContinuationRecorder,
-    BlockAndPersistArgs(
+      progress,
+      recorder,
+      goalContinuationRecorder,
+      BlockAndPersistArgs(
         run = args.run,
         attemptCount = args.attemptCount,
         reason = args.reason,
@@ -165,8 +168,8 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
         failureDisposition = args.failureDisposition,
         payload = args.payload,
       ),
-    transitions,
-  )
+      transitions,
+    )
 
   private fun blockAndPersistCore(
     state: FeatureTaskRuntimeProgressSnapshotAccess,
@@ -347,10 +350,10 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
   internal fun PhaseOutputSettlementContext.blockAndPersistInPhase(args: BlockAndPersistInPhaseArgs): PhaseOutcome {
     val coupling = settlementCoupling()
     return blockAndPersistCore(
-    coupling.progress,
-    recorder,
-    goalContinuationRecorder,
-    BlockAndPersistArgs(
+      coupling.progress,
+      recorder,
+      goalContinuationRecorder,
+      BlockAndPersistArgs(
         run = args.run,
         attemptCount = args.attemptCount,
         reason = args.reason,
@@ -360,8 +363,8 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
         failureDisposition = args.failureDisposition,
         payload = args.payload,
       ),
-    coupling.transitions,
-  )
+      coupling.transitions,
+    )
   }
 
   internal fun operatorReopenedPhase(
@@ -555,19 +558,19 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     val agentId = context.agentId
     if (!run.policy.relaunchOnInvalidOutput) {
       return blockNonRetryableSemanticFailure(
-    recorder,
-    context,
-  )
+        recorder,
+        context,
+      )
     }
     loop.outputGateFailures += 1
     val budgetBlock =
       FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(run.phaseId, run.policy, loop.outputGateFailures)
     budgetBlock?.let { capReason ->
       return blockInPhase(
-    context.progress,
-    context.loopTransitions,
-    recorder,
-    PhaseBlockRequest(
+        context.progress,
+        context.loopTransitions,
+        recorder,
+        PhaseBlockRequest(
           run = run,
           attemptCount = loop.iteration,
           reason = withSchemaGateDetail(capReason, requireNotNull(attempt.retryableOperatorReason)),
@@ -579,7 +582,7 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
             ),
           failureDisposition = FeatureTaskRuntimeFailureDisposition.INVALID_OUTPUT,
         ),
-  )
+      )
     }
     val failedIteration = loop.semanticIteration
     loop.iteration += 1
@@ -602,10 +605,10 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
     val run = context.run
     val attempt = context.attempt
     return blockInPhase(
-    context.progress,
-    context.loopTransitions,
-    recorder,
-    PhaseBlockRequest(
+      context.progress,
+      context.loopTransitions,
+      recorder,
+      PhaseBlockRequest(
         run = run,
         attemptCount = context.loop.iteration,
         reason =
@@ -621,7 +624,7 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
           ),
         failureDisposition = FeatureTaskRuntimeFailureDisposition.INVALID_OUTPUT,
       ),
-  )
+    )
   }
 
   internal fun durableNonOutputAttempts(

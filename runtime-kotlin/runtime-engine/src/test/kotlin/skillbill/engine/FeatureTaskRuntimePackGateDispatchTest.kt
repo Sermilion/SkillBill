@@ -1,6 +1,5 @@
 package skillbill.engine
 
-import skillbill.scaffold.model.PlatformManifest
 import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
@@ -11,6 +10,7 @@ import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
+import skillbill.scaffold.model.PlatformManifest
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
@@ -169,19 +169,18 @@ class FeatureTaskRuntimePackGateDispatchTest {
       repo.toFile().deleteRecursively()
     }
   }
+
   private fun buildDispatchPack(): PlatformManifest {
-      return kotlinPackWithBuildGate().let { manifest ->
-          manifest.copy(
-            validationGate =
-              requireNotNull(manifest.validationGate).copy(
-                buildCommand = listOf("./gradlew", "build-discovery"),
-                cacheBypassingBuildCommand = listOf("./gradlew", "build-verification"),
-                collectAllFullGateCommand = listOf("./gradlew", "validation-discovery"),
-                cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "validation-verification"),
-              ),
-          )
-        }
-
+    return kotlinPackWithBuildGate().let { manifest ->
+      manifest.copy(
+        validationGate =
+          requireNotNull(manifest.validationGate).copy(
+            buildCommand = listOf("./gradlew", "build-discovery"),
+            cacheBypassingBuildCommand = listOf("./gradlew", "build-verification"),
+            collectAllFullGateCommand = listOf("./gradlew", "validation-discovery"),
+            cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "validation-verification"),
+          ),
+      )
+    }
   }
-
 }

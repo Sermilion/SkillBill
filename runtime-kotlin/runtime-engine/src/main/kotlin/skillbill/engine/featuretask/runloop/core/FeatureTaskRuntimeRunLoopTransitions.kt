@@ -4,7 +4,6 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
 import skillbill.engine.featuretask.runloop.observability.loopEdge
-import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.runner.skeletonDefinitionFor
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
@@ -86,11 +85,11 @@ object FeatureTaskRuntimeRunLoopTransitions {
         else -> {
           with(FeatureTaskRuntimeRunLoopBackwardEdge) {
             FeatureTaskRuntimeRunLoopBackwardEdge.recordBackwardEdge(
-    context,
-    edge = requireNotNull(edge),
-    edgeIteration = requireNotNull(transition.edgeIteration),
-    verdict = effectiveVerdict,
-  )
+              context,
+              edge = requireNotNull(edge),
+              edgeIteration = requireNotNull(transition.edgeIteration),
+              verdict = effectiveVerdict,
+            )
             observability.loopEdge(
               transition.phaseId,
               loopId,

@@ -1,10 +1,10 @@
 package skillbill.engine.goalrunner.launch
 
-import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.workflow.persist.generateWorkflowId
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.goalrunner.execution.core.GoalRunnerSubtaskLaunchBoundaries
 import skillbill.engine.goalrunner.execution.core.StoppedReportArgs
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
@@ -200,15 +200,17 @@ class GoalRunnerSubtaskLaunchPrepare(
         "Goal subtask '$subtaskId' is missing from the decomposition manifest."
       }
     val executionPlan =
-      executionPlans.resolveCreation(FeatureTaskRuntimeExecutionPlanCreationRequest(
-        repoRoot = request.repoRoot,
-        definition = SkeletonDefinition.GOAL_CHILD,
-        reviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT,
-        qualityGate = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, subtaskId),
-        validationDepth = ValidationDepth.FULL,
-        timeout = request.timeout,
-        workflowId = priorWorkflowId,
-      ))
+      executionPlans.resolveCreation(
+        FeatureTaskRuntimeExecutionPlanCreationRequest(
+          repoRoot = request.repoRoot,
+          definition = SkeletonDefinition.GOAL_CHILD,
+          reviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT,
+          qualityGate = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, subtaskId),
+          validationDepth = ValidationDepth.FULL,
+          timeout = request.timeout,
+          workflowId = priorWorkflowId,
+        ),
+      )
     val firstRun = priorWorkflowId == null
     val resumesBlockedChild = subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && !firstRun
     val assignedWorkflowId = priorWorkflowId ?: generateWorkflowId(RUNTIME_WORKFLOW_ID_PREFIX, clock, random)
@@ -255,7 +257,11 @@ class GoalRunnerSubtaskLaunchPrepare(
     return PreparedLaunch(attemptedState, assignedWorkflowId.takeIf { firstRun })
   }
 
-  private fun governedChildSpecPath(subtaskId: Int, specPath: String, canonicalRepository: Path): String {
+  private fun governedChildSpecPath(
+    subtaskId: Int,
+    specPath: String,
+    canonicalRepository: Path,
+  ): String {
     val rawSpecPath =
       requireNotNull(
         specPath.takeIf(String::isNotBlank),

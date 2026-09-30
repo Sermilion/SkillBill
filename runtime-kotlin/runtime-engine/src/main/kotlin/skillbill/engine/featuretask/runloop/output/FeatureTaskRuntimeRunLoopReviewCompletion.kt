@@ -59,10 +59,10 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
         recordStandaloneReviewCompletion(args, outputText, acceptedOutput)
       } catch (error: RuntimeOwnedFactUnavailable) {
         return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-    state,
-    transitions,
-    recorder,
-    PhaseBlockRequest(
+          state,
+          transitions,
+          recorder,
+          PhaseBlockRequest(
             run = run,
             attemptCount = iteration,
             reason =
@@ -71,23 +71,23 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
             observability = observability,
             failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
           ),
-  )
+        )
       }
     return if (persisted) {
       null
     } else {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-    state,
-    transitions,
-    recorder,
-    PhaseBlockRequest(
+        state,
+        transitions,
+        recorder,
+        PhaseBlockRequest(
           run = run,
           attemptCount = iteration,
           reason = "Runtime-owned review settlement could not be persisted.",
           observability = observability,
           failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
         ),
-  )
+      )
     }
   }
 
@@ -160,11 +160,11 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
             payload = BlockAndPersistPayload(fileManifest = fileManifest),
           )
         return FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersist(
-    state,
-    transitions,
-    recorder,
-    goalContinuationRecorder,
-    BlockAndPersistArgs(
+          state,
+          transitions,
+          recorder,
+          goalContinuationRecorder,
+          BlockAndPersistArgs(
             run = inPhase.run,
             attemptCount = inPhase.attemptCount,
             reason = inPhase.reason,
@@ -174,23 +174,23 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
             failureDisposition = inPhase.failureDisposition,
             payload = inPhase.payload,
           ),
-  )
+        )
       }
     return if (completed) {
       null
     } else {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-    state,
-    transitions,
-    recorder,
-    PhaseBlockRequest(
+        state,
+        transitions,
+        recorder,
+        PhaseBlockRequest(
           run = run,
           attemptCount = iteration,
           reason = "Goal-subtask review could not atomically persist its reserved pass and completed phase.",
           observability = observability,
           payload = BlockAndPersistPayload(fileManifest = fileManifest),
         ),
-  )
+      )
     }
   }
 

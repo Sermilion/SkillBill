@@ -193,13 +193,14 @@ class FeatureTaskRuntimeReviewGenerationRecorder(
     loopId: String,
     edgeIteration: Int,
   ): Map<String, FeatureTaskRuntimePhaseRecord> {
-    val invalidated = previous.copy(
-      status = WorkflowStepStatus.RUNNING,
-      finishedAt = null,
-      outputArtifact = null,
-      loopId = loopId,
-      edgeIteration = edgeIteration,
-    )
+    val invalidated =
+      previous.copy(
+        status = WorkflowStepStatus.RUNNING,
+        finishedAt = null,
+        outputArtifact = null,
+        loopId = loopId,
+        edgeIteration = edgeIteration,
+      )
     return LinkedHashMap(existing).apply { put(previous.phaseId, invalidated) }
   }
 

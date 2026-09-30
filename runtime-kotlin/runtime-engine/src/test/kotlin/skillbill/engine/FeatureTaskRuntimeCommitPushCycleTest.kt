@@ -27,7 +27,7 @@ class FeatureTaskRuntimeCommitPushCycleTest {
       realFeatureTaskRuntimePhaseOutputValidator
         .validatePhaseOutput(
           FeatureTaskRuntimeRunLoopCommitCycle.runtimeOwnedCommitPushOutput(
-          "commit_push",
+            "commit_push",
             FeatureTaskRuntimeCommitPushReceipt(commitSha = sha, branch = "feat/x", baseBranch = "main", pushed = true),
           ),
           sourceLabel = "commit_push",

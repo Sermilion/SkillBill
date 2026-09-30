@@ -2448,13 +2448,12 @@ internal object HarnessDeadProcessSupervisor : FeatureTaskRuntimeWorkerSuperviso
 }
 
 private fun runnerRepositoryPaths(repositoryIdentity: String): RepositoryEnclosingRootPort =
-    object : RepositoryEnclosingRootPort {
-      override fun enclosingRepositoryRoot(start: Path): Path = canonicalPath(start)
+  object : RepositoryEnclosingRootPort {
+    override fun enclosingRepositoryRoot(start: Path): Path = canonicalPath(start)
 
-      override fun canonicalPath(path: Path): Path = path.toAbsolutePath().normalize()
+    override fun canonicalPath(path: Path): Path = path.toAbsolutePath().normalize()
 
-      override fun optionalRealPath(path: Path): Path? = null
+    override fun optionalRealPath(path: Path): Path? = null
 
-      override fun repositoryIdentity(repoRoot: Path): String = repositoryIdentity
-    }
-
+    override fun repositoryIdentity(repoRoot: Path): String = repositoryIdentity
+  }

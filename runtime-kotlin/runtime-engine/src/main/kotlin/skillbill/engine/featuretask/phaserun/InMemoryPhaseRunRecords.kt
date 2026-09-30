@@ -237,8 +237,6 @@ internal class InMemoryPhaseRunRecords(
     terminal: FeatureTaskRuntimeDecomposeTerminal,
     planStepId: String,
   ): Boolean = true
-
-
 }
 
 private fun ProducerOutputEvidence.detached(): ProducerOutputEvidence = copy(payload = payload?.copyOf())

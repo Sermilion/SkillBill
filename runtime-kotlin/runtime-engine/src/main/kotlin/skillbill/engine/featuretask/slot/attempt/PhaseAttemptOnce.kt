@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slot.attempt
 
-import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation.prepareLaunchForCapture
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
@@ -34,6 +33,7 @@ import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
+import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation.prepareLaunchForCapture
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.engine.featuretask.slot.stepFacts
@@ -93,10 +93,10 @@ object PhaseAttemptOnce {
     val coupling = scope.settlementCoupling()
     return runCatching {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-    coupling.progress,
-    coupling.transitions,
-    scope.recorder,
-    PhaseBlockRequest(
+        coupling.progress,
+        coupling.transitions,
+        scope.recorder,
+        PhaseBlockRequest(
           run = run,
           attemptCount = rejection.attempt,
           reason = reason,
@@ -104,7 +104,7 @@ object PhaseAttemptOnce {
           failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
           payload = BlockAndPersistPayload(childNeverLaunched = true),
         ),
-  )
+      )
     }.getOrElse { secondary ->
       rejection.addSuppressed(secondary)
       when (secondary) {

@@ -8,7 +8,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
-
 /**
  * Read-only progress and attempt facts for one run; mutation routes through [FeatureTaskRuntimeRunTransitionOwner].
  */
@@ -27,9 +26,7 @@ internal interface FeatureTaskRuntimeRunProgressObservations {
 
   val phasesRequiringDurableGateInvalidation: Set<String>
 
-
   fun explicitResumeStart(requestedPhaseId: String): ExplicitResumeStart
-
 
   val completedPhaseIds: List<String>
 
@@ -43,14 +40,7 @@ internal interface FeatureTaskRuntimeRunProgressObservations {
     currentReason: String,
   ): Boolean
 
-
-
-
-
   fun loop(loopId: String): LoopProgressObservation
-
-
-
 
   val reviewEvidenceGeneration: Int
 
@@ -58,9 +48,7 @@ internal interface FeatureTaskRuntimeRunProgressObservations {
 
   fun verdictFor(phaseId: String): FeatureTaskRuntimeVerdict
 
-
   fun spanBlockedByEntryGate(span: List<String>): Boolean
-
 }
 
 /** Run-loop phase blocking inputs that need review-pass and resume metadata. */
@@ -88,7 +76,6 @@ private class DetachedProgressObservations(
   private val captured: FeatureTaskRuntimeRunState,
 ) : FeatureTaskRuntimeProgressSnapshotAccess by captured
 
-
 internal data class PhaseProgressObservation(
   val completed: Boolean,
   val hasPriorRecord: Boolean,
@@ -104,7 +91,6 @@ internal data class LoopProgressObservation(
   val iteration: Int,
   val liveClaimed: Boolean,
 )
-
 
 internal fun detachedOutput(output: FeatureTaskRuntimePhaseOutput): FeatureTaskRuntimePhaseOutput =
   output.copy(

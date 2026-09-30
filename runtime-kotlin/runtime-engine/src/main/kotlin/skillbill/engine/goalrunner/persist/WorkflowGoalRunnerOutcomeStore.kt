@@ -393,12 +393,12 @@ internal class WorkflowGoalRunnerBlockBridge(
     require(workflowId == expectedIdentity.workflowId) { "Operator resume identity belongs to another workflow." }
     return database.transaction { unitOfWork ->
       blockWrites.reopenBlockedPhaseForOperatorResume(
-    unitOfWork,
-    preferredPhaseId,
-    reason,
-    expectedIdentity,
-    expectedExecutionPlan,
-  )
+        unitOfWork,
+        preferredPhaseId,
+        reason,
+        expectedIdentity,
+        expectedExecutionPlan,
+      )
     }
   }
 }

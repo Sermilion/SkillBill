@@ -29,7 +29,10 @@ internal interface PhasePullRequestLaunchHookContext : PhaseAttemptLaunchHookCon
 }
 
 internal interface PhaseCommitLaunchHookContext : PhaseAttemptLaunchHookContext {
-  fun recoverCommitUpstream(run: PhaseRun, upstreamReceipt: (String, Int) -> FeatureTaskRuntimePhaseOutput?)
+  fun recoverCommitUpstream(
+    run: PhaseRun,
+    upstreamReceipt: (String, Int) -> FeatureTaskRuntimePhaseOutput?,
+  )
 }
 
 internal interface PhaseStepOutputContext : PhaseAttemptEnvironment {
@@ -42,10 +45,13 @@ internal interface PhaseStepOutputContext : PhaseAttemptEnvironment {
 }
 
 internal interface PhaseAuditOutputContext : PhaseStepOutputContext {
+  val operatorReopened: Boolean
+
   fun settleAuditRound(
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+    progressRejection: String?,
   ): AttemptResult?
 }
 

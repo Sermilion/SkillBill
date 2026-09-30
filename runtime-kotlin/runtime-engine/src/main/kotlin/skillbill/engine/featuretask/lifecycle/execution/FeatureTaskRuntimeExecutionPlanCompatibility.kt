@@ -91,12 +91,16 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
   }
 
   private fun decodePlan(encoded: ByteArray): ResolvedPhaseExecutionPlan =
-    try { codec.decode(encoded) }
-    catch (error: InvalidFeatureTaskRuntimeExecutionPlanSchemaError) {
+    try {
+      codec.decode(encoded)
+    } catch (error: InvalidFeatureTaskRuntimeExecutionPlanSchemaError) {
       throw CorruptFeatureTaskRuntimeExecutionPlanError().also { it.addSuppressed(error) }
     }
 
-  private fun requireSupportedStrategies(plan: ResolvedPhaseExecutionPlan, definition: SkeletonDefinition) {
+  private fun requireSupportedStrategies(
+    plan: ResolvedPhaseExecutionPlan,
+    definition: SkeletonDefinition,
+  ) {
     plan.selectedStrategies.forEach { identity ->
       if (!strategies.registry.contains(identity.slot, identity.strategyId)) {
         throw UnsupportedFeatureTaskRuntimeExecutionPlanError()

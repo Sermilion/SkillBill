@@ -228,7 +228,8 @@ internal class WorkflowGoalRunnerBlockWrites(
       sessionId = "",
     )
   }
-  private fun missingPlan(): Nothing = throw MissingFeatureTaskRuntimeExecutionPlanError()
-  private fun incompatiblePlan(): Nothing = throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
 
+  private fun missingPlan(): Nothing = throw MissingFeatureTaskRuntimeExecutionPlanError()
+
+  private fun incompatiblePlan(): Nothing = throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
 }

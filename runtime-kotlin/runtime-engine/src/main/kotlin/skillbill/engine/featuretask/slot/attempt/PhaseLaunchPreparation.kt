@@ -397,9 +397,15 @@ object PhaseLaunchPreparation {
             resolution = null,
             executedTier = RuntimeOwnedReviewMode.execute(run.request.runInvariants.codeReviewMode),
           )
-      val checkpointArgs = RepositoryCheckpointResolutionArgs(
-        recorder, goalContinuationRecorder, phaseGates, coupledRunTransitions, session, run,
-      )
+      val checkpointArgs =
+        RepositoryCheckpointResolutionArgs(
+          recorder,
+          goalContinuationRecorder,
+          phaseGates,
+          coupledRunTransitions,
+          session,
+          run,
+        )
       return FeatureTaskRuntimePhasePromptComposeInputs(
         issueKey = run.request.issueKey,
         briefing = briefing,

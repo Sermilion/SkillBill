@@ -60,8 +60,9 @@ class FeatureTaskRuntimeExecutionEntry(
     val matchingTraversal =
       request.transitionsOverride == null || request.transitionsOverride == accepted.plan.traversal
     val selectedDepth = request.goalContinuation?.validationDepth ?: ValidationDepth.DEFAULT
-    val matchingSettings = request.timeout?.inWholeMilliseconds == accepted.effectiveInputs.phaseTimeoutMillis &&
-      selectedDepth == accepted.effectiveInputs.validationDepth
+    val matchingSettings =
+      request.timeout?.inWholeMilliseconds == accepted.effectiveInputs.phaseTimeoutMillis &&
+        selectedDepth == accepted.effectiveInputs.validationDepth
     if (!matchingTraversal || !matchingSettings ||
       request.runInvariants.codeReviewMode.toRuntimeSelection() != accepted.plan.reviewSelection
     ) {

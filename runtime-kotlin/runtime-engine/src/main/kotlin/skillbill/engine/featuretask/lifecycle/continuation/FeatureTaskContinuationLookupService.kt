@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.lifecycle.continuation
 
-import skillbill.ports.workflow.model.WorkflowStateRecord
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
@@ -23,6 +22,7 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.FeatureTaskWorkflowCandidate
+import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
@@ -36,7 +36,6 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 private const val ADMISSION_WORKFLOW_LABEL_LIMIT = 128
-
 
 @Inject
 class FeatureTaskContinuationLookupService(
@@ -122,8 +121,9 @@ class FeatureTaskContinuationLookupService(
   ) {
     val unchangedRoute =
       identity == candidate.executionIdentity && identity.governedSpecPath == candidate.governedSpecPath
-    val matchingRow = identity.workflowId == row.workflowId && identity.mode == candidate.mode &&
-      identity.normalizedIssueKey == row.issueKey?.trim()?.uppercase()
+    val matchingRow =
+      identity.workflowId == row.workflowId && identity.mode == candidate.mode &&
+        identity.normalizedIssueKey == row.issueKey?.trim()?.uppercase()
     if (!unchangedRoute || !matchingRow) {
       throw InvalidFeatureTaskExecutionIdentitySchemaError(candidate.workflowId, "identity changed before claim")
     }

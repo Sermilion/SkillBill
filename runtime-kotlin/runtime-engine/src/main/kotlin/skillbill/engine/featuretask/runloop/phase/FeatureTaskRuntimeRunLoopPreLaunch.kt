@@ -28,9 +28,8 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
     state: FeatureTaskRuntimeProgressSnapshotAccess,
     observability: FeatureTaskRuntimeRunObservability,
   ): PhaseOutcome? {
-    context.strategyFor(
-      run.phaseId,
-    ).stepHooks(run.phaseId).reconcileBeforeLaunch(run, context.launchHookContext(run, context.strategyFor(run.phaseId).stepHooks(run.phaseId)))
+    val hooks = context.strategyFor(run.phaseId).stepHooks(run.phaseId)
+    hooks.reconcileBeforeLaunch(run, context.launchHookContext(run, hooks))
     val persisted =
       state.phase(run.phaseId).blockedReason?.let { persistedReason ->
         val nextIteration = state.phase(run.phaseId).nextIteration
@@ -62,11 +61,11 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
       }
     return missing?.let {
       persistPreLaunchBlock(
-    context,
-    run,
-    observability,
-    it,
-  )
+        context,
+        run,
+        observability,
+        it,
+      )
     }
   }
 
@@ -79,11 +78,11 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
     val durable = preLaunch.durableRecord
     val coupling = context.settlementCoupling()
     return FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersist(
-    coupling.progress,
-    coupling.transitions,
-    context.recorder,
-    context.goalContinuationRecorder,
-    BlockAndPersistArgs(
+      coupling.progress,
+      coupling.transitions,
+      context.recorder,
+      context.goalContinuationRecorder,
+      BlockAndPersistArgs(
         run = run,
         attemptCount = preLaunch.attemptCount,
         reason = preLaunch.reason,
@@ -103,7 +102,7 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
             rejectedOutput = durable?.rejectedOutput,
           ),
       ),
-  )
+    )
   }
 
   internal fun missingRequiredUpstream(

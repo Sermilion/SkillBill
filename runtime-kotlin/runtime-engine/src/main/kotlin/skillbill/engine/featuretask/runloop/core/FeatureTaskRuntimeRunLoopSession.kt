@@ -74,7 +74,6 @@ internal class FeatureTaskRuntimeRunLoopSession(
   override val recordRejectionSettlementPending: Boolean
     get() = recordRejectionSettlementPendingStorage
 
-
   override val blocked: FeatureTaskRuntimeRunReport.Blocked?
     get() = (terminalOutcome as? FeatureTaskRuntimeRunTerminalOutcome.Blocked)?.report?.detached()
 

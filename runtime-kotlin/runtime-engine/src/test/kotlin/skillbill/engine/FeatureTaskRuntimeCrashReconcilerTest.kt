@@ -1,7 +1,5 @@
 package skillbill.engine
 
-import skillbill.workflow.engine.model.DurableWorkflowArtifacts
-import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
@@ -20,6 +18,7 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessIdentity
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.taskruntime.model.isConfirmedDead
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.engine.WorkflowEngine
@@ -462,170 +461,175 @@ class FeatureTaskRuntimeCrashReconcilerTest {
 
       override fun pause(durationMillis: Long) = Unit
     }
-  private fun seedRepositoryCandidate(database: DatabaseSessionFactory, workflowId: String, repositoryRoot: Path, policy: Pair<String, Long?>) {
-        database.selfManagedWrite { unit ->
-          val inputs = execution.inputsFor(policy.first, policy.second)
-          val identity =
-            execution.identity(workflowId).copy(
-              repositoryIdentity =
-                FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX +
-                  repositoryRoot.toAbsolutePath().normalize(),
-            )
-          execution.seed(
-            unit.workflowStates,
-            workflowId,
-            descriptor = execution.descriptor(inputs),
-            executionIdentity = identity,
-          )
-          val row = requireNotNull(unit.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
-          unit.workflowStates.saveFeatureTaskWorkflow(
-            row.copy(workflowStatus = WorkflowStatus.RUNNING.wireValue),
-            RUNTIME,
-          )
-          val updatedRow = requireNotNull(unit.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
-          unit.workflowStates.acquireFeatureTaskRuntimeWorker(
-            FeatureTaskRuntimeWorkerOwnership(
-              workflowId = workflowId,
-              generation = 1,
-              ownerToken = "$workflowId-owner",
-              hostIdentity = "host",
-              bootIdentity = "boot",
-              pid = 4242,
-              processBirthToken = "birth-4242",
-              leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE,
-              heartbeatAt = "2000-01-01T00:00:00Z",
-              expiresAt = "2000-01-01T00:00:30Z",
-              phaseId = "implement",
-              phaseAttempt = 1,
-            ),
-            updatedRow.updatedAt,
-          )
-        }
+
+  private fun seedRepositoryCandidate(
+    database: DatabaseSessionFactory,
+    workflowId: String,
+    repositoryRoot: Path,
+    policy: Pair<String, Long?>,
+  ) {
+    database.selfManagedWrite { unit ->
+      val inputs = execution.inputsFor(policy.first, policy.second)
+      val identity =
+        execution.identity(workflowId).copy(
+          repositoryIdentity =
+            FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX +
+              repositoryRoot.toAbsolutePath().normalize(),
+        )
+      execution.seed(
+        unit.workflowStates,
+        workflowId,
+        descriptor = execution.descriptor(inputs),
+        executionIdentity = identity,
+      )
+      val row = requireNotNull(unit.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
+      unit.workflowStates.saveFeatureTaskWorkflow(
+        row.copy(workflowStatus = WorkflowStatus.RUNNING.wireValue),
+        RUNTIME,
+      )
+      val updatedRow = requireNotNull(unit.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
+      unit.workflowStates.acquireFeatureTaskRuntimeWorker(
+        FeatureTaskRuntimeWorkerOwnership(
+          workflowId = workflowId,
+          generation = 1,
+          ownerToken = "$workflowId-owner",
+          hostIdentity = "host",
+          bootIdentity = "boot",
+          pid = 4242,
+          processBirthToken = "birth-4242",
+          leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE,
+          heartbeatAt = "2000-01-01T00:00:00Z",
+          expiresAt = "2000-01-01T00:00:30Z",
+          phaseId = "implement",
+          phaseAttempt = 1,
+        ),
+        updatedRow.updatedAt,
+      )
+    }
   }
 
   private fun seedCrashPreservationRow(database: DatabaseSessionFactory) {
-      database.selfManagedWrite { unit ->
-        val row = requireNotNull(unit.workflowStates.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME))
-        val recordTime = "2026-09-28T12:00:00Z"
-        val retainedRecords =
-          mapOf(
-            "preplan" to
-              FeatureTaskRuntimePhaseRecord(
-                phaseId = "preplan",
-                status = WorkflowStepStatus.COMPLETED,
-                attemptCount = 2,
-                startedAt = recordTime,
-                finishedAt = recordTime,
-                resolvedAgentId = "agent-preplan",
-                outputArtifact = "retained-preplan-output",
-              ).asWorkflowArtifactEntry(),
-            "commit_push" to
-              FeatureTaskRuntimePhaseRecord(
-                phaseId = "commit_push",
-                status = WorkflowStepStatus.COMPLETED,
-                attemptCount = 1,
-                startedAt = recordTime,
-                finishedAt = recordTime,
-                resolvedAgentId = "runtime",
-                outputArtifact = "retained-commit-push-evidence",
-              ).asWorkflowArtifactEntry(),
-          )
-        val artifacts = crashPreservationArtifacts(row, retainedRecords, recordTime)
-        val steps =
-          WorkflowEngine().openRecord(
-            WorkflowFamily.TASK_RUNTIME.definition,
-            WORKFLOW_ID,
-            row.sessionId.orEmpty(),
-            "commit_push",
-          ).toRecord().stepsJson
-        unit.workflowStates.saveFeatureTaskWorkflow(
-          row.copy(
-            workflowStatus = WorkflowStatus.RUNNING.wireValue,
-            currentStepId = "commit_push",
-            stepsJson = steps,
-            artifactsJson = JsonCodec.mapToJsonString(artifacts),
-          ),
-          RUNTIME,
+    database.selfManagedWrite { unit ->
+      val row = requireNotNull(unit.workflowStates.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME))
+      val recordTime = "2026-09-28T12:00:00Z"
+      val retainedRecords =
+        mapOf(
+          "preplan" to
+            FeatureTaskRuntimePhaseRecord(
+              phaseId = "preplan",
+              status = WorkflowStepStatus.COMPLETED,
+              attemptCount = 2,
+              startedAt = recordTime,
+              finishedAt = recordTime,
+              resolvedAgentId = "agent-preplan",
+              outputArtifact = "retained-preplan-output",
+            ).asWorkflowArtifactEntry(),
+          "commit_push" to
+            FeatureTaskRuntimePhaseRecord(
+              phaseId = "commit_push",
+              status = WorkflowStepStatus.COMPLETED,
+              attemptCount = 1,
+              startedAt = recordTime,
+              finishedAt = recordTime,
+              resolvedAgentId = "runtime",
+              outputArtifact = "retained-commit-push-evidence",
+            ).asWorkflowArtifactEntry(),
         )
-        val updatedRow = requireNotNull(unit.workflowStates.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME))
-        unit.workflowStates.acquireFeatureTaskRuntimeWorker(
-          FeatureTaskRuntimeWorkerOwnership(
-            workflowId = WORKFLOW_ID,
-            generation = 1,
-            ownerToken = "owner-token-crashed01",
-            hostIdentity = "host",
-            bootIdentity = "boot",
-            pid = 4242,
-            processBirthToken = "birth-4242",
-            leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE,
-            heartbeatAt = "2000-01-01T00:00:00Z",
-            expiresAt = "2000-01-01T00:00:30Z",
-            phaseId = "commit_push",
-            phaseAttempt = 1,
-          ),
-          updatedRow.updatedAt,
-        )
-      }
-
+      val artifacts = crashPreservationArtifacts(row, retainedRecords, recordTime)
+      val steps =
+        WorkflowEngine().openRecord(
+          WorkflowFamily.TASK_RUNTIME.definition,
+          WORKFLOW_ID,
+          row.sessionId.orEmpty(),
+          "commit_push",
+        ).toRecord().stepsJson
+      unit.workflowStates.saveFeatureTaskWorkflow(
+        row.copy(
+          workflowStatus = WorkflowStatus.RUNNING.wireValue,
+          currentStepId = "commit_push",
+          stepsJson = steps,
+          artifactsJson = JsonCodec.mapToJsonString(artifacts),
+        ),
+        RUNTIME,
+      )
+      val updatedRow = requireNotNull(unit.workflowStates.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME))
+      unit.workflowStates.acquireFeatureTaskRuntimeWorker(
+        FeatureTaskRuntimeWorkerOwnership(
+          workflowId = WORKFLOW_ID,
+          generation = 1,
+          ownerToken = "owner-token-crashed01",
+          hostIdentity = "host",
+          bootIdentity = "boot",
+          pid = 4242,
+          processBirthToken = "birth-4242",
+          leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE,
+          heartbeatAt = "2000-01-01T00:00:00Z",
+          expiresAt = "2000-01-01T00:00:30Z",
+          phaseId = "commit_push",
+          phaseAttempt = 1,
+        ),
+        updatedRow.updatedAt,
+      )
+    }
   }
 
-  private fun crashPreservationArtifacts(row: WorkflowStateRecord, retainedRecords: Map<String, Any?>, recordTime: String): DurableWorkflowArtifacts {
-        return row.toSnapshot().artifacts +
-            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
-              execution.validator.read(
-                execution.encoded(execution.inputsFor(null, 45_000)),
-                "crash recovery preservation test",
-              ),
-            ) +
-            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(retainedRecords) +
-            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.entry(
+  private fun crashPreservationArtifacts(
+    row: WorkflowStateRecord,
+    retainedRecords: Map<String, Any?>,
+    recordTime: String,
+  ): Map<String, Any?> {
+    return row.toSnapshot().artifacts +
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
+        execution.validator.read(
+          execution.encoded(execution.inputsFor(null, 45_000)),
+          "crash recovery preservation test",
+        ),
+      ) +
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(retainedRecords) +
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.entry(
+        mapOf(
+          "contract_version" to FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION,
+          "checkpoints" to
+            listOf(
               mapOf(
-                "contract_version" to FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION,
-                "checkpoints" to
-                  listOf(
-                    mapOf(
-                      "sequence_number" to 1,
-                      "issue_key" to "SKILL-384",
-                      "subtask_id" to "2",
-                      "checkpoint_ref" to featureTaskRuntimeCheckpointRefName("SKILL-384", "2", 1),
-                      "branch" to "feat/SKILL-384",
-                      "phase_id" to "implement",
-                      "generation" to 1,
-                      "owned_path_digest" to "a".repeat(64),
-                      "owned_path_count" to 1,
-                      "commit_sha" to "b".repeat(40),
-                      "recorded_at" to recordTime,
-                    ),
-                  ),
+                "sequence_number" to 1,
+                "issue_key" to "SKILL-384",
+                "subtask_id" to "2",
+                "checkpoint_ref" to featureTaskRuntimeCheckpointRefName("SKILL-384", "2", 1),
+                "branch" to "feat/SKILL-384",
+                "phase_id" to "implement",
+                "generation" to 1,
+                "owned_path_digest" to "a".repeat(64),
+                "owned_path_count" to 1,
+                "commit_sha" to "b".repeat(40),
+                "recorded_at" to recordTime,
               ),
-            )
-
+            ),
+        ),
+      )
   }
 
   private fun changedGateDescriptor(): Map<String, Any?> {
     return execution.descriptor().toMutableMap().apply {
-        val policies =
-          (get(Keys.EFFECTIVE_POLICIES) as List<*>).map {
-            requireNotNull(JsonCodec.anyToStringAnyMap(it))
-          }.map { policy ->
-            if (policy[Keys.ID] == "gate-commands") policy + (Keys.SEMANTIC_DIGEST to "0".repeat(64)) else policy
-          }
-        put(Keys.EFFECTIVE_POLICIES, policies)
-      }
-
+      val policies =
+        (get(Keys.EFFECTIVE_POLICIES) as List<*>).map {
+          requireNotNull(JsonCodec.anyToStringAnyMap(it))
+        }.map { policy ->
+          if (policy[Keys.ID] == "gate-commands") policy + (Keys.SEMANTIC_DIGEST to "0".repeat(64)) else policy
+        }
+      put(Keys.EFFECTIVE_POLICIES, policies)
+    }
   }
 
   private fun incompatibleStrategyDescriptor(): Map<String, Any?> {
     return execution.descriptor().toMutableMap().apply {
-        val strategies =
-          (get(Keys.SELECTED_STRATEGIES) as List<*>).map {
-            requireNotNull(JsonCodec.anyToStringAnyMap(it))
-          }.mapIndexed { index, strategy ->
-            if (index == 0) strategy + (Keys.SEMANTIC_REVISION to 99) else strategy
-          }
-        put(Keys.SELECTED_STRATEGIES, strategies)
-      }
-
+      val strategies =
+        (get(Keys.SELECTED_STRATEGIES) as List<*>).map {
+          requireNotNull(JsonCodec.anyToStringAnyMap(it))
+        }.mapIndexed { index, strategy ->
+          if (index == 0) strategy + (Keys.SEMANTIC_REVISION to 99) else strategy
+        }
+      put(Keys.SELECTED_STRATEGIES, strategies)
+    }
   }
-
 }

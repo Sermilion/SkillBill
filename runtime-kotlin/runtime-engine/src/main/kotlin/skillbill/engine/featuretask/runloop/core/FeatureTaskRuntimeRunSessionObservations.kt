@@ -19,7 +19,6 @@ internal interface FeatureTaskRuntimeRunSessionObservations {
 
   val recordRejectionSettlementPending: Boolean
 
-
   val blocked: FeatureTaskRuntimeRunReport.Blocked?
 
   val paused: FeatureTaskRuntimeRunReport.Paused?

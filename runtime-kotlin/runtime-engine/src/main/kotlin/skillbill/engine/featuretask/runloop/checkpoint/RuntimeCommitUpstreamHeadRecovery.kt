@@ -1,9 +1,5 @@
 package skillbill.engine.featuretask.runloop.checkpoint
 
-import skillbill.contracts.JsonCodec
-import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeMeasuredFactKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
@@ -14,8 +10,6 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-
 
 internal object RuntimeCommitUpstreamHeadRecovery {
   fun reconcileBeforeLaunch(
@@ -97,5 +91,4 @@ internal object RuntimeCommitUpstreamHeadRecovery {
       )
     }
   }
-
 }

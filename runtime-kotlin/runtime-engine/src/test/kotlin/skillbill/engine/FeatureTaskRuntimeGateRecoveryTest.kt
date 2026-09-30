@@ -1,14 +1,13 @@
 package skillbill.engine
 
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import kotlin.test.assertIs
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
@@ -19,6 +18,7 @@ import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -60,15 +60,7 @@ class FeatureTaskRuntimeGateRecoveryTest {
             val beforeCheckpoints = harness.recorder.loadCheckpointIdentities(WORKFLOW_ID)
             val head = branch.gitOperations.headCommitShaValue
 
-            if (finalizationStatus == "completed") {
-              val result = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request))
-              assertTrue(result.blockedReason.contains("Terminal workflows"))
-            } else {
-              val error = assertFailsWith<InvalidFeatureTaskRuntimePhaseOutputSchemaError> {
-                harness.runner.run(harness.request)
-              }
-              assertEquals(phase, error.sourceLabel)
-            }
+            assertRecoveryRefused(harness, phase, finalizationStatus)
             val afterWorkflow =
               harness.database.read {
                 it.workflowStates.get(
@@ -92,6 +84,23 @@ class FeatureTaskRuntimeGateRecoveryTest {
           }
         }
       }
+    }
+  }
+
+  private fun assertRecoveryRefused(
+    harness: TelemetryRunnerHarness,
+    phase: String,
+    finalizationStatus: String,
+  ) {
+    if (finalizationStatus == "completed") {
+      val result = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request))
+      assertTrue(result.blockedReason.contains("Terminal workflows"))
+    } else {
+      val error =
+        assertFailsWith<InvalidFeatureTaskRuntimePhaseOutputSchemaError> {
+          harness.runner.run(harness.request)
+        }
+      assertEquals(phase, error.sourceLabel)
     }
   }
 
@@ -138,28 +147,30 @@ class FeatureTaskRuntimeGateRecoveryTest {
       }
     return JsonCodec.mapToJsonString(envelope + ("produced_outputs" to (produced + (key to invalid))))
   }
-  private fun seedGateCheckpointAndLedger(recorder: FeatureTaskRuntimePhaseRecorder, phase: String) {
-            assertTrue(
-              recorder.appendLedgerEntry(
-                FeatureTaskRuntimePhaseLedgerRequest(
-                  WORKFLOW_ID,
-                  FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
-                  phase,
-                  3,
-                  "claude",
-                ),
-              ),
-            )
-            assertTrue(
-              recorder.appendCheckpointIdentity(
-                AppendCheckpointIdentityArgs(
-                  workflowId = WORKFLOW_ID, issueKey = RUNNER_TEST_ISSUE_KEY, subtaskId = "1",
-                  branch = "feat/SKILL-384-gates", phaseId = phase, loopId = null, generation = 0,
-                  parentSha = "b".repeat(40), ownedPaths = listOf("src/Foo.kt"), commitSha = "a".repeat(40),
-                ),
-              ),
-            )
 
+  private fun seedGateCheckpointAndLedger(
+    recorder: FeatureTaskRuntimePhaseRecorder,
+    phase: String,
+  ) {
+    assertTrue(
+      recorder.appendLedgerEntry(
+        FeatureTaskRuntimePhaseLedgerRequest(
+          WORKFLOW_ID,
+          FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
+          phase,
+          3,
+          "claude",
+        ),
+      ),
+    )
+    assertTrue(
+      recorder.appendCheckpointIdentity(
+        AppendCheckpointIdentityArgs(
+          workflowId = WORKFLOW_ID, issueKey = RUNNER_TEST_ISSUE_KEY, subtaskId = "1",
+          branch = "feat/SKILL-384-gates", phaseId = phase, loopId = null, generation = 0,
+          parentSha = "b".repeat(40), ownedPaths = listOf("src/Foo.kt"), commitSha = "a".repeat(40),
+        ),
+      ),
+    )
   }
-
 }

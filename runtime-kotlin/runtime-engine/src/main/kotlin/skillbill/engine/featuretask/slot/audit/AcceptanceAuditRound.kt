@@ -1,12 +1,12 @@
 package skillbill.engine.featuretask.slot.audit
 
-import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
+import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseAuditOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
@@ -20,9 +20,11 @@ import skillbill.workflow.taskruntime.feature.FeatureTaskRuntimeAuditRemainingAc
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeAuditRemainingAcResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal object AcceptanceAuditRound : PhaseStepHooks {
-    override val contextKind = PhaseStepHookContextKind.AUDIT
+  override val contextKind = PhaseStepHookContextKind.AUDIT
+
   override fun completionRejection(
     run: PhaseRun,
     context: PhaseStepOutputContext,
@@ -46,11 +48,37 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ): AttemptResult? =
-    (
+  ): AttemptResult? {
+    val auditContext =
       context as? PhaseAuditOutputContext
         ?: error("Audit settlement requires the accepted audit output context.")
-    ).settleAuditRound(capture, attested, outputMap)
+    val progressRejection = progressRejection(auditContext, capture, outputMap)
+    return auditContext.settleAuditRound(capture, attested, outputMap, progressRejection)
+  }
+
+  private fun progressRejection(
+    context: PhaseAuditOutputContext,
+    capture: ValidatedOutputCapture,
+    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
+  ): String? {
+    val finalResponse = auditProseValue(outputMap)
+    if (FeatureTaskRuntimeAuditRemainingAcInterpretation.interpret(finalResponse) !is
+        FeatureTaskRuntimeAuditRemainingAcResult.RemainingCriteriaText
+    ) {
+      return null
+    }
+    val priorOutput = context.progress.phase(capture.run.phaseId).output?.normalizedOutput?.envelopeWireMap()
+    val repaired =
+      context.progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX).hasPriorRecord ||
+        context.progress.loop(FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_REPAIR_LOOP_ID).iteration > 0
+    return AcceptanceAuditProgress.rejectionReason(
+      criteria = context.request.runInvariants.acceptanceCriteria,
+      text = finalResponse.orEmpty(),
+      priorText = auditProseValue(priorOutput),
+      repaired = repaired,
+      operatorReopened = context.operatorReopened,
+    )
+  }
 
   override fun acceptedOutput(
     context: PhaseStepOutputContext,

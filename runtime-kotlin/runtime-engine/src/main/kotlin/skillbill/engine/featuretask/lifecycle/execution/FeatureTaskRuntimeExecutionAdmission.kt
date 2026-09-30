@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
-import skillbill.ports.workflow.model.WorkflowStateRecord
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
@@ -16,6 +15,7 @@ import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaErr
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.WorkflowStateRepository
+import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
@@ -30,7 +30,6 @@ import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 private const val ADMISSION_WORKFLOW_LABEL_LIMIT = 128
-
 
 @Inject
 class FeatureTaskRuntimeExecutionAdmission(
@@ -89,8 +88,9 @@ class FeatureTaskRuntimeExecutionAdmission(
     workflowId: String,
     expected: FeatureTaskExecutionIdentity?,
   ) {
-    val matchingRow = identity.workflowId == workflowId && identity.mode == FeatureTaskWorkflowMode.RUNTIME &&
-      identity.normalizedIssueKey == row.issueKey?.trim()?.uppercase()
+    val matchingRow =
+      identity.workflowId == workflowId && identity.mode == FeatureTaskWorkflowMode.RUNTIME &&
+        identity.normalizedIssueKey == row.issueKey?.trim()?.uppercase()
     val matchingExpected = expected == null || identity == expected
     if (!matchingRow || !matchingExpected) {
       throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "execution identity changed")

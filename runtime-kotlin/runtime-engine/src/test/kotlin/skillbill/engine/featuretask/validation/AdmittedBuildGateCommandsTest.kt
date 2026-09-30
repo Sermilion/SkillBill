@@ -1,16 +1,16 @@
 package skillbill.engine.featuretask.validation
 
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
-import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.engine.ExecutionPlanAdmissionFixture
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
@@ -89,6 +89,7 @@ class AdmittedBuildGateCommandsTest {
       root.toFile().deleteRecursively()
     }
   }
+
   private fun admitGate(
     database: DatabaseSessionFactory,
     execution: ExecutionPlanAdmissionFixture,
@@ -96,30 +97,29 @@ class AdmittedBuildGateCommandsTest {
     inputs: EffectiveGatePolicyInputs,
     descriptor: Map<String, Any?>,
   ) = database.transaction { unit ->
-          val row =
-            WorkflowEngine().openRecord(
-              WorkflowFamily.TASK_RUNTIME.definition,
-              request.workflowId,
-              "session",
-              "build",
-            ).toRecord().copy(issueKey = request.issueKey)
-          unit.workflowStates.saveFeatureTaskWorkflow(
-            row.copy(
-              artifactsJson =
-                JsonCodec.mapToJsonString(
-                  row.toSnapshot().artifacts +
-                    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
-                      descriptor,
-                    ),
-                ),
-            ),
-            FeatureTaskWorkflowMode.RUNTIME,
-          )
-          unit.workflowStates.saveFeatureTaskExecutionIdentity(
-            execution.identity(request.workflowId, request.issueKey)
-              .copy(routeScope = FeatureTaskRouteScope.GOAL_CHILD),
-          )
-          execution.admission.admit(unit.workflowStates, request.workflowId, inputs)
-        }
-
+    val row =
+      WorkflowEngine().openRecord(
+        WorkflowFamily.TASK_RUNTIME.definition,
+        request.workflowId,
+        "session",
+        "build",
+      ).toRecord().copy(issueKey = request.issueKey)
+    unit.workflowStates.saveFeatureTaskWorkflow(
+      row.copy(
+        artifactsJson =
+          JsonCodec.mapToJsonString(
+            row.toSnapshot().artifacts +
+              DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
+                descriptor,
+              ),
+          ),
+      ),
+      FeatureTaskWorkflowMode.RUNTIME,
+    )
+    unit.workflowStates.saveFeatureTaskExecutionIdentity(
+      execution.identity(request.workflowId, request.issueKey)
+        .copy(routeScope = FeatureTaskRouteScope.GOAL_CHILD),
+    )
+    execution.admission.admit(unit.workflowStates, request.workflowId, inputs)
+  }
 }

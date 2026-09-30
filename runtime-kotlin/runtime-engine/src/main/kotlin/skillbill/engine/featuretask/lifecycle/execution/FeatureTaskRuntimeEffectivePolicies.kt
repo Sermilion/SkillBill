@@ -15,7 +15,6 @@ import java.security.MessageDigest
 
 private const val EFFECTIVE_POLICY_CANONICAL_BYTE_LIMIT = 65536
 
-
 internal object FeatureTaskRuntimeEffectivePolicies {
   fun resolve(
     plan: ResolvedPhaseExecutionPlan,

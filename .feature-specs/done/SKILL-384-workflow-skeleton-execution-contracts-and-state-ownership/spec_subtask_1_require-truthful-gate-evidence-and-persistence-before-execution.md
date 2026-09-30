@@ -1,6 +1,6 @@
 # SKILL-384 Subtask 1 - Require truthful gate evidence and persistence before execution
 
-Parent spec: [.feature-specs/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership/spec.md](spec.md)
 Issue key: SKILL-384
 
 ## Scope

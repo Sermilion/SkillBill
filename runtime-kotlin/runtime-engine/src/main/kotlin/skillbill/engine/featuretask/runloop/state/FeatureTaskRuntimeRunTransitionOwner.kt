@@ -66,7 +66,6 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     }
   }
 
-
   fun establishResumedReentryPair(pending: PendingReentry?) {
     session.transitionReentryPair(pending, pending)
   }
@@ -177,8 +176,6 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     recorder.recordRequiredPhaseStart(phaseState)
     reserveReviewPassAfterPhaseState(phaseState.reviewPassNumber)
   }
-
-
 
   fun applyPersistedPhaseCompletion(
     output: FeatureTaskRuntimePhaseOutput,
@@ -325,9 +322,6 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
     }
     progress.clearBranchSetupBlock(phaseId)
   }
-
-
-
 }
 
 internal val PhaseRunState.coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner

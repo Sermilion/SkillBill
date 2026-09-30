@@ -6,6 +6,22 @@ The audit directive regression and prompt snapshots cover this exception. The 25
 
 # featuretask runtime boundary decisions
 
+## [2026-09-30] Bind strategy authority to the accepted step
+Context: SKILL-384 subtask 3 found that broad step state, attempt environments and helper paths let strategies reach unrelated mutable state or bypass launch prerequisites.
+Decision: Issue private bindings for the accepted run, selected strategy and policy. Strategies and hooks declare their role; bindings expose detached observations and only that role's operations, then close after dispatch. Keep runners, gate cycles and finalization machinery behind their runtime owners.
+Reason: Renaming a context or adding getters preserves its authority. Bound operations enforce plan membership and required persistence while keeping the shared loop and existing review, fan-out and gate owners.
+Alternatives considered: Another workflow framework or a role interface per helper would add forwarding layers without proving narrower authority.
+
+## [2026-09-30] Keep coupled transitions with one run and session owner
+Context: Progress, session, retries, completion and review invalidation must agree during live execution and durable reconstruction.
+Decision: Store one FeatureTaskRuntimeRunTransitionOwner per run, paired with one session. Use named transitions; acknowledge durable completion and review tombstones before matching in-memory changes, and required starts before attempt accounting.
+Reason: Independent field writers can leave partial transitions or spend retry budget before persistence succeeds. One owner preserves the existing durable and ephemeral policies, checkpoint ownership and audit briefing exception without a new durable format or semantic reset.
+
+## [2026-09-30] Pair transitive capability checks with runtime admission
+Context: Strategy authority can leak through helper constructors, extensions, aliases, factories or mutable observation copies even when prohibited type names disappear from entry points.
+Decision: Use a Kotlin PSI declaration graph across engine source and a typed primitive-writer inventory. Keep runtime machinery traversable, reject unresolved governed edges, and register synthetic allowed and violating cases with the architecture rule. Retain runtime binding checks and observable behavioral coverage.
+Reason: Direct type-name checks miss transitive authority. Source-level reachability checks cannot prove active-step identity or transition outcomes, so accepted-plan admission and behavioral evidence remain separate requirements.
+
 ## [2026-09-28] Bind standalone validation to its own command family
 Context: Standalone validation could dispatch build commands while reporting validation. Goal-child build and agent-driven workflow validation have different execution contracts.
 Decision: Bind SkeletonDefinition.VALIDATION to PackValidationStrategy, PHASE_VALIDATE, and validation evidence. Resolve the dominant pack's full-validation command pair with wrapper overrides; keep goal-child build on its build command pair and build receipt.
@@ -132,6 +148,7 @@ Context: F-005 documented 122 context extensions and duplicate PlanningBranch ru
 Decision: Record before/after extension counts and retained broad inputs in `runtime-kotlin/ARCHITECTURE.md` under State Ownership; peel run-loop-only overloads; keep `runPhaseDriveLoop` and `invalidateReviewGenerationIfNeeded` as the only Drive context extensions; pass carried-forward review, gate settlement, pack routing, and checkpoint calculations through explicit arguments; retain context at validation agent-turn/fix-loop orchestration and review launch capture because those paths still coordinate the launch, activity, diagnostics, clock, transition, and session ports; remove public collaborator aliases on `FeatureTaskRuntimeRunLoop`.
 Reason: Helpers must not gain authority through a renamed all-access receiver; the loop stays the sole owner of forward drive and session transitions.
 Revisit when: a new helper needs a full context and no smaller port set can be named.
+Superseded by: Bind strategy authority to the accepted step (2026-09-30)
 
 ## [2026-09-15] Run-evidence ownership derives from the active run, not the store prefix
 Context: every path under `.skill-bill/` was runtime-private, so the whole `run-evidence` store was exempt from the owned-path inventory. This run's own artifacts never blocked, but a foreign workflow's artifact and a file forged under the same directory were swept out with them.

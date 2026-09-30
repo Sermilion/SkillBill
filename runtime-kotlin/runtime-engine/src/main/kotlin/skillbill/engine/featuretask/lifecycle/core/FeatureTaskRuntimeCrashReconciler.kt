@@ -13,8 +13,8 @@ import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaErr
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate
-import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
+import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.isConfirmedDead
 import skillbill.ports.workflow.model.toSnapshot
@@ -82,9 +82,10 @@ class FeatureTaskRuntimeCrashReconciler(
       FAULT_REASON_CLASS
     }
 
-
-  private fun readCandidateAdmission(candidate: FeatureTaskRuntimeCrashReconciliationCandidate): CrashCandidateAdmission? =
-database.read { unit ->
+  private fun readCandidateAdmission(
+    candidate: FeatureTaskRuntimeCrashReconciliationCandidate,
+  ): CrashCandidateAdmission? =
+    database.read { unit ->
       val row =
         unit.workflowStates.getFeatureTaskWorkflowAsMode(
           candidate.ownership.workflowId,
@@ -184,10 +185,11 @@ database.read { unit ->
   private fun ownsExpiredLease(
     current: FeatureTaskRuntimeWorkerOwnership,
     candidate: FeatureTaskRuntimeCrashReconciliationCandidate,
-  ): Boolean = current.ownerToken == candidate.ownership.ownerToken &&
-    current.generation == candidate.ownership.generation &&
-    current.leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE &&
-    current.expiresAtInstant.isBefore(clock.instant())
+  ): Boolean =
+    current.ownerToken == candidate.ownership.ownerToken &&
+      current.generation == candidate.ownership.generation &&
+      current.leaseState == FeatureTaskRuntimeWorkerLeaseState.ACTIVE &&
+      current.expiresAtInstant.isBefore(clock.instant())
 
   private companion object {
     const val FAULT_REASON_CLASS = "reconcile_fault"

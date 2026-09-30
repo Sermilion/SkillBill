@@ -214,78 +214,80 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
     assertEquals(read, validator.read(validator.write(payload, "boundary"), "boundary"))
   }
 
-  private fun invalidSettingCases(): Map<String, (ObjectNode) -> Unit> = linkedMapOf(
-        "unknown governed field" to { it.put("unrecognized", true) },
-        "unknown effective setting" to {
-          (
-            it.path(
-              Keys.EFFECTIVE_POLICY_SETTINGS,
-            ) as ObjectNode
-          ).put("unrecognized", true)
-        },
-        "missing validation depth" to {
-          (
-            it.path(
-              Keys.EFFECTIVE_POLICY_SETTINGS,
-            ) as ObjectNode
-          ).remove(Keys.VALIDATION_DEPTH)
-        },
-        "unsupported validation depth" to {
-          (it.path(Keys.EFFECTIVE_POLICY_SETTINGS) as ObjectNode).put(Keys.VALIDATION_DEPTH, "shallow")
-        },
-        "negative phase timeout" to {
-          (it.path(Keys.EFFECTIVE_POLICY_SETTINGS) as ObjectNode).put(Keys.PHASE_TIMEOUT_MILLIS, -1)
-        },
-        "phase timeout overflow" to {
-          (
-            it.path(
-              Keys.EFFECTIVE_POLICY_SETTINGS,
-            ) as ObjectNode
-          ).put(Keys.PHASE_TIMEOUT_MILLIS, Long.MAX_VALUE.toBigInteger().add(BigInteger.ONE))
-        },
-        "fractional phase timeout" to {
-          (it.path(Keys.EFFECTIVE_POLICY_SETTINGS) as ObjectNode).put(Keys.PHASE_TIMEOUT_MILLIS, 1.5)
-        },
-        "identifier exceeds 128 ASCII characters" to {
-          it.rows(Keys.SELECTED_STRATEGIES).objectAt(0).put(Keys.STRATEGY_ID, "a".repeat(129))
-        },
-        "non ASCII identifier" to { it.rows(Keys.SELECTED_STRATEGIES).objectAt(0).put(Keys.STRATEGY_ID, "stratégie") },
-  )
+  private fun invalidSettingCases(): Map<String, (ObjectNode) -> Unit> =
+    linkedMapOf(
+      "unknown governed field" to { it.put("unrecognized", true) },
+      "unknown effective setting" to {
+        (
+          it.path(
+            Keys.EFFECTIVE_POLICY_SETTINGS,
+          ) as ObjectNode
+        ).put("unrecognized", true)
+      },
+      "missing validation depth" to {
+        (
+          it.path(
+            Keys.EFFECTIVE_POLICY_SETTINGS,
+          ) as ObjectNode
+        ).remove(Keys.VALIDATION_DEPTH)
+      },
+      "unsupported validation depth" to {
+        (it.path(Keys.EFFECTIVE_POLICY_SETTINGS) as ObjectNode).put(Keys.VALIDATION_DEPTH, "shallow")
+      },
+      "negative phase timeout" to {
+        (it.path(Keys.EFFECTIVE_POLICY_SETTINGS) as ObjectNode).put(Keys.PHASE_TIMEOUT_MILLIS, -1)
+      },
+      "phase timeout overflow" to {
+        (
+          it.path(
+            Keys.EFFECTIVE_POLICY_SETTINGS,
+          ) as ObjectNode
+        ).put(Keys.PHASE_TIMEOUT_MILLIS, Long.MAX_VALUE.toBigInteger().add(BigInteger.ONE))
+      },
+      "fractional phase timeout" to {
+        (it.path(Keys.EFFECTIVE_POLICY_SETTINGS) as ObjectNode).put(Keys.PHASE_TIMEOUT_MILLIS, 1.5)
+      },
+      "identifier exceeds 128 ASCII characters" to {
+        it.rows(Keys.SELECTED_STRATEGIES).objectAt(0).put(Keys.STRATEGY_ID, "a".repeat(129))
+      },
+      "non ASCII identifier" to { it.rows(Keys.SELECTED_STRATEGIES).objectAt(0).put(Keys.STRATEGY_ID, "stratégie") },
+    )
 
-  private fun invalidStructureCases(): Map<String, (ObjectNode) -> Unit> = linkedMapOf(
-        "zero revision" to { (it.path(Keys.DEFINITION) as ObjectNode).put(Keys.SEMANTIC_REVISION, 0) },
-        "overflow revision" to { (it.path(Keys.DEFINITION) as ObjectNode).put(Keys.SEMANTIC_REVISION, 2147483648L) },
-        "overflow attempt cap" to {
-          it.traversal().rows(
-            Keys.BACKWARD_EDGES,
-          ).objectAt(0).put(Keys.PER_EDGE_CAP, 2147483648L)
-        },
-        "overflow warning threshold" to {
-          it.traversal().rows(Keys.BACKWARD_EDGES).objectAt(0).put(Keys.WARN_AFTER_ITERATIONS, 2147483648L)
-        },
-        "uppercase digest" to { it.rows(Keys.STEP_POLICIES).objectAt(0).put(Keys.SEMANTIC_DIGEST, "A".repeat(64)) },
-        "short digest" to { it.rows(Keys.STEP_POLICIES).objectAt(0).put(Keys.SEMANTIC_DIGEST, "a".repeat(63)) },
-        "too many strategies" to { it.repeatRow(Keys.SELECTED_STRATEGIES, 33) },
-        "too many selected steps" to { plan ->
-          val steps = plan.rows(Keys.SELECTED_STRATEGIES).objectAt(0).rows(Keys.SELECTED_STEPS)
-          steps.removeAll()
-          repeat(129) { steps.add("step-$it") }
-        },
-        "too many dispatch owners" to { it.repeatRow(Keys.DISPATCH_OWNERSHIP, 129) },
-        "too many policy descriptors" to { it.repeatRow(Keys.STEP_POLICIES, 257) },
-        "too many resume descriptors" to { it.repeatRow(Keys.RESUME_INTERPRETATIONS, 257) },
-        "too many backward edges" to { it.traversal().repeatRow(Keys.BACKWARD_EDGES, 257) },
-        "too many gates" to { it.traversal().repeatRow(Keys.ENTRY_GATES, 257) },
-        "too many successors" to { it.traversal().repeatRow(Keys.LOOP_ONLY_SUCCESSORS, 257) },
-        "ambiguous edge trigger" to { plan ->
-          val edges = plan.traversal().rows(Keys.BACKWARD_EDGES)
-          edges.add(edges.objectAt(0).deepCopy().put(Keys.LOOP_ID, "other-repair"))
-        },
-        "ambiguous loop identity" to { plan ->
-          val edges = plan.traversal().rows(Keys.BACKWARD_EDGES)
-          edges.add(edges.objectAt(0).deepCopy().put(Keys.VERDICT, "record_rejected"))
-        },
-  )
+  private fun invalidStructureCases(): Map<String, (ObjectNode) -> Unit> =
+    linkedMapOf(
+      "zero revision" to { (it.path(Keys.DEFINITION) as ObjectNode).put(Keys.SEMANTIC_REVISION, 0) },
+      "overflow revision" to { (it.path(Keys.DEFINITION) as ObjectNode).put(Keys.SEMANTIC_REVISION, 2147483648L) },
+      "overflow attempt cap" to {
+        it.traversal().rows(
+          Keys.BACKWARD_EDGES,
+        ).objectAt(0).put(Keys.PER_EDGE_CAP, 2147483648L)
+      },
+      "overflow warning threshold" to {
+        it.traversal().rows(Keys.BACKWARD_EDGES).objectAt(0).put(Keys.WARN_AFTER_ITERATIONS, 2147483648L)
+      },
+      "uppercase digest" to { it.rows(Keys.STEP_POLICIES).objectAt(0).put(Keys.SEMANTIC_DIGEST, "A".repeat(64)) },
+      "short digest" to { it.rows(Keys.STEP_POLICIES).objectAt(0).put(Keys.SEMANTIC_DIGEST, "a".repeat(63)) },
+      "too many strategies" to { it.repeatRow(Keys.SELECTED_STRATEGIES, 33) },
+      "too many selected steps" to { plan ->
+        val steps = plan.rows(Keys.SELECTED_STRATEGIES).objectAt(0).rows(Keys.SELECTED_STEPS)
+        steps.removeAll()
+        repeat(129) { steps.add("step-$it") }
+      },
+      "too many dispatch owners" to { it.repeatRow(Keys.DISPATCH_OWNERSHIP, 129) },
+      "too many policy descriptors" to { it.repeatRow(Keys.STEP_POLICIES, 257) },
+      "too many resume descriptors" to { it.repeatRow(Keys.RESUME_INTERPRETATIONS, 257) },
+      "too many backward edges" to { it.traversal().repeatRow(Keys.BACKWARD_EDGES, 257) },
+      "too many gates" to { it.traversal().repeatRow(Keys.ENTRY_GATES, 257) },
+      "too many successors" to { it.traversal().repeatRow(Keys.LOOP_ONLY_SUCCESSORS, 257) },
+      "ambiguous edge trigger" to { plan ->
+        val edges = plan.traversal().rows(Keys.BACKWARD_EDGES)
+        edges.add(edges.objectAt(0).deepCopy().put(Keys.LOOP_ID, "other-repair"))
+      },
+      "ambiguous loop identity" to { plan ->
+        val edges = plan.traversal().rows(Keys.BACKWARD_EDGES)
+        edges.add(edges.objectAt(0).deepCopy().put(Keys.VERDICT, "record_rejected"))
+      },
+    )
 
   private val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
 
@@ -334,31 +336,31 @@ class FeatureTaskRuntimeExecutionPlanCoherenceTest {
   }
 
   private fun ObjectNode.writeStrategyRows(groups: List<Pair<String, List<String>>>) {
-      val strategies = putArray(Keys.SELECTED_STRATEGIES)
-      val dispatches = putArray(Keys.DISPATCH_OWNERSHIP)
-      val policies = putArray(Keys.STEP_POLICIES)
-      val resumes = putArray(Keys.RESUME_INTERPRETATIONS)
-      groups.forEach { (slot, owned) ->
-        strategies.addObject().apply {
-          put(Keys.SLOT, slot)
-          put(Keys.STRATEGY_ID, slot)
-          put(Keys.SEMANTIC_REVISION, 1)
-          put(Keys.ENTRY_STEP, owned.first())
-          putArray(Keys.SELECTED_STEPS).also { array -> owned.forEach(array::add) }
-        }
-        owned.forEach { step ->
-          dispatches.addObject().put(Keys.STEP, step).put(Keys.SLOT, slot)
-            .put(Keys.STRATEGY_ID, slot).put(Keys.SEMANTIC_REVISION, 1)
-          policies.addObject().put(
-            Keys.STEP,
-            step,
-          ).put(Keys.IDENTITY, "policy-$step").put(Keys.SEMANTIC_DIGEST, "a".repeat(64))
-          resumes.addObject().put(
-            Keys.STEP,
-            step,
-          ).put(Keys.IDENTITY, "resume-$step").put(Keys.SEMANTIC_DIGEST, "b".repeat(64))
-        }
+    val strategies = putArray(Keys.SELECTED_STRATEGIES)
+    val dispatches = putArray(Keys.DISPATCH_OWNERSHIP)
+    val policies = putArray(Keys.STEP_POLICIES)
+    val resumes = putArray(Keys.RESUME_INTERPRETATIONS)
+    groups.forEach { (slot, owned) ->
+      strategies.addObject().apply {
+        put(Keys.SLOT, slot)
+        put(Keys.STRATEGY_ID, slot)
+        put(Keys.SEMANTIC_REVISION, 1)
+        put(Keys.ENTRY_STEP, owned.first())
+        putArray(Keys.SELECTED_STEPS).also { array -> owned.forEach(array::add) }
       }
+      owned.forEach { step ->
+        dispatches.addObject().put(Keys.STEP, step).put(Keys.SLOT, slot)
+          .put(Keys.STRATEGY_ID, slot).put(Keys.SEMANTIC_REVISION, 1)
+        policies.addObject().put(
+          Keys.STEP,
+          step,
+        ).put(Keys.IDENTITY, "policy-$step").put(Keys.SEMANTIC_DIGEST, "a".repeat(64))
+        resumes.addObject().put(
+          Keys.STEP,
+          step,
+        ).put(Keys.IDENTITY, "resume-$step").put(Keys.SEMANTIC_DIGEST, "b".repeat(64))
+      }
+    }
   }
 
   private fun ObjectNode.traversal(): ObjectNode = path(Keys.TRAVERSAL) as ObjectNode
