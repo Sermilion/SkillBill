@@ -36,14 +36,15 @@ internal object AcceptanceAuditPromptSections {
           "An enforcement guard or architecture check whose implementation a criterion requires counts as " +
           "production behavior even under a test source set; its example and regression cases stay excluded.",
       valueContent =
-        "value carries the remaining acceptance criteria only. Emit an explicit empty list `[]` when all " +
-          "production requirements are met. Exclude test-only criteria and test-related parts of mixed criteria. " +
+        "value carries the remaining acceptance criteria only. When all production requirements are met, " +
+          "value is exactly `[]` with no text before or after it, and the satisfied rationale goes in " +
+          "summary. Exclude test-only criteria and test-related parts of mixed criteria. " +
           "Otherwise name each remaining criterion, the missing production behavior, and relevant production paths. " +
           "A nonempty value routes to audit_implement_fix. Do not repair gaps in audit. Only an empty list " +
           "allows downstream review. Omit verdict unless the list is empty, then use satisfied. Every audit " +
           "checks the complete planned criterion list against the current tree. " +
           "Start each open finding with its briefing criterion ID, one finding per bullet or JSON entry. " +
-          "Original spec labels are accepted aliases. Keep satisfied summaries outside value. For capability " +
+          "Original spec labels are accepted aliases. For capability " +
           "gaps, identify the actual consumer, helper or cast path, and reachable forbidden operation. A cast " +
           "inside an authorized review consumer alone does not prove a non-review access path. " +
           "Another automatic repair requires fewer open criterion IDs than before repair; equal or larger " +

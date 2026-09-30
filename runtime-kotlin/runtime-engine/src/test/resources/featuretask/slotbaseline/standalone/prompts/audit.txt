@@ -104,9 +104,10 @@ The tools may be deferred in this session: load them first with ToolSearch
 - Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
   phase_id "audit", attempt 1, and value: one prose string carrying everything
   the next phase needs (what this phase produced, deviations from the briefing, what was
-  deliberately left to later phases). When a value content section follows, it describes what the
-  next phase expects inside value; carry that content as prose or as JSON text, whichever is clearer.
-  The runtime does not validate the shape of value. Optional summary: one sentence.
+  deliberately left to later phases). When a value content section follows, it defines value and
+  overrides this description: carry its content as prose or as JSON text, whichever is clearer, and
+  emit any exact literal it names with nothing added. Otherwise the runtime does not validate the
+  shape of value. Optional summary: one sentence.
 - Cannot finish: call `mcp__skill-bill__feature_task_phase_block` with the same workflow_id, phase_id, and
   attempt, a reason string naming the obstacle, and failure_disposition one of "retryable",
   "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
@@ -115,7 +116,7 @@ Copy workflow_id, phase_id, and attempt exactly as written here. After the tool 
 final object below only if both tools stay unavailable after loading them.
 
 ## Value content
-value carries the remaining acceptance criteria only. Emit an explicit empty list `[]` when all production requirements are met. Exclude test-only criteria and test-related parts of mixed criteria. Otherwise name each remaining criterion, the missing production behavior, and relevant production paths. A nonempty value routes to audit_implement_fix. Do not repair gaps in audit. Only an empty list allows downstream review. Omit verdict unless the list is empty, then use satisfied. Every audit checks the complete planned criterion list against the current tree. Start each open finding with its briefing criterion ID, one finding per bullet or JSON entry. Original spec labels are accepted aliases. Keep satisfied summaries outside value. For capability gaps, identify the actual consumer, helper or cast path, and reachable forbidden operation. A cast inside an authorized review consumer alone does not prove a non-review access path. Another automatic repair requires fewer open criterion IDs than before repair; equal or larger counts block for operator intervention, even when the IDs or descriptions changed.
+value carries the remaining acceptance criteria only. When all production requirements are met, value is exactly `[]` with no text before or after it, and the satisfied rationale goes in summary. Exclude test-only criteria and test-related parts of mixed criteria. Otherwise name each remaining criterion, the missing production behavior, and relevant production paths. A nonempty value routes to audit_implement_fix. Do not repair gaps in audit. Only an empty list allows downstream review. Omit verdict unless the list is empty, then use satisfied. Every audit checks the complete planned criterion list against the current tree. Start each open finding with its briefing criterion ID, one finding per bullet or JSON entry. Original spec labels are accepted aliases. For capability gaps, identify the actual consumer, helper or cast path, and reachable forbidden operation. A cast inside an authorized review consumer alone does not prove a non-review access path. Another automatic repair requires fewer open criterion IDs than before repair; equal or larger counts block for operator intervention, even when the IDs or descriptions changed.
 
 ## Fallback final output (only when the settlement tools are unavailable)
 End your response with exactly one JSON object as the last thing you emit. Prefer a raw
@@ -123,7 +124,8 @@ object with nothing after it; a single ```json fenced block is also accepted. Th
 stamps the contract version and phase id itself. Fields:
 - "status": one of "completed", "blocked", "failed"
 - "summary": one sentence describing what this phase did
-- "value": non-blank prose carrying everything the next phase needs
+- "value": non-blank prose carrying everything the next phase needs, or exactly what a value
+  content section defines
 - "verdict": optional; set it only when this briefing names a verdict for this phase
 - "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
   "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".

@@ -31,7 +31,8 @@ private fun minimalFinalObject(fallback: Boolean): String {
     stamps the contract version and phase id itself. Fields:
     - "status": one of "completed", "blocked", "failed"
     - "summary": one sentence describing what this phase did
-    - "value": non-blank prose carrying everything the next phase needs
+    - "value": non-blank prose carrying everything the next phase needs, or exactly what a value
+      content section defines
     - "verdict": optional; set it only when this briefing names a verdict for this phase
     - "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
       "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".

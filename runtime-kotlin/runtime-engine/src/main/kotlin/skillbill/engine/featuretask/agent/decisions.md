@@ -1,3 +1,10 @@
+## [2026-09-30] A phase's value content section overrides the generic prose value
+
+Context: The shared settlement directive asked every phase for one prose value carrying everything the next phase needs, while audit's value content section requires exactly `[]` when satisfied. SKILL-386 subtask 1's audit settled `[]` followed by a satisfied summary, and the single-session audit blocked as invalid output.
+Decision: The settlement directive and fallback contract defer to a value content section, including any exact literal it names. Audit states that a satisfied value is exactly `[]` with no surrounding text and that the rationale goes in summary. The runtime keeps its exact `[]` interpretation.
+Reason: The conflict was in the prompt. Accepting trailing prose after `[]` would let text after the literal hide an open criterion.
+Alternatives considered: Leniently reading a leading `[]` line as satisfied when verdict is satisfied, rejected as weakening the audit guard.
+
 ## [2026-09-30] Admission routes the gate pack by tracked files when the diff has no concrete owner
 
 Context: Goal-child admission freezes the gate pack from working-tree paths before implementation. A clean tree refused creation and a spec-only diff admitted the gateless review fallback, so SKILL-386 subtask 1 blocked at build with Kotlin changes committed.
