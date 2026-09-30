@@ -8,7 +8,7 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeCommitPushPa
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeCommitPushReceipt
-import skillbill.engine.featuretask.runloop.finalization.RuntimeCommitCycle
+import skillbill.engine.featuretask.runloop.finalization.FeatureTaskRuntimeRunLoopCommitCycle
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
@@ -26,7 +26,8 @@ class FeatureTaskRuntimeCommitPushCycleTest {
     val accepted =
       realFeatureTaskRuntimePhaseOutputValidator
         .validatePhaseOutput(
-          RuntimeCommitCycle.runtimeOwnedCommitPushOutput(
+          FeatureTaskRuntimeRunLoopCommitCycle.runtimeOwnedCommitPushOutput(
+          "commit_push",
             FeatureTaskRuntimeCommitPushReceipt(commitSha = sha, branch = "feat/x", baseBranch = "main", pushed = true),
           ),
           sourceLabel = "commit_push",

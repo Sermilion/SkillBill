@@ -71,6 +71,7 @@ class FeatureTaskRuntimePhaseOutputSchemaValidator : FeatureTaskRuntimePhaseOutp
           FeatureTaskRuntimePhaseOutputValidationResult.Rejected(
             code = FeatureTaskRuntimePhaseOutputFailureCode.SCHEMA_INVALID,
             reason = "Validation receipt failed its execution evidence contract.",
+            diagnosticReason = error.message.orEmpty(),
             payloadFreeReason = "Validation receipt failed its execution evidence contract.",
           )
         } catch (error: InvalidFeatureTaskRuntimeBuildReceiptSchemaError) {

@@ -4,7 +4,6 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
-import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunEvidenceOwnership
@@ -35,7 +34,7 @@ internal data class FeatureTaskRuntimeRunLoopContext(
   val runState: PhaseRunState,
   val strategies: PhaseStrategyLookup,
 ) : PhaseAttemptRunLoopCollaborators {
-  override val progress get() = runState.coupledProgress().progressSnapshot()
+  override val progress get() = runState.coupledProgress().progressSnapshot
 
   internal val state: FeatureTaskRuntimeRunState get() = runState.coupledProgress()
   override val session get() = runState.coupledSession().sessionSnapshot()
@@ -215,7 +214,7 @@ class FeatureTaskRuntimeRunLoop internal constructor(
       issueKey = context.request.issueKey,
       workflowId = context.request.workflowId,
       featureSize = context.request.runInvariants.featureSize.name,
-      completedPhaseIds = context.state.completedPhaseIds(),
+      completedPhaseIds = context.state.completedPhaseIds,
       resolvedBranch = branch,
     )
   }

@@ -16,20 +16,21 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhase
 import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-private const val HEAD_SETTLED_HISTORY_SUMMARY = "Boundary history settled from repository HEAD."
 
 internal object RuntimeCommitUpstreamHeadRecovery {
   fun reconcileBeforeLaunch(
     run: PhaseRun,
     context: PhaseAttemptLaunchRuntimeContext,
+    upstreamReceipt: (String, Int) -> FeatureTaskRuntimePhaseOutput?,
   ) {
-    reconcile(run, context)
+    reconcile(run, context, upstreamReceipt)
     clearUpstreamPersistedBlockIfRecovered(run, context)
   }
 
   private fun reconcile(
     run: PhaseRun,
     context: PhaseAttemptLaunchRuntimeContext,
+    upstreamReceipt: (String, Int) -> FeatureTaskRuntimePhaseOutput?,
   ) {
     val headSha =
       context.phaseGates.gitOperations
@@ -42,7 +43,7 @@ internal object RuntimeCommitUpstreamHeadRecovery {
     val missing = missingUpstream(run.declaration, context.progress.outputs()) ?: return
     if (missing.isEmpty()) return
     missing.forEach { phaseId ->
-      reconcilePhase(phaseId, headSha, context)
+      reconcilePhase(phaseId, headSha, context, upstreamReceipt)
     }
   }
 
@@ -50,7 +51,7 @@ internal object RuntimeCommitUpstreamHeadRecovery {
     run: PhaseRun,
     context: PhaseAttemptLaunchRuntimeContext,
   ) {
-    val reason = context.progress.persistedBlockedReason(run.phaseId) ?: return
+    val reason = context.progress.phase(run.phaseId).blockedReason ?: return
     if (!reason.contains("requires upstream output", ignoreCase = true)) return
     if (missingUpstream(run.declaration, context.progress.outputs())?.isNotEmpty() == true) return
     context.coupledRunTransitions.clearPersistedBlockAfterUpstreamRecovery(run.phaseId)
@@ -60,17 +61,17 @@ internal object RuntimeCommitUpstreamHeadRecovery {
     phaseId: String,
     headSha: String,
     context: PhaseAttemptLaunchRuntimeContext,
+    upstreamReceipt: (String, Int) -> FeatureTaskRuntimePhaseOutput?,
   ) {
     val state = context.progress
-    val record = state.recordFor(phaseId)
+    val record = state.phase(phaseId).record
     val attemptCount = record?.attemptCount?.coerceAtLeast(1) ?: 1
     val output =
       phaseId
-        .takeIf(::supportsHeadFallback)
-        ?.takeIf { state.outputFor(it) == null }
+        .takeIf { state.phase(it).output == null }
         ?.takeIf {
           record == null || record.status.workflowStepStatus() == WorkflowStepStatus.COMPLETED
-        }?.let { syntheticOutput(it, attemptCount) }
+        }?.let { upstreamReceipt(it, attemptCount) }
     val accepted =
       output?.let {
         runCatching {
@@ -97,41 +98,4 @@ internal object RuntimeCommitUpstreamHeadRecovery {
     }
   }
 
-  private fun supportsHeadFallback(phaseId: String): Boolean =
-    phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY
-
-  private fun syntheticOutput(
-    phaseId: String,
-    attemptCount: Int,
-  ): FeatureTaskRuntimePhaseOutput? =
-    when (phaseId) {
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY -> {
-        val payload =
-          JsonCodec.mapToJsonString(
-            mapOf(
-              SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-              SharedPayloadKeys.PHASE_ID to FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
-              SharedPayloadKeys.STATUS to "completed",
-              SharedPayloadKeys.SUMMARY to HEAD_SETTLED_HISTORY_SUMMARY,
-              SharedPayloadKeys.PRODUCED_OUTPUTS to
-                mapOf(
-                  SharedPayloadKeys.VALUE to HEAD_SETTLED_HISTORY_SUMMARY,
-                  FeatureTaskRuntimeMeasuredFactKeys.MEASURED_FACTS to
-                    mapOf(
-                      FeatureTaskRuntimeMeasuredFactKeys.CHANGED_PATHS to FeatureTaskRuntimeMeasuredFactKeys.UNKNOWN,
-                      FeatureTaskRuntimeMeasuredFactKeys.HISTORY_WRITTEN to FeatureTaskRuntimeMeasuredFactKeys.UNKNOWN,
-                      FeatureTaskRuntimeMeasuredFactKeys.DECISIONS_RECORDED to
-                        FeatureTaskRuntimeMeasuredFactKeys.UNKNOWN,
-                    ),
-                ),
-            ),
-          )
-        FeatureTaskRuntimePhaseOutput(
-          phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
-          iteration = attemptCount.coerceAtLeast(1),
-          payload = payload,
-        )
-      }
-      else -> null
-    }
 }

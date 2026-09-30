@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.pullrequest
 
+import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.lifecycle.branch.requirePublishableBranch
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
@@ -7,7 +8,6 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
-import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhasePullRequestContext
 import skillbill.engine.featuretask.slot.state.PhasePullRequestStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.engine.featuretask.slot.withMeasuredFacts
@@ -32,7 +33,6 @@ import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 
 class PrDescriptionStrategy(
-  override val runner: PhaseRunner,
   private val pullRequestIdentityLookup: PullRequestIdentityLookup,
   private val readinessGate: PullRequestReadinessGate,
   private val templateFiles: PullRequestTemplateFiles,
@@ -55,6 +55,7 @@ class PrDescriptionStrategy(
 
   private val measuredHooks =
     object : PhaseStepHooks {
+    override val contextKind = PhaseStepHookContextKind.PULL_REQUEST
       override fun beforeAgentLaunch(
         run: PhaseRun,
         context: PhaseAttemptLaunchHookContext,

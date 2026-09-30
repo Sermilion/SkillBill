@@ -8,12 +8,12 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_BUILD_RECEI
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
+import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
-import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
-import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleRequest
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
@@ -43,6 +43,8 @@ import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import skillbill.workflow.taskruntime.validation.unparseableGateFailureMessage
 
+private const val PACK_LABEL_LIMIT = 120
+private const val GATE_FAILURE_DETAIL_LIMIT = 512
 private const val BUILD_PHASE_STATUS_COMPLETED = "completed"
 
 private data class BuildGateCycleState(
@@ -58,34 +60,41 @@ class FeatureTaskRuntimeBuildGateCoordinator(
   private val repoLocalConfig: RepoLocalConfigPort,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  fun execute(cycle: ValidationGateCycleRequest, onGateRunCount: (Int) -> Unit = {}): ValidationGateCycleResult = when (
-    val resolution = cycle.request.admittedExecution?.effectiveInputs?.let { inputs ->
-      check(inputs.commandFamily == cycle.commandFamily) { "Gate command family differs from admission." }
-      inputs.declaration?.let { ValidationGateResolution.Declared(requireNotNull(inputs.packSlug), it) }
-        ?: ValidationGateResolution.Absent(inputs.packSlug)
-    } ?: resolver.resolve(cycle.changedPaths)
-  ) {
-    is ValidationGateResolution.Absent ->
-      terminalBlockedResult(
-        "Required ${cycle.commandFamily.name.lowercase()} gate declaration is absent" +
-          (resolution.routedPackSlug?.let { " from dominant pack '${it.take(120)}'." } ?: "."),
-        failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
-      )
-    is ValidationGateResolution.Incompatible -> terminalBlockedResult(resolution.reason.take(512))
-    is ValidationGateResolution.Declared -> {
-      val declaration = resolution.declaration
-      if (requiredCommandsMissing(declaration, cycle.commandFamily)) {
+  fun execute(
+    cycle: ValidationGateCycleRequest,
+    onGateRunCount: (Int) -> Unit = {},
+  ): ValidationGateCycleResult =
+    when (
+      val resolution =
+        cycle.request.admittedExecution?.effectiveInputs?.let { inputs ->
+          check(inputs.commandFamily == cycle.commandFamily) { "Gate command family differs from admission." }
+          inputs.declaration?.let { ValidationGateResolution.Declared(requireNotNull(inputs.packSlug), it) }
+            ?: ValidationGateResolution.Absent(inputs.packSlug)
+        } ?: resolver.resolve(cycle.changedPaths)
+    ) {
+      is ValidationGateResolution.Absent ->
         terminalBlockedResult(
-          "Pack '${resolution.packSlug.take(
-            120,
-          )}' is missing a required ${cycle.commandFamily.name.lowercase()} command.",
+          "Required ${cycle.commandFamily.name.lowercase()} gate declaration is absent" +
+            (resolution.routedPackSlug?.let { " from dominant pack '${it.take(PACK_LABEL_LIMIT)}'." } ?: "."),
           failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
         )
-      } else {
-        checkAndRepair(cycle, declaration, onGateRunCount)
+      is ValidationGateResolution.Incompatible -> terminalBlockedResult(
+        resolution.reason.take(GATE_FAILURE_DETAIL_LIMIT),
+      )
+      is ValidationGateResolution.Declared -> {
+        val declaration = resolution.declaration
+        if (requiredCommandsMissing(declaration, cycle.commandFamily)) {
+          terminalBlockedResult(
+            "Pack '${resolution.packSlug.take(
+              PACK_LABEL_LIMIT,
+            )}' is missing a required ${cycle.commandFamily.name.lowercase()} command.",
+            failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+          )
+        } else {
+          checkAndRepair(cycle, declaration, onGateRunCount)
+        }
       }
     }
-  }
 
   private fun checkAndRepair(
     cycle: ValidationGateCycleRequest,
@@ -106,8 +115,9 @@ class FeatureTaskRuntimeBuildGateCoordinator(
       )
     }
 
-    val discoveryCheckpoint = cycle.repositoryCheckpointProvider()
-      ?: return terminalBlockedResult("Required gate could not resolve the repository checkpoint before discovery.")
+    val discoveryCheckpoint =
+      cycle.repositoryCheckpointProvider()
+        ?: return terminalBlockedResult("Required gate could not resolve the repository checkpoint before discovery.")
     val discovery = runGate(cycle, declaration, ValidationGateCyclePhase.INITIAL_DISCOVERY)
     val discoveryFindings = buildFindingsForRepairFromResult(discovery)
     recordGateProgress(
@@ -116,50 +126,53 @@ class FeatureTaskRuntimeBuildGateCoordinator(
       command = discovery.command,
       checkpoint = discoveryCheckpoint,
       write =
-      ValidationGateProgressWrite(
-        repairWindowPhase = repairWindowPhaseFor(discoveryFindings),
-        remainingFindings = null,
-        completeFindings = discoveryFindings,
-        repairsUsed = 0,
-        capturedTriagePlan = null,
-      ),
+        ValidationGateProgressWrite(
+          repairWindowPhase = repairWindowPhaseFor(discoveryFindings),
+          remainingFindings = null,
+          completeFindings = discoveryFindings,
+          repairsUsed = 0,
+          capturedTriagePlan = null,
+        ),
     )
     if (discoveryFindings.isEmpty()) {
       return completedResult(cycle, declaration, measurements)
     }
     val triage = runBuildTriageIfNeeded(cycle, discoveryFindings)
-    if (triage is ValidationGateTriageResult.Stopped) return ValidationGateCycleResult.Terminal(triage.outcome)
+    return if (triage is ValidationGateTriageResult.Stopped) ValidationGateCycleResult.Terminal(triage.outcome)
+    else {
     val triagePlan = (triage as? ValidationGateTriageResult.Captured)?.validationRepairPlan
     if (triagePlan != null) {
       persistProgress(
         state = state,
         write =
-        ValidationGateProgressWrite(
-          repairWindowPhase = FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN,
-          remainingFindings = null,
-          completeFindings = discoveryFindings,
-          repairsUsed = 0,
-          capturedTriagePlan = triagePlan,
-        ),
+          ValidationGateProgressWrite(
+            repairWindowPhase = FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN,
+            remainingFindings = null,
+            completeFindings = discoveryFindings,
+            repairsUsed = 0,
+            capturedTriagePlan = triagePlan,
+          ),
       )
     }
-    return repairLoop(
+    repairLoop(
       state = state,
       declaration = declaration,
       openFindings = discoveryFindings,
       initialRepairsUsed = 0,
       triagePlan = triagePlan,
     )
+    }
   }
 
   private fun runBuildTriageIfNeeded(
     cycle: ValidationGateCycleRequest,
     findings: List<ValidationGateFinding>,
-  ): ValidationGateTriageResult = if (requiresUnparseableGateTriage(findings)) {
-    cycle.agentTriageLauncher.launch(ValidationFindingSetProjection(findings))
-  } else {
-    ValidationGateTriageResult.Empty
-  }
+  ): ValidationGateTriageResult =
+    if (requiresUnparseableGateTriage(findings)) {
+      cycle.agentTriageLauncher.launch(ValidationFindingSetProjection(findings))
+    } else {
+      ValidationGateTriageResult.Empty
+    }
 
   private fun repairLoop(
     state: BuildGateCycleState,
@@ -180,12 +193,12 @@ class FeatureTaskRuntimeBuildGateCoordinator(
         persistProgress(
           state = state,
           write =
-          ValidationGateProgressWrite.findingsOpen(
-            completeFindings = currentFindings,
-            repairsUsed = repairsUsed,
-            capturedTriagePlan = triagePlan,
-            remainingFindings = projection,
-          ),
+            ValidationGateProgressWrite.findingsOpen(
+              completeFindings = currentFindings,
+              repairsUsed = repairsUsed,
+              capturedTriagePlan = triagePlan,
+              remainingFindings = projection,
+            ),
         )
         return terminalBlockedResult(
           "Build gate still reports ${currentFindings.size} finding(s) after $MAX_REPAIR_TURNS repair " +
@@ -197,11 +210,11 @@ class FeatureTaskRuntimeBuildGateCoordinator(
       persistProgress(
         state = state,
         write =
-        ValidationGateProgressWrite.findingsOpen(
-          completeFindings = currentFindings,
-          repairsUsed = repairsUsed,
-          capturedTriagePlan = triagePlan,
-        ),
+          ValidationGateProgressWrite.findingsOpen(
+            completeFindings = currentFindings,
+            repairsUsed = repairsUsed,
+            capturedTriagePlan = triagePlan,
+          ),
       )
       val terminal =
         when (
@@ -249,24 +262,25 @@ class FeatureTaskRuntimeBuildGateCoordinator(
       command = verify.command,
       checkpoint = verificationCheckpoint,
       write =
-      ValidationGateProgressWrite(
-        repairWindowPhase = repairWindowPhaseFor(verifyFindings),
-        remainingFindings = null,
-        completeFindings = verifyFindings,
-        repairsUsed = repairsUsed,
-        capturedTriagePlan = triagePlan,
-      ),
+        ValidationGateProgressWrite(
+          repairWindowPhase = repairWindowPhaseFor(verifyFindings),
+          remainingFindings = null,
+          completeFindings = verifyFindings,
+          repairsUsed = repairsUsed,
+          capturedTriagePlan = triagePlan,
+        ),
     )
     return verifyFindings
   }
 
   private fun repairWindowPhaseFor(
     findings: List<ValidationGateFinding>,
-  ): FeatureTaskRuntimeValidationGateRepairWindowPhase = if (findings.isEmpty()) {
-    FeatureTaskRuntimeValidationGateRepairWindowPhase.NONE
-  } else {
-    FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN
-  }
+  ): FeatureTaskRuntimeValidationGateRepairWindowPhase =
+    if (findings.isEmpty()) {
+      FeatureTaskRuntimeValidationGateRepairWindowPhase.NONE
+    } else {
+      FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN
+    }
 
   private fun wrapperFor(cycle: ValidationGateCycleRequest): String? {
     val admitted = cycle.request.admittedExecution
@@ -308,10 +322,12 @@ class FeatureTaskRuntimeBuildGateCoordinator(
     declaration: ValidationGateDeclaration,
     measurements: List<FeatureTaskRuntimeValidationGateRunRecord>,
   ): ValidationGateCycleResult {
-    val terminal = measurements.lastOrNull()
-      ?: return terminalBlockedResult("Required gate has no terminal command record.")
-    val checkpoint = terminal.repositoryCheckpoint
-      ?: return terminalBlockedResult("Required gate has no terminal repository checkpoint.")
+    val terminal =
+      measurements.lastOrNull()
+        ?: return terminalBlockedResult("Required gate has no terminal command record.")
+    val checkpoint =
+      terminal.repositoryCheckpoint
+        ?: return terminalBlockedResult("Required gate has no terminal repository checkpoint.")
     if (checkpoint != cycle.repositoryCheckpointProvider()) {
       return terminalBlockedResult("Repository checkpoint changed after the required gate command.")
     }
@@ -327,10 +343,11 @@ class FeatureTaskRuntimeBuildGateCoordinator(
         gateArgv(declaration, cycle.commandFamily, terminalPhase),
         wrapper,
       ).joinToString(" ")
-    if (terminal.command != requiredCommand || terminal.exitCode != 0 ||
-      terminal.outcome != ValidationGateRunOutcome.PASSED) {
-      return terminalBlockedResult("Terminal required gate command evidence does not match its configured invocation.")
-    }
+    return if (terminal.command != requiredCommand || terminal.exitCode != 0 ||
+      terminal.outcome != ValidationGateRunOutcome.PASSED
+    ) {
+      terminalBlockedResult("Terminal required gate command evidence does not match its configured invocation.")
+    } else {
     val output =
       when (cycle.commandFamily) {
         ValidationGateCommandFamily.BUILD ->
@@ -344,7 +361,8 @@ class FeatureTaskRuntimeBuildGateCoordinator(
           )
         }
       }
-    return ValidationGateCycleResult.Terminal(ValidationGateCycleTerminalOutcome.Completed(output))
+    ValidationGateCycleResult.Terminal(ValidationGateCycleTerminalOutcome.Completed(output))
+    }
   }
 
   private fun recordGateProgress(
@@ -369,7 +387,10 @@ class FeatureTaskRuntimeBuildGateCoordinator(
     persistProgress(state = state, write = write)
   }
 
-  private fun persistProgress(state: BuildGateCycleState, write: ValidationGateProgressWrite) {
+  private fun persistProgress(
+    state: BuildGateCycleState,
+    write: ValidationGateProgressWrite,
+  ) {
     val progress =
       FeatureTaskRuntimeValidationGateProgress(
         gateRunCount = state.measurements.size,
@@ -451,12 +472,12 @@ private fun buildFindingsForRepairFromResult(result: ValidationGateRunResult): L
           module = "<build-gate>",
           ruleOrTestId = "unparseable_gate_failure",
           message =
-          unparseableGateFailureMessage(
-            gateLabel = "Build gate",
-            outcome = result.outcome.wireValue,
-            exitCode = result.exitCode,
-            stdout = result.stdout,
-          ),
+            unparseableGateFailureMessage(
+              gateLabel = "Build gate",
+              outcome = result.outcome.wireValue,
+              exitCode = result.exitCode,
+              stdout = result.stdout,
+            ),
           location = null,
         ),
       )
@@ -476,18 +497,20 @@ private fun decodeBuildPersistedFindings(raw: List<Map<String, String?>>): List<
 private fun requiredCommandsMissing(
   declaration: ValidationGateDeclaration,
   family: ValidationGateCommandFamily,
-): Boolean = when (family) {
-  ValidationGateCommandFamily.BUILD ->
-    declaration.buildCommand.isNullOrEmpty() || declaration.cacheBypassingBuildCommand.isNullOrEmpty()
-  ValidationGateCommandFamily.VALIDATION ->
-    declaration.collectAllFullGateCommand.isEmpty() || declaration.cacheBypassingCollectAllFullGateCommand.isEmpty()
-}
+): Boolean =
+  when (family) {
+    ValidationGateCommandFamily.BUILD ->
+      declaration.buildCommand.isNullOrEmpty() || declaration.cacheBypassingBuildCommand.isNullOrEmpty()
+    ValidationGateCommandFamily.VALIDATION ->
+      declaration.collectAllFullGateCommand.isEmpty() || declaration.cacheBypassingCollectAllFullGateCommand.isEmpty()
+  }
 
 private fun gateArgv(
   declaration: ValidationGateDeclaration,
   family: ValidationGateCommandFamily,
   phase: ValidationGateCyclePhase,
-): List<String> = when (family) {
-  ValidationGateCommandFamily.BUILD -> buildGateArgv(declaration, phase)
-  ValidationGateCommandFamily.VALIDATION -> validationGateArgv(declaration, phase)
-}
+): List<String> =
+  when (family) {
+    ValidationGateCommandFamily.BUILD -> buildGateArgv(declaration, phase)
+    ValidationGateCommandFamily.VALIDATION -> validationGateArgv(declaration, phase)
+  }

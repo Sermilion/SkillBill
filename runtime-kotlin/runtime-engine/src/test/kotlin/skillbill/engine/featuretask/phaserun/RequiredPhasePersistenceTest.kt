@@ -15,7 +15,7 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContex
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopPlanningBranch
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.state.featureTaskRuntimeRunLoopStepBinding
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptOnce
@@ -64,8 +64,8 @@ class RequiredPhasePersistenceTest {
         val records = rejectingRecords(context.recorder, rejection)
         val strategy =
           when (phase) {
-            "build" -> PackBuildStrategy(context.runState.strategyFor("validate").runner)
-            "validate" -> PackValidationStrategy(context.runState.strategyFor("validate").runner)
+            "build" -> PackBuildStrategy()
+            "validate" -> PackValidationStrategy()
             else -> context.runState.strategyFor(phase)
           }
         val intercepted = context.withRecords(records, selectedStrategy = strategy)
@@ -113,6 +113,30 @@ class RequiredPhasePersistenceTest {
   }
 
   @Test
+  fun rejectedReviewBriefingBlocksBeforeReviewLaunch() {
+    withCapturedContext { context, launcherCount, gateCount, assertNoGitEffects ->
+      val branch = requireNotNull(context.recorder.loadResolvedBranch(WORKFLOW_ID))
+      val rejection = RequiredPhaseWriteRejected(RequiredPhaseWriteKind.BRIEFING, WORKFLOW_ID, "review", 1)
+      val records =
+        object : PhaseRunRecords by rejectingRecords(context.recorder, rejection) {
+          override fun loadResolvedBranch(workflowId: String) = branch.copy(reviewBaseSha = "0".repeat(40))
+        }
+      val intercepted = context.withRecords(records)
+      val run = phaseRun(intercepted, "review")
+
+      val outcome = intercepted.runState.strategyFor("review").runStep(run, intercepted.runState.step(run))
+
+      assertEquals(rejection.message, outcome.blockedReason)
+      val terminal = assertNotNull(context.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("review"))
+      assertEquals(WorkflowStepStatus.BLOCKED, terminal.status)
+      assertEquals(rejection.message, terminal.blockedReason)
+      assertEquals(0, launcherCount())
+      assertEquals(0, gateCount())
+      assertNoGitEffects()
+    }
+  }
+
+  @Test
   fun secondaryTerminalAndDiagnosticFailuresDoNotReplaceTheAttributedRejection() {
     withCapturedContext { context, launcherCount, _, assertNoGitEffects ->
       val rejection = RequiredPhaseWriteRejected(RequiredPhaseWriteKind.START, WORKFLOW_ID, "preplan", 1)
@@ -122,7 +146,7 @@ class RequiredPhasePersistenceTest {
           override fun warning(
             message: String,
             error: Throwable?,
-          ) = throw IllegalStateException("diagnostics unavailable")
+          ) = error("diagnostics unavailable")
 
           override fun error(
             message: String,
@@ -339,7 +363,7 @@ class RequiredPhasePersistenceTest {
         override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
           stepBinding.authorizeCoordinatorDispatch(run)
           stepBinding.beginStepBinding(run)
-          return featureTaskRuntimeRunLoopStepBinding(
+          return FeatureTaskRuntimeRunLoopStepBindings.create(
             skillbill.engine.featuretask.slot.attempt.phaseAttemptCollaborationScope(
               PhaseAttemptRunHost(run.request, this, run.phaseId, this),
             ),

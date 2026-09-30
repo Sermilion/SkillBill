@@ -53,7 +53,7 @@ internal object VerifyFindingsEvidence {
         SpecIntentProjectionResolveRequest(
           repoRoot = run.request.repoRoot.toFileLocation(),
           explicitSpecPath = reviewSpecPath(run)?.toFileLocation(),
-          branchName = state.resolvedBranchName() ?: "HEAD",
+          branchName = state.resolvedBranchName ?: "HEAD",
           changedPaths = emptyList(),
           budget = ReviewContextBudgetPolicy.DEFAULT,
         ),
@@ -155,7 +155,7 @@ internal object VerifyFindingsEvidence {
     val reviewOutput = state.completedStepEnvelope(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) ?: return
     val passNumber =
       (state as? PhaseReviewPassState)
-        ?.completedReviewPassCount()
+        ?.completedReviewPassCount
         ?.takeIf { it > 0 }
         ?: 1
     val recordedVerdicts = state.recordedFindingVerdicts(reviewOutput)

@@ -4,7 +4,10 @@ import skillbill.ports.goalrunner.runner.model.GoalRunnerChildExecutionPlanAdmis
 
 val DIRECT_GOAL_RUNNER_EXECUTION_COORDINATOR: GoalRunnerExecutionCoordinator =
   object : GoalRunnerExecutionCoordinator {
-    override fun <T> runOwned(parentWorkflowId: String, block: () -> T): T = block()
+    override fun <T> runOwned(
+      parentWorkflowId: String,
+      block: () -> T,
+    ): T = block()
 
     override fun <T> runOwnedWithChildAdmission(
       parentWorkflowId: String,

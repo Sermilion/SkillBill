@@ -46,10 +46,13 @@ fun FeatureTaskRuntimeRunner.executePreparedRun(
       runRequest,
       diagnostics,
     )
-  val executionPlan = requireNotNull(runRequest.admittedExecution).let { admitted ->
-    check(admitted.identity.workflowId == runRequest.workflowId) { "Execution admission belongs to another workflow." }
-    admitted.plan
-  }
+  val executionPlan =
+    requireNotNull(runRequest.admittedExecution).let { admitted ->
+      check(admitted.identity.workflowId == runRequest.workflowId) {
+        "Execution admission belongs to another workflow."
+      }
+      admitted.plan
+    }
   val state = createExecutePreparedRunState(runRequest, executionPlan)
   val telemetryContext =
     buildExecutePreparedRunTelemetryContext(

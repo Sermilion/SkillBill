@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.attempt
 
+import skillbill.engine.featuretask.runloop.core.RepositoryCheckpointResolutionArgs
 import skillbill.engine.featuretask.runloop.attempt.RunLoopSettlementCoupling
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptContext
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
@@ -32,14 +33,14 @@ internal fun PhaseQualityGateCycleContext.gateCheckpoint(run: PhaseRun): String?
 
 internal fun PhaseQualityGateCycleContext.gateChangedPaths(run: PhaseRun): List<String> =
   FeatureTaskRuntimeRunLoopValidationScope
-    .validationChangedPaths(
-      phaseGates,
-      recorder,
-      goalContinuationRecorder,
-      coupledRunTransitions,
-      session,
-      run,
-    ).orEmpty()
+    .validationChangedPaths(RepositoryCheckpointResolutionArgs(
+        phaseGates = phaseGates,
+        recorder = recorder,
+        goalContinuationRecorder = goalContinuationRecorder,
+        coupledRunTransitions = coupledRunTransitions,
+        session = session,
+        run = run,
+      )).orEmpty()
 
 internal fun PhaseQualityGateCycleContext.persistGateRequiredRunning(
   run: PhaseRun,
@@ -102,11 +103,9 @@ internal fun PhaseQualityGateCycleContext.blockGateStep(
 ): PhaseOutcome {
   val coupling = gateSettlementCoupling()
   return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-    request,
     coupling.progress,
     coupling.transitions,
     recorder,
-    observability,
     PhaseBlockRequest(
       run = run,
       attemptCount = iteration,
@@ -151,7 +150,7 @@ internal class RuntimeOwnedGateSettlement(
         byteSize = payload.size.toLong(),
         sha256 = sha256HexUtf8(outputText),
         payload = payload,
-        generation = context.progress.evidenceGeneration(run.policy.generationScoped),
+        generation = (if (run.policy.generationScoped) context.progress.reviewEvidenceGeneration else 0),
       ),
     )
     if (!persistCompleted(run, iteration, outputText, accepted)) {

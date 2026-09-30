@@ -64,24 +64,25 @@ class FeatureTaskRuntimeValidationGateStatusProjectionTest {
     assertEquals(2, projected.gateRuns.single().executedWorkUnits)
   }
 
-  private fun gateEvidenceOutput(): String = FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
-    phaseId = "validate",
-    repositoryCheckpoint = "checkpoint",
-    measurements =
-    listOf(
-      FeatureTaskRuntimeValidationGateRunRecord(
-        durationMs = 1,
-        outcome = ValidationGateRunOutcome.PASSED,
-        cacheMode = ValidationGateCacheMode.FORCED_FULL,
-        executedWorkUnits = 2,
-        executedChecks = listOf("runtime-engine|compileKotlin", "runtime-engine|test"),
-        command = "./gradlew check --continue",
-        exitCode = 0,
-        repositoryCheckpoint = "checkpoint",
-      ),
-    ),
-    requiredCommand = "./gradlew check --continue",
-  ).payload
+  private fun gateEvidenceOutput(): String =
+    FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
+      phaseId = "validate",
+      repositoryCheckpoint = "checkpoint",
+      measurements =
+        listOf(
+          FeatureTaskRuntimeValidationGateRunRecord(
+            durationMs = 1,
+            outcome = ValidationGateRunOutcome.PASSED,
+            cacheMode = ValidationGateCacheMode.FORCED_FULL,
+            executedWorkUnits = 2,
+            executedChecks = listOf("runtime-engine|compileKotlin", "runtime-engine|test"),
+            command = "./gradlew check --continue",
+            exitCode = 0,
+            repositoryCheckpoint = "checkpoint",
+          ),
+        ),
+      requiredCommand = "./gradlew check --continue",
+    ).payload
 
   private fun settledValidationResult(payload: String): Map<String, Any?>? {
     val envelope =
@@ -106,18 +107,18 @@ class FeatureTaskRuntimeValidationGateStatusProjectionTest {
         phaseId = "validate",
         repositoryCheckpoint = "checkpoint",
         measurements =
-        listOf(
-          FeatureTaskRuntimeValidationGateRunRecord(
-            durationMs = 1,
-            outcome = ValidationGateRunOutcome.PASSED,
-            cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE,
-            executedWorkUnits = 0,
-            executedChecks = emptyList(),
-            command = "./gradlew check",
-            exitCode = 0,
-            repositoryCheckpoint = "checkpoint",
+          listOf(
+            FeatureTaskRuntimeValidationGateRunRecord(
+              durationMs = 1,
+              outcome = ValidationGateRunOutcome.PASSED,
+              cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE,
+              executedWorkUnits = 0,
+              executedChecks = emptyList(),
+              command = "./gradlew check",
+              exitCode = 0,
+              repositoryCheckpoint = "checkpoint",
+            ),
           ),
-        ),
         requiredCommand = "./gradlew check",
       )
     recorder.recordPhaseState(

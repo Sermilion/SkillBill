@@ -1,18 +1,18 @@
 package skillbill.engine.featuretask.runloop.phase
 
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
-import skillbill.engine.featuretask.runloop.attempt.launchHookContext
+import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.launchHookContext
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistArgs
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSessionObservations
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
 import skillbill.engine.featuretask.runloop.core.LEGACY_PLANNING_PROJECTION_LAUNCH_SEAM_REJECTION
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.PreLaunchBlock
 import skillbill.engine.featuretask.runloop.core.ShouldRetryPersistedBlockArgs
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopProgressObservations
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.missingUpstream
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunLoopCollaborators
@@ -25,14 +25,16 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
   internal fun preLaunchBlock(
     context: PhaseAttemptRunLoopCollaborators,
     run: PhaseRun,
-    state: FeatureTaskRuntimeRunLoopProgressObservations,
+    state: FeatureTaskRuntimeProgressSnapshotAccess,
     observability: FeatureTaskRuntimeRunObservability,
   ): PhaseOutcome? {
-    context.strategyFor(run.phaseId).stepHooks(run.phaseId).reconcileBeforeLaunch(run, context.launchHookContext(run))
+    context.strategyFor(
+      run.phaseId,
+    ).stepHooks(run.phaseId).reconcileBeforeLaunch(run, context.launchHookContext(run, context.strategyFor(run.phaseId).stepHooks(run.phaseId)))
     val persisted =
-      state.persistedBlockedReason(run.phaseId)?.let { persistedReason ->
-        val nextIteration = state.nextIteration(run.phaseId)
-        val durable = state.recordFor(run.phaseId)
+      state.phase(run.phaseId).blockedReason?.let { persistedReason ->
+        val nextIteration = state.phase(run.phaseId).nextIteration
+        val durable = state.phase(run.phaseId).record
         if (
           shouldRelaunchPersistedBlock(
             context = context,
@@ -60,31 +62,28 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
       }
     return missing?.let {
       persistPreLaunchBlock(
-        context,
-        run,
-        state,
-        observability,
-        it,
-      )
+    context,
+    run,
+    observability,
+    it,
+  )
     }
   }
 
   private fun persistPreLaunchBlock(
     context: PhaseAttemptRunLoopCollaborators,
     run: PhaseRun,
-    state: FeatureTaskRuntimeRunLoopProgressObservations,
     observability: FeatureTaskRuntimeRunObservability,
     preLaunch: PreLaunchBlock,
   ): PhaseOutcome {
     val durable = preLaunch.durableRecord
     val coupling = context.settlementCoupling()
     return FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersist(
-      context.request,
-      coupling.progress,
-      coupling.transitions,
-      context.recorder,
-      context.goalContinuationRecorder,
-      BlockAndPersistArgs(
+    coupling.progress,
+    coupling.transitions,
+    context.recorder,
+    context.goalContinuationRecorder,
+    BlockAndPersistArgs(
         run = run,
         attemptCount = preLaunch.attemptCount,
         reason = preLaunch.reason,
@@ -104,12 +103,12 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
             rejectedOutput = durable?.rejectedOutput,
           ),
       ),
-    )
+  )
   }
 
   internal fun missingRequiredUpstream(
     run: PhaseRun,
-    state: FeatureTaskRuntimeRunLoopProgressObservations,
+    state: FeatureTaskRuntimeProgressSnapshotAccess,
   ): List<String>? =
     missingUpstream(
       run.declaration,
@@ -124,7 +123,7 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
       FeatureTaskRuntimePhaseWorkflowDefinition.REGENERATION_PRODUCER_BY_CONSUMER.containsKey(phaseId)
 
   internal fun isReenterableRecordRejection(
-    state: FeatureTaskRuntimeRunLoopProgressObservations,
+    state: FeatureTaskRuntimeProgressSnapshotAccess,
     phaseId: String,
     reason: String,
   ): Boolean =
@@ -164,7 +163,7 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
   }
 
   internal fun shouldRetryPersistedBlock(
-    session: FeatureTaskRuntimeRunLoopSessionObservations,
+    session: FeatureTaskRuntimeRunSessionObservations,
     args: ShouldRetryPersistedBlockArgs,
   ): Boolean {
     val disposition = args.durable?.failureDisposition

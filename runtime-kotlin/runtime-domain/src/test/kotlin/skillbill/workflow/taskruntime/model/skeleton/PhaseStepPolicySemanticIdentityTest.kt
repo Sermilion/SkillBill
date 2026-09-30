@@ -6,28 +6,30 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class PhaseStepPolicySemanticIdentityTest {
-  private val policy = PhaseStepPolicy(
-    mutating = false,
-    relaunchOnInvalidOutput = false,
-    singleAgentSession = false,
-    readOnlyIdle = false,
-    fileMutating = false,
-    generationScoped = false,
-  )
+  private val policy =
+    PhaseStepPolicy(
+      mutating = false,
+      relaunchOnInvalidOutput = false,
+      singleAgentSession = false,
+      readOnlyIdle = false,
+      fileMutating = false,
+      generationScoped = false,
+    )
 
   @Test
   fun `every behavior affecting step policy field changes semantic identity`() {
     val baseline = identity(policy)
-    val changes = listOf(
-      policy.copy(mutating = true),
-      policy.copy(relaunchOnInvalidOutput = true),
-      policy.copy(singleAgentSession = true),
-      policy.copy(readOnlyIdle = true),
-      policy.copy(fileMutating = true),
-      policy.copy(generationScoped = true),
-      policy.copy(outputGateAttempts = 2),
-      policy.copy(extendsOwnedInventory = true),
-    ).map(::identity)
+    val changes =
+      listOf(
+        policy.copy(mutating = true),
+        policy.copy(relaunchOnInvalidOutput = true),
+        policy.copy(singleAgentSession = true),
+        policy.copy(readOnlyIdle = true),
+        policy.copy(fileMutating = true),
+        policy.copy(generationScoped = true),
+        policy.copy(outputGateAttempts = 2),
+        policy.copy(extendsOwnedInventory = true),
+      ).map(::identity)
     changes.forEach { assertNotEquals(baseline, it) }
     assertEquals(changes.size, changes.toSet().size)
     assertEquals(baseline, identity(policy.copy()))

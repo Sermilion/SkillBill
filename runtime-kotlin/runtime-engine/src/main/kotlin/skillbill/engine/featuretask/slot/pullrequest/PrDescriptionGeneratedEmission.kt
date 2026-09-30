@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.slot.pullrequest
 
 import skillbill.application.telemetry.model.PrDescriptionGeneratedRequest
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
+import skillbill.engine.featuretask.slot.state.PhasePullRequestContext
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult

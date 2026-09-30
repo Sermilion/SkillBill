@@ -3,7 +3,7 @@ package skillbill.architecture
 internal object StrategyCapabilityWriterInventory {
   private const val PROGRESS = "skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState"
   private const val SESSION = "skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession"
-  private const val OWNER = "skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner"
+  private const val OWNER = "skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner"
 
   val primitiveWriters: Set<String> =
     setOf(
@@ -35,6 +35,13 @@ internal object StrategyCapabilityWriterInventory {
         "clearRecordRejectionSettlementPending",
         "recordPhaseContentIdentities",
       ).map { "$SESSION.$it" }
+
+  fun qualifiedWriterOwner(simpleName: String): String? =
+    when (simpleName) {
+      "FeatureTaskRuntimeRunState", PROGRESS -> PROGRESS
+      "FeatureTaskRuntimeRunLoopSession", SESSION -> SESSION
+      else -> null
+    }
 
   fun violations(catalog: Map<String, CapabilitySymbol>): List<String> =
     catalog.values

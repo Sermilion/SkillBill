@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.codereview
 
+import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 import skillbill.agentaddon.model.AgentAddonPromptFormatter
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelReviewLaneStatus
@@ -18,8 +19,8 @@ import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
-import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
+import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -36,7 +37,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path
 
 class InlineReviewStrategy(
-  override val runner: PhaseRunner,
+  runner: PhaseRunner,
 ) : PhaseStrategyStatusProjection() {
   private val codeReview = CodeReviewSlot(runner, InlineReviewPass)
 
@@ -44,6 +45,8 @@ class InlineReviewStrategy(
   override val strategyId: String = ID
   override val steps: List<String> = codeReview.steps
   override val entryStep: String = codeReview.entryStep
+
+  override fun executionBindingKind(stepId: String): PhaseExecutionBindingKind = codeReview.executionBindingKind(stepId)
 
   override fun policyFor(stepId: String): PhaseStepPolicy = codeReview.policyFor(stepId)
 

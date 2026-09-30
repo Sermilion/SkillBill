@@ -28,7 +28,11 @@ data class FeatureTaskRuntimeValidationGateExecutionEvidence(
       require(gateRuns.last().outcome == ValidationGateRunOutcome.PASSED && gateRuns.last().exitCode == 0) {
         "Passed validation evidence must end with a successful required command."
       }
-      require(gateRuns.all { !it.command.isNullOrBlank() && it.exitCode != null && !it.repositoryCheckpoint.isNullOrBlank() }) {
+      require(
+        gateRuns.all {
+          !it.command.isNullOrBlank() && it.exitCode != null && !it.repositoryCheckpoint.isNullOrBlank()
+        },
+      ) {
         "Validation gate runs must retain command, exit code, and repository checkpoint evidence."
       }
       require(gateRuns.all { it.executedChecksRecorded }) {
@@ -106,7 +110,10 @@ data class FeatureTaskRuntimeValidationGateExecutionEvidence(
         } catch (error: InvalidFeatureTaskRuntimeValidationEvidenceSchemaError) {
           throw error
         } catch (error: InvalidWorkflowStateSchemaError) {
-          invalid(sourceLabel, "Gate run execution fields are missing or malformed.")
+          throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(
+            sourceLabel,
+            "Gate run execution fields are missing or malformed.",
+          ).also { it.addSuppressed(error) }
         } catch (error: IllegalArgumentException) {
           invalid(sourceLabel, error.message.orEmpty())
         }

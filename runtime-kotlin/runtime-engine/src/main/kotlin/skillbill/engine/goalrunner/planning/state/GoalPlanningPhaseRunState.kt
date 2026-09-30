@@ -13,7 +13,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.runloop.state.featureTaskRuntimeRunLoopStepBinding
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
@@ -67,7 +67,14 @@ internal class GoalPlanningPhaseRunState(
 
   override fun fanOut(stepId: String): PhaseRunFanOut = planFanOut
 
+  internal fun planningUnitState(
+    unitId: Int,
+    outputSink: AgentRunOutputSink,
+  ): PhaseRunState = GoalPlanningUnitRunState(this, unitId, GoalPlanningStepAttempts(planning, unitId, outputSink))
+
   override fun strategyFor(stepId: String): PhaseStrategy = strategies.strategyFor(stepId, executionPlan)
+
+  override fun runnerFor(stepId: String) = strategies.runnerFor(stepId, executionPlan)
 
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = strategies.selectedOwnerOf(stepId, executionPlan)
 
@@ -82,7 +89,7 @@ internal class GoalPlanningPhaseRunState(
   override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
     authorizeSelectedStepRun(run)
     stepBinding.beginStepBinding(run)
-    return featureTaskRuntimeRunLoopStepBinding(
+    return FeatureTaskRuntimeRunLoopStepBindings.create(
       phaseAttemptLaunchCollaborationScope(PhaseAttemptRunHost(run.request, this, run.phaseId, this)),
       run,
     )
@@ -138,6 +145,8 @@ private class GoalPlanningUnitRunState(
 
   override fun strategyFor(stepId: String): PhaseStrategy = parent.strategyFor(stepId)
 
+  override fun runnerFor(stepId: String) = parent.runnerFor(stepId)
+
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = parent.selectedOwnerOf(stepId)
 
   override fun unselectedStepIds(): Set<String> = parent.unselectedStepIds()
@@ -147,7 +156,7 @@ private class GoalPlanningUnitRunState(
   override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
     parent.authorizeSelectedStepRun(run)
     parent.stepBinding.beginStepBinding(run, unitId)
-    return featureTaskRuntimeRunLoopStepBinding(
+    return FeatureTaskRuntimeRunLoopStepBindings.create(
       phaseAttemptLaunchCollaborationScope(PhaseAttemptRunHost(run.request, this, run.phaseId, this)),
       run,
       unitId,
@@ -192,12 +201,7 @@ private class GoalPlanningPlanFanOut(
     outputSink: AgentRunOutputSink,
   ): PhaseAcceptedStepExecution {
     val run = runState.stepBinding.requireAuthorizedFanOutWave()
-    val unitRunState =
-      GoalPlanningUnitRunState(
-        runState,
-        unitId,
-        GoalPlanningStepAttempts(planning, unitId, outputSink),
-      )
+    val unitRunState = runState.planningUnitState(unitId, outputSink)
     return unitRunState.step(run)
   }
 

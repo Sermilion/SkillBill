@@ -1,7 +1,6 @@
 package skillbill.cli
 
 import skillbill.cli.core.CliRuntime
-import skillbill.cli.goal.core.GOAL_EXIT_BLOCKED
 import skillbill.cli.model.CliExecutionResult
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.di.core.SkillBillVersion
@@ -464,9 +463,9 @@ class CliGoalRuntimeExecutionTest {
     assertContains(watch.stdout, "watch_refresh: index=1 status=ok current_subtask=1 current_step=implement")
     assertContains(watch.stdout, "watch_observability: index=1 phase=implement role=phase_subagent")
     assertContains(watch.stdout, "sequence=0")
-    assertEquals(GOAL_EXIT_BLOCKED, resumed.exitCode, resumed.stdout)
-    assertEquals(2, launcher.requests.size)
+    assertEquals(1, resumed.exitCode, resumed.stderr)
+    assertTrue(launcher.requests.isEmpty())
     assertTrue(launcher.childLaunches.isEmpty())
-    assertContains(resumed.stdout, "Could not capture the goal-subtask review baseline")
+    assertContains(resumed.stderr, "missing_descriptor")
   }
 }

@@ -22,13 +22,14 @@ class FeatureTaskRuntimeTransitionFunctionShippedTest {
     verdict: FeatureTaskRuntimeVerdict,
     edgeIterationCount: Int = 0,
     settledVerdicts: Map<String, FeatureTaskRuntimeVerdict> = satisfiedAudit,
-  ): FeatureTaskRuntimeNextPhase = shippedTransition(
-    shipped,
-    currentPhaseId,
-    verdict,
-    edgeIterationCount,
-    settledVerdicts,
-  )
+  ): FeatureTaskRuntimeNextPhase =
+    shippedTransition(
+      shipped,
+      currentPhaseId,
+      verdict,
+      edgeIterationCount,
+      settledVerdicts,
+    )
 
   @Test
   fun `a clean run advances implement to simplify to audit to review to verify_findings to validate`() {

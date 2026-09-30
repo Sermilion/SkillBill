@@ -38,9 +38,10 @@ internal class WorkflowStateStore private constructor(
     connection: Connection,
     clock: Clock,
     workflowSnapshotValidator: WorkflowSnapshotValidator,
+    transactionActive: Boolean = false,
   ) : this(
     connection,
-    FeatureTaskWorkflowStateStore(connection, clock, workflowSnapshotValidator),
+    FeatureTaskWorkflowStateStore(connection, clock, workflowSnapshotValidator, transactionActive),
     FeatureVerifyWorkflowStateStore(connection, clock, workflowSnapshotValidator),
   )
 
@@ -123,10 +124,11 @@ internal class FeatureTaskWorkflowStateStore(
   connection: Connection,
   clock: Clock,
   workflowSnapshotValidator: WorkflowSnapshotValidator,
+  transactionActive: Boolean = false,
 ) : FeatureTaskWorkflowStateRepository,
   FeatureTaskExecutionLookupRepository by FeatureTaskExecutionLookupStore(connection),
   GoalChildWorkflowStateRepository by GoalChildWorkflowStore(connection),
-  FeatureTaskRuntimeWorkerRepository by FeatureTaskRuntimeWorkerStore(connection) {
+  FeatureTaskRuntimeWorkerRepository by FeatureTaskRuntimeWorkerStore(connection, transactionActive) {
   private val rows = FeatureTaskWorkflowRowStore(connection, clock, workflowSnapshotValidator)
 
   override fun terminalizeLegacyProseFeatureTaskWorkflow(row: WorkflowStateRecord) =

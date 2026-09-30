@@ -1,14 +1,15 @@
 package skillbill.engine.featuretask.slot.audit
 
+import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseAuditOutputContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
-import skillbill.engine.featuretask.slot.audit.AcceptanceAuditVerdictRule.Companion.auditProseValue
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditVerdictRule.Companion.removedVerdictRejection
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.workflow.model.WorkflowStepStatus
@@ -21,6 +22,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
 internal object AcceptanceAuditRound : PhaseStepHooks {
+    override val contextKind = PhaseStepHookContextKind.AUDIT
   override fun completionRejection(
     run: PhaseRun,
     context: PhaseStepOutputContext,

@@ -68,11 +68,11 @@ class GoalRunner(
           blockedReason = alreadyRunning.message.orEmpty(),
           workflowId = loadedState.manifest.workflowIdFor(loadedState.manifest.currentSubtaskIntent.subtaskId),
           lastResumableStep =
-          loadedState.manifest.subtasks
-            .firstOrNull { it.id == loadedState.manifest.currentSubtaskIntent.subtaskId }
-            ?.lastResumableStep
-            .orEmpty()
-            .ifBlank { "plan" },
+            loadedState.manifest.subtasks
+              .firstOrNull { it.id == loadedState.manifest.currentSubtaskIntent.subtaskId }
+              ?.lastResumableStep
+              .orEmpty()
+              .ifBlank { "plan" },
         ),
       )
     }
@@ -165,7 +165,10 @@ class GoalRunner(
     return planningStop.withParentWorkflowId(state.parentWorkflowId)
   }
 
-  private fun emitCompletedGoalEvent(request: GoalRunnerRunRequest, finalReport: GoalRunnerRunReport) {
+  private fun emitCompletedGoalEvent(
+    request: GoalRunnerRunRequest,
+    finalReport: GoalRunnerRunReport,
+  ) {
     if (finalReport is GoalRunnerRunReport.Completed) {
       request.eventSink.emit(
         GoalRunnerRunEvent.Completed(
@@ -196,7 +199,8 @@ class GoalRunner(
   }
 }
 
-private fun GoalRunnerRunReport.withParentWorkflowId(parentWorkflowId: String): GoalRunnerRunReport = when (this) {
-  is GoalRunnerRunReport.Completed -> copy(parentWorkflowId = parentWorkflowId)
-  is GoalRunnerRunReport.Stopped -> copy(parentWorkflowId = parentWorkflowId)
-}
+private fun GoalRunnerRunReport.withParentWorkflowId(parentWorkflowId: String): GoalRunnerRunReport =
+  when (this) {
+    is GoalRunnerRunReport.Completed -> copy(parentWorkflowId = parentWorkflowId)
+    is GoalRunnerRunReport.Stopped -> copy(parentWorkflowId = parentWorkflowId)
+  }

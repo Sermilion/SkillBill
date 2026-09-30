@@ -1,13 +1,13 @@
 package skillbill.engine.featuretask.slot.attempt
 
-import skillbill.engine.featuretask.runloop.attempt.launchHookContext
+import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.launchHookContext
 import skillbill.engine.featuretask.runloop.attempt.phaseAttemptContext
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.FixLoopBranchContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptLoopState
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.core.phaseAttemptAccumulatorContext
+import skillbill.engine.featuretask.runloop.core.PhaseAttemptAccumulatorContext
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.observability.featureTaskRuntimeStartContinuationKind
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
@@ -52,7 +52,7 @@ internal object PhaseAttemptSteps {
     val agentId = run.resolvedAgent.resolvedAgentId
     val coupling = settlementCoupling()
     val progressState = coupling.progress
-    var iteration = progress.nextIteration(run.phaseId)
+    var iteration = progress.phase(run.phaseId).nextIteration
     val continuationSegmentCount =
       FeatureTaskRuntimeRunLoopPhaseBlocking
         .durableContinuationSegmentCount(recorder, run)
@@ -63,6 +63,7 @@ internal object PhaseAttemptSteps {
       return PhaseAttemptOnce.blockRequiredWriteRejection(this, run, rejection)
     }
     val operatorReopened = FeatureTaskRuntimeRunLoopPhaseBlocking.operatorReopenedPhase(session, run.phaseId)
+    val crashResumed = progress.phase(run.phaseId).resumedFromPriorProcess
     coupling.transitions.beginPhaseAttemptLaunchAfterRequiredStart(
       run.phaseId,
       operatorReopened = operatorReopened,
@@ -71,15 +72,14 @@ internal object PhaseAttemptSteps {
       (
         progress.fixLoopIterationFor(run.phaseId, iteration) - continuationSegmentCount - nonOutputAttempts.size
       ).coerceAtLeast(1)
-    val crashResumed = progress.resumedFromPriorProcess(run.phaseId)
-    stepHooks(run).onLaunch(run, launchHookContext(run))
+    stepHooks(run).onLaunch(run, launchHookContext(run, stepHooks(run)))
     observability.started(
       run.phaseId,
       agentId,
       iteration,
       run.modelDirective,
       FeatureTaskRuntimePhaseStartReentry(
-        resumed = iteration > 1 || progress.hasPriorRecord(run.phaseId),
+        resumed = iteration > 1 || progress.phase(run.phaseId).hasPriorRecord,
         startKind =
           featureTaskRuntimeStartContinuationKind(
             crashResumed = crashResumed,
@@ -107,15 +107,7 @@ internal object PhaseAttemptSteps {
         resolveFixLoopOutcome(
           FixLoopOutcomeArgs(
             context =
-              phaseAttemptAccumulatorContext(
-                run,
-                coupling.transitions,
-                transitions,
-                progressState,
-                coupling.session,
-                loop.iteration,
-                observability,
-              ),
+              PhaseAttemptAccumulatorContext(phaseAttemptContext(run, loop.iteration, observability)),
             loop = loop,
             agentId = agentId,
             call = call,
@@ -161,30 +153,26 @@ internal object PhaseAttemptSteps {
     return attempt.settledOutcome ?: when {
       attempt.incompleteWorkContinuationReason != null ->
         phaseAttempts.settleIncompleteWork(
-          request,
-          state,
-          recorder,
-          observability,
-          context,
-        )
+    recorder,
+    context,
+  )
       attempt.boundaryBodyDeliveryContinuationReason != null ->
         phaseAttempts.settleBoundaryBodyDelivery(observability, context)
-      attempt.malformedOutput -> phaseAttempts.settleMalformedOutput(request, state, recorder, observability, context)
+      attempt.malformedOutput -> phaseAttempts.settleMalformedOutput(
+    recorder,
+    context,
+  )
       attempt.retryableTerminalRetryReason != null ->
         phaseAttempts.settleRetryableTerminal(
-          request,
-          state,
-          recorder,
-          observability,
-          context,
-        )
+    recorder,
+    context,
+  )
       else ->
         FeatureTaskRuntimeRunLoopPhaseBlocking.settleSemanticFailure(
-          request,
-          recorder,
-          observability,
-          context,
-        )
+    recorder,
+    observability,
+    context,
+  )
     }
   }
 }

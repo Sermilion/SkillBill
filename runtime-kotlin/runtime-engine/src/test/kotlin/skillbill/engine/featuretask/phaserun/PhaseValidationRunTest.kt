@@ -13,7 +13,7 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.state.featureTaskRuntimeRunLoopStepBinding
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
@@ -275,7 +275,7 @@ class PhaseValidationRunTest {
 
               override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
                 stepBinding.beginStepBinding(run)
-                return featureTaskRuntimeRunLoopStepBinding(
+                return FeatureTaskRuntimeRunLoopStepBindings.create(
                   skillbill.engine.featuretask.slot.attempt.phaseAttemptCollaborationScope(
                     PhaseAttemptRunHost(run.request, this, run.phaseId, this),
                   ),

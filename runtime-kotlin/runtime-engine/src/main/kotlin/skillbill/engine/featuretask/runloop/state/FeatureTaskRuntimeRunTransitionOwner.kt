@@ -17,7 +17,7 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 
-internal class FeatureTaskRuntimeRunLoopTransitionOwner(
+internal class FeatureTaskRuntimeRunTransitionOwner(
   private val progress: FeatureTaskRuntimeRunState,
   private val session: FeatureTaskRuntimeRunLoopSession,
 ) {
@@ -66,11 +66,6 @@ internal class FeatureTaskRuntimeRunLoopTransitionOwner(
     }
   }
 
-  fun clearMatchingReentry(loopId: String) {
-    if (session.pendingReentry?.loopId == loopId || session.activeReentry?.loopId == loopId) {
-      session.transitionReentryPair(null, null)
-    }
-  }
 
   fun establishResumedReentryPair(pending: PendingReentry?) {
     session.transitionReentryPair(pending, pending)
@@ -95,7 +90,7 @@ internal class FeatureTaskRuntimeRunLoopTransitionOwner(
     output: FeatureTaskRuntimePhaseOutput,
     operatorBlockRetryPhaseId: String,
   ) {
-    if (!progress.isComplete(output.phaseId)) {
+    if (!progress.phase(output.phaseId).completed) {
       progress.recordCompleted(output)
     }
     session.consumeOperatorBlockRetryCompletion(operatorBlockRetryPhaseId)
@@ -169,7 +164,7 @@ internal class FeatureTaskRuntimeRunLoopTransitionOwner(
         featureSize = request.runInvariants.featureSize.name,
         lastIncompletePhase = phaseId,
         blockedReason = reason,
-        completedPhaseIds = progress.completedPhaseIds(),
+        completedPhaseIds = progress.completedPhaseIds,
         resolvedBranch = resolvedBranch,
       ),
     )
@@ -183,19 +178,7 @@ internal class FeatureTaskRuntimeRunLoopTransitionOwner(
     reserveReviewPassAfterPhaseState(phaseState.reviewPassNumber)
   }
 
-  fun recordOutputSettlementRunningPhase(
-    recorder: PhaseRunRecords,
-    phaseState: FeatureTaskRuntimePhaseStateRequest,
-  ) {
-    recordOutputSettlementRequiredStart(recorder, phaseState)
-  }
 
-  fun recordOutputSettlementRequiredStart(
-    recorder: PhaseRunRecords,
-    phaseState: FeatureTaskRuntimePhaseStateRequest,
-  ) {
-    acknowledgeRequiredPhaseStart(recorder, phaseState)
-  }
 
   fun applyPersistedPhaseCompletion(
     output: FeatureTaskRuntimePhaseOutput,
@@ -287,16 +270,6 @@ internal class FeatureTaskRuntimeRunLoopTransitionOwner(
     progress.restartAttemptBudget(phaseId)
   }
 
-  fun recordPhaseAttemptLaunch(
-    phaseId: String,
-    restartBudget: Boolean,
-  ) {
-    if (restartBudget) {
-      progress.restartAttemptBudget(phaseId)
-    }
-    progress.recordPhaseLaunched(phaseId)
-  }
-
   fun beginPhaseAttemptLaunchAfterRequiredStart(
     phaseId: String,
     operatorReopened: Boolean,
@@ -304,7 +277,7 @@ internal class FeatureTaskRuntimeRunLoopTransitionOwner(
     if (operatorReopened) {
       progress.restartAttemptBudget(phaseId)
     }
-    recordPhaseAttemptLaunch(phaseId, restartBudget = false)
+    progress.recordPhaseLaunched(phaseId)
   }
 
   fun observeResolvedBranchForCheckpoint(branch: String?) {
@@ -347,27 +320,17 @@ internal class FeatureTaskRuntimeRunLoopTransitionOwner(
   }
 
   fun clearRecoveredBranchSetupBlock(phaseId: String) {
-    if (!progress.hasBranchSetupBlock(phaseId)) {
+    if (!progress.phase(phaseId).branchSetupBlocked) {
       return
     }
     progress.clearBranchSetupBlock(phaseId)
   }
 
-  fun observeRemediationCheckpointBranch(branch: String?) {
-    observeResolvedBranchForCheckpoint(branch)
-  }
 
-  fun blockRemediationCheckpointEstablishment(
-    request: FeatureTaskRuntimeRunFacts,
-    precedingPhaseId: String,
-    reason: String,
-    resolvedBranch: String?,
-  ) {
-    transitionCheckpointRemediationBlock(request, precedingPhaseId, reason, resolvedBranch)
-  }
+
 }
 
-internal val PhaseRunState.coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner
+internal val PhaseRunState.coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner
   get() = runLoopCoupledTransitions
 
 internal fun PhaseRunState.coupledProgress(): FeatureTaskRuntimeRunState = runLoopCoupledProgress()
@@ -377,4 +340,22 @@ internal fun PhaseRunState.coupledSession(): FeatureTaskRuntimeRunLoopSession = 
 internal fun coupledRunTransitions(
   progress: FeatureTaskRuntimeRunState,
   session: FeatureTaskRuntimeRunLoopSession,
-): FeatureTaskRuntimeRunLoopTransitionOwner = runLoopCoupledTransitions(progress, session)
+): FeatureTaskRuntimeRunTransitionOwner = runLoopCoupledTransitions(progress, session)
+
+internal fun PhaseRunState.runLoopCoupledProgress(): FeatureTaskRuntimeRunState = progress as FeatureTaskRuntimeRunState
+
+internal fun PhaseRunState.runLoopCoupledSession(): FeatureTaskRuntimeRunLoopSession =
+  session as FeatureTaskRuntimeRunLoopSession
+
+internal fun coupledRunTransitionOwner(
+  progress: FeatureTaskRuntimeRunState,
+  session: FeatureTaskRuntimeRunLoopSession,
+): FeatureTaskRuntimeRunTransitionOwner = progress.transitionOwnerFor(session)
+
+internal val PhaseRunState.runLoopCoupledTransitions: FeatureTaskRuntimeRunTransitionOwner
+  get() = coupledRunTransitionOwner(runLoopCoupledProgress(), runLoopCoupledSession())
+
+internal fun runLoopCoupledTransitions(
+  progress: FeatureTaskRuntimeRunState,
+  session: FeatureTaskRuntimeRunLoopSession,
+): FeatureTaskRuntimeRunTransitionOwner = coupledRunTransitionOwner(progress, session)

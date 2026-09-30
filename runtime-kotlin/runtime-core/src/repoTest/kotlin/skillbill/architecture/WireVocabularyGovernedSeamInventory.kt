@@ -165,10 +165,11 @@ internal object WireVocabularyGovernedSeamInventory {
       else -> emptySet()
     }
 
-  private fun executionPlanGovernedKeys(node: JsonNode): Set<String> = buildSet {
-    if (node.isObject) addAll(propertyNames(node.path("properties")))
-    if (node.isContainerNode) node.elements().forEachRemaining { addAll(executionPlanGovernedKeys(it)) }
-  }
+  private fun executionPlanGovernedKeys(node: JsonNode): Set<String> =
+    buildSet {
+      if (node.isObject) addAll(propertyNames(node.path("properties")))
+      if (node.isContainerNode) node.elements().forEachRemaining { addAll(executionPlanGovernedKeys(it)) }
+    }
 
   private fun telemetryProxyGovernedKeys(): Set<String> =
     payloadKeyValues(TelemetryProxyPayloadKeys::class.java) + SharedPayloadKeys.CONTRACT_VERSION

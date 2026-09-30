@@ -8,11 +8,12 @@ internal fun FeatureTaskRuntimePhaseRecorder.openTestWorkflow(
   sessionId: String,
   issueKey: String? = null,
 ): Boolean {
-  val executionPlan = if (loadPhaseRecords(workflowId) == null) {
-    val fixture = ExecutionPlanAdmissionFixture()
-    ValidatedFeatureTaskRuntimeExecutionPlan.read(fixture.encoded, fixture.validator)
-  } else {
-    null
-  }
+  val executionPlan =
+    if (loadPhaseRecords(workflowId) == null) {
+      val fixture = ExecutionPlanAdmissionFixture()
+      ValidatedFeatureTaskRuntimeExecutionPlan.read(fixture.encoded, fixture.validator)
+    } else {
+      null
+    }
   return ensureWorkflowOpen(workflowId, sessionId, issueKey, executionPlan)
 }

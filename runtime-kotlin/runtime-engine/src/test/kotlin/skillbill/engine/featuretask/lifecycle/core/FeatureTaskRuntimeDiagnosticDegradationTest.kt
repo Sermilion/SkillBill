@@ -229,16 +229,20 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
       lifecycle,
     )
 
-  private fun recorder(database: RuntimeFakeDatabaseSessionFactory) = featureTaskRuntimePhaseRecorder(
-    database,
-    NoopSnapshotValidator,
-    AcceptingFeatureTaskRuntimeWireArtifactValidator,
-    AcceptingFeatureTaskRuntimeWireArtifactValidator,
-    testHarnessClock,
-    NoopRuntimeDiagnostics,
-  )
+  private fun recorder(database: RuntimeFakeDatabaseSessionFactory) =
+    featureTaskRuntimePhaseRecorder(
+      database,
+      NoopSnapshotValidator,
+      AcceptingFeatureTaskRuntimeWireArtifactValidator,
+      AcceptingFeatureTaskRuntimeWireArtifactValidator,
+      testHarnessClock,
+      NoopRuntimeDiagnostics,
+    )
 
-  private fun evidence(payload: ByteArray, repairTurn: Int) = ProducerOutputEvidence(
+  private fun evidence(
+    payload: ByteArray,
+    repairTurn: Int,
+  ) = ProducerOutputEvidence(
     workflowId = WORKFLOW_ID,
     phaseId = "validate",
     attempt = 1,
@@ -251,7 +255,10 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
     repairTurn = repairTurn,
   )
 
-  private fun rejection(payload: ByteArray, repairTurn: Int) = RejectedOutputDiagnosticRequest(
+  private fun rejection(
+    payload: ByteArray,
+    repairTurn: Int,
+  ) = RejectedOutputDiagnosticRequest(
     workflowId = WORKFLOW_ID,
     phaseId = "validate",
     attempt = 1,
@@ -265,7 +272,10 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
   )
 
   private object NoopSnapshotValidator : WorkflowSnapshotValidator {
-    override fun validate(snapshot: WorkflowStateSnapshot, slug: String) = Unit
+    override fun validate(
+      snapshot: WorkflowStateSnapshot,
+      slug: String,
+    ) = Unit
   }
 
   private companion object {

@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.codereview
 
+import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
@@ -74,6 +75,13 @@ internal class CodeReviewSlot(
   val steps: List<String> = policies.keys.toList()
   val entryStep: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
   val loopRules: PhaseLoopRules = InlineReviewLoopRules
+
+  fun executionBindingKind(stepId: String): PhaseExecutionBindingKind = when (stepId) {
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> PhaseExecutionBindingKind.REVIEW
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> PhaseExecutionBindingKind.FINDING_VERIFICATION
+    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> PhaseExecutionBindingKind.REPAIR_RECEIPT
+    else -> throw UnknownPhaseStepError(stepId)
+  }
 
   fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 

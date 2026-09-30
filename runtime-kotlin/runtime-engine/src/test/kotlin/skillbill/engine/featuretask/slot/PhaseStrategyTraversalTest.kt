@@ -213,8 +213,6 @@ internal class CompositionTestStrategy(
 ) : PhaseStrategy() {
   var stepPolicy = PhaseStepPolicy(false, false, false, false, false, false)
 
-  override val runner: PhaseRunner get() = error("Composition must not acquire a runner")
-
   override fun policyFor(stepId: String) = stepPolicy
 
   override fun directiveFor(stepId: String): String = error("Composition must not request a launch directive")

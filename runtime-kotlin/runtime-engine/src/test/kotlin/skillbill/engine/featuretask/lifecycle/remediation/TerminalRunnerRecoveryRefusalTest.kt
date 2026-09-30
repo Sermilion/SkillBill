@@ -1,15 +1,15 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
-import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.ExecutionPlanAdmissionFixture
+import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.WORKFLOW_ID
 import skillbill.engine.defaultPhaseAwareLauncher
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.goalContinuationHarness
 import skillbill.engine.validJsonOutput
 import skillbill.workflow.model.FeatureTaskWorkflowMode
-import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -26,10 +26,11 @@ class TerminalRunnerRecoveryRefusalTest {
         try {
           val git = RecordingWorkflowGitOperations(currentBranchValue = "feat/existing-runtime-branch")
           val harness = goalContinuationHarness(root, git, defaultPhaseAwareLauncher())
-          val execution = ExecutionPlanAdmissionFixture(
-            definition = SkeletonDefinition.GOAL_CHILD,
-            specPath = harness.request().runInvariants.specReference,
-          )
+          val execution =
+            ExecutionPlanAdmissionFixture(
+              definition = SkeletonDefinition.GOAL_CHILD,
+              specPath = harness.request().runInvariants.specReference,
+            )
           execution.seed(harness.repository, WORKFLOW_ID, harness.request().issueKey)
           harness.seedReviewPhase("completed", 3, validJsonOutput("review"), 1)
           harness.seedPhase("commit_push", finalizationStatus, 2, "original-agent", validJsonOutput("commit_push"))

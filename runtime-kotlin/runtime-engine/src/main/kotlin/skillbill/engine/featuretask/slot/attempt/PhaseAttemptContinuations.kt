@@ -38,8 +38,8 @@ import skillbill.engine.featuretask.runloop.output.rejectionPath
 import skillbill.engine.featuretask.runloop.output.retryRejectionReason
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopProgressObservations
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.runner.nonRetryingPhaseSchemaBlockReason
@@ -56,10 +56,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 
 object PhaseAttemptContinuations {
   internal fun settleIncompleteWork(
-    request: FeatureTaskRuntimeRunFacts,
-    state: FeatureTaskRuntimeRunLoopProgressObservations,
     recorder: PhaseRunRecords,
-    observability: FeatureTaskRuntimeRunObservability,
     context: FixLoopBranchContext,
   ): PhaseOutcome? {
     val run = context.run
@@ -70,12 +67,10 @@ object PhaseAttemptContinuations {
     loop.continuationSegmentCount += 1
     if (!PhaseAttemptContinuations.recordIncompleteAttempt(recorder, run, loop.iteration, attempt)) {
       return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-        request,
-        context.progress,
-        context.loopTransitions,
-        recorder,
-        observability,
-        PhaseBlockRequest(
+    context.progress,
+    context.loopTransitions,
+    recorder,
+    PhaseBlockRequest(
           run = run,
           attemptCount = loop.iteration,
           reason =
@@ -87,7 +82,7 @@ object PhaseAttemptContinuations {
           payload = BlockAndPersistPayload(fileManifest = attempt.fileManifest),
           failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
         ),
-      )
+  )
     }
     if (run.policy.singleAgentSession) {
       return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
@@ -146,10 +141,7 @@ object PhaseAttemptContinuations {
   }
 
   internal fun settleMalformedOutput(
-    request: FeatureTaskRuntimeRunFacts,
-    state: FeatureTaskRuntimeRunLoopProgressObservations,
     recorder: PhaseRunRecords,
-    observability: FeatureTaskRuntimeRunObservability,
     context: FixLoopBranchContext,
   ): PhaseOutcome? {
     val run = context.run
@@ -158,7 +150,10 @@ object PhaseAttemptContinuations {
     val observability = context.observability
     val agentId = context.agentId
     if (run.policy.singleAgentSession) {
-      return blockSingleAgentMalformedOutput(request, state, recorder, context)
+      return blockSingleAgentMalformedOutput(
+    recorder,
+    context,
+  )
     }
     loop.outputGateFailures += 1
     loop.malformedAttemptCount += 1
@@ -179,12 +174,10 @@ object PhaseAttemptContinuations {
       return null
     }
     return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-      request,
-      context.progress,
-      context.loopTransitions,
-      recorder,
-      observability,
-      PhaseBlockRequest(
+    context.progress,
+    context.loopTransitions,
+    recorder,
+    PhaseBlockRequest(
         run = run,
         attemptCount = loop.iteration,
         reason = withSchemaGateDetail(formatBlock, requireNotNull(attempt.schemaInvalidOperatorReason)),
@@ -196,23 +189,19 @@ object PhaseAttemptContinuations {
           ),
         failureDisposition = FeatureTaskRuntimeFailureDisposition.INVALID_OUTPUT,
       ),
-    )
+  )
   }
 
   private fun blockSingleAgentMalformedOutput(
-    request: FeatureTaskRuntimeRunFacts,
-    state: FeatureTaskRuntimeRunLoopProgressObservations,
     recorder: PhaseRunRecords,
     context: FixLoopBranchContext,
   ): PhaseOutcome {
     val attempt = context.attempt
     return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-      request,
-      context.progress,
-      context.loopTransitions,
-      recorder,
-      context.observability,
-      PhaseBlockRequest(
+    context.progress,
+    context.loopTransitions,
+    recorder,
+    PhaseBlockRequest(
         run = context.run,
         attemptCount = context.loop.iteration,
         reason =
@@ -228,14 +217,11 @@ object PhaseAttemptContinuations {
           ),
         failureDisposition = FeatureTaskRuntimeFailureDisposition.INVALID_OUTPUT,
       ),
-    )
+  )
   }
 
   internal fun settleRetryableTerminal(
-    request: FeatureTaskRuntimeRunFacts,
-    state: FeatureTaskRuntimeRunLoopProgressObservations,
     recorder: PhaseRunRecords,
-    observability: FeatureTaskRuntimeRunObservability,
     context: FixLoopBranchContext,
   ): PhaseOutcome? {
     val run = context.run
@@ -260,12 +246,10 @@ object PhaseAttemptContinuations {
             requireNotNull(attempt.retryableOperatorReason)
         }
       return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-        request,
-        context.progress,
-        context.loopTransitions,
-        recorder,
-        observability,
-        PhaseBlockRequest(
+    context.progress,
+    context.loopTransitions,
+    recorder,
+    PhaseBlockRequest(
           run = run,
           attemptCount = loop.iteration,
           reason = reason,
@@ -284,7 +268,7 @@ object PhaseAttemptContinuations {
               FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE
             },
         ),
-      )
+  )
     }
     val failedIteration = loop.semanticIteration
     loop.iteration += 1
@@ -370,19 +354,18 @@ object PhaseAttemptContinuations {
       )
     recordUnattributableRejectedEvidence(request, recorder, args, generationScoped)
     return FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersistInPhase(
-      request,
-      args.context.state,
-      args.context.loopTransitions,
-      recorder,
-      null,
-      phaseBlockArgs(
+    args.context.state,
+    args.context.loopTransitions,
+    recorder,
+    null,
+    phaseBlockArgs(
         run = run,
         attemptCount = iteration,
         reason = unattributableRecordRejectionReason(run.phaseId, rejection, producer, detail),
         observability = observability,
         payload = BlockAndPersistPayload(childNeverLaunched = true),
       ).withDisposition(FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION),
-    )
+  )
   }
 
   internal fun recordUnattributableRejectedEvidence(
@@ -404,7 +387,7 @@ object PhaseAttemptContinuations {
         .asSequence()
         .map { it.producerIteration.phaseId }
         .distinct()
-        .mapNotNull { phaseId -> state.outputFor(phaseId) }
+        .mapNotNull { phaseId -> state.phase(phaseId).output }
         .firstOrNull()
     val outputGenerationScoped = rejectedOutput?.let { generationScoped(it.phaseId) } ?: false
     val evidence =
@@ -429,11 +412,11 @@ object PhaseAttemptContinuations {
   private fun unattributableProducerEvidence(
     request: FeatureTaskRuntimeRunFacts,
     recorder: PhaseRunRecords,
-    state: FeatureTaskRuntimeRunLoopProgressObservations,
+    state: FeatureTaskRuntimeProgressSnapshotAccess,
     output: FeatureTaskRuntimePhaseOutput,
     generationScoped: Boolean,
   ): ProducerOutputEvidence? {
-    val agentId = state.recordFor(output.phaseId)?.resolvedAgentId ?: return null
+    val agentId = state.phase(output.phaseId).record?.resolvedAgentId ?: return null
     return when (
       val read =
         recorder.producerOutput(
@@ -442,7 +425,7 @@ object PhaseAttemptContinuations {
             phaseId = output.phaseId,
             attempt = output.iteration.coerceAtLeast(1),
             agentId = agentId,
-            generation = state.evidenceGeneration(generationScoped),
+            generation = (if (generationScoped) state.reviewEvidenceGeneration else 0),
           ),
         )
     ) {
@@ -531,33 +514,6 @@ object PhaseAttemptContinuations {
     val rejection = args.rejection
     val transitionDeclaration = transitionDeclaration
     val coupling = settlementCoupling()
-    val regeneration =
-      PhaseAttemptContinuations.recordRejectionRegenerationEdge(transitionDeclaration, run.phaseId)
-    if (regeneration == null) {
-      return PhaseAttemptContinuations.blockUnattributableRecordRejection(
-        request,
-        recorder,
-        UnattributableRecordRejectionArgs(
-          context =
-            PhaseAttemptContext(
-              run,
-              coupling.transitions,
-              transitionDeclaration,
-              state,
-              coupling.session,
-              iteration,
-              observability,
-            ),
-          rejection = rejection,
-          producer =
-            transitionDeclaration.backwardEdges
-              .firstOrNull {
-                it.fromPhaseId == run.phaseId && it.triggeringVerdict == FeatureTaskRuntimeVerdict.RECORD_REJECTED
-              }?.destinationPhaseId,
-        ),
-        generationScoped = { acceptedStepPolicy(it).generationScoped },
-      )
-    }
     val attemptContext =
       PhaseAttemptContext(
         run,
@@ -568,6 +524,24 @@ object PhaseAttemptContinuations {
         iteration,
         observability,
       )
+    val regeneration =
+      PhaseAttemptContinuations.recordRejectionRegenerationEdge(transitionDeclaration, run.phaseId)
+    if (regeneration == null) {
+      return PhaseAttemptContinuations.blockUnattributableRecordRejection(
+        request,
+        recorder,
+        UnattributableRecordRejectionArgs(
+          context = attemptContext,
+          rejection = rejection,
+          producer =
+            transitionDeclaration.backwardEdges
+              .firstOrNull {
+                it.fromPhaseId == run.phaseId && it.triggeringVerdict == FeatureTaskRuntimeVerdict.RECORD_REJECTED
+              }?.destinationPhaseId,
+        ),
+        generationScoped = { acceptedStepPolicy(it).generationScoped },
+      )
+    }
     val evidenceResolution =
       PhaseAttemptContinuations
         .readProducerEvidenceForRecordRejection(
@@ -635,7 +609,7 @@ object PhaseAttemptContinuations {
 
   internal fun readProducerEvidenceForRecordRejection(
     request: FeatureTaskRuntimeRunFacts,
-    state: FeatureTaskRuntimeRunLoopProgressObservations,
+    state: FeatureTaskRuntimeProgressSnapshotAccess,
     recorder: PhaseRunRecords,
     observability: FeatureTaskRuntimeRunObservability,
     args: ProducerEvidenceRecordRejectionArgs,
@@ -647,10 +621,10 @@ object PhaseAttemptContinuations {
     val producer = args.producer
     val consumer = args.consumer
     val producingIteration =
-      (state.outputFor(producer)?.iteration ?: state.recordFor(producer)?.attemptCount ?: 1)
+      (state.phase(producer).output?.iteration ?: state.phase(producer).record?.attemptCount ?: 1)
         .coerceAtLeast(1)
     val producerAgentId =
-      state.recordFor(producer)?.resolvedAgentId
+      state.phase(producer).record?.resolvedAgentId
         ?: return missingProducerAgentResolution(
           MissingProducerAgentResolutionArgs(
             request,
@@ -672,7 +646,7 @@ object PhaseAttemptContinuations {
             phaseId = producer,
             attempt = producingIteration,
             agentId = producerAgentId,
-            generation = state.evidenceGeneration(args.producerGenerationScoped),
+            generation = (if (args.producerGenerationScoped) state.reviewEvidenceGeneration else 0),
           ),
         )
     ) {
@@ -683,12 +657,10 @@ object PhaseAttemptContinuations {
       ->
         RecordRejectionEvidenceResolution.Settled(
           missingProducerEvidenceBlock(
-            request,
-            args.context.state,
-            args.context.loopTransitions,
-            recorder,
-            observability,
-            MissingProducerEvidenceBlockArgs(
+    args.context.state,
+    args.context.loopTransitions,
+    recorder,
+    MissingProducerEvidenceBlockArgs(
               run = run,
               iteration = iteration,
               consumer = consumer,
@@ -699,7 +671,7 @@ object PhaseAttemptContinuations {
               progress = args.context.state,
               loopTransitions = args.context.loopTransitions,
             ),
-          ),
+  ),
         )
     }
   }
@@ -709,12 +681,10 @@ object PhaseAttemptContinuations {
   ): RecordRejectionEvidenceResolution =
     RecordRejectionEvidenceResolution.Settled(
       missingProducerAgentBlock(
-        args.request,
-        args.state,
-        args.loopTransitions,
-        args.recorder,
-        args.observability,
-        MissingProducerAgentBlockArgs(
+    args.state,
+    args.loopTransitions,
+    args.recorder,
+    MissingProducerAgentBlockArgs(
           args.run,
           args.iteration,
           args.consumer,
@@ -723,24 +693,20 @@ object PhaseAttemptContinuations {
           args.state,
           args.loopTransitions,
         ),
-      ),
+  ),
     )
 
   private fun missingProducerAgentBlock(
-    request: FeatureTaskRuntimeRunFacts,
-    progress: FeatureTaskRuntimeRunLoopProgressObservations,
-    loopTransitions: FeatureTaskRuntimeRunLoopTransitionOwner,
+    progress: FeatureTaskRuntimeProgressSnapshotAccess,
+    loopTransitions: FeatureTaskRuntimeRunTransitionOwner,
     recorder: PhaseRunRecords,
-    observability: FeatureTaskRuntimeRunObservability,
     args: MissingProducerAgentBlockArgs,
   ): PhaseOutcome =
     FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-      request,
-      progress,
-      loopTransitions,
-      recorder,
-      observability,
-      PhaseBlockRequest(
+    progress,
+    loopTransitions,
+    recorder,
+    PhaseBlockRequest(
         run = args.run,
         attemptCount = args.iteration,
         reason =
@@ -751,7 +717,7 @@ object PhaseAttemptContinuations {
         observability = args.observability,
         failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
       ),
-    )
+  )
 
   private data class MissingProducerEvidenceBlockArgs(
     val run: PhaseRun,
@@ -761,16 +727,14 @@ object PhaseAttemptContinuations {
     val producingIteration: Int,
     val producerRead: FeatureTaskRuntimeProducerOutputRead,
     val observability: FeatureTaskRuntimeRunObservability,
-    val progress: FeatureTaskRuntimeRunLoopProgressObservations,
-    val loopTransitions: FeatureTaskRuntimeRunLoopTransitionOwner,
+    val progress: FeatureTaskRuntimeProgressSnapshotAccess,
+    val loopTransitions: FeatureTaskRuntimeRunTransitionOwner,
   )
 
   private fun missingProducerEvidenceBlock(
-    request: FeatureTaskRuntimeRunFacts,
-    progress: FeatureTaskRuntimeRunLoopProgressObservations,
-    loopTransitions: FeatureTaskRuntimeRunLoopTransitionOwner,
+    progress: FeatureTaskRuntimeProgressSnapshotAccess,
+    loopTransitions: FeatureTaskRuntimeRunTransitionOwner,
     recorder: PhaseRunRecords,
-    observability: FeatureTaskRuntimeRunObservability,
     args: MissingProducerEvidenceBlockArgs,
   ): PhaseOutcome {
     val evidenceClause =
@@ -783,12 +747,10 @@ object PhaseAttemptContinuations {
           "of fabricating a rejected-output diagnostic from normalized workflow persistence.state."
       }
     return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-      request,
-      progress,
-      loopTransitions,
-      recorder,
-      observability,
-      PhaseBlockRequest(
+    progress,
+    loopTransitions,
+    recorder,
+    PhaseBlockRequest(
         run = args.run,
         attemptCount = args.iteration,
         reason =
@@ -797,12 +759,12 @@ object PhaseAttemptContinuations {
         observability = args.observability,
         failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
       ),
-    )
+  )
   }
 
   internal fun quarantineRecordRejection(
     request: FeatureTaskRuntimeRunFacts,
-    state: FeatureTaskRuntimeRunLoopProgressObservations,
+    state: FeatureTaskRuntimeProgressSnapshotAccess,
     recorder: PhaseRunRecords,
     args: QuarantineRecordRejectionArgs,
   ): PhaseOutcome =
@@ -815,7 +777,7 @@ object PhaseAttemptContinuations {
 
   internal fun quarantineRecordRejectionBody(
     request: FeatureTaskRuntimeRunFacts,
-    state: FeatureTaskRuntimeRunLoopProgressObservations,
+    state: FeatureTaskRuntimeProgressSnapshotAccess,
     recorder: PhaseRunRecords,
     args: QuarantineRecordRejectionArgs,
   ): PhaseOutcome {
@@ -828,7 +790,7 @@ object PhaseAttemptContinuations {
     val consumer = run.phaseId
     val producer = regeneration.producer
     val producingIteration =
-      (state.outputFor(producer)?.iteration ?: state.recordFor(producer)?.attemptCount ?: 1)
+      (state.phase(producer).output?.iteration ?: state.phase(producer).record?.attemptCount ?: 1)
         .coerceAtLeast(1)
     val diagnosticWrite =
       writeQuarantineRejectedOutput(
@@ -851,7 +813,7 @@ object PhaseAttemptContinuations {
         producer = producer,
         producingIteration = producingIteration,
         rejection = rejection,
-        regenerationAttempt = (state.edgeIterationCount(regeneration.edge.loopId) + 1).coerceAtLeast(1),
+        regenerationAttempt = (state.loop(regeneration.edge.loopId).iteration + 1).coerceAtLeast(1),
         iteration = iteration,
         diagnosticWrite = diagnosticWrite,
         producerEvidence = producerEvidence,
@@ -861,7 +823,7 @@ object PhaseAttemptContinuations {
   }
 
   private fun writeQuarantineRejectedOutput(
-    state: FeatureTaskRuntimeRunLoopProgressObservations,
+    state: FeatureTaskRuntimeProgressSnapshotAccess,
     recorder: PhaseRunRecords,
     args: WriteQuarantineRejectedOutputArgs,
   ): FeatureTaskRuntimeRejectedOutputWrite {

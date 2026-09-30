@@ -39,7 +39,6 @@ import skillbill.engine.featuretask.slot.attempt.blockAndPersistInPhase
 import skillbill.engine.featuretask.slot.attempt.finalizationCoupledProgress
 import skillbill.engine.featuretask.slot.attempt.persistFinalizationCompleted
 import skillbill.engine.featuretask.slot.attempt.persistFinalizationRequiredRunning
-import skillbill.engine.featuretask.slot.commitpush.InMemoryCommitPush
 import skillbill.engine.featuretask.validation.ReadinessCommitPushSettleRequest
 import skillbill.engine.featuretask.validation.ReadinessCommitPushSettleResult
 import skillbill.engine.featuretask.validation.ReadinessCommittedHeadBindRequest
@@ -49,7 +48,6 @@ import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhas
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 private data class FinaliseSubtaskArgs(
   val branch: String,
@@ -66,9 +64,9 @@ private data class BindCommittedHeadArgs(
   val outcome: FeatureTaskRuntimeSubtaskFinalised,
 )
 
-object RuntimeCommitCycle {
+internal object FeatureTaskRuntimeRunLoopCommitCycle {
   internal fun PhaseRuntimeFinalizationContext.runDeclaredCommitPushCycle(run: PhaseRun): PhaseOutcome {
-    val iteration = progress.nextIteration(run.phaseId)
+    val iteration = progress.phase(run.phaseId).nextIteration
     persistRunning(run, iteration)?.let { return it }
     observability.started(
       run.phaseId,
@@ -80,7 +78,7 @@ object RuntimeCommitCycle {
     return settle(run, iteration)
   }
 
-  internal fun runtimeOwnedCommitPushOutput(receipt: FeatureTaskRuntimeCommitPushReceipt): String {
+  internal fun runtimeOwnedCommitPushOutput(phaseId: String, receipt: FeatureTaskRuntimeCommitPushReceipt): String {
     val result = linkedMapOf<String, Any?>()
     receipt.commitSha?.trim()?.takeIf(String::isNotBlank)?.let { sha ->
       result[DecompositionManifestPayloadKeys.COMMIT_SHA] = sha
@@ -95,7 +93,7 @@ object RuntimeCommitCycle {
     return JsonCodec.mapToJsonString(
       mapOf(
         SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-        SharedPayloadKeys.PHASE_ID to FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
+        SharedPayloadKeys.PHASE_ID to phaseId,
         SharedPayloadKeys.STATUS to STATUS_COMPLETED,
         SharedPayloadKeys.SUMMARY to "Runtime staged every dirty path, committed, and recorded commit_sha.",
         SharedPayloadKeys.PRODUCED_OUTPUTS to
@@ -144,6 +142,7 @@ object RuntimeCommitCycle {
       run,
       iteration,
       runtimeOwnedCommitPushOutput(
+        run.phaseId,
         FeatureTaskRuntimeCommitPushReceipt(result.value, branch, baseBranch, pushed = true),
       ),
     )
@@ -226,6 +225,7 @@ object RuntimeCommitCycle {
         args.run,
         args.iteration,
         runtimeOwnedCommitPushOutput(
+        args.run.phaseId,
           FeatureTaskRuntimeCommitPushReceipt(
             commitSha = args.outcome.commitSha,
             branch = args.branch,
@@ -299,7 +299,7 @@ object RuntimeCommitCycle {
     val accepted =
       accept(
         run,
-        runtimeOwnedCommitPushOutput(FeatureTaskRuntimeCommitPushReceipt(commitSha = null)),
+        runtimeOwnedCommitPushOutput(run.phaseId, FeatureTaskRuntimeCommitPushReceipt(commitSha = null)),
       ).getOrElse { error ->
         return block(
           run,
@@ -343,19 +343,17 @@ object RuntimeCommitCycle {
     val normalizedOutput = accepted.normalizedOutput
     if (!persistCompleted(run, iteration, outputText, accepted)) {
       return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-        request,
-        finalizationCoupledProgress(),
-        coupledRunTransitions,
-        recorder,
-        observability,
-        PhaseBlockRequest(
+    finalizationCoupledProgress(),
+    coupledRunTransitions,
+    recorder,
+    PhaseBlockRequest(
           run = run,
           attemptCount = iteration,
           reason = "Runtime-owned commit_push settlement could not be persisted.",
           observability = observability,
           failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
         ),
-      )
+  )
     }
     observability.completed(run.phaseId, run.resolvedAgent.resolvedAgentId, iteration)
     return PhaseOutcome.completed(

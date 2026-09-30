@@ -92,24 +92,32 @@ class FeatureTaskRuntimeBuildReceiptSchemaValidatorTest {
   fun coherenceRejectsZeroRunsUnknownOrMissingFactsAndMismatchedAggregates() {
     val receipt = representativeReceipt()
     val run = (receipt.getValue("gate_runs") as List<*>).single() as Map<*, *>
-    val missing = listOf("command", "exit_code", "repository_checkpoint", "executed_checks").map { key ->
-      receipt + ("gate_runs" to listOf(run - key))
-    }
-    val invalid = missing + listOf(
-      receipt + mapOf("gate_run_count" to 0, "gate_runs" to emptyList<Any>()),
-      receipt + ("gate_run_count" to 2),
-      receipt + ("checks" to listOf("invented")),
-      receipt + ("gate_runs" to listOf(run + ("outcome" to "unknown"))),
-      receipt + mapOf("gate_run_count" to 2, "gate_runs" to
-        listOf(run, run + mapOf("outcome" to "failed", "exit_code" to 1))),
-    )
+    val missing =
+      listOf("command", "exit_code", "repository_checkpoint", "executed_checks").map { key ->
+        receipt + ("gate_runs" to listOf(run - key))
+      }
+    val invalid =
+      missing +
+        listOf(
+          receipt + mapOf("gate_run_count" to 0, "gate_runs" to emptyList<Any>()),
+          receipt + ("gate_run_count" to 2),
+          receipt + ("checks" to listOf("invented")),
+          receipt + ("gate_runs" to listOf(run + ("outcome" to "unknown"))),
+          receipt +
+            mapOf(
+              "gate_run_count" to 2,
+              "gate_runs" to
+                listOf(run, run + mapOf("outcome" to "failed", "exit_code" to 1)),
+            ),
+        )
     invalid.forEach { payload ->
       assertFailsWith<InvalidFeatureTaskRuntimeBuildReceiptSchemaError> {
         FeatureTaskRuntimeBuildReceiptSchemaValidator.validate(payload, "coherence")
       }
     }
     FeatureTaskRuntimeBuildReceiptSchemaValidator.validate(
-      receipt + ("gate_runs" to listOf(run + ("executed_work_units" to 0))), "cached",
+      receipt + ("gate_runs" to listOf(run + ("executed_work_units" to 0))),
+      "cached",
     )
   }
 

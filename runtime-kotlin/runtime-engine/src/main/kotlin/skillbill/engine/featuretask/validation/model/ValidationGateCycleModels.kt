@@ -1,8 +1,7 @@
 package skillbill.engine.featuretask.validation.model
 
-import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
-import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.scaffold.model.ValidationGateDeclaration
@@ -79,7 +78,10 @@ sealed interface ValidationGateCycleTerminalOutcome {
 }
 
 fun interface ValidationGateProgressStore {
-  fun persist(workflowId: String, progress: FeatureTaskRuntimeValidationGateProgress)
+  fun persist(
+    workflowId: String,
+    progress: FeatureTaskRuntimeValidationGateProgress,
+  )
 
   fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress? = null
 }
@@ -97,13 +99,14 @@ data class ValidationGateProgressWrite(
       repairsUsed: Int,
       capturedTriagePlan: String?,
       remainingFindings: ValidationFindingSetProjection? = null,
-    ): ValidationGateProgressWrite = ValidationGateProgressWrite(
-      repairWindowPhase = FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN,
-      remainingFindings = remainingFindings,
-      completeFindings = completeFindings,
-      repairsUsed = repairsUsed,
-      capturedTriagePlan = capturedTriagePlan,
-    )
+    ): ValidationGateProgressWrite =
+      ValidationGateProgressWrite(
+        repairWindowPhase = FeatureTaskRuntimeValidationGateRepairWindowPhase.FINDINGS_OPEN,
+        remainingFindings = remainingFindings,
+        completeFindings = completeFindings,
+        repairsUsed = repairsUsed,
+        capturedTriagePlan = capturedTriagePlan,
+      )
   }
 }
 

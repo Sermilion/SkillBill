@@ -7,7 +7,7 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.state.featureTaskRuntimeRunLoopStepBinding
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
@@ -15,6 +15,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
+import skillbill.engine.goalrunner.planning.state.GoalPlanningPhaseRunState
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
 
@@ -36,7 +37,7 @@ internal class RejectingPlanningRunLoopEntry(
 
         override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
           stepBinding.beginStepBinding(run)
-          return featureTaskRuntimeRunLoopStepBinding(
+          return FeatureTaskRuntimeRunLoopStepBindings.create(
             skillbill.engine.featuretask.slot.attempt.phaseAttemptCollaborationScope(
               PhaseAttemptRunHost(run.request, this, run.phaseId, this),
             ),
@@ -50,7 +51,23 @@ internal class RejectingPlanningRunLoopEntry(
             override fun unitState(
               unitId: Int,
               outputSink: AgentRunOutputSink,
-            ): PhaseAcceptedStepExecution = fanOut.unitState(unitId, outputSink)
+            ): PhaseAcceptedStepExecution {
+              val run = delegate.stepBinding.requireAuthorizedFanOutWave()
+              val unit = (delegate as GoalPlanningPhaseRunState).planningUnitState(unitId, outputSink)
+              val interceptedUnit =
+                object : PhaseRunState by unit {
+                  override val records = rejecting(unit.records)
+                }
+              delegate.stepBinding.beginStepBinding(run, unitId)
+              return FeatureTaskRuntimeRunLoopStepBindings.create(
+                skillbill.engine.featuretask.slot.attempt.phaseAttemptCollaborationScope(
+                  PhaseAttemptRunHost(run.request, interceptedUnit, run.phaseId, interceptedUnit),
+                ),
+                run,
+                unitId,
+                bindingCoordinator = delegate.stepBinding,
+              )
+            }
           }
         }
       }

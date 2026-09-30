@@ -318,7 +318,8 @@ class RuntimeEnginePublicTopLevelDeclarationArchitectureTest {
     var entered = false
     val bodies = linkedMapOf<String, StringBuilder>()
     val fileScope = StringBuilder()
-    source.lineSequence().forEach { line ->
+    val lines = source.lineSequence().filterNot { it.trimStart().startsWith("import ") }.toList()
+    lines.forEachIndexed { index, line ->
       if (current == null && braceDepth == 0) {
         STEP_DECLARATION.find(line)?.groupValues?.get(1)?.let { name ->
           current = name
@@ -334,7 +335,8 @@ class RuntimeEnginePublicTopLevelDeclarationArchitectureTest {
       parenDepth -= line.count { character -> character == ')' }
       if (braceDepth > 0) entered = true
       val bodyClosed = entered
-      val bodyLessDeclarationClosed = parenDepth <= 0
+      val nextLine = lines.drop(index + 1).firstOrNull { it.isNotBlank() }
+      val bodyLessDeclarationClosed = parenDepth <= 0 && (nextLine == null || !nextLine.first().isWhitespace())
       if (braceDepth <= 0 && (bodyClosed || bodyLessDeclarationClosed)) {
         current = null
         entered = false

@@ -24,17 +24,18 @@ internal fun defaultPhaseExecution(
 internal fun attemptPhaseExecution(
   phaseId: String,
   context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
-): IdeStatusCurrentPhaseExecution? = context.phases
-  .firstOrNull { it.phaseId == phaseId }
-  ?.attemptCount
-  ?.takeIf { it >= 1 }
-  ?.let { count ->
-    IdeStatusCurrentPhaseExecution(
-      phaseId = phaseId,
-      kind = IdeStatusCurrentPhaseExecutionKind.ATTEMPT,
-      count = count,
-    )
-  }
+): IdeStatusCurrentPhaseExecution? =
+  context.phases
+    .firstOrNull { it.phaseId == phaseId }
+    ?.attemptCount
+    ?.takeIf { it >= 1 }
+    ?.let { count ->
+      IdeStatusCurrentPhaseExecution(
+        phaseId = phaseId,
+        kind = IdeStatusCurrentPhaseExecutionKind.ATTEMPT,
+        count = count,
+      )
+    }
 
 private fun edgePhaseExecution(
   phaseId: String,
@@ -45,11 +46,11 @@ private fun edgePhaseExecution(
   return IdeStatusCurrentPhaseExecution(
     phaseId = phaseId,
     kind =
-    if (edge.perEdgeCap == null) {
-      IdeStatusCurrentPhaseExecutionKind.SEMANTIC_LOOP
-    } else {
-      IdeStatusCurrentPhaseExecutionKind.BOUNDED_EDGE
-    },
+      if (edge.perEdgeCap == null) {
+        IdeStatusCurrentPhaseExecutionKind.SEMANTIC_LOOP
+      } else {
+        IdeStatusCurrentPhaseExecutionKind.BOUNDED_EDGE
+      },
     count = edgeIteration,
     total = edge.perEdgeCap,
   )

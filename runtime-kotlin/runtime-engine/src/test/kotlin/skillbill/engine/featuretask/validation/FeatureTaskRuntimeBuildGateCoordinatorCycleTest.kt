@@ -202,24 +202,36 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
     val runner = ScriptedGateRunner(listOf(failedEmptyFindings("compiler could not start")))
     val progress = RecordingProgressStore(mutableListOf(), null)
     val reason = "Required briefing write rejected for phase 'build', attempt 1."
-    val result = buildCoordinator(declaredResolver(declarationWithBuild()), runner).execute(
-      ValidationGateCycleRequest(
-        phaseId = "build",
-        repoRoot = validationGateTestRepoRoot,
-        request = minimalRequest(),
-        validationDepth = ValidationDepth.DEFAULT,
-        changedPaths = listOf("runtime-kotlin/foo.kt"),
-        repositoryCheckpoint = "checkpoint",
-        progressStore = progress,
-        agentTriageLauncher = ValidationGateAgentTriageLauncher {
-          ValidationGateTriageResult.Stopped(ValidationGateCycleTerminalOutcome.Blocked(reason))
-        },
-        agentRepairLauncher = ValidationGateAgentRepairLauncher { _, _, _ -> error("Triage rejection must stop repair") },
-      ),
+    val result =
+      buildCoordinator(declaredResolver(declarationWithBuild()), runner).execute(
+        ValidationGateCycleRequest(
+          phaseId = "build",
+          repoRoot = validationGateTestRepoRoot,
+          request = minimalRequest(),
+          validationDepth = ValidationDepth.DEFAULT,
+          changedPaths = listOf("runtime-kotlin/foo.kt"),
+          repositoryCheckpoint = "checkpoint",
+          progressStore = progress,
+          agentTriageLauncher =
+            ValidationGateAgentTriageLauncher {
+              ValidationGateTriageResult.Stopped(ValidationGateCycleTerminalOutcome.Blocked(reason))
+            },
+          agentRepairLauncher =
+            ValidationGateAgentRepairLauncher {
+                _,
+                _,
+                _,
+              ->
+              error("Triage rejection must stop repair")
+            },
+        ),
+      )
+    assertEquals(
+      reason,
+      assertIs<ValidationGateCycleTerminalOutcome.Blocked>(
+        assertIs<ValidationGateCycleResult.Terminal>(result).outcome,
+      ).reason,
     )
-    assertEquals(reason, assertIs<ValidationGateCycleTerminalOutcome.Blocked>(
-      assertIs<ValidationGateCycleResult.Terminal>(result).outcome,
-    ).reason)
     assertEquals(1, runner.calls)
   }
 
@@ -227,22 +239,25 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
   fun aCommandCannotCertifyAChangedRepositoryCheckpoint() {
     val runner = ScriptedGateRunner(listOf(passed()))
     var checkpointsRead = 0
-    val result = buildCoordinator(declaredResolver(declarationWithBuild()), runner).execute(
-      ValidationGateCycleRequest(
-        phaseId = "build",
-        repoRoot = validationGateTestRepoRoot,
-        request = minimalRequest(),
-        validationDepth = ValidationDepth.DEFAULT,
-        changedPaths = listOf("runtime-kotlin/foo.kt"),
-        repositoryCheckpoint = "before",
-        repositoryCheckpointProvider = { if (checkpointsRead++ == 0) "before" else "after" },
-        progressStore = RecordingProgressStore(mutableListOf(), null),
-        agentRepairLauncher = ValidationGateAgentRepairLauncher { _, _, _ -> error("No repair was authorized") },
-      ),
+    val result =
+      buildCoordinator(declaredResolver(declarationWithBuild()), runner).execute(
+        ValidationGateCycleRequest(
+          phaseId = "build",
+          repoRoot = validationGateTestRepoRoot,
+          request = minimalRequest(),
+          validationDepth = ValidationDepth.DEFAULT,
+          changedPaths = listOf("runtime-kotlin/foo.kt"),
+          repositoryCheckpoint = "before",
+          repositoryCheckpointProvider = { if (checkpointsRead++ == 0) "before" else "after" },
+          progressStore = RecordingProgressStore(mutableListOf(), null),
+          agentRepairLauncher = ValidationGateAgentRepairLauncher { _, _, _ -> error("No repair was authorized") },
+        ),
+      )
+    assertTrue(
+      assertIs<ValidationGateCycleTerminalOutcome.Blocked>(
+        assertIs<ValidationGateCycleResult.Terminal>(result).outcome,
+      ).reason.contains("checkpoint changed"),
     )
-    assertTrue(assertIs<ValidationGateCycleTerminalOutcome.Blocked>(
-      assertIs<ValidationGateCycleResult.Terminal>(result).outcome,
-    ).reason.contains("checkpoint changed"))
     assertEquals(1, runner.calls)
   }
 

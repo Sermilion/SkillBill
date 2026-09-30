@@ -1,8 +1,11 @@
 package skillbill.engine.featuretask.runloop.state
 
+import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRemediationCollaborationScope
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.state.PhaseFindingVerificationState
 import skillbill.engine.featuretask.slot.state.PhaseRepairReceiptState
 import skillbill.goalrunner.model.UnaddressedFinding
@@ -12,7 +15,8 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.goalreview.upsertRepairReceipt
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
+import skillbill.engine.featuretask.slot.attempt.runLoopBinding
 
 internal class FeatureTaskRuntimeRunLoopFindingVerificationState(
   private val environment: PhaseAttemptRemediationCollaborationScope,
@@ -35,7 +39,7 @@ internal class FeatureTaskRuntimeRunLoopFindingVerificationState(
   override fun persistFindingVerificationCheckpoint(
     dispositions: List<FeatureTaskRuntimeFindingVerificationDisposition>,
   ): Boolean {
-    requireAcceptedWriter(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS)
+    requireAcceptedWriter(PhaseExecutionBindingKind.FINDING_VERIFICATION)
     return environment.recorder.persistFindingVerificationCheckpoint(workflowId, dispositions)
   }
 
@@ -45,7 +49,7 @@ internal class FeatureTaskRuntimeRunLoopFindingVerificationState(
   override fun persistVerificationBoundarySelection(
     selections: Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>,
   ): Boolean {
-    requireAcceptedWriter(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS)
+    requireAcceptedWriter(PhaseExecutionBindingKind.FINDING_VERIFICATION)
     return environment.recorder.persistFindingVerificationBoundarySelection(workflowId, selections)
   }
 
@@ -53,7 +57,7 @@ internal class FeatureTaskRuntimeRunLoopFindingVerificationState(
     passNumber: Int,
     rejected: List<UnaddressedFinding>,
   ) {
-    requireAcceptedWriter(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS)
+    requireAcceptedWriter(PhaseExecutionBindingKind.FINDING_VERIFICATION)
     environment.recorder.appendRejectedVerificationFindings(workflowId, passNumber, rejected)
   }
 
@@ -64,13 +68,26 @@ internal class FeatureTaskRuntimeRunLoopFindingVerificationState(
     )
 
   override fun recordRepairReceipt(receipt: FeatureTaskRuntimeRepairReceipt): Boolean {
-    requireAcceptedWriter(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX)
+    requireAcceptedWriter(PhaseExecutionBindingKind.REPAIR_RECEIPT)
     return environment.goalContinuationRecorder.updateReviewState(workflowId) { it.upsertRepairReceipt(receipt) } !=
       null
   }
 
-  private fun requireAcceptedWriter(phaseId: String) {
+  private fun requireAcceptedWriter(kind: PhaseExecutionBindingKind) {
     bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
-    check(run.phaseId == phaseId) { "Finding write belongs to accepted step '$phaseId'." }
+    check(environment.runLoopBinding.selectedOwnerOf(run.phaseId)?.executionBindingKind(run.phaseId) == kind) {
+      "Finding write belongs to the accepted binding kind '$kind'."
+    }
   }
 }
+
+internal fun PhaseAttemptRunHost.recordReviewRunForAcceptedStep(
+  reviewRunId: String,
+  result: ParallelCodeReviewResult,
+  laneTelemetryRecorded: Boolean,
+) {
+  recordReviewRunForRunStatePorts(reviewRunId, result, laneTelemetryRecorded)
+}
+
+internal fun PhaseAttemptRunHost.pinnedReviewTargetForAcceptedStep(resolve: () -> ReviewTarget): ReviewTarget =
+  pinnedReviewTargetForRunStatePorts(resolve)

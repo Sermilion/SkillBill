@@ -4,11 +4,17 @@ import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
-/** Read-only progress and attempt facts for one run; mutation routes through [FeatureTaskRuntimeRunLoopTransitionOwner]. */
+
+/**
+ * Read-only progress and attempt facts for one run; mutation routes through [FeatureTaskRuntimeRunTransitionOwner].
+ */
 internal interface FeatureTaskRuntimeRunProgressObservations {
+  fun phase(phaseId: String): PhaseProgressObservation
+
   val transitions: FeatureTaskRuntimeTransitionDeclaration
 
   val initialRecords: Map<String, FeatureTaskRuntimePhaseRecord>
@@ -19,17 +25,13 @@ internal interface FeatureTaskRuntimeRunProgressObservations {
 
   fun outputs(requiredPhaseIds: Collection<String> = emptyList()): List<FeatureTaskRuntimePhaseOutput>
 
-  fun outputs(): List<FeatureTaskRuntimePhaseOutput> = outputs(emptyList())
+  val phasesRequiringDurableGateInvalidation: Set<String>
 
-  fun phasesRequiringDurableGateInvalidation(): Set<String>
-
-  fun recordFor(phaseId: String): FeatureTaskRuntimePhaseRecord?
 
   fun explicitResumeStart(requestedPhaseId: String): ExplicitResumeStart
 
-  fun isComplete(phaseId: String): Boolean
 
-  fun completedPhaseIds(): List<String>
+  val completedPhaseIds: List<String>
 
   fun fixLoopIterationFor(
     phaseId: String,
@@ -41,33 +43,28 @@ internal interface FeatureTaskRuntimeRunProgressObservations {
     currentReason: String,
   ): Boolean
 
-  fun hasPriorRecord(phaseId: String): Boolean
 
-  fun resumedFromPriorProcess(phaseId: String): Boolean
 
-  fun persistedBlockedReason(phaseId: String): String?
 
-  fun hasBranchSetupBlock(phaseId: String): Boolean
 
-  fun edgeIterationCount(loopId: String): Int
+  fun loop(loopId: String): LoopProgressObservation
 
-  fun isLoopLiveClaimed(loopId: String): Boolean
 
-  fun outputFor(phaseId: String): FeatureTaskRuntimePhaseOutput?
 
-  fun nextIteration(phaseId: String): Int
 
-  fun evidenceGeneration(generationScoped: Boolean): Int
+  val reviewEvidenceGeneration: Int
+
+  fun durableVerdictFor(phaseId: String): FeatureTaskRuntimeVerdict
 
   fun verdictFor(phaseId: String): FeatureTaskRuntimeVerdict
 
+
   fun spanBlockedByEntryGate(span: List<String>): Boolean
 
-  fun durableVerdictFor(phaseId: String): FeatureTaskRuntimeVerdict
 }
 
 /** Run-loop phase blocking inputs that need review-pass and resume metadata. */
-internal interface FeatureTaskRuntimeRunLoopProgressObservations : FeatureTaskRuntimeRunProgressObservations {
+internal interface FeatureTaskRuntimeProgressSnapshotAccess : FeatureTaskRuntimeRunProgressObservations {
   fun persistedBlockResume(
     phaseId: String,
     reason: String,
@@ -82,3 +79,61 @@ internal interface FeatureTaskRuntimeRunLoopProgressObservations : FeatureTaskRu
 
   val resumeRules: (String) -> PhaseResumeRules
 }
+
+internal fun detachedProgressObservations(
+  captured: FeatureTaskRuntimeRunState,
+): FeatureTaskRuntimeProgressSnapshotAccess = DetachedProgressObservations(captured)
+
+private class DetachedProgressObservations(
+  private val captured: FeatureTaskRuntimeRunState,
+) : FeatureTaskRuntimeProgressSnapshotAccess by captured
+
+
+internal data class PhaseProgressObservation(
+  val completed: Boolean,
+  val hasPriorRecord: Boolean,
+  val resumedFromPriorProcess: Boolean,
+  val blockedReason: String?,
+  val branchSetupBlocked: Boolean,
+  val record: FeatureTaskRuntimePhaseRecord?,
+  val output: FeatureTaskRuntimePhaseOutput?,
+  val nextIteration: Int,
+)
+
+internal data class LoopProgressObservation(
+  val iteration: Int,
+  val liveClaimed: Boolean,
+)
+
+
+internal fun detachedOutput(output: FeatureTaskRuntimePhaseOutput): FeatureTaskRuntimePhaseOutput =
+  output.copy(
+    normalizedOutput =
+      output.normalizedOutput?.let { normalized ->
+        NormalizedFeatureTaskRuntimePhaseOutput(
+          normalized.canonicalJson,
+          detachedEnvelope(normalized),
+        )
+      },
+  )
+
+internal fun detachedEnvelope(normalized: NormalizedFeatureTaskRuntimePhaseOutput): Map<String, Any?> {
+  val envelope = normalized.envelopePayload() as Map<*, *>
+  return envelope.entries.associate { (key, value) -> key.toString() to detachedJsonValue(value) }
+}
+
+internal fun detachedRecord(record: FeatureTaskRuntimePhaseRecord): FeatureTaskRuntimePhaseRecord =
+  record.copy(
+    fileManifestBefore = record.fileManifestBefore.toList(),
+    fileManifestAfter = record.fileManifestAfter.toList(),
+    fileManifestIntroduced = record.fileManifestIntroduced.toList(),
+  )
+
+internal fun detachedJsonValue(value: Any?): Any? =
+  when (value) {
+    is Map<*, *> -> value.entries.associate { (key, nested) -> key.toString() to detachedJsonValue(nested) }
+    is List<*> -> value.map(::detachedJsonValue)
+    is Set<*> -> value.mapTo(linkedSetOf(), ::detachedJsonValue)
+    is Array<*> -> value.map(::detachedJsonValue)
+    else -> value
+  }

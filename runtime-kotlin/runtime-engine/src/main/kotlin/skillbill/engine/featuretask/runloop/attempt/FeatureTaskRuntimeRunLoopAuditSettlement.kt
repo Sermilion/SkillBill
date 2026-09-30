@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.runloop.attempt
 
+import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.runloop.core.AttemptResult
@@ -9,7 +10,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
 import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditProgress
-import skillbill.engine.featuretask.slot.audit.AcceptanceAuditVerdictRule.Companion.auditProseValue
+import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.feature.FeatureTaskRuntimeAuditRemainingAcInterpretation
@@ -18,7 +19,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
-internal object RunLoopAuditSettlement {
+internal object FeatureTaskRuntimeRunLoopAuditSettlement {
   fun settleCompletedRound(
     context: PhaseCheckpointRemediationContext,
     capture: ValidatedOutputCapture,
@@ -49,7 +50,7 @@ internal object RunLoopAuditSettlement {
     fileManifest: FeatureTaskRuntimePhaseFileManifest?,
   ): AttemptResult =
     AttemptResult.settled(
-      context.blockStepInPhase(
+      FeatureTaskRuntimeRunLoopPhaseBlocking.blockStepInPhase(context,
         PhaseBlockRequest(
           run = run,
           attemptCount = iteration,
@@ -70,7 +71,7 @@ internal object RunLoopAuditSettlement {
     reason: String,
   ): AttemptResult =
     AttemptResult.settled(
-      context.blockStepInPhase(
+      FeatureTaskRuntimeRunLoopPhaseBlocking.blockStepInPhase(context,
         PhaseBlockRequest(
           run = capture.run,
           attemptCount = capture.iteration,

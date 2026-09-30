@@ -39,6 +39,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.error as failDiagnosticSink
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 class FeatureTaskContinuationAdmissionTest {
@@ -68,31 +69,35 @@ class FeatureTaskContinuationAdmissionTest {
     withFixture { fixture ->
       val original = fixture.row()
       val descriptor = fixture.execution.descriptor()
-      val revised = descriptor + (
-        Keys.DEFINITION to (
-          requireNotNull(JsonCodec.anyToStringAnyMap(descriptor[Keys.DEFINITION])) + (Keys.SEMANTIC_REVISION to 99)
+      val revised =
+        descriptor + (
+          Keys.DEFINITION to (
+            requireNotNull(JsonCodec.anyToStringAnyMap(descriptor[Keys.DEFINITION])) + (Keys.SEMANTIC_REVISION to 99)
           )
         )
-      val changed = fixture.execution.validator.read(
-        fixture.execution.codec.encodeExecution(
-          fixture.execution.plan,
-          fixture.execution.inputs.copy(phaseTimeoutMillis = 1),
-        ),
-        "changed settings",
-      )
-      val cases = listOf(
-        null to MissingFeatureTaskRuntimeExecutionPlanError::class,
-        "unreadable-descriptor" to CorruptFeatureTaskRuntimeExecutionPlanError::class,
-        (descriptor + (Keys.CONTRACT_VERSION to "9.0")) to UnsupportedFeatureTaskRuntimeExecutionPlanError::class,
-        revised to UnsupportedFeatureTaskRuntimeExecutionPlanError::class,
-        changed to IncompatibleFeatureTaskRuntimeExecutionPlanError::class,
-      )
+      val changed =
+        fixture.execution.validator.read(
+          fixture.execution.codec.encodeExecution(
+            fixture.execution.plan,
+            fixture.execution.inputs.copy(phaseTimeoutMillis = 1),
+          ),
+          "changed settings",
+        )
+      val cases =
+        listOf(
+          null to MissingFeatureTaskRuntimeExecutionPlanError::class,
+          "unreadable-descriptor" to CorruptFeatureTaskRuntimeExecutionPlanError::class,
+          (descriptor + (Keys.CONTRACT_VERSION to "9.0")) to UnsupportedFeatureTaskRuntimeExecutionPlanError::class,
+          revised to UnsupportedFeatureTaskRuntimeExecutionPlanError::class,
+          changed to IncompatibleFeatureTaskRuntimeExecutionPlanError::class,
+        )
       cases.forEach { (value, expectedType) ->
         fixture.replaceDescriptor(original, value)
         val before = fixture.row()
-        val error = assertFailsWith<FeatureTaskRuntimeExecutionPlanAdmissionError> {
-          fixture.lookup.claim(fixture.candidate(), fixture.execution.inputs)
-        }
+        val error =
+          assertFailsWith<FeatureTaskRuntimeExecutionPlanAdmissionError> {
+            fixture.lookup.claim(fixture.candidate(), fixture.execution.inputs)
+          }
         assertEquals(expectedType, error::class)
         assertEquals(before, fixture.row())
         assertEquals(0, fixture.execution.launches)
@@ -109,13 +114,14 @@ class FeatureTaskContinuationAdmissionTest {
     withFixture { fixture ->
       val candidate = fixture.candidate()
       val original = fixture.row()
-      val changed = fixture.execution.validator.read(
-        fixture.execution.codec.encodeExecution(
-          fixture.execution.plan,
-          fixture.execution.inputs.copy(packSlug = "different-pack"),
-        ),
-        "changed routing",
-      )
+      val changed =
+        fixture.execution.validator.read(
+          fixture.execution.codec.encodeExecution(
+            fixture.execution.plan,
+            fixture.execution.inputs.copy(packSlug = "different-pack"),
+          ),
+          "changed routing",
+        )
       fixture.replaceDescriptor(original, changed)
       val before = fixture.row()
       assertEquals(candidate.updatedAt, before.updatedAt)
@@ -205,17 +211,23 @@ class FeatureTaskContinuationAdmissionTest {
     }
     withFixture { fixture ->
       fixture.replaceDescriptor(fixture.row(), null)
-      val lookup = FeatureTaskContinuationLookupService(
-        fixture.database,
-        testWorkflowSnapshotValidator,
-        fixture.execution.compatibility,
-        object : RuntimeDiagnostics {
-          override fun warning(message: String, error: Throwable?) =
-            throw IllegalStateException("diagnostic sink unavailable")
-          override fun error(message: String, error: Throwable?) =
-            throw IllegalStateException("diagnostic sink unavailable")
-        },
-      )
+      val lookup =
+        FeatureTaskContinuationLookupService(
+          fixture.database,
+          testWorkflowSnapshotValidator,
+          fixture.execution.compatibility,
+          object : RuntimeDiagnostics {
+            override fun warning(
+              message: String,
+              error: Throwable?,
+            ) = failDiagnosticSink("diagnostic sink unavailable")
+
+            override fun error(
+              message: String,
+              error: Throwable?,
+            ) = failDiagnosticSink("diagnostic sink unavailable")
+          },
+        )
       val before = fixture.row()
       assertFailsWith<MissingFeatureTaskRuntimeExecutionPlanError> {
         lookup.claim(fixture.candidate(), fixture.execution.inputs)
@@ -230,32 +242,22 @@ class FeatureTaskContinuationAdmissionTest {
     try {
       val database = phaseRunDatabase(home, testHarnessClock)
       val execution = ExecutionPlanAdmissionFixture()
-      val record = WorkflowEngine().openRecord(WorkflowFamily.TASK_RUNTIME.definition, WORKFLOW_ID, "session", "plan")
-        .toRecord().copy(
-          issueKey = "SKILL-384",
-          artifactsJson = JsonCodec.mapToJsonString(mapOf(family.entry(execution.descriptor()))),
+      val record =
+        WorkflowEngine().openRecord(WorkflowFamily.TASK_RUNTIME.definition, WORKFLOW_ID, "session", "plan")
+          .toRecord().copy(
+            issueKey = "SKILL-384",
+            artifactsJson = JsonCodec.mapToJsonString(mapOf(family.entry(execution.descriptor()))),
+          )
+      seedContinuationIdentity(database, record)
+      val recorder =
+        featureTaskRuntimePhaseRecorder(
+          database,
+          NoopWorkflowSnapshotValidator,
+          AcceptingFeatureTaskRuntimeWireArtifactValidator,
+          AcceptingFeatureTaskRuntimeWireArtifactValidator,
+          testHarnessClock,
+          NoopRuntimeDiagnostics,
         )
-      database.transaction { unit ->
-        unit.workflowStates.saveFeatureTaskWorkflow(record, FeatureTaskWorkflowMode.RUNTIME)
-        unit.workflowStates.saveFeatureTaskExecutionIdentity(
-          FeatureTaskExecutionIdentity(
-            WORKFLOW_ID,
-            "SKILL-384",
-            REPOSITORY,
-            SPEC,
-            FeatureTaskWorkflowMode.RUNTIME,
-            FeatureTaskRouteScope.STANDALONE,
-          ),
-        )
-      }
-      val recorder = featureTaskRuntimePhaseRecorder(
-        database,
-        NoopWorkflowSnapshotValidator,
-        AcceptingFeatureTaskRuntimeWireArtifactValidator,
-        AcceptingFeatureTaskRuntimeWireArtifactValidator,
-        testHarnessClock,
-        NoopRuntimeDiagnostics,
-      )
       assertTrue(
         recorder.recordPhaseState(
           FeatureTaskRuntimePhaseStateRequest(
@@ -298,42 +300,57 @@ class FeatureTaskContinuationAdmissionTest {
 
   private class Fixture(val database: DatabaseSessionFactory, val execution: ExecutionPlanAdmissionFixture) {
     val warnings = mutableListOf<String>()
-    val lookup = FeatureTaskContinuationLookupService(
-      database,
-      testWorkflowSnapshotValidator,
-      execution.compatibility,
-      object : RuntimeDiagnostics {
-        override fun warning(message: String, error: Throwable?) {
-          warnings.add(message)
-        }
-        override fun error(message: String, error: Throwable?) {
-          warnings.add(message)
-        }
-      },
-    )
+    val lookup =
+      FeatureTaskContinuationLookupService(
+        database,
+        testWorkflowSnapshotValidator,
+        execution.compatibility,
+        object : RuntimeDiagnostics {
+          override fun warning(
+            message: String,
+            error: Throwable?,
+          ) {
+            warnings.add(message)
+          }
 
-    fun row(): WorkflowStateRecord = database.read {
-      assertNotNull(
-        it.workflowStates.getFeatureTaskWorkflow(WORKFLOW_ID),
+          override fun error(
+            message: String,
+            error: Throwable?,
+          ) {
+            warnings.add(message)
+          }
+        },
       )
-    }
 
-    fun candidate() = assertIs<FeatureTaskContinuationLookupResult.Resumable>(
-      lookup.lookup("SKILL-384", REPOSITORY),
-    ).candidate
+    fun row(): WorkflowStateRecord =
+      database.read {
+        assertNotNull(
+          it.workflowStates.getFeatureTaskWorkflow(WORKFLOW_ID),
+        )
+      }
 
-    fun candidateFrom(row: WorkflowStateRecord) = assertIs<FeatureTaskContinuationLookupResult.AlreadyRunning>(
-      lookup.lookup("SKILL-384", REPOSITORY),
-    ).candidate.copy(
-      status = row.workflowStatus,
-      currentStep = row.currentStepId,
-      updatedAt = row.updatedAt,
-    )
+    fun candidate() =
+      assertIs<FeatureTaskContinuationLookupResult.Resumable>(
+        lookup.lookup("SKILL-384", REPOSITORY),
+      ).candidate
 
-    fun replaceDescriptor(original: WorkflowStateRecord, descriptor: Any?) {
-      val artifacts = requireNotNull(
-        JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(original.artifactsJson)),
-      ).toMutableMap()
+    fun candidateFrom(row: WorkflowStateRecord) =
+      assertIs<FeatureTaskContinuationLookupResult.AlreadyRunning>(
+        lookup.lookup("SKILL-384", REPOSITORY),
+      ).candidate.copy(
+        status = row.workflowStatus,
+        currentStep = row.currentStepId,
+        updatedAt = row.updatedAt,
+      )
+
+    fun replaceDescriptor(
+      original: WorkflowStateRecord,
+      descriptor: Any?,
+    ) {
+      val artifacts =
+        requireNotNull(
+          JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(original.artifactsJson)),
+        ).toMutableMap()
       if (descriptor == null) family.removeFrom(artifacts) else family.putInto(artifacts, descriptor)
       DriverManager.getConnection("jdbc:sqlite:${database.resolveDbPath()}").use { connection ->
         connection.prepareStatement(
@@ -353,4 +370,21 @@ class FeatureTaskContinuationAdmissionTest {
     const val SPEC = ".feature-specs/SKILL-384/spec.md"
     val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN
   }
+  private fun seedContinuationIdentity(database: DatabaseSessionFactory, record: WorkflowStateRecord) {
+      database.transaction { unit ->
+        unit.workflowStates.saveFeatureTaskWorkflow(record, FeatureTaskWorkflowMode.RUNTIME)
+        unit.workflowStates.saveFeatureTaskExecutionIdentity(
+          FeatureTaskExecutionIdentity(
+            WORKFLOW_ID,
+            "SKILL-384",
+            REPOSITORY,
+            SPEC,
+            FeatureTaskWorkflowMode.RUNTIME,
+            FeatureTaskRouteScope.STANDALONE,
+          ),
+        )
+      }
+
+  }
+
 }

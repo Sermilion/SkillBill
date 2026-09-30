@@ -1,7 +1,7 @@
 package skillbill.engine.featuretask.review.core
 
-import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
 import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -21,9 +21,10 @@ internal fun requireAdmittedGateRegenerationBoundary(
   val position = order.indexOf(producer)
   val ledger = decodePhaseLedger(record.artifacts)
   val latest = ledger.filter { it.phaseId == producer }.maxByOrNull { it.sequenceNumber }
-  val checkpoints = decodeCheckpointIdentitiesFromArtifact(
-    DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(record.artifacts),
-  )
+  val checkpoints =
+    decodeCheckpointIdentitiesFromArtifact(
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(record.artifacts),
+    )
   val downstream = order.drop(position + 1).toSet()
   val consumer = record.currentStepId
   val latestConsumer = ledger.filter { it.phaseId == consumer }.maxByOrNull { it.sequenceNumber }
@@ -33,15 +34,15 @@ internal fun requireAdmittedGateRegenerationBoundary(
       latestConsumer?.action != FeatureTaskRuntimePhaseLedgerAction.COMPLETE &&
       checkpoints.none { it.phaseId == consumer }
   val downstreamBeyondConsumer = downstream - consumer
-  if (position < 0 || !consumerIsSafeBoundary ||
-    records[producer]?.status != WorkflowStepStatus.COMPLETED ||
-    latest?.action != FeatureTaskRuntimePhaseLedgerAction.COMPLETE ||
-    latest.attemptCount != records[producer]?.attemptCount ||
-    checkpoints.none { it.phaseId in order.take(position + 1) } ||
-    records.keys.any { it in downstreamBeyondConsumer } ||
-    ledger.any { it.phaseId in downstreamBeyondConsumer } ||
-    checkpoints.any { it.phaseId in downstreamBeyondConsumer }
-  ) {
+  val producerIsProven = records[producer]?.status == WorkflowStepStatus.COMPLETED &&
+    latest?.action == FeatureTaskRuntimePhaseLedgerAction.COMPLETE &&
+    latest.attemptCount == records[producer]?.attemptCount
+  val retainedProducerCheckpoint = checkpoints.any { it.phaseId in order.take(position + 1) }
+  val untouchedDownstream = records.keys.none { it in downstreamBeyondConsumer } &&
+    ledger.none { it.phaseId in downstreamBeyondConsumer } &&
+    checkpoints.none { it.phaseId in downstreamBeyondConsumer }
+  val provenBoundary = position >= 0 && consumerIsSafeBoundary && producerIsProven
+  if (!provenBoundary || !retainedProducerCheckpoint || !untouchedDownstream) {
     throw UnsafeFeatureTaskRuntimeRegenerationError(FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS)
   }
 }

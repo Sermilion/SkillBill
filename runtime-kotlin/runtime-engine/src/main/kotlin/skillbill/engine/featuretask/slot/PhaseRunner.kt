@@ -5,8 +5,8 @@ import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 
 /**
- * Executes one phase step for any strategy: composes the step prompt, launches the agent, reads the step's
- * settlement, and returns the uniform step output. Every strategy owns its own instance.
+ * Executes one phase step: composes the prompt, launches the agent, reads its settlement, and returns the output.
+ * The strategy registry owns the runner association; ordinary strategies do not receive this capability.
  */
 interface PhaseRunner {
   /** Runs [input] against the per-call [state] through the runner's default agent-launch session. */

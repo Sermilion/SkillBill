@@ -13,7 +13,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal class ValidationSettlementState(
   completed: Set<String>,
@@ -73,9 +72,14 @@ internal fun invalidateUnsettledResumedCompletions(
   state: ValidationSettlementState,
   validation: ValidationSettlementValidation,
 ) {
-  val gateOutputs = state.initialRecords.values
-    .filter { validation.resumeRules(it.phaseId).requiresValidCompletedOutput && it.status == WorkflowStepStatus.COMPLETED }
-    .associate { it.phaseId to validation.validatedRecordToOutput(it) }
+  val gateOutputs =
+    state.initialRecords.values
+      .filter {
+        validation.resumeRules(
+          it.phaseId,
+        ).requiresValidCompletedOutput && it.status == WorkflowStepStatus.COMPLETED
+      }
+      .associate { it.phaseId to validation.validatedRecordToOutput(it) }
   state.completed.sortedBy(state.transitions.forwardPhaseIds::indexOf).forEach { stepId ->
     if (stepId !in state.completed) return@forEach
     val record = state.initialRecords[stepId] ?: return@forEach

@@ -27,6 +27,7 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeWorkerCoordinatorTest {
   private val execution = ExecutionPlanAdmissionFixture()
+
   @Test
   fun `unowned acquire still claims after a concurrent updated_at bump`() {
     val repository = InMemoryRuntimeWorkflowRepository()
@@ -108,7 +109,10 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         execution.admission,
       )
 
-    val failure = assertFailsWith<IllegalStateException> { coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { Unit } }
+    val failure =
+      assertFailsWith<IllegalStateException> {
+        coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { Unit }
+      }
 
     assertTrue(failure.message.orEmpty().contains("PID was reused"))
     assertEquals(false, supervisor.gracefulTerminationRequested)
@@ -183,7 +187,10 @@ class FeatureTaskRuntimeWorkerCoordinatorTest {
         execution.admission,
       )
 
-    val failure = assertFailsWith<IllegalStateException> { coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { Unit } }
+    val failure =
+      assertFailsWith<IllegalStateException> {
+        coordinator.runOwned(WORKFLOW_ID, execution.inputs, execution.identity(WORKFLOW_ID)) { Unit }
+      }
 
     assertTrue(failure.message.orEmpty().contains("Concurrent continuation"))
   }

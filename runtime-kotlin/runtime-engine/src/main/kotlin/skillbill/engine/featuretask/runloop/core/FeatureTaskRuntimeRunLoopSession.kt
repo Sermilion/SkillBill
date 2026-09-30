@@ -4,34 +4,34 @@ import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeOperatorBlockRetry
 
-internal sealed class FeatureTaskRuntimeRunLoopTerminalOutcome {
+internal sealed class FeatureTaskRuntimeRunTerminalOutcome {
   data class Blocked(
     val report: FeatureTaskRuntimeRunReport.Blocked,
-  ) : FeatureTaskRuntimeRunLoopTerminalOutcome()
+  ) : FeatureTaskRuntimeRunTerminalOutcome()
 
   data class Paused(
     val report: FeatureTaskRuntimeRunReport.Paused,
-  ) : FeatureTaskRuntimeRunLoopTerminalOutcome()
+  ) : FeatureTaskRuntimeRunTerminalOutcome()
 
   data class Decomposed(
     val report: FeatureTaskRuntimeRunReport.Decomposed,
-  ) : FeatureTaskRuntimeRunLoopTerminalOutcome()
+  ) : FeatureTaskRuntimeRunTerminalOutcome()
 }
 
 internal class FeatureTaskRuntimeRunLoopSession(
   override val operatorBlockRetry: FeatureTaskRuntimeOperatorBlockRetry?,
   initialPendingReentry: PendingReentry?,
-) : FeatureTaskRuntimeRunLoopSessionObservations {
+) : FeatureTaskRuntimeRunSessionObservations {
   private val phaseContentIdentitiesStorage = mutableMapOf<String, Map<String, String>>()
   private var resolvedBranchStorage: String? = null
   private var checkpointOwnershipDecidedStorage: Boolean = false
-  private var terminalOutcome: FeatureTaskRuntimeRunLoopTerminalOutcome? = null
+  private var terminalOutcome: FeatureTaskRuntimeRunTerminalOutcome? = null
   private var operatorBlockRetryCompletedStorage: Boolean = false
   private var pendingReentryStorage: PendingReentry? = initialPendingReentry
   private var activeReentryStorage: PendingReentry? = initialPendingReentry
   private var recordRejectionSettlementPendingStorage: Boolean = false
 
-  fun sessionSnapshot(): FeatureTaskRuntimeRunLoopSessionObservations =
+  fun sessionSnapshot(): FeatureTaskRuntimeRunSessionObservations =
     detachedSessionObservations(
       FeatureTaskRuntimeRunLoopSession(operatorBlockRetry, pendingReentry).also { captured ->
         captured.phaseContentIdentitiesStorage.putAll(
@@ -76,24 +76,24 @@ internal class FeatureTaskRuntimeRunLoopSession(
 
 
   override val blocked: FeatureTaskRuntimeRunReport.Blocked?
-    get() = (terminalOutcome as? FeatureTaskRuntimeRunLoopTerminalOutcome.Blocked)?.report?.detached()
+    get() = (terminalOutcome as? FeatureTaskRuntimeRunTerminalOutcome.Blocked)?.report?.detached()
 
   override val paused: FeatureTaskRuntimeRunReport.Paused?
-    get() = (terminalOutcome as? FeatureTaskRuntimeRunLoopTerminalOutcome.Paused)?.report?.detached()
+    get() = (terminalOutcome as? FeatureTaskRuntimeRunTerminalOutcome.Paused)?.report?.detached()
 
   override val decomposed: FeatureTaskRuntimeRunReport.Decomposed?
-    get() = (terminalOutcome as? FeatureTaskRuntimeRunLoopTerminalOutcome.Decomposed)?.report?.detached()
+    get() = (terminalOutcome as? FeatureTaskRuntimeRunTerminalOutcome.Decomposed)?.report?.detached()
 
   internal fun transitionToBlocked(report: FeatureTaskRuntimeRunReport.Blocked) {
-    terminalOutcome = FeatureTaskRuntimeRunLoopTerminalOutcome.Blocked(report.detached())
+    terminalOutcome = FeatureTaskRuntimeRunTerminalOutcome.Blocked(report.detached())
   }
 
   internal fun transitionToPaused(report: FeatureTaskRuntimeRunReport.Paused) {
-    terminalOutcome = FeatureTaskRuntimeRunLoopTerminalOutcome.Paused(report.detached())
+    terminalOutcome = FeatureTaskRuntimeRunTerminalOutcome.Paused(report.detached())
   }
 
   internal fun transitionToDecomposed(report: FeatureTaskRuntimeRunReport.Decomposed) {
-    terminalOutcome = FeatureTaskRuntimeRunLoopTerminalOutcome.Decomposed(report.detached())
+    terminalOutcome = FeatureTaskRuntimeRunTerminalOutcome.Decomposed(report.detached())
   }
 
   internal fun clearTerminalOutcome() {
@@ -139,11 +139,11 @@ internal class FeatureTaskRuntimeRunLoopSession(
   }
 }
 
-private fun FeatureTaskRuntimeRunLoopTerminalOutcome.detached(): FeatureTaskRuntimeRunLoopTerminalOutcome =
+private fun FeatureTaskRuntimeRunTerminalOutcome.detached(): FeatureTaskRuntimeRunTerminalOutcome =
   when (this) {
-    is FeatureTaskRuntimeRunLoopTerminalOutcome.Blocked -> copy(report = report.detached())
-    is FeatureTaskRuntimeRunLoopTerminalOutcome.Paused -> copy(report = report.detached())
-    is FeatureTaskRuntimeRunLoopTerminalOutcome.Decomposed -> copy(report = report.detached())
+    is FeatureTaskRuntimeRunTerminalOutcome.Blocked -> copy(report = report.detached())
+    is FeatureTaskRuntimeRunTerminalOutcome.Paused -> copy(report = report.detached())
+    is FeatureTaskRuntimeRunTerminalOutcome.Decomposed -> copy(report = report.detached())
   }
 
 private fun FeatureTaskRuntimeRunReport.Blocked.detached() =

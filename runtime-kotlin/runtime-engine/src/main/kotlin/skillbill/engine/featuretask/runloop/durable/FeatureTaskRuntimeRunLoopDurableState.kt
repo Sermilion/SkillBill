@@ -9,7 +9,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.runloop.state.featureTaskRuntimeRunLoopStepBinding
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
@@ -57,6 +57,8 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
 
   override fun strategyFor(stepId: String): PhaseStrategy = runner.strategies.strategyFor(stepId, executionPlan)
 
+  override fun runnerFor(stepId: String) = runner.strategies.runnerFor(stepId, executionPlan)
+
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? =
     runner.strategies.selectedOwnerOf(stepId, executionPlan)
 
@@ -67,7 +69,7 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
     require(run.phaseId in executionPlan.selectedStepIds)
     require(strategyFor(run.phaseId).policyFor(run.phaseId) == run.policy)
     stepBinding.beginStepBinding(run)
-    return featureTaskRuntimeRunLoopStepBinding(
+    return FeatureTaskRuntimeRunLoopStepBindings.create(
       phaseAttemptLaunchCollaborationScope(PhaseAttemptRunHost(run.request, this, run.phaseId, this)),
       run,
     )

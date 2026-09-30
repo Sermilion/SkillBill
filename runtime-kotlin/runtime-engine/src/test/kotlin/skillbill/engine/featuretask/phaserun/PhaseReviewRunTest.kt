@@ -199,24 +199,32 @@ class PhaseReviewRunTest {
     mode: CodeReviewExecutionMode?,
     target: ReviewTarget? = null,
     reviewRunId: String? = null,
-  ): PhaseRunRequest = PhaseRunRequest(
-    definitionId = SkeletonDefinition.REVIEW.id,
-    repoRoot = repoRoot,
-    invokedAgentId = REVIEW_AGENT,
-    codeReviewMode = mode,
-    reviewInvocation = ReviewInvocation(target = target, reviewRunId = reviewRunId),
-  )
+  ): PhaseRunRequest =
+    PhaseRunRequest(
+      definitionId = SkeletonDefinition.REVIEW.id,
+      repoRoot = repoRoot,
+      invokedAgentId = REVIEW_AGENT,
+      codeReviewMode = mode,
+      reviewInvocation = ReviewInvocation(target = target, reviewRunId = reviewRunId),
+    )
 
-  private fun directiveRecordingReviewRunner(directives: MutableList<String>): PhaseRunner = object : PhaseRunner {
-    override fun run(input: PhaseStepInput, state: PhaseLaunchState): PhaseStepOutput {
-      directives += input.directive
-      return reviewStepOutput(APPROVED_REVIEW)
+  private fun directiveRecordingReviewRunner(directives: MutableList<String>): PhaseRunner =
+    object : PhaseRunner {
+      override fun run(
+        input: PhaseStepInput,
+        state: PhaseLaunchState,
+      ): PhaseStepOutput {
+        directives += input.directive
+        return reviewStepOutput(APPROVED_REVIEW)
+      }
     }
-  }
 
   private fun isFixed(): Boolean = Files.readString(source) == FIXED_SOURCE
 
-  private fun fixLauncher(verifyEveryPass: Boolean = false, onFix: () -> Unit = {}): RuntimeRecordingLauncher {
+  private fun fixLauncher(
+    verifyEveryPass: Boolean = false,
+    onFix: () -> Unit = {},
+  ): RuntimeRecordingLauncher {
     var verifies = 0
     var fixes = 0
     return RuntimeRecordingLauncher { request ->
@@ -249,40 +257,43 @@ class PhaseReviewRunTest {
     launcher: RuntimeRecordingLauncher,
     reviewRunner: PhaseRunner,
     runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
-  ): PhaseRunEntry = entryFor(
-    RuntimeHarnessConfig(
-      branchSetup = BranchSetupTestConfig(gitOperations = git),
-      repoRoot = repoRoot,
-      launcher = launcher,
-      reviewRunner = reviewRunner,
-    ),
-    runLoopEntry,
-  )
+  ): PhaseRunEntry =
+    entryFor(
+      RuntimeHarnessConfig(
+        branchSetup = BranchSetupTestConfig(gitOperations = git),
+        repoRoot = repoRoot,
+        launcher = launcher,
+        reviewRunner = reviewRunner,
+      ),
+      runLoopEntry,
+    )
 
   private fun delegatedEntry(
     launcher: RuntimeRecordingLauncher,
     lanes: LaneScript,
     validator: FeatureTaskRuntimePhaseOutputValidator? = realFeatureTaskRuntimePhaseOutputValidator,
     inlineReview: () -> String = { error("the delegated review must not open an inline review session") },
-  ): PhaseRunEntry = entryFor(
-    RuntimeHarnessConfig(
-      branchSetup = BranchSetupTestConfig(gitOperations = git),
-      repoRoot = repoRoot,
-      launcher = launcher,
-      validator = validator,
-      agentAssignment = FeatureTaskRuntimeAgentAssignment(perPhaseAgentIds = mapOf(PHASE_REVIEW to REVIEW_AGENT)),
-      reviewRunner = scriptedReviewPhaseRunner(inlineReview),
-      delegatedReviewRunner = scriptedDelegatedReviewRunner(database, home, lanes),
-    ),
-  )
+  ): PhaseRunEntry =
+    entryFor(
+      RuntimeHarnessConfig(
+        branchSetup = BranchSetupTestConfig(gitOperations = git),
+        repoRoot = repoRoot,
+        launcher = launcher,
+        validator = validator,
+        agentAssignment = FeatureTaskRuntimeAgentAssignment(perPhaseAgentIds = mapOf(PHASE_REVIEW to REVIEW_AGENT)),
+        reviewRunner = scriptedReviewPhaseRunner(inlineReview),
+        delegatedReviewRunner = scriptedDelegatedReviewRunner(database, home, lanes),
+      ),
+    )
 
   private fun entryFor(
     config: RuntimeHarnessConfig,
     runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
   ): PhaseRunEntry {
-    val runner = telemetryRunnerHarness(runtimeConfig = config.copy(seedDurableWorkflow = false), databaseFactory = {
-      database
-    }).runner
+    val runner =
+      telemetryRunnerHarness(runtimeConfig = config.copy(seedDurableWorkflow = false), databaseFactory = {
+        database
+      }).runner
     return phaseRunEntry(runner, database, clock, runLoopEntry)
   }
 
@@ -368,16 +379,17 @@ class PhaseReviewRunTest {
 
 private fun FeatureTaskRuntimeRunner.withRunLoopEntry(
   entry: FeatureTaskRuntimeRunLoopEntry,
-): FeatureTaskRuntimeRunner = FeatureTaskRuntimeRunner(
-  strategies = strategies,
-  recorder = recorder,
-  goalContinuationRecorder = goalContinuationRecorder,
-  outputValidator = outputValidator,
-  phaseGates = phaseGates,
-  startup = startup,
-  phaseSettlementService = phaseSettlementService,
-  diagnostics = diagnostics,
-  clock = clock,
-  probeWriters = probeWriters,
-  runLoopEntry = entry,
-)
+): FeatureTaskRuntimeRunner =
+  FeatureTaskRuntimeRunner(
+    strategies = strategies,
+    recorder = recorder,
+    goalContinuationRecorder = goalContinuationRecorder,
+    outputValidator = outputValidator,
+    phaseGates = phaseGates,
+    startup = startup,
+    phaseSettlementService = phaseSettlementService,
+    diagnostics = diagnostics,
+    clock = clock,
+    probeWriters = probeWriters,
+    runLoopEntry = entry,
+  )

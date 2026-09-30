@@ -13,25 +13,31 @@ data class PhaseStepPolicy(
   val outputGateAttempts: Int = 1,
   val extendsOwnedInventory: Boolean = false,
 ) {
-  fun semanticIdentity(strategyId: String, semanticRevision: Int, stepId: String): String {
-    val encoded = JsonCodec.valueToJsonString(
-      listOf(
-        strategyId,
-        semanticRevision,
-        stepId,
-        mutating,
-        relaunchOnInvalidOutput,
-        singleAgentSession,
-        readOnlyIdle,
-        fileMutating,
-        generationScoped,
-        outputGateAttempts,
-        extendsOwnedInventory,
-      ),
-    )
-    val digest = MessageDigest.getInstance("SHA-256")
-      .digest(encoded.toByteArray(Charsets.UTF_8))
-      .joinToString("") { "%02x".format(it) }
+  fun semanticIdentity(
+    strategyId: String,
+    semanticRevision: Int,
+    stepId: String,
+  ): String {
+    val encoded =
+      JsonCodec.valueToJsonString(
+        listOf(
+          strategyId,
+          semanticRevision,
+          stepId,
+          mutating,
+          relaunchOnInvalidOutput,
+          singleAgentSession,
+          readOnlyIdle,
+          fileMutating,
+          generationScoped,
+          outputGateAttempts,
+          extendsOwnedInventory,
+        ),
+      )
+    val digest =
+      MessageDigest.getInstance("SHA-256")
+        .digest(encoded.toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
     return "step-policy-v1:$digest"
   }
 }

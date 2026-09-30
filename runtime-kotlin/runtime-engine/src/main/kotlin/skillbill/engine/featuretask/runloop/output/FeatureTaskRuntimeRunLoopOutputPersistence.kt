@@ -1,13 +1,12 @@
 package skillbill.engine.featuretask.runloop.output
 
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
+import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.PersistPhaseArgs
 import skillbill.engine.featuretask.runloop.core.PhaseStateRequestArgs
 import skillbill.engine.featuretask.runloop.core.PhaseStateRequestAttachments
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeCorrectiveRepairContext
@@ -50,6 +49,6 @@ object FeatureTaskRuntimeRunLoopOutputPersistence {
             ),
         ),
       )
-    coupling.transitions.recordOutputSettlementRunningPhase(context.recorder, phaseState)
+    coupling.transitions.acknowledgeRequiredPhaseStart(context.recorder, phaseState)
   }
 }

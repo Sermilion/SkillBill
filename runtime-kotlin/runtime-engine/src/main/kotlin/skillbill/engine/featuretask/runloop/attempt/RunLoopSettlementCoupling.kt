@@ -1,19 +1,19 @@
 package skillbill.engine.featuretask.runloop.attempt
 
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSessionObservations
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptContext
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopProgressObservations
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 
 internal data class RunLoopSettlementCoupling(
-  val progress: FeatureTaskRuntimeRunLoopProgressObservations,
-  val session: FeatureTaskRuntimeRunLoopSessionObservations,
-  val sessionObservations: FeatureTaskRuntimeRunLoopSessionObservations,
-  val transitions: FeatureTaskRuntimeRunLoopTransitionOwner,
+  val progress: FeatureTaskRuntimeProgressSnapshotAccess,
+  val session: FeatureTaskRuntimeRunSessionObservations,
+  val sessionObservations: FeatureTaskRuntimeRunSessionObservations,
+  val transitions: FeatureTaskRuntimeRunTransitionOwner,
 )
 
 internal fun PhaseOutputSettlementContext.settlementCoupling(): RunLoopSettlementCoupling =

@@ -10,7 +10,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
 import skillbill.engine.featuretask.runloop.observability.blocked
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.STATUS_BLOCKED
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptTraversalRuntimeContext
@@ -66,7 +66,7 @@ internal object PlanDecompositionStop {
           stopper.resolve(
             request = request,
             completedOutput = planOutput,
-            completedPhaseIds = progress.completedPhaseIds(),
+            completedPhaseIds = progress.completedPhaseIds,
             resolvedBranch = session.resolvedBranch,
             specSource = specSource,
           )
@@ -117,7 +117,7 @@ internal class FeatureTaskRuntimePlanningStopper(
   private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
   private val records: PhaseRunRecords,
   private val diagnostics: RuntimeDiagnostics,
-  private val coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner,
+  private val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner,
 ) {
   fun resolve(
     request: FeatureTaskRuntimeRunFacts,

@@ -14,7 +14,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.runloop.state.featureTaskRuntimeRunLoopStepBinding
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
@@ -56,7 +56,8 @@ internal class InMemoryPhaseRunState(
   override val settlements: PhaseRunSettlements = InMemoryPhaseRunSettlements
   override val checkpoints: PhaseRunCheckpoints = InMemoryPhaseRunCheckpoints
   override val specSource: SpecSource = facts.request.specSource
-  override val transitions: FeatureTaskRuntimeTransitionDeclaration = progress.transitions
+  override val transitions: FeatureTaskRuntimeTransitionDeclaration
+    get() = progress.transitions
   override val attemptLoop: PhaseStepAttempts = PhaseAttemptLoop
   override val collaborators: PhaseAttemptCollaborators =
     PhaseAttemptCollaborators(entry.outputValidator, entry.clock, entry.diagnostics)
@@ -71,6 +72,8 @@ internal class InMemoryPhaseRunState(
 
   override fun strategyFor(stepId: String): PhaseStrategy = entry.strategies.strategyFor(stepId, executionPlan)
 
+  override fun runnerFor(stepId: String) = entry.strategies.runnerFor(stepId, executionPlan)
+
   override fun selectedOwnerOf(stepId: String): PhaseStrategy? = entry.strategies.selectedOwnerOf(stepId, executionPlan)
 
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
@@ -80,7 +83,7 @@ internal class InMemoryPhaseRunState(
     require(run.phaseId in executionPlan.selectedStepIds)
     require(strategyFor(run.phaseId).policyFor(run.phaseId) == run.policy)
     stepBinding.beginStepBinding(run)
-    return featureTaskRuntimeRunLoopStepBinding(
+    return FeatureTaskRuntimeRunLoopStepBindings.create(
       phaseAttemptLaunchCollaborationScope(PhaseAttemptRunHost(run.request, this, run.phaseId, this)),
       run,
     )

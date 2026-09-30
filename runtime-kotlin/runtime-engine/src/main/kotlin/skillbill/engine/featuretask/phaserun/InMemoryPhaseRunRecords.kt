@@ -17,6 +17,7 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionEr
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.review.model.ReviewFindingVerdict
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
@@ -26,7 +27,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeShare
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FeatureTaskRuntimeCheckpointIdentity
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttempt
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
-import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
@@ -148,7 +148,8 @@ internal class InMemoryPhaseRunRecords(
 
   override fun loadFindingVerificationBoundarySelection(
     workflowId: String,
-  ): Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>? = verificationBoundary?.detachedBoundary()
+  ): Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>? =
+    verificationBoundary?.detachedBoundary()
 
   override fun persistFindingVerificationBoundarySelection(
     workflowId: String,
@@ -237,19 +238,7 @@ internal class InMemoryPhaseRunRecords(
     planStepId: String,
   ): Boolean = true
 
-  private fun List<FeatureTaskRuntimeFindingVerificationDisposition>.detachedDispositions() =
-    map { disposition -> disposition.copy(selectedBoundaryHeadings = disposition.selectedBoundaryHeadings.toList()) }
 
-  private fun Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>.detachedBoundary() =
-    mapValues { (_, headings) -> headings.toList() }
-
-  private fun FeatureTaskRuntimeValidationGateProgress.detached() =
-    copy(
-      gateRuns = gateRuns.map { run -> run.copy(executedChecks = run.executedChecks.toList()) },
-      remainingFindings = remainingFindings.map { it.toMap() },
-      completeFindings = completeFindings.map { it.toMap() },
-      lastAgentUnfixedCriteria = lastAgentUnfixedCriteria.toList(),
-    )
 }
 
 private fun ProducerOutputEvidence.detached(): ProducerOutputEvidence = copy(payload = payload?.copyOf())
@@ -259,4 +248,18 @@ private fun FeatureTaskRuntimePhaseRecord.detached(): FeatureTaskRuntimePhaseRec
     fileManifestBefore = fileManifestBefore.toList(),
     fileManifestAfter = fileManifestAfter.toList(),
     fileManifestIntroduced = fileManifestIntroduced.toList(),
+  )
+
+private fun List<FeatureTaskRuntimeFindingVerificationDisposition>.detachedDispositions() =
+  map { disposition -> disposition.copy(selectedBoundaryHeadings = disposition.selectedBoundaryHeadings.toList()) }
+
+private fun Map<String, List<FeatureTaskRuntimeVerificationBoundaryHeadingProvenance>>.detachedBoundary() =
+  mapValues { (_, headings) -> headings.toList() }
+
+private fun FeatureTaskRuntimeValidationGateProgress.detached() =
+  copy(
+    gateRuns = gateRuns.map { run -> run.copy(executedChecks = run.executedChecks.toList()) },
+    remainingFindings = remainingFindings.map { it.toMap() },
+    completeFindings = completeFindings.map { it.toMap() },
+    lastAgentUnfixedCriteria = lastAgentUnfixedCriteria.toList(),
   )

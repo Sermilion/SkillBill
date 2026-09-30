@@ -11,7 +11,7 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommi
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.core.CheckpointCommitMessageArgs
 import skillbill.engine.featuretask.runloop.core.CommitCheckpointArgs
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSessionObservations
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
 import skillbill.engine.featuretask.runloop.core.RecordCheckpointIdentityArgs
 import skillbill.engine.featuretask.runloop.core.RemediationCheckpointCommit
 import skillbill.engine.featuretask.runloop.core.remediationCheckpointBlockedReason
@@ -146,7 +146,7 @@ object FeatureTaskRuntimeRunLoopCheckpointRemediation {
             parentSha = null,
           )
         is FeatureTaskRuntimeCheckpointDecision.Block -> {
-          coupledRunTransitions.blockRemediationCheckpointEstablishment(
+          coupledRunTransitions.transitionCheckpointRemediationBlock(
             request,
             precedingPhaseId,
             scope.reason,
@@ -418,7 +418,7 @@ object FeatureTaskRuntimeRunLoopCheckpointRemediation {
       return when (scope) {
         is FeatureTaskRuntimeCheckpointDecision.Skip -> true
         is FeatureTaskRuntimeCheckpointDecision.Block -> {
-          coupledRunTransitions.blockRemediationCheckpointEstablishment(
+          coupledRunTransitions.transitionCheckpointRemediationBlock(
             request,
             precedingPhaseId,
             scope.reason,
@@ -451,7 +451,7 @@ object FeatureTaskRuntimeRunLoopCheckpointRemediation {
     }
   }
 
-  internal fun remediationCheckpointSkippable(session: FeatureTaskRuntimeRunLoopSessionObservations): Boolean {
+  internal fun remediationCheckpointSkippable(session: FeatureTaskRuntimeRunSessionObservations): Boolean {
     val branch = session.resolvedBranch
     return branch == null || FeatureTaskRuntimeBranchSetup.protectedBranchName(branch) != null
   }

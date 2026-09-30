@@ -42,17 +42,17 @@ object RuntimeModuleCatalog {
         ModuleEdgeExpectation(
           api = setOf("runtime-application", "runtime-engine", "runtime-ports"),
           implementation =
-          setOf(
-            "runtime-domain",
-            "runtime-contracts",
-            "runtime-infra:host",
-            "runtime-infra:contracts",
-            "runtime-infra:skills",
-            "runtime-infra:launcher",
-            "runtime-infra:workflow",
-            "runtime-infra:http",
-            "runtime-infra:sqlite",
-          ),
+            setOf(
+              "runtime-domain",
+              "runtime-contracts",
+              "runtime-infra:host",
+              "runtime-infra:contracts",
+              "runtime-infra:skills",
+              "runtime-infra:launcher",
+              "runtime-infra:workflow",
+              "runtime-infra:http",
+              "runtime-infra:sqlite",
+            ),
         ),
       "runtime-engine" to
         ModuleEdgeExpectation(
@@ -83,38 +83,38 @@ object RuntimeModuleCatalog {
         ModuleEdgeExpectation(
           api = emptySet(),
           implementation =
-          setOf(
-            "runtime-contracts",
-            "runtime-domain",
-            "runtime-ports",
-            "runtime-infra:contracts",
-            "runtime-infra:host",
-          ),
+            setOf(
+              "runtime-contracts",
+              "runtime-domain",
+              "runtime-ports",
+              "runtime-infra:contracts",
+              "runtime-infra:host",
+            ),
         ),
       "runtime-infra:launcher" to
         ModuleEdgeExpectation(
           api = emptySet(),
           implementation =
-          setOf(
-            "runtime-contracts",
-            "runtime-domain",
-            "runtime-ports",
-            "runtime-infra:skills",
-            "runtime-infra:host",
-          ),
+            setOf(
+              "runtime-contracts",
+              "runtime-domain",
+              "runtime-ports",
+              "runtime-infra:skills",
+              "runtime-infra:host",
+            ),
         ),
       "runtime-infra:workflow" to
         ModuleEdgeExpectation(
           api = emptySet(),
           implementation =
-          setOf(
-            "runtime-contracts",
-            "runtime-domain",
-            "runtime-ports",
-            "runtime-infra:skills",
-            "runtime-infra:contracts",
-            "runtime-infra:host",
-          ),
+            setOf(
+              "runtime-contracts",
+              "runtime-domain",
+              "runtime-ports",
+              "runtime-infra:skills",
+              "runtime-infra:contracts",
+              "runtime-infra:host",
+            ),
         ),
       "runtime-infra:http" to
         ModuleEdgeExpectation(
@@ -130,27 +130,27 @@ object RuntimeModuleCatalog {
         ModuleEdgeExpectation(
           api = emptySet(),
           implementation =
-          setOf(
-            "runtime-application",
-            "runtime-contracts",
-            "runtime-core",
-            "runtime-domain",
-            "runtime-engine",
-            "runtime-ports",
-          ),
+            setOf(
+              "runtime-application",
+              "runtime-contracts",
+              "runtime-core",
+              "runtime-domain",
+              "runtime-engine",
+              "runtime-ports",
+            ),
         ),
       "runtime-mcp" to
         ModuleEdgeExpectation(
           api = emptySet(),
           implementation =
-          setOf(
-            "runtime-application",
-            "runtime-contracts",
-            "runtime-core",
-            "runtime-domain",
-            "runtime-engine",
-            "runtime-ports",
-          ),
+            setOf(
+              "runtime-application",
+              "runtime-contracts",
+              "runtime-core",
+              "runtime-domain",
+              "runtime-engine",
+              "runtime-ports",
+            ),
         ),
       "runtime-ports" to
         ModuleEdgeExpectation(
@@ -174,9 +174,14 @@ object RuntimeModuleCatalog {
         ),
       "runtime-contracts" to emptySet(),
       "runtime-core" to emptySet(),
-      "runtime-engine" to setOf(
-        "runtime-application", "runtime-domain", "runtime-infra:contracts", "runtime-infra:sqlite", "runtime-ports",
-      ),
+      "runtime-engine" to
+        setOf(
+          "runtime-application",
+          "runtime-domain",
+          "runtime-infra:contracts",
+          "runtime-infra:sqlite",
+          "runtime-ports",
+        ),
       "runtime-domain" to emptySet(),
       "runtime-infra" to emptySet(),
       "runtime-infra:host" to setOf("runtime-ports"),

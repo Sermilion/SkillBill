@@ -12,10 +12,13 @@ import kotlin.test.assertFailsWith
 class FeatureTaskRuntimeValidationEvidenceTest {
   @Test
   fun successfulDiscoveryCannotMaskFailedTerminalVerificationWithDifferentArgv() {
-    val evidence = FeatureTaskRuntimeValidationEvidence(listOf(
-      FeatureTaskRuntimeValidationCommandResult("./gradlew check", 0),
-      FeatureTaskRuntimeValidationCommandResult("./gradlew check --rerun-tasks", 1),
-    ))
+    val evidence =
+      FeatureTaskRuntimeValidationEvidence(
+        listOf(
+          FeatureTaskRuntimeValidationCommandResult("./gradlew check", 0),
+          FeatureTaskRuntimeValidationCommandResult("./gradlew check --rerun-tasks", 1),
+        ),
+      )
 
     assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
       evidence.requireSuccessfulCommand("./gradlew check", "validate")

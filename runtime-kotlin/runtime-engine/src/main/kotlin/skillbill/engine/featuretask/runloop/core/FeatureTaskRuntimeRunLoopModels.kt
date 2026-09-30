@@ -12,8 +12,8 @@ import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopProgressObservations
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runner.LaunchResult
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
@@ -127,9 +127,9 @@ internal data class FixLoopBranchContext(
   val loop: PhaseAttemptLoopState,
   val observability: FeatureTaskRuntimeRunObservability,
   val agentId: String,
-  val session: FeatureTaskRuntimeRunLoopSessionObservations,
-  val progress: FeatureTaskRuntimeRunLoopProgressObservations,
-  val loopTransitions: FeatureTaskRuntimeRunLoopTransitionOwner,
+  val session: FeatureTaskRuntimeRunSessionObservations,
+  val progress: FeatureTaskRuntimeProgressSnapshotAccess,
+  val loopTransitions: FeatureTaskRuntimeRunTransitionOwner,
 )
 
 class ValidatedOutputCapture internal constructor(

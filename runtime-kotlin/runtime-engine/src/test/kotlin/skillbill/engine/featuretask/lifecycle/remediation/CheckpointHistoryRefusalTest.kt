@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
+import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.ExecutionPlanAdmissionFixture
@@ -31,14 +32,15 @@ class CheckpointHistoryRefusalTest {
         val home = Files.createTempDirectory("checkpoint-history-refusal")
         try {
           val database = phaseRunDatabase(home, Clock.systemUTC())
-          val recorder = featureTaskRuntimePhaseRecorder(
-            database,
-            NoopWorkflowSnapshotValidator,
-            AcceptingFeatureTaskRuntimeWireArtifactValidator,
-            AcceptingFeatureTaskRuntimeWireArtifactValidator,
-            Clock.systemUTC(),
-            NoopRuntimeDiagnostics,
-          )
+          val recorder =
+            featureTaskRuntimePhaseRecorder(
+              database,
+              NoopWorkflowSnapshotValidator,
+              AcceptingFeatureTaskRuntimeWireArtifactValidator,
+              AcceptingFeatureTaskRuntimeWireArtifactValidator,
+              Clock.systemUTC(),
+              NoopRuntimeDiagnostics,
+            )
           val workflowId = "wftr-checkpoint-refusal"
           val execution = ExecutionPlanAdmissionFixture()
           database.transaction { execution.seed(it.workflowStates, workflowId) }
@@ -54,30 +56,7 @@ class CheckpointHistoryRefusalTest {
               outputArtifact = "retained-commit-push-evidence",
             ),
           )
-          database.transaction { unit ->
-            val row = assertNotNull(unit.workflowStates.getFeatureTaskWorkflow(workflowId))
-            val artifacts = assertNotNull(
-              JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(row.artifactsJson)),
-            ).toMutableMap()
-            artifacts.putAll(
-              mapOf(
-                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.entry(
-                  mapOf(
-                    SharedPayloadKeys.CONTRACT_VERSION to "0.1",
-                    "checkpoints" to listOf("retained-checkpoint-evidence"),
-                  ),
-                ),
-              ),
-            )
-            unit.workflowStates.saveFeatureTaskWorkflow(
-              row.copy(
-                workflowStatus = status.wireValue,
-                artifactsJson = JsonCodec.mapToJsonString(artifacts),
-                finishedAt = "2026-09-28T00:00:00Z".takeIf { status in WorkflowStatus.terminalStatuses },
-              ),
-              FeatureTaskWorkflowMode.RUNTIME,
-            )
-          }
+          seedUnsupportedCheckpointHistory(database, workflowId, status)
           val before = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
 
           assertFailsWith<InvalidFeatureTaskRuntimeCheckpointIdentityVersionError> {
@@ -104,4 +83,37 @@ class CheckpointHistoryRefusalTest {
       }
     }
   }
+  private fun seedUnsupportedCheckpointHistory(
+    database: DatabaseSessionFactory,
+    workflowId: String,
+    status: WorkflowStatus,
+  ) {
+          database.transaction { unit ->
+            val row = assertNotNull(unit.workflowStates.getFeatureTaskWorkflow(workflowId))
+            val artifacts =
+              assertNotNull(
+                JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(row.artifactsJson)),
+              ).toMutableMap()
+            artifacts.putAll(
+              mapOf(
+                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.entry(
+                  mapOf(
+                    SharedPayloadKeys.CONTRACT_VERSION to "0.1",
+                    "checkpoints" to listOf("retained-checkpoint-evidence"),
+                  ),
+                ),
+              ),
+            )
+            unit.workflowStates.saveFeatureTaskWorkflow(
+              row.copy(
+                workflowStatus = status.wireValue,
+                artifactsJson = JsonCodec.mapToJsonString(artifacts),
+                finishedAt = "2026-09-28T00:00:00Z".takeIf { status in WorkflowStatus.terminalStatuses },
+              ),
+              FeatureTaskWorkflowMode.RUNTIME,
+            )
+          }
+
+  }
+
 }

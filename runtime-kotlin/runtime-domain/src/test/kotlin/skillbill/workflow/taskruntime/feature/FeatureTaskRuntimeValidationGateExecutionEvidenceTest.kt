@@ -170,29 +170,36 @@ class FeatureTaskRuntimeValidationGateExecutionEvidenceTest {
   @Test
   fun eachMissingExecutionFactAndUnknownOutcomeFailsAtItsTypedBoundary() {
     val original = gateRun().toArtifactMap()
-    val keys = listOf(
-      ValidationEvidencePayloadKeys.COMMAND,
-      ValidationEvidencePayloadKeys.EXIT_CODE,
-      ValidationEvidencePayloadKeys.EXECUTED_CHECKS,
-      ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT,
-      ValidationEvidencePayloadKeys.OUTCOME,
-      ValidationEvidencePayloadKeys.CACHE_MODE,
-    )
-    val invalidRuns = keys.map { key -> original - key } +
-      listOf(original + (ValidationEvidencePayloadKeys.OUTCOME to "unknown"),
-        original + (ValidationEvidencePayloadKeys.EXIT_CODE to 1))
+    val keys =
+      listOf(
+        ValidationEvidencePayloadKeys.COMMAND,
+        ValidationEvidencePayloadKeys.EXIT_CODE,
+        ValidationEvidencePayloadKeys.EXECUTED_CHECKS,
+        ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT,
+        ValidationEvidencePayloadKeys.OUTCOME,
+        ValidationEvidencePayloadKeys.CACHE_MODE,
+      )
+    val invalidRuns =
+      keys.map { key -> original - key } +
+        listOf(
+          original + (ValidationEvidencePayloadKeys.OUTCOME to "unknown"),
+          original + (ValidationEvidencePayloadKeys.EXIT_CODE to 1),
+        )
     invalidRuns.forEach { run ->
       assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
         FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(
-          evidenceArtifact(listOf("runtime-engine|compileKotlin"), listOf(run)), "validate",
+          evidenceArtifact(listOf("runtime-engine|compileKotlin"), listOf(run)),
+          "validate",
         )
       }
     }
     val valid = evidenceArtifact(listOf("runtime-engine|compileKotlin"), listOf(original))
     listOf(
       valid + (ValidationEvidencePayloadKeys.GATE_RUN_COUNT to 2),
-      valid + (ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT to
-        mapOf(ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT_FINGERPRINT to "unrelated")),
+      valid + (
+        ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT to
+          mapOf(ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT_FINGERPRINT to "unrelated")
+      ),
     ).forEach { invalid ->
       assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
         FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(invalid, "validate")

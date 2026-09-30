@@ -38,51 +38,50 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
     attempt: Int,
-  ) =
-    database.transaction { unitOfWork ->
-      val record =
-        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-          ?: throw RequiredPhaseWriteRejected(
-            writeKind = RequiredPhaseWriteKind.BRIEFING,
-            workflowId = workflowId,
-            phaseId = briefing.phaseId,
-            attempt = attempt,
-          )
-      wireArtifactValidator.validateEnvelope(briefing.handoffEnvelope.asWorkflowArtifactEntry(), workflowId)
-      val artifacts = record.artifacts
-      val updatedBriefings =
-        LinkedHashMap(phaseBriefingsFrom(artifacts, wireArtifactValidator::validateEnvelopeWire))
-          .apply { put(briefing.phaseId, briefing) }
-      val deliveredHistory =
-        deliveredProjectionHistoryFrom(
-          artifacts,
-          wireArtifactValidator::validateEnvelopeWire,
-          wireArtifactValidator::validatePersistenceWire,
+  ) = database.transaction { unitOfWork ->
+    val record =
+      unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+        ?: throw RequiredPhaseWriteRejected(
+          writeKind = RequiredPhaseWriteKind.BRIEFING,
+          workflowId = workflowId,
+          phaseId = briefing.phaseId,
+          attempt = attempt,
         )
-      val delivered = nextDeliveredProjectionRecord(workflowId, briefing, deliveredHistory)
-      wireArtifactValidator.validatePersistenceRecord(
-        delivered.asWorkflowArtifactEntry(),
-        "delivered-projection:${briefing.phaseId}",
+    wireArtifactValidator.validateEnvelope(briefing.handoffEnvelope.asWorkflowArtifactEntry(), workflowId)
+    val artifacts = record.artifacts
+    val updatedBriefings =
+      LinkedHashMap(phaseBriefingsFrom(artifacts, wireArtifactValidator::validateEnvelopeWire))
+        .apply { put(briefing.phaseId, briefing) }
+    val deliveredHistory =
+      deliveredProjectionHistoryFrom(
+        artifacts,
+        wireArtifactValidator::validateEnvelopeWire,
+        wireArtifactValidator::validatePersistenceWire,
       )
-      recordProjectionMeasurements(unitOfWork, workflowId, briefing, delivered, artifacts)
-      recordSharedEvidenceMeasurement(unitOfWork, sharedEvidenceMeasurement)
-      val updatedDelivered =
-        LinkedHashMap(deliveredHistory)
-          .apply {
-            entries.removeIf { (_, value) -> value.consumerPhaseId == briefing.phaseId }
-            put(deliveredProjectionKey(delivered), delivered)
-          }
-      val patch =
-        mapOf(
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_BRIEFINGS.entry(
-            updatedBriefings.mapValues { (_, value) -> value.asBriefingArtifactEntry() },
-          ),
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DELIVERED_PROJECTIONS.entry(
-            updatedDelivered.mapValues { (_, value) -> value.asWorkflowArtifactEntry() },
-          ),
-        )
-      workflowPersistence.persistArtifactsPatch(unitOfWork.workflowStates, record, patch)
-    }
+    val delivered = nextDeliveredProjectionRecord(workflowId, briefing, deliveredHistory)
+    wireArtifactValidator.validatePersistenceRecord(
+      delivered.asWorkflowArtifactEntry(),
+      "delivered-projection:${briefing.phaseId}",
+    )
+    recordProjectionMeasurements(unitOfWork, workflowId, briefing, delivered, artifacts)
+    recordSharedEvidenceMeasurement(unitOfWork, sharedEvidenceMeasurement)
+    val updatedDelivered =
+      LinkedHashMap(deliveredHistory)
+        .apply {
+          entries.removeIf { (_, value) -> value.consumerPhaseId == briefing.phaseId }
+          put(deliveredProjectionKey(delivered), delivered)
+        }
+    val patch =
+      mapOf(
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_BRIEFINGS.entry(
+          updatedBriefings.mapValues { (_, value) -> value.asBriefingArtifactEntry() },
+        ),
+        DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DELIVERED_PROJECTIONS.entry(
+          updatedDelivered.mapValues { (_, value) -> value.asWorkflowArtifactEntry() },
+        ),
+      )
+    workflowPersistence.persistArtifactsPatch(unitOfWork.workflowStates, record, patch)
+  }
 
   fun recordProjectionRejection(
     workflowId: String,

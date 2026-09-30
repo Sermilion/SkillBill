@@ -44,17 +44,18 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
             capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.ADVANCE,
             capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
           ),
-        ) + FeatureTaskRuntimePhaseWorkflowDefinition.REGENERATION_LOOP_ID_BY_PRODUCER.map { (producer, loopId) ->
-          FeatureTaskRuntimeBackwardEdge(
-            fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
-            triggeringVerdict = FeatureTaskRuntimeVerdict.RECORD_REJECTED,
-            destinationPhaseId = producer,
-            loopId = loopId,
-            perEdgeCap = FeatureTaskRuntimePhaseWorkflowDefinition.MAX_RECORD_REGENERATION_ATTEMPTS,
-            capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
-            capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
-          )
-        },
+        ) +
+          FeatureTaskRuntimePhaseWorkflowDefinition.REGENERATION_LOOP_ID_BY_PRODUCER.map { (producer, loopId) ->
+            FeatureTaskRuntimeBackwardEdge(
+              fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
+              triggeringVerdict = FeatureTaskRuntimeVerdict.RECORD_REJECTED,
+              destinationPhaseId = producer,
+              loopId = loopId,
+              perEdgeCap = FeatureTaskRuntimePhaseWorkflowDefinition.MAX_RECORD_REGENERATION_ATTEMPTS,
+              capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+              capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+            )
+          },
       loopOnlyPhaseIds =
         setOf(
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,

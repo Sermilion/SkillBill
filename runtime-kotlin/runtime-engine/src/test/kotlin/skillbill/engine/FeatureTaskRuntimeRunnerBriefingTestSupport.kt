@@ -39,25 +39,27 @@ import kotlin.test.assertTrue
 
 internal const val RUNNER_BRIEFING_ISSUE_KEY = RUNNER_TEST_ISSUE_KEY
 
-private fun briefingFixtureRecordedOutputs() = listOf(
-  FeatureTaskRuntimePhaseOutput("preplan", 1, PREPLAN_OUTPUT),
-  FeatureTaskRuntimePhaseOutput("plan", 1, PLAN_OUTPUT),
-  FeatureTaskRuntimePhaseOutput("implement", 1, IMPLEMENT_OUTPUT),
-  FeatureTaskRuntimePhaseOutput("simplify", 1, SIMPLIFY_OUTPUT),
-  FeatureTaskRuntimePhaseOutput("audit", 1, VALID_AUDIT_OUTPUT),
-  FeatureTaskRuntimePhaseOutput("review", 1, VALID_REVIEW_OUTPUT),
-  FeatureTaskRuntimePhaseOutput("verify_findings", 1, VALID_VERIFY_FINDINGS_OUTPUT),
-  FeatureTaskRuntimePhaseOutput("validate", 1, validJsonOutput("validate")),
-  FeatureTaskRuntimePhaseOutput("write_history", 1, validJsonOutput("write_history")),
-  FeatureTaskRuntimePhaseOutput("commit_push", 1, FINALISED_COMMIT_PUSH_OUTPUT),
-)
+private fun briefingFixtureRecordedOutputs() =
+  listOf(
+    FeatureTaskRuntimePhaseOutput("preplan", 1, PREPLAN_OUTPUT),
+    FeatureTaskRuntimePhaseOutput("plan", 1, PLAN_OUTPUT),
+    FeatureTaskRuntimePhaseOutput("implement", 1, IMPLEMENT_OUTPUT),
+    FeatureTaskRuntimePhaseOutput("simplify", 1, SIMPLIFY_OUTPUT),
+    FeatureTaskRuntimePhaseOutput("audit", 1, VALID_AUDIT_OUTPUT),
+    FeatureTaskRuntimePhaseOutput("review", 1, VALID_REVIEW_OUTPUT),
+    FeatureTaskRuntimePhaseOutput("verify_findings", 1, VALID_VERIFY_FINDINGS_OUTPUT),
+    FeatureTaskRuntimePhaseOutput("validate", 1, validJsonOutput("validate")),
+    FeatureTaskRuntimePhaseOutput("write_history", 1, validJsonOutput("write_history")),
+    FeatureTaskRuntimePhaseOutput("commit_push", 1, FINALISED_COMMIT_PUSH_OUTPUT),
+  )
 
-private fun briefingFixtureInvariants() = FeatureTaskRuntimeRunInvariants(
-  specReference = RUNNER_TEST_SPEC_REFERENCE,
-  featureSize = FeatureTaskRuntimeFeatureSize.SMALL,
-  acceptanceCriteria = listOf("AC-1", "AC-2"),
-  mandatesAndOverrides = listOf("mandate-X"),
-)
+private fun briefingFixtureInvariants() =
+  FeatureTaskRuntimeRunInvariants(
+    specReference = RUNNER_TEST_SPEC_REFERENCE,
+    featureSize = FeatureTaskRuntimeFeatureSize.SMALL,
+    acceptanceCriteria = listOf("AC-1", "AC-2"),
+    mandatesAndOverrides = listOf("mandate-X"),
+  )
 
 private fun briefingsForCompletedPhases(
   invariants: FeatureTaskRuntimeRunInvariants,
@@ -125,14 +127,14 @@ private fun inlineGoalContinuationHarness(
       GoalContinuationStateRecordRequest(
         workflowId = WORKFLOW_ID,
         continuation =
-        FeatureTaskRuntimeGoalContinuationArtifact(
-          issueKey = RUNNER_BRIEFING_ISSUE_KEY,
-          subtaskId = 5,
-          suppressPr = true,
-          goalBranch = "feat/existing-runtime-branch",
-          parentWorkflowId = "wfl-parent",
-          codeReviewMode = CodeReviewExecutionMode.INLINE,
-        ),
+          FeatureTaskRuntimeGoalContinuationArtifact(
+            issueKey = RUNNER_BRIEFING_ISSUE_KEY,
+            subtaskId = 5,
+            suppressPr = true,
+            goalBranch = "feat/existing-runtime-branch",
+            parentWorkflowId = "wfl-parent",
+            codeReviewMode = CodeReviewExecutionMode.INLINE,
+          ),
         reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
       ),
     ),
@@ -148,27 +150,28 @@ private fun seedPreReviewPhases(harness: RunnerHarness) {
   harness.seedPhase("audit", "completed", 1, phaseAgent("audit"), VALID_AUDIT_OUTPUT)
 }
 
-private fun pausedReviewState(reviewedDeltaDigest: String) = GoalSubtaskReviewState.initial(
-  reviewBaseSha = "0".repeat(40),
-  baselineUntrackedPaths = emptyList(),
-  codeReviewMode = CodeReviewExecutionMode.INLINE,
-).reserveNextPass().completeReservedPass(
-  verdict = FeatureTaskRuntimeVerdict.CHANGES_REQUESTED,
-  unresolvedFindingCount = 1,
-  findings =
-  listOf(
-    GoalSubtaskReviewCompactFinding(
-      severity = "blocker",
-      label = "StaleCap",
-      text = "unresolved",
-      findingId = "F-001",
-    ),
-  ),
-).copy(
-  disposition = GoalSubtaskReviewDisposition.PAUSED,
-  reviewedDeltaDigest = reviewedDeltaDigest,
-  remediationBaseSha = "9".repeat(40),
-)
+private fun pausedReviewState(reviewedDeltaDigest: String) =
+  GoalSubtaskReviewState.initial(
+    reviewBaseSha = "0".repeat(40),
+    baselineUntrackedPaths = emptyList(),
+    codeReviewMode = CodeReviewExecutionMode.INLINE,
+  ).reserveNextPass().completeReservedPass(
+    verdict = FeatureTaskRuntimeVerdict.CHANGES_REQUESTED,
+    unresolvedFindingCount = 1,
+    findings =
+      listOf(
+        GoalSubtaskReviewCompactFinding(
+          severity = "blocker",
+          label = "StaleCap",
+          text = "unresolved",
+          findingId = "F-001",
+        ),
+      ),
+  ).copy(
+    disposition = GoalSubtaskReviewDisposition.PAUSED,
+    reviewedDeltaDigest = reviewedDeltaDigest,
+    remediationBaseSha = "9".repeat(40),
+  )
 
 private fun seedStaleReviewHarness(
   tempPrefix: String,
@@ -188,12 +191,12 @@ private fun seedStaleReviewHarness(
     GoalSubtaskReviewInputResult(
       status = WorkflowGitOperationStatus.OK,
       input =
-      GoalSubtaskReviewInput(
-        reviewBaseSha = "0".repeat(40),
-        currentHeadSha = COMMITTED_HEAD_SHA,
-        trackedDelta = trackedDelta,
-        ownedUntrackedPatches = "",
-      ),
+        GoalSubtaskReviewInput(
+          reviewBaseSha = "0".repeat(40),
+          currentHeadSha = COMMITTED_HEAD_SHA,
+          trackedDelta = trackedDelta,
+          ownedUntrackedPatches = "",
+        ),
     )
   val harness = inlineGoalContinuationHarness(repoRoot, git, validJsonOutput("commit_push"))
   harness.seedReviewPhase("completed", 1, validJsonOutput("review"), reviewPassNumber = 1)
@@ -227,10 +230,10 @@ internal fun assertNonScopeReviewPrepFailureSurfacesEvidenceStoreCause() {
       harness.runner.run(
         harness.request().copy(
           transitionsOverride =
-          FeatureTaskRuntimeTransitionDeclaration(
-            forwardPhaseIds = listOf("preplan", "plan", "implement", "simplify", "audit", "review"),
-            backwardEdges = emptyList(),
-          ),
+            FeatureTaskRuntimeTransitionDeclaration(
+              forwardPhaseIds = listOf("preplan", "plan", "implement", "simplify", "audit", "review"),
+              backwardEdges = emptyList(),
+            ),
         ),
       ),
     )
@@ -274,10 +277,10 @@ internal fun assertCappedReviewStaleIgnoresUnreachableRemediationBase() {
   harness.runner.run(
     harness.request().copy(
       transitionsOverride =
-      FeatureTaskRuntimeTransitionDeclaration(
-        forwardPhaseIds = listOf("preplan"),
-        backwardEdges = emptyList(),
-      ),
+        FeatureTaskRuntimeTransitionDeclaration(
+          forwardPhaseIds = listOf("preplan"),
+          backwardEdges = emptyList(),
+        ),
     ),
   )
   val after = requireNotNull(harness.goalContinuationRecorder.reviewStateRecorder.reviewState(WORKFLOW_ID))
@@ -310,10 +313,10 @@ internal fun assertCappedReviewStaleReopensWhenImmutableDigestChanged() {
   harness.runner.run(
     harness.request().copy(
       transitionsOverride =
-      FeatureTaskRuntimeTransitionDeclaration(
-        forwardPhaseIds = listOf("preplan"),
-        backwardEdges = emptyList(),
-      ),
+        FeatureTaskRuntimeTransitionDeclaration(
+          forwardPhaseIds = listOf("preplan"),
+          backwardEdges = emptyList(),
+        ),
     ),
   )
   val after = requireNotNull(harness.goalContinuationRecorder.reviewStateRecorder.reviewState(WORKFLOW_ID))

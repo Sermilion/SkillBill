@@ -31,7 +31,11 @@ class FeatureTaskRuntimeGoalStartBaselineTest {
     assertNull(harness.recorder.loadGoalStartResolvedBranch(PARENT_WORKFLOW_ID))
   }
 
-  private fun seedBaseline(harness: RunnerHarness, workflowId: String, baselineOwnedPaths: List<String>) {
+  private fun seedBaseline(
+    harness: RunnerHarness,
+    workflowId: String,
+    baselineOwnedPaths: List<String>,
+  ) {
     harness.recorder.openTestWorkflow(workflowId, SESSION_ID)
     harness.recorder.recordResolvedBranch(
       workflowId,

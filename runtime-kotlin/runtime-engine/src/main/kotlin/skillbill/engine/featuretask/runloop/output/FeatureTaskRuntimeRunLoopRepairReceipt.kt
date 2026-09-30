@@ -16,7 +16,7 @@ object FeatureTaskRuntimeRunLoopRepairReceipt {
     reenteredStepId: String,
     error: String,
   ): Boolean {
-    context.coupledRunTransitions.blockRemediationCheckpointEstablishment(
+    context.coupledRunTransitions.transitionCheckpointRemediationBlock(
       context.request,
       precedingPhaseId,
       "Feature-task-runtime could not record the pre-fix remediation base sha before re-entering " +

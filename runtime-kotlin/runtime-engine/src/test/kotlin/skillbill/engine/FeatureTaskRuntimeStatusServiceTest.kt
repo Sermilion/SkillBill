@@ -82,23 +82,27 @@ class FeatureTaskRuntimeStatusServiceTest {
     harness.recordRunInvariants(FeatureTaskRuntimeFeatureSize.MEDIUM)
     harness.recordRunning("implement", attemptCount = 4)
     val execution = ExecutionPlanAdmissionFixture()
-    val descriptor = execution.descriptor().toMutableMap().apply {
-      put(
-        FeatureTaskRuntimeExecutionPlanKeys.DEFINITION,
-        mapOf(
-          FeatureTaskRuntimeExecutionPlanKeys.ID to execution.plan.definitionId,
-          FeatureTaskRuntimeExecutionPlanKeys.SEMANTIC_REVISION to 99,
-        ),
-      )
-    }
+    val descriptor =
+      execution.descriptor().toMutableMap().apply {
+        put(
+          FeatureTaskRuntimeExecutionPlanKeys.DEFINITION,
+          mapOf(
+            FeatureTaskRuntimeExecutionPlanKeys.ID to execution.plan.definitionId,
+            FeatureTaskRuntimeExecutionPlanKeys.SEMANTIC_REVISION to 99,
+          ),
+        )
+      }
     val original = requireNotNull(harness.repository.getFeatureTaskWorkflowAsMode(WORKFLOW_ID, RUNTIME))
-    val incompatible = original.copy(
-      artifactsJson = JsonCodec.mapToJsonString(
-        original.toSnapshot().artifacts + DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
-          descriptor,
-        ),
-      ),
-    )
+    val incompatible =
+      original.copy(
+        artifactsJson =
+          JsonCodec.mapToJsonString(
+            original.toSnapshot().artifacts +
+              DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
+                descriptor,
+              ),
+          ),
+      )
     harness.repository.saveFeatureTaskWorkflow(incompatible, RUNTIME)
     val records = harness.recorder.loadPhaseRecords(WORKFLOW_ID)
     val projection = requireNotNull(harness.service.status(FeatureTaskRuntimeStatusRequest(WORKFLOW_ID)))
@@ -548,10 +552,10 @@ class FeatureTaskRuntimeStatusServiceTest {
         parentSpecPath = ".feature-specs/SKILL-65-runtime/spec.md",
         decompositionManifestPath = ".feature-specs/SKILL-65-runtime/decomposition-manifest.yaml",
         subtaskSpecPaths =
-        listOf(
-          ".feature-specs/SKILL-65-runtime/spec_subtask_1_domain.md",
-          ".feature-specs/SKILL-65-runtime/spec_subtask_2_runtime.md",
-        ),
+          listOf(
+            ".feature-specs/SKILL-65-runtime/spec_subtask_1_domain.md",
+            ".feature-specs/SKILL-65-runtime/spec_subtask_2_runtime.md",
+          ),
       ),
       "plan",
     )
@@ -997,26 +1001,26 @@ class FeatureTaskRuntimeStatusAttributionTest {
       FeatureTaskRuntimeValidationGateProgress(
         gateRunCount = 2,
         gateRuns =
-        listOf(
-          FeatureTaskRuntimeValidationGateRunRecord(
-            durationMs = 10,
-            outcome = "failed",
-            cacheMode = "warm",
-            executedWorkUnits = 1,
-            command = "./gradlew check",
-            exitCode = 1,
-            repositoryCheckpoint = "checkpoint-1",
+          listOf(
+            FeatureTaskRuntimeValidationGateRunRecord(
+              durationMs = 10,
+              outcome = "failed",
+              cacheMode = "warm",
+              executedWorkUnits = 1,
+              command = "./gradlew check",
+              exitCode = 1,
+              repositoryCheckpoint = "checkpoint-1",
+            ),
+            FeatureTaskRuntimeValidationGateRunRecord(
+              durationMs = 12,
+              outcome = "failed",
+              cacheMode = "warm",
+              executedWorkUnits = 1,
+              command = "./gradlew check --rerun-tasks",
+              exitCode = 1,
+              repositoryCheckpoint = "checkpoint-2",
+            ),
           ),
-          FeatureTaskRuntimeValidationGateRunRecord(
-            durationMs = 12,
-            outcome = "failed",
-            cacheMode = "warm",
-            executedWorkUnits = 1,
-            command = "./gradlew check --rerun-tasks",
-            exitCode = 1,
-            repositoryCheckpoint = "checkpoint-2",
-          ),
-        ),
       ),
     )
 
@@ -1170,16 +1174,17 @@ private fun diagnosticSignal(
   failureClass: FeatureTaskRuntimeDiagnosticFailureClass,
   phaseId: String,
   attempt: Int,
-): FeatureTaskRuntimeDiagnosticSignal = FeatureTaskRuntimeDiagnosticSignal(
-  operation = "retain-producer-output",
-  failureClass = failureClass,
-  conflictingKey = "wftr-20260603-status-0001:$phaseId:0:$attempt:1:cursor",
-  phaseId = phaseId,
-  attempt = attempt,
-  repairTurn = 1,
-  generation = 0,
-  recordedAt = "2026-08-12T20:19:51Z",
-)
+): FeatureTaskRuntimeDiagnosticSignal =
+  FeatureTaskRuntimeDiagnosticSignal(
+    operation = "retain-producer-output",
+    failureClass = failureClass,
+    conflictingKey = "wftr-20260603-status-0001:$phaseId:0:$attempt:1:cursor",
+    phaseId = phaseId,
+    attempt = attempt,
+    repairTurn = 1,
+    generation = 0,
+    recordedAt = "2026-08-12T20:19:51Z",
+  )
 
 internal fun statusHarness(): StatusHarness {
   val repository = StatusInMemoryWorkflowRepository()
@@ -1219,7 +1224,11 @@ internal class StatusHarness(
   val service: FeatureTaskRuntimeStatusService,
   val repository: StatusInMemoryWorkflowRepository,
 ) {
-  fun recordRunning(phaseId: String, attemptCount: Int, resolvedAgentId: String = "claude") = recorder.recordPhaseState(
+  fun recordRunning(
+    phaseId: String,
+    attemptCount: Int,
+    resolvedAgentId: String = "claude",
+  ) = recorder.recordPhaseState(
     FeatureTaskRuntimePhaseStateRequest(
       workflowId = WORKFLOW_ID,
       phaseId = phaseId,
@@ -1231,32 +1240,39 @@ internal class StatusHarness(
     ),
   )
 
-  fun recordCompleted(phaseId: String, attemptCount: Int, resolvedAgentId: String = "claude") =
-    recorder.recordPhaseState(
-      FeatureTaskRuntimePhaseStateRequest(
-        workflowId = WORKFLOW_ID,
-        phaseId = phaseId,
-        status = "completed",
-        attemptCount = attemptCount,
-        resolvedAgentId = resolvedAgentId,
-        finished = true,
-        outputArtifact = """{"contract_version":"0.1"}""",
-      ),
-    )
+  fun recordCompleted(
+    phaseId: String,
+    attemptCount: Int,
+    resolvedAgentId: String = "claude",
+  ) = recorder.recordPhaseState(
+    FeatureTaskRuntimePhaseStateRequest(
+      workflowId = WORKFLOW_ID,
+      phaseId = phaseId,
+      status = "completed",
+      attemptCount = attemptCount,
+      resolvedAgentId = resolvedAgentId,
+      finished = true,
+      outputArtifact = """{"contract_version":"0.1"}""",
+    ),
+  )
 
-  fun recordBlocked(phaseId: String, attemptCount: Int, blockedReason: String, resolvedAgentId: String = "claude") =
-    recorder.recordPhaseState(
-      FeatureTaskRuntimePhaseStateRequest(
-        workflowId = WORKFLOW_ID,
-        phaseId = phaseId,
-        status = "blocked",
-        attemptCount = attemptCount,
-        resolvedAgentId = resolvedAgentId,
-        finished = false,
-        outputArtifact = null,
-        blockedReason = blockedReason,
-      ),
-    )
+  fun recordBlocked(
+    phaseId: String,
+    attemptCount: Int,
+    blockedReason: String,
+    resolvedAgentId: String = "claude",
+  ) = recorder.recordPhaseState(
+    FeatureTaskRuntimePhaseStateRequest(
+      workflowId = WORKFLOW_ID,
+      phaseId = phaseId,
+      status = "blocked",
+      attemptCount = attemptCount,
+      resolvedAgentId = resolvedAgentId,
+      finished = false,
+      outputArtifact = null,
+      blockedReason = blockedReason,
+    ),
+  )
 
   fun recordLedger(
     action: FeatureTaskRuntimePhaseLedgerAction,
@@ -1329,12 +1345,12 @@ internal class StatusHarness(
     runInvariantsStore.resolve(
       workflowId = WORKFLOW_ID,
       proposed =
-      FeatureTaskRuntimeRunInvariants(
-        specReference = ".feature-specs/SKILL-65/spec.md",
-        featureSize = featureSize,
-        acceptanceCriteria = listOf("AC-1"),
-        mandatesAndOverrides = emptyList(),
-      ),
+        FeatureTaskRuntimeRunInvariants(
+          specReference = ".feature-specs/SKILL-65/spec.md",
+          featureSize = featureSize,
+          acceptanceCriteria = listOf("AC-1"),
+          mandatesAndOverrides = emptyList(),
+        ),
     )
   }
 
@@ -1360,54 +1376,77 @@ private class StatusFakeDatabaseSessionFactory(
 
   override fun <T> transaction(block: (UnitOfWork) -> T): T = block(unitOfWork())
 
-  private fun unitOfWork(): UnitOfWork = object : UnitOfWorkDefaults() {
-    override val dbPath: Path = this@StatusFakeDatabaseSessionFactory.dbPath
-    override val reviews: ReviewRepository get() = error("unused")
-    override val learnings: LearningRepository get() = error("unused")
-    override val lifecycleTelemetry: LifecycleTelemetryRepository get() = error("unused")
-    override val telemetryReconciliation: TelemetryReconciliationRepository get() = error("unused")
-    override val telemetryOutbox: TelemetryOutboxRepository get() = error("unused")
-    override val workflowStates: WorkflowStateRepository = repository
-    override val workList = EmptyWorkListRepository
-    override val goalPlanningPreparations = EmptyGoalPlanningPreparationRepository
-    override val goalRunnerControls = EmptyGoalRunnerControlRepository
-  }
+  private fun unitOfWork(): UnitOfWork =
+    object : UnitOfWorkDefaults() {
+      override val dbPath: Path = this@StatusFakeDatabaseSessionFactory.dbPath
+      override val reviews: ReviewRepository get() = error("unused")
+      override val learnings: LearningRepository get() = error("unused")
+      override val lifecycleTelemetry: LifecycleTelemetryRepository get() = error("unused")
+      override val telemetryReconciliation: TelemetryReconciliationRepository get() = error("unused")
+      override val telemetryOutbox: TelemetryOutboxRepository get() = error("unused")
+      override val workflowStates: WorkflowStateRepository = repository
+      override val workList = EmptyWorkListRepository
+      override val goalPlanningPreparations = EmptyGoalPlanningPreparationRepository
+      override val goalRunnerControls = EmptyGoalRunnerControlRepository
+    }
 }
 
 internal class StatusInMemoryWorkflowRepository : WorkflowStateRepositoryDefaults() {
   override fun saveFeatureTaskExecutionIdentity(identity: FeatureTaskExecutionIdentity) = Unit
 
-  override fun findStandaloneFeatureTaskCandidates(normalizedIssueKey: String, repositoryIdentity: String) =
-    emptyList<FeatureTaskWorkflowCandidate>()
+  override fun findStandaloneFeatureTaskCandidates(
+    normalizedIssueKey: String,
+    repositoryIdentity: String,
+  ) = emptyList<FeatureTaskWorkflowCandidate>()
 
   private val taskRuntimeRows = linkedMapOf<String, WorkflowStateRecord>()
 
-  override fun saveFeatureTaskWorkflow(row: WorkflowStateRecord, mode: FeatureTaskWorkflowMode) {
+  override fun saveFeatureTaskWorkflow(
+    row: WorkflowStateRecord,
+    mode: FeatureTaskWorkflowMode,
+  ) {
     taskRuntimeRows[row.workflowId] = row
   }
 
-  override fun getFeatureTaskWorkflowAsMode(workflowId: String, mode: FeatureTaskWorkflowMode): WorkflowStateRecord? =
-    taskRuntimeRows[workflowId]
+  override fun getFeatureTaskWorkflowAsMode(
+    workflowId: String,
+    mode: FeatureTaskWorkflowMode,
+  ): WorkflowStateRecord? = taskRuntimeRows[workflowId]
 
-  override fun listFeatureTaskWorkflows(mode: FeatureTaskWorkflowMode, limit: Int): List<WorkflowStateRecord> =
-    taskRuntimeRows.values.toList().asReversed().take(limit)
+  override fun listFeatureTaskWorkflows(
+    mode: FeatureTaskWorkflowMode,
+    limit: Int,
+  ): List<WorkflowStateRecord> = taskRuntimeRows.values.toList().asReversed().take(limit)
 
-  override fun save(family: WorkflowFamily, snapshot: WorkflowStateSnapshot) =
-    saveRecord(family, snapshot.toRecord(taskRuntimeRows[snapshot.workflowId]))
+  override fun save(
+    family: WorkflowFamily,
+    snapshot: WorkflowStateSnapshot,
+  ) = saveRecord(family, snapshot.toRecord(taskRuntimeRows[snapshot.workflowId]))
 
-  override fun saveRecord(family: WorkflowFamily, record: WorkflowStateRecord) {
+  override fun saveRecord(
+    family: WorkflowFamily,
+    record: WorkflowStateRecord,
+  ) {
     taskRuntimeRows[record.workflowId] = record
   }
 
-  override fun get(family: WorkflowFamily, workflowId: String): WorkflowStateSnapshot? =
-    taskRuntimeRows[workflowId]?.toSnapshot()
+  override fun get(
+    family: WorkflowFamily,
+    workflowId: String,
+  ): WorkflowStateSnapshot? = taskRuntimeRows[workflowId]?.toSnapshot()
 
-  override fun list(family: WorkflowFamily, limit: Int): List<WorkflowStateSnapshot> =
+  override fun list(
+    family: WorkflowFamily,
+    limit: Int,
+  ): List<WorkflowStateSnapshot> =
     taskRuntimeRows.values.toList().asReversed().take(limit).map(WorkflowStateRecord::toSnapshot)
 
   override fun latest(family: WorkflowFamily): WorkflowStateSnapshot? = list(family, 1).firstOrNull()
 }
 
 private object StatusNoopSnapshotValidator : WorkflowSnapshotValidator {
-  override fun validate(snapshot: WorkflowStateSnapshot, slug: String) = Unit
+  override fun validate(
+    snapshot: WorkflowStateSnapshot,
+    slug: String,
+  ) = Unit
 }

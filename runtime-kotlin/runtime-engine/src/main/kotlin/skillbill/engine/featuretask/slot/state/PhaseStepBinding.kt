@@ -1,14 +1,17 @@
 package skillbill.engine.featuretask.slot.state
 
+import skillbill.application.telemetry.model.PrDescriptionGeneratedRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseRepositoryObservations
 import skillbill.engine.featuretask.slot.attempt.PhaseAcceptedStepCallTarget
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
-import skillbill.engine.featuretask.slot.codereview.PhaseReviewExecutionContext
-import skillbill.engine.featuretask.slot.pullrequest.PhasePullRequestContext
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
 /** Step binding for one accepted step; strategies read launch facts through [launchState] only. */
 internal interface PhaseStepBinding {
@@ -25,7 +28,7 @@ internal interface PhaseStepBinding {
 
   fun completedStepPayload(stepId: String): String?
 
-  fun resolvedBranchName(): String?
+  val resolvedBranchName: String?
 
   fun stepCompleted(iteration: Int)
 
@@ -117,6 +120,8 @@ internal interface PhaseReviewStepBinding :
     run: PhaseRun,
     iteration: Int,
   ): PhaseOutcome?
+
+  fun blockRequiredReviewWrite(rejection: RequiredPhaseWriteRejected): PhaseOutcome
 }
 
 /** verify_findings reads and writes only the finding-verification ledger for its step. */
@@ -128,3 +133,14 @@ internal interface PhaseVerifyFindingsStepBinding :
 internal interface PhaseImplementFixStepBinding :
   PhaseAgentStepBinding,
   PhaseRepairReceiptState
+
+internal data class PhasePullRequestContext(
+  val request: FeatureTaskRuntimeRunFacts,
+  val gitOperations: PhaseRepositoryObservations,
+  val diagnostics: RuntimeDiagnostics,
+  val prDescriptionGenerated: (PrDescriptionGeneratedRequest) -> Unit,
+  val transitions: FeatureTaskRuntimeTransitionDeclaration,
+  private val branch: FeatureTaskRuntimeResolvedBranch?,
+) {
+  fun resolvedBranch(): FeatureTaskRuntimeResolvedBranch? = branch
+}

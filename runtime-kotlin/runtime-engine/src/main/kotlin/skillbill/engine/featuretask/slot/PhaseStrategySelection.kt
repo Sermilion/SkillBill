@@ -69,7 +69,9 @@ class PhaseStrategySelection(
       }
       slotBindings.forEach { (slot, binding) ->
         if (binding.strategyIds.isEmpty()) {
-          throw InvalidPhaseStrategyCompositionError("selection for ${definition.id}/${slot.wireValue} has no strategies")
+          throw InvalidPhaseStrategyCompositionError(
+            "selection for ${definition.id}/${slot.wireValue} has no strategies",
+          )
         }
         binding.strategyIds.firstOrNull { !registry.contains(slot, it) }?.let { strategyId ->
           throw UnregisteredPhaseStrategySelectionError(slot.wireValue, strategyId)
@@ -87,8 +89,9 @@ class PhaseStrategySelection(
     slot: PhaseSlot,
     facts: PhaseStrategySelectionFacts,
   ): String {
-    val binding = bindings[facts.definition]?.get(slot)
-      ?: throw UnknownPhaseStrategyError(slot.wireValue, "definition=${facts.definition.id}")
+    val binding =
+      bindings[facts.definition]?.get(slot)
+        ?: throw UnknownPhaseStrategyError(slot.wireValue, "definition=${facts.definition.id}")
     return binding.resolve(facts)
       ?: throw InvalidPhaseStrategyCompositionError(
         "no matching selection for ${facts.definition.id}/${slot.wireValue}: " +

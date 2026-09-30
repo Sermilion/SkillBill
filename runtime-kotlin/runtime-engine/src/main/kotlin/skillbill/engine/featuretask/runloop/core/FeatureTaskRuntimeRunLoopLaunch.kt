@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.runloop.core
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.install.model.SupportedAgent
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -13,7 +13,7 @@ import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeCorrec
 object FeatureTaskRuntimeRunLoopLaunch {
   internal fun capturePhaseContentIdentities(
     request: FeatureTaskRuntimeRunFacts,
-    coupledTransitions: FeatureTaskRuntimeRunLoopTransitionOwner,
+    coupledTransitions: FeatureTaskRuntimeRunTransitionOwner,
     phaseGates: FeatureTaskRuntimePhaseGates,
     phaseId: String,
   ) {

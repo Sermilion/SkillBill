@@ -3,6 +3,11 @@ package skillbill.engine.featuretask.slot
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
 import skillbill.engine.PROMPT_COMPOSER_ISSUE_KEY
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
+import skillbill.engine.featuretask.lifecycle.execution.executionPolicyDigest
+import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.FILE_MUTATING
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.GENERATION_SCOPED
@@ -16,10 +21,6 @@ import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.LaneScript
 import skillbill.engine.featuretask.slot.codereview.scriptedDelegatedReviewRunner
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
-import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
-import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
-import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
-import skillbill.engine.featuretask.lifecycle.execution.executionPolicyDigest
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy
 import skillbill.engine.featuretask.slot.plan.GoalPlanFanOutStrategy
@@ -32,7 +33,6 @@ import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidati
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
-import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.promptComposerBriefingFor
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
@@ -80,39 +80,44 @@ class PhaseStrategyCompositionTest {
   @TempDir lateinit var home: Path
 
   private fun productionRegistry(): PhaseStrategyRegistry {
-    val database = sqliteSessionFactoryForTests(
-      userHome = home,
-      dbPathOverride = home.resolve("metrics.db").toString(),
-      environment = emptyMap(),
-    )
+    val database =
+      sqliteSessionFactoryForTests(
+        userHome = home,
+        dbPathOverride = home.resolve("metrics.db").toString(),
+        environment = emptyMap(),
+      )
     return PhaseStrategyRegistry(
-      strategies + listOf(
-        DelegatedReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
-        GoalPlanFanOutStrategy({ runner }, SequentialBoundedWorkFanOutPort, 1),
-      ),
+      (
+        strategies +
+          listOf(
+            DelegatedReviewStrategy(runner, scriptedDelegatedReviewRunner(database, home, LaneScript())),
+            GoalPlanFanOutStrategy(SequentialBoundedWorkFanOutPort, 1),
+          )
+      ).map { PhaseStrategyRegistration(it, runner) },
     )
   }
 
   private val runner =
     object : PhaseRunner {
-      override fun run(input: PhaseStepInput, state: PhaseLaunchState): PhaseStepOutput =
-        error("Policy lookups must not launch a step.")
+      override fun run(
+        input: PhaseStepInput,
+        state: PhaseLaunchState,
+      ): PhaseStepOutput = error("Policy lookups must not launch a step.")
     }
 
   private val strategies =
     listOf(
-      AgentPreplanStrategy(runner),
-      AgentPlanStrategy(runner),
-      ImplementThenSimplifyStrategy(runner),
-      AcceptanceAuditStrategy(runner),
+      AgentPreplanStrategy(),
+      AgentPlanStrategy(),
+      ImplementThenSimplifyStrategy(),
+      AcceptanceAuditStrategy(),
       InlineReviewStrategy(runner),
-      PackBuildStrategy(runner),
-      PackValidationStrategy(runner),
-      AgentValidateStrategy(runner),
-      BoundaryHistoryStrategy(runner),
-      RuntimeCommitStrategy(runner),
+      PackBuildStrategy(),
+      PackValidationStrategy(),
+      AgentValidateStrategy(),
+      BoundaryHistoryStrategy(),
+      RuntimeCommitStrategy(),
       PrDescriptionStrategy(
-        runner,
         UnavailablePullRequestIdentityLookup,
         PullRequestReadinessGate(AbsentReadinessEvidence, NoopRuntimeDiagnostics),
         LocalPullRequestTemplateFiles,
@@ -175,15 +180,17 @@ class PhaseStrategyCompositionTest {
           ),
         )
       val lookup = PhaseStrategyLookup(registry, selection)
-      val orders = listOf(
-        linkedSetOf(FeatureTaskRuntimeQualityGateSelection.BUILD, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
-        linkedSetOf(FeatureTaskRuntimeQualityGateSelection.VALIDATE, FeatureTaskRuntimeQualityGateSelection.BUILD),
-      )
-      val failures = orders.map { order ->
-        assertFailsWith<InvalidPhaseStrategyCompositionError> {
-          lookup.executionPlan(PhaseStrategySelectionFacts(gateOnly, order))
-        }.message
-      }
+      val orders =
+        listOf(
+          linkedSetOf(FeatureTaskRuntimeQualityGateSelection.BUILD, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
+          linkedSetOf(FeatureTaskRuntimeQualityGateSelection.VALIDATE, FeatureTaskRuntimeQualityGateSelection.BUILD),
+        )
+      val failures =
+        orders.map { order ->
+          assertFailsWith<InvalidPhaseStrategyCompositionError> {
+            lookup.executionPlan(PhaseStrategySelectionFacts(gateOnly, order))
+          }.message
+        }
       assertEquals(failures.first(), failures.last())
     }
   }
@@ -230,52 +237,7 @@ class PhaseStrategyCompositionTest {
                 qualityGate?.let(::add)
               },
             )
-          val plan = lookup.executionPlan(facts)
-
-          val excludedGate =
-            if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD) PHASE_VALIDATE else PHASE_BUILD
-          val expectedSteps = definition.stepIds - excludedGate
-          assertEquals(expectedSteps.toSet(), plan.selectedStepIds, definition.id)
-          assertEquals(expectedSteps, plan.traversal.forwardPhaseIds, definition.id)
-          assertEquals(definition.slots, plan.selectedSlots, definition.id)
-          if (definition == SkeletonDefinition.STANDALONE || definition == SkeletonDefinition.GOAL_CHILD) {
-            val recoveryEdges = plan.traversal.backwardEdges.filter {
-              it.triggeringVerdict == FeatureTaskRuntimeVerdict.RECORD_REJECTED
-            }
-            assertEquals(1, recoveryEdges.size, definition.id)
-            assertEquals(
-              if (excludedGate == PHASE_BUILD) PHASE_VALIDATE else PHASE_BUILD,
-              recoveryEdges.single().destinationPhaseId,
-            )
-            assertEquals(2, recoveryEdges.single().perEdgeCap)
-          }
-          val expectedGate = when {
-            definition == SkeletonDefinition.VALIDATION -> PackValidationStrategy.ID
-            qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD -> PackBuildStrategy.ID
-            else -> AgentValidateStrategy.ID
-          }
-          if (PhaseSlot.QUALITY_GATE in definition.slots) {
-            val selectedGate = if (excludedGate == PHASE_BUILD) PHASE_VALIDATE else PHASE_BUILD
-            assertEquals(expectedGate, lookup.strategyFor(selectedGate, plan).strategyId)
-          }
-          if (definition == SkeletonDefinition.REVIEW) {
-            assertEquals(
-              if (reviewMode == CodeReviewExecutionMode.DELEGATED) {
-                DelegatedReviewStrategy.ID
-              } else {
-                InlineReviewStrategy.ID
-              },
-              lookup.strategyFor(PHASE_REVIEW, plan).strategyId,
-            )
-          }
-          if (definition == SkeletonDefinition.GOAL_PLANNING) {
-            assertEquals(GoalPlanFanOutStrategy.ID, lookup.strategyFor(PHASE_PLAN, plan).strategyId)
-          }
-          plan.selectedStrategies.forEach { identity ->
-            identity.steps.forEach { step ->
-              assertSame(registry.strategy(identity.slot, identity.strategyId), lookup.strategyFor(step, plan))
-            }
-          }
+          assertSelectedComposition(registry, lookup, facts)
         }
       }
     }
@@ -288,36 +250,39 @@ class PhaseStrategyCompositionTest {
     val codec = FeatureTaskRuntimeExecutionPlanCodec(FeatureTaskRuntimeExecutionPlanSchemaValidator())
     val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
     SkeletonDefinition.entries.forEach { definition ->
-      val gates = if (definition == SkeletonDefinition.GOAL_CHILD) {
-        FeatureTaskRuntimeQualityGateSelection.entries.map { it }
-      } else {
-        listOf(null)
-      }
+      val gates =
+        if (definition == SkeletonDefinition.GOAL_CHILD) {
+          FeatureTaskRuntimeQualityGateSelection.entries.map { it }
+        } else {
+          listOf(null)
+        }
       gates.forEach { gate ->
-        val original = lookup.executionPlan(
-          PhaseStrategySelectionFacts(
-            definition,
-            buildSet {
-              if (PhaseSlot.CODE_REVIEW in definition.slots) add(CodeReviewExecutionMode.INLINE)
-              gate?.let(::add)
-            },
-          ),
-        )
-        val encoded = codec.encodeExecution(
-          original,
-          EffectiveGatePolicyInputs(
-            if (gate == FeatureTaskRuntimeQualityGateSelection.BUILD) {
-              ValidationGateCommandFamily.BUILD
-            } else {
-              ValidationGateCommandFamily.VALIDATION
-            },
-            null,
-            null,
-            null,
-            ValidationDepth.FULL,
-            null,
-          ),
-        )
+        val original =
+          lookup.executionPlan(
+            PhaseStrategySelectionFacts(
+              definition,
+              buildSet {
+                if (PhaseSlot.CODE_REVIEW in definition.slots) add(CodeReviewExecutionMode.INLINE)
+                gate?.let(::add)
+              },
+            ),
+          )
+        val encoded =
+          codec.encodeExecution(
+            original,
+            EffectiveGatePolicyInputs(
+              if (gate == FeatureTaskRuntimeQualityGateSelection.BUILD) {
+                ValidationGateCommandFamily.BUILD
+              } else {
+                ValidationGateCommandFamily.VALIDATION
+              },
+              null,
+              null,
+              null,
+              ValidationDepth.FULL,
+              null,
+            ),
+          )
         val restored = compatibility.requireSupportedComposition(encoded)
 
         assertEquals(original.selectedStrategies, restored.selectedStrategies)
@@ -343,10 +308,11 @@ class PhaseStrategyCompositionTest {
     val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
     val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
     val plan = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()))
-    val encoded = codec.encodeExecution(
-      plan,
-      EffectiveGatePolicyInputs(ValidationGateCommandFamily.VALIDATION, null, null, null, ValidationDepth.FULL, null),
-    )
+    val encoded =
+      codec.encodeExecution(
+        plan,
+        EffectiveGatePolicyInputs(ValidationGateCommandFamily.VALIDATION, null, null, null, ValidationDepth.FULL, null),
+      )
     val original = validator.read(encoded, "original")
 
     assertFailsWith<MissingFeatureTaskRuntimeExecutionPlanError> { compatibility.requireSupportedComposition(null) }
@@ -358,26 +324,7 @@ class PhaseStrategyCompositionTest {
         JsonCodec.mapToJsonString(original + (Keys.CONTRACT_VERSION to "9.9")).toByteArray(),
       )
     }
-    val definition = requireNotNull(JsonCodec.anyToStringAnyMap(original[Keys.DEFINITION]))
-    assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
-      compatibility.requireSupportedComposition(
-        validator.write(
-          original + (Keys.DEFINITION to (definition + (Keys.SEMANTIC_REVISION to 2))),
-          "unsupported revision",
-        ),
-      )
-    }
-    val changedStrategyRevision = original.toMutableMap()
-    listOf(Keys.SELECTED_STRATEGIES, Keys.DISPATCH_OWNERSHIP).forEach { field ->
-      changedStrategyRevision[field] = requireNotNull(original[field] as? List<*>).map {
-        requireNotNull(JsonCodec.anyToStringAnyMap(it)) + (Keys.SEMANTIC_REVISION to 2)
-      }
-    }
-    assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
-      compatibility.requireSupportedComposition(
-        validator.write(changedStrategyRevision, "unsupported strategy revision"),
-      )
-    }
+    assertUnsupportedSelections(original, compatibility, validator)
     listOf(Keys.STEP_POLICIES, Keys.RESUME_INTERPRETATIONS).forEach { field ->
       val rows = requireNotNull(original[field] as? List<*>)
       val first = requireNotNull(JsonCodec.anyToStringAnyMap(rows.first()))
@@ -387,11 +334,12 @@ class PhaseStrategyCompositionTest {
         compatibility.requireSupportedComposition(validator.write(corrupt, "corrupt digest"))
       }
       val unsupportedPolicy = changed + (Keys.SEMANTIC_DIGEST to executionPolicyDigest("unknown-private-policy"))
-      val error = assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
-        compatibility.requireSupportedComposition(
-          validator.write(original + (field to listOf(unsupportedPolicy)), "unsupported policy"),
-        )
-      }
+      val error =
+        assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+          compatibility.requireSupportedComposition(
+            validator.write(original + (field to listOf(unsupportedPolicy)), "unsupported policy"),
+          )
+        }
       assertFalse(error.message.orEmpty().contains("unknown-private-policy"))
       assertContentEquals(
         encoded,
@@ -417,16 +365,18 @@ class PhaseStrategyCompositionTest {
     val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
     val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
     val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
-    val plan = lookup.executionPlan(
-      PhaseStrategySelectionFacts(
-        SkeletonDefinition.GOAL_CHILD,
-        setOf(CodeReviewExecutionMode.INLINE, FeatureTaskRuntimeQualityGateSelection.BUILD),
-      ),
-    )
-    val encoded = codec.encodeExecution(
-      plan,
-      EffectiveGatePolicyInputs(ValidationGateCommandFamily.BUILD, null, null, null, ValidationDepth.FULL, null),
-    )
+    val plan =
+      lookup.executionPlan(
+        PhaseStrategySelectionFacts(
+          SkeletonDefinition.GOAL_CHILD,
+          setOf(CodeReviewExecutionMode.INLINE, FeatureTaskRuntimeQualityGateSelection.BUILD),
+        ),
+      )
+    val encoded =
+      codec.encodeExecution(
+        plan,
+        EffectiveGatePolicyInputs(ValidationGateCommandFamily.BUILD, null, null, null, ValidationDepth.FULL, null),
+      )
     val original = validator.read(encoded, "original")
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
       compatibility.requireSupportedComposition(
@@ -446,30 +396,31 @@ class PhaseStrategyCompositionTest {
     val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
     val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
     val original = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()))
-    val encoded = codec.encodeExecution(
-      original,
-      EffectiveGatePolicyInputs(ValidationGateCommandFamily.VALIDATION, null, null, null, ValidationDepth.FULL, null),
-    )
+    val encoded =
+      codec.encodeExecution(
+        original,
+        EffectiveGatePolicyInputs(ValidationGateCommandFamily.VALIDATION, null, null, null, ValidationDepth.FULL, null),
+      )
     val reordered = validator.read(encoded, "original").entries.reversed().associate { it.key to it.value }
-    val replacement = PackValidationStrategy(object : PhaseRunner {
-      override fun run(input: PhaseStepInput, state: PhaseLaunchState): PhaseStepOutput =
-        error("Semantic comparison must not launch a runner.")
-    })
-    val freshRegistry = PhaseStrategyRegistry(listOf(replacement))
-    val freshLookup = PhaseStrategyLookup(
-      freshRegistry,
-      PhaseStrategySelection(
+    val replacement = PackValidationStrategy()
+    val freshRegistry = PhaseStrategyRegistry(listOf(PhaseStrategyRegistration(replacement, runner)))
+    val freshLookup =
+      PhaseStrategyLookup(
         freshRegistry,
-        mapOf(
-          SkeletonDefinition.VALIDATION to mapOf(
-            PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(PackValidationStrategy.ID),
+        PhaseStrategySelection(
+          freshRegistry,
+          mapOf(
+            SkeletonDefinition.VALIDATION to
+              mapOf(
+                PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(PackValidationStrategy.ID),
+              ),
           ),
         ),
-      ),
-    )
-    val restored = FeatureTaskRuntimeExecutionPlanCompatibility(codec, freshLookup).requireSupportedComposition(
-      JsonCodec.mapToJsonString(reordered).toByteArray(),
-    )
+      )
+    val restored =
+      FeatureTaskRuntimeExecutionPlanCompatibility(codec, freshLookup).requireSupportedComposition(
+        JsonCodec.mapToJsonString(reordered).toByteArray(),
+      )
 
     assertContentEquals(encoded, codec.encode(restored))
     assertSame(replacement, freshLookup.strategyFor(PHASE_VALIDATE, restored))
@@ -533,4 +484,83 @@ class PhaseStrategyCompositionTest {
   }
 
   private enum class PolicyTrait { MUTATING, RELAUNCH, SINGLE, READ_ONLY_IDLE, FILE_MUTATING, GENERATION_SCOPED }
+  private fun assertSelectedComposition(registry: PhaseStrategyRegistry, lookup: PhaseStrategyLookup, facts: PhaseStrategySelectionFacts) {
+    val definition = facts.definition
+    val reviewMode = facts.values.filterIsInstance<CodeReviewExecutionMode>().singleOrNull()
+    val qualityGate = facts.values.filterIsInstance<FeatureTaskRuntimeQualityGateSelection>().singleOrNull()
+          val plan = lookup.executionPlan(facts)
+
+          val excludedGate =
+            if (qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD) PHASE_VALIDATE else PHASE_BUILD
+          val expectedSteps = definition.stepIds - excludedGate
+          assertEquals(expectedSteps.toSet(), plan.selectedStepIds, definition.id)
+          assertEquals(expectedSteps, plan.traversal.forwardPhaseIds, definition.id)
+          assertEquals(definition.slots, plan.selectedSlots, definition.id)
+          if (definition == SkeletonDefinition.STANDALONE || definition == SkeletonDefinition.GOAL_CHILD) {
+            val recoveryEdges =
+              plan.traversal.backwardEdges.filter {
+                it.triggeringVerdict == FeatureTaskRuntimeVerdict.RECORD_REJECTED
+              }
+            assertEquals(1, recoveryEdges.size, definition.id)
+            assertEquals(
+              if (excludedGate == PHASE_BUILD) PHASE_VALIDATE else PHASE_BUILD,
+              recoveryEdges.single().destinationPhaseId,
+            )
+            assertEquals(2, recoveryEdges.single().perEdgeCap)
+          }
+          val expectedGate =
+            when {
+              definition == SkeletonDefinition.VALIDATION -> PackValidationStrategy.ID
+              qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD -> PackBuildStrategy.ID
+              else -> AgentValidateStrategy.ID
+            }
+          if (PhaseSlot.QUALITY_GATE in definition.slots) {
+            val selectedGate = if (excludedGate == PHASE_BUILD) PHASE_VALIDATE else PHASE_BUILD
+            assertEquals(expectedGate, lookup.strategyFor(selectedGate, plan).strategyId)
+          }
+          if (definition == SkeletonDefinition.REVIEW) {
+            assertEquals(
+              if (reviewMode == CodeReviewExecutionMode.DELEGATED) {
+                DelegatedReviewStrategy.ID
+              } else {
+                InlineReviewStrategy.ID
+              },
+              lookup.strategyFor(PHASE_REVIEW, plan).strategyId,
+            )
+          }
+          if (definition == SkeletonDefinition.GOAL_PLANNING) {
+            assertEquals(GoalPlanFanOutStrategy.ID, lookup.strategyFor(PHASE_PLAN, plan).strategyId)
+          }
+          plan.selectedStrategies.forEach { identity ->
+            identity.steps.forEach { step ->
+              assertSame(registry.strategy(identity.slot, identity.strategyId), lookup.strategyFor(step, plan))
+            }
+          }
+  }
+
+  private fun assertUnsupportedSelections(original: Map<String, Any?>, compatibility: FeatureTaskRuntimeExecutionPlanCompatibility, validator: FeatureTaskRuntimeExecutionPlanSchemaValidator) {
+    val definition = requireNotNull(JsonCodec.anyToStringAnyMap(original[Keys.DEFINITION]))
+    assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
+      compatibility.requireSupportedComposition(
+        validator.write(
+          original + (Keys.DEFINITION to (definition + (Keys.SEMANTIC_REVISION to 2))),
+          "unsupported revision",
+        ),
+      )
+    }
+    val changedStrategyRevision = original.toMutableMap()
+    listOf(Keys.SELECTED_STRATEGIES, Keys.DISPATCH_OWNERSHIP).forEach { field ->
+      changedStrategyRevision[field] =
+        requireNotNull(original[field] as? List<*>).map {
+          requireNotNull(JsonCodec.anyToStringAnyMap(it)) + (Keys.SEMANTIC_REVISION to 2)
+        }
+    }
+    assertFailsWith<UnsupportedFeatureTaskRuntimeExecutionPlanError> {
+      compatibility.requireSupportedComposition(
+        validator.write(changedStrategyRevision, "unsupported strategy revision"),
+      )
+    }
+
+  }
+
 }

@@ -21,16 +21,13 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommi
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.runloop.core.CheckpointCommitMessageArgs
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSessionObservations
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
 import skillbill.engine.featuretask.runloop.core.RecordCheckpointIdentityArgs
 import skillbill.engine.featuretask.runloop.core.SubtaskCommitLedgerState
 import skillbill.engine.featuretask.runloop.core.isFeatureSpecPathForIssue
 import skillbill.engine.featuretask.runloop.core.reconcileCheckpointPathInventory
 import skillbill.engine.featuretask.runloop.core.remediationCheckpointBlockedReason
-import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunProgressObservations
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
@@ -48,7 +45,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDe
 object FeatureTaskRuntimeRunLoopCheckpoint {
   internal fun concurrentlyModifiedOwnedPaths(
     request: FeatureTaskRuntimeRunFacts,
-    session: FeatureTaskRuntimeRunLoopSessionObservations,
+    session: FeatureTaskRuntimeRunSessionObservations,
     phaseGates: FeatureTaskRuntimePhaseGates,
     phaseId: String,
     ownedPaths: List<String>,
@@ -425,7 +422,7 @@ object FeatureTaskRuntimeRunLoopCheckpoint {
 
   internal fun checkpointCommitMessage(
     request: FeatureTaskRuntimeRunFacts,
-    progress: FeatureTaskRuntimeRunProgressObservations,
+    progress: FeatureTaskRuntimeProgressSnapshotAccess,
     diagnostics: RuntimeDiagnostics,
     args: CheckpointCommitMessageArgs,
   ): String {
@@ -581,11 +578,11 @@ object FeatureTaskRuntimeRunLoopCheckpoint {
   }
 
   internal fun checkpointGeneration(
-    state: FeatureTaskRuntimeRunProgressObservations,
+    state: FeatureTaskRuntimeProgressSnapshotAccess,
     loopId: String?,
   ): Int =
     loopId?.let {
-      state.edgeIterationCount(it)
+      state.loop(it).iteration
     } ?: 0
 
   internal fun recordCheckpointIdentity(
@@ -651,7 +648,7 @@ object FeatureTaskRuntimeRunLoopCheckpoint {
     ) -> String,
   ): Boolean {
     with(context) {
-      coupledRunTransitions.blockRemediationCheckpointEstablishment(
+      coupledRunTransitions.transitionCheckpointRemediationBlock(
         request,
         precedingPhaseId,
         blockedReason(

@@ -1,10 +1,10 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
-import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_BUILD_RECEIPT_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION
+import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
@@ -13,8 +13,14 @@ import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.security.MessageDigest
 
+private const val EFFECTIVE_POLICY_CANONICAL_BYTE_LIMIT = 65536
+
+
 internal object FeatureTaskRuntimeEffectivePolicies {
-  fun resolve(plan: ResolvedPhaseExecutionPlan, gate: EffectiveGatePolicyInputs): List<ResolvedExecutionPolicy> =
+  fun resolve(
+    plan: ResolvedPhaseExecutionPlan,
+    gate: EffectiveGatePolicyInputs,
+  ): List<ResolvedExecutionPolicy> =
     listOf(
       policy("gate-commands", gate.canonicalInputs()),
       policy(
@@ -58,14 +64,18 @@ internal object FeatureTaskRuntimeEffectivePolicies {
       policy("finalization", listOf("runtime-owned-commit-push", "retain-uncertain-effects", "terminal-refusal")),
     )
 
-  private fun policy(id: String, inputs: Any?): ResolvedExecutionPolicy =
-    ResolvedExecutionPolicy(id, 1, effectivePolicyDigest(inputs))
+  private fun policy(
+    id: String,
+    inputs: Any?,
+  ): ResolvedExecutionPolicy = ResolvedExecutionPolicy(id, 1, effectivePolicyDigest(inputs))
 }
 
 internal fun effectivePolicyDigest(inputs: Any?): String {
   val encoded = JsonCodec.valueToJsonString(inputs).toByteArray(Charsets.UTF_8)
-  if (encoded.size > 65536) {
-    throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("effective policy inputs exceed 65536 UTF-8 bytes")
+  if (encoded.size > EFFECTIVE_POLICY_CANONICAL_BYTE_LIMIT) {
+    throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError(
+      "effective policy inputs exceed $EFFECTIVE_POLICY_CANONICAL_BYTE_LIMIT UTF-8 bytes",
+    )
   }
   return MessageDigest.getInstance("SHA-256").digest(encoded).joinToString("") { "%02x".format(it) }
 }

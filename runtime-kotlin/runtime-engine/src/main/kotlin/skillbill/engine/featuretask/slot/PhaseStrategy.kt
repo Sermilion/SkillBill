@@ -28,6 +28,16 @@ abstract class PhaseStrategy {
 
   open fun resumeInterpretationIdentity(stepId: String): String = "$strategyId/$semanticRevision:$stepId"
 
+  internal open fun executionBindingKind(stepId: String): PhaseExecutionBindingKind {
+    policyFor(stepId)
+    return when (slot) {
+      PhaseSlot.PREPLAN, PhaseSlot.PLAN -> PhaseExecutionBindingKind.PLANNING
+      else -> PhaseExecutionBindingKind.AGENT
+    }
+  }
+
+  internal open val plansInFanOut: Boolean = false
+
   internal open val qualityGateOperation: PhaseQualityGateOperation? = null
 
   internal open fun acceptsAttemptStrategy(attemptStrategyId: String): Boolean = attemptStrategyId == strategyId
@@ -37,8 +47,6 @@ abstract class PhaseStrategy {
   open val optionalSteps: Set<String> = emptySet()
 
   abstract val entryStep: String
-
-  abstract val runner: PhaseRunner
 
   abstract fun policyFor(stepId: String): PhaseStepPolicy
 
@@ -99,3 +107,5 @@ internal sealed interface PhaseQualityGateOperation {
 
   data object AgentValidation : PhaseQualityGateOperation
 }
+
+internal enum class PhaseExecutionBindingKind { AGENT, PLANNING, REVIEW, FINDING_VERIFICATION, REPAIR_RECEIPT }

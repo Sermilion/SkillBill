@@ -37,46 +37,46 @@ class SkeletonDefinitionTest {
     FeatureTaskRuntimeTransitionDeclaration(
       forwardPhaseIds = forwardPhaseIds,
       entryGates =
-      listOf(
-        FeatureTaskRuntimePhaseEntryGate("review", "audit", FeatureTaskRuntimeVerdict.SATISFIED),
-        FeatureTaskRuntimePhaseEntryGate(
-          "implement_fix",
-          "verify_findings",
-          FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED,
+        listOf(
+          FeatureTaskRuntimePhaseEntryGate("review", "audit", FeatureTaskRuntimeVerdict.SATISFIED),
+          FeatureTaskRuntimePhaseEntryGate(
+            "implement_fix",
+            "verify_findings",
+            FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED,
+          ),
         ),
-      ),
       backwardEdges =
-      listOf(
-        FeatureTaskRuntimeBackwardEdge(
-          "audit",
-          FeatureTaskRuntimeVerdict.ADVANCE,
-          "audit_implement_fix",
-          "audit_repair",
-          perEdgeCap = null,
-          warnAfterIterations = 3,
-        ),
-        FeatureTaskRuntimeBackwardEdge(
-          fromPhaseId = "verify_findings",
-          triggeringVerdict = FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED,
-          destinationPhaseId = "implement_fix",
-          loopId = "review_fix",
-          perEdgeCap = 1,
-          capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.ADVANCE,
-          capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
-        ),
-      ) +
-        listOf("build" to "regenerate_build_receipt", "validate" to "regenerate_validation_receipt").map {
-            (step, loop) ->
+        listOf(
           FeatureTaskRuntimeBackwardEdge(
-            fromPhaseId = "write_history",
-            triggeringVerdict = FeatureTaskRuntimeVerdict.RECORD_REJECTED,
-            destinationPhaseId = step,
-            loopId = loop,
-            perEdgeCap = 2,
-            capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+            "audit",
+            FeatureTaskRuntimeVerdict.ADVANCE,
+            "audit_implement_fix",
+            "audit_repair",
+            perEdgeCap = null,
+            warnAfterIterations = 3,
+          ),
+          FeatureTaskRuntimeBackwardEdge(
+            fromPhaseId = "verify_findings",
+            triggeringVerdict = FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED,
+            destinationPhaseId = "implement_fix",
+            loopId = "review_fix",
+            perEdgeCap = 1,
+            capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.ADVANCE,
             capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
-          )
-        },
+          ),
+        ) +
+          listOf("build" to "regenerate_build_receipt", "validate" to "regenerate_validation_receipt").map {
+              (step, loop) ->
+            FeatureTaskRuntimeBackwardEdge(
+              fromPhaseId = "write_history",
+              triggeringVerdict = FeatureTaskRuntimeVerdict.RECORD_REJECTED,
+              destinationPhaseId = step,
+              loopId = loop,
+              perEdgeCap = 2,
+              capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+              capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+            )
+          },
       loopOnlyPhaseIds = setOf("audit_implement_fix", "implement_fix", "build"),
       loopOnlySuccessors = emptyMap(),
     )

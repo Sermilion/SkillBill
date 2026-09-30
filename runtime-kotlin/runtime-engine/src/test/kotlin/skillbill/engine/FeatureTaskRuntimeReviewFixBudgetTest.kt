@@ -36,7 +36,7 @@ class FeatureTaskRuntimeReviewFixBudgetTest {
 
   @Test
   fun `a run with no durable ledger reports both measurements unavailable rather than intact`() {
-    val harness = runnerHarness()
+    val harness = runnerHarness(runtimeConfig = RuntimeHarnessConfig(seedDurableWorkflow = false))
 
     assertNull(harness.runner.reviewFixCapExhaustion(WORKFLOW_ID))
     assertNull(harness.runner.auditGapIterationCount(WORKFLOW_ID))
@@ -80,20 +80,23 @@ private fun RunnerHarness.appendLedger(
   ).detail(),
 )
 
-private fun RunnerHarness.appendAuditContinuation(kind: FeatureTaskRuntimeContinuationKind) = appendLedger(
-  FeatureTaskRuntimePhaseLedgerAction.FIX_LOOP_ITERATION,
-  phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
-) {
-  copy(
-    blockedReason = FeatureTaskRuntimeContinuationKind.LEDGER_DETAIL_PREFIX + kind.wireValue,
-    fixLoopIteration = 1,
-  )
-}
-
-private fun RunnerHarness.appendLoopEdge(loopId: String, edgeIteration: Int) =
-  appendLedger(FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE) {
-    copy(loopId = loopId, edgeIteration = edgeIteration)
+private fun RunnerHarness.appendAuditContinuation(kind: FeatureTaskRuntimeContinuationKind) =
+  appendLedger(
+    FeatureTaskRuntimePhaseLedgerAction.FIX_LOOP_ITERATION,
+    phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+  ) {
+    copy(
+      blockedReason = FeatureTaskRuntimeContinuationKind.LEDGER_DETAIL_PREFIX + kind.wireValue,
+      fixLoopIteration = 1,
+    )
   }
+
+private fun RunnerHarness.appendLoopEdge(
+  loopId: String,
+  edgeIteration: Int,
+) = appendLedger(FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE) {
+  copy(loopId = loopId, edgeIteration = edgeIteration)
+}
 
 private fun RunnerHarness.appendLoopCapExhausted(loopId: String) =
   appendLedger(FeatureTaskRuntimePhaseLedgerAction.LOOP_CAP_EXHAUSTED) {

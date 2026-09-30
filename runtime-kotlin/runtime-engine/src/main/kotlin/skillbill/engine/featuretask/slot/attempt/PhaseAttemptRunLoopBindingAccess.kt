@@ -5,7 +5,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
@@ -22,7 +22,7 @@ internal class PhaseAttemptRunLoopBindingAccess internal constructor(
   val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator
     get() = host.stepBinding
 
-  val coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner
+  val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner
     get() = host.coupledRunTransitions
 
   fun runAcceptedAgentStep(

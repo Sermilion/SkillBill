@@ -1,9 +1,9 @@
 package skillbill.engine.featuretask.review.core
 
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationRecorder
-import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.review.model.ReviewFindingVerdict
@@ -27,8 +27,10 @@ class FeatureTaskRuntimeReviewCheckpointRecorder(
       workflowPersistence,
     )
 
-  fun persistReviewGenerationInvalidation(workflowId: String, reviewStepId: String): Int? =
-    reviewGeneration.persistReviewGenerationInvalidation(workflowId, reviewStepId)
+  fun persistReviewGenerationInvalidation(
+    workflowId: String,
+    reviewStepId: String,
+  ): Int? = reviewGeneration.persistReviewGenerationInvalidation(workflowId, reviewStepId)
 
   fun reconcileReviewGeneration(workflowId: String): Int = reviewGeneration.reconcileReviewGeneration(workflowId)
 
@@ -38,13 +40,14 @@ class FeatureTaskRuntimeReviewCheckpointRecorder(
     loopId: String,
     edgeIteration: Int,
     admitted: AdmittedFeatureTaskRuntimeExecution? = null,
-  ): Boolean = reviewGeneration.invalidateQuarantinedProducerRecord(
-    workflowId,
-    producerPhaseId,
-    loopId,
-    edgeIteration,
-    admitted,
-  )
+  ): Boolean =
+    reviewGeneration.invalidateQuarantinedProducerRecord(
+      workflowId,
+      producerPhaseId,
+      loopId,
+      edgeIteration,
+      admitted,
+    )
 
   fun recordedFindingVerdicts(output: Map<String, Any?>): List<ReviewFindingVerdict> =
     reviewGeneration.recordedFindingVerdicts(output)
@@ -52,8 +55,11 @@ class FeatureTaskRuntimeReviewCheckpointRecorder(
   fun fetchUnaddressedLedger(workflowId: String): List<UnaddressedFinding> =
     reviewGeneration.fetchUnaddressedLedger(workflowId)
 
-  fun appendRejectedVerificationFindings(workflowId: String, passNumber: Int, rejected: List<UnaddressedFinding>) =
-    reviewGeneration.appendRejectedVerificationFindings(workflowId, passNumber, rejected)
+  fun appendRejectedVerificationFindings(
+    workflowId: String,
+    passNumber: Int,
+    rejected: List<UnaddressedFinding>,
+  ) = reviewGeneration.appendRejectedVerificationFindings(workflowId, passNumber, rejected)
 
   fun loadFindingVerificationCheckpoint(workflowId: String): List<FeatureTaskRuntimeFindingVerificationDisposition>? =
     findingVerification.loadFindingVerificationCheckpoint(workflowId)

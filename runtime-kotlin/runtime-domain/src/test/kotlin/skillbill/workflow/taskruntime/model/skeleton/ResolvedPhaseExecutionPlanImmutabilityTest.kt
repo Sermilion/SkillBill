@@ -19,23 +19,25 @@ class ResolvedPhaseExecutionPlanImmutabilityTest {
     val policies = steps.associateWith { "step-policy-v1:$it" }.toMutableMap()
     val resumes = steps.associateWith { "resume-v1:$it" }.toMutableMap()
     val forward = steps.toMutableList()
-    val edge = FeatureTaskRuntimeBackwardEdge("simplify", FeatureTaskRuntimeVerdict.CHANGES_REQUESTED, "implement", "retry", 1)
+    val edge =
+      FeatureTaskRuntimeBackwardEdge("simplify", FeatureTaskRuntimeVerdict.CHANGES_REQUESTED, "implement", "retry", 1)
     val edges = mutableListOf(edge)
     val gate = FeatureTaskRuntimePhaseEntryGate("simplify", "implement", FeatureTaskRuntimeVerdict.SATISFIED)
     val gates = mutableListOf(gate)
     val loopOnly = mutableSetOf<String>()
     val successors = mutableMapOf<String, String>()
-    val plan = ResolvedPhaseExecutionPlan(
-      definitionId = "implementation",
-      definitionSemanticRevision = 1,
-      selectedStrategies = strategies,
-      reviewSelection = null,
-      qualityGateSelection = null,
-      traversal = FeatureTaskRuntimeTransitionDeclaration(forward, edges, loopOnly, gates, successors),
-      dispatchStrategyByStep = dispatch,
-      stepPolicyIdentities = policies,
-      resumeInterpretationIdentities = resumes,
-    )
+    val plan =
+      ResolvedPhaseExecutionPlan(
+        definitionId = "implementation",
+        definitionSemanticRevision = 1,
+        selectedStrategies = strategies,
+        reviewSelection = null,
+        qualityGateSelection = null,
+        traversal = FeatureTaskRuntimeTransitionDeclaration(forward, edges, loopOnly, gates, successors),
+        dispatchStrategyByStep = dispatch,
+        stepPolicyIdentities = policies,
+        resumeInterpretationIdentities = resumes,
+      )
 
     steps.clear()
     strategies.clear()
@@ -53,8 +55,14 @@ class ResolvedPhaseExecutionPlanImmutabilityTest {
     assertEquals(setOf("implement"), plan.selectedEntryStepIds)
     assertEquals(listOf(PhaseSlot.IMPLEMENTATION), plan.selectedSlots)
     assertEquals(mapOf("implement" to owner, "simplify" to owner), plan.dispatchStrategyByStep)
-    assertEquals(mapOf("implement" to "step-policy-v1:implement", "simplify" to "step-policy-v1:simplify"), plan.stepPolicyIdentities)
-    assertEquals(mapOf("implement" to "resume-v1:implement", "simplify" to "resume-v1:simplify"), plan.resumeInterpretationIdentities)
+    assertEquals(
+      mapOf("implement" to "step-policy-v1:implement", "simplify" to "step-policy-v1:simplify"),
+      plan.stepPolicyIdentities,
+    )
+    assertEquals(
+      mapOf("implement" to "resume-v1:implement", "simplify" to "resume-v1:simplify"),
+      plan.resumeInterpretationIdentities,
+    )
     assertEquals(listOf("implement", "simplify"), plan.traversal.forwardPhaseIds)
     assertEquals(listOf(edge), plan.traversal.backwardEdges)
     assertEquals(listOf(gate), plan.traversal.entryGates)

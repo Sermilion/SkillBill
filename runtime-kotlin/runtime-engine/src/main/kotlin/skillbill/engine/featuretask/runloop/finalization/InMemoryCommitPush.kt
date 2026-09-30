@@ -1,4 +1,4 @@
-package skillbill.engine.featuretask.slot.commitpush
+package skillbill.engine.featuretask.runloop.finalization
 
 import skillbill.engine.featuretask.lifecycle.checkpoint.isRuntimePrivatePath
 import skillbill.ports.workflow.gitops.WorkflowGitOperations

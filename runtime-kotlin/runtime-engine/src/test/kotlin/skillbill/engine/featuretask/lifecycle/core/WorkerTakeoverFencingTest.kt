@@ -88,32 +88,34 @@ class WorkerTakeoverFencingTest {
   fun `stale token generation and competing reservation cannot terminate or launch a worker`() {
     listOf("token", "generation", "reservation").forEach { race ->
       withOwnedWorkflow { database, original ->
-        val supervisor = TakeoverSupervisor(
-          onInspect = {
-            database.transaction { unit ->
-              assertTrue(
-                unit.workflowStates.reserveFeatureTaskRuntimeWorkerTakeover(
-                  original.workflowId,
-                  original.ownerToken,
-                  original.generation,
-                ),
-              )
-              if (race != "reservation") {
-                val replacement = original.copy(
-                  ownerToken = if (race == "token") "competing-owner-token" else original.ownerToken,
-                  generation = if (race == "generation") original.generation + 1 else original.generation,
-                )
+        val supervisor =
+          TakeoverSupervisor(
+            onInspect = {
+              database.transaction { unit ->
                 assertTrue(
-                  unit.workflowStates.transferFeatureTaskRuntimeWorker(
-                    replacement,
+                  unit.workflowStates.reserveFeatureTaskRuntimeWorkerTakeover(
+                    original.workflowId,
                     original.ownerToken,
                     original.generation,
                   ),
                 )
+                if (race != "reservation") {
+                  val replacement =
+                    original.copy(
+                      ownerToken = if (race == "token") "competing-owner-token" else original.ownerToken,
+                      generation = if (race == "generation") original.generation + 1 else original.generation,
+                    )
+                  assertTrue(
+                    unit.workflowStates.transferFeatureTaskRuntimeWorker(
+                      replacement,
+                      original.ownerToken,
+                      original.generation,
+                    ),
+                  )
+                }
               }
-            }
-          },
-        )
+            },
+          )
         val before = database.read { it.workflowStates.getFeatureTaskWorkflow(original.workflowId) }
         val coordinator =
           FeatureTaskRuntimeWorkerCoordinator(database, supervisor, testHarnessClock, execution.admission)
@@ -136,10 +138,11 @@ class WorkerTakeoverFencingTest {
           when (race) {
             "token" -> assertEquals(original.copy(ownerToken = "competing-owner-token"), retained)
             "generation" -> assertEquals(original.copy(generation = original.generation + 1), retained)
-            else -> assertEquals(
-              original.copy(leaseState = FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED),
-              retained,
-            )
+            else ->
+              assertEquals(
+                original.copy(leaseState = FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED),
+                retained,
+              )
           }
         }
       }
@@ -149,14 +152,15 @@ class WorkerTakeoverFencingTest {
   @Test
   fun `live worker termination follows durable reservation and replacement retains a higher generation`() {
     withOwnedWorkflow { database, original ->
-      val supervisor = TakeoverSupervisor(onTerminate = {
-        database.read { unit ->
-          assertEquals(
-            original.copy(leaseState = FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED),
-            unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(original.workflowId),
-          )
-        }
-      })
+      val supervisor =
+        TakeoverSupervisor(onTerminate = {
+          database.read { unit ->
+            assertEquals(
+              original.copy(leaseState = FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED),
+              unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(original.workflowId),
+            )
+          }
+        })
       val coordinator = FeatureTaskRuntimeWorkerCoordinator(database, supervisor, testHarnessClock, execution.admission)
       coordinator.runOwned(original.workflowId, execution.inputs, execution.identity(original.workflowId)) { admitted ->
         assertEquals(original.workflowId, admitted.identity.workflowId)
@@ -177,10 +181,11 @@ class WorkerTakeoverFencingTest {
   @Test
   fun `worker admission refuses invalid descriptors before acquisition or takeover`() {
     val descriptor = execution.descriptor()
-    val changed = execution.validator.read(
-      execution.codec.encodeExecution(execution.plan, execution.inputs.copy(phaseTimeoutMillis = 1)),
-      "changed timeout",
-    )
+    val changed =
+      execution.validator.read(
+        execution.codec.encodeExecution(execution.plan, execution.inputs.copy(phaseTimeoutMillis = 1)),
+        "changed timeout",
+      )
     listOf(null, "malformed", descriptor + (Keys.CONTRACT_VERSION to "9.0"), changed).forEach { supplied ->
       listOf(false, true).forEach { owned ->
         withOwnedWorkflow { database, original ->
@@ -255,15 +260,17 @@ class WorkerTakeoverFencingTest {
   fun `takeover rechecks descriptor after process inspection and again before transfer`() {
     listOf(false, true).forEach { afterReservation ->
       withOwnedWorkflow { database, original ->
-        val changed = execution.validator.read(
-          execution.codec.encodeExecution(execution.plan, execution.inputs.copy(packSlug = "different-pack")),
-          "changed pack",
-        )
+        val changed =
+          execution.validator.read(
+            execution.codec.encodeExecution(execution.plan, execution.inputs.copy(packSlug = "different-pack")),
+            "changed pack",
+          )
         val mutate = { replaceWorkerDescriptor(database, original.workflowId, changed) }
-        val supervisor = TakeoverSupervisor(
-          onInspect = if (afterReservation) ({}) else mutate,
-          onTerminate = if (afterReservation) mutate else ({}),
-        )
+        val supervisor =
+          TakeoverSupervisor(
+            onInspect = if (afterReservation) ({}) else mutate,
+            onTerminate = if (afterReservation) mutate else ({}),
+          )
         val before = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(original.workflowId)) }
         val coordinator =
           FeatureTaskRuntimeWorkerCoordinator(database, supervisor, testHarnessClock, execution.admission)
@@ -288,11 +295,12 @@ class WorkerTakeoverFencingTest {
           assertEquals(originalArtifacts, row.toSnapshot().artifacts.toMap())
           assertEquals(
             original.copy(
-              leaseState = if (afterReservation) {
-                FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED
-              } else {
-                FeatureTaskRuntimeWorkerLeaseState.ACTIVE
-              },
+              leaseState =
+                if (afterReservation) {
+                  FeatureTaskRuntimeWorkerLeaseState.TAKEOVER_RESERVED
+                } else {
+                  FeatureTaskRuntimeWorkerLeaseState.ACTIVE
+                },
             ),
             unit.workflowStates.getFeatureTaskRuntimeWorkerOwnership(original.workflowId),
           )
@@ -354,14 +362,15 @@ private fun withOwnedWorkflow(block: (DatabaseSessionFactory, FeatureTaskRuntime
   val home = Files.createTempDirectory("worker-takeover-fence")
   try {
     val database = phaseRunDatabase(home, testHarnessClock)
-    val recorder = featureTaskRuntimePhaseRecorder(
-      database,
-      NoopWorkflowSnapshotValidator,
-      AcceptingFeatureTaskRuntimeWireArtifactValidator,
-      AcceptingFeatureTaskRuntimeWireArtifactValidator,
-      testHarnessClock,
-      NoopRuntimeDiagnostics,
-    )
+    val recorder =
+      featureTaskRuntimePhaseRecorder(
+        database,
+        NoopWorkflowSnapshotValidator,
+        AcceptingFeatureTaskRuntimeWireArtifactValidator,
+        AcceptingFeatureTaskRuntimeWireArtifactValidator,
+        testHarnessClock,
+        NoopRuntimeDiagnostics,
+      )
     val original = ownership().copy(workflowId = "wftr-takeover-fence")
     database.transaction { execution.seed(it.workflowStates, original.workflowId) }
     assertTrue(
@@ -429,7 +438,10 @@ private class TakeoverSupervisor(
     return true
   }
 
-  override fun awaitExit(ownership: FeatureTaskRuntimeWorkerOwnership, timeout: Duration) = Unit
+  override fun awaitExit(
+    ownership: FeatureTaskRuntimeWorkerOwnership,
+    timeout: Duration,
+  ) = Unit
 
   override fun pause(durationMillis: Long) = Unit
 
@@ -440,6 +452,7 @@ private class TakeoverSupervisor(
     heartbeats++
     return object : FeatureTaskRuntimeHeartbeat {
       override fun stop() = Unit
+
       override fun fencingLostReason(): String? = null
     }
   }
@@ -447,10 +460,15 @@ private class TakeoverSupervisor(
 
 private val execution = ExecutionPlanAdmissionFixture()
 
-private fun replaceWorkerDescriptor(database: DatabaseSessionFactory, workflowId: String, descriptor: Any?) {
-  val artifacts = database.read {
-    assertNotNull(it.workflowStates.getFeatureTaskWorkflow(workflowId)).toSnapshot().artifacts.toMutableMap()
-  }
+private fun replaceWorkerDescriptor(
+  database: DatabaseSessionFactory,
+  workflowId: String,
+  descriptor: Any?,
+) {
+  val artifacts =
+    database.read {
+      assertNotNull(it.workflowStates.getFeatureTaskWorkflow(workflowId)).toSnapshot().artifacts.toMutableMap()
+    }
   val family = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN
   if (descriptor == null) family.removeFrom(artifacts) else family.putInto(artifacts, descriptor)
   DriverManager.getConnection("jdbc:sqlite:${database.resolveDbPath()}").use { connection ->

@@ -6,7 +6,7 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 /**
  * The run-loop decisions a strategy owns over the loops, re-entries, and settled steps of its slot. The run loop
  * asks the strategy selected for the step, or for the destination step of the loop, so it names no step or loop of
- * that slot itself. Every decision reads and writes run state through the per-call [PhaseAgentStepBinding]. Each decision
+ * that slot itself. Each decision uses the accepted [PhaseAcceptedStepExecution] binding.
  * defaults to the neutral answer, so a strategy overrides only the decisions its slot owns.
  */
 internal interface PhaseLoopRules {

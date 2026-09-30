@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.plan
 
+import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.directive.directiveResource
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
@@ -7,7 +8,6 @@ import skillbill.engine.featuretask.phase.prompt.directives.envelopeContract
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
-import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptTraversalHookContext
@@ -24,9 +24,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class AgentPlanStrategy(
-  override val runner: PhaseRunner,
-) : PhaseStrategy() {
+class AgentPlanStrategy : PhaseStrategy() {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to
@@ -100,6 +98,7 @@ class AgentPlanStrategy(
   }
 
   private object PlanStepHooks : PhaseStepHooks {
+    override val contextKind = PhaseStepHookContextKind.PLANNING
     override fun completionRejection(
       run: PhaseRun,
       context: PhaseStepOutputContext,

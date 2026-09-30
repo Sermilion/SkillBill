@@ -95,10 +95,10 @@ class FeatureTaskRuntimeRunner(
       featureSize = request.runInvariants.featureSize.name,
       lastIncompletePhase = FeatureTaskRuntimePhaseWorkflowDefinition.definition.defaultInitialStepId,
       blockedReason =
-      "Cannot resume workflow '${request.workflowId}' in runtime mode: it was created in " +
-        "'${existingMode.wireValue}' mode. A feature-task workflow is mode-scoped — prose and runtime are " +
-        "not interchangeable. Finish this subtask in '${existingMode.wireValue}' mode, or reset the subtask " +
-        "to start a fresh runtime attempt.",
+        "Cannot resume workflow '${request.workflowId}' in runtime mode: it was created in " +
+          "'${existingMode.wireValue}' mode. A feature-task workflow is mode-scoped — prose and runtime are " +
+          "not interchangeable. Finish this subtask in '${existingMode.wireValue}' mode, or reset the subtask " +
+          "to start a fresh runtime attempt.",
       completedPhaseIds = emptyList(),
       resolvedBranch = null,
     )

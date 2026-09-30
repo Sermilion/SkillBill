@@ -24,44 +24,65 @@ class PhaseHistoricalInterpreterTest {
   @Test
   fun `interpreting an unselected historical build never authorizes execution`() {
     var launches = 0
-    val runner = object : PhaseRunner {
-      override fun run(input: PhaseStepInput, state: PhaseLaunchState): PhaseStepOutput {
-        launches++
-        error("Unselected historical steps must not launch")
+    val runner =
+      object : PhaseRunner {
+        override fun run(
+          input: PhaseStepInput,
+          state: PhaseLaunchState,
+        ): PhaseStepOutput {
+          launches++
+          error("Unselected historical steps must not launch")
+        }
       }
-    }
-    val registry = PhaseStrategyRegistry(listOf(AgentValidateStrategy(runner)))
-    val lookup = PhaseStrategyLookup(
-      registry,
-      PhaseStrategySelection(
+    val registry = PhaseStrategyRegistry(listOf(PhaseStrategyRegistration(AgentValidateStrategy(), runner)))
+    val lookup =
+      PhaseStrategyLookup(
         registry,
-        mapOf(SkeletonDefinition.VALIDATION to mapOf(PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID))),
-      ),
-    )
+        PhaseStrategySelection(
+          registry,
+          mapOf(
+            SkeletonDefinition.VALIDATION to
+              mapOf(
+                PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID),
+              ),
+          ),
+        ),
+      )
     val plan = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()))
     assertEquals(setOf(PHASE_VALIDATE), plan.selectedStepIds)
     assertFailsWith<InvalidPhaseStrategyCompositionError> { lookup.strategyFor(PHASE_BUILD, plan) }
 
     val history = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)
-    val record = FeatureTaskRuntimePhaseRecord(
-      phaseId = PHASE_BUILD,
-      status = WorkflowStepStatus.COMPLETED,
-      attemptCount = 3,
-      startedAt = Instant.EPOCH,
-      finishedAt = Instant.EPOCH.plusSeconds(10),
-      resolvedAgentId = "original-builder",
-      outputArtifact = "retained-output",
-    )
+    val record =
+      FeatureTaskRuntimePhaseRecord(
+        phaseId = PHASE_BUILD,
+        status = WorkflowStepStatus.COMPLETED,
+        attemptCount = 3,
+        startedAt = Instant.EPOCH,
+        finishedAt = Instant.EPOCH.plusSeconds(10),
+        resolvedAgentId = "original-builder",
+        outputArtifact = "retained-output",
+      )
     val normalized = history.normalize(mapOf(PHASE_BUILD to record), emptyList())
-    val execution = history.currentExecution(
-      FeatureTaskRuntimeCurrentPhaseExecutionContext(
-        currentPhaseId = PHASE_BUILD,
-        records = normalized.records,
-        phases = listOf(FeatureTaskRuntimePhaseStatus(PHASE_BUILD, WorkflowStepStatus.COMPLETED.wireValue, 3, "original-builder", true)),
-        ledger = emptyList(),
-        gateRunCount = 2,
-      ),
-    )
+    val execution =
+      history.currentExecution(
+        FeatureTaskRuntimeCurrentPhaseExecutionContext(
+          currentPhaseId = PHASE_BUILD,
+          records = normalized.records,
+          phases =
+            listOf(
+              FeatureTaskRuntimePhaseStatus(
+                PHASE_BUILD,
+                WorkflowStepStatus.COMPLETED.wireValue,
+                3,
+                "original-builder",
+                true,
+              ),
+            ),
+          ledger = emptyList(),
+          gateRunCount = 2,
+        ),
+      )
 
     assertSame(record, normalized.records[PHASE_BUILD])
     assertEquals(IdeStatusCurrentPhaseExecutionKind.GATE_RUN, execution?.kind)
@@ -75,16 +96,17 @@ class PhaseHistoricalInterpreterTest {
   @Test
   fun `unknown historical semantics retain raw records and have no resume rules`() {
     val history = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)
-    val record = FeatureTaskRuntimePhaseRecord(
-      phaseId = "unknown-step",
-      status = WorkflowStepStatus.COMPLETED,
-      attemptCount = 4,
-      startedAt = Instant.EPOCH,
-      resolvedAgentId = "original-agent",
-      outputArtifact = "retain-original-evidence",
-      loopId = "unknown-loop",
-      edgeIteration = 2,
-    )
+    val record =
+      FeatureTaskRuntimePhaseRecord(
+        phaseId = "unknown-step",
+        status = WorkflowStepStatus.COMPLETED,
+        attemptCount = 4,
+        startedAt = Instant.EPOCH,
+        resolvedAgentId = "original-agent",
+        outputArtifact = "retain-original-evidence",
+        loopId = "unknown-loop",
+        edgeIteration = 2,
+      )
 
     assertSame(record, history.normalize(mapOf(record.phaseId to record), emptyList()).records[record.phaseId])
     assertFailsWith<InvalidPhaseStrategyCompositionError> { history.resumeRules(record.phaseId) }

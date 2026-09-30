@@ -18,6 +18,7 @@ import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseReviewExecutionContext
 import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
@@ -51,8 +52,12 @@ internal class CodeReviewStep(
     prompt: PhaseStepPromptSource,
   ): PhaseOutcome {
     val iteration = state.nextStepIteration()
-    return state.startReviewStep(requestedRun, iteration)
-      ?: runAfterStart(requestedRun, context, state, prompt)
+    return try {
+      state.startReviewStep(requestedRun, iteration)
+        ?: runAfterStart(requestedRun, context, state, prompt)
+    } catch (rejection: RequiredPhaseWriteRejected) {
+      state.blockRequiredReviewWrite(rejection)
+    }
   }
 
   private fun runAfterStart(
@@ -75,7 +80,7 @@ internal class CodeReviewStep(
         is InlineReviewPrepared.Settled -> return prepared.outcome
       }
     val iteration = state.nextStepIteration()
-    val passNumber = state.reviewPassNumber()
+    val passNumber = state.reviewPassNumber
     val resolution =
       FeatureTaskRuntimeReviewPassSequence.resolveForPass(run.request.runInvariants.codeReviewMode, passNumber)
     val reviewRunId =
@@ -114,7 +119,7 @@ internal class CodeReviewStep(
     state: PhaseReviewPassState,
   ): PhaseLaunchReviewTier {
     val reviewState = state as PhaseReviewStepBinding
-    val passNumber = reviewState.reviewPassNumber()
+    val passNumber = reviewState.reviewPassNumber
     val resolution =
       FeatureTaskRuntimeReviewPassSequence.resolveForPass(run.request.runInvariants.codeReviewMode, passNumber)
     reviewState.persistResolvedReviewTier(resolution)

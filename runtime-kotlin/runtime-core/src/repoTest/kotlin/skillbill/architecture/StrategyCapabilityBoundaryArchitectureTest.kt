@@ -21,6 +21,11 @@ class StrategyCapabilityBoundaryArchitectureTest {
           "/featuretask/slot/" in path &&
             "/slot/attempt/" !in path &&
             "/slot/state/" !in path &&
+            "/slot/runner/" !in path &&
+            !path.endsWith("/slot/PhaseRunner.kt") &&
+            !path.endsWith("/slot/PhaseStrategyRegistry.kt") &&
+            !path.endsWith("/slot/PhaseStrategyLookup.kt") &&
+            !path.endsWith("/slot/PhaseStrategySelection.kt") &&
             !path.endsWith("/PhaseStepHooks.kt") &&
             !path.endsWith("/PhaseLoopRules.kt") &&
             !path.endsWith("/SkeletonStrategyBindings.kt")
@@ -104,6 +109,45 @@ class StrategyCapabilityBoundaryArchitectureTest {
   }
 
   @Test
+  fun `qualified and wildcard helpers cannot hide review authority`() {
+    val helper =
+      CapabilitySource(
+        "attempt/Receipt.kt",
+        """
+        package skillbill.engine.featuretask.slot.attempt
+        import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
+        internal fun obtain(input: Any) = input as PhaseReviewPassState
+        internal fun Any.openReceipt() = obtain(this)
+        internal object Bridge {
+          fun expose(input: Any) = hidden(input)
+          private fun hidden(input: Any) = obtain(input)
+        }
+        """.trimIndent(),
+      )
+    val paths =
+      listOf(
+        "" to "skillbill.engine.featuretask.slot.attempt.obtain(input)",
+        "" to "skillbill.engine.featuretask.slot.attempt.Bridge.expose(input)",
+        "import skillbill.engine.featuretask.slot.attempt.Bridge as Alias" to "Alias.expose(input)",
+        "import skillbill.engine.featuretask.slot.attempt.*" to "obtain(input)",
+        "import skillbill.engine.featuretask.slot.attempt.*" to "input.openReceipt()",
+      )
+    paths.forEach { (imports, invocation) ->
+      val consumer =
+        CapabilitySource(
+          "audit/Probe.kt",
+          """
+          package skillbill.engine.featuretask.slot.audit
+          $imports
+          internal fun probe(input: Any) = $invocation.reserveReviewPass()
+          """.trimIndent(),
+        )
+      val findings = StrategyCapabilityTransitiveGraph.violations(listOf(consumer, helper), setOf(consumer.path))
+      assertTrue(findings.any { "PhaseReviewPassState" in it }, "$invocation: $findings")
+    }
+  }
+
+  @Test
   fun `unresolved governed helpers fail the capability guard`() {
     val consumer =
       CapabilitySource(
@@ -116,6 +160,16 @@ class StrategyCapabilityBoundaryArchitectureTest {
       )
     val findings = StrategyCapabilityTransitiveGraph.violations(listOf(consumer), setOf(consumer.path))
     assertTrue(findings.any { "unresolved governed authority edge" in it && "UnindexedBridge" in it })
+    val qualified =
+      CapabilitySource(
+        "audit/QualifiedUnknown.kt",
+        """
+        package skillbill.engine.featuretask.slot.audit
+        internal fun probe(input: Any) = skillbill.engine.featuretask.slot.attempt.unindexed(input)
+        """.trimIndent(),
+      )
+    val qualifiedFindings = StrategyCapabilityTransitiveGraph.violations(listOf(qualified), setOf(qualified.path))
+    assertTrue(qualifiedFindings.any { "unresolved governed authority edge" in it && "unindexed" in it })
   }
 
   @Test
@@ -125,7 +179,7 @@ class StrategyCapabilityBoundaryArchitectureTest {
         "runloop/Observations.kt",
         """
         package skillbill.engine.featuretask.runloop.state
-        internal interface FeatureTaskRuntimeRunProgressObservations {
+        internal interface FeatureTaskRuntimeProgressSnapshotAccess {
           fun nextIteration(step: String): Int
         }
         """.trimIndent(),
@@ -135,9 +189,9 @@ class StrategyCapabilityBoundaryArchitectureTest {
         "attempt/ObservationBridge.kt",
         """
         package skillbill.engine.featuretask.slot.attempt
-        import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunProgressObservations
-        internal class ObservationBridge(private val observations: FeatureTaskRuntimeRunProgressObservations) {
-          fun next() = observations.nextIteration("audit")
+        import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+        internal class ObservationBridge(private val observations: FeatureTaskRuntimeProgressSnapshotAccess) {
+          fun next() = observations.phase("audit").nextIteration
         }
         """.trimIndent(),
       )
@@ -147,7 +201,11 @@ class StrategyCapabilityBoundaryArchitectureTest {
         """
         package skillbill.engine.featuretask.slot.audit
         import skillbill.engine.featuretask.slot.attempt.ObservationBridge
-        internal class Allowed(private val bridge: ObservationBridge) { fun next() = bridge.next() }
+        internal class Allowed(private val bridge: ObservationBridge) {
+          fun next() = bridge.next()
+          fun detached(observations: skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess) =
+            skillbill.engine.featuretask.slot.attempt.ObservationBridge(observations).next()
+        }
         """.trimIndent(),
       )
     val review =

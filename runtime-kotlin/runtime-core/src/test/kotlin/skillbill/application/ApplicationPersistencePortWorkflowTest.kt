@@ -56,21 +56,21 @@ class ApplicationPersistencePortWorkflowTest {
           workflowStatus = WorkflowStatus.BLOCKED.wireValue,
           currentStepId = "implement",
           stepUpdates =
-          WorkflowStepUpdates.from(
-            listOf(
-              mapOf("step_id" to "implement", "status" to "blocked", "attempt_count" to 1),
+            WorkflowStepUpdates.from(
+              listOf(
+                mapOf("step_id" to "implement", "status" to "blocked", "attempt_count" to 1),
+              ),
             ),
-          ),
           artifactsPatch =
-          WorkflowArtifactPatch.from(
-            mapOf(
-              "preplan_digest" to mapOf("ok" to true),
-              FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY to
-                mapOf(
-                  "plan" to completedPhaseRecord("plan", outputArtifact = """{"task_count":1}"""),
-                ),
+            WorkflowArtifactPatch.from(
+              mapOf(
+                "preplan_digest" to mapOf("ok" to true),
+                FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY to
+                  mapOf(
+                    "plan" to completedPhaseRecord("plan", outputArtifact = """{"task_count":1}"""),
+                  ),
+              ),
             ),
-          ),
         ),
       ) as WorkflowUpdateResult.Ok
     val listed = service.list(WorkflowFamilyKind.TASK_RUNTIME)
@@ -288,7 +288,7 @@ class ApplicationPersistencePortWorkflowTest {
       (
         service.openTestFeatureTask(WorkflowFamilyKind.TASK_RUNTIME, sessionId = "ftr-001")
           as WorkflowOpenResult.Ok
-        ).workflowId
+      ).workflowId
     val reason = "Use the operator-approved fresh-process isolation boundary."
     recorder.recordRuntimePhase(
       workflowId,

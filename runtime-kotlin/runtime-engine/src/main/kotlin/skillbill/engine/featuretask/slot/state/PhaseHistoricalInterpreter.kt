@@ -36,26 +36,29 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 internal enum class PhaseHistoricalPolicy { REVISION_1 }
 
 internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPolicy) {
-  private val rules: Map<String, PhaseResumeRules> = when (policy) {
-    PhaseHistoricalPolicy.REVISION_1 -> mapOf(
-      PHASE_PREPLAN to PhaseResumeRules.None,
-      PHASE_PLAN to PlanResumeRules,
-      PHASE_IMPLEMENT to ImplementResumeRules,
-      PHASE_SIMPLIFY to PhaseResumeRules.None,
-      PHASE_AUDIT to AcceptanceAuditResumeRules,
-      PHASE_REVIEW to CodeReviewResumeRules,
-      PHASE_VERIFY_FINDINGS to PhaseResumeRules.None,
-      PHASE_IMPLEMENT_FIX to PhaseResumeRules.None,
-      PHASE_BUILD to PhaseResumeRules.None,
-      PHASE_VALIDATE to AgentValidateResumeRules,
-      PHASE_WRITE_HISTORY to PhaseResumeRules.None,
-      PHASE_COMMIT_PUSH to PhaseResumeRules.None,
-      PHASE_PR to PhaseResumeRules.None,
-    )
-  }
+  private val rules: Map<String, PhaseResumeRules> =
+    when (policy) {
+      PhaseHistoricalPolicy.REVISION_1 ->
+        mapOf(
+          PHASE_PREPLAN to PhaseResumeRules.None,
+          PHASE_PLAN to PlanResumeRules,
+          PHASE_IMPLEMENT to ImplementResumeRules,
+          PHASE_SIMPLIFY to PhaseResumeRules.None,
+          PHASE_AUDIT to AcceptanceAuditResumeRules,
+          PHASE_REVIEW to CodeReviewResumeRules,
+          PHASE_VERIFY_FINDINGS to PhaseResumeRules.None,
+          PHASE_IMPLEMENT_FIX to PhaseResumeRules.None,
+          PHASE_BUILD to PhaseResumeRules.None,
+          PHASE_VALIDATE to AgentValidateResumeRules,
+          PHASE_WRITE_HISTORY to PhaseResumeRules.None,
+          PHASE_COMMIT_PUSH to PhaseResumeRules.None,
+          PHASE_PR to PhaseResumeRules.None,
+        )
+    }
 
-  fun resumeRules(stepId: String): PhaseResumeRules = rules[stepId]
-    ?: throw InvalidPhaseStrategyCompositionError("no historical interpretation for $stepId under $policy")
+  fun resumeRules(stepId: String): PhaseResumeRules =
+    rules[stepId]
+      ?: throw InvalidPhaseStrategyCompositionError("no historical interpretation for $stepId under $policy")
 
   fun loopOnlyStepIds(gate: FeatureTaskRuntimeQualityGateSelection): Set<String> =
     if (gate == FeatureTaskRuntimeQualityGateSelection.BUILD) {
@@ -64,26 +67,29 @@ internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPol
       setOf(PHASE_IMPLEMENT_FIX, PHASE_BUILD)
     }
 
-  fun gateReportedBy(stepId: String?): PhaseReportedGate? = when (stepId) {
-    PHASE_BUILD -> PhaseReportedGate.BUILD
-    PHASE_VALIDATE -> PhaseReportedGate.VALIDATION
-    else -> null
-  }
+  fun gateReportedBy(stepId: String?): PhaseReportedGate? =
+    when (stepId) {
+      PHASE_BUILD -> PhaseReportedGate.BUILD
+      PHASE_VALIDATE -> PhaseReportedGate.VALIDATION
+      else -> null
+    }
 
-  fun stepReporting(gate: PhaseReportedGate): String = when (gate) {
-    PhaseReportedGate.BUILD -> PHASE_BUILD
-    PhaseReportedGate.VALIDATION -> PHASE_VALIDATE
-  }
+  fun stepReporting(gate: PhaseReportedGate): String =
+    when (gate) {
+      PhaseReportedGate.BUILD -> PHASE_BUILD
+      PhaseReportedGate.VALIDATION -> PHASE_VALIDATE
+    }
 
   fun normalize(
     records: Map<String, FeatureTaskRuntimePhaseRecord>,
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
   ): FeatureTaskRuntimeStatelessAuditInputs {
-    val known = FeatureTaskRuntimeRunStateReconstruction.normalizeForStatelessAudit(
-      records.filterKeys { it in rules },
-      ledger.filter { it.phaseId in rules },
-      ::resumeRules,
-    )
+    val known =
+      FeatureTaskRuntimeRunStateReconstruction.normalizeForStatelessAudit(
+        records.filterKeys { it in rules },
+        ledger.filter { it.phaseId in rules },
+        ::resumeRules,
+      )
     val retainedLedger = known.ledger.toSet()
     return FeatureTaskRuntimeStatelessAuditInputs(
       records.mapValues { (step, raw) -> known.records[step] ?: raw },

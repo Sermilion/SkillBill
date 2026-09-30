@@ -1,7 +1,7 @@
 package skillbill.engine.featuretask.runloop.core
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
-import skillbill.engine.featuretask.runloop.attempt.phaseLoopContext
+import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.phaseLoopContext
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
 import skillbill.engine.featuretask.runloop.observability.loopCapExhausted
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
@@ -205,8 +205,8 @@ object FeatureTaskRuntimeRunLoopDrive {
     context: FeatureTaskRuntimeRunLoopContext,
     phaseId: String,
   ): String? =
-    if (context.state.isComplete(phaseId)) {
-      context.state.outputFor(phaseId)?.let { output ->
+    if (context.state.phase(phaseId).completed) {
+      context.state.phase(phaseId).output?.let { output ->
         FeatureTaskRuntimeRunLoopBackwardEdge.afterCompletion(context, output)
       }
     } else {

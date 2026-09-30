@@ -23,17 +23,17 @@ internal class GoalPlanningStepAttempts(
   ): PhaseOutcome {
     call.acceptedExecution.requireAcceptedAttempt(run, call)
     val owner = context.strategyFor(run.phaseId)
-    val launch =
-      GoalPlanningLaunch(
-        runner = owner.runner,
-        state = call.acceptedExecution,
-        prompt = call.description.prompt,
-        policy = call.description.policy,
-        invariantFields = owner.briefingInvariantFields(run.phaseId),
-      )
     val iteration = call.acceptedExecution.nextStepIteration()
     return try {
       PhaseAttemptOnce.persistRequiredStart(context, run, iteration)
+      val launch =
+        GoalPlanningLaunch(
+          runner = context.runnerForAcceptedAttempt(run, call),
+          state = call.acceptedExecution,
+          prompt = call.description.prompt,
+          policy = call.description.policy,
+          invariantFields = owner.briefingInvariantFields(run.phaseId),
+        )
       subtaskId?.let { id -> progress.producePlan(id, outputSink, launch) } ?: progress.settlePreplan(launch)
     } catch (rejection: RequiredPhaseWriteRejected) {
       PhaseAttemptOnce.blockRequiredWriteRejection(context, run, rejection)

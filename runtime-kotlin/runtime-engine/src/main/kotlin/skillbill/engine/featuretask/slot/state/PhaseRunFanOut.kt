@@ -1,7 +1,6 @@
 package skillbill.engine.featuretask.slot.state
 
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
-import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 
 /**

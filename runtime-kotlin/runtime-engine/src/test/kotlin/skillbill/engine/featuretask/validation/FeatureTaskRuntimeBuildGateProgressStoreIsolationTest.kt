@@ -35,10 +35,10 @@ class FeatureTaskRuntimeBuildGateProgressStoreIsolationTest {
       FeatureTaskRuntimeValidationGateProgress(
         gateRunCount = 2,
         gateRuns =
-        listOf(
-          gateRunRecord(outcome = "failed"),
-          gateRunRecord(outcome = "failed"),
-        ),
+          listOf(
+            gateRunRecord(outcome = "failed"),
+            gateRunRecord(outcome = "failed"),
+          ),
       )
     val buildProgress =
       FeatureTaskRuntimeValidationGateProgress(

@@ -65,8 +65,6 @@ class FeatureTaskRuntimeDeprecatedRunCommand(
           prepared,
           runIssueKey,
           runSpecPath,
-          prepared.repoRoot,
-          deps.inputs.repositoryEnclosingRootPort,
         )
       },
     )
@@ -100,8 +98,6 @@ class FeatureTaskRuntimeDeprecatedExplicitRunCommand(
           prepared,
           issueKey,
           runSpecPath,
-          prepared.repoRoot,
-          deps.inputs.repositoryEnclosingRootPort,
         )
       },
     )

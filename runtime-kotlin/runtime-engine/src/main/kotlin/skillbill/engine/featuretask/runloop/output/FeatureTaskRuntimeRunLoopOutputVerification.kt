@@ -34,8 +34,8 @@ import skillbill.engine.featuretask.runloop.core.isFeatureSpecPathForIssue
 import skillbill.engine.featuretask.runloop.core.reconcileCheckpointPathInventory
 import skillbill.engine.featuretask.runloop.observability.completedEvent
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopProgressObservations
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
@@ -218,9 +218,8 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     }
 
   internal fun terminalOutputAttempt(
-    request: FeatureTaskRuntimeRunFacts,
-    progress: FeatureTaskRuntimeRunLoopProgressObservations,
-    loopTransitions: FeatureTaskRuntimeRunLoopTransitionOwner,
+    progress: FeatureTaskRuntimeProgressSnapshotAccess,
+    loopTransitions: FeatureTaskRuntimeRunTransitionOwner,
     recorder: PhaseRunRecords,
     args: TerminalOutputAttemptArgs,
     blockedDisposition: FeatureTaskRuntimeFailureDisposition,
@@ -249,12 +248,10 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     } else {
       AttemptResult.settled(
         FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-          request,
-          progress,
-          loopTransitions,
-          recorder,
-          observability,
-          PhaseBlockRequest(
+    progress,
+    loopTransitions,
+    recorder,
+    PhaseBlockRequest(
             run = run,
             attemptCount = iteration,
             reason = reason,
@@ -262,7 +259,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
             payload = BlockAndPersistPayload(fileManifest = fileManifest, normalizedOutput = normalizedOutput),
             failureDisposition = disposition,
           ),
-        ),
+  ),
       )
     }
   }
@@ -574,12 +571,10 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         val blockCoupling = context.settlementCoupling()
         return AttemptResult.settled(
           FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-            request,
-            blockCoupling.progress,
-            blockCoupling.transitions,
-            recorder,
-            observability,
-            PhaseBlockRequest(
+    blockCoupling.progress,
+    blockCoupling.transitions,
+    recorder,
+    PhaseBlockRequest(
               run = run,
               attemptCount = iteration,
               reason = "Validated phase output could not be persisted to the authoritative workflow record.",
@@ -587,7 +582,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
               payload = BlockAndPersistPayload(fileManifest = fileManifest),
               failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
             ),
-          ),
+  ),
         )
       }
       return null

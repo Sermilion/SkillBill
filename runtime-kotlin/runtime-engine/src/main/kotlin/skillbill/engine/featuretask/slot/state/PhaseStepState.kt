@@ -5,8 +5,10 @@ import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparati
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
+import skillbill.engine.featuretask.slot.PhaseRepositoryObservations
 import skillbill.engine.featuretask.slot.PhaseStepFileManifest
 import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
@@ -16,6 +18,7 @@ import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificati
 import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
+import java.time.Clock
 
 /** The review pass reservation, launch, and tier facts a code_review step records before its review settles. */
 internal interface PhaseReviewPassState {
@@ -29,7 +32,7 @@ internal interface PhaseReviewPassState {
   ): GoalSubtaskReviewInputPreparation
 
   /** The review pass number the current review attempt runs as. */
-  fun reviewPassNumber(): Int
+  val reviewPassNumber: Int
 
   /** The review run id the durable record holds for [passNumber], if any. */
   fun recordedReviewRunId(passNumber: Int): String?
@@ -57,7 +60,7 @@ internal interface PhaseReviewPassState {
   fun persistResolvedReviewTier(resolution: ReviewPassResolution)
 
   /** The goal review passes the durable review state completed, if any review state is recorded. */
-  fun completedReviewPassCount(): Int?
+  val completedReviewPassCount: Int?
 
   /** Records the review run and its lane telemetry when the strategy did not already record it. */
   fun recordReviewRun(
@@ -184,3 +187,9 @@ internal interface PhaseReviewGenerationState {
     reentryLoopId: String,
   ): Int?
 }
+
+internal data class PhaseReviewExecutionContext(
+  val gitOperations: PhaseRepositoryObservations,
+  val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
+  val clock: Clock,
+)

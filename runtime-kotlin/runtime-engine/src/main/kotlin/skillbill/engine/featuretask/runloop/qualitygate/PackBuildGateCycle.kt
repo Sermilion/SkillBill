@@ -7,7 +7,6 @@ import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.qualitygate.buildGateProgressStore
 import skillbill.engine.featuretask.slot.attempt.PhaseQualityGateCycleContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
 import skillbill.engine.featuretask.slot.attempt.RuntimeOwnedGateSettlement
@@ -16,8 +15,7 @@ import skillbill.engine.featuretask.slot.attempt.gateChangedPaths
 import skillbill.engine.featuretask.slot.attempt.gateCheckpoint
 import skillbill.engine.featuretask.slot.attempt.persistGateRequiredRunning
 import skillbill.engine.featuretask.slot.attempt.runGateAttemptOnce
-import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStepHooks
-import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildTriagePlan
+import skillbill.engine.featuretask.validation.PackBuildTriagePlan
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentTriageLauncher
@@ -27,6 +25,7 @@ import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminal
 import skillbill.engine.featuretask.validation.model.ValidationGateProgressStore
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult
+import skillbill.engine.featuretask.validation.repairSegmentOutput
 import skillbill.ports.taskruntime.validateBuildReceipt
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -194,7 +193,7 @@ internal class PackBuildGateCycle(
             ?: settled.pausedReason
             ?: "Validation repair attempt persistence.session.blocked.",
         )
-      else -> ValidationGateAgentRepairResult.Completed(PackBuildStepHooks.repairSegmentOutput(run, iteration))
+      else -> ValidationGateAgentRepairResult.Completed(repairSegmentOutput(run, iteration))
     }
   }
 

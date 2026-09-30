@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.runloop.attempt
 
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopProgressObservations
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 
 @Deprecated(
@@ -9,4 +9,4 @@ import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 )
 internal fun runLoopCoupledProgressForSettlement(
   context: PhaseOutputSettlementContext,
-): FeatureTaskRuntimeRunLoopProgressObservations = context.settlementCoupling().progress
+): FeatureTaskRuntimeProgressSnapshotAccess = context.settlementCoupling().progress

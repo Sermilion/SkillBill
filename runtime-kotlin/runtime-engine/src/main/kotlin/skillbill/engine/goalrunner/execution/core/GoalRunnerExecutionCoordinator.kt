@@ -22,7 +22,10 @@ import java.time.Clock
 import java.time.Duration
 
 interface GoalRunnerExecutionCoordinator {
-  fun <T> runOwned(parentWorkflowId: String, block: () -> T): T
+  fun <T> runOwned(
+    parentWorkflowId: String,
+    block: () -> T,
+  ): T
 
   fun <T> runOwnedWithChildAdmission(
     parentWorkflowId: String,
@@ -35,20 +38,21 @@ class GoalRunnerExecutionAlreadyRunningException(parentWorkflowId: String, detai
   "Goal parent '$parentWorkflowId' cannot start: $detail",
 )
 
-fun GoalRunnerExecutionLease.asWorkerOwnership(parentWorkflowId: String) = FeatureTaskRuntimeWorkerOwnership(
-  workflowId = parentWorkflowId,
-  generation = generation,
-  ownerToken = ownerToken,
-  hostIdentity = hostIdentity,
-  bootIdentity = bootIdentity,
-  pid = pid,
-  processBirthToken = processBirthToken,
-  leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE,
-  heartbeatAt = heartbeatAt.toString(),
-  expiresAt = expiresAt.toString(),
-  phaseId = "goal_runner",
-  phaseAttempt = 1,
-)
+fun GoalRunnerExecutionLease.asWorkerOwnership(parentWorkflowId: String) =
+  FeatureTaskRuntimeWorkerOwnership(
+    workflowId = parentWorkflowId,
+    generation = generation,
+    ownerToken = ownerToken,
+    hostIdentity = hostIdentity,
+    bootIdentity = bootIdentity,
+    pid = pid,
+    processBirthToken = processBirthToken,
+    leaseState = FeatureTaskRuntimeWorkerLeaseState.ACTIVE,
+    heartbeatAt = heartbeatAt.toString(),
+    expiresAt = expiresAt.toString(),
+    phaseId = "goal_runner",
+    phaseAttempt = 1,
+  )
 
 @Inject
 class DefaultGoalRunnerExecutionCoordinator(
@@ -59,7 +63,10 @@ class DefaultGoalRunnerExecutionCoordinator(
   private val daemonThreadPort: DaemonThreadPort,
   private val identifierGeneratorPort: IdentifierGeneratorPort,
 ) : GoalRunnerExecutionCoordinator {
-  override fun <T> runOwned(parentWorkflowId: String, block: () -> T): T = runOwned(parentWorkflowId, null, block)
+  override fun <T> runOwned(
+    parentWorkflowId: String,
+    block: () -> T,
+  ): T = runOwned(parentWorkflowId, null, block)
 
   override fun <T> runOwnedWithChildAdmission(
     parentWorkflowId: String,
@@ -106,7 +113,11 @@ class DefaultGoalRunnerExecutionCoordinator(
     return lease
   }
 
-  private fun <T> runWithLease(parentWorkflowId: String, lease: GoalRunnerExecutionLease, block: () -> T): T {
+  private fun <T> runWithLease(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+    block: () -> T,
+  ): T {
     val plan =
       FeatureTaskRuntimeHeartbeatPlan(
         label = parentWorkflowId,
@@ -144,8 +155,10 @@ class DefaultGoalRunnerExecutionCoordinator(
     return teardownFailure
   }
 
-  private fun mergeTeardownFailure(existing: Throwable?, next: Throwable): Throwable =
-    existing?.also { addSuppressedIfDistinct(it, next) } ?: next
+  private fun mergeTeardownFailure(
+    existing: Throwable?,
+    next: Throwable,
+  ): Throwable = existing?.also { addSuppressedIfDistinct(it, next) } ?: next
 
   private fun <T> completeRun(
     parentWorkflowId: String,
@@ -220,7 +233,10 @@ class DefaultGoalRunnerExecutionCoordinator(
     }
   }
 
-  private fun clearStalePauseOrReleaseLease(parentWorkflowId: String, lease: GoalRunnerExecutionLease) {
+  private fun clearStalePauseOrReleaseLease(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+  ) {
     val failure =
       runCatching {
         clearStaleRunnerInterruptedPause(parentWorkflowId)
@@ -237,7 +253,10 @@ class DefaultGoalRunnerExecutionCoordinator(
     }
   }
 
-  private fun releaseExecutionLease(parentWorkflowId: String, lease: GoalRunnerExecutionLease) {
+  private fun releaseExecutionLease(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+  ) {
     if (!manifestStore.releaseExecutionLease(parentWorkflowId, lease.ownerToken, lease.generation)) {
       error("Goal parent '$parentWorkflowId' execution lease release lost fencing.")
     }
@@ -252,7 +271,10 @@ class DefaultGoalRunnerExecutionCoordinator(
     }
   }
 
-  private fun addSuppressedIfDistinct(primary: Throwable, secondary: Throwable) {
+  private fun addSuppressedIfDistinct(
+    primary: Throwable,
+    secondary: Throwable,
+  ) {
     if (primary !== secondary) {
       primary.addSuppressed(secondary)
     }
@@ -281,7 +303,10 @@ class DefaultGoalRunnerExecutionCoordinator(
     manifestStore.clearRunnerInterruptedPause(parentWorkflowId)
   }
 
-  private fun reclaimableOwnerToken(parentWorkflowId: String, existing: GoalRunnerExecutionLease): String {
+  private fun reclaimableOwnerToken(
+    parentWorkflowId: String,
+    existing: GoalRunnerExecutionLease,
+  ): String {
     if (leaseIsExpired(existing)) return existing.ownerToken
     val ownership = existing.asWorkerOwnership(parentWorkflowId)
     return when (supervisor.inspect(ownership)) {
@@ -329,8 +354,10 @@ class DefaultGoalRunnerExecutionCoordinator(
     return ageMs in 0 until DUPLICATE_LAUNCH_WINDOW.toMillis()
   }
 
-  private fun cannotStart(parentWorkflowId: String, detail: String): Nothing =
-    throw GoalRunnerExecutionAlreadyRunningException(parentWorkflowId, detail)
+  private fun cannotStart(
+    parentWorkflowId: String,
+    detail: String,
+  ): Nothing = throw GoalRunnerExecutionAlreadyRunningException(parentWorkflowId, detail)
 
   private fun newLease(
     existing: GoalRunnerExecutionLease?,

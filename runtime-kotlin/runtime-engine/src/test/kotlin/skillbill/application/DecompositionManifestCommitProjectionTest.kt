@@ -1,6 +1,5 @@
 package skillbill.application
 
-import skillbill.application.decomposition.DecompositionManifestWriteGuard
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.decompositionPlanningResult
@@ -15,6 +14,7 @@ import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.decomposition.DecompositionPlanningResult
+import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.model.RepositoryRoot
 import skillbill.model.toPath
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -371,7 +371,7 @@ class DecompositionManifestCommitProjectionTest {
           workflowId = "missing-owner",
           outcome =
             DecompositionManifestProjectionOutcome.Failed(
-              operation = DecompositionManifestWriteGuard.projectionOperationLabel(),
+              operation = "test-projection",
               targetPath = "decomposition-manifest.yaml",
             ),
         )
@@ -579,6 +579,7 @@ class DecompositionManifestCommitProjectionTest {
         service.open(
           WorkflowServiceOpenArgs(
             kind = WorkflowFamilyKind.TASK_RUNTIME,
+            executionPlan = testExecutionPlan(),
             issueKey = "SKILL-51",
             repositoryIdentity = repositoryIdentity,
             governedSpecPath = ".feature-specs/SKILL-51-decomposition/spec.md",

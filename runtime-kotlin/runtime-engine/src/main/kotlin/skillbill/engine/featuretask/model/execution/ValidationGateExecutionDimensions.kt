@@ -9,4 +9,3 @@ enum class ValidationGateCommandFamily {
   BUILD,
   VALIDATION,
 }
-

@@ -30,6 +30,8 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
  * prompt sections, and output checks live with the step instead of in the shared code.
  */
 internal interface PhaseStepHooks : PhaseStepLaunchHooks {
+  val contextKind: PhaseStepHookContextKind get() = PhaseStepHookContextKind.COMMON
+
   /** The reason the strategy cannot proceed with an agent launch after briefing persistence, or null when it can. */
   fun beforeAgentLaunch(
     run: PhaseRun,
@@ -220,3 +222,5 @@ internal fun NormalizedFeatureTaskRuntimePhaseOutput.withMeasuredFacts(
   envelope[SharedPayloadKeys.PRODUCED_OUTPUTS] = produced
   return copy(envelope = envelope, canonicalJson = JsonCodec.mapToJsonString(envelope))
 }
+
+internal enum class PhaseStepHookContextKind { COMMON, AUDIT, COMMIT, FINDING_VERIFICATION, PULL_REQUEST, PLANNING }

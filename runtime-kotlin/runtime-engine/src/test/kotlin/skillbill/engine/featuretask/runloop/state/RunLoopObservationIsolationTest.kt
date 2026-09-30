@@ -20,7 +20,7 @@ class RunLoopObservationIsolationTest {
     val state = progress()
     val session = FeatureTaskRuntimeRunLoopSession(null, null)
     val owner = coupledRunTransitionOwner(state, session)
-    val observedProgress = state.progressSnapshot()
+    val observedProgress = state.progressSnapshot
     val observedSession = session.sessionSnapshot()
 
     owner.recordSyntheticUpstreamCompletion(FeatureTaskRuntimePhaseOutput("implement", 1, "{}"))
@@ -28,10 +28,10 @@ class RunLoopObservationIsolationTest {
 
     assertNull(observedProgress as? FeatureTaskRuntimeRunState)
     assertNull(observedSession as? FeatureTaskRuntimeRunLoopSession)
-    assertFalse(observedProgress.isComplete("implement"))
+    assertFalse(observedProgress.phase("implement").completed)
     assertEquals(emptyList(), observedProgress.outputs())
     assertNull(observedSession.resolvedBranch)
-    assertTrue(state.progressSnapshot().isComplete("implement"))
+    assertTrue(state.progressSnapshot.phase("implement").completed)
     assertEquals("feature/owned", session.sessionSnapshot().resolvedBranch)
   }
 

@@ -1,9 +1,10 @@
 package skillbill.engine.featuretask.runloop.core
 
+import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking.persistBranchSetupBlock
 import skillbill.application.decomposition.specSource
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
-import skillbill.engine.featuretask.runloop.attempt.traversalHookContext
+import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.traversalHookContext
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
@@ -29,13 +30,13 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
       FeatureTaskRuntimeRunLoopPlanningBranch.decideByStep(context, edge.destinationPhaseId) { rules, _ ->
         rules.resumesInFlightReentry(edge.loopId)
       } == true
-    if (!resumes || state.isLoopLiveClaimed(edge.loopId) || state.isComplete(edge.destinationPhaseId)) {
+    if (!resumes || state.loop(edge.loopId).liveClaimed || state.phase(edge.destinationPhaseId).completed) {
       return null
     }
     val destinationRecord =
       state
-        .recordFor(edge.destinationPhaseId)
-        ?.takeIf { it.loopId == edge.loopId && it.edgeIteration == state.edgeIterationCount(edge.loopId) }
+        .phase(edge.destinationPhaseId).record
+        ?.takeIf { it.loopId == edge.loopId && it.edgeIteration == state.loop(edge.loopId).iteration }
         ?: return null
     val edgeIteration = requireNotNull(destinationRecord.edgeIteration)
     val pendingReentry =
@@ -66,7 +67,6 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
 
   internal fun recordBackwardEdge(
     context: FeatureTaskRuntimeRunLoopContext,
-    session: FeatureTaskRuntimeRunLoopSession,
     edge: FeatureTaskRuntimeBackwardEdge,
     edgeIteration: Int,
     verdict: FeatureTaskRuntimeVerdict,
@@ -139,7 +139,7 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
   ): String? =
     with(context) {
       if (FeatureTaskRuntimeRunLoopPhaseBlocking.operatorReopenedPhase(session, phaseId)) return null
-      val record = state.recordFor(phaseId) ?: return null
+      val record = state.phase(phaseId).record ?: return null
       return FeatureTaskRuntimeRunLoopBackwardEdge.capExhaustionForRecord(
         context,
         phaseId,
@@ -155,7 +155,7 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
     with(context) {
       val loopId = record.loopId
       val iteration = record.edgeIteration
-      if (loopId == null || iteration == null || state.isLoopLiveClaimed(loopId)) {
+      if (loopId == null || iteration == null || state.loop(loopId).liveClaimed) {
         return null
       }
       val edge =
@@ -164,7 +164,7 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
             (candidate.destinationPhaseId == phaseId || candidate.fromPhaseId == phaseId)
         }
       if (edge?.destinationPhaseId == phaseId) {
-        val sourceRecord = state.recordFor(edge.fromPhaseId)
+        val sourceRecord = state.phase(edge.fromPhaseId).record
         if (
           sourceRecord?.status?.workflowStepStatus() == WorkflowStepStatus.BLOCKED &&
           sourceRecord.loopId == loopId &&
@@ -248,7 +248,10 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
       .strategyFor(
         output.phaseId,
       ).stepHooks(output.phaseId)
-      .afterCompletion(context.traversalHookContext(output), output)
+      .afterCompletion(
+        context.traversalHookContext(output, context.runState.strategyFor(output.phaseId).stepHooks(output.phaseId)),
+        output,
+      )
 
   internal fun establishBranchIfNeeded(
     context: FeatureTaskRuntimeRunLoopContext,
@@ -264,9 +267,8 @@ object FeatureTaskRuntimeRunLoopBackwardEdge {
             transitions.forwardPhaseIds.firstOrNull { context.acceptedStepPolicy(it).fileMutating } ?: phaseId,
         )
       return setup.blockedReason?.also { reason ->
-        FeatureTaskRuntimeRunLoopPhaseBlocking.persistBranchSetupBlock(
+        runState.coupledRunTransitions.persistBranchSetupBlock(
           request,
-          runState.coupledRunTransitions,
           recorder,
           observability,
           phaseId,

@@ -50,7 +50,10 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionProjectionTest {
   fun `repair and finalization projections expose only checkpoint-specific request fields`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
 
-    fun fields(consumer: String, projection: String): List<String> =
+    fun fields(
+      consumer: String,
+      projection: String,
+    ): List<String> =
       def.phaseDeclarations.getValue(consumer).projectionDeclarations
         .single { it.projectionName == projection }
         .declaredFieldNames
@@ -174,9 +177,9 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionProjectionTest {
         FeatureTaskRuntimeTransitionDeclaration(
           forwardPhaseIds = listOf("review", "audit"),
           entryGates =
-          listOf(
-            FeatureTaskRuntimePhaseEntryGate("review", "audit", FeatureTaskRuntimeVerdict.SATISFIED),
-          ),
+            listOf(
+              FeatureTaskRuntimePhaseEntryGate("review", "audit", FeatureTaskRuntimeVerdict.SATISFIED),
+            ),
         )
       }
     assertTrue(error.message.orEmpty().contains("precede"))

@@ -162,7 +162,6 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
         generationScoped = false,
       )
 
-    fun productionPolicy(stepId: String): PhaseStepPolicy =
-      statusProjectionPhaseStrategies().registry.strategies.first { stepId in it.steps }.policyFor(stepId)
+    fun productionPolicy(stepId: String): PhaseStepPolicy = productionStrategyFor(stepId).policyFor(stepId)
   }
 }

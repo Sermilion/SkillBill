@@ -87,15 +87,16 @@ class FeatureTaskRuntimeWriteHistorySettlementTest {
     }
   }
 
-  private fun goalChild(): FeatureTaskRuntimeGoalContinuationContext = FeatureTaskRuntimeGoalContinuationContext(
-    parentIssueKey = RUNNER_TEST_ISSUE_KEY,
-    subtaskId = 11,
-    subtaskName = "runtime-owned write_history rules",
-    goalBranch = GOAL_BRANCH,
-    suppressPr = true,
-    parentWorkflowId = "wfl-parent",
-    reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
-  )
+  private fun goalChild(): FeatureTaskRuntimeGoalContinuationContext =
+    FeatureTaskRuntimeGoalContinuationContext(
+      parentIssueKey = RUNNER_TEST_ISSUE_KEY,
+      subtaskId = 11,
+      subtaskName = "runtime-owned write_history rules",
+      goalBranch = GOAL_BRANCH,
+      suppressPr = true,
+      parentWorkflowId = "wfl-parent",
+      reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
+    )
 
   private fun measuredFacts(outputArtifact: String): Map<String, Any?> {
     val envelope = JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(outputArtifact))

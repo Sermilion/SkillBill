@@ -38,8 +38,10 @@ internal interface PhaseResumeRules {
   ): FeatureTaskRuntimePhaseRecord = stripped
 
   /** Whether a blocked ledger entry of this step is dropped, given its [raw] and [resumed] record. */
-  fun dropsBlockedLedgerEntry(raw: FeatureTaskRuntimePhaseRecord?, resumed: FeatureTaskRuntimePhaseRecord?): Boolean =
-    false
+  fun dropsBlockedLedgerEntry(
+    raw: FeatureTaskRuntimePhaseRecord?,
+    resumed: FeatureTaskRuntimePhaseRecord?,
+  ): Boolean = false
 
   /** Whether the durable output of [record] is withheld from the resumed run. */
   fun withholdsDurableOutput(record: FeatureTaskRuntimePhaseRecord): Boolean = false
@@ -54,8 +56,10 @@ internal interface PhaseResumeRules {
   ): Boolean = false
 
   /** How a persisted block of this step with [reason] resumes, given its [recentBlockedReasons], newest first. */
-  fun persistedBlockResume(reason: String, recentBlockedReasons: List<String?>): PhaseBlockResume =
-    PhaseBlockResume.DEFAULT
+  fun persistedBlockResume(
+    reason: String,
+    recentBlockedReasons: List<String?>,
+  ): PhaseBlockResume = PhaseBlockResume.DEFAULT
 
   companion object {
     val None: PhaseResumeRules = object : PhaseResumeRules {}

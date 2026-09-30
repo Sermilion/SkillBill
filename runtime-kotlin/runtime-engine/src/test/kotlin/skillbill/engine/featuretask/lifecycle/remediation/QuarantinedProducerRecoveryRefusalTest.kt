@@ -1,7 +1,8 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
-import skillbill.workflow.engine.model.DurableWorkflowArtifacts
-import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import java.nio.file.Path
+import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.engine.ExecutionPlanAdmissionFixture
@@ -15,12 +16,14 @@ import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.slotbaseline.SlotBaselineSqlite
 import skillbill.engine.openTestWorkflow
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
+import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
@@ -45,47 +48,16 @@ class QuarantinedProducerRecoveryRefusalTest {
       val execution = ExecutionPlanAdmissionFixture()
       val workflowId = "wftr-admitted-gate"
       database.transaction { execution.seed(it.workflowStates, workflowId) }
-      val recorder = featureTaskRuntimePhaseRecorder(
-        database,
-        NoopWorkflowSnapshotValidator,
-        AcceptingFeatureTaskRuntimeWireArtifactValidator,
-        AcceptingFeatureTaskRuntimeWireArtifactValidator,
-        testHarnessClock,
-        NoopRuntimeDiagnostics,
-      )
-      assertTrue(
-        recorder.recordPhaseState(
-          FeatureTaskRuntimePhaseStateRequest(
-            workflowId = workflowId,
-            phaseId = "validate",
-            status = "completed",
-            attemptCount = 4,
-            resolvedAgentId = "original-validator",
-            finished = true,
-            outputArtifact = "retained-gate-output",
-          ),
-        ),
-      )
-      assertTrue(
-        recorder.appendLedgerEntry(
-          FeatureTaskRuntimePhaseLedgerRequest(
-            workflowId = workflowId,
-            phaseId = "validate",
-            action = FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
-            attemptCount = 4,
-            resolvedAgentId = "original-validator",
-          ),
-        ),
-      )
-      assertTrue(
-        recorder.appendCheckpointIdentity(
-          AppendCheckpointIdentityArgs(
-            workflowId = workflowId, issueKey = "SKILL-384", subtaskId = "2", branch = "feat/SKILL-384",
-            phaseId = "review", loopId = null, generation = 0, parentSha = "a".repeat(40),
-            ownedPaths = listOf("src/Changed.kt"), commitSha = "b".repeat(40),
-          ),
-        ),
-      )
+      val recorder =
+        featureTaskRuntimePhaseRecorder(
+          database,
+          NoopWorkflowSnapshotValidator,
+          AcceptingFeatureTaskRuntimeWireArtifactValidator,
+          AcceptingFeatureTaskRuntimeWireArtifactValidator,
+          testHarnessClock,
+          NoopRuntimeDiagnostics,
+        )
+      seedCompletedGateEvidence(recorder, workflowId)
       assertTrue(
         recorder.recordPhaseState(
           FeatureTaskRuntimePhaseStateRequest(
@@ -105,9 +77,10 @@ class QuarantinedProducerRecoveryRefusalTest {
           outputBytes.size.toLong(), sha256HexUtf8("retained-gate-output"), outputBytes,
         ),
       )
-      val retainedEvidence = database.read {
-        it.rejectedOutputDiagnostics.readProducerOutput(workflowId, "validate", 4, "original-validator")
-      }
+      val retainedEvidence =
+        database.read {
+          it.rejectedOutputDiagnostics.readProducerOutput(workflowId, "validate", 4, "original-validator")
+        }
       val before = assertNotNull(recorder.loadPhaseRecords(workflowId)?.get("validate"))
       val ledger = recorder.loadPhaseLedger(workflowId)
       val checkpoints = recorder.loadCheckpointIdentities(workflowId)
@@ -128,9 +101,10 @@ class QuarantinedProducerRecoveryRefusalTest {
         ),
         after,
       )
-      val afterEvidence = database.read {
-        it.rejectedOutputDiagnostics.readProducerOutput(workflowId, "validate", 4, "original-validator")
-      }
+      val afterEvidence =
+        database.read {
+          it.rejectedOutputDiagnostics.readProducerOutput(workflowId, "validate", 4, "original-validator")
+        }
       assertEquals(retainedEvidence?.sha256, afterEvidence?.sha256)
       assertContentEquals(outputBytes, afterEvidence?.payload)
       assertEquals(ledger, recorder.loadPhaseLedger(workflowId))
@@ -143,55 +117,57 @@ class QuarantinedProducerRecoveryRefusalTest {
 
   @Test
   fun `durable producer invalidation preserves attempts outputs and checkpoints when recovery is unsafe`() {
-    val cases = buildList {
-      WorkflowStatus.terminalStatuses.forEach { status ->
-        add(RecoveryCase(FeatureTaskRuntimeRegenerationRefusal.TERMINAL_WORKFLOW, status = status))
-      }
-      listOf("build", "validate").forEach { producer ->
-        add(RecoveryCase(FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS, producer = producer))
-      }
-      listOf("commit_push", "pr").forEach { finalizationStep ->
-        listOf("pending", "running", "completed").forEach { finalizationStatus ->
+    val cases =
+      buildList {
+        WorkflowStatus.terminalStatuses.forEach { status ->
+          add(RecoveryCase(FeatureTaskRuntimeRegenerationRefusal.TERMINAL_WORKFLOW, status = status))
+        }
+        listOf("build", "validate").forEach { producer ->
+          add(RecoveryCase(FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS, producer = producer))
+        }
+        listOf("commit_push", "pr").forEach { finalizationStep ->
+          listOf("pending", "running", "completed").forEach { finalizationStatus ->
+            add(
+              RecoveryCase(
+                FeatureTaskRuntimeRegenerationRefusal.IRREVERSIBLE_WORK_RECORDED,
+                finalizationStep = finalizationStep,
+                finalizationStatus = finalizationStatus,
+              ),
+            )
+          }
           add(
             RecoveryCase(
               FeatureTaskRuntimeRegenerationRefusal.IRREVERSIBLE_WORK_RECORDED,
               finalizationStep = finalizationStep,
-              finalizationStatus = finalizationStatus,
+              ledgerOnly = true,
             ),
           )
         }
-        add(
-          RecoveryCase(
-            FeatureTaskRuntimeRegenerationRefusal.IRREVERSIBLE_WORK_RECORDED,
-            finalizationStep = finalizationStep,
-            ledgerOnly = true,
-          ),
-        )
+        add(RecoveryCase(FeatureTaskRuntimeRegenerationRefusal.MISSING_PRODUCER_EVIDENCE, seedProducer = false))
       }
-      add(RecoveryCase(FeatureTaskRuntimeRegenerationRefusal.MISSING_PRODUCER_EVIDENCE, seedProducer = false))
-    }
     cases.forEach(::assertRecoveryRefused)
   }
 
   @Test
   fun `admitted build and validate recovery refuses incomplete evidence and semantic changes without mutation`() {
-    val cases = listOf(
-      GateRecoveryCase("build", SkeletonDefinition.GOAL_CHILD, FeatureTaskRuntimeQualityGateSelection.BUILD),
-      GateRecoveryCase("validate", SkeletonDefinition.STANDALONE, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
-    ).flatMap { gate ->
+    val cases =
       listOf(
-        gate.copy(allow = true),
-        gate.copy(missingPayload = true),
-        gate.copy(missingLedger = true),
-        gate.copy(mismatchedLedgerAttempt = true),
-        gate.copy(missingPriorCheckpoint = true),
-        gate.copy(downstreamRecord = true),
-        gate.copy(downstreamLedger = true),
-        gate.copy(downstreamCheckpoint = true),
-        gate.copy(changedDescriptorAfterAdmission = true),
-        gate.copy(irreversibleEvidence = true),
-      )
-    }
+        GateRecoveryCase("build", SkeletonDefinition.GOAL_CHILD, FeatureTaskRuntimeQualityGateSelection.BUILD),
+        GateRecoveryCase("validate", SkeletonDefinition.STANDALONE, FeatureTaskRuntimeQualityGateSelection.VALIDATE),
+      ).flatMap { gate ->
+        listOf(
+          gate.copy(allow = true),
+          gate.copy(missingPayload = true),
+          gate.copy(missingLedger = true),
+          gate.copy(mismatchedLedgerAttempt = true),
+          gate.copy(missingPriorCheckpoint = true),
+          gate.copy(downstreamRecord = true),
+          gate.copy(downstreamLedger = true),
+          gate.copy(downstreamCheckpoint = true),
+          gate.copy(changedDescriptorAfterAdmission = true),
+          gate.copy(irreversibleEvidence = true),
+        )
+      }
     cases.forEach(::assertAdmittedGateRecoveryRefused)
   }
 
@@ -200,151 +176,24 @@ class QuarantinedProducerRecoveryRefusalTest {
     try {
       val database = phaseRunDatabase(root, testHarnessClock)
       val execution = ExecutionPlanAdmissionFixture(case.definition, qualityGate = case.qualityGate)
-      val recorder = featureTaskRuntimePhaseRecorder(
-        database,
-        NoopWorkflowSnapshotValidator,
-        AcceptingFeatureTaskRuntimeWireArtifactValidator,
-        AcceptingFeatureTaskRuntimeWireArtifactValidator,
-        testHarnessClock,
-        NoopRuntimeDiagnostics,
-      )
+      val recorder =
+        featureTaskRuntimePhaseRecorder(
+          database,
+          NoopWorkflowSnapshotValidator,
+          AcceptingFeatureTaskRuntimeWireArtifactValidator,
+          AcceptingFeatureTaskRuntimeWireArtifactValidator,
+          testHarnessClock,
+          NoopRuntimeDiagnostics,
+        )
       val workflowId = "wftr-admitted-gate-refusal"
       database.transaction { execution.seed(it.workflowStates, workflowId) }
       assertTrue(recorder.openTestWorkflow(workflowId, "recovery-session", "SKILL-384"))
       val producerAttempt = 4
-      assertTrue(
-        recorder.recordPhaseState(
-          FeatureTaskRuntimePhaseStateRequest(
-            workflowId = workflowId,
-            phaseId = case.producer,
-            status = "completed",
-            attemptCount = producerAttempt,
-            resolvedAgentId = "original-gate",
-            finished = true,
-            outputArtifact = "retained-gate-output",
-          ),
-        ),
-      )
-      if (!case.missingPayload) {
-        val bytes = "retained-gate-output".toByteArray()
-        recorder.retainProducerOutput(ProducerOutputEvidence(
-          workflowId, case.producer, producerAttempt, "original-gate", "runtime", testHarnessClock.instant(),
-          bytes.size.toLong(), sha256HexUtf8("retained-gate-output"), bytes,
-        ))
-      }
-      assertTrue(recorder.recordPhaseState(FeatureTaskRuntimePhaseStateRequest(
-        workflowId = workflowId, phaseId = "write_history", status = "running", attemptCount = 1,
-        resolvedAgentId = "history-agent", finished = false,
-      )))
-      if (!case.missingLedger) {
-        assertTrue(
-          recorder.appendLedgerEntry(
-            FeatureTaskRuntimePhaseLedgerRequest(
-              workflowId = workflowId,
-              phaseId = case.producer,
-              action = FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
-              attemptCount = if (case.mismatchedLedgerAttempt) producerAttempt - 1 else producerAttempt,
-              resolvedAgentId = "original-gate",
-            ),
-          ),
-        )
-      }
-      if (!case.missingPriorCheckpoint) {
-        assertTrue(
-          recorder.appendCheckpointIdentity(
-            AppendCheckpointIdentityArgs(
-              workflowId = workflowId, issueKey = "SKILL-384", subtaskId = "2", branch = "feat/SKILL-384",
-              phaseId = case.producer, loopId = null, generation = 0, parentSha = "a".repeat(40),
-              ownedPaths = listOf("src/Changed.kt"), commitSha = "b".repeat(40),
-            ),
-          ),
-        )
-      }
-      when {
-        case.downstreamRecord -> assertTrue(
-          recorder.recordPhaseState(
-            FeatureTaskRuntimePhaseStateRequest(
-              workflowId = workflowId,
-              phaseId = "write_history",
-              status = "completed",
-              attemptCount = 1,
-              resolvedAgentId = "history-agent",
-              finished = true,
-            ),
-          ),
-        )
-        case.downstreamLedger -> assertTrue(
-          recorder.appendLedgerEntry(
-            FeatureTaskRuntimePhaseLedgerRequest(
-              workflowId = workflowId,
-              phaseId = "write_history",
-              action = FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
-              attemptCount = 1,
-              resolvedAgentId = "downstream-agent",
-            ),
-          ),
-        )
-        case.downstreamCheckpoint -> assertTrue(
-          recorder.appendCheckpointIdentity(
-            AppendCheckpointIdentityArgs(
-              workflowId = workflowId, issueKey = "SKILL-384", subtaskId = "2", branch = "feat/SKILL-384",
-              phaseId = "write_history", loopId = null, generation = 0, parentSha = "c".repeat(40),
-              ownedPaths = listOf("src/Other.kt"), commitSha = "d".repeat(40),
-            ),
-          ),
-        )
-        case.irreversibleEvidence -> assertTrue(
-          recorder.recordPhaseState(
-            FeatureTaskRuntimePhaseStateRequest(
-              workflowId = workflowId,
-              phaseId = "commit_push",
-              status = "completed",
-              attemptCount = 2,
-              resolvedAgentId = "original-finalizer",
-              finished = true,
-              outputArtifact = "retained-finalization-output",
-            ),
-          ),
-        )
-      }
+      seedGateAndHistory(recorder, workflowId, case)
+      seedGateLedgerAndCheckpoint(recorder, workflowId, case)
+      seedDownstreamEvidence(recorder, workflowId, case)
       val admitted = database.transaction { execution.admission.admit(it.workflowStates, workflowId, execution.inputs) }
-      if (case.changedDescriptorAfterAdmission) {
-        val row = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
-        val artifacts = row.artifactsJson.let { JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(it)) }
-        val descriptor =
-          requireNotNull(
-            JsonCodec.anyToStringAnyMap(
-              DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(
-                DurableWorkflowArtifacts.fromMap(requireNotNull(artifacts)),
-              ),
-            ),
-          )
-        val policies = (descriptor[PlanKeys.EFFECTIVE_POLICIES] as List<*>).map {
-          requireNotNull(JsonCodec.anyToStringAnyMap(it))
-        }
-        val changed = descriptor + (
-          PlanKeys.EFFECTIVE_POLICIES to policies.map { policy ->
-            if (policy[PlanKeys.ID] == "gate-commands") {
-              policy + (
-                PlanKeys.SEMANTIC_DIGEST to "0".repeat(
-                  64,
-                )
-                )
-            } else {
-              policy
-            }
-          }
-          )
-        SlotBaselineSqlite.updateFeatureTaskArtifacts(
-          root.resolve("metrics.db"),
-          workflowId,
-          JsonCodec.mapToJsonString(
-            row.toSnapshot().artifacts + DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
-              changed,
-            ),
-          ),
-        )
-      }
+      changeDescriptorAfterAdmission(database, root, workflowId, case)
       val before = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
       val records = recorder.loadPhaseRecords(workflowId)
       val ledger = recorder.loadPhaseLedger(workflowId)
@@ -364,14 +213,16 @@ class QuarantinedProducerRecoveryRefusalTest {
           recorder.invalidateQuarantinedProducerRecord(workflowId, case.producer, "regen_gate", 1, admitted)
         }
       } else {
-        val error = assertFailsWith<UnsafeFeatureTaskRuntimeRegenerationError>(case.toString()) {
-          recorder.invalidateQuarantinedProducerRecord(workflowId, case.producer, "regen_gate", 1, admitted)
-        }
-        val expected = when {
-          case.irreversibleEvidence -> FeatureTaskRuntimeRegenerationRefusal.IRREVERSIBLE_WORK_RECORDED
-          case.missingPayload -> FeatureTaskRuntimeRegenerationRefusal.MISSING_PRODUCER_EVIDENCE
-          else -> FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS
-        }
+        val error =
+          assertFailsWith<UnsafeFeatureTaskRuntimeRegenerationError>(case.toString()) {
+            recorder.invalidateQuarantinedProducerRecord(workflowId, case.producer, "regen_gate", 1, admitted)
+          }
+        val expected =
+          when {
+            case.irreversibleEvidence -> FeatureTaskRuntimeRegenerationRefusal.IRREVERSIBLE_WORK_RECORDED
+            case.missingPayload -> FeatureTaskRuntimeRegenerationRefusal.MISSING_PRODUCER_EVIDENCE
+            else -> FeatureTaskRuntimeRegenerationRefusal.UNPROVEN_GATE_SEMANTICS
+          }
         assertEquals(expected, error.refusal, case.toString())
       }
 
@@ -389,14 +240,15 @@ class QuarantinedProducerRecoveryRefusalTest {
     val root = Files.createTempDirectory("quarantined-producer-refusal")
     try {
       val database = phaseRunDatabase(root, testHarnessClock)
-      val recorder = featureTaskRuntimePhaseRecorder(
-        database,
-        NoopWorkflowSnapshotValidator,
-        AcceptingFeatureTaskRuntimeWireArtifactValidator,
-        AcceptingFeatureTaskRuntimeWireArtifactValidator,
-        testHarnessClock,
-        NoopRuntimeDiagnostics,
-      )
+      val recorder =
+        featureTaskRuntimePhaseRecorder(
+          database,
+          NoopWorkflowSnapshotValidator,
+          AcceptingFeatureTaskRuntimeWireArtifactValidator,
+          AcceptingFeatureTaskRuntimeWireArtifactValidator,
+          testHarnessClock,
+          NoopRuntimeDiagnostics,
+        )
       val workflowId = "wftr-quarantined-producer"
       val execution = ExecutionPlanAdmissionFixture()
       database.transaction { execution.seed(it.workflowStates, workflowId) }
@@ -416,35 +268,7 @@ class QuarantinedProducerRecoveryRefusalTest {
           ),
         )
       }
-      case.finalizationStep?.let { phase ->
-        if (case.ledgerOnly) {
-          assertTrue(
-            recorder.appendLedgerEntry(
-              FeatureTaskRuntimePhaseLedgerRequest(
-                workflowId = workflowId,
-                phaseId = phase,
-                action = FeatureTaskRuntimePhaseLedgerAction.START,
-                attemptCount = 2,
-                resolvedAgentId = "original-finalizer",
-              ),
-            ),
-          )
-        } else {
-          assertTrue(
-            recorder.recordPhaseState(
-              FeatureTaskRuntimePhaseStateRequest(
-                workflowId = workflowId,
-                phaseId = phase,
-                status = case.finalizationStatus,
-                attemptCount = 2,
-                resolvedAgentId = "original-finalizer",
-                finished = case.finalizationStatus == "completed",
-                outputArtifact = "retained-finalization-output",
-              ),
-            ),
-          )
-        }
-      }
+      seedFinalizationEvidence(recorder, workflowId, case)
       assertTrue(
         recorder.appendCheckpointIdentity(
           AppendCheckpointIdentityArgs(
@@ -473,9 +297,10 @@ class QuarantinedProducerRecoveryRefusalTest {
       val ledger = recorder.loadPhaseLedger(workflowId)
       val checkpoints = recorder.loadCheckpointIdentities(workflowId)
 
-      val error = assertFailsWith<UnsafeFeatureTaskRuntimeRegenerationError>(case.toString()) {
-        recorder.invalidateQuarantinedProducerRecord(workflowId, case.producer, "regen_implement", 1)
-      }
+      val error =
+        assertFailsWith<UnsafeFeatureTaskRuntimeRegenerationError>(case.toString()) {
+          recorder.invalidateQuarantinedProducerRecord(workflowId, case.producer, "regen_implement", 1)
+        }
 
       assertEquals(case.refusal, error.refusal)
       database.read { assertEquals(before, it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
@@ -512,4 +337,262 @@ class QuarantinedProducerRecoveryRefusalTest {
     val changedDescriptorAfterAdmission: Boolean = false,
     val irreversibleEvidence: Boolean = false,
   )
+  private fun seedCompletedGateEvidence(recorder: FeatureTaskRuntimePhaseRecorder, workflowId: String) {
+      assertTrue(
+        recorder.recordPhaseState(
+          FeatureTaskRuntimePhaseStateRequest(
+            workflowId = workflowId,
+            phaseId = "validate",
+            status = "completed",
+            attemptCount = 4,
+            resolvedAgentId = "original-validator",
+            finished = true,
+            outputArtifact = "retained-gate-output",
+          ),
+        ),
+      )
+      assertTrue(
+        recorder.appendLedgerEntry(
+          FeatureTaskRuntimePhaseLedgerRequest(
+            workflowId = workflowId,
+            phaseId = "validate",
+            action = FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
+            attemptCount = 4,
+            resolvedAgentId = "original-validator",
+          ),
+        ),
+      )
+      assertTrue(
+        recorder.appendCheckpointIdentity(
+          AppendCheckpointIdentityArgs(
+            workflowId = workflowId, issueKey = "SKILL-384", subtaskId = "2", branch = "feat/SKILL-384",
+            phaseId = "review", loopId = null, generation = 0, parentSha = "a".repeat(40),
+            ownedPaths = listOf("src/Changed.kt"), commitSha = "b".repeat(40),
+          ),
+        ),
+      )
+
+  }
+
+  private fun seedGateAndHistory(
+    recorder: FeatureTaskRuntimePhaseRecorder,
+    workflowId: String,
+    case: GateRecoveryCase,
+  ) {
+      assertTrue(
+        recorder.recordPhaseState(
+          FeatureTaskRuntimePhaseStateRequest(
+            workflowId = workflowId,
+            phaseId = case.producer,
+            status = "completed",
+            attemptCount = 4,
+            resolvedAgentId = "original-gate",
+            finished = true,
+            outputArtifact = "retained-gate-output",
+          ),
+        ),
+      )
+      if (!case.missingPayload) {
+        val bytes = "retained-gate-output".toByteArray()
+        recorder.retainProducerOutput(
+          ProducerOutputEvidence(
+            workflowId, case.producer, 4, "original-gate", "runtime", testHarnessClock.instant(),
+            bytes.size.toLong(), sha256HexUtf8("retained-gate-output"), bytes,
+          ),
+        )
+      }
+      assertTrue(
+        recorder.recordPhaseState(
+          FeatureTaskRuntimePhaseStateRequest(
+            workflowId = workflowId,
+            phaseId = "write_history",
+            status = "running",
+            attemptCount = 1,
+            resolvedAgentId = "history-agent",
+            finished = false,
+          ),
+        ),
+      )
+
+  }
+
+  private fun seedGateLedgerAndCheckpoint(
+    recorder: FeatureTaskRuntimePhaseRecorder,
+    workflowId: String,
+    case: GateRecoveryCase,
+  ) {
+      if (!case.missingLedger) {
+        assertTrue(
+          recorder.appendLedgerEntry(
+            FeatureTaskRuntimePhaseLedgerRequest(
+              workflowId = workflowId,
+              phaseId = case.producer,
+              action = FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
+              attemptCount = if (case.mismatchedLedgerAttempt) 4 - 1 else 4,
+              resolvedAgentId = "original-gate",
+            ),
+          ),
+        )
+      }
+      if (!case.missingPriorCheckpoint) {
+        assertTrue(
+          recorder.appendCheckpointIdentity(
+            AppendCheckpointIdentityArgs(
+              workflowId = workflowId, issueKey = "SKILL-384", subtaskId = "2", branch = "feat/SKILL-384",
+              phaseId = case.producer, loopId = null, generation = 0, parentSha = "a".repeat(40),
+              ownedPaths = listOf("src/Changed.kt"), commitSha = "b".repeat(40),
+            ),
+          ),
+        )
+      }
+
+  }
+
+  private fun seedDownstreamEvidence(
+    recorder: FeatureTaskRuntimePhaseRecorder,
+    workflowId: String,
+    case: GateRecoveryCase,
+  ) {
+      when {
+        case.downstreamRecord ->
+          assertTrue(
+            recorder.recordPhaseState(
+              FeatureTaskRuntimePhaseStateRequest(
+                workflowId = workflowId,
+                phaseId = "write_history",
+                status = "completed",
+                attemptCount = 1,
+                resolvedAgentId = "history-agent",
+                finished = true,
+              ),
+            ),
+          )
+        case.downstreamLedger ->
+          assertTrue(
+            recorder.appendLedgerEntry(
+              FeatureTaskRuntimePhaseLedgerRequest(
+                workflowId = workflowId,
+                phaseId = "write_history",
+                action = FeatureTaskRuntimePhaseLedgerAction.COMPLETE,
+                attemptCount = 1,
+                resolvedAgentId = "downstream-agent",
+              ),
+            ),
+          )
+        case.downstreamCheckpoint ->
+          assertTrue(
+            recorder.appendCheckpointIdentity(
+              AppendCheckpointIdentityArgs(
+                workflowId = workflowId, issueKey = "SKILL-384", subtaskId = "2", branch = "feat/SKILL-384",
+                phaseId = "write_history", loopId = null, generation = 0, parentSha = "c".repeat(40),
+                ownedPaths = listOf("src/Other.kt"), commitSha = "d".repeat(40),
+              ),
+            ),
+          )
+        case.irreversibleEvidence ->
+          assertTrue(
+            recorder.recordPhaseState(
+              FeatureTaskRuntimePhaseStateRequest(
+                workflowId = workflowId,
+                phaseId = "commit_push",
+                status = "completed",
+                attemptCount = 2,
+                resolvedAgentId = "original-finalizer",
+                finished = true,
+                outputArtifact = "retained-finalization-output",
+              ),
+            ),
+          )
+      }
+
+  }
+
+  private fun changeDescriptorAfterAdmission(
+    database: DatabaseSessionFactory,
+    root: Path,
+    workflowId: String,
+    case: GateRecoveryCase,
+  ) {
+      if (case.changedDescriptorAfterAdmission) {
+        val row = database.read { requireNotNull(it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
+        val artifacts = row.artifactsJson.let { JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(it)) }
+        val descriptor =
+          requireNotNull(
+            JsonCodec.anyToStringAnyMap(
+              DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(
+                DurableWorkflowArtifacts.fromMap(requireNotNull(artifacts)),
+              ),
+            ),
+          )
+        val policies =
+          (descriptor[PlanKeys.EFFECTIVE_POLICIES] as List<*>).map {
+            requireNotNull(JsonCodec.anyToStringAnyMap(it))
+          }
+        val changed =
+          descriptor + (
+            PlanKeys.EFFECTIVE_POLICIES to
+              policies.map { policy ->
+                if (policy[PlanKeys.ID] == "gate-commands") {
+                  policy + (
+                    PlanKeys.SEMANTIC_DIGEST to
+                      "0".repeat(
+                        64,
+                      )
+                  )
+                } else {
+                  policy
+                }
+              }
+          )
+        SlotBaselineSqlite.updateFeatureTaskArtifacts(
+          root.resolve("metrics.db"),
+          workflowId,
+          JsonCodec.mapToJsonString(
+            row.toSnapshot().artifacts +
+              DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
+                changed,
+              ),
+          ),
+        )
+      }
+
+  }
+
+  private fun seedFinalizationEvidence(
+    recorder: FeatureTaskRuntimePhaseRecorder,
+    workflowId: String,
+    case: RecoveryCase,
+  ) {
+      case.finalizationStep?.let { phase ->
+        if (case.ledgerOnly) {
+          assertTrue(
+            recorder.appendLedgerEntry(
+              FeatureTaskRuntimePhaseLedgerRequest(
+                workflowId = workflowId,
+                phaseId = phase,
+                action = FeatureTaskRuntimePhaseLedgerAction.START,
+                attemptCount = 2,
+                resolvedAgentId = "original-finalizer",
+              ),
+            ),
+          )
+        } else {
+          assertTrue(
+            recorder.recordPhaseState(
+              FeatureTaskRuntimePhaseStateRequest(
+                workflowId = workflowId,
+                phaseId = phase,
+                status = case.finalizationStatus,
+                attemptCount = 2,
+                resolvedAgentId = "original-finalizer",
+                finished = case.finalizationStatus == "completed",
+                outputArtifact = "retained-finalization-output",
+              ),
+            ),
+          )
+        }
+      }
+
+  }
+
 }

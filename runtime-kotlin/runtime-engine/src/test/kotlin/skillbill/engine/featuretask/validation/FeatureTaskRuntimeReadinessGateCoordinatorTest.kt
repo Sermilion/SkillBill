@@ -59,7 +59,10 @@ class FeatureTaskRuntimeReadinessGateCoordinatorTest {
             reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
           ),
       )
-    val phases = statusProjectionPhaseStrategies().executionPlan(strategySelectionFacts(request)).traversal.forwardPhaseIds
+    val phases =
+      statusProjectionPhaseStrategies().executionPlan(
+        strategySelectionFacts(request),
+      ).traversal.forwardPhaseIds
     assertFalse(phases.contains(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR))
     assertTrue(phases.contains(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH))
   }

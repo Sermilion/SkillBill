@@ -1,5 +1,12 @@
 package skillbill.engine.goalrunner.manifest
 
+import skillbill.ports.decomposition.DecompositionManifestProjectionWriter
+import skillbill.model.RepositoryRoot
+import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
+import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.ports.workflow.decomposition.persistDecompositionManifestProjectionFailure
+import skillbill.ports.workflow.decomposition.clearDecompositionManifestProjectionFailure
+import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
 import skillbill.application.workflow.decomposition.requireRuntimeModeForEngineWrite
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.goalrunner.status.reconcileControlStateForManifest
@@ -28,6 +35,10 @@ internal class WorkflowGoalRunnerManifestProjectionPersistence(
   private val engine: WorkflowEngine,
   private val parentProjection: GoalParentProjectionWriter,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
+  private val decompositionManifestWriter: DecompositionManifestProjectionWriter,
+  private val repositoryRoot: RepositoryRoot,
+  private val decompositionManifestValidator: DecompositionManifestValidator,
+  private val decompositionManifestStore: DecompositionManifestStore,
 ) {
   fun save(state: GoalRunnerManifestState): SavedManifestProjection =
     database.transaction { unitOfWork -> saveInTransaction(unitOfWork, state) }
@@ -94,4 +105,33 @@ internal class WorkflowGoalRunnerManifestProjectionPersistence(
       projectionArtifacts = refreshed.artifacts,
     )
   }
+  fun writeProjectionFile(
+      state: GoalRunnerManifestState,
+      projectionArtifacts: DurableWorkflowArtifacts,
+    ): DecompositionManifestProjectionOutcome {
+      val outcome =
+        decompositionManifestWriter.writeProjectionFromWorkflowState(
+          state.repoRoot ?: repositoryRoot.path,
+          projectionArtifacts,
+          decompositionManifestValidator,
+          decompositionManifestStore,
+        )
+      when (outcome) {
+        is DecompositionManifestProjectionOutcome.Failed ->
+          database.transaction { unitOfWork ->
+            persistDecompositionManifestProjectionFailure(
+              engine,
+              unitOfWork,
+              state.parentWorkflowId,
+              outcome,
+            )
+          }
+        is DecompositionManifestProjectionOutcome.Written ->
+          database.transaction { unitOfWork ->
+            clearDecompositionManifestProjectionFailure(engine, unitOfWork, state.parentWorkflowId)
+          }
+        DecompositionManifestProjectionOutcome.Absent -> Unit
+      }
+      return outcome
+    }
 }

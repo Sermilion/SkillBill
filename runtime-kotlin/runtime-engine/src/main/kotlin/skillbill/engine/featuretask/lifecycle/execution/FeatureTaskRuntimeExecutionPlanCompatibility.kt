@@ -1,9 +1,7 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
-import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
-import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import me.tatarka.inject.annotations.Inject
-import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
@@ -11,6 +9,7 @@ import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaE
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedExecutionPolicy
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -40,8 +39,9 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
     expectedDescriptor: ValidatedFeatureTaskRuntimeExecutionPlan?,
   ): ResolvedPhaseExecutionPlan {
     val plan = requireSupportedComposition(encoded)
-    val expected = expectedDescriptor
-      ?: throw MissingFeatureTaskRuntimeExecutionPlanError()
+    val expected =
+      expectedDescriptor
+        ?: throw MissingFeatureTaskRuntimeExecutionPlanError()
     val expectedPlan = codec.decode(expected.encoded())
     requireSupportedPolicies(expectedPlan.effectivePolicies)
     if (!codec.encode(plan).contentEquals(codec.encode(expectedPlan))) incompatible()
@@ -54,25 +54,49 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
   ): ResolvedPhaseExecutionPlan {
     val plan = requireSupportedComposition(encoded)
     val inputs = effectiveInputs ?: incompatible()
-    val supported = FeatureTaskRuntimeEffectivePolicies.resolve(
-      plan,
-      inputs,
-    ).sortedBy { it.id }
+    val supported =
+      FeatureTaskRuntimeEffectivePolicies.resolve(
+        plan,
+        inputs,
+      ).sortedBy { it.id }
     if (plan.effectivePolicies != supported) incompatible()
     return plan
   }
 
   fun requireSupportedComposition(encoded: ByteArray?): ResolvedPhaseExecutionPlan {
     if (encoded == null) throw MissingFeatureTaskRuntimeExecutionPlanError()
-    val plan = try {
-      codec.decode(encoded)
-    } catch (_: InvalidFeatureTaskRuntimeExecutionPlanSchemaError) {
-      throw CorruptFeatureTaskRuntimeExecutionPlanError()
-    }
-    val definition = SkeletonDefinition.entries.singleOrNull {
-      it.id == plan.definitionId && it.semanticRevision == plan.definitionSemanticRevision
-    } ?: throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
+    val plan = decodePlan(encoded)
+    val definition =
+      SkeletonDefinition.entries.singleOrNull {
+        it.id == plan.definitionId && it.semanticRevision == plan.definitionSemanticRevision
+      } ?: throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
     if (plan.selectedSlots != definition.slots) incompatible()
+    requireSupportedStrategies(plan, definition)
+    val selectionMatches =
+      try {
+        strategies.matchesRecordedSelection(plan, definition)
+      } catch (_: InvalidPhaseStrategyCompositionError) {
+        incompatible()
+      }
+    if (!selectionMatches) incompatible()
+    val traversal =
+      try {
+        definition.traversal(plan.selectedStepIds, plan.selectedEntryStepIds)
+      } catch (_: IllegalArgumentException) {
+        incompatible()
+      }
+    if (plan.traversal != traversal) incompatible()
+    requireSupportedPolicies(plan.effectivePolicies)
+    return plan
+  }
+
+  private fun decodePlan(encoded: ByteArray): ResolvedPhaseExecutionPlan =
+    try { codec.decode(encoded) }
+    catch (error: InvalidFeatureTaskRuntimeExecutionPlanSchemaError) {
+      throw CorruptFeatureTaskRuntimeExecutionPlanError().also { it.addSuppressed(error) }
+    }
+
+  private fun requireSupportedStrategies(plan: ResolvedPhaseExecutionPlan, definition: SkeletonDefinition) {
     plan.selectedStrategies.forEach { identity ->
       if (!strategies.registry.contains(identity.slot, identity.strategyId)) {
         throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
@@ -96,33 +120,20 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
         }
       }
     }
-    val selectionMatches = try {
-      strategies.matchesRecordedSelection(plan, definition)
-    } catch (_: InvalidPhaseStrategyCompositionError) {
-      incompatible()
-    }
-    if (!selectionMatches) incompatible()
-    val traversal = try {
-      definition.traversal(plan.selectedStepIds, plan.selectedEntryStepIds)
-    } catch (_: IllegalArgumentException) {
-      incompatible()
-    }
-    if (plan.traversal != traversal) incompatible()
-    requireSupportedPolicies(plan.effectivePolicies)
-    return plan
   }
 
   private fun requireSupportedPolicies(policies: List<ResolvedExecutionPolicy>) {
-    val supported = setOf(
-      "gate-commands",
-      "receipt-interpretation",
-      "retry-budgets",
-      "resume-budgets",
-      "acceptance-audit",
-      "review-invalidation",
-      "checkpoint-ownership",
-      "finalization",
-    )
+    val supported =
+      setOf(
+        "gate-commands",
+        "receipt-interpretation",
+        "retry-budgets",
+        "resume-budgets",
+        "acceptance-audit",
+        "review-invalidation",
+        "checkpoint-ownership",
+        "finalization",
+      )
     if (policies.map { it.id }.toSet() != supported || policies.any { it.semanticRevision != 1 }) {
       throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
     }

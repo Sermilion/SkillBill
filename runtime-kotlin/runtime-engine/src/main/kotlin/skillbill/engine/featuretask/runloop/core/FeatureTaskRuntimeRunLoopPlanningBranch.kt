@@ -6,7 +6,7 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolv
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPreLaunch
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopProgressObservations
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.runloop.state.unresolvedReviewFindings
 import skillbill.engine.featuretask.runner.phaseDeclaration
@@ -45,21 +45,20 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       )
     val run = capExhaustionPhaseRun(context, phaseId)
     FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersist(
-      request,
-      context.runState,
-      recorder,
-      goalContinuationRecorder,
-      BlockAndPersistArgs(
+    context.runState,
+    recorder,
+    goalContinuationRecorder,
+    BlockAndPersistArgs(
         run = run,
-        attemptCount = state.nextIteration(phaseId),
+        attemptCount = state.phase(phaseId).nextIteration,
         reason = reason,
         observability = observability,
         loopId = transition.loopId,
         edgeIteration = transition.edgeIteration,
         failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
-        payload = BlockAndPersistPayload(outputArtifact = state.outputFor(phaseId)?.payload),
+        payload = BlockAndPersistPayload(outputArtifact = state.phase(phaseId).output?.payload),
       ),
-    )
+  )
     FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(request, state, session, phaseId, reason)
   }
 
@@ -226,9 +225,9 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
   }
 
   internal fun effectiveEdgeIterationCount(
-    state: FeatureTaskRuntimeRunLoopProgressObservations,
+    state: FeatureTaskRuntimeProgressSnapshotAccess,
     edge: FeatureTaskRuntimeBackwardEdge,
-  ): Int = state.edgeIterationCount(edge.loopId)
+  ): Int = state.loop(edge.loopId).iteration
 
   internal fun capExhaustionReason(args: CapExhaustionReasonArgs): String {
     val request = args.request

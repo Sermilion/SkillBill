@@ -179,21 +179,18 @@ data class FeatureTaskRuntimeValidationGateProgress(
       } catch (error: IllegalArgumentException) {
         throw InvalidWorkflowStateSchemaError(
           "FeatureTaskRuntimeValidationGateProgress is incoherent: ${error.message.orEmpty()}",
+          error,
         )
       }
 
     private fun decodeGateRuns(raw: Any?): List<FeatureTaskRuntimeValidationGateRunRecord> {
       val runsRaw =
-        raw as? List<*>
-          ?: throw InvalidWorkflowStateSchemaError(
-            "FeatureTaskRuntimeValidationGateProgress is missing gate_runs.",
-          )
+        raw as? List<*> ?: invalidGateRuns("FeatureTaskRuntimeValidationGateProgress is missing gate_runs.")
       return runsRaw.mapIndexed { index, entry ->
         val map =
-          entry as? Map<*, *>
-            ?: throw InvalidWorkflowStateSchemaError(
-              "FeatureTaskRuntimeValidationGateProgress.gate_runs[$index] must be a mapping.",
-            )
+          entry as? Map<*, *> ?: invalidGateRuns(
+            "FeatureTaskRuntimeValidationGateProgress.gate_runs[$index] must be a mapping.",
+          )
         try {
           FeatureTaskRuntimeValidationGateRunRecord(
             durationMs = map.gateProgressLong(ValidationEvidencePayloadKeys.DURATION_MS),
@@ -220,6 +217,7 @@ data class FeatureTaskRuntimeValidationGateProgress(
         } catch (error: IllegalArgumentException) {
           throw InvalidWorkflowStateSchemaError(
             "FeatureTaskRuntimeValidationGateProgress.gate_runs[$index] is incoherent: ${error.message.orEmpty()}",
+            error,
           )
         }
       }
@@ -308,3 +306,5 @@ internal fun Map<*, *>.gateProgressOptionalString(key: String): String? {
   if (!containsKey(key) || this[key] == null) return null
   return gateProgressString(key)
 }
+
+private fun invalidGateRuns(reason: String): Nothing = throw InvalidWorkflowStateSchemaError(reason)

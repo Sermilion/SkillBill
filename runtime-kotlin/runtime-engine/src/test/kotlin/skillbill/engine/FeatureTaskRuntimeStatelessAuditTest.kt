@@ -59,7 +59,8 @@ class FeatureTaskRuntimeStatelessAuditTest {
       WORKFLOW_ID,
       harness.repository.taskRuntimeArtifacts(WORKFLOW_ID) + (retiredProgressKey to "unreadable old progress"),
     )
-    assertIs<FeatureTaskRuntimeRunReport.Completed>(harness.runner.run(harness.request()))
+    val terminalRetry = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
+    assertTrue(terminalRetry.blockedReason.contains("Terminal workflows"))
     assertEquals(auditLaunchCount, harness.launchedPromptPhaseOrder().count { it == "audit" })
     assertEquals(auditRecord, harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit"))
     assertEquals("unreadable old progress", harness.repository.taskRuntimeArtifacts(WORKFLOW_ID)[retiredProgressKey])
@@ -265,16 +266,16 @@ class FeatureTaskRuntimeStatelessAuditTest {
           repoRoot = root,
           git = git,
           launcher =
-          RuntimeRecordingLauncher { request ->
-            val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-            facts(
-              when {
-                phaseId == "audit" -> auditSatisfiedOutput()
-                phaseId == "commit_push" -> validJsonOutput("commit_push")
-                else -> validJsonOutput(phaseId)
-              },
-            )
-          },
+            RuntimeRecordingLauncher { request ->
+              val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+              facts(
+                when {
+                  phaseId == "audit" -> auditSatisfiedOutput()
+                  phaseId == "commit_push" -> validJsonOutput("commit_push")
+                  else -> validJsonOutput(phaseId)
+                },
+              )
+            },
         )
       harness.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
       recordReviewCap(harness)
@@ -294,14 +295,14 @@ class FeatureTaskRuntimeStatelessAuditTest {
         GoalContinuationStateRecordRequest(
           workflowId = WORKFLOW_ID,
           continuation =
-          FeatureTaskRuntimeGoalContinuationArtifact(
-            issueKey = RUNNER_TEST_ISSUE_KEY,
-            subtaskId = 5,
-            suppressPr = true,
-            goalBranch = "feat/existing-runtime-branch",
-            parentWorkflowId = "wfl-parent",
-            codeReviewMode = CodeReviewExecutionMode.DEFAULT,
-          ),
+            FeatureTaskRuntimeGoalContinuationArtifact(
+              issueKey = RUNNER_TEST_ISSUE_KEY,
+              subtaskId = 5,
+              suppressPr = true,
+              goalBranch = "feat/existing-runtime-branch",
+              parentWorkflowId = "wfl-parent",
+              codeReviewMode = CodeReviewExecutionMode.DEFAULT,
+            ),
           reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
         ),
       ),
@@ -313,14 +314,14 @@ class FeatureTaskRuntimeStatelessAuditTest {
             verdict = FeatureTaskRuntimeVerdict.CHANGES_REQUESTED,
             unresolvedFindingCount = 1,
             findings =
-            listOf(
-              GoalSubtaskReviewCompactFinding(
-                severity = "blocker",
-                label = "Missing behavior",
-                text = "The required behavior is still absent.",
-                findingId = "F-001",
+              listOf(
+                GoalSubtaskReviewCompactFinding(
+                  severity = "blocker",
+                  label = "Missing behavior",
+                  text = "The required behavior is still absent.",
+                  findingId = "F-001",
+                ),
               ),
-            ),
           ).copy(disposition = GoalSubtaskReviewDisposition.REVIEW_CAP_REACHED)
         },
       )

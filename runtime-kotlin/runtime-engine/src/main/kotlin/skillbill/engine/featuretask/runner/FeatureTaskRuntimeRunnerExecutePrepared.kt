@@ -61,7 +61,7 @@ internal fun FeatureTaskRuntimeRunner.driveExecutePreparedRunLoop(
         recorder
           .loadOperatorBlockRetry(runRequest.workflowId)
           ?.takeIf { retry ->
-            state.recordFor(retry.phaseId)?.status.let { status ->
+            state.phase(retry.phaseId).record?.status.let { status ->
               status == null || status.workflowStepStatus() == WorkflowStepStatus.PENDING
             }
           },

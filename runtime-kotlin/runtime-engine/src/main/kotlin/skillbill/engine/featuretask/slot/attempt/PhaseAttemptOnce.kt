@@ -1,9 +1,10 @@
 package skillbill.engine.featuretask.slot.attempt
 
+import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation.prepareLaunchForCapture
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
-import skillbill.engine.featuretask.runloop.attempt.launchHookContext
+import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.launchHookContext
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistInPhaseArgs
@@ -56,7 +57,7 @@ object PhaseAttemptOnce {
             iteration,
             STATUS_RUNNING,
             false,
-            context.progress.outputFor(run.phaseId)?.payload,
+            context.progress.phase(run.phaseId).output?.payload,
           ),
         launched = FeatureTaskRuntimeRunLoopLaunch.launchedModelDirective(run),
       ),
@@ -90,14 +91,12 @@ object PhaseAttemptOnce {
     val reason = rejection.message.orEmpty()
     val scope = PhaseAttemptLaunchCollaborationScope(host)
     val coupling = scope.settlementCoupling()
-    return try {
+    return runCatching {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-        host.request,
-        coupling.progress,
-        coupling.transitions,
-        scope.recorder,
-        scope.observability,
-        PhaseBlockRequest(
+    coupling.progress,
+    coupling.transitions,
+    scope.recorder,
+    PhaseBlockRequest(
           run = run,
           attemptCount = rejection.attempt,
           reason = reason,
@@ -105,12 +104,13 @@ object PhaseAttemptOnce {
           failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
           payload = BlockAndPersistPayload(childNeverLaunched = true),
         ),
-      )
-    } catch (secondary: CancellationException) {
+  )
+    }.getOrElse { secondary ->
       rejection.addSuppressed(secondary)
-      throw secondary
-    } catch (secondary: Throwable) {
-      rejection.addSuppressed(secondary)
+      when (secondary) {
+        is CancellationException -> throw secondary
+        is InterruptedException -> throw secondary
+      }
       RuntimeDiagnosticsBestEffortWarning.record(
         scope.diagnostics,
         "Required phase write rejection for '${run.phaseId}' could not be persisted; " +
@@ -141,8 +141,7 @@ object PhaseAttemptOnce {
         override fun prepareLaunch(input: PhaseStepInput): PhaseStepInput? =
           when (
             val preparation =
-              PhaseLaunchPreparation.prepareLaunchForCapture(
-                context,
+              context.prepareLaunchForCapture(
                 run,
                 iteration,
                 priorCorrection,
@@ -155,7 +154,11 @@ object PhaseAttemptOnce {
                 context
                   .stepHooks(
                     run,
-                  ).beforeAgentLaunch(run, context.launchHookContext(run), call.acceptedExecution)
+                  ).beforeAgentLaunch(
+                    run,
+                    context.launchHookContext(run, context.stepHooks(run)),
+                    call.acceptedExecution,
+                  )
               if (launchBlock != null) {
                 rejected = LaunchResult.infraFailure(launchBlock, childNeverLaunched = true)
                 null

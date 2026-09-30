@@ -130,20 +130,24 @@ class GoalPlanningRequiredPersistenceTest {
     listOf("preplan", "plan").forEach { phase ->
       RequiredPhaseWriteKind.entries.forEach { kind ->
         val entry = RejectingPlanningRunLoopEntry(phase, kind)
-        val harness = sweepHarness(SweepHarnessConfig(runLoopEntry = entry)) { launched, _, _ ->
-          validPhaseOutcome(launched)
-        }
+        val harness =
+          sweepHarness(SweepHarnessConfig(runLoopEntry = entry)) { launched, _, _ ->
+            validPhaseOutcome(launched)
+          }
 
-        val result = assertIs<GoalPlanningSweepOutcome.Stopped>(
-          harness.sweep.prepare(harness.stateFor(manifest(subtaskCount = 2)), harness.request()),
-        )
+        val result =
+          assertIs<GoalPlanningSweepOutcome.Stopped>(
+            harness.sweep.prepare(harness.stateFor(manifest(subtaskCount = 2)), harness.request()),
+          )
 
         assertEquals(phase, result.lastResumableStep)
         assertTrue(result.blockedReason.contains("Required ${kind.wireValue} write rejected"))
         assertEquals(0, harness.launcher.phases.count { it == phase })
         assertEquals(0, harness.preparedCount())
-        assertTrue(entry.terminalReasons.any { it?.contains("Required ${kind.wireValue} write rejected") == true },
-          "$phase $kind terminal reasons: ${entry.terminalReasons}")
+        assertTrue(
+          entry.terminalReasons.any { it?.contains("Required ${kind.wireValue} write rejected") == true },
+          "$phase $kind terminal reasons: ${entry.terminalReasons}",
+        )
       }
     }
   }

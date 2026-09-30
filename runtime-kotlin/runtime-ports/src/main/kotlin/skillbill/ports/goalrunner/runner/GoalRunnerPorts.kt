@@ -27,11 +27,20 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import java.nio.file.Path
 
 interface GoalRunnerManifestQueries {
-  fun loadByIssueKey(issueKey: String, repoRoot: Path? = null): GoalRunnerManifestState?
+  fun loadByIssueKey(
+    issueKey: String,
+    repoRoot: Path? = null,
+  ): GoalRunnerManifestState?
 
-  fun readByIssueKey(issueKey: String, repoRoot: Path? = null): GoalRunnerManifestState?
+  fun readByIssueKey(
+    issueKey: String,
+    repoRoot: Path? = null,
+  ): GoalRunnerManifestState?
 
-  fun readByIssueKeyIfPresent(issueKey: String, repoRoot: Path? = null): GoalRunnerManifestState?
+  fun readByIssueKeyIfPresent(
+    issueKey: String,
+    repoRoot: Path? = null,
+  ): GoalRunnerManifestState?
 
   fun loadDurableByIssueKey(issueKey: String): GoalRunnerManifestState?
 
@@ -58,7 +67,10 @@ interface GoalRunnerManifestExecutionCommands {
     overwriteExistingReason: Boolean = false,
   ): GoalRunnerControlState?
 
-  fun requestPauseByIssueKey(issueKey: String, repoRoot: Path? = null): GoalRunnerPausePersistenceResult?
+  fun requestPauseByIssueKey(
+    issueKey: String,
+    repoRoot: Path? = null,
+  ): GoalRunnerPausePersistenceResult?
 
   fun resume(parentWorkflowId: String): GoalRunnerManifestState?
 
@@ -77,9 +89,16 @@ interface GoalRunnerManifestExecutionCommands {
     childAdmission: GoalRunnerChildExecutionPlanAdmission,
   ): Boolean
 
-  fun heartbeatExecutionLease(parentWorkflowId: String, lease: GoalRunnerExecutionLease): Boolean
+  fun heartbeatExecutionLease(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+  ): Boolean
 
-  fun releaseExecutionLease(parentWorkflowId: String, ownerToken: String, generation: Long): Boolean
+  fun releaseExecutionLease(
+    parentWorkflowId: String,
+    ownerToken: String,
+    generation: Long,
+  ): Boolean
 
   fun releaseExecutionLeaseIfExpired(
     parentWorkflowId: String,
@@ -90,21 +109,39 @@ interface GoalRunnerManifestExecutionCommands {
 }
 
 interface GoalRunnerManifestControlWrites {
-  fun bindRepositoryIdentity(parentWorkflowId: String, repositoryIdentity: String): GoalRunnerControlState
+  fun bindRepositoryIdentity(
+    parentWorkflowId: String,
+    repositoryIdentity: String,
+  ): GoalRunnerControlState
 
-  fun persistStopAfterSubtask(parentWorkflowId: String, subtaskId: Int): GoalRunnerControlState
+  fun persistStopAfterSubtask(
+    parentWorkflowId: String,
+    subtaskId: Int,
+  ): GoalRunnerControlState
 
-  fun authorizeSubtaskLaunch(state: GoalRunnerManifestState, subtaskId: Int): GoalRunnerLaunchAuthorization
+  fun authorizeSubtaskLaunch(
+    state: GoalRunnerManifestState,
+    subtaskId: Int,
+  ): GoalRunnerLaunchAuthorization
 
   fun authorizePlanningLaunch(parentWorkflowId: String): AgentRunSpawnAuthorization?
 
-  fun persistControlState(parentWorkflowId: String, state: GoalRunnerControlState): GoalRunnerControlState
+  fun persistControlState(
+    parentWorkflowId: String,
+    state: GoalRunnerControlState,
+  ): GoalRunnerControlState
 
   fun clearRunnerInterruptedPause(parentWorkflowId: String): GoalRunnerControlState
 
-  fun persistReviewMode(parentWorkflowId: String, mode: CodeReviewExecutionMode): CodeReviewExecutionMode
+  fun persistReviewMode(
+    parentWorkflowId: String,
+    mode: CodeReviewExecutionMode,
+  ): CodeReviewExecutionMode
 
-  fun persistReviewPolicy(parentWorkflowId: String, policy: GoalRunnerReviewPolicy): GoalRunnerReviewPolicy
+  fun persistReviewPolicy(
+    parentWorkflowId: String,
+    policy: GoalRunnerReviewPolicy,
+  ): GoalRunnerReviewPolicy
 
   fun persistOutOfBandAcceptance(
     parentWorkflowId: String,
@@ -129,7 +166,10 @@ interface GoalRunnerManifestStateWrites {
     subtaskId: Int,
   ): GoalRunnerCompletionPersistenceResult
 
-  fun saveHardReset(state: GoalRunnerManifestState, preservePlanning: Boolean = false): GoalRunnerManifestState
+  fun saveHardReset(
+    state: GoalRunnerManifestState,
+    preservePlanning: Boolean = false,
+  ): GoalRunnerManifestState
 
   fun deleteIncompatibleChildWorkflow(
     state: GoalRunnerManifestState,
@@ -163,7 +203,11 @@ interface GoalRunnerManifestStore :
   GoalRunnerManifestPurgeCommands
 
 interface GoalRunnerTerminalOutcomeStore {
-  fun terminalOutcome(workflowId: String, issueKey: String, subtaskId: Int): GoalRunnerStoredOutcome?
+  fun terminalOutcome(
+    workflowId: String,
+    issueKey: String,
+    subtaskId: Int,
+  ): GoalRunnerStoredOutcome?
 
   fun recoverAndPersistTerminalOutcome(
     workflowId: String,
@@ -185,7 +229,10 @@ interface GoalRunnerReviewOutcomeStore {
 
   fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult>
 
-  fun acknowledgeGoalReviewPass(workflowId: String, passNumber: Int): Boolean
+  fun acknowledgeGoalReviewPass(
+    workflowId: String,
+    passNumber: Int,
+  ): Boolean
 }
 
 interface GoalRunnerWorkflowOutcomeStore :

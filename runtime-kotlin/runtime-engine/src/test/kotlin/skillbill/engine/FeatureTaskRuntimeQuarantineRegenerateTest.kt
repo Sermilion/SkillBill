@@ -1,5 +1,7 @@
 package skillbill.engine
 
+import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import kotlin.test.assertFailsWith
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -46,7 +48,7 @@ class FeatureTaskRuntimeQuarantineRegenerateTest {
   }
 
   @Test
-  fun `a rejected record whose producer the pipeline dropped blocks durably with a value-required reason`() {
+  fun `a traversal dropping a recorded producer is refused before recovery`() {
     val surviving =
       listOf(
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
@@ -61,12 +63,12 @@ class FeatureTaskRuntimeQuarantineRegenerateTest {
       FeatureTaskRuntimeTransitionDeclaration(
         forwardPhaseIds = surviving,
         backwardEdges =
-        FeatureTaskRuntimePhaseWorkflowDefinition.transitions.backwardEdges
-          .filter { it.fromPhaseId in surviving && it.destinationPhaseId in surviving },
+          FeatureTaskRuntimePhaseWorkflowDefinition.transitions.backwardEdges
+            .filter { it.fromPhaseId in surviving && it.destinationPhaseId in surviving },
         loopOnlyPhaseIds = emptySet(),
         entryGates =
-        FeatureTaskRuntimePhaseWorkflowDefinition.transitions.entryGates
-          .filter { it.phaseId in surviving && it.requiredPhaseId in surviving },
+          FeatureTaskRuntimePhaseWorkflowDefinition.transitions.entryGates
+            .filter { it.phaseId in surviving && it.requiredPhaseId in surviving },
       )
     val harness = runnerHarness(RuntimeHarnessConfig(agentAssignment = phasePerAgentAssignment()))
     harness.seedPhase("preplan", "completed", 1, phaseAgent("preplan"), validJsonOutput("preplan"))
@@ -74,11 +76,11 @@ class FeatureTaskRuntimeQuarantineRegenerateTest {
     harness.seedPhase("implement", "completed", 1, phaseAgent("implement"), legacyImplement)
     harness.seedPhase("simplify", "completed", 1, phaseAgent("simplify"), SIMPLIFY_OUTPUT)
 
-    val report = harness.runner.run(harness.request(truncated))
-
-    val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(report)
-    assertEquals("audit", blocked.lastIncompletePhase)
-    assertContains(blocked.blockedReason, "produced_outputs.value is required")
+    val records = harness.recorder.loadPhaseRecords(WORKFLOW_ID)
+    assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+      harness.runner.run(harness.request(truncated))
+    }
+    assertEquals(records, harness.recorder.loadPhaseRecords(WORKFLOW_ID))
     assertTrue(
       harness.launchedPromptPhaseOrder().none { it == "implement" },
       "a dropped producer is never re-entered",

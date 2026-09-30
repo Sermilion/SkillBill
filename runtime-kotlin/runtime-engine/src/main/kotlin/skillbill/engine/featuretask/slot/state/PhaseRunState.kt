@@ -4,11 +4,12 @@ import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSessionObservations
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunProgressObservations
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
@@ -28,10 +29,10 @@ internal interface PhaseRunState :
   val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator
 
   /** The in-memory progress of the run: step records, iterations, completions, and the review generation. */
-  val progress: FeatureTaskRuntimeRunProgressObservations
+  val progress: FeatureTaskRuntimeProgressSnapshotAccess
 
   /** The run's session: the resolved branch, the pending re-entry, and the terminal report. */
-  val session: FeatureTaskRuntimeRunLoopSessionObservations
+  val session: FeatureTaskRuntimeRunSessionObservations
 
   /** The step lifecycle events and telemetry the run emits. */
   val telemetry: FeatureTaskRuntimeRunObservability
@@ -71,6 +72,8 @@ internal interface PhaseRunState :
 
   /** The strategy selected for [stepId] in this run. */
   fun strategyFor(stepId: String): PhaseStrategy
+
+  fun runnerFor(stepId: String): PhaseRunner
 
   /** The selected strategy that declares [stepId] among its steps, or null when no selected strategy does. */
   fun selectedOwnerOf(stepId: String): PhaseStrategy?

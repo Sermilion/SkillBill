@@ -69,7 +69,15 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
             attemptCount = 1,
             startedAt = "2026-09-19T00:00:00Z",
             resolvedAgentId = "claude",
-            outputArtifact = payload.replace("\"status\": \"completed\"", "\"status\": \"$status\""),
+            outputArtifact =
+              payload.replace(
+                "\"status\": \"completed\"",
+                if (status == "failed") {
+                  "\"status\": \"failed\", \"failure_disposition\": \"retryable\""
+                } else {
+                  "\"status\": \"completed\""
+                },
+              ),
           )
         val history = validation.copy(phaseId = "write_history", outputArtifact = validJsonOutput("write_history"))
         val state =
@@ -80,10 +88,10 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
             resumeRulesFn = RESUME_RULES,
           )
         val valid = status == "completed"
-        assertEquals(valid, "validate" in state.completedPhaseIds())
-        assertEquals(valid, "write_history" in state.completedPhaseIds())
-        assertEquals(!valid, "validate" in state.phasesRequiringDurableGateInvalidation())
-        assertEquals(!valid, "write_history" in state.phasesRequiringDurableGateInvalidation())
+        assertEquals(valid, "validate" in state.completedPhaseIds)
+        assertEquals(valid, "write_history" in state.completedPhaseIds)
+        assertEquals(!valid, "validate" in state.phasesRequiringDurableGateInvalidation)
+        assertEquals(!valid, "write_history" in state.phasesRequiringDurableGateInvalidation)
       }
   }
 
@@ -108,7 +116,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     outputs.clear()
 
     assertEquals(listOf(output), state.outputs())
-    assertEquals(listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT), state.completedPhaseIds())
+    assertEquals(listOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT), state.completedPhaseIds)
   }
 
   @Test
@@ -222,12 +230,12 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         resumeRulesFn = RESUME_RULES,
       )
 
-    assertEquals(live.completedPhaseIds(), resumed.completedPhaseIds())
+    assertEquals(live.completedPhaseIds, resumed.completedPhaseIds)
     assertEquals(
-      live.edgeIterationCount(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID),
-      resumed.edgeIterationCount(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID),
+      live.loop(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID).iteration,
+      resumed.loop(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID).iteration,
     )
-    assertEquals(live.outputFor(output.phaseId)?.payload, resumed.outputFor(output.phaseId)?.payload)
+    assertEquals(live.phase(output.phaseId).output?.payload, resumed.phase(output.phaseId).output?.payload)
   }
 
   @Test
@@ -286,12 +294,12 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         resumeRulesFn = RESUME_RULES,
       )
 
-    assertEquals(live.completedPhaseIds(), resumed.completedPhaseIds())
+    assertEquals(live.completedPhaseIds, resumed.completedPhaseIds)
     assertEquals(
-      live.edgeIterationCount(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID),
-      resumed.edgeIterationCount(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID),
+      live.loop(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID).iteration,
+      resumed.loop(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID).iteration,
     )
-    assertEquals(live.outputFor(output.phaseId)?.payload, resumed.outputFor(output.phaseId)?.payload)
+    assertEquals(live.phase(output.phaseId).output?.payload, resumed.phase(output.phaseId).output?.payload)
   }
 
   private fun sqliteResumeDatabase(tempDir: Path): SQLiteDatabaseSessionFactory =
@@ -424,9 +432,9 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         outputValidator = AlwaysValidValidator,
         resumeRulesFn = RESUME_RULES,
       )
-    assertNull(state.persistedBlockedReason("audit"))
-    assertEquals(WorkflowStepStatus.PENDING, state.recordFor("audit")?.status)
-    assertFalse(state.isComplete("audit"))
+    assertNull(state.phase("audit").blockedReason)
+    assertEquals(WorkflowStepStatus.PENDING, state.phase("audit").record?.status)
+    assertFalse(state.phase("audit").completed)
   }
 
   @Test

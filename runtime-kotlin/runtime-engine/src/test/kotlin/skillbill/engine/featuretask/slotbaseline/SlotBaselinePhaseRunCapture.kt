@@ -54,7 +54,10 @@ internal object SlotBaselinePhaseRunCapture {
       captureAgentPhase(SkeletonDefinition.PR.id, intake = null).encodedFiles(SlotBaselinePaths.PHASE_PR)
   }
 
-  private fun captureAgentPhase(definitionId: String, intake: String?): AgentPhaseRunCapture =
+  private fun captureAgentPhase(
+    definitionId: String,
+    intake: String?,
+  ): AgentPhaseRunCapture =
     SlotBaselinePhaseRunHarness.use { harness ->
       val launcher =
         RuntimeRecordingLauncher { request ->
@@ -66,10 +69,10 @@ internal object SlotBaselinePhaseRunCapture {
       AgentPhaseRunCapture(
         capture = PhaseRunCapture(result.printedFields(), harness.outboxRows()),
         prompts =
-        launcher.requests
-          .map { request -> requireNotNull(request.skillRunRequest.promptOverride) }
-          .groupBy(::phaseIdFromPrompt)
-          .mapValues { (_, prompts) -> prompts.joinToString(PROMPT_ATTEMPT_SEPARATOR) },
+          launcher.requests
+            .map { request -> requireNotNull(request.skillRunRequest.promptOverride) }
+            .groupBy(::phaseIdFromPrompt)
+            .mapValues { (_, prompts) -> prompts.joinToString(PROMPT_ATTEMPT_SEPARATOR) },
         specBundle = (result as? PhaseRunResult.Completed)?.specBundle?.let(harness::specBundleFiles),
       )
     }
@@ -79,16 +82,17 @@ internal object SlotBaselinePhaseRunCapture {
     val prompts: Map<String, String>,
     val specBundle: Map<String, String>?,
   ) {
-    fun encodedFiles(resourcePrefix: String): Map<String, String> = buildMap {
-      put("$resourcePrefix/${SlotBaselinePaths.PHASE_RUN_OUTPUT}", SlotBaselineJson.encode(capture.output))
-      put("$resourcePrefix/${SlotBaselinePaths.PHASE_RUN_TELEMETRY}", SlotBaselineJson.encode(capture.telemetry))
-      specBundle?.let { files ->
-        put("$resourcePrefix/${SlotBaselinePaths.PHASE_PLAN_SPEC_BUNDLE}", SlotBaselineJson.encode(files))
+    fun encodedFiles(resourcePrefix: String): Map<String, String> =
+      buildMap {
+        put("$resourcePrefix/${SlotBaselinePaths.PHASE_RUN_OUTPUT}", SlotBaselineJson.encode(capture.output))
+        put("$resourcePrefix/${SlotBaselinePaths.PHASE_RUN_TELEMETRY}", SlotBaselineJson.encode(capture.telemetry))
+        specBundle?.let { files ->
+          put("$resourcePrefix/${SlotBaselinePaths.PHASE_PLAN_SPEC_BUNDLE}", SlotBaselineJson.encode(files))
+        }
+        prompts.forEach { (stepId, prompt) ->
+          put("$resourcePrefix/${SlotBaselinePaths.PROMPTS_DIR}/$stepId.txt", SlotBaselineJson.encode(prompt))
+        }
       }
-      prompts.forEach { (stepId, prompt) ->
-        put("$resourcePrefix/${SlotBaselinePaths.PROMPTS_DIR}/$stepId.txt", SlotBaselineJson.encode(prompt))
-      }
-    }
   }
 
   private const val PHASE_PLAN = "plan"
@@ -101,10 +105,11 @@ internal object SlotBaselinePhaseRunCapture {
       PhaseRunCapture(result.printedFields(), harness.outboxRows())
     }
 
-  private fun captureValidation(): PhaseRunCapture = SlotBaselinePhaseRunHarness.use { harness ->
-    val result = harness.validationEntry().run(harness.request(SkeletonDefinition.VALIDATION.id, mode = null))
-    PhaseRunCapture(result.printedFields(), harness.outboxRows())
-  }
+  private fun captureValidation(): PhaseRunCapture =
+    SlotBaselinePhaseRunHarness.use { harness ->
+      val result = harness.validationEntry().run(harness.request(SkeletonDefinition.VALIDATION.id, mode = null))
+      PhaseRunCapture(result.printedFields(), harness.outboxRows())
+    }
 
   private data class PhaseRunCapture(
     val output: Map<String, Any?>,
@@ -112,37 +117,40 @@ internal object SlotBaselinePhaseRunCapture {
   )
 }
 
-internal fun PhaseRunResult.printedFields(): Map<String, Any?> = mapOf(
-  "status" to if (this is PhaseRunResult.Completed) "completed" else "blocked",
-  "completed_step_ids" to completedStepIds,
-  "review_result" to reviewResult?.printedFields(),
-  "value" to (this as? PhaseRunResult.Completed)?.value?.let(SlotBaselineJson::parseEmbedded),
-  "blocked_step_id" to (this as? PhaseRunResult.Blocked)?.stepId,
-  "blocked_reason" to (this as? PhaseRunResult.Blocked)?.reason,
-  "invocation_id" to invocationId,
-) + listOfNotNull((this as? PhaseRunResult.Completed)?.specBundle?.let { bundle -> "spec_bundle" to bundle.fields() })
+internal fun PhaseRunResult.printedFields(): Map<String, Any?> =
+  mapOf(
+    "status" to if (this is PhaseRunResult.Completed) "completed" else "blocked",
+    "completed_step_ids" to completedStepIds,
+    "review_result" to reviewResult?.printedFields(),
+    "value" to (this as? PhaseRunResult.Completed)?.value?.let(SlotBaselineJson::parseEmbedded),
+    "blocked_step_id" to (this as? PhaseRunResult.Blocked)?.stepId,
+    "blocked_reason" to (this as? PhaseRunResult.Blocked)?.reason,
+    "invocation_id" to invocationId,
+  ) + listOfNotNull((this as? PhaseRunResult.Completed)?.specBundle?.let { bundle -> "spec_bundle" to bundle.fields() })
 
-private fun PhaseRunSpecBundle.fields(): Map<String, Any?> = mapOf(
-  "parent_spec_path" to parentSpecPath,
-  "decomposition_manifest_path" to decompositionManifestPath,
-  "subtask_spec_paths" to subtaskSpecPaths,
-)
+private fun PhaseRunSpecBundle.fields(): Map<String, Any?> =
+  mapOf(
+    "parent_spec_path" to parentSpecPath,
+    "decomposition_manifest_path" to decompositionManifestPath,
+    "subtask_spec_paths" to subtaskSpecPaths,
+  )
 
-private fun ParallelCodeReviewResult.printedFields(): Map<String, Any?> = mapOf(
-  "output" to output,
-  "lane1" to
-    mapOf(
-      "agent_id" to lane1.agentId,
-      "success" to lane1.success,
-      "failure_reason" to lane1.failureReason,
-      "dropped_candidate_diagnostic" to lane1.droppedCandidateDiagnostic,
-    ),
-  "review_session_id" to reviewSessionId,
-  "applied_learnings" to appliedLearnings,
-  "coverage" to coverage?.render(),
-  "accounting_summary" to
-    accountingSummary?.toReviewAccountingBoundedJson()?.let(SlotBaselineJson::parseEmbedded),
-)
+private fun ParallelCodeReviewResult.printedFields(): Map<String, Any?> =
+  mapOf(
+    "output" to output,
+    "lane1" to
+      mapOf(
+        "agent_id" to lane1.agentId,
+        "success" to lane1.success,
+        "failure_reason" to lane1.failureReason,
+        "dropped_candidate_diagnostic" to lane1.droppedCandidateDiagnostic,
+      ),
+    "review_session_id" to reviewSessionId,
+    "applied_learnings" to appliedLearnings,
+    "coverage" to coverage?.render(),
+    "accounting_summary" to
+      accountingSummary?.toReviewAccountingBoundedJson()?.let(SlotBaselineJson::parseEmbedded),
+  )
 
 internal class SlotBaselinePhaseRunHarness private constructor(
   private val repoRoot: Path,
@@ -157,12 +165,16 @@ internal class SlotBaselinePhaseRunHarness private constructor(
       Files.writeString(path, LEAKY_SOURCE)
     }
 
-  fun request(definitionId: String, mode: CodeReviewExecutionMode?): PhaseRunRequest = PhaseRunRequest(
-    definitionId = definitionId,
-    repoRoot = repoRoot,
-    invokedAgentId = REVIEW_AGENT,
-    codeReviewMode = mode,
-  )
+  fun request(
+    definitionId: String,
+    mode: CodeReviewExecutionMode?,
+  ): PhaseRunRequest =
+    PhaseRunRequest(
+      definitionId = definitionId,
+      repoRoot = repoRoot,
+      invokedAgentId = REVIEW_AGENT,
+      codeReviewMode = mode,
+    )
 
   fun reviewEntry(mode: CodeReviewExecutionMode?): PhaseRunEntry {
     val delegated = mode == CodeReviewExecutionMode.DELEGATED
@@ -174,8 +186,8 @@ internal class SlotBaselinePhaseRunHarness private constructor(
         launcher = fixLauncher(),
         validator = realFeatureTaskRuntimePhaseOutputValidator.takeIf { delegated },
         agentAssignment =
-        FeatureTaskRuntimeAgentAssignment(perPhaseAgentIds = mapOf(PHASE_REVIEW to REVIEW_AGENT))
-          .takeIf { delegated },
+          FeatureTaskRuntimeAgentAssignment(perPhaseAgentIds = mapOf(PHASE_REVIEW to REVIEW_AGENT))
+            .takeIf { delegated },
         reviewRunner = scriptedReviewPhaseRunner { if (isFixed()) APPROVED_REVIEW else BLOCKER_REVIEW },
         delegatedReviewRunner = scriptedDelegatedReviewRunner(database, home, lanes).takeIf { delegated },
       ),
@@ -196,14 +208,15 @@ internal class SlotBaselinePhaseRunHarness private constructor(
     )
   }
 
-  fun agentEntry(launcher: RuntimeRecordingLauncher): PhaseRunEntry = entryFor(
-    RuntimeHarnessConfig(
-      seedDurableWorkflow = false,
-      branchSetup = BranchSetupTestConfig(gitOperations = git),
-      repoRoot = repoRoot,
-      launcher = launcher,
-    ),
-  )
+  fun agentEntry(launcher: RuntimeRecordingLauncher): PhaseRunEntry =
+    entryFor(
+      RuntimeHarnessConfig(
+        seedDurableWorkflow = false,
+        branchSetup = BranchSetupTestConfig(gitOperations = git),
+        repoRoot = repoRoot,
+        launcher = launcher,
+      ),
+    )
 
   fun specBundleFiles(bundle: PhaseRunSpecBundle): Map<String, String> =
     (listOf(bundle.parentSpecPath, bundle.decompositionManifestPath) + bundle.subtaskSpecPaths)
@@ -212,9 +225,10 @@ internal class SlotBaselinePhaseRunHarness private constructor(
   fun outboxRows(): List<Map<String, Any?>> = SlotBaselineSqlite.rows(database.resolveDbPath(), "telemetry_outbox")
 
   private fun entryFor(config: RuntimeHarnessConfig): PhaseRunEntry {
-    val runner = telemetryRunnerHarness(runtimeConfig = config.copy(seedDurableWorkflow = false), databaseFactory = {
-      database
-    }).runner
+    val runner =
+      telemetryRunnerHarness(runtimeConfig = config.copy(seedDurableWorkflow = false), databaseFactory = {
+        database
+      }).runner
     return phaseRunEntry(runner, database, SlotBaselineFullRunCapture.sqliteClock)
   }
 

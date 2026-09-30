@@ -9,7 +9,7 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommi
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistInPhaseArgs
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSessionObservations
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.PhaseStateRequestArgs
@@ -17,18 +17,18 @@ import skillbill.engine.featuretask.runloop.core.PhaseStateRequestAttachments
 import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopProgressObservations
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.runLoopCoupledProgress
 import skillbill.engine.featuretask.runloop.state.runLoopCoupledSession
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
+import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStrategy
-import skillbill.engine.featuretask.slot.attempt.phaseAttemptCollaborationScope
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseQualityGateReporting
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
@@ -56,10 +56,10 @@ internal class PhaseAttemptRunHost(
   private val acceptedLaunchState: PhaseLaunchState,
 ) : PhaseAttemptEnvironment,
   PhaseQualityGateReporting by backingRunState {
-  val progress: FeatureTaskRuntimeRunLoopProgressObservations
-    get() = backingRunState.runLoopCoupledProgress().progressSnapshot()
+  val progress: FeatureTaskRuntimeProgressSnapshotAccess
+    get() = backingRunState.runLoopCoupledProgress().progressSnapshot
 
-  val session: FeatureTaskRuntimeRunLoopSessionObservations
+  val session: FeatureTaskRuntimeRunSessionObservations
     get() = backingRunState.runLoopCoupledSession().sessionSnapshot()
 
   val records: PhaseRunRecords
@@ -86,7 +86,7 @@ internal class PhaseAttemptRunHost(
   val telemetry: FeatureTaskRuntimeRunObservability
     get() = backingRunState.telemetry
 
-  val coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner
+  val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner
     get() = backingRunState.coupledRunTransitions
 
   val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator
@@ -134,7 +134,18 @@ internal class PhaseAttemptRunHost(
     check(input.stepName == boundPhaseId && input.facts.issueKey == request.issueKey)
     val owner = requireNotNull(backingRunState.selectedOwnerOf(boundPhaseId))
     check(owner.acceptsAttemptStrategy(call.strategyId) && call.request === request)
-    return owner.runner.run(input, launchState)
+    return backingRunState.runnerFor(boundPhaseId).run(input, launchState)
+  }
+
+  internal fun runnerForAcceptedAttempt(
+    run: PhaseRun,
+    call: PhaseStepCall,
+  ): PhaseRunner {
+    call.requireAcceptedAttempt(run, call)
+    check(run.phaseId == boundPhaseId && run.request === request)
+    val owner = requireNotNull(backingRunState.selectedOwnerOf(boundPhaseId))
+    check(owner.acceptsAttemptStrategy(call.strategyId) && call.request === request)
+    return backingRunState.runnerFor(boundPhaseId)
   }
 
   internal fun launchStateForAcceptedStep(): PhaseLaunchState = acceptedLaunchState
@@ -251,7 +262,6 @@ internal class PhaseRuntimeFinalizationScope(
 
 internal fun PhaseRuntimeFinalizationContext.blockAndPersistInPhase(args: BlockAndPersistInPhaseArgs): PhaseOutcome =
   FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersistInPhase(
-    request,
     finalizationCoupledProgress(),
     coupledRunTransitions,
     recorder,
@@ -334,7 +344,7 @@ internal fun PhaseRuntimeFinalizationContext.persistFinalizationCompleted(
 }
 
 internal fun PhaseRuntimeFinalizationContext.finalizationCoupledProgress():
-  FeatureTaskRuntimeRunLoopProgressObservations =
+  FeatureTaskRuntimeProgressSnapshotAccess =
   progress
 
 internal fun PhaseRuntimeFinalizationContext.finalizationAttemptHost(): PhaseAttemptRunHost =

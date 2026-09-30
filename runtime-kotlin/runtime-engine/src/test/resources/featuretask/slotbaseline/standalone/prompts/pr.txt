@@ -165,7 +165,7 @@ value: Fixture implement prose for downstream audit.
 changed_paths:
 validation_summary: completed
 base_branch: main
-diff_reference: repository-checkpoint-831bf900
+diff_reference: slot-baseline-checkpoint
 ### from: commit_push
 commit_sha: __NORMALIZED_SHA40__
 branch: feat/SKILL-380-phase-slot-strategies
@@ -189,7 +189,7 @@ acceptance_criteria:
   - AC-2
 
 ## Repository checkpoint (layer 2, resolved)
-fingerprint: repository-checkpoint-831bf900
+fingerprint: slot-baseline-checkpoint
 base_ref: __NORMALIZED_SHA40__
 head_ref: __NORMALIZED_SHA40__
 scoped_owned_paths:

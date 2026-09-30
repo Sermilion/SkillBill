@@ -21,14 +21,19 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 
-internal fun PhaseAttemptLaunchRuntimeContext.launchHookContext(run: PhaseRun): PhaseAttemptLaunchHookContext {
+internal object FeatureTaskRuntimeRunLoopHookViews {
+internal fun PhaseAttemptLaunchRuntimeContext.launchHookContext(
+  run: PhaseRun,
+  hooks: PhaseStepHooks,
+): PhaseAttemptLaunchHookContext {
   check(request === run.request)
-  return when (run.phaseId) {
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH -> CommitLaunchView(this, run)
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> FindingLaunchView(this)
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR -> PullRequestLaunchView(this)
+  return when (hooks.contextKind) {
+    PhaseStepHookContextKind.COMMIT -> CommitLaunchView(this, run)
+    PhaseStepHookContextKind.FINDING_VERIFICATION -> FindingLaunchView(this)
+    PhaseStepHookContextKind.PULL_REQUEST -> PullRequestLaunchView(this)
     else -> LaunchView(this)
   }
 }
@@ -57,9 +62,9 @@ private class CommitLaunchView(
   private val acceptedRun: PhaseRun,
 ) : LaunchView(context),
   PhaseCommitLaunchHookContext {
-  override fun recoverCommitUpstream(run: PhaseRun) {
+  override fun recoverCommitUpstream(run: PhaseRun, upstreamReceipt: (String, Int) -> FeatureTaskRuntimePhaseOutput?) {
     check(run === acceptedRun)
-    RuntimeCommitUpstreamHeadRecovery.reconcileBeforeLaunch(run, context)
+    RuntimeCommitUpstreamHeadRecovery.reconcileBeforeLaunch(run, context, upstreamReceipt)
   }
 }
 
@@ -71,12 +76,15 @@ private class FindingLaunchView(
   override val specIntentProjectionResolver get() = context.phaseGates.specIntentProjectionResolver
 }
 
-internal fun PhaseOutputSettlementContext.stepOutputContext(run: PhaseRun): PhaseStepOutputContext {
+internal fun PhaseOutputSettlementContext.stepOutputContext(
+  run: PhaseRun,
+  hooks: PhaseStepHooks,
+): PhaseStepOutputContext {
   check(request === run.request)
-  return when (run.phaseId) {
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT ->
+  return when (hooks.contextKind) {
+    PhaseStepHookContextKind.AUDIT ->
       AuditOutputView(this as PhaseCheckpointRemediationContext, this, run)
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> FindingOutputView(this)
+    PhaseStepHookContextKind.FINDING_VERIFICATION -> FindingOutputView(this)
     else -> OutputView(this)
   }
 }
@@ -103,7 +111,7 @@ private class AuditOutputView(
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ) = RunLoopAuditSettlement.settleCompletedRound(
+  ) = FeatureTaskRuntimeRunLoopAuditSettlement.settleCompletedRound(
     remediation,
     capture.also { check(it.run === acceptedRun) },
     attested,
@@ -121,8 +129,9 @@ private class FindingOutputView(
 
 internal fun PhaseAttemptTraversalRuntimeContext.traversalHookContext(
   output: FeatureTaskRuntimePhaseOutput,
+  hooks: PhaseStepHooks,
 ): PhaseAttemptTraversalHookContext =
-  if (output.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN) {
+  if (hooks.contextKind == PhaseStepHookContextKind.PLANNING) {
     PlanningTraversalView(this, output)
   } else {
     TraversalView(this)
@@ -140,7 +149,7 @@ private class PlanningTraversalView(
 ) : TraversalView(context),
   PhasePlanningTraversalContext {
   override fun settlePlanningStop(output: FeatureTaskRuntimePhaseOutput): String? {
-    check(output === acceptedOutput && context.progress.isComplete(output.phaseId))
+    check(output === acceptedOutput && context.progress.phase(output.phaseId).completed)
     return PlanDecompositionStop.apply(context, output)
   }
 }
@@ -150,3 +159,5 @@ internal fun PhaseCheckpointRemediationContext.phaseLoopContext(): PhaseLoopCont
 
 private fun PhaseCheckpointRemediationContext.phaseOutputValidator() =
   (this as PhaseOutputSettlementContext).outputValidator
+
+}

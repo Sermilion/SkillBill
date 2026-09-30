@@ -53,9 +53,12 @@ when the strategy returns. Planning unit bindings require an authorized wave and
 progress, session and records.
 
 `PhaseStepCall` carries accepted metadata and its bound target. It has no runner callback or
-prepared-launch operation. The runtime attempt host selects the accepted owner's runner after
-required persistence. Strategies cannot recover the host, records, gate context or finalization
-context from a binding. Runtime gate cycles and commit cycles live under `runloop.qualitygate`
+prepared-launch operation. `PhaseStrategyRegistration` pairs each strategy with its runner in the
+registry. The accepted attempt host resolves that runner only after required persistence. Ordinary
+and gate strategies receive no raw runner. Goal planning resolves a runner for its accepted
+planning call after required start persistence; its phase-bound launch state rejects another step.
+Review strategies retain their review launch dependency inside the review slot. Strategies cannot
+recover the host, records, gate context or finalization context from a binding. Runtime gate cycles and commit cycles live under `runloop.qualitygate`
 and `runloop.finalization`; bindings invoke the selected operation rather than return its context.
 
 `PhaseAttemptEnvironment` contains request facts only. Strategy hooks receive detached
@@ -65,7 +68,7 @@ owned branch internally. Loop rules receive a readonly `PhaseLoopContext`; revie
 use `PhaseRepositoryObservations`, whose private adapter exposes no Git writes. PR measurement
 receives a single telemetry emitter instead of lifecycle terminal authority.
 
-`FeatureTaskRuntimeRunLoopTransitionOwner` owns coupled progress, session, accounting,
+`FeatureTaskRuntimeRunTransitionOwner` owns coupled progress, session, accounting,
 completion, re-entry, evidence and checkpoint state transitions. Each `FeatureTaskRuntimeRunState`
 stores one owner paired with one session; a second session is rejected. Durable completion and
 review tombstone writes precede corresponding in-memory changes. Required phase-start writes
@@ -80,12 +83,21 @@ not reconstruct mutation authority from observations.
 
 `StrategyCapabilityBoundaryArchitectureTest` uses Kotlin PSI to build a declaration graph across
 all engine source. It follows consumer roots through helpers, extensions, aliases, constructors,
-properties, factories and used parameter/return types. Attempt and state folders remain in the
-transitive catalog. Skeleton composition wiring is excluded as a consumer root. Unresolved
-governed edges fail. Raw state is forbidden to all consumers; review authority is forbidden to
-non-review consumers. A typed primitive-writer inventory also checks helpers outside the
-consumer graph. Synthetic allowed and violating cases prove these boundaries, and runtime
-binding tests prove accepted-step admission. The rule is registered in
+properties, factories and used parameter/return types. Same-name overload declarations are
+combined conservatively so each candidate edge remains reachable. Extension functions with an
+implicit run-state receiver are included in primitive-writer checks. Attempt and state folders
+remain in the transitive catalog. Skeleton composition wiring is excluded as a consumer root.
+Runtime runner implementations, registry, lookup and selection are also excluded as consumer roots,
+and remain traversable when a consumer reaches them. Package-qualified helper calls, wildcard
+imports and companion members contribute declaration edges. Wildcard imports retain all indexed
+candidates, and value receivers shadow imported names.
+Unresolved governed edges fail. Raw state and raw `PhaseRunner` authority are forbidden to
+ordinary and gate strategy consumers; review authority is forbidden to non-review consumers.
+Review consumers may reach the review launch runner through their review slot. Runtime registrations
+retain other runners outside strategy objects, and the attempt host resolves the selected runner
+through run state after admission. A typed primitive-writer inventory also checks helpers outside the consumer graph. Synthetic
+allowed and violating cases prove these boundaries, and runtime binding checks prove accepted-step
+admission. The rule is registered in
 `PrincipleEnforcementInventory.enforceableRules`.
 
 The operation-level inventory and retained runtime collaborator dispositions are in
@@ -163,10 +175,12 @@ inputs:
   audit/checkpoint and accepted-output persistence tail retains
   `settlementContext`.
 - Review preparation and the review step live in the `code_review` slot
-  (`slot.codereview`). They reach durable run state, git operations, the
-  output validator, and the clock through the active step binding and its
-  attempt scope, not through a fresh `PhaseRunState.step` lookup. Since
-  SKILL-380 subtask 7, no slot class takes the run-loop context.
+  (`slot.codereview`). Their binding admits each review mutation only while
+  the accepted step is active. `PhaseReviewExecutionContext` supplies repository
+  observations, the output validator, and the clock; it has no git writer or
+  attempt scope. Review launch and persistence pass through the accepted-step
+  binding and its owning recorder operations. Since SKILL-380 subtask 7, no
+  slot class takes the run-loop context.
 - PhaseAttempts exposes top-level block/pause seams with request/state/
   recorder/goal-recorder/observability arguments; its context overloads remain
   only for the generic attempt-loop adjacency.

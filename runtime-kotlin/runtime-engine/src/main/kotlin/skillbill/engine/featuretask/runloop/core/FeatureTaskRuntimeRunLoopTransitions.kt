@@ -4,13 +4,12 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpointRemediation
 import skillbill.engine.featuretask.runloop.observability.loopEdge
+import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.runner.skeletonDefinitionFor
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
-import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunLoopCollaborators
-import skillbill.engine.featuretask.runloop.state.coupledSession
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
+import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
@@ -43,23 +42,24 @@ object FeatureTaskRuntimeRunLoopTransitions {
     edge: FeatureTaskRuntimeBackwardEdge?,
     effectiveVerdict: FeatureTaskRuntimeVerdict,
     transition: FeatureTaskRuntimeNextPhase,
-  ): String? = with(context) {
-    when (transition) {
-      is FeatureTaskRuntimeNextPhase.TerminalAdvance -> null
-      is FeatureTaskRuntimeNextPhase.TerminalBlock -> {
-        FeatureTaskRuntimeRunLoopPlanningBranch.blockOnCapExhaustion(context, phaseId, transition)
-        null
+  ): String? =
+    with(context) {
+      when (transition) {
+        is FeatureTaskRuntimeNextPhase.TerminalAdvance -> null
+        is FeatureTaskRuntimeNextPhase.TerminalBlock -> {
+          FeatureTaskRuntimeRunLoopPlanningBranch.blockOnCapExhaustion(context, phaseId, transition)
+          null
+        }
+        is FeatureTaskRuntimeNextPhase.Next ->
+          nextTransitionTarget(
+            context,
+            phaseId,
+            edge,
+            effectiveVerdict,
+            transition,
+          )
       }
-      is FeatureTaskRuntimeNextPhase.Next ->
-        nextTransitionTarget(
-          context,
-          phaseId,
-          edge,
-          effectiveVerdict,
-          transition,
-        )
     }
-  }
 
   internal fun nextTransitionTarget(
     context: FeatureTaskRuntimeRunLoopContext,
@@ -67,57 +67,58 @@ object FeatureTaskRuntimeRunLoopTransitions {
     edge: FeatureTaskRuntimeBackwardEdge?,
     effectiveVerdict: FeatureTaskRuntimeVerdict,
     transition: FeatureTaskRuntimeNextPhase.Next,
-  ): String? = with(context) {
-    val loopId = transition.loopId
-    return when {
-      loopId == null &&
-        !establishForwardCheckpoint(
-          context,
-          precedingPhaseId = phaseId,
-          destinationPhaseId = transition.phaseId,
-        )
-      -> null
-      loopId == null -> transition.phaseId
-      reentersMutatingPhase(context, requireNotNull(edge), transition.phaseId) &&
-        !with(FeatureTaskRuntimeRunLoopCheckpointRemediation) {
-          FeatureTaskRuntimeRunLoopCheckpointRemediation.establishRemediationCheckpoint(context, phaseId, loopId)
-        } -> null
-      else -> {
-        with(FeatureTaskRuntimeRunLoopBackwardEdge) {
-          FeatureTaskRuntimeRunLoopBackwardEdge.recordBackwardEdge(
+  ): String? =
+    with(context) {
+      val loopId = transition.loopId
+      return when {
+        loopId == null &&
+          !establishForwardCheckpoint(
             context,
-            runState.coupledSession(),
-            edge = requireNotNull(edge),
-            edgeIteration = requireNotNull(transition.edgeIteration),
-            verdict = effectiveVerdict,
+            precedingPhaseId = phaseId,
+            destinationPhaseId = transition.phaseId,
           )
-          observability.loopEdge(
-            transition.phaseId,
-            loopId,
-            requireNotNull(transition.edgeIteration),
-            effectiveVerdict,
-          )
-          FeatureTaskRuntimeRunLoopBackwardEdge.warnOnThresholdCrossing(
-            request,
-            diagnostics,
-            requireNotNull(edge),
-            requireNotNull(transition.edgeIteration),
-          )
+        -> null
+        loopId == null -> transition.phaseId
+        reentersMutatingPhase(context, requireNotNull(edge), transition.phaseId) &&
+          !with(FeatureTaskRuntimeRunLoopCheckpointRemediation) {
+            FeatureTaskRuntimeRunLoopCheckpointRemediation.establishRemediationCheckpoint(context, phaseId, loopId)
+          } -> null
+        else -> {
+          with(FeatureTaskRuntimeRunLoopBackwardEdge) {
+            FeatureTaskRuntimeRunLoopBackwardEdge.recordBackwardEdge(
+    context,
+    edge = requireNotNull(edge),
+    edgeIteration = requireNotNull(transition.edgeIteration),
+    verdict = effectiveVerdict,
+  )
+            observability.loopEdge(
+              transition.phaseId,
+              loopId,
+              requireNotNull(transition.edgeIteration),
+              effectiveVerdict,
+            )
+            FeatureTaskRuntimeRunLoopBackwardEdge.warnOnThresholdCrossing(
+              request,
+              diagnostics,
+              requireNotNull(edge),
+              requireNotNull(transition.edgeIteration),
+            )
+          }
+          transition.phaseId
         }
-        transition.phaseId
       }
     }
-  }
 
   internal fun reentersMutatingPhase(
     context: PhaseRunLoopAttemptCollaborators,
     edge: FeatureTaskRuntimeBackwardEdge,
     destinationPhaseId: String,
-  ): Boolean = spanBetween(
-    context.transitions,
-    destinationPhaseId,
-    edge.fromPhaseId,
-  ).any { context.acceptedStepPolicy(it).mutating }
+  ): Boolean =
+    spanBetween(
+      context.transitions,
+      destinationPhaseId,
+      edge.fromPhaseId,
+    ).any { context.acceptedStepPolicy(it).mutating }
 
   internal fun establishForwardCheckpoint(
     context: PhaseAttemptRunLoopCollaborators,

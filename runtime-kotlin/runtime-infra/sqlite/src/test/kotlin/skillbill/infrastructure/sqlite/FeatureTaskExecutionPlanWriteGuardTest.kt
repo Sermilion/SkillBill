@@ -91,18 +91,21 @@ class FeatureTaskExecutionPlanWriteGuardTest {
     workflowRow(id, "session-$id", "bill-feature-task", "plan", RUNTIME)
       .copy(workflowStatus = WorkflowStatus.PAUSED.wireValue)
 
-  private fun descriptor(id: String): String = JsonCodec.mapToJsonString(
-    mapOf(family.entry(mapOf(FeatureTaskRuntimeExecutionPlanKeys.ID to id))),
-  )
+  private fun descriptor(id: String): String =
+    JsonCodec.mapToJsonString(
+      mapOf(family.entry(mapOf(FeatureTaskRuntimeExecutionPlanKeys.ID to id))),
+    )
 
   private fun withDatabase(block: (SQLiteDatabaseSessionFactory) -> Unit) {
     val directory = Files.createTempDirectory("execution-plan-write")
     try {
-      block(sqliteDatabaseSessionFactory(
-        userHome = directory,
-        dbPathOverride = directory.resolve("metrics.db").toString(),
-        environment = emptyMap(),
-      ))
+      block(
+        sqliteDatabaseSessionFactory(
+          userHome = directory,
+          dbPathOverride = directory.resolve("metrics.db").toString(),
+          environment = emptyMap(),
+        ),
+      )
     } finally {
       directory.toFile().deleteRecursively()
     }

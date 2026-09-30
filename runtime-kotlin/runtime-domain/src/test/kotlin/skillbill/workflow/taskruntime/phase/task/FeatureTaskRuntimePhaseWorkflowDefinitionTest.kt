@@ -50,9 +50,9 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
           currentStepId = "implement",
           steps = emptyList(),
           artifacts =
-          DurableWorkflowArtifacts.fromMap(
-            requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(artifacts))),
-          ),
+            DurableWorkflowArtifacts.fromMap(
+              requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(artifacts))),
+            ),
           startedAt = null,
           updatedAt = null,
           finishedAt = null,
@@ -72,9 +72,9 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
           currentStepId = "gather_diff",
           steps = emptyList(),
           artifacts =
-          DurableWorkflowArtifacts.fromMap(
-            requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(artifacts))),
-          ),
+            DurableWorkflowArtifacts.fromMap(
+              requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(artifacts))),
+            ),
           startedAt = null,
           updatedAt = null,
           finishedAt = null,

@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.codereview.verify
 
+import skillbill.engine.featuretask.slot.PhaseStepHookContextKind
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
@@ -12,6 +13,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 internal class VerifyFindingsStep : PhaseStepHooks {
+    override val contextKind = PhaseStepHookContextKind.FINDING_VERIFICATION
   val policy =
     PhaseStepPolicy(
       mutating = false,

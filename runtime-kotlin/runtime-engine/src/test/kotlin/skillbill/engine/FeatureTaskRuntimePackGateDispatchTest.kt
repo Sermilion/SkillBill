@@ -1,5 +1,6 @@
 package skillbill.engine
 
+import skillbill.scaffold.model.PlatformManifest
 import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
@@ -33,28 +34,31 @@ class FeatureTaskRuntimePackGateDispatchTest {
         branch.gitOperations.currentBranchValue = "feat/SKILL-384-gates"
         branch.gitOperations.changedPathsBetweenCommitsValue = listOf("src/Foo.kt")
         val launcher = satisfiedAuditLauncher()
-        val harness = telemetryRunnerHarness(
-          RuntimeHarnessConfig(
-            repoRoot = repo,
-            branchSetup = branch,
-            launcher = launcher,
-            goalContinuation = FeatureTaskRuntimeGoalContinuationContext(
-              parentIssueKey = "SKILL-384",
-              subtaskId = 1,
-              subtaskName = "gate evidence",
-              goalBranch = branch.gitOperations.currentBranchValue,
-              suppressPr = true,
-              parentWorkflowId = "goal-skill-384",
-              reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
-              qualityGateSelection = FeatureTaskRuntimeQualityGateSelection.BUILD,
+        val harness =
+          telemetryRunnerHarness(
+            RuntimeHarnessConfig(
+              repoRoot = repo,
+              branchSetup = branch,
+              launcher = launcher,
+              goalContinuation =
+                FeatureTaskRuntimeGoalContinuationContext(
+                  parentIssueKey = "SKILL-384",
+                  subtaskId = 1,
+                  subtaskName = "gate evidence",
+                  goalBranch = branch.gitOperations.currentBranchValue,
+                  suppressPr = true,
+                  parentWorkflowId = "goal-skill-384",
+                  reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
+                  qualityGateSelection = FeatureTaskRuntimeQualityGateSelection.BUILD,
+                ),
+              validationGatePlatformManifests = listOf(pack.copy(validationGate = missing)),
+              validationGateRunner =
+                object : ValidationGateRunner {
+                  override fun run(request: ValidationGateRunRequest): ValidationGateRunResult =
+                    error("Missing required command must block before gate execution")
+                },
             ),
-            validationGatePlatformManifests = listOf(pack.copy(validationGate = missing)),
-            validationGateRunner = object : ValidationGateRunner {
-              override fun run(request: ValidationGateRunRequest): ValidationGateRunResult =
-                error("Missing required command must block before gate execution")
-            },
-          ),
-        )
+          )
 
         assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request))
 
@@ -86,59 +90,54 @@ class FeatureTaskRuntimePackGateDispatchTest {
       branch.gitOperations.repositoryFingerprintValue = "build-checkpoint"
       branch.gitOperations.currentBranchValue = "feat/SKILL-384-gates"
       branch.gitOperations.changedPathsBetweenCommitsValue = listOf("src/Foo.kt")
-      val pack = kotlinPackWithBuildGate().let { manifest ->
-        manifest.copy(
-          validationGate = requireNotNull(manifest.validationGate).copy(
-            buildCommand = listOf("./gradlew", "build-discovery"),
-            cacheBypassingBuildCommand = listOf("./gradlew", "build-verification"),
-            collectAllFullGateCommand = listOf("./gradlew", "validation-discovery"),
-            cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "validation-verification"),
+      val pack = buildDispatchPack()
+      val launcher = satisfiedAuditLauncher()
+      val harness =
+        telemetryRunnerHarness(
+          RuntimeHarnessConfig(
+            repoRoot = repo,
+            branchSetup = branch,
+            launcher = launcher,
+            validator = realFeatureTaskRuntimePhaseOutputValidator,
+            goalContinuation =
+              FeatureTaskRuntimeGoalContinuationContext(
+                parentIssueKey = "SKILL-384",
+                subtaskId = 1,
+                subtaskName = "gate evidence",
+                goalBranch = branch.gitOperations.currentBranchValue,
+                suppressPr = true,
+                parentWorkflowId = "goal-skill-384",
+                reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
+                qualityGateSelection = FeatureTaskRuntimeQualityGateSelection.BUILD,
+              ),
+            validationGatePlatformManifests = listOf(pack),
+            gateRepoLocalConfig = repoLocalConfig("./tools/gradlew"),
+            validationGateRunner =
+              object : ValidationGateRunner {
+                override fun run(request: ValidationGateRunRequest): ValidationGateRunResult {
+                  requests += request
+                  val failed = requests.size == 1
+                  return ValidationGateRunResult(
+                    exitCode = if (failed) 1 else 0,
+                    durationMs = 1,
+                    outcome = if (failed) ValidationGateRunOutcome.FAILED else ValidationGateRunOutcome.PASSED,
+                    cacheMode = request.cacheMode,
+                    executedWorkUnits = 0,
+                    executedCheckIdentities = emptyList(),
+                    findings =
+                      if (failed) {
+                        listOf(
+                          ValidationGateFinding("engine", "compile", "broken", "src/Foo.kt"),
+                        )
+                      } else {
+                        emptyList()
+                      },
+                    command = request.argv.joinToString(" "),
+                  )
+                }
+              },
           ),
         )
-      }
-      val launcher = satisfiedAuditLauncher()
-      val harness = telemetryRunnerHarness(
-        RuntimeHarnessConfig(
-          repoRoot = repo,
-          branchSetup = branch,
-          launcher = launcher,
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
-          goalContinuation = FeatureTaskRuntimeGoalContinuationContext(
-            parentIssueKey = "SKILL-384",
-            subtaskId = 1,
-            subtaskName = "gate evidence",
-            goalBranch = branch.gitOperations.currentBranchValue,
-            suppressPr = true,
-            parentWorkflowId = "goal-skill-384",
-            reviewBaseline = GoalSubtaskReviewBaseline("0".repeat(40), emptyList()),
-            qualityGateSelection = FeatureTaskRuntimeQualityGateSelection.BUILD,
-          ),
-          validationGatePlatformManifests = listOf(pack),
-          gateRepoLocalConfig = repoLocalConfig("./tools/gradlew"),
-          validationGateRunner = object : ValidationGateRunner {
-            override fun run(request: ValidationGateRunRequest): ValidationGateRunResult {
-              requests += request
-              val failed = requests.size == 1
-              return ValidationGateRunResult(
-                exitCode = if (failed) 1 else 0,
-                durationMs = 1,
-                outcome = if (failed) ValidationGateRunOutcome.FAILED else ValidationGateRunOutcome.PASSED,
-                cacheMode = request.cacheMode,
-                executedWorkUnits = 0,
-                executedCheckIdentities = emptyList(),
-                findings = if (failed) {
-                  listOf(
-                    ValidationGateFinding("engine", "compile", "broken", "src/Foo.kt"),
-                  )
-                } else {
-                  emptyList()
-                },
-                command = request.argv.joinToString(" "),
-              )
-            }
-          },
-        ),
-      )
 
       val report = harness.runner.run(harness.request)
 
@@ -170,4 +169,19 @@ class FeatureTaskRuntimePackGateDispatchTest {
       repo.toFile().deleteRecursively()
     }
   }
+  private fun buildDispatchPack(): PlatformManifest {
+      return kotlinPackWithBuildGate().let { manifest ->
+          manifest.copy(
+            validationGate =
+              requireNotNull(manifest.validationGate).copy(
+                buildCommand = listOf("./gradlew", "build-discovery"),
+                cacheBypassingBuildCommand = listOf("./gradlew", "build-verification"),
+                collectAllFullGateCommand = listOf("./gradlew", "validation-discovery"),
+                cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "validation-verification"),
+              ),
+          )
+        }
+
+  }
+
 }

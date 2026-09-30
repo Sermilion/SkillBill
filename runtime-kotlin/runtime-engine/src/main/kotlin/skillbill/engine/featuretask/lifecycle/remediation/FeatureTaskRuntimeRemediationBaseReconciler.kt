@@ -28,7 +28,9 @@ import java.time.Clock
 
 private sealed interface RemediationSnapshotRead {
   data class Available(val snapshot: RemediationReconcileSnapshot) : RemediationSnapshotRead
+
   data class Refused(val reason: String) : RemediationSnapshotRead
+
   data object Absent : RemediationSnapshotRead
 }
 
@@ -42,11 +44,12 @@ class FeatureTaskRuntimeRemediationBaseReconciler(
     gitOperations: WorkflowGitOperations,
     repoRoot: Path,
   ): RemediationBaseCoherenceResult {
-    val snapshot = when (val read = readRemediationSnapshot(workflowId)) {
-      is RemediationSnapshotRead.Available -> read.snapshot
-      is RemediationSnapshotRead.Refused -> return RemediationBaseBlocked(read.reason)
-      RemediationSnapshotRead.Absent -> return RemediationBaseCoherent(null)
-    }
+    val snapshot =
+      when (val read = readRemediationSnapshot(workflowId)) {
+        is RemediationSnapshotRead.Available -> read.snapshot
+        is RemediationSnapshotRead.Refused -> return RemediationBaseBlocked(read.reason)
+        RemediationSnapshotRead.Absent -> return RemediationBaseCoherent(null)
+      }
     return reconcileFromSnapshot(
       snapshot = snapshot,
       workflowId = workflowId,
@@ -57,8 +60,9 @@ class FeatureTaskRuntimeRemediationBaseReconciler(
 
   private fun readRemediationSnapshot(workflowId: String): RemediationSnapshotRead =
     database.read { unitOfWork ->
-      val record = unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-        ?: return@read RemediationSnapshotRead.Absent
+      val record =
+        unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
+          ?: return@read RemediationSnapshotRead.Absent
       if (record.workflowStatus in WorkflowStatus.terminalStatuses) {
         return@read RemediationSnapshotRead.Refused("Terminal workflows cannot enter remediation recovery.")
       }
@@ -66,9 +70,10 @@ class FeatureTaskRuntimeRemediationBaseReconciler(
       try {
         val state = reviewStateFromArtifacts(artifacts) ?: return@read RemediationSnapshotRead.Absent
         val continuation = continuationFromArtifacts(artifacts) ?: return@read RemediationSnapshotRead.Absent
-        val checkpoints = decodeCheckpointIdentitiesFromArtifact(
-          DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(artifacts),
-        )
+        val checkpoints =
+          decodeCheckpointIdentitiesFromArtifact(
+            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(artifacts),
+          )
         RemediationSnapshotRead.Available(RemediationReconcileSnapshot(state, continuation, checkpoints))
       } catch (_: InvalidFeatureTaskRuntimeCheckpointIdentityVersionError) {
         RemediationSnapshotRead.Refused(

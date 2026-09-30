@@ -8,8 +8,14 @@ internal object StrategyCapabilityTransitiveGraph {
     val catalog = StrategyCapabilitySourceCatalog.parse(sources)
     val findings = linkedSetOf<String>()
     findings += StrategyCapabilityWriterInventory.violations(catalog)
-    catalog.values.filter { it.path in roots }.forEach { root ->
-      val forbidden = rawAuthority + if (reviewConsumer(root.path)) emptySet() else reviewAuthority
+    catalog.values.filter { symbol -> symbol.sourcePaths.any(roots::contains) }.forEach { root ->
+      val reviewRoot = root.sourcePaths.any(::reviewConsumer)
+      val forbidden =
+        (
+          rawAuthority -
+            (if (reviewRoot) setOf("skillbill.engine.featuretask.slot.PhaseRunner") else emptySet())
+        ) +
+          (if (reviewRoot) emptySet() else reviewAuthority)
       val visited = mutableSetOf<String>()
 
       fun visit(
@@ -39,10 +45,11 @@ internal object StrategyCapabilityTransitiveGraph {
   private val rawAuthority =
     setOf(
       "skillbill.engine.featuretask.slot.state.PhaseRunState",
+      "skillbill.engine.featuretask.slot.PhaseRunner",
       "skillbill.engine.featuretask.slot.state.PhaseRunRecords",
       "skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState",
       "skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession",
-      "skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner",
+      "skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner",
       "skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost",
       "skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunLoopBindingAccess",
       "skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext",

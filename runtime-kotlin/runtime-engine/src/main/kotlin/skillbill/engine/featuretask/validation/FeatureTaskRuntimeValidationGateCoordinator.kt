@@ -45,6 +45,9 @@ class FeatureTaskRuntimeValidationGateCoordinator {
     }
 
   companion object {
+    private fun invalidValidationEvidence(phaseId: String, reason: String): Nothing =
+      throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(phaseId, reason)
+
     fun runtimeOwnedValidationOutput(
       phaseId: String,
       repositoryCheckpoint: String,
@@ -58,7 +61,7 @@ class FeatureTaskRuntimeValidationGateCoordinator {
           FeatureTaskRuntimeValidationCommandResult(command, exitCode)
         }
       if (evidence.isEmpty()) {
-        throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(
+        invalidValidationEvidence(
           phaseId,
           "runtime-owned validation evidence has no command results.",
         )
@@ -66,16 +69,17 @@ class FeatureTaskRuntimeValidationGateCoordinator {
       val commandEvidence = FeatureTaskRuntimeValidationEvidence(evidence)
       val terminalResult = commandEvidence.requireSuccessfulResult(phaseId)
       if (terminalResult.command != requiredCommand) {
-        throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(
+        invalidValidationEvidence(
           phaseId,
           "terminal validation command does not match the required verification command.",
         )
       }
-      if (measurements.size != evidence.size || measurements.zip(evidence).any { (measurement, result) ->
+      if (measurements.size != evidence.size ||
+        measurements.zip(evidence).any { (measurement, result) ->
           measurement.command != result.command || measurement.exitCode != result.exitCode
         }
       ) {
-        throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(
+        invalidValidationEvidence(
           phaseId,
           "validation command results must match the ordered gate run records.",
         )

@@ -30,18 +30,21 @@ class SqliteValidationGateEvidenceRoundTripTest {
   @Test
   fun cachedSuccessfulCommandRetainsExplicitEmptyWorkAndChecks() {
     val repo = repository()
-    val evidence = FeatureTaskRuntimeValidationGateExecutionEvidence.fromGateMeasurements(listOf(
-      FeatureTaskRuntimeValidationGateRunRecord(
-        durationMs = 1,
-        outcome = ValidationGateRunOutcome.PASSED,
-        cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE,
-        executedWorkUnits = 0,
-        executedChecks = emptyList(),
-        command = "./gradlew check",
-        exitCode = 0,
-        repositoryCheckpoint = "cached-checkpoint",
-      ),
-    ))
+    val evidence =
+      FeatureTaskRuntimeValidationGateExecutionEvidence.fromGateMeasurements(
+        listOf(
+          FeatureTaskRuntimeValidationGateRunRecord(
+            durationMs = 1,
+            outcome = ValidationGateRunOutcome.PASSED,
+            cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE,
+            executedWorkUnits = 0,
+            executedChecks = emptyList(),
+            command = "./gradlew check",
+            exitCode = 0,
+            repositoryCheckpoint = "cached-checkpoint",
+          ),
+        ),
+      )
 
     persistEvidence(repo, evidence)
 

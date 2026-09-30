@@ -4,7 +4,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeOperatorBlockRetry
 
 /** Read-only session facts for attempt and settlement helpers; mutations route through the transition owner. */
-internal interface FeatureTaskRuntimeRunLoopSessionObservations {
+internal interface FeatureTaskRuntimeRunSessionObservations {
   val operatorBlockRetry: FeatureTaskRuntimeOperatorBlockRetry?
 
   val checkpointOwnershipDecided: Boolean

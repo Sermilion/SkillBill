@@ -14,27 +14,32 @@ class FeatureTaskRuntimeExecutionPlanSchemaContractVersionTest {
   @Test
   fun `packaged schema preserves canonical identity version and governed wire keys`() {
     val source = YAMLMapper().readTree(Files.readString(repositorySchemaFile()))
-    val bundled = checkNotNull(javaClass.classLoader.getResourceAsStream(
-      FeatureTaskRuntimeExecutionPlanSchemaPaths.CLASSPATH_RESOURCE,
-    )).use { YAMLMapper().readTree(it) }
+    val bundled =
+      checkNotNull(
+        javaClass.classLoader.getResourceAsStream(
+          FeatureTaskRuntimeExecutionPlanSchemaPaths.CLASSPATH_RESOURCE,
+        ),
+      ).use { YAMLMapper().readTree(it) }
     assertEquals(source, bundled)
     assertEquals(FeatureTaskRuntimeExecutionPlanSchemaPaths.EXPECTED_SCHEMA_ID, source.path("$" + "id").asText())
     assertEquals(
       FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION,
       source.path("properties").path(FeatureTaskRuntimeExecutionPlanKeys.CONTRACT_VERSION).path("const").asText(),
     )
-    val declared = FeatureTaskRuntimeExecutionPlanKeys::class.java.declaredFields
-      .filter { it.type == String::class.java }
-      .map { it.get(null) as String }.toSet()
+    val declared =
+      FeatureTaskRuntimeExecutionPlanKeys::class.java.declaredFields
+        .filter { it.type == String::class.java }
+        .map { it.get(null) as String }.toSet()
     assertEquals(declared, propertyNames(source))
   }
 
-  private fun propertyNames(node: JsonNode): Set<String> = buildSet {
-    if (node.isObject) {
-      node.path("properties").fieldNames().forEachRemaining { add(it) }
+  private fun propertyNames(node: JsonNode): Set<String> =
+    buildSet {
+      if (node.isObject) {
+        node.path("properties").fieldNames().forEachRemaining { add(it) }
+      }
+      if (node.isContainerNode) node.elements().forEachRemaining { addAll(propertyNames(it)) }
     }
-    if (node.isContainerNode) node.elements().forEachRemaining { addAll(propertyNames(it)) }
-  }
 
   private fun repositorySchemaFile(): Path {
     var current: Path? = Path.of("").toAbsolutePath().normalize()

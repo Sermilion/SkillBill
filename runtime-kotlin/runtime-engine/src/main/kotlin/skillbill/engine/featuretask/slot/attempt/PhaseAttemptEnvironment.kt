@@ -5,11 +5,11 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlemen
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.attempt.remediationCoupling
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSessionObservations
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopProgressObservations
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
@@ -41,9 +41,9 @@ internal interface PhaseAttemptEnvironment {
 internal interface PhaseOutputSettlementContext :
   PhaseAttemptEnvironment,
   PhaseAttemptTransitionDeclarationAccess {
-  val progress: FeatureTaskRuntimeRunLoopProgressObservations
+  val progress: FeatureTaskRuntimeProgressSnapshotAccess
 
-  val session: FeatureTaskRuntimeRunLoopSessionObservations
+  val session: FeatureTaskRuntimeRunSessionObservations
 
   val recorder: PhaseRunRecords
 
@@ -61,7 +61,7 @@ internal interface PhaseOutputSettlementContext :
 
   val observability: FeatureTaskRuntimeRunObservability
 
-  val coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner
+  val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner
 
   val specSource: SpecSource
 }
@@ -70,9 +70,9 @@ internal interface PhaseOutputSettlementContext :
 internal interface PhaseCheckpointRemediationContext :
   PhaseAttemptEnvironment,
   PhaseAttemptPlanAuthorization {
-  val progress: FeatureTaskRuntimeRunLoopProgressObservations
+  val progress: FeatureTaskRuntimeProgressSnapshotAccess
 
-  val session: FeatureTaskRuntimeRunLoopSessionObservations
+  val session: FeatureTaskRuntimeRunSessionObservations
 
   val phaseGates: FeatureTaskRuntimePhaseGates
 
@@ -84,7 +84,7 @@ internal interface PhaseCheckpointRemediationContext :
 
   val observability: FeatureTaskRuntimeRunObservability
 
-  val coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner
+  val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner
 
   val transitions: FeatureTaskRuntimeTransitionDeclaration
 
@@ -107,9 +107,9 @@ internal interface PhaseAttemptStrategyLookup {
 
 /** Launch and pre-launch hook inputs; narrower than the full collaborator aggregate. */
 internal interface PhaseAttemptLaunchRuntimeContext : PhaseAttemptEnvironment {
-  val progress: FeatureTaskRuntimeRunLoopProgressObservations
+  val progress: FeatureTaskRuntimeProgressSnapshotAccess
 
-  val session: FeatureTaskRuntimeRunLoopSessionObservations
+  val session: FeatureTaskRuntimeRunSessionObservations
 
   val outputValidator: FeatureTaskRuntimePhaseOutputValidator
 
@@ -119,7 +119,7 @@ internal interface PhaseAttemptLaunchRuntimeContext : PhaseAttemptEnvironment {
 
   val recorder: PhaseRunRecords
 
-  val coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner
+  val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner
 
   fun pushLocalBranchIfAhead(branch: String): String? {
     val git = phaseGates.gitOperations
@@ -142,9 +142,9 @@ internal interface PhaseQualityGateCycleContext :
   PhaseAttemptEnvironment,
   PhaseAttemptTransitionDeclarationAccess,
   PhaseQualityGateReporting {
-  val progress: FeatureTaskRuntimeRunLoopProgressObservations
+  val progress: FeatureTaskRuntimeProgressSnapshotAccess
 
-  val session: FeatureTaskRuntimeRunLoopSessionObservations
+  val session: FeatureTaskRuntimeRunSessionObservations
 
   val recorder: PhaseRunRecords
 
@@ -160,14 +160,14 @@ internal interface PhaseQualityGateCycleContext :
 
   val observability: FeatureTaskRuntimeRunObservability
 
-  val coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner
+  val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner
 }
 
 /** Runtime commit and pull-request finalization without arbitrary attempt or strategy authority. */
 internal interface PhaseRuntimeFinalizationContext : PhaseAttemptEnvironment {
-  val progress: FeatureTaskRuntimeRunLoopProgressObservations
+  val progress: FeatureTaskRuntimeProgressSnapshotAccess
 
-  val session: FeatureTaskRuntimeRunLoopSessionObservations
+  val session: FeatureTaskRuntimeRunSessionObservations
 
   val transitions: FeatureTaskRuntimeTransitionDeclaration
 
@@ -185,16 +185,16 @@ internal interface PhaseRuntimeFinalizationContext : PhaseAttemptEnvironment {
 
   val observability: FeatureTaskRuntimeRunObservability
 
-  val coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner
+  val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner
 
   val checkpoints: PhaseRunCheckpoints
 }
 
 /** Post-completion traversal hook inputs for planning and decomposition stops. */
 internal interface PhaseAttemptTraversalRuntimeContext : PhaseAttemptEnvironment {
-  val progress: FeatureTaskRuntimeRunLoopProgressObservations
+  val progress: FeatureTaskRuntimeProgressSnapshotAccess
 
-  val session: FeatureTaskRuntimeRunLoopSessionObservations
+  val session: FeatureTaskRuntimeRunSessionObservations
 
   val specSource: SpecSource
 
@@ -206,7 +206,7 @@ internal interface PhaseAttemptTraversalRuntimeContext : PhaseAttemptEnvironment
 
   val phaseGates: FeatureTaskRuntimePhaseGates
 
-  val coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner
+  val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner
 
   val observability: FeatureTaskRuntimeRunObservability
 }
@@ -255,10 +255,10 @@ internal open class PhaseAttemptSettlementScope(
   override val diagnostics: RuntimeDiagnostics
     get() = attemptRunHost().diagnostics
 
-  override val progress: FeatureTaskRuntimeRunLoopProgressObservations
+  override val progress: FeatureTaskRuntimeProgressSnapshotAccess
     get() = attemptRunHost().progress
 
-  override val session: FeatureTaskRuntimeRunLoopSessionObservations
+  override val session: FeatureTaskRuntimeRunSessionObservations
     get() = attemptRunHost().session
 
   override val observability: FeatureTaskRuntimeRunObservability
@@ -273,7 +273,7 @@ internal open class PhaseAttemptSettlementScope(
   override val phaseSettlementService: PhaseRunSettlements
     get() = attemptRunHost().settlements
 
-  override val coupledRunTransitions: FeatureTaskRuntimeRunLoopTransitionOwner
+  override val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner
     get() = attemptRunHost().coupledRunTransitions
 
   override val specSource: SpecSource
@@ -293,7 +293,8 @@ internal open class PhaseAttemptSettlementScope(
 
   internal fun requireAcceptedBoundStep(stepId: String) {
     check(stepId == attemptRunHost().boundPhaseId) {
-      "Step '$stepId' is not the accepted binding for this attempt; only '${attemptRunHost().boundPhaseId}' is authorized."
+      "Step '$stepId' is not the accepted binding for this attempt; " +
+        "only '${attemptRunHost().boundPhaseId}' is authorized."
     }
   }
 }
@@ -350,6 +351,11 @@ internal class PhaseRunLoopAttemptScope(
     }
     return attemptRunHost().strategyFor(stepId)
   }
+
+  internal fun runnerForAcceptedAttempt(
+    run: PhaseRun,
+    call: PhaseStepCall,
+  ) = attemptRunHost().runnerForAcceptedAttempt(run, call)
 }
 
 internal fun phaseAttemptLaunchCollaborationScope(host: PhaseAttemptRunHost): PhaseAttemptLaunchCollaborationScope =
@@ -369,12 +375,12 @@ internal fun remediationCollaborationScope(
 internal typealias PhaseAttemptRunCollaborationScope = PhaseAttemptRemediationCollaborationScope
 
 internal val PhaseRunLoopAttemptCollaborators.blockingSessionForPhaseEffects:
-  FeatureTaskRuntimeRunLoopSessionObservations
+  FeatureTaskRuntimeRunSessionObservations
   get() = settlementCoupling().session
 
-internal val PhaseOutputSettlementContext.blockingSessionForPhaseEffects: FeatureTaskRuntimeRunLoopSessionObservations
+internal val PhaseOutputSettlementContext.blockingSessionForPhaseEffects: FeatureTaskRuntimeRunSessionObservations
   get() = settlementCoupling().session
 
 internal fun PhaseCheckpointRemediationContext.blockingSessionForPhaseEffects():
-  FeatureTaskRuntimeRunLoopSessionObservations =
+  FeatureTaskRuntimeRunSessionObservations =
   remediationCoupling().session

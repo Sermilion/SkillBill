@@ -111,19 +111,21 @@ class PhasePlanRunTest {
     return JsonCodec.mapToJsonString(envelope)
   }
 
-  private fun planRequest(): PhaseRunRequest = PhaseRunRequest(
-    definitionId = SkeletonDefinition.PLAN.id,
-    repoRoot = repoRoot,
-    invokedAgentId = "claude",
-    intake = "$ISSUE_KEY split the runtime work into ordered subtasks",
-  )
+  private fun planRequest(): PhaseRunRequest =
+    PhaseRunRequest(
+      definitionId = SkeletonDefinition.PLAN.id,
+      repoRoot = repoRoot,
+      invokedAgentId = "claude",
+      intake = "$ISSUE_KEY split the runtime work into ordered subtasks",
+    )
 
   private fun planBundleDirectories(): List<String> =
     repoRoot.resolve(FEATURE_SPECS).toFile().list().orEmpty().filter { name -> name.startsWith("$ISSUE_KEY-") }
 
-  private fun launcher(output: (String) -> String): RuntimeRecordingLauncher = RuntimeRecordingLauncher { request ->
-    facts(output(phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))))
-  }
+  private fun launcher(output: (String) -> String): RuntimeRecordingLauncher =
+    RuntimeRecordingLauncher { request ->
+      facts(output(phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))))
+    }
 
   private fun launchedPhaseIds(launcher: RuntimeRecordingLauncher): List<String> =
     launcher.requests.map { request -> phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride)) }
@@ -132,13 +134,13 @@ class PhasePlanRunTest {
     val runner =
       telemetryRunnerHarness(
         runtimeConfig =
-        RuntimeHarnessConfig(
-          seedDurableWorkflow = false,
-          branchSetup = committedRepoBranchSetup(),
-          repoRoot = repoRoot,
-          launcher = launcher,
-          validator = FeatureTaskRuntimePhaseOutputSchemaValidator(),
-        ),
+          RuntimeHarnessConfig(
+            seedDurableWorkflow = false,
+            branchSetup = committedRepoBranchSetup(),
+            repoRoot = repoRoot,
+            launcher = launcher,
+            validator = FeatureTaskRuntimePhaseOutputSchemaValidator(),
+          ),
         databaseFactory = { database },
       ).runner
     return phaseRunEntry(runner, database, clock)

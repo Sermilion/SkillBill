@@ -11,6 +11,6 @@ enum class FeatureTaskRuntimeRegenerationRefusal(val wireValue: String) {
 class UnsafeFeatureTaskRuntimeRegenerationError(
   val refusal: FeatureTaskRuntimeRegenerationRefusal,
 ) : IllegalStateException(
-  "Receipt regeneration refused: ${refusal.wireValue}. " +
-    "Retain the workflow and inspect its evidence with a compatible runtime.",
-)
+    "Receipt regeneration refused: ${refusal.wireValue}. " +
+      "Retain the workflow and inspect its evidence with a compatible runtime.",
+  )

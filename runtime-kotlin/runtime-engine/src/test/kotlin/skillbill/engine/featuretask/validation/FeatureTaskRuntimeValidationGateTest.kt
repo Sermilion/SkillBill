@@ -67,14 +67,15 @@ class FeatureTaskRuntimeValidationGateTest {
   fun persistedProgressRejectsUnsupportedVersionsAndMissingExecutionFacts() {
     val progress = progressArtifact(1, "passed", "cache_eligible", emptyMap())
     val run = (progress.getValue("gate_runs") as List<*>).single() as Map<*, *>
-    val invalid = listOf(
-      progress - "contract_version",
-      progress + ("contract_version" to "unsupported"),
-      progress + ("gate_run_count" to 2),
-      progress + ("gate_runs" to listOf(run - "command")),
-      progress + ("gate_runs" to listOf(run - "executed_checks")),
-      progress + ("gate_runs" to listOf(run + ("outcome" to "unknown"))),
-    )
+    val invalid =
+      listOf(
+        progress - "contract_version",
+        progress + ("contract_version" to "unsupported"),
+        progress + ("gate_run_count" to 2),
+        progress + ("gate_runs" to listOf(run - "command")),
+        progress + ("gate_runs" to listOf(run - "executed_checks")),
+        progress + ("gate_runs" to listOf(run + ("outcome" to "unknown"))),
+      )
     invalid.forEach { artifact ->
       assertFailsWith<InvalidWorkflowStateSchemaError> { decodeValidationGateProgressFromArtifact(artifact) }
     }

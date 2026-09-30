@@ -22,15 +22,15 @@ class FeatureTaskRuntimeBuildGateSelectionTest {
       buildCommand = listOf("echo", "build"),
       cacheBypassingBuildCommand = listOf("echo", "build-full"),
       findings =
-      ValidationGateFindingsLocator(
-        format = ValidationGateFindingsFormat.JUNIT_XML,
-        artifactGlobs = listOf("**/*.xml"),
-        compilerDiagnostics =
-        ValidationGateCompilerDiagnosticsLocator(
-          GRADLE_KOTLIN_COMPILER_STDOUT,
+        ValidationGateFindingsLocator(
+          format = ValidationGateFindingsFormat.JUNIT_XML,
+          artifactGlobs = listOf("**/*.xml"),
+          compilerDiagnostics =
+            ValidationGateCompilerDiagnosticsLocator(
+              GRADLE_KOTLIN_COMPILER_STDOUT,
+            ),
+          executedWork = ValidationGateExecutedWorkSignal(ValidationGateExecutedWorkFormat.GRADLE_ACTIONABLE_SUMMARY),
         ),
-        executedWork = ValidationGateExecutedWorkSignal(ValidationGateExecutedWorkFormat.GRADLE_ACTIONABLE_SUMMARY),
-      ),
     )
 
   @Test

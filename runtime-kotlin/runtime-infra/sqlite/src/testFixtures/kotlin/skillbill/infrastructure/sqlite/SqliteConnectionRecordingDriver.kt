@@ -24,7 +24,10 @@ class SqliteConnectionRecordingDriver(
     pragmaTableInfoQueries = 0
   }
 
-  override fun connect(url: String?, properties: Properties?): Connection? {
+  override fun connect(
+    url: String?,
+    properties: Properties?,
+  ): Connection? {
     val connection = delegate.connect(url, properties) ?: return null
     val wrapped =
       Proxy.newProxyInstance(
@@ -44,7 +47,11 @@ class SqliteConnectionRecordingDriver(
     return wrapped
   }
 
-  private fun recordStatement(statement: Statement, preparedSql: String?, prepared: Boolean): Statement =
+  private fun recordStatement(
+    statement: Statement,
+    preparedSql: String?,
+    prepared: Boolean,
+  ): Statement =
     Proxy.newProxyInstance(
       Statement::class.java.classLoader,
       arrayOf(if (prepared) PreparedStatement::class.java else Statement::class.java),
@@ -71,33 +78,39 @@ class SqliteConnectionRecordingDriver(
     }
   }
 
-  private fun isConnectionPragma(sql: String): Boolean = sql.startsWith("PRAGMA BUSY_TIMEOUT") ||
-    sql.startsWith("PRAGMA JOURNAL_MODE") ||
-    sql.startsWith("PRAGMA FOREIGN_KEYS")
+  private fun isConnectionPragma(sql: String): Boolean =
+    sql.startsWith("PRAGMA BUSY_TIMEOUT") ||
+      sql.startsWith("PRAGMA JOURNAL_MODE") ||
+      sql.startsWith("PRAGMA FOREIGN_KEYS")
 
-  private fun isTransactionControl(sql: String): Boolean = sql.startsWith("BEGIN") ||
-    sql.startsWith("COMMIT") ||
-    sql.startsWith("ROLLBACK")
+  private fun isTransactionControl(sql: String): Boolean =
+    sql.startsWith("BEGIN") ||
+      sql.startsWith("COMMIT") ||
+      sql.startsWith("ROLLBACK")
 
-  private fun isSchemaMaintenance(sql: String): Boolean = sql.contains("SCHEMA_MIGRATIONS") ||
-    sql.startsWith("CREATE TABLE") ||
-    sql.startsWith("CREATE INDEX") ||
-    sql.startsWith("ALTER TABLE") ||
-    sql.startsWith("DROP TABLE") ||
-    sql.startsWith("DROP INDEX")
+  private fun isSchemaMaintenance(sql: String): Boolean =
+    sql.contains("SCHEMA_MIGRATIONS") ||
+      sql.startsWith("CREATE TABLE") ||
+      sql.startsWith("CREATE INDEX") ||
+      sql.startsWith("ALTER TABLE") ||
+      sql.startsWith("DROP TABLE") ||
+      sql.startsWith("DROP INDEX")
 
-  private fun isRepairScan(sql: String): Boolean = sql.contains("SQLITE_MASTER") ||
-    sql.contains("PRAGMA_TABLE_INFO") ||
-    (
-      sql.contains(
-        "STATE_ENTERED_AT_ESTIMATED",
-      ) && !sql.contains("EXCLUDED") && !sql.contains("WHERE WORKFLOW_ID = ?")
+  private fun isRepairScan(sql: String): Boolean =
+    sql.contains("SQLITE_MASTER") ||
+      sql.contains("PRAGMA_TABLE_INFO") ||
+      (
+        sql.contains(
+          "STATE_ENTERED_AT_ESTIMATED",
+        ) && !sql.contains("EXCLUDED") && !sql.contains("WHERE WORKFLOW_ID = ?")
       )
 
   override fun acceptsURL(url: String?): Boolean = delegate.acceptsURL(url)
 
-  override fun getPropertyInfo(url: String?, properties: Properties?): Array<DriverPropertyInfo> =
-    delegate.getPropertyInfo(url, properties)
+  override fun getPropertyInfo(
+    url: String?,
+    properties: Properties?,
+  ): Array<DriverPropertyInfo> = delegate.getPropertyInfo(url, properties)
 
   override fun getMajorVersion(): Int = delegate.majorVersion
 
@@ -107,9 +120,14 @@ class SqliteConnectionRecordingDriver(
 
   override fun getParentLogger(): Logger = delegate.parentLogger
 
-  private fun invokeRaw(method: Method, target: Any, args: Array<out Any?>?): Any? = try {
-    method.invoke(target, *(args ?: emptyArray()))
-  } catch (error: InvocationTargetException) {
-    throw error.targetException
-  }
+  private fun invokeRaw(
+    method: Method,
+    target: Any,
+    args: Array<out Any?>?,
+  ): Any? =
+    try {
+      method.invoke(target, *(args ?: emptyArray()))
+    } catch (error: InvocationTargetException) {
+      throw error.targetException
+    }
 }

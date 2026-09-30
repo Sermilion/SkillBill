@@ -64,9 +64,9 @@ class AmbientInputsAndLoudFailSeamsTest {
     assertTrue(start.reopen)
     state.reopenFromExplicitResume(start.phaseId)
 
-    assertTrue(state.isComplete(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT))
-    assertTrue(state.isComplete(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW))
-    assertFalse(state.isComplete(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY))
+    assertTrue(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT).completed)
+    assertTrue(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW).completed)
+    assertFalse(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY).completed)
   }
 
   @Test
@@ -101,8 +101,8 @@ class AmbientInputsAndLoudFailSeamsTest {
     assertTrue(start.reopen)
     state.reopenFromExplicitResume(start.phaseId)
 
-    assertTrue(state.isComplete(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT))
-    assertFalse(state.isComplete(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW))
+    assertTrue(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT).completed)
+    assertFalse(state.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW).completed)
   }
 
   @Test

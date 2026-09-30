@@ -1,7 +1,5 @@
 package skillbill.engine
 
-import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
-import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.testWorkflowSnapshotValidator
@@ -17,12 +15,14 @@ import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestRejectionReason
 import skillbill.ports.goalrunner.runner.model.GoalAttemptLedgerEntryDraft
 import skillbill.ports.goalrunner.runner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReconcileGate
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.phaseRecordsFromWorkflowArtifacts
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -67,11 +67,11 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
           workflowId = "wftr-task-runtime",
           issueKey = "SKILL-64",
           draft =
-          GoalAttemptLedgerEntryDraft(
-            action = GoalAttemptLedgerAction.FINAL_RECONCILED_OUTCOME,
-            timestamp = Instant.parse("2026-06-11T18:28:09Z"),
-            finalReconciledResult = "blocked",
-          ),
+            GoalAttemptLedgerEntryDraft(
+              action = GoalAttemptLedgerAction.FINAL_RECONCILED_OUTCOME,
+              timestamp = Instant.parse("2026-06-11T18:28:09Z"),
+              finalReconciledResult = "blocked",
+            ),
         ),
       )
 
@@ -99,13 +99,13 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
       store.recordWorkerSubtaskRequestOutcomes(
         workflowId = "wftr-task-runtime",
         outcomes =
-        listOf(
-          GoalRunnerWorkerSubtaskRequestOutcome.Rejected(
-            sourceStream = "stdout",
-            reason = GoalRunnerWorkerSubtaskRequestRejectionReason.UNSAFE_PATH,
-            message = "unsafe path",
+          listOf(
+            GoalRunnerWorkerSubtaskRequestOutcome.Rejected(
+              sourceStream = "stdout",
+              reason = GoalRunnerWorkerSubtaskRequestRejectionReason.UNSAFE_PATH,
+              message = "unsafe path",
+            ),
           ),
-        ),
       )
 
     assertTrue(recorded)
@@ -136,9 +136,9 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
         workflowId = "wftr-goal-review",
         state = state,
         rawReviewResult =
-        """
+          """
           {"verdict":"changes_requested","produced_outputs":{}}
-        """.trimIndent(),
+          """.trimIndent(),
       ),
       RUNTIME,
     )
@@ -147,9 +147,9 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
         database = FakeDatabaseSessionFactory(workflows),
         workflowSnapshotValidator = testWorkflowSnapshotValidator,
         artifactPorts =
-        OutcomeStoreTestArtifactPorts(
-          phaseOutputValidator = AlwaysValidValidator,
-        ),
+          OutcomeStoreTestArtifactPorts(
+            phaseOutputValidator = AlwaysValidValidator,
+          ),
       )
 
     assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
@@ -178,9 +178,9 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
         workflowId = "wftr-goal-review-prose",
         state = state,
         rawReviewResult =
-        """
+          """
           [F-001] Major | path="runtime-kotlin/Example.kt" | line=10 | description=example finding in prose.
-        """.trimIndent(),
+          """.trimIndent(),
       ),
       RUNTIME,
     )

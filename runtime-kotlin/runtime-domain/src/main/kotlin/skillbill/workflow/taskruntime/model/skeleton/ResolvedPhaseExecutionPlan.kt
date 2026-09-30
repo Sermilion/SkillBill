@@ -103,13 +103,15 @@ class ResolvedPhaseExecutionPlan(
     val selectedSteps = this.selectedStrategies.flatMap(ResolvedPhaseStrategyIdentity::steps)
     require(selectedSteps.size == selectedSteps.toSet().size)
     require(selectedSteps.toSet() == this.dispatchStrategyByStep.keys)
-    require(this.selectedStrategies.all { identity ->
-      identity.entryStep in identity.steps &&
-      identity.steps.all {
-        this.dispatchStrategyByStep[it] ==
-          ResolvedPhaseStrategyDispatch(identity.slot, identity.strategyId, identity.semanticRevision)
-      }
-    })
+    require(
+      this.selectedStrategies.all { identity ->
+        identity.entryStep in identity.steps &&
+          identity.steps.all {
+            this.dispatchStrategyByStep[it] ==
+              ResolvedPhaseStrategyDispatch(identity.slot, identity.strategyId, identity.semanticRevision)
+          }
+      },
+    )
     require(this.dispatchStrategyByStep.keys.containsAll(this.stepPolicyIdentities.keys))
     require(this.dispatchStrategyByStep.keys == this.stepPolicyIdentities.keys)
     require(this.dispatchStrategyByStep.keys.containsAll(this.resumeInterpretationIdentities.keys))
@@ -117,8 +119,17 @@ class ResolvedPhaseExecutionPlan(
     require(this.stepPolicyIdentities.values.all(String::isNotBlank))
     require(this.resumeInterpretationIdentities.values.all(String::isNotBlank))
     require(this.traversal.entryGates.all { it.phaseId in selectedStepIds && it.requiredPhaseId in selectedStepIds })
-    require(this.traversal.backwardEdges.all { it.fromPhaseId in selectedStepIds && it.destinationPhaseId in selectedStepIds })
-    require(this.traversal.loopOnlySuccessors.all { (source, successor) -> source in selectedStepIds && successor in selectedStepIds })
+    require(
+      this.traversal.backwardEdges.all {
+        it.fromPhaseId in selectedStepIds && it.destinationPhaseId in selectedStepIds
+      },
+    )
+    require(
+      this.traversal.loopOnlySuccessors.all {
+          (source, successor) ->
+        source in selectedStepIds && successor in selectedStepIds
+      },
+    )
   }
 
   private fun <T> immutableList(values: List<T>): List<T> = Collections.unmodifiableList(values.toList())

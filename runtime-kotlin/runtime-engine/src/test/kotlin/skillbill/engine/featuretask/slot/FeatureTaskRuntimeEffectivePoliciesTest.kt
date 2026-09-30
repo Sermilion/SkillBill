@@ -2,14 +2,13 @@ package skillbill.engine.featuretask.slot
 
 import skillbill.contracts.JsonCodec
 import skillbill.engine.ExecutionPlanAdmissionFixture
-import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeEffectivePolicies
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.effectivePolicyDigest
-import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
-import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
+import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
@@ -38,22 +37,25 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
   fun `durable producer refuses coherent traversal overrides without a supported semantic mapping`() {
     val fixture = ExecutionPlanAdmissionFixture()
     val plan = fixture.plan
-    val changed = plan.withTraversal(
-      plan.traversal.copy(
-        backwardEdges = plan.traversal.backwardEdges.mapIndexed { index, edge ->
-          if (index == 0) edge.copy(perEdgeCap = (edge.perEdgeCap ?: 1) + 1) else edge
-        },
-      ),
-    )
+    val changed =
+      plan.withTraversal(
+        plan.traversal.copy(
+          backwardEdges =
+            plan.traversal.backwardEdges.mapIndexed { index, edge ->
+              if (index == 0) edge.copy(perEdgeCap = (edge.perEdgeCap ?: 1) + 1) else edge
+            },
+        ),
+      )
     assertNotEquals(plan.traversal, changed.traversal)
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
       fixture.codec.encodeExecution(changed, fixture.inputs)
     }
-    val encoded = fixture.codec.encode(
-      changed.withEffectivePolicies(
-        FeatureTaskRuntimeEffectivePolicies.resolve(changed, fixture.inputs),
-      ),
-    )
+    val encoded =
+      fixture.codec.encode(
+        changed.withEffectivePolicies(
+          FeatureTaskRuntimeEffectivePolicies.resolve(changed, fixture.inputs),
+        ),
+      )
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
       fixture.compatibility.requireSupportedExecution(encoded, fixture.inputs)
     }
@@ -85,15 +87,16 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
       )
     }
     restored.effectivePolicies.forEach { selected ->
-      val changed = restored.effectivePolicies.map {
-        if (it == selected) {
-          it.copy(
-            semanticDigest = "0".repeat(64),
-          )
-        } else {
-          it
+      val changed =
+        restored.effectivePolicies.map {
+          if (it == selected) {
+            it.copy(
+              semanticDigest = "0".repeat(64),
+            )
+          } else {
+            it
+          }
         }
-      }
       assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
         compatibility.requireSupportedExecution(codec.encode(restored.withEffectivePolicies(changed)), inputs)
       }
@@ -118,44 +121,49 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
   @Test
   fun `effective command identity compares resolved wrappers while retaining ordered argv and execution settings`() {
     val original = codec.encodeExecution(plan, inputs)
-    val equivalent = inputs.copy(
-      gradleWrapper = null,
-      declaration = declaration.copy(
-        collectAllFullGateCommand = listOf("runtime/gradlew", "-p", "runtime", "check", "--continue"),
-        cacheBypassingCollectAllFullGateCommand = listOf(
-          "runtime/gradlew",
-          "-p",
-          "runtime",
-          "check",
-          "--continue",
-          "--rerun-tasks",
-        ),
-        suppressionMarkers = declaration.suppressionMarkers.reversed(),
-        findings = declaration.findings.copy(artifactGlobs = declaration.findings.artifactGlobs.reversed()),
-      ),
-    )
+    val equivalent =
+      inputs.copy(
+        gradleWrapper = null,
+        declaration =
+          declaration.copy(
+            collectAllFullGateCommand = listOf("runtime/gradlew", "-p", "runtime", "check", "--continue"),
+            cacheBypassingCollectAllFullGateCommand =
+              listOf(
+                "runtime/gradlew",
+                "-p",
+                "runtime",
+                "check",
+                "--continue",
+                "--rerun-tasks",
+              ),
+            suppressionMarkers = declaration.suppressionMarkers.reversed(),
+            findings = declaration.findings.copy(artifactGlobs = declaration.findings.artifactGlobs.reversed()),
+          ),
+      )
     assertContentEquals(original, codec.encodeExecution(plan, equivalent))
     assertContentEquals(original, codec.encode(compatibility.requireSupportedExecution(original, equivalent)))
-    val changed = listOf(
-      inputs.copy(gradleWrapper = "different/gradlew"),
-      inputs.copy(packSlug = "custom-pack"),
-      inputs.copy(phaseTimeoutMillis = null),
-      inputs.copy(phaseTimeoutMillis = 0),
-      inputs.copy(commandFamily = ValidationGateCommandFamily.BUILD),
-      inputs.copy(declaration = null),
-      inputs.copy(
-        declaration = declaration.copy(collectAllFullGateCommand = listOf("./gradlew", "--continue", "check")),
-      ),
-      inputs.copy(
-        declaration = declaration.copy(cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "check")),
-      ),
-      inputs.copy(declaration = declaration.copy(findings = declaration.findings.copy(executedWork = null))),
-      inputs.copy(declaration = declaration.copy(suppressionMarkers = emptyList())),
-    )
+    val changed =
+      listOf(
+        inputs.copy(gradleWrapper = "different/gradlew"),
+        inputs.copy(packSlug = "custom-pack"),
+        inputs.copy(phaseTimeoutMillis = null),
+        inputs.copy(phaseTimeoutMillis = 0),
+        inputs.copy(commandFamily = ValidationGateCommandFamily.BUILD),
+        inputs.copy(declaration = null),
+        inputs.copy(
+          declaration = declaration.copy(collectAllFullGateCommand = listOf("./gradlew", "--continue", "check")),
+        ),
+        inputs.copy(
+          declaration = declaration.copy(cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "check")),
+        ),
+        inputs.copy(declaration = declaration.copy(findings = declaration.findings.copy(executedWork = null))),
+        inputs.copy(declaration = declaration.copy(suppressionMarkers = emptyList())),
+      )
     changed.forEach { current ->
-      val error = assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
-        compatibility.requireSupportedExecution(original, current)
-      }
+      val error =
+        assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> {
+          compatibility.requireSupportedExecution(original, current)
+        }
       assertFalse(error.message.orEmpty().contains("gradlew"))
     }
     assertNotEquals(effectivePolicyDigest(null), effectivePolicyDigest(emptyList<String>()))
@@ -182,13 +190,15 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
     assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> {
       validator.write(duplicate, "duplicate policy")
     }
-    val maximum = resolved.withEffectivePolicies(
-      (1..254).map { ResolvedExecutionPolicy("policy-$it", 1, "a".repeat(64)) },
-    )
+    val maximum =
+      resolved.withEffectivePolicies(
+        (1..254).map { ResolvedExecutionPolicy("policy-$it", 1, "a".repeat(64)) },
+      )
     assertEquals(254, codec.decode(codec.encode(maximum)).effectivePolicies.size)
-    val excessive = maximum.withEffectivePolicies(
-      maximum.effectivePolicies + ResolvedExecutionPolicy("policy-255", 1, "a".repeat(64)),
-    )
+    val excessive =
+      maximum.withEffectivePolicies(
+        maximum.effectivePolicies + ResolvedExecutionPolicy("policy-255", 1, "a".repeat(64)),
+      )
     assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> { codec.encode(excessive) }
     val oversized = inputs.copy(declaration = declaration.copy(suppressionMarkers = listOf("x".repeat(65536))))
     assertFailsWith<InvalidFeatureTaskRuntimeExecutionPlanSchemaError> { codec.encodeExecution(plan, oversized) }
@@ -200,43 +210,47 @@ class FeatureTaskRuntimeEffectivePoliciesTest {
 
   private val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
   private val codec = FeatureTaskRuntimeExecutionPlanCodec(validator)
-  private val strategy = PackValidationStrategy(object : PhaseRunner {
-    override fun run(input: PhaseStepInput, state: PhaseLaunchState): PhaseStepOutput =
-      error("Descriptor admission cannot launch execution")
-  })
+  private val strategy = PackValidationStrategy()
   private val registry = PhaseStrategyRegistry(listOf(strategy))
-  private val lookup = PhaseStrategyLookup(
-    registry,
-    PhaseStrategySelection(
+  private val lookup =
+    PhaseStrategyLookup(
       registry,
-      mapOf(
-        SkeletonDefinition.VALIDATION to mapOf(
-          PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(strategy.strategyId),
+      PhaseStrategySelection(
+        registry,
+        mapOf(
+          SkeletonDefinition.VALIDATION to
+            mapOf(
+              PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(strategy.strategyId),
+            ),
         ),
       ),
-    ),
-  )
+    )
   private val plan = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()))
   private val compatibility = FeatureTaskRuntimeExecutionPlanCompatibility(codec, lookup)
-  private val declaration = ValidationGateDeclaration(
-    fullGateCommand = listOf("./gradlew", "check"),
-    cacheBypassingFullGateCommand = listOf("./gradlew", "check", "--rerun-tasks"),
-    collectAllFullGateCommand = listOf("./gradlew", "check", "--continue"),
-    cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "check", "--continue", "--rerun-tasks"),
-    findings = ValidationGateFindingsLocator(
-      ValidationGateFindingsFormat.JUNIT_XML,
-      listOf("**/test-results/*.xml", "**/reports/*.xml"),
-      ValidationGateCompilerDiagnosticsLocator(ValidationGateCompilerDiagnosticsFormat.GRADLE_KOTLIN_COMPILER_STDOUT),
-      ValidationGateExecutedWorkSignal(ValidationGateExecutedWorkFormat.GRADLE_ACTIONABLE_SUMMARY),
-    ),
-    suppressionMarkers = listOf("@Suppress", "noinspection"),
-  )
-  private val inputs = EffectiveGatePolicyInputs(
-    ValidationGateCommandFamily.VALIDATION,
-    "kotlin",
-    declaration,
-    "runtime/gradlew",
-    ValidationDepth.FULL,
-    60000,
-  )
+  private val declaration =
+    ValidationGateDeclaration(
+      fullGateCommand = listOf("./gradlew", "check"),
+      cacheBypassingFullGateCommand = listOf("./gradlew", "check", "--rerun-tasks"),
+      collectAllFullGateCommand = listOf("./gradlew", "check", "--continue"),
+      cacheBypassingCollectAllFullGateCommand = listOf("./gradlew", "check", "--continue", "--rerun-tasks"),
+      findings =
+        ValidationGateFindingsLocator(
+          ValidationGateFindingsFormat.JUNIT_XML,
+          listOf("**/test-results/*.xml", "**/reports/*.xml"),
+          ValidationGateCompilerDiagnosticsLocator(
+            format = ValidationGateCompilerDiagnosticsFormat.GRADLE_KOTLIN_COMPILER_STDOUT,
+          ),
+          ValidationGateExecutedWorkSignal(ValidationGateExecutedWorkFormat.GRADLE_ACTIONABLE_SUMMARY),
+        ),
+      suppressionMarkers = listOf("@Suppress", "noinspection"),
+    )
+  private val inputs =
+    EffectiveGatePolicyInputs(
+      ValidationGateCommandFamily.VALIDATION,
+      "kotlin",
+      declaration,
+      "runtime/gradlew",
+      ValidationDepth.FULL,
+      60000,
+    )
 }

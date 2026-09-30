@@ -6,7 +6,7 @@ import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
 import skillbill.engine.featuretask.persist.RuntimeOwnedFactUnavailable
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistArgs
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSessionObservations
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseReviewPersistenceArgs
@@ -17,8 +17,8 @@ import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
 import skillbill.engine.featuretask.runloop.core.phaseBlockArgs
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopProgressObservations
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopTransitionOwner
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
@@ -32,9 +32,9 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputR
 
 internal data class ReviewOutputPersistenceContext(
   val request: FeatureTaskRuntimeRunFacts,
-  val state: FeatureTaskRuntimeRunLoopProgressObservations,
-  val transitions: FeatureTaskRuntimeRunLoopTransitionOwner,
-  val session: FeatureTaskRuntimeRunLoopSessionObservations,
+  val state: FeatureTaskRuntimeProgressSnapshotAccess,
+  val transitions: FeatureTaskRuntimeRunTransitionOwner,
+  val session: FeatureTaskRuntimeRunSessionObservations,
   val recorder: PhaseRunRecords,
   val observability: FeatureTaskRuntimeRunObservability,
   val goalContinuationRecorder: PhaseRunGoal,
@@ -42,7 +42,7 @@ internal data class ReviewOutputPersistenceContext(
 
 internal fun isGoalReviewRun(
   run: PhaseRun,
-  state: FeatureTaskRuntimeRunLoopProgressObservations,
+  state: FeatureTaskRuntimeProgressSnapshotAccess,
 ): Boolean = state.resumeRules(run.phaseId).tracksReviewPasses && isGoalContinuationRun(run.request)
 
 object FeatureTaskRuntimeRunLoopReviewCompletion {
@@ -59,12 +59,10 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
         recordStandaloneReviewCompletion(args, outputText, acceptedOutput)
       } catch (error: RuntimeOwnedFactUnavailable) {
         return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-          request,
-          state,
-          transitions,
-          recorder,
-          observability,
-          PhaseBlockRequest(
+    state,
+    transitions,
+    recorder,
+    PhaseBlockRequest(
             run = run,
             attemptCount = iteration,
             reason =
@@ -73,25 +71,23 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
             observability = observability,
             failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
           ),
-        )
+  )
       }
     return if (persisted) {
       null
     } else {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-        request,
-        state,
-        transitions,
-        recorder,
-        observability,
-        PhaseBlockRequest(
+    state,
+    transitions,
+    recorder,
+    PhaseBlockRequest(
           run = run,
           attemptCount = iteration,
           reason = "Runtime-owned review settlement could not be persisted.",
           observability = observability,
           failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
         ),
-      )
+  )
     }
   }
 
@@ -119,7 +115,7 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
               fileManifest = args.fileManifest,
               normalizedOutput = acceptedOutput.normalizedOutput,
               repairEvidence = acceptedOutput.repairEvidence,
-              reviewRunId = state.recordFor(args.run.phaseId)?.reviewRunId,
+              reviewRunId = state.phase(args.run.phaseId).record?.reviewRunId,
             ),
         ),
       )
@@ -164,12 +160,11 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
             payload = BlockAndPersistPayload(fileManifest = fileManifest),
           )
         return FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersist(
-          request,
-          state,
-          transitions,
-          recorder,
-          goalContinuationRecorder,
-          BlockAndPersistArgs(
+    state,
+    transitions,
+    recorder,
+    goalContinuationRecorder,
+    BlockAndPersistArgs(
             run = inPhase.run,
             attemptCount = inPhase.attemptCount,
             reason = inPhase.reason,
@@ -179,25 +174,23 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
             failureDisposition = inPhase.failureDisposition,
             payload = inPhase.payload,
           ),
-        )
+  )
       }
     return if (completed) {
       null
     } else {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-        request,
-        state,
-        transitions,
-        recorder,
-        observability,
-        PhaseBlockRequest(
+    state,
+    transitions,
+    recorder,
+    PhaseBlockRequest(
           run = run,
           attemptCount = iteration,
           reason = "Goal-subtask review could not atomically persist its reserved pass and completed phase.",
           observability = observability,
           payload = BlockAndPersistPayload(fileManifest = fileManifest),
         ),
-      )
+  )
     }
   }
 

@@ -34,17 +34,17 @@ internal class FeatureTaskRuntimeRunState(
   initialReviewGeneration: Int = 0,
   private val stepVerdictRule: (String) -> FeatureTaskRuntimeStepVerdictRule? = { null },
   private val resumeRulesFn: (String) -> PhaseResumeRules,
-) : FeatureTaskRuntimeRunLoopProgressObservations {
+) : FeatureTaskRuntimeProgressSnapshotAccess {
   private var transitionOwnership:
-    Pair<FeatureTaskRuntimeRunLoopSession, FeatureTaskRuntimeRunLoopTransitionOwner>? = null
+    Pair<FeatureTaskRuntimeRunLoopSession, FeatureTaskRuntimeRunTransitionOwner>? = null
 
-  fun transitionOwnerFor(session: FeatureTaskRuntimeRunLoopSession): FeatureTaskRuntimeRunLoopTransitionOwner {
+  fun transitionOwnerFor(session: FeatureTaskRuntimeRunLoopSession): FeatureTaskRuntimeRunTransitionOwner {
     val existing = transitionOwnership
     if (existing != null) {
       check(existing.first === session) { "Run progress cannot be paired with a different session." }
       return existing.second
     }
-    return FeatureTaskRuntimeRunLoopTransitionOwner(this, session).also { owner ->
+    return FeatureTaskRuntimeRunTransitionOwner(this, session).also { owner ->
       transitionOwnership = session to owner
     }
   }
@@ -84,7 +84,8 @@ internal class FeatureTaskRuntimeRunState(
     completedReviewPassNumber = source.completedReviewPassNumber
   }
 
-  fun progressSnapshot(): FeatureTaskRuntimeRunLoopProgressObservations =
+  val progressSnapshot: FeatureTaskRuntimeProgressSnapshotAccess
+    get() =
     detachedProgressObservations(FeatureTaskRuntimeRunState(this))
 
   private val transitionDeclaration: FeatureTaskRuntimeTransitionDeclaration =
@@ -296,6 +297,17 @@ internal class FeatureTaskRuntimeRunState(
     durableReviewInvalidationTombstone?.let(::resetInvalidatedReviewGeneration)
   }
 
+  override fun phase(phaseId: String): PhaseProgressObservation = PhaseProgressObservation(
+    completed = phaseId in completedPhases,
+    hasPriorRecord = phaseId in priorRecords,
+    resumedFromPriorProcess = phaseId in initialRecords && phaseId !in phasesLaunchedThisProcess,
+    blockedReason = blockedRecords[phaseId],
+    branchSetupBlocked = phaseId in branchSetupBlockedPhases,
+    record = detachedInitialRecords[phaseId]?.let(::detachedRecord),
+    output = outputBuffer.filter { it.phaseId == phaseId }.maxByOrNull { it.iteration }?.let(::detachedOutput),
+    nextIteration = nextIteration(phaseId),
+  )
+
   override fun outputs(requiredPhaseIds: Collection<String>): List<FeatureTaskRuntimePhaseOutput> {
     val inMemory = outputBuffer.map(::detachedOutput)
     if (requiredPhaseIds.isEmpty()) return inMemory
@@ -323,7 +335,8 @@ internal class FeatureTaskRuntimeRunState(
     phaseTokenUsage[phaseId] = inputTokens to outputTokens
   }
 
-  override fun phasesRequiringDurableGateInvalidation(): Set<String> = gateInvalidatedPhaseIds.toSet()
+  override val phasesRequiringDurableGateInvalidation: Set<String>
+    get() = gateInvalidatedPhaseIds.toSet()
 
   internal fun resetInvalidatedReviewGeneration(reviewStepId: String) {
     val loopId = FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID
@@ -341,8 +354,6 @@ internal class FeatureTaskRuntimeRunState(
     completedReviewPassNumber = null
   }
 
-  override fun recordFor(phaseId: String): FeatureTaskRuntimePhaseRecord? =
-    detachedInitialRecords[phaseId]?.let(::detachedRecord)
 
   internal fun reopenForReentry(phaseId: String) {
     completedPhases.remove(phaseId)
@@ -351,7 +362,7 @@ internal class FeatureTaskRuntimeRunState(
 
   override fun explicitResumeStart(requestedPhaseId: String): ExplicitResumeStart {
     val requestedStart = ExplicitResumeStart(requestedPhaseId, reopen = true)
-    if (!resumeRules(requestedPhaseId).resumesPastCompletion || !isComplete(requestedPhaseId)) {
+    if (!resumeRules(requestedPhaseId).resumesPastCompletion || !(requestedPhaseId in completedPhases)) {
       return requestedStart
     }
     val auditIndex = transitions.forwardPhaseIds.indexOf(requestedPhaseId)
@@ -359,10 +370,10 @@ internal class FeatureTaskRuntimeRunState(
     val laterPhaseIds = transitions.forwardPhaseIds.drop(auditIndex + 1)
     val furthestLater =
       laterPhaseIds.lastOrNull { phaseId ->
-        hasPriorRecord(phaseId) || isComplete(phaseId)
+        (phaseId in priorRecords) || (phaseId in completedPhases)
       }
     val resumePhaseId = furthestLater ?: laterPhaseIds.firstOrNull() ?: return requestedStart
-    return ExplicitResumeStart(resumePhaseId, reopen = !isComplete(resumePhaseId))
+    return ExplicitResumeStart(resumePhaseId, reopen = !(resumePhaseId in completedPhases))
   }
 
   internal fun reopenFromExplicitResume(phaseId: String) {
@@ -386,7 +397,6 @@ internal class FeatureTaskRuntimeRunState(
     fixLoopBudgetBaseByPhase[phaseId] = maxOf(nextIteration(phaseId) - 1, 0)
   }
 
-  override fun isComplete(phaseId: String): Boolean = phaseId in completedPhases
 
   internal fun recordCompleted(output: FeatureTaskRuntimePhaseOutput) {
     outputBuffer += detachedOutput(output)
@@ -397,7 +407,8 @@ internal class FeatureTaskRuntimeRunState(
     }
   }
 
-  override fun completedPhaseIds(): List<String> =
+  override val completedPhaseIds: List<String>
+    get() =
     FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds.filter { it in completedPhases }
 
   override fun fixLoopIterationFor(
@@ -453,29 +464,25 @@ internal class FeatureTaskRuntimeRunState(
         ?.contains("rejected an upstream bounded planning projection at the launch seam") == true
   }
 
-  override fun hasPriorRecord(phaseId: String): Boolean = phaseId in priorRecords
 
-  override fun resumedFromPriorProcess(phaseId: String): Boolean =
-    phaseId in initialRecords && phaseId !in phasesLaunchedThisProcess
 
   internal fun recordPhaseLaunched(phaseId: String) {
     phasesLaunchedThisProcess += phaseId
   }
 
-  override fun persistedBlockedReason(phaseId: String): String? = blockedRecords[phaseId]
 
   internal fun clearPersistedBlock(phaseId: String) {
     blockedRecords.remove(phaseId)
   }
 
-  override fun hasBranchSetupBlock(phaseId: String): Boolean = phaseId in branchSetupBlockedPhases
 
   internal fun clearBranchSetupBlock(phaseId: String) {
     branchSetupBlockedPhases.remove(phaseId)
     persistedAttemptCounts.remove(phaseId)
   }
 
-  override fun edgeIterationCount(loopId: String): Int = edgeIterationByLoop[loopId] ?: 0
+  override fun loop(loopId: String): LoopProgressObservation =
+    LoopProgressObservation(edgeIterationByLoop[loopId] ?: 0, loopId in liveClaimedLoops)
 
   internal fun recordEdgeIteration(
     loopId: String,
@@ -485,7 +492,6 @@ internal class FeatureTaskRuntimeRunState(
     liveClaimedLoops += loopId
   }
 
-  override fun isLoopLiveClaimed(loopId: String): Boolean = loopId in liveClaimedLoops
 
   internal fun discardStaleReentry(loopId: String) {
     inFlightReentries.remove(loopId)
@@ -496,10 +502,11 @@ internal class FeatureTaskRuntimeRunState(
   internal val latestInFlightReentry: Pair<String, InFlightReentry>?
     get() = inFlightReentries.maxByOrNull { (_, reentry) -> reentry.edgeSequenceNumber }?.toPair()
 
-  override fun outputFor(phaseId: String): FeatureTaskRuntimePhaseOutput? =
+
+  private fun outputFor(phaseId: String): FeatureTaskRuntimePhaseOutput? =
     outputBuffer.filter { it.phaseId == phaseId }.maxByOrNull { it.iteration }?.let(::detachedOutput)
 
-  override fun nextIteration(phaseId: String): Int {
+  private fun nextIteration(phaseId: String): Int {
     val latestOutputIteration = outputBuffer.filter { it.phaseId == phaseId }.maxOfOrNull { it.iteration } ?: 0
     val persistedAttempts = persistedAttemptCounts[phaseId] ?: 0
     return maxOf(persistedAttempts, latestOutputIteration) + 1
@@ -521,43 +528,11 @@ internal class FeatureTaskRuntimeRunState(
     return requireNotNull(detachedJsonValue(parsed)).toWorkflowArtifactMap()
   }
 
-  private fun detachedOutput(output: FeatureTaskRuntimePhaseOutput): FeatureTaskRuntimePhaseOutput =
-    output.copy(
-      normalizedOutput =
-        output.normalizedOutput?.let { normalized ->
-          NormalizedFeatureTaskRuntimePhaseOutput(
-            normalized.canonicalJson,
-            detachedEnvelope(normalized),
-          )
-        },
-    )
-
-  private fun detachedEnvelope(normalized: NormalizedFeatureTaskRuntimePhaseOutput): Map<String, Any?> {
-    val envelope = normalized.envelopePayload() as Map<*, *>
-    return envelope.entries.associate { (key, value) -> key.toString() to detachedJsonValue(value) }
-  }
-
-  private fun detachedRecord(record: FeatureTaskRuntimePhaseRecord): FeatureTaskRuntimePhaseRecord =
-    record.copy(
-      fileManifestBefore = record.fileManifestBefore.toList(),
-      fileManifestAfter = record.fileManifestAfter.toList(),
-      fileManifestIntroduced = record.fileManifestIntroduced.toList(),
-    )
-
-  private fun detachedJsonValue(value: Any?): Any? =
-    when (value) {
-      is Map<*, *> -> value.entries.associate { (key, nested) -> key.toString() to detachedJsonValue(nested) }
-      is List<*> -> value.map(::detachedJsonValue)
-      is Set<*> -> value.mapTo(linkedSetOf(), ::detachedJsonValue)
-      is Array<*> -> value.map(::detachedJsonValue)
-      else -> value
-    }
-
   internal fun advanceReviewGeneration(next: Int) {
     if (next > reviewGeneration) reviewGeneration = next
   }
 
-  override fun evidenceGeneration(generationScoped: Boolean): Int = if (generationScoped) reviewGeneration else 0
+  override val reviewEvidenceGeneration: Int get() = reviewGeneration
 
   internal fun reserveReviewPass(passNumber: Int?) {
     if (passNumber != null) currentReviewPassNumber = passNumber
@@ -590,7 +565,7 @@ internal class FeatureTaskRuntimeRunState(
 internal fun FeatureTaskRuntimeRunState.unresolvedReviewFindings(
   phaseId: String,
 ): List<FeatureTaskRuntimeReviewFinding> =
-  FeatureTaskRuntimeOutputVerification.unresolvedReviewFindings(parsedOutput(outputFor(phaseId)))
+  FeatureTaskRuntimeOutputVerification.unresolvedReviewFindings(parsedOutput(phase(phaseId).output))
 
 private fun recentBlockedReasons(
   ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,

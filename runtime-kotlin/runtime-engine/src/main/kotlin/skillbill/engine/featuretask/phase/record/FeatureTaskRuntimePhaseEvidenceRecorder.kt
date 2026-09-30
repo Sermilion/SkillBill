@@ -153,9 +153,7 @@ class FeatureTaskRuntimePhaseEvidenceRecorder(
         }
     }
 
-  fun appendCheckpointIdentity(
-    args: AppendCheckpointIdentityArgs,
-  ): Boolean =
+  fun appendCheckpointIdentity(args: AppendCheckpointIdentityArgs): Boolean =
     database.transaction { unitOfWork ->
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, args.workflowId)
