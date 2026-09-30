@@ -4,6 +4,7 @@ import skillbill.application.reviewevidence.model.DiffResolutionException
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.diff.model.ReviewDiffQuery
 import skillbill.review.context.model.commit.ReviewCommitCoverageFact
 import skillbill.review.context.model.commit.ReviewCommitSource
 import skillbill.review.context.model.commit.ReviewCommitUnit
@@ -93,13 +94,9 @@ internal class SharedReviewEvidenceAssembler(private val diffResolver: DiffResol
   private fun revList(
     repoRoot: Path,
     range: ReviewCommitRange,
-  ): List<String> {
-    val output =
-      diffResolver
-        .runProcess(listOf("git", "rev-list", "--first-parent", "--reverse", range.span), repoRoot)
-        ?: throw DiffResolutionException("Could not enumerate the commit sequence for ${range.span}.")
-    return output.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
-  }
+  ): List<String> =
+    diffResolver.firstParentCommits(repoRoot, range.baseRevision, range.headRevision)
+      ?: throw DiffResolutionException("Could not enumerate the commit sequence for ${range.span}.")
 
   private fun readCommit(
     repoRoot: Path,
@@ -107,16 +104,13 @@ internal class SharedReviewEvidenceAssembler(private val diffResolver: DiffResol
     baseRevision: String,
   ): RawCommitDiff {
     val metadata =
-      diffResolver.runProcess(listOf("git", "show", "-s", "--format=%P%n%s", sha), repoRoot)
+      diffResolver.commitMetadata(repoRoot, sha)
         ?: throw DiffResolutionException("Could not read commit metadata for '$sha'.")
-    val lines = metadata.lines()
-
-    val parent = lines.firstOrNull()?.trim()?.split(" ")?.firstOrNull()?.takeIf { it.isNotEmpty() } ?: baseRevision
-    val subject = lines.drop(1).joinToString("\n").trim()
+    val parent = metadata.parentShas.firstOrNull() ?: baseRevision
     val diff =
-      diffResolver.runProcess(listOf("git", "diff", parent, sha), repoRoot)
+      diffResolver.diff(repoRoot, ReviewDiffQuery.CommitRange(parent, sha))
         ?: throw DiffResolutionException("Could not read the incremental diff for commit '$sha'.")
-    return RawCommitDiff(sha, parent, subject, diff)
+    return RawCommitDiff(sha, parent, metadata.subject, diff)
   }
 }
 

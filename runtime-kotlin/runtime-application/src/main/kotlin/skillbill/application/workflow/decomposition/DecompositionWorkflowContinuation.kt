@@ -144,12 +144,12 @@ class DecompositionWorkflowContinuation(
                 listOf(
                   mapOf(
                     SharedPayloadKeys.STEP_ID to "preplan",
-                    SharedPayloadKeys.STATUS to "completed",
+                    SharedPayloadKeys.STATUS to WorkflowStepStatus.COMPLETED.wireValue,
                     "attempt_count" to 1,
                   ),
                   mapOf(
                     SharedPayloadKeys.STEP_ID to "plan",
-                    SharedPayloadKeys.STATUS to "completed",
+                    SharedPayloadKeys.STATUS to WorkflowStepStatus.COMPLETED.wireValue,
                     "attempt_count" to 1,
                   ),
                 ),
@@ -393,7 +393,7 @@ class DecompositionWorkflowContinuation(
               listOf(
                 mapOf(
                   SharedPayloadKeys.STEP_ID to "preplan",
-                  SharedPayloadKeys.STATUS to "running",
+                  SharedPayloadKeys.STATUS to WorkflowStepStatus.RUNNING.wireValue,
                   "attempt_count" to 1,
                 ),
               ),

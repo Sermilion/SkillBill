@@ -14,9 +14,9 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
-const val SCAFFOLD_SESSION_SUFFIX_LENGTH = 4
+private const val SCAFFOLD_SESSION_SUFFIX_LENGTH = 4
 
-fun generateScaffoldSessionId(clock: Clock): String {
+private fun generateScaffoldSessionId(clock: Clock): String {
   val date = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC).format(DateTimeFormatter.BASIC_ISO_DATE)
   val suffix = UUID.randomUUID().toString().take(SCAFFOLD_SESSION_SUFFIX_LENGTH)
   return "nss-$date-$suffix"

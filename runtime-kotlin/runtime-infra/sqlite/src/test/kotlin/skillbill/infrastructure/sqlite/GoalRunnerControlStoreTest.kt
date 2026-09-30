@@ -257,6 +257,59 @@ class GoalRunnerControlStoreTest {
   }
 
   @Test
+  fun `malformed durable acceptance identity and review policy fail typed and never authorize another subtask`() {
+    val dbPath = Files.createTempDirectory("skillbill-goal-malformed-controls").resolve("metrics.db")
+    val malformedIdentities = listOf("2.5", "2147483648", "0", "-1", "\"2\"")
+
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = GoalRunnerControlStore(connection)
+      malformedIdentities.forEachIndexed { index, identity ->
+        val parent = "parent-malformed-$index"
+        store.persistControlState(parent, GoalRunnerControlState())
+        writeRawAcceptances(connection, parent, rawAcceptanceList(identity))
+        assertFailsWith<InvalidWorkflowStateSchemaError>("subtask_id $identity must be rejected.") {
+          store.outOfBandAcceptances(parent)
+        }
+      }
+      store.persistControlState("parent-blank-commit", GoalRunnerControlState())
+      writeRawAcceptances(connection, "parent-blank-commit", rawAcceptanceList("2", " "))
+      assertFailsWith<InvalidWorkflowStateSchemaError> { store.outOfBandAcceptances("parent-blank-commit") }
+
+      store.persistControlState("parent-unknown-mode", GoalRunnerControlState())
+      connection.prepareStatement(
+        "UPDATE goal_runner_controls SET review_policy_json = ? WHERE parent_workflow_id = ?",
+      ).use { statement ->
+        statement.setString(1, """{"code_review_mode":"not-a-mode"}""")
+        statement.setString(2, "parent-unknown-mode")
+        statement.executeUpdate()
+      }
+      assertFailsWith<InvalidWorkflowStateSchemaError> { store.reviewPolicy("parent-unknown-mode") }
+    }
+  }
+
+  private fun rawAcceptanceList(
+    subtaskId: String,
+    commitSha: String = "abc123",
+  ): String =
+    """
+    [{"subtask_id":$subtaskId,"commit_sha":"$commitSha","reason":"accepted","accepted_at":"2026-08-01T10:00:00Z"}]
+    """.trimIndent()
+
+  private fun writeRawAcceptances(
+    connection: Connection,
+    parentWorkflowId: String,
+    json: String,
+  ) {
+    connection.prepareStatement(
+      "UPDATE goal_runner_controls SET out_of_band_acceptances_json = ? WHERE parent_workflow_id = ?",
+    ).use { statement ->
+      statement.setString(1, json)
+      statement.setString(2, parentWorkflowId)
+      statement.executeUpdate()
+    }
+  }
+
+  @Test
   fun `switching current subtask id zeros only the subtask accumulator`() {
     val state =
       GoalRunnerControlState(

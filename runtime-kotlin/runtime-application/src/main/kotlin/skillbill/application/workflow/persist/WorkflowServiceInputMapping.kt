@@ -39,6 +39,7 @@ import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.WorkflowStepStatus
 import java.nio.file.Path
 import java.time.Clock
 import java.time.ZoneOffset
@@ -167,7 +168,7 @@ internal fun WorkflowContinueDecision.toReopenInput(sessionId: String): Workflow
         listOf(
           mapOf(
             SharedPayloadKeys.STEP_ID to resumeStepId,
-            SharedPayloadKeys.STATUS to "running",
+            SharedPayloadKeys.STATUS to WorkflowStepStatus.RUNNING.wireValue,
             "attempt_count" to nextAttemptCount,
           ),
         ),

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.application.decomposition.repoRelativePath
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.contracts.review.ReviewFinishedTelemetryPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
@@ -99,6 +100,17 @@ internal object WireVocabularyGovernedSeamInventory {
           ),
       ),
       GovernedPayloadSeam(
+        seamId = "goal-runner-controls",
+        schemaRepoRelativePath = GOAL_RUNNER_CONTROLS_AUTHORITY,
+        governedRelativePathMarkers =
+          listOf(
+            "application/workflow/service/LegacyGoalRunnerControlMigration",
+            "infrastructure/sqlite/workflow/goalrunner/runner/LegacyGoalRunnerControlLedgerMigration",
+            "infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreDecodePolicies",
+            "infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreEncode",
+          ),
+      ),
+      GovernedPayloadSeam(
         seamId = "sqlite-telemetry-materialization",
         schemaRepoRelativePath = SQLITE_TELEMETRY_MATERIALIZATION_AUTHORITY,
         governedRelativePathMarkers =
@@ -128,6 +140,9 @@ internal object WireVocabularyGovernedSeamInventory {
 
   const val GOAL_CONTINUATION_ARTIFACT_SCHEMA_AUTHORITY: String =
     "internal/feature-task-runtime-goal-continuation-artifact"
+
+  const val GOAL_RUNNER_CONTROLS_AUTHORITY: String =
+    "internal/goal-runner-controls"
 
   const val SQLITE_TELEMETRY_MATERIALIZATION_AUTHORITY: String =
     "internal/sqlite-telemetry-materialization"
@@ -159,6 +174,7 @@ internal object WireVocabularyGovernedSeamInventory {
       FeatureTaskRuntimeExecutionPlanSchemaPaths.REPO_RELATIVE_PATH ->
         executionPlanGovernedKeys(loadRepoSchema(schemaRepoRelativePath))
       GOAL_CONTINUATION_ARTIFACT_SCHEMA_AUTHORITY -> goalContinuationArtifactGovernedKeys()
+      GOAL_RUNNER_CONTROLS_AUTHORITY -> goalRunnerControlsGovernedKeys()
       SQLITE_TELEMETRY_MATERIALIZATION_AUTHORITY -> sqliteTelemetryMaterializationGovernedKeys()
       SQLITE_REVIEW_TELEMETRY_AUTHORITY -> sqliteReviewTelemetryGovernedKeys()
       TELEMETRY_PROXY_AUTHORITY -> telemetryProxyGovernedKeys()
@@ -214,6 +230,20 @@ internal object WireVocabularyGovernedSeamInventory {
       FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SLUG,
       FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SOURCE_IDENTITY,
       FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256,
+    )
+
+  private fun goalRunnerControlsGovernedKeys(): Set<String> =
+    setOf(
+      SharedPayloadKeys.SUBTASK_ID,
+      DecompositionManifestPayloadKeys.COMMIT_SHA,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARALLEL_REVIEW_AGENT,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.AGENT_ADDON_SELECTION,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SLUG,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SOURCE_IDENTITY,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ACCEPTANCE_REASON,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ACCEPTED_AT,
     )
 
   private fun decompositionManifestGovernedKeys(schema: JsonNode): Set<String> {

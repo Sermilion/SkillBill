@@ -1,3 +1,16 @@
+## [2026-10-01] SKILL-388 subtask 1 — Application boundary repairs and enforcement
+Areas: runtime-application/{review,reviewevidence,workflow,decomposition,uninstall}, runtime-ports/diff, runtime-infra/{workflow,sqlite}, runtime-engine/featuretask, runtime-cli/system, runtime-contracts, runtime-core repoTest, docs/observability-policy.md
+- Git facts now come through `DiffResolverPort` as fact-level reads (commit resolution, merge base, index entries, untracked paths, diff) with `ReviewDiffModels`; runtime-application no longer builds git argv. `FileSystemDiffResolver` owns process handling, separates stderr, distinguishes null from empty diff, and honors interrupts. reusable
+- `ParallelCodeReviewRunnerPlanning` keeps `diffResolver` private and exposes internal fact forwarders that the Revisions, LaneMap and EvidenceCoordinates extensions call.
+- Legacy goal-runner control migration (application and sqlite v40) decodes through typed policies, fails atomically on malformed identity or required fields, and chains the caught cause through error helpers returning Nothing.
+- Enum `wireValue` replaces string literals at decomposition and workflow retry seams; `WireVocabularyGovernedSeamInventory` and `TypedParseBoundaryArchitectureTest` gained the goal-runner-controls seam and missing-selection cases.
+- Uninstall confirmation text moved out of application models into the CLI command; prompt goes to live stdout, status to result stdout.
+- Dead code deleted and module-local declarations narrowed to internal; test fakes rewritten to fact-level fakes.
+- Trap: the engine shared-review resolver degrades only on IllegalArgumentException from diff-evidence parsing; a broad catch fails detekt.
+- Trap: KDoc on non-interface types and `//` comments in architecture scan support fail CommentAndInterfaceKdocArchitectureTest.
+Feature flag: N/A
+Acceptance criteria: 9/9 implemented (validate phase passed gradle check; agnix not run headless)
+
 ## [2026-09-23] SKILL-370 subtask 2 — Ownership moves and namespace hygiene
 Areas: runtime-application/{review,workflow,decomposition,telemetry,agentrun,idestatus}, runtime-engine, runtime-domain/workflow/decomposition
 - Dependency direction flipped: `runtime-engine` now declares `implementation(project(":runtime-application"))` and runtime-application declares no engine edge in any configuration. `RuntimeModuleCatalog` and `ARCHITECTURE.md` record the same edge.

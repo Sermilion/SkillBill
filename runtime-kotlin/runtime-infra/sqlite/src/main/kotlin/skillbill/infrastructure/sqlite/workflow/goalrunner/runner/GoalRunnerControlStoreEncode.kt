@@ -1,6 +1,8 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.runner
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowTimestampPayloadKeys
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
@@ -11,15 +13,15 @@ import java.time.Instant
 
 internal fun GoalRunnerReviewPolicy.toArtifactMap(): Map<String, Any?> =
   buildMap {
-    put("code_review_mode", codeReviewMode.wireValue)
+    put(FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE, codeReviewMode.wireValue)
     if (agentAddonSelection.entries.isNotEmpty()) {
       put(
-        "agent_addon_selection",
+        FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.AGENT_ADDON_SELECTION,
         agentAddonSelection.entries.map { entry ->
           mapOf(
-            "slug" to entry.slug,
-            "source_identity" to entry.sourceIdentity,
-            "content_sha256" to entry.contentSha256,
+            FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SLUG to entry.slug,
+            FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SOURCE_IDENTITY to entry.sourceIdentity,
+            FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256 to entry.contentSha256,
           )
         },
       )
@@ -29,9 +31,9 @@ internal fun GoalRunnerReviewPolicy.toArtifactMap(): Map<String, Any?> =
 internal fun GoalRunnerOutOfBandAcceptance.toArtifactMap(): Map<String, Any?> =
   mapOf(
     SharedPayloadKeys.SUBTASK_ID to subtaskId,
-    "commit_sha" to commitSha,
-    "reason" to reason,
-    "accepted_at" to acceptedAt,
+    DecompositionManifestPayloadKeys.COMMIT_SHA to commitSha,
+    FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ACCEPTANCE_REASON to reason,
+    FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ACCEPTED_AT to acceptedAt,
   )
 
 internal fun GoalRunnerExecutionLease.toArtifactMap(source: Map<*, *>? = null): Map<String, Any?> =

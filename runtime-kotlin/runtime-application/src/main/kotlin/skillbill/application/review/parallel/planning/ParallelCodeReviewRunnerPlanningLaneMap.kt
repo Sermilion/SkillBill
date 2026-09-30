@@ -9,10 +9,9 @@ import skillbill.application.reviewevidence.model.DiffResolutionException
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.diff.model.ReviewDiffQuery
 import skillbill.review.plan.ReviewStackRouting
 import skillbill.review.plan.model.ReviewRoutingChangedFile
-import skillbill.text.GIT_NUL_RECORD_DELIMITER
-import java.nio.file.Path
 
 internal fun ParallelCodeReviewRunnerPlanning.resolveAgent(
   agentId: String,
@@ -47,15 +46,13 @@ internal fun ParallelCodeReviewRunnerPlanning.resolveDiff(
             "$PARALLEL_REVIEW_MAX_SUPPLIED_DIFF_BYTES bytes.",
         )
     } ?: when (request.scope) {
-      ParallelReviewScope.STAGED -> runDiff(listOf("git", "diff", "--cached"), request.repoRoot)
-      ParallelReviewScope.UNSTAGED -> runDiff(listOf("git", "diff"), request.repoRoot)
+      ParallelReviewScope.STAGED -> queryDiff(request, ReviewDiffQuery.Staged)
+      ParallelReviewScope.UNSTAGED -> queryDiff(request, ReviewDiffQuery.Unstaged)
       ParallelReviewScope.UNCOMMITTED,
       ParallelReviewScope.WORKTREE_FROM_BASE,
       -> resolveWorktreeFromBaseDiff(request, base)
-      ParallelReviewScope.BRANCH -> runDiff(listOf("git", "diff", base, head), request.repoRoot)
-      ParallelReviewScope.PR ->
-        runProcess(listOf("git", "diff", base, head), request.repoRoot)
-          ?: runDiff(listOf("gh", "pr", "diff"), request.repoRoot)
+      ParallelReviewScope.BRANCH -> queryDiff(request, ReviewDiffQuery.CommitRange(base, head))
+      ParallelReviewScope.PR -> queryDiff(request, ReviewDiffQuery.PullRequest(base, head))
     }
   if (diffText.isBlank() && request.scope != ParallelReviewScope.WORKTREE_FROM_BASE) {
     throw DiffResolutionException("Diff is empty for scope '${request.scope.name.lowercase()}'.")
@@ -67,22 +64,17 @@ internal fun ParallelCodeReviewRunnerPlanning.resolveWorktreeFromBaseDiff(
   request: ParallelCodeReviewRequest,
   base: String,
 ): String {
-  val args =
-    buildList {
-      addAll(listOf("git", "diff", "--binary", base))
-      if (request.ownedPathspec.isNotEmpty()) {
-        add("--")
-        addAll(request.ownedPathspec)
-      }
-    }
-  val tracked = runProcess(args, request.repoRoot).orEmpty()
+  val tracked =
+    queryDiff(
+      request,
+      ReviewDiffQuery.WorkingTree(base, request.ownedPathspec, includeBinary = true),
+    )
   val excluded = request.baselineUntrackedPolicy.excludedPaths.toSet()
   val untracked =
-    runProcess(
-      listOf("git", "ls-files", "-o", "--exclude-standard", "-z"),
-      request.repoRoot,
-    ).orEmpty()
-      .split(GIT_NUL_RECORD_DELIMITER)
+    (
+      untrackedPaths(request.repoRoot)
+        ?: throw DiffResolutionException("Could not list untracked files for scope '${scopeName(request)}'.")
+    )
       .map(String::trim)
       .filter(String::isNotBlank)
       .filterNot { it in excluded }
@@ -95,10 +87,8 @@ internal fun ParallelCodeReviewRunnerPlanning.resolveWorktreeFromBaseDiff(
   val patches = StringBuilder()
   untracked.forEach { path ->
     val patch =
-      runProcess(
-        listOf("git", "diff", "--binary", "--no-index", "/dev/null", path),
-        request.repoRoot,
-      ).orEmpty()
+      diff(request.repoRoot, ReviewDiffQuery.UntrackedFile(path))
+        ?: throw DiffResolutionException("Could not read the diff of untracked file '$path'.")
     if (patch.isNotBlank()) {
       patches.append(patch)
       if (!patches.endsWith("\n")) patches.append('\n')
@@ -113,14 +103,14 @@ internal fun ParallelCodeReviewRunnerPlanning.resolveWorktreeFromBaseDiff(
   }
 }
 
-internal fun ParallelCodeReviewRunnerPlanning.runDiff(
-  args: List<String>,
-  workDir: Path,
+private fun scopeName(request: ParallelCodeReviewRequest): String = request.scope.name.lowercase()
+
+private fun ParallelCodeReviewRunnerPlanning.queryDiff(
+  request: ParallelCodeReviewRequest,
+  query: ReviewDiffQuery,
 ): String =
-  runProcess(args, workDir)
-    ?: throw DiffResolutionException(
-      "Command failed: ${args.joinToString(" ")}",
-    )
+  diff(request.repoRoot, query)
+    ?: throw DiffResolutionException("Could not read the diff for scope '${scopeName(request)}'.")
 
 internal fun ParallelCodeReviewRunnerPlanning.detectStack(
   evidence: ReviewDiffEvidence,

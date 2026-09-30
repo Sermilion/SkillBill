@@ -54,6 +54,13 @@ these seams:
 - worktree edit journal cap: when `trimToCap` drops rows records
   `seam=worktree_edit_journal_cap value_expected=rows_within_cap value_used=dropped_oldest_ticks`
   with `dropped_rows`
+- review diff queries: `FileSystemDiffResolver` logs a WARNING with `seam=diff_resolver_query`,
+  the query, value used, value expected, and cause for every unavailable result (timeout, launch
+  failure, rejected exit, over-cap output, I/O failure, malformed index record, PR diff fallback
+  to `gh pr diff`) and for a temp-file cleanup failure. Unavailable is `null`; an empty string or
+  list is a successful empty result. Shared review evidence derivation records
+  `seam=shared_review_evidence_derive` when an unavailable diff yields no evidence, and
+  `seam=shared_review_evidence_parse` when a diff fails to parse
 
 Each record names the seam, the value actually used, the value that was expected,
 and why the substitution happened. A fallback that cannot be attributed to a

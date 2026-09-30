@@ -37,7 +37,7 @@ class ParallelCodeReviewEndToEndTest {
 
     assertEquals(
       1,
-      recorder.diffCommands.count { it.contains("diff") },
+      recorder.diffQueries.size,
       "Scope discovery must happen once for the whole review, not once per lane.",
     )
     assertEquals(

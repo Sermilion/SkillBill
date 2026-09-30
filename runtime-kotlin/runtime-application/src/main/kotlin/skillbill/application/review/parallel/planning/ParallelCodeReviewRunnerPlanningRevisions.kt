@@ -55,28 +55,17 @@ internal fun ParallelCodeReviewRunnerPlanning.canonicalRevision(
   revision: String,
   repoRoot: Path,
 ): String =
-  runProcess(listOf("git", "rev-parse", "--verify", "$revision^{commit}"), repoRoot)
-    ?.trim()
-    ?.takeIf { it.isNotBlank() }
+  resolveCommit(repoRoot, revision)
     ?: throw DiffResolutionException("Review revision '$revision' does not resolve to a commit here.")
 
-internal fun ParallelCodeReviewRunnerPlanning.detectPrBase(repoRoot: Path): String {
-  val baseRefOid =
-    runProcess(listOf("gh", "pr", "view", "--json", "baseRefOid", "--jq", ".baseRefOid"), repoRoot)
-      ?.trim()
-      ?.takeIf { it.isNotBlank() }
-  val merged =
-    baseRefOid?.let {
-      runProcess(listOf("git", "merge-base", "HEAD", it), repoRoot)?.trim()
-    }
-  return merged?.takeIf { it.isNotBlank() } ?: detectBranchBase(repoRoot)
-}
+internal fun ParallelCodeReviewRunnerPlanning.detectPrBase(repoRoot: Path): String =
+  pullRequestBaseCommit(repoRoot)?.let { mergeBase(repoRoot, it) }
+    ?: detectBranchBase(repoRoot)
 
 internal fun ParallelCodeReviewRunnerPlanning.detectBranchBase(repoRoot: Path): String {
   val candidates = listOf("main", "master", "origin/main", "origin/master")
   for (candidate in candidates) {
-    val result = runProcess(listOf("git", "merge-base", "HEAD", candidate), repoRoot)
-    if (result != null) return result.trim()
+    mergeBase(repoRoot, candidate)?.let { return it }
   }
   throw DiffResolutionException(
     "Could not detect branch base. Tried: ${candidates.joinToString()}.",

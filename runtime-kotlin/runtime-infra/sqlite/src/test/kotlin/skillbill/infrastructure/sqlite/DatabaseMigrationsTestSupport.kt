@@ -40,7 +40,18 @@ internal fun seedVersionKeyedLedger(dbPath: Path) {
   }
 }
 
-internal fun seedLegacyGoalRunnerControlsMigrationFixture(dbPath: Path) {
+internal val VALID_LEGACY_GOAL_ACCEPTANCE: Map<String, Any?> =
+  mapOf(
+    "subtask_id" to 2,
+    "commit_sha" to "legacy-commit",
+    "reason" to "accepted outside the normal review path",
+    "accepted_at" to "2026-09-17T10:00:00Z",
+  )
+
+internal fun seedLegacyGoalRunnerControlsMigrationFixture(
+  dbPath: Path,
+  acceptances: List<Map<String, Any?>> = listOf(VALID_LEGACY_GOAL_ACCEPTANCE),
+) {
   DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
     connection.createStatement().use { statement ->
       statement.executeUpdate(
@@ -54,15 +65,7 @@ internal fun seedLegacyGoalRunnerControlsMigrationFixture(dbPath: Path) {
             mapOf(
               "code_review_mode" to CodeReviewExecutionMode.INLINE.wireValue,
             ),
-          GOAL_OUT_OF_BAND_ACCEPTANCE_ARTIFACT_KEY to
-            listOf(
-              mapOf(
-                "subtask_id" to 2,
-                "commit_sha" to "legacy-commit",
-                "reason" to "accepted outside the normal review path",
-                "accepted_at" to "2026-09-17T10:00:00Z",
-              ),
-            ),
+          GOAL_OUT_OF_BAND_ACCEPTANCE_ARTIFACT_KEY to acceptances,
         ),
       )
     connection.prepareStatement(

@@ -7,6 +7,9 @@ import skillbill.application.reviewevidence.model.DiffResolutionException
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.diff.DiffResolverPortDefaults
+import skillbill.ports.diff.model.ReviewCommitMetadata
+import skillbill.ports.diff.model.ReviewDiffQuery
 import skillbill.ports.review.model.ReviewCheckpointFileIdentity
 import skillbill.review.context.model.commit.ReviewCommitSource
 import java.nio.file.Path
@@ -29,45 +32,54 @@ class ReviewCommitSequenceResolverTest {
     +$line
     """.trimIndent()
 
-  private class FakeGit(private val responses: Map<String, String?>) : DiffResolverPort {
+  private class FakeGit(
+    private val commits: Map<String, List<String>> = emptyMap(),
+    private val metadata: Map<String, ReviewCommitMetadata> = emptyMap(),
+    private val diffs: Map<ReviewDiffQuery, String> = emptyMap(),
+  ) : DiffResolverPortDefaults() {
     val invoked: MutableList<String> = mutableListOf()
 
-    override fun runProcess(
-      args: List<String>,
-      workDir: Path,
+    override fun firstParentCommits(
+      repoRoot: Path,
+      base: String,
+      head: String,
+    ): List<String>? {
+      invoked += "firstParentCommits $base..$head"
+      return commits["$base..$head"]
+    }
+
+    override fun commitMetadata(
+      repoRoot: Path,
+      sha: String,
+    ): ReviewCommitMetadata? {
+      invoked += "commitMetadata $sha"
+      return metadata[sha]
+    }
+
+    override fun diff(
+      repoRoot: Path,
+      query: ReviewDiffQuery,
     ): String? {
-      val key = args.joinToString(" ")
-      invoked += key
-      return responses[key]
+      invoked += "diff $query"
+      return diffs[query]
     }
 
     override fun reviewWorktreeFileIdentities(
       root: Path,
       paths: List<String>,
     ) = emptyMap<String, ReviewCheckpointFileIdentity>()
-
-    override fun readDiff(
-      path: Path,
-      maxBytes: Long,
-    ): String? = null
   }
 
   private fun branchRepo(
     shas: List<String>,
     diffs: Map<String, String>,
     parents: Map<String, String>,
-  ): FakeGit {
-    val responses =
-      mutableMapOf<String, String?>(
-        "git rev-list --first-parent --reverse base..head" to shas.joinToString("\n"),
-      )
-    shas.forEach { sha ->
-      val parent = parents.getValue(sha)
-      responses["git show -s --format=%P%n%s $sha"] = "$parent\nsubject $sha"
-      responses["git diff $parent $sha"] = diffs.getValue(sha)
-    }
-    return FakeGit(responses)
-  }
+  ): FakeGit =
+    FakeGit(
+      commits = mapOf("base..head" to shas),
+      metadata = shas.associateWith { sha -> ReviewCommitMetadata(listOf(parents.getValue(sha)), "subject $sha") },
+      diffs = shas.associate { sha -> ReviewDiffQuery.CommitRange(parents.getValue(sha), sha) to diffs.getValue(sha) },
+    )
 
   private fun sixCommitRepo(): FakeGit {
     val shas = (1..5).map { "c$it" } + "head"
@@ -107,17 +119,22 @@ class ReviewCommitSequenceResolverTest {
   @Test fun `a merge commit is traversed by first parent only`() {
     val mergeDiff = diffFor("src/Merged.kt", "merged")
     val headDiff = diffFor("src/head.kt", "line-head")
-    val responses =
-      mutableMapOf<String, String?>(
-        "git rev-list --first-parent --reverse base..head" to "c1\nmerge\nhead",
-        "git show -s --format=%P%n%s c1" to "base\nsubject c1",
-        "git diff base c1" to diffFor("src/c1.kt", "line-c1"),
-        "git show -s --format=%P%n%s merge" to "c1 other\nMerge branch 'other'",
-        "git diff c1 merge" to mergeDiff,
-        "git show -s --format=%P%n%s head" to "merge\nsubject head",
-        "git diff merge head" to headDiff,
+    val git =
+      FakeGit(
+        commits = mapOf("base..head" to listOf("c1", "merge", "head")),
+        metadata =
+          mapOf(
+            "c1" to ReviewCommitMetadata(listOf("base"), "subject c1"),
+            "merge" to ReviewCommitMetadata(listOf("c1", "other"), "Merge branch 'other'"),
+            "head" to ReviewCommitMetadata(listOf("merge"), "subject head"),
+          ),
+        diffs =
+          mapOf(
+            ReviewDiffQuery.CommitRange("base", "c1") to diffFor("src/c1.kt", "line-c1"),
+            ReviewDiffQuery.CommitRange("c1", "merge") to mergeDiff,
+            ReviewDiffQuery.CommitRange("merge", "head") to headDiff,
+          ),
       )
-    val git = FakeGit(responses)
     val resolved =
       resolve(
         git,
@@ -126,7 +143,7 @@ class ReviewCommitSequenceResolverTest {
       )
     assertEquals(listOf("c1", "merge", "head"), resolved.units.map { it.commitSha })
     assertEquals(listOf("base", "c1", "merge"), resolved.units.map { it.parentSha })
-    assertTrue(git.invoked.none { it.startsWith("git diff other") })
+    assertTrue(git.invoked.none { it.startsWith("diff") && "other" in it })
     assertTrue(resolved.coverageFact.chainVerified)
   }
 
@@ -175,15 +192,15 @@ class ReviewCommitSequenceResolverTest {
 
   @Test fun `a duplicated commit fails loudly`() {
     val diff = diffFor("src/A.kt", "alpha")
-    val responses =
-      mutableMapOf<String, String?>(
-        "git rev-list --first-parent --reverse base..head" to "head\nhead",
-        "git show -s --format=%P%n%s head" to "base\nsubject head",
-        "git diff base head" to diff,
+    val git =
+      FakeGit(
+        commits = mapOf("base..head" to listOf("head", "head")),
+        metadata = mapOf("head" to ReviewCommitMetadata(listOf("base"), "subject head")),
+        diffs = mapOf(ReviewDiffQuery.CommitRange("base", "head") to diff),
       )
     val failure =
       assertFailsWith<DiffResolutionException> {
-        resolve(FakeGit(responses), ParallelReviewScope.BRANCH, diff)
+        resolve(git, ParallelReviewScope.BRANCH, diff)
       }
     assertTrue("more than once" in failure.message.orEmpty())
   }
@@ -205,7 +222,7 @@ class ReviewCommitSequenceResolverTest {
   @Test fun `a failed rev-list fails loudly instead of degrading to a synthetic unit`() {
     val failure =
       assertFailsWith<DiffResolutionException> {
-        resolve(FakeGit(emptyMap()), ParallelReviewScope.BRANCH, diffFor("src/A.kt", "alpha"))
+        resolve(FakeGit(), ParallelReviewScope.BRANCH, diffFor("src/A.kt", "alpha"))
       }
     assertTrue("enumerate the commit sequence" in failure.message.orEmpty())
   }
@@ -224,7 +241,7 @@ class ReviewCommitSequenceResolverTest {
 
   @Test fun `non-commit and locally-absent sources produce exactly one declared synthetic unit`() {
     val aggregate = diffFor("src/A.kt", "alpha")
-    val noGit = FakeGit(emptyMap())
+    val noGit = FakeGit()
     listOf(
       ParallelReviewScope.STAGED to ReviewCommitSource.SYNTHETIC_WORKING_TREE,
       ParallelReviewScope.UNSTAGED to ReviewCommitSource.SYNTHETIC_WORKING_TREE,
@@ -243,7 +260,7 @@ class ReviewCommitSequenceResolverTest {
     assertEquals(
       ReviewCommitSource.SYNTHETIC_AGGREGATE_PR_DIFF,
       resolve(
-        FakeGit(mapOf("git rev-list --first-parent --reverse base..head" to "")),
+        FakeGit(commits = mapOf("base..head" to emptyList())),
         ParallelReviewScope.PR,
         aggregate,
       ).units.single().source,

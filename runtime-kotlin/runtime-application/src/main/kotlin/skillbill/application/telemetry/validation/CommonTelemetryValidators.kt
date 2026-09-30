@@ -1,6 +1,5 @@
 package skillbill.application.telemetry.validation
 
-val specInputTypes = listOf("raw_text", "pdf", "markdown_file", "image", "directory")
 val historySignalValues = listOf("none", "irrelevant", "low", "medium", "high")
 
 internal fun validateEnum(

@@ -104,6 +104,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowDefinition
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
@@ -3325,7 +3326,67 @@ class WorkflowGoalRunnerProgressStoreTest {
       )
     assertEquals(setOf("plan", DECOMPOSITION_RUNTIME_ARTIFACT_KEY), persistedArtifacts.keys)
   }
+
+  @Test
+  fun `parent projection rejects a malformed legacy acceptance identity before touching controls or artifacts`() {
+    val manifest = decompositionRuntime(status = "in_progress")
+    val parent =
+      workflowRecord(
+        workflowId = "wfl-malformed-parent",
+        artifactsPatch =
+          WorkflowArtifactPatch.from(
+            mapOf(
+              "plan" to mapOf("mode" to "decompose"),
+              "goal_review_policy" to mapOf("code_review_mode" to CodeReviewExecutionMode.INLINE.wireValue),
+              "goal_out_of_band_acceptances" to listOf(legacyAcceptance(subtaskId = 1)),
+            ),
+          ),
+      ).copy(issueKey = manifest.issueKey)
+    val workflows = InMemoryWorkflowStates()
+    workflows.saveFeatureTaskWorkflow(parent, PROSE)
+    val artifactsBefore = requireNotNull(workflows.getFeatureTaskWorkflow("wfl-malformed-parent")).artifactsJson
+
+    listOf<Any>(1.5, 2147483648L, Double.NaN, Double.POSITIVE_INFINITY, 0, -1, "1").forEach { identity ->
+      val controls = RecordingGoalRunnerControlRepository()
+      val malformed =
+        parent.toSnapshot().let { snapshot ->
+          snapshot.copy(
+            artifacts =
+              DurableWorkflowArtifacts.fromMap(
+                snapshot.artifacts + ("goal_out_of_band_acceptances" to listOf(legacyAcceptance(identity))),
+              ),
+          )
+        }
+
+      assertFailsWith<InvalidWorkflowStateSchemaError>("subtask_id $identity must be rejected.") {
+        FakeDatabaseSessionFactory(workflows, goalRunnerControls = controls).transaction { unitOfWork ->
+          testWorkflowEngine.persistParentDecompositionRuntime(
+            malformed,
+            manifest,
+            unitOfWork,
+            testDecompositionManifestValidator,
+          )
+        }
+      }
+
+      assertNull(controls.reviewPolicy("wfl-malformed-parent"))
+      assertEquals(emptyMap(), controls.outOfBandAcceptances("wfl-malformed-parent"))
+      val persisted = requireNotNull(workflows.getFeatureTaskWorkflow("wfl-malformed-parent"))
+      assertEquals(artifactsBefore, persisted.artifactsJson)
+      val persistedKeys = decodeWorkflowArtifactsForTest(persisted.artifactsJson).keys
+      assertTrue("goal_review_policy" in persistedKeys && "goal_out_of_band_acceptances" in persistedKeys)
+      assertFalse(DECOMPOSITION_RUNTIME_ARTIFACT_KEY in persistedKeys)
+    }
+  }
 }
+
+private fun legacyAcceptance(subtaskId: Any): Map<String, Any?> =
+  mapOf(
+    "subtask_id" to subtaskId,
+    "commit_sha" to "abc1234",
+    "reason" to "implemented outside the runtime",
+    "accepted_at" to "2026-08-01T12:00:00Z",
+  )
 
 private const val COMPACT_UPDATE_ACK_PAYLOAD_BYTE_CEILING = 1024
 

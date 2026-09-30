@@ -197,6 +197,40 @@ class WireVocabularyArchitectureTest {
   }
 
   @Test
+  fun `goal runner controls seam rejects undeclared literal key access`() {
+    val files =
+      listOf(
+        syntheticSourceFile(
+          "contracts/GoalRunnerControlPayloadKeys.kt",
+          """
+
+          object GoalRunnerControlPayloadKeys {
+            const val ACCEPTED_AT: String = "accepted_at"
+          }
+          """.trimIndent(),
+        ),
+        syntheticSourceFile(
+          "infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreDecodePolicies.kt",
+          """
+
+          fun read(raw: Map<String, Any?>) = raw["accepted_at"]
+          """.trimIndent(),
+        ),
+      )
+    val report =
+      WireVocabularyArchitectureSupport.scanSourceFiles(
+        files,
+        includePayloadKeyAccesses = true,
+        enforceGovernedSeams = true,
+        schemaPropertyKeysByPath =
+          mapOf(
+            WireVocabularyGovernedSeamInventory.GOAL_RUNNER_CONTROLS_AUTHORITY to setOf("accepted_at"),
+          ),
+      )
+    assertTrue(report.violations.any { it.contains("accesses key 'accepted_at'") })
+  }
+
+  @Test
   fun `sqlite telemetry seam rejects inline session id access`() {
     val files =
       listOf(
