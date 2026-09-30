@@ -1,11 +1,13 @@
 package skillbill.infrastructure.skills.install
 
+import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.skills.install.plan.codexAgentsPath
 import skillbill.infrastructure.skills.install.plan.codexConfigRoots
 import skillbill.infrastructure.skills.install.plan.codexSkillTargets
 import skillbill.infrastructure.skills.install.plan.detectAgents
 import skillbill.infrastructure.skills.install.runtime.InstallOperations
 import skillbill.model.toPath
+import skillbill.ports.system.HostPlatformPort
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -132,14 +134,19 @@ class CodexConfigRootsTest {
     val home = Files.createTempDirectory("skillbill-codex-roots-agentpath")
     Files.createDirectories(home.resolve(".codex"))
     markedProfile(home, ".codex-or")
+    val hostPlatform =
+      object : HostPlatformPort by JdkHostPlatformPort {
+        override fun resolveEnvironment(): Map<String, String> =
+          mapOf("CODEX_HOME" to home.resolve(".codex-host").toString())
+      }
 
     assertEquals(
       home.resolve(".codex/skills"),
-      InstallOperations.agentPath("codex", home, environment = emptyMap()),
+      InstallOperations.agentPath("codex", home, environment = emptyMap(), hostPlatform = hostPlatform),
     )
     assertEquals(
       home.resolve(".codex/agents"),
-      InstallOperations.codexAgentsPath(home, environment = emptyMap()),
+      InstallOperations.codexAgentsPath(home, environment = emptyMap(), hostPlatform = hostPlatform),
     )
   }
 

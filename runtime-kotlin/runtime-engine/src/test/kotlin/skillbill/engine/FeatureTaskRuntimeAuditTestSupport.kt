@@ -1,11 +1,13 @@
 package skillbill.engine
 
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+
 internal const val AUDIT_GAP_MESSAGE = "AC-002 acceptance criterion is not yet implemented"
 
 internal fun auditSatisfiedOutput(): String =
   """
   {
-    "contract_version": "0.6",
+    "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
     "phase_id": "audit",
     "status": "completed",
     "summary": "Every acceptance criterion is met.",
@@ -19,7 +21,7 @@ internal fun auditRemainingAcOutput(remainingText: String): String {
   val escaped = remainingText.replace("\\", "\\\\").replace("\"", "\\\"")
   return """
     {
-      "contract_version": "0.6",
+      "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
       "phase_id": "audit",
       "status": "completed",
       "summary": "Audit found remaining acceptance criteria.",
@@ -33,7 +35,7 @@ internal fun auditRemainingAcOutput(remainingText: String): String {
 internal fun auditGapsFoundOutput(): String =
   """
   {
-    "contract_version": "0.6",
+    "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
     "phase_id": "audit",
     "status": "completed",
     "summary": "Audit found unmet acceptance criteria.",
@@ -47,7 +49,7 @@ internal fun auditGapsFoundOutput(): String =
 internal fun auditBlockedOutput(reason: String): String =
   """
   {
-    "contract_version": "0.6",
+    "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
     "phase_id": "audit",
     "status": "blocked",
     "failure_disposition": "needs_user_action",

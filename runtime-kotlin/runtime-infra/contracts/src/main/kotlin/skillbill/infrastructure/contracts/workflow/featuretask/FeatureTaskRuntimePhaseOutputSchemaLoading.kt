@@ -1,7 +1,12 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.JsonNodeFactory
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.networknt.schema.JsonSchema
+import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
@@ -19,9 +24,44 @@ internal const val FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_REPO_RELATIVE_PATH: 
   FeatureTaskRuntimePhaseOutputSchemaPaths.REPO_RELATIVE_PATH
 
 internal fun loadFeatureTaskRuntimePhaseOutputSchema(): JsonSchema =
+  compilePhaseOutputSchema(
+    cacheKey = FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_CLASSPATH_RESOURCE,
+    prepareSchemaDocument = {},
+  )
+
+internal fun loadFeatureTaskRuntimePhaseOutputLegacyReadSchema(): JsonSchema =
+  compilePhaseOutputSchema(
+    cacheKey = "$FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_CLASSPATH_RESOURCE$LEGACY_READ_CACHE_SUFFIX",
+    prepareSchemaDocument = ::widenForLegacyRead,
+  )
+
+internal fun isLegacyReadableContractVersion(contractVersion: String?): Boolean =
+  contractVersion == FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION
+
+private const val LEGACY_READ_CACHE_SUFFIX: String = "#legacy-read"
+private const val SCHEMA_PROPERTIES: String = "properties"
+private const val SCHEMA_DEFS: String = "\$defs"
+private const val SCHEMA_TYPE: String = "type"
+private const val SCHEMA_ENUM: String = "enum"
+private const val SCHEMA_STRING_TYPE: String = "string"
+private const val UNIFORM_SETTLEMENT_DEF: String = "uniformSettlement"
+
+private fun widenForLegacyRead(yamlNode: JsonNode) {
+  val nodes = JsonNodeFactory.instance
+  val readableVersions = nodes.arrayNode().add(FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION)
+  val contractVersion = nodes.objectNode().put(SCHEMA_TYPE, SCHEMA_STRING_TYPE)
+  contractVersion.set<JsonNode>(SCHEMA_ENUM, readableVersions)
+  (yamlNode.path(SCHEMA_PROPERTIES) as ObjectNode).set<JsonNode>(SharedPayloadKeys.CONTRACT_VERSION, contractVersion)
+  (yamlNode.path(SCHEMA_DEFS) as ObjectNode).set<JsonNode>(UNIFORM_SETTLEMENT_DEF, nodes.objectNode())
+}
+
+private fun compilePhaseOutputSchema(
+  cacheKey: String,
+  prepareSchemaDocument: (JsonNode) -> Unit,
+): JsonSchema =
   ClasspathContractSchemaLoader.compiledSchema(
     CompiledSchemaRequest(
-      cacheKey = FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_CLASSPATH_RESOURCE,
+      cacheKey = cacheKey,
       classLoader = FeatureTaskRuntimePhaseOutputWireSchema::class.java.classLoader,
       classpathResource = FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_CLASSPATH_RESOURCE,
       missingResource = {
@@ -48,6 +88,7 @@ internal fun loadFeatureTaskRuntimePhaseOutputSchema(): JsonSchema =
           reason = reason,
         )
       },
+      prepareSchemaDocument = prepareSchemaDocument,
     ),
   )
 

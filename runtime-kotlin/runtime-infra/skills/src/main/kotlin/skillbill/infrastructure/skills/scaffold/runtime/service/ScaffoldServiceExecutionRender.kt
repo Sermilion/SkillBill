@@ -5,6 +5,7 @@ import skillbill.infrastructure.skills.scaffold.rendering.defaultAreaFocus
 import skillbill.infrastructure.skills.scaffold.rendering.inferSkillDescription
 import skillbill.infrastructure.skills.scaffold.rendering.renderContentBody
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.TemplateContext
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 
 internal fun renderAgentAddonManifest(plan: ScaffoldPlan): String =
   buildString {
@@ -31,6 +32,7 @@ internal fun renderDeclaredPackContentSheet(plan: ScaffoldPlan): String =
     skillContext(plan),
     description = effectiveDescription(plan),
     contentBody = plan.contentBody,
+    internalFor = PACK_SIDECAR_PARENT_SKILL,
   )
 
 internal fun skillContext(plan: ScaffoldPlan): TemplateContext =

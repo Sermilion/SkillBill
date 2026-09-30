@@ -14,10 +14,11 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolv
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
+import skillbill.error.featuretask.UnknownQualityGateSelectionError
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 
@@ -66,7 +67,7 @@ internal fun FeatureTaskRuntimePhaseAgentCommand.prepareRuntimeRun(
     } else {
       deps.agentAddonSelectionPort.verifyPersisted(
         persistedSelection,
-        AgentAddonConsumer.BILL_FEATURE,
+        AgentAddonConsumer.SKILL_BILL,
         receivingAgents,
       )
     }
@@ -127,11 +128,17 @@ internal fun FeatureTaskRuntimePhaseAgentCommand.requestedQualityGateSelection(
   val fromEnv =
     environment[FeatureTaskRuntimeGoalContinuationLaunchTokens.QUALITY_GATE_SELECTION_ENV]
       ?.takeIf(String::isNotBlank)
-      ?.let(FeatureTaskRuntimeQualityGateSelection::fromWire)
+      ?.let { raw ->
+        parseQualityGateSelection(FeatureTaskRuntimeGoalContinuationLaunchTokens.QUALITY_GATE_SELECTION_ENV, raw)
+      }
   val fromCli =
     when (qualityGateSelections.size) {
       0 -> null
-      1 -> FeatureTaskRuntimeQualityGateSelection.fromWire(qualityGateSelections.single())
+      1 ->
+        parseQualityGateSelection(
+          FeatureTaskRuntimeGoalContinuationLaunchTokens.QUALITY_GATE_SELECTION_FLAG,
+          qualityGateSelections.single(),
+        )
       else -> {
         val raw = qualityGateSelections.joinToString(", ")
         if (qualityGateSelections.distinct().size == 1) {
@@ -148,6 +155,20 @@ internal fun FeatureTaskRuntimePhaseAgentCommand.requestedQualityGateSelection(
     }
   return fromCli ?: fromEnv ?: FeatureTaskRuntimeQualityGateSelection.VALIDATE
 }
+
+private fun parseQualityGateSelection(
+  source: String,
+  raw: String,
+): FeatureTaskRuntimeQualityGateSelection =
+  try {
+    FeatureTaskRuntimeQualityGateSelection.fromWire(raw)
+  } catch (error: UnknownQualityGateSelectionError) {
+    throw UsageError(
+      "Unknown $source value '$raw'. Allowed: ${error.allowedValues.joinToString()}.",
+    ).also { usage ->
+      runCatching { usage.initCause(error) }
+    }
+  }
 
 internal fun FeatureTaskRuntimePhaseAgentCommand.requestedOperatorDecision(): GoalSubtaskOperatorDecision? {
   if (operatorDecisions.size > 1) {

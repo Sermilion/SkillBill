@@ -1,0 +1,45 @@
+{
+    "blocked_reason": null,
+    "blocked_step_id": null,
+    "completed_step_ids": [
+        "review",
+        "verify_findings",
+        "implement_fix"
+    ],
+    "invocation_id": "rvs-slot-baseline-inln",
+    "review_result": {
+        "accounting_summary": null,
+        "applied_learnings": null,
+        "coverage": null,
+        "lane1": {
+            "agent_id": "claude",
+            "dropped_candidate_diagnostic": null,
+            "failure_reason": null,
+            "success": true
+        },
+        "output": "- [F-001] Blocker | High | src/Foo.kt:1 | Foo.kt leaks a connection in the error path\nverdict: changes_requested",
+        "review_session_id": "rvs-slot-baseline-inln"
+    },
+    "status": "completed",
+    "value": {
+        "contract_version": "0.7",
+        "phase_id": "implement_fix",
+        "produced_outputs": {
+            "reconciled_state": {
+                "evidence": "Fixture tree at target state.",
+                "reconciled": true
+            },
+            "repair_receipt": {
+                "contract_version": "0.3",
+                "entries": [
+                    {
+                        "finding_id": "F-001",
+                        "outcome": "addressed"
+                    }
+                ]
+            }
+        },
+        "status": "completed",
+        "summary": "Phase produced a validated output."
+    }
+}

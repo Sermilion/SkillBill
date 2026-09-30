@@ -1,7 +1,7 @@
 ---
 name: bill-ios-code-review-reliability
 description: Use when reviewing iOS background work, retries, relaunch, and degradation risks.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Reliability Review Specialist

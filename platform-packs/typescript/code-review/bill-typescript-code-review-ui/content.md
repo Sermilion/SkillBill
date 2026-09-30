@@ -1,7 +1,7 @@
 ---
 name: bill-typescript-code-review-ui
 description: Use when reviewing DOM or framework-owned TypeScript UI state, effects, events, rendering, routing, hydration, cleanup, and recovery behavior.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # UI Review Specialist

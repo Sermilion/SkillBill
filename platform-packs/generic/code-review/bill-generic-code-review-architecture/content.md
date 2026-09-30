@@ -1,7 +1,7 @@
 ---
 name: bill-generic-code-review-architecture
 description: Technology-neutral architecture review for boundary ownership, dependency direction, state lifetime, and change isolation.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Generic Architecture Review

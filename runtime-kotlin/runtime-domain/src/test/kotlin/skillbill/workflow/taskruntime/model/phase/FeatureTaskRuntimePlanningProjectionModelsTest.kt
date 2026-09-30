@@ -94,6 +94,21 @@ class FeatureTaskRuntimePlanningProjectionModelsTest {
     assertEquals("runtime decomposition", outcome.featureName)
   }
 
+  @Test
+  fun `a decompose plan outcome accepts a single-subtask spec bundle`() {
+    val singleSubtaskPackage =
+      nestedDecompositionPackage().let { pkg -> pkg + ("subtasks" to (pkg["subtasks"] as List<*>).take(1)) }
+
+    val outcome =
+      featureTaskRuntimeDecomposePlanOutcomeOrNull(
+        mapOf("produced_outputs" to mapOf("decomposition_package" to singleSubtaskPackage)),
+        SpecSource.LOCAL,
+      )
+
+    assertNotNull(outcome)
+    assertEquals(listOf("first"), outcome.subtasks.map { subtask -> subtask.name })
+  }
+
   private fun nestedDecompositionPackage(): Map<String, Any?> =
     mapOf(
       "mode" to "decompose",

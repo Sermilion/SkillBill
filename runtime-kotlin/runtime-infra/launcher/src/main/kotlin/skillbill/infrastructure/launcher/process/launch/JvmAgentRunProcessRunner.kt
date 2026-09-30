@@ -178,8 +178,8 @@ class JvmAgentRunProcessRunner(
   }
 
   private data class ProcessResources(
-    val stdout: CappedUtf8Drain,
-    val stderr: CappedUtf8Drain,
+    val stdout: Utf8Drain,
+    val stderr: Utf8Drain,
     val lifetime: ProcessRunLifetime,
   )
 
@@ -194,17 +194,15 @@ class JvmAgentRunProcessRunner(
 
   private fun createProcessResources(args: ProcessResourceRequest): ProcessResources {
     val stdout =
-      CappedUtf8Drain(
+      Utf8Drain(
         input = args.stdoutStream,
-        limitBytes = AGENT_RUN_OUTPUT_LIMIT_BYTES,
         outputStream = AgentRunOutputStream.STDOUT,
         outputSink = args.request.launch.outputSink,
         onChunkRead = { args.outputTracker.markObserved() },
       )
     val stderr =
-      CappedUtf8Drain(
+      Utf8Drain(
         input = args.stderrStream,
-        limitBytes = AGENT_RUN_OUTPUT_LIMIT_BYTES,
         outputStream = AgentRunOutputStream.STDERR,
         outputSink = args.request.launch.outputSink,
         onChunkRead = { args.outputTracker.markObserved() },
@@ -260,7 +258,7 @@ class JvmAgentRunProcessRunner(
       liveness = settledWait.liveness,
       processStarted = true,
       mcpStartupObserved = mcpStartupObserved,
-      stdoutTruncated = stdout.truncated,
+      stdoutTruncated = false,
       stdoutByteSize = stdout.totalByteSize,
       stdoutSha256 = stdout.sha256,
       outputCaptureIncomplete = release.outputCaptureIncomplete,
@@ -301,7 +299,7 @@ class JvmAgentRunProcessRunner(
           processState = GoalRunnerProcessState.KILLED,
           lastOutputAt = outputTracker.lastObservedAt()?.toIsoUtc(),
         ),
-      stdoutTruncated = stdout.truncated,
+      stdoutTruncated = false,
       stdoutByteSize = stdout.totalByteSize,
       stdoutSha256 = stdout.sha256,
       outputCaptureIncomplete = release.outputCaptureIncomplete,

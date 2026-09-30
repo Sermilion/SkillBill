@@ -1,6 +1,5 @@
 package skillbill.infrastructure.skills.nativeagent
 
-import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionKind
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceFile
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceText
@@ -102,20 +101,6 @@ class NativeAgentToolsetContractTest {
           "reaches no capability field hands the worker every tool the parent can reach.",
       )
     }
-  }
-
-  @Test
-  fun `the inline review worker is declared with the narrow reviewer toolset`() {
-    val root = repoRoot()
-    val bundle = root.resolve("skills/bill-code-review-inline/native-agents/agents.yaml")
-    val inline = parseNativeAgentSourceFile(bundle).single { it.name == "bill-code-review-inline" }
-
-    assertEquals(GOVERNED_EVIDENCE_TOOLS, inline.tools)
-
-    assertEquals(NativeAgentCompositionKind.GovernedContent, inline.composition?.kind)
-    val governed = Files.readString(root.resolve("skills/bill-code-review-inline/content.md"))
-    assertTrue("internal-for: bill-code-review" in governed, "The inline worker must install as a sidecar")
-    assertTrue("never launches one" in governed, "The governed content must forbid per-area fan-out")
   }
 
   private companion object {

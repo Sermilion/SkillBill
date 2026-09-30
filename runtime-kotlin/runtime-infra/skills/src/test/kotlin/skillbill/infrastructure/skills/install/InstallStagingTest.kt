@@ -190,19 +190,19 @@ class InstallStagingTest {
   fun `generated supporting pointers for skills are materialized in staging`() {
     val repoRoot = Files.createTempDirectory("skillbill-install-staging-skill-repo").also(tempDirs::add)
     val home = Files.createTempDirectory("skillbill-install-staging-skill-home").also(tempDirs::add)
-    val skillDir = repoRoot.resolve("skills/bill-code-review")
+    val skillDir = repoRoot.resolve("skills/skill-bill")
     Files.createDirectories(skillDir)
     seedTopLevelSkillContent(skillDir)
     SkillClassFixtures.seedShippedSkillClasses(repoRoot)
     val targets = supportingFileTargets(repoRoot)
-    requiredSupportingFilesForSkill("bill-code-review", repoRoot).map(targets::getValue).forEach { target ->
+    requiredSupportingFilesForSkill("skill-bill", repoRoot).map(targets::getValue).forEach { target ->
       Files.createDirectories(target.parent)
       Files.writeString(target, "supporting target\n")
     }
 
     val rendered = stageInstalledSkill(repoRoot, skillDir, home)
 
-    requiredSupportingFilesForSkill("bill-code-review", repoRoot).forEach { fileName ->
+    requiredSupportingFilesForSkill("skill-bill", repoRoot).forEach { fileName ->
       val sourceSidecar = skillDir.resolve(fileName)
       assertFalse(Files.exists(sourceSidecar, LinkOption.NOFOLLOW_LINKS), "source must not contain $fileName")
       val staged = rendered.stagingDir.resolve(fileName)
@@ -392,17 +392,17 @@ class InstallStagingTest {
   fun `content hash changes when support pointer target bytes change and stabilises without mutation`() {
     val repoRoot = Files.createTempDirectory("skillbill-hash-invalidation-repo").also(tempDirs::add)
     val home = Files.createTempDirectory("skillbill-hash-invalidation-home").also(tempDirs::add)
-    val skillDir = repoRoot.resolve("skills/bill-code-review")
+    val skillDir = repoRoot.resolve("skills/skill-bill")
     Files.createDirectories(skillDir)
     seedTopLevelSkillContent(skillDir)
     SkillClassFixtures.seedShippedSkillClasses(repoRoot)
     val targets = supportingFileTargets(repoRoot)
-    requiredSupportingFilesForSkill("bill-code-review", repoRoot).map(targets::getValue).forEach { target ->
+    requiredSupportingFilesForSkill("skill-bill", repoRoot).map(targets::getValue).forEach { target ->
       Files.createDirectories(target.parent)
       Files.writeString(target, "original content\n")
     }
     val pointers = applicablePointers(repoRoot, skillDir)
-    val supportPointers = generatedSupportPointersFor(repoRoot, skillDir, "bill-code-review")
+    val supportPointers = generatedSupportPointersFor(repoRoot, skillDir, "skill-bill")
     val authored = authoredFilesFor(skillDir, pointers, supportPointers)
 
     val hashBefore = computeInstallContentHash(skillDir, authored, pointers, supportPointers)
@@ -431,23 +431,23 @@ class InstallStagingTest {
   }
 
   @Test
-  fun `bill feature stages dynamic agent addon pointer and addon edits invalidate only its hash`() {
+  fun `skill-bill stages dynamic agent addon pointer and addon edits invalidate only its hash`() {
     val repo = Files.createTempDirectory("skillbill-agent-addon-staging").also(tempDirs::add)
     val home = Files.createTempDirectory("skillbill-agent-addon-home").also(tempDirs::add)
-    val feature = repo.resolve("skills/bill-feature")
+    val feature = repo.resolve("skills/skill-bill")
     val unrelated = repo.resolve("skills/bill-unrelated")
     Files.createDirectories(feature)
     Files.createDirectories(unrelated)
     Files.writeString(
       feature.resolve("content.md"),
-      "---\nname: bill-feature\ndescription: Feature router.\n---\n\nBody.\n",
+      "---\nname: skill-bill\ndescription: Skill Bill router.\n---\n\nBody.\n",
     )
     Files.writeString(unrelated.resolve("content.md"), "---\nname: bill-unrelated\ndescription: Other.\n---\n\nBody.\n")
     Files.createDirectories(feature.resolve("references"))
     Files.writeString(feature.resolve("references/agent-addon-review-helper.md"), "Authored nested reference.\n")
     SkillClassFixtures.seedShippedSkillClasses(repo)
     val targets = supportingFileTargets(repo)
-    requiredSupportingFilesForSkill("bill-feature", repo).map(targets::getValue).forEach { target ->
+    requiredSupportingFilesForSkill("skill-bill", repo).map(targets::getValue).forEach { target ->
       Files.createDirectories(target.parent)
       Files.writeString(target, "support\n")
     }
@@ -456,7 +456,7 @@ class InstallStagingTest {
     Files.writeString(
       addon.resolve("agent-addon.yaml"),
       "contract_version: \"1.0\"\nslug: review-helper\ndescription: Review helper\n" +
-        "agent_ids:\n  - codex\nconsumers:\n  - bill-feature\n",
+        "agent_ids:\n  - codex\nconsumers:\n  - skill-bill\n",
     )
     Files.writeString(addon.resolve("content.md"), "Addon body.\n")
 
@@ -652,8 +652,8 @@ class InstallStagingTest {
     val frontmatter =
       """
       |---
-      |name: bill-code-review
-      |description: Review code.
+      |name: skill-bill
+      |description: Run governed work.
       |---
       """.trimMargin() + "\n\nAuthored review guidance.\n"
     Files.writeString(skillDir.resolve("content.md"), frontmatter)

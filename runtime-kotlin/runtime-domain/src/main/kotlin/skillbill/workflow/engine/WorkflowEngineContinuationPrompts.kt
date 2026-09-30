@@ -22,13 +22,14 @@ internal fun continuationBrief(request: ContinuationBriefRequest): String {
   val stepLabel = request.definition.stepLabels[request.resumeStepId] ?: request.resumeStepId
   val currentArtifacts = request.artifactKeys.currentStepArtifactKeys.joinToString().ifBlank { "none" }
   val omittedArtifacts = request.artifactKeys.omittedArtifactKeys.joinToString().ifBlank { "none" }
+  val skillName = request.definition.skillName
   val instructionPath =
-    CONTINUATION_CONTENT_PATHS[request.definition.skillName]
-      ?.let { path -> "Follow the normal step instructions in `$path`. " }
+    continuationEntryCommand(skillName, request.workflowId).takeIf { command -> command != skillName }
+      ?.let { command -> "Follow the normal step instructions that `$command` supplies." }
       .orEmpty()
   return "Resume `${request.definition.skillName}` workflow `${request.workflowId}` from `$stepLabel` " +
     "(`${request.resumeStepId}`). " +
-    instructionPath +
+    instructionPath.takeIf(String::isNotEmpty)?.let { "$it " }.orEmpty() +
     "Use `current_step_artifacts` in this compact payload ($currentArtifacts) as authoritative " +
     "current-step context instead of reconstructing prior context from chat history. " +
     "Omitted artifact keys ($omittedArtifacts) remain private phase context. Explicit operator diagnostics " +
@@ -68,7 +69,7 @@ internal fun continuationEntryPrompt(request: ContinuationEntryPromptRequest): S
   val omittedArtifacts = request.artifactKeys.omittedArtifactKeys.joinToString().ifBlank { "none" }
   val commonLines =
     mutableListOf(
-      "Use `${request.definition.skillName}` in continuation mode.",
+      "Use `${continuationEntryCommand(request.definition.skillName, identity.workflowId)}` in continuation mode.",
       "Workflow id: ${identity.workflowId}",
       "Session id: ${identity.sessionId.ifBlank { "(none)" }}",
       "Continue status: ${identity.continueStatus.wireValue}",
@@ -97,13 +98,19 @@ internal fun continuationEntryPrompt(request: ContinuationEntryPromptRequest): S
     "Workflow update rule: every step_updates item must include step_id, status, and integer " +
     "attempt_count; use attempt_count ${identity.nextAttemptCount} for `${identity.resumeStepId}` " +
     "unless a later retry increments it."
-  commonLines += "Keep the same workflow_id and session_id, then continue `${request.definition.skillName}`."
+  commonLines +=
+    "Keep the same workflow_id and session_id, then continue " +
+    "`${continuationEntryCommand(request.definition.skillName, identity.workflowId)}`."
   commonLines += "Step directive: $directive"
   commonLines += "Immediate next action: ${identity.nextAction}"
   return commonLines.joinToString("\n")
 }
 
-internal val CONTINUATION_CONTENT_PATHS: Map<String, String> =
-  mapOf(
-    "bill-feature-verify" to "skills/bill-feature-verify/content.md",
-  )
+internal fun continuationEntryCommand(
+  skillName: String,
+  workflowId: String,
+): String =
+  when (skillName) {
+    "bill-feature-verify" -> "skill-bill operation verify confirm:$workflowId"
+    else -> skillName
+  }

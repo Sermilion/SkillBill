@@ -1,0 +1,83 @@
+[
+    {
+        "contract_version": "0.1",
+        "event_kind": "operation_started",
+        "expected_long": true,
+        "operation_kind": "planning_projection_attempt",
+        "operation_name": "preplan:0:attempt:1",
+        "process_alive": true,
+        "sequence_number": 0,
+        "step_id": "preplan",
+        "timestamp": "__NORMALIZED_TIMESTAMP__",
+        "workflow_id": "wfl-skill-380-parent",
+        "workflow_phase": "goal_planning"
+    },
+    {
+        "contract_version": "0.1",
+        "event_kind": "operation_completed",
+        "expected_long": true,
+        "operation_kind": "planning_projection_attempt",
+        "operation_name": "preplan:0:attempt:1",
+        "outcome": "succeeded",
+        "process_alive": true,
+        "sequence_number": 1,
+        "step_id": "preplan",
+        "timestamp": "__NORMALIZED_TIMESTAMP__",
+        "workflow_id": "wfl-skill-380-parent",
+        "workflow_phase": "goal_planning"
+    },
+    {
+        "contract_version": "0.1",
+        "event_kind": "operation_started",
+        "expected_long": true,
+        "operation_kind": "planning_projection_attempt",
+        "operation_name": "plan:1:attempt:1",
+        "process_alive": true,
+        "sequence_number": 2,
+        "step_id": "plan",
+        "timestamp": "__NORMALIZED_TIMESTAMP__",
+        "workflow_id": "wfl-skill-380-parent",
+        "workflow_phase": "goal_planning"
+    },
+    {
+        "contract_version": "0.1",
+        "event_kind": "operation_completed",
+        "expected_long": true,
+        "operation_kind": "planning_projection_attempt",
+        "operation_name": "plan:1:attempt:1",
+        "outcome": "succeeded",
+        "process_alive": true,
+        "sequence_number": 3,
+        "step_id": "plan",
+        "timestamp": "__NORMALIZED_TIMESTAMP__",
+        "workflow_id": "wfl-skill-380-parent",
+        "workflow_phase": "goal_planning"
+    },
+    {
+        "contract_version": "0.1",
+        "event_kind": "operation_started",
+        "expected_long": true,
+        "operation_kind": "planning_projection_attempt",
+        "operation_name": "plan:2:attempt:1",
+        "process_alive": true,
+        "sequence_number": 4,
+        "step_id": "plan",
+        "timestamp": "__NORMALIZED_TIMESTAMP__",
+        "workflow_id": "wfl-skill-380-parent",
+        "workflow_phase": "goal_planning"
+    },
+    {
+        "contract_version": "0.1",
+        "event_kind": "operation_completed",
+        "expected_long": true,
+        "operation_kind": "planning_projection_attempt",
+        "operation_name": "plan:2:attempt:1",
+        "outcome": "succeeded",
+        "process_alive": true,
+        "sequence_number": 5,
+        "step_id": "plan",
+        "timestamp": "__NORMALIZED_TIMESTAMP__",
+        "workflow_id": "wfl-skill-380-parent",
+        "workflow_phase": "goal_planning"
+    }
+]

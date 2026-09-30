@@ -3,6 +3,7 @@ package skillbill.engine
 
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
 import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimePhaseOutputTestValidator
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
@@ -203,7 +204,7 @@ class FeatureTaskRuntimeCorrectiveRespawnIntegrationTest {
   fun `malformed simplify output blocks before audit and preserves the single-session boundary`() {
     val malformed =
       completedPhaseBody(
-        "0.6",
+        FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
         "simplify",
         "Missing simplification receipt.",
         "{}",

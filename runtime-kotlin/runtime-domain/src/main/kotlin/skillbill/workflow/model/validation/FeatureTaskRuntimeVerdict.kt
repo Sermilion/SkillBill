@@ -34,6 +34,10 @@ data class FeatureTaskRuntimeVerdict(
 
     val ESCALATED: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("escalated")
 
+    val PROGRESS: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("progress")
+
+    val NO_PROGRESS: FeatureTaskRuntimeVerdict = FeatureTaskRuntimeVerdict("no_progress")
+
     val REMOVED_VERDICTS: Set<FeatureTaskRuntimeVerdict> = setOf(REPAIR_PLANNED, ESCALATED, GAPS_FOUND)
 
     fun rejectRemovedVerdict(

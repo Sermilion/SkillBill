@@ -1,7 +1,7 @@
 ---
 name: bill-python-code-review-performance
 description: Review Python performance risks in hot paths, database access, network/filesystem work, memory use, imports, batching, streaming, and async/blocking boundaries.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Python Performance Review

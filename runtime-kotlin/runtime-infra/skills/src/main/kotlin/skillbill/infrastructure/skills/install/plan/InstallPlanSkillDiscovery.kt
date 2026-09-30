@@ -14,6 +14,7 @@ import skillbill.infrastructure.skills.scaffold.validation.review.contentFiles
 import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.InstallPlanSkill
 import skillbill.install.model.InstallPlanSkillKind
+import skillbill.install.model.ListedSkillNames
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.model.PlatformManifest
@@ -26,6 +27,7 @@ internal fun discoverPlatformManifests(
   request: InstallPlanRequest,
   enforceContractVersion: Boolean = true,
   catalogLoader: PlatformPackCatalogLoader? = null,
+  enforceGovernedReviewStructure: Boolean = true,
 ): List<PlatformManifest> {
   val loader =
     catalogLoader ?: return discoverPlatformPackManifests(
@@ -39,6 +41,7 @@ internal fun discoverPlatformManifests(
       environment = request.environment,
       enforceContractVersion = enforceContractVersion,
       catalogLoader = loader,
+      enforceGovernedReviewStructure = enforceGovernedReviewStructure,
     ),
   )
 }
@@ -51,7 +54,7 @@ internal fun discoverBaseSkills(skillsRoot: Path): List<InstallPlanSkill> {
     Files.list(skillsRoot).use { stream ->
       stream
         .filter { skillDir -> Files.isDirectory(skillDir, LinkOption.NOFOLLOW_LINKS) }
-        .filter { skillDir -> skillDir.fileName.toString().startsWith("bill-") }
+        .filter { skillDir -> ListedSkillNames.isListed(skillDir.fileName.toString()) }
         .toList()
         .sortedBy { skillDir -> skillDir.fileName.toString() }
     }
@@ -59,7 +62,7 @@ internal fun discoverBaseSkills(skillsRoot: Path): List<InstallPlanSkill> {
     candidateSkillDirs
       .filterNot { skillDir -> Files.isRegularFile(skillDir.resolve("content.md"), LinkOption.NOFOLLOW_LINKS) }
   require(missingContent.isEmpty()) {
-    "Base skills root '$skillsRoot' contains bill-* skill directories without content.md: " +
+    "Base skills root '$skillsRoot' contains listed skill directories without content.md: " +
       missingContent.joinToString(", ") { skillDir -> skillDir.fileName.toString() }
   }
   val baseSkills =
@@ -97,6 +100,7 @@ internal fun platformSkills(
   manifest: PlatformManifest,
   enforceContractVersion: Boolean = true,
   packRootsBySlug: Map<String, Path> = emptyMap(),
+  enforceGovernedReviewStructure: Boolean = true,
 ): List<InstallPlanSkill> {
   val contentFiles = listOfNotNull(manifest.declaredFiles.baseline) + manifest.declaredFiles.areas.values
   val skillDirs = contentFiles.map { contentFile -> platformSkillDir(manifest, contentFile.toPath()) }
@@ -104,8 +108,15 @@ internal fun platformSkills(
   require(duplicateSkillDir == null) {
     "Platform pack '${manifest.slug}' produces duplicate skill name '${duplicateSkillDir?.fileName}'."
   }
-  validatePlatformPack(manifest, SHELL_CONTRACT_VERSION, enforceContractVersion)
-  ReviewSkillStructureValidator.validate(manifest.packRoot.toPath(), packRootsBySlug)
+  validatePlatformPack(
+    manifest,
+    SHELL_CONTRACT_VERSION,
+    enforceContractVersion,
+    enforceGovernedReviewStructure,
+  )
+  if (enforceGovernedReviewStructure) {
+    ReviewSkillStructureValidator.validate(manifest.packRoot.toPath(), packRootsBySlug)
+  }
   return skillDirs
     .sortedBy { skillDir -> skillDir.fileName.toString() }
     .map { skillDir ->

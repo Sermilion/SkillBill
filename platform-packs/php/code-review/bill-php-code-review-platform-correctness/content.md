@@ -1,7 +1,7 @@
 ---
 name: bill-php-code-review-platform-correctness
 description: Use when reviewing PHP language semantics, runtime behavior, state transitions, and execution-lifetime correctness.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # PHP Platform Correctness Review Specialist

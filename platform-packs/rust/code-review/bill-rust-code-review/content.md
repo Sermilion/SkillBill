@@ -1,7 +1,7 @@
 ---
 name: bill-rust-code-review
 description: Use when conducting a Rust PR review across crates, workspaces, libraries, services, CLIs, async code, FFI, persistence, tests, and Rust-owned UI surfaces.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Adaptive Rust PR Review

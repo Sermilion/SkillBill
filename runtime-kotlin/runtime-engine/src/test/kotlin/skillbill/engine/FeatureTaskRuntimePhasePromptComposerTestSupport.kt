@@ -2,10 +2,10 @@
 package skillbill.engine
 
 import skillbill.application.realPlanningProjectionValidator
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
-import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposer
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
@@ -41,7 +41,7 @@ internal fun promptComposerProjectionEnvelope(
   phaseId: String,
   producedOutputs: String,
 ): String =
-  """{"contract_version":"0.6","phase_id":"$phaseId","status":"completed",""" +
+  """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"$phaseId","status":"completed",""" +
     """"summary":"Phase produced a validated output.","produced_outputs":$producedOutputs}"""
 
 internal fun composePromptForPhase(phaseId: String) =
@@ -77,7 +77,8 @@ internal fun promptComposerBriefingFor(
   options: PromptComposerBriefingOptions,
 ): FeatureTaskRuntimePhaseLaunchBriefing {
   val checkpoint = FeatureTaskRuntimeRepositoryCheckpoint(fingerprint = "fixture-checkpoint-1")
-  val declaration = phaseDeclaration(phaseId, options.featureSize)
+  val declaration =
+    phaseDeclaration(phaseId, options.featureSize, setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD))
   return FeatureTaskRuntimePhaseBriefingAssembler.assemble(
     FeatureTaskRuntimeHandoffContract.assembleHandoff(
       FeatureTaskRuntimeHandoffAssemblyRequest(
@@ -121,7 +122,7 @@ internal fun assertAuditPromptNamesSignal(
 
 internal fun assertSchemaCorrectionSuppressesContinuation(context: FeatureTaskRuntimeCorrectiveRepairContext) {
   val prompt =
-    FeatureTaskRuntimePhasePromptComposer.compose(
+    composePhasePrompt(
       PROMPT_COMPOSER_ISSUE_KEY,
       promptComposerBriefingFor("implement"),
     ) {
@@ -140,7 +141,7 @@ internal fun assertSchemaCorrectionSuppressesContinuation(context: FeatureTaskRu
 
 internal fun assertTerminalAndContinuationRetriesOmitRepairContext() {
   val terminalOnly =
-    FeatureTaskRuntimePhasePromptComposer.compose(
+    composePhasePrompt(
       PROMPT_COMPOSER_ISSUE_KEY,
       promptComposerBriefingFor("implement"),
     ) {
@@ -150,7 +151,7 @@ internal fun assertTerminalAndContinuationRetriesOmitRepairContext() {
   assertFalse(terminalOnly.contains("SKILL187-SHOULD-NOT-APPEAR"))
 
   val continuationOnly =
-    FeatureTaskRuntimePhasePromptComposer.compose(
+    composePhasePrompt(
       PROMPT_COMPOSER_ISSUE_KEY,
       promptComposerBriefingFor("implement"),
     ) {

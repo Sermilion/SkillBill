@@ -16,11 +16,28 @@ abstract class WorkflowGitOperationsTestBase :
   RepositoryOwnedPathsGitOperations by UnavailableRepositoryOwnedPathsGitOperations,
   RuntimePhaseFileManifestGitOperations by NoopRuntimePhaseFileManifestGitOperations,
   ScopedStagingGitOperations by UnavailableScopedStagingGitOperations,
-  SuppressionEvidenceGitOperations by NoopSuppressionEvidenceGitOperations {
+  SuppressionEvidenceGitOperations by NoopSuppressionEvidenceGitOperations,
+  WorkflowGitReleaseTagOperations by NoopWorkflowGitReleaseTagOperations {
   override fun worktreeNumstat(repoRoot: Path): WorkflowWorktreeNumstatResult =
     WorkflowWorktreeNumstatResult(status = WorkflowGitOperationStatus.OK, files = emptyList())
 
   override fun stageAll(repoRoot: Path): WorkflowGitOperationResult = WorkflowGitOperationResult.Ok(value = "")
+
+  override fun commitCountAhead(
+    repoRoot: Path,
+    baseRevision: String,
+  ): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Failed(
+      error = "This git operations implementation cannot count commits ahead of '$baseRevision'.",
+    )
+
+  override fun mergeBaseWithHead(
+    repoRoot: Path,
+    baseRevision: String,
+  ): WorkflowGitOperationResult =
+    WorkflowGitOperationResult.Failed(
+      error = "This git operations implementation cannot find the merge base of '$baseRevision' and HEAD.",
+    )
 
   override fun resetSoftToCommit(
     repoRoot: Path,

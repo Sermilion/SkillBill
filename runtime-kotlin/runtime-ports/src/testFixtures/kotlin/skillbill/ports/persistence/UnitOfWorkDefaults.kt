@@ -12,6 +12,8 @@ import skillbill.ports.idestatus.AgentActivityStampRepository
 import skillbill.ports.idestatus.EmptyAgentActivityStampRepository
 import skillbill.ports.idestatus.EmptyWorktreeEditJournalRepository
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
+import skillbill.ports.operation.OperationProposalRepository
+import skillbill.ports.operation.UnavailableOperationProposalRepository
 
 abstract class UnitOfWorkDefaults : UnitOfWork {
   open override val unaddressedFindings: UnaddressedFindingsRepository = UnavailableUnaddressedFindingsRepository
@@ -23,6 +25,7 @@ abstract class UnitOfWorkDefaults : UnitOfWork {
     UnavailableRejectedOutputDiagnosticPermissions
   open override val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository =
     UnavailableFeatureTaskPhaseSettlementRepository
+  open override val operationProposals: OperationProposalRepository = UnavailableOperationProposalRepository
 
   override fun purgeDecomposedGoal(parentWorkflowId: String) = Unit
 }

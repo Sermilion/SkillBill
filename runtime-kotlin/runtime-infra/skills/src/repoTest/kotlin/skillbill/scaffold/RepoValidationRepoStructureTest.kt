@@ -4,10 +4,13 @@ import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.composition.renderNativeAgentSource
 import skillbill.infrastructure.skills.nativeagent.testNativeAgentCompositionContext
 import skillbill.infrastructure.skills.scaffold.runtime.validation.RepoValidationRuntime
+import skillbill.infrastructure.skills.scaffold.runtime.validation.validateReadme
+import skillbill.infrastructure.skills.scaffold.runtime.validation.validateSkillReferencesInFile
 import skillbill.testing.repoRootFromTest
 import skillbill.testing.seedConformingPlatformPack
 import java.nio.file.Files
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -50,7 +53,7 @@ class RepoValidationRepoStructureTest {
       |---
       |name: bill-invalid-review-shape-code-review-architecture
       |description: Malformed architecture specialist fixture.
-      |internal-for: bill-code-review
+      |internal-for: skill-bill
       |---
       |
       |# Malformed Architecture Specialist
@@ -160,14 +163,14 @@ class RepoValidationRepoStructureTest {
   fun `repo validation rejects extra authored files beside source skills`() {
     val repoRoot = Files.createTempDirectory("skillbill-extra-source-file")
     createRepoValidationSkillFixture(repoRoot)
-    Files.writeString(repoRoot.resolve("skills/bill-code-review/patterns.md"), "extra organization file\n")
+    Files.writeString(repoRoot.resolve("skills/skill-bill/patterns.md"), "extra organization file\n")
 
     val report = RepoValidationRuntime.validateRepo(repoRoot, testNativeAgentCompositionContext(repoRoot))
 
     assertFalse(report.passed)
     assertTrue(
       report.issues.any {
-        it.contains("skills/bill-code-review/patterns.md") &&
+        it.contains("skills/skill-bill/patterns.md") &&
           it.contains("skill source directories may contain only content.md and native-agents/")
       },
       report.issues.joinToString("\n"),
@@ -190,7 +193,7 @@ class RepoValidationRepoStructureTest {
 
     assertTrue(
       report.issues.any {
-        it.contains("skills/bill-code-review/shell-ceremony.md") &&
+        it.contains("skills/skill-bill/shell-ceremony.md") &&
           it.contains("committed generated supporting pointer file is not allowed")
       },
       report.issues.joinToString("\n"),
@@ -206,7 +209,7 @@ class RepoValidationRepoStructureTest {
 
     assertTrue(
       report.issues.any {
-        it.contains("skills/bill-code-review/shell-ceremony.md") &&
+        it.contains("skills/skill-bill/shell-ceremony.md") &&
           it.contains("committed generated supporting pointer file is not allowed")
       },
       report.issues.joinToString("\n"),
@@ -217,14 +220,14 @@ class RepoValidationRepoStructureTest {
   fun `repo validation rejects regular copied generated supporting pointer files beside non-platform skills`() {
     val repoRoot = Files.createTempDirectory("skillbill-regular-sidecar")
     createRepoValidationSkillFixture(repoRoot)
-    val sidecar = repoRoot.resolve("skills/bill-code-review/shell-ceremony.md")
+    val sidecar = repoRoot.resolve("skills/skill-bill/shell-ceremony.md")
     Files.writeString(sidecar, "copied markdown\n")
 
     val report = RepoValidationRuntime.validateRepo(repoRoot, testNativeAgentCompositionContext(repoRoot))
 
     assertTrue(
       report.issues.any {
-        it.contains("skills/bill-code-review/shell-ceremony.md") &&
+        it.contains("skills/skill-bill/shell-ceremony.md") &&
           it.contains("committed generated supporting pointer file is not allowed")
       },
       report.issues.joinToString("\n"),
@@ -235,7 +238,7 @@ class RepoValidationRepoStructureTest {
   fun `repo validation skips native agent markdown skill references`() {
     val repoRoot = Files.createTempDirectory("skillbill-native-agent-refs")
     createRepoValidationSkillFixture(repoRoot)
-    val nativeAgent = repoRoot.resolve("skills/bill-code-review/native-agents/bill-code-review-worker.md")
+    val nativeAgent = repoRoot.resolve("skills/skill-bill/native-agents/bill-code-review-worker.md")
     Files.createDirectories(nativeAgent.parent)
     Files.writeString(
       nativeAgent,
@@ -254,6 +257,25 @@ class RepoValidationRepoStructureTest {
       report.issues.any { it.contains("references unknown skill 'bill-code-review-worker'") },
       report.issues.joinToString("\n"),
     )
+  }
+
+  @Test
+  fun `repo validation reads the skill-bill slash command as a skill but not skill-bill cli prose`() {
+    val repoRoot = Files.createTempDirectory("skillbill-dispatcher-refs")
+    val skillFile = repoRoot.resolve("skills/bill-example/content.md")
+    Files.createDirectories(skillFile.parent)
+    Files.writeString(
+      skillFile,
+      "Run `/skill-bill SKILL-1`, or `skill-bill goal SKILL-1` from ~/.local/bin/skill-bill.\n",
+    )
+    val readme = repoRoot.resolve("README.md")
+    Files.writeString(readme, "| Skill | Use |\n| --- | --- |\n| `/skill-bill` | Dispatcher. |\n")
+    val issues = mutableListOf<String>()
+
+    validateSkillReferencesInFile(skillFile, repoRoot, setOf("bill-example"), issues)
+    validateReadme(readme, setOf("skill-bill"), emptySet(), issues)
+
+    assertEquals(listOf("skills/bill-example/content.md: references unknown skill 'skill-bill'"), issues)
   }
 
   @Test

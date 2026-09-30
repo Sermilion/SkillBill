@@ -17,6 +17,7 @@ import skillbill.install.model.WindowsSymlinkDecision
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
 import skillbill.install.model.buildInstallPlanWireMap
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.ports.repository.toFileLocation
 import skillbill.testing.seedConformingPlatformPack
 import java.nio.file.Files
@@ -110,6 +111,7 @@ class InstallPlanSchemaValidatesExistingFixturesTest {
   private fun setupFixture(): InstallPlanWireFixture {
     val repoRoot = Files.createTempDirectory("skillbill-install-plan-schema-repo").also(tempDirs::add)
     val home = Files.createTempDirectory("skillbill-install-plan-schema-home").also(tempDirs::add)
+    seedBaseSkill(repoRoot, PACK_SIDECAR_PARENT_SKILL)
     seedBaseSkill(repoRoot, "bill-code-review")
     seedBaseSkill(repoRoot, "bill-code-check")
     seedPlatformPack(repoRoot, "kotlin", areaNames = listOf("architecture", "testing"))

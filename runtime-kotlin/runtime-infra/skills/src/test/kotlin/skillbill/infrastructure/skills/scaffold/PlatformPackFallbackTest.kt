@@ -43,7 +43,7 @@ class PlatformPackFallbackTest {
       ---
       name: bill-custom-neutral-code-review
       description: Neutral review fallback used by the contract fixture.
-      internal-for: bill-code-review
+      internal-for: skill-bill
       ---
 
       # Neutral Review

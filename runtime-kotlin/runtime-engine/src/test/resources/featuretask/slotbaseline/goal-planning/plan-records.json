@@ -1,0 +1,60 @@
+[
+    {
+        "contract_version": "0.2",
+        "created_at": "__NORMALIZED_TIMESTAMP__",
+        "decomposition_manifest_hash": "__NORMALIZED_SHA64__",
+        "governed_sub_spec_path": ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_1.md",
+        "manifest_order": 0,
+        "normalized_issue_key": "SKILL-380",
+        "parent_goal_workflow_id": "wfl-skill-380-parent",
+        "parent_spec_hash": "__NORMALIZED_SHA64__",
+        "payload_sha256": "__NORMALIZED_SHA64__",
+        "phase_output_contract_id": "https://skill-bill.dev/contracts/feature-task-runtime-phase-output-schema.yaml",
+        "phase_output_contract_version": "0.7",
+        "plan_payload_json": {
+            "contract_version": "0.7",
+            "phase_id": "plan",
+            "produced_outputs": {
+                "value": "Fixture plan prose for downstream implement and audit."
+            },
+            "status": "completed",
+            "summary": "s"
+        },
+        "planning_contract_id": "https://skill-bill.dev/contracts/goal-planning-preparation-schema.yaml",
+        "planning_contract_version": "0.2",
+        "preparation_status": "prepared",
+        "repair_evidence_json": null,
+        "repository_identity": "repo-root-realpath-v1:__NORMALIZED_REPO_ROOT__",
+        "sub_spec_hash": "__NORMALIZED_SHA64__",
+        "subtask_id": 1
+    },
+    {
+        "contract_version": "0.2",
+        "created_at": "__NORMALIZED_TIMESTAMP__",
+        "decomposition_manifest_hash": "__NORMALIZED_SHA64__",
+        "governed_sub_spec_path": ".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_2.md",
+        "manifest_order": 1,
+        "normalized_issue_key": "SKILL-380",
+        "parent_goal_workflow_id": "wfl-skill-380-parent",
+        "parent_spec_hash": "__NORMALIZED_SHA64__",
+        "payload_sha256": "__NORMALIZED_SHA64__",
+        "phase_output_contract_id": "https://skill-bill.dev/contracts/feature-task-runtime-phase-output-schema.yaml",
+        "phase_output_contract_version": "0.7",
+        "plan_payload_json": {
+            "contract_version": "0.7",
+            "phase_id": "plan",
+            "produced_outputs": {
+                "value": "Fixture plan prose for downstream implement and audit."
+            },
+            "status": "completed",
+            "summary": "s"
+        },
+        "planning_contract_id": "https://skill-bill.dev/contracts/goal-planning-preparation-schema.yaml",
+        "planning_contract_version": "0.2",
+        "preparation_status": "prepared",
+        "repair_evidence_json": null,
+        "repository_identity": "repo-root-realpath-v1:__NORMALIZED_REPO_ROOT__",
+        "sub_spec_hash": "__NORMALIZED_SHA64__",
+        "subtask_id": 2
+    }
+]

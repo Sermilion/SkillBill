@@ -1,7 +1,7 @@
 ---
 name: bill-ios-code-review-ui
 description: Use when reviewing iOS ownership, navigation, presentation, animation, and adaptive layout.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # UI Review Specialist

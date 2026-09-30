@@ -1,7 +1,7 @@
 ---
 name: bill-php-code-review-api-contracts
 description: Use when reviewing PHP request validation, response serialization, protocol semantics, and client compatibility.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # PHP API Contract Review Specialist

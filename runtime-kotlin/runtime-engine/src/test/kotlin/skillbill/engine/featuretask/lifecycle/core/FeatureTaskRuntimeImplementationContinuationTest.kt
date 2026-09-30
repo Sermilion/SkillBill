@@ -2,7 +2,10 @@ package skillbill.engine.featuretask.lifecycle.core
 
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeImplementationObligations
 import skillbill.engine.featuretask.phase.core.featureTaskRuntimeImplementationContinuationFrom
-import skillbill.engine.featuretask.phase.prompt.directives.implementationContinuationDirective
+import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
+import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections
+import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections.SegmentKind
+import skillbill.engine.promptComposerBriefingFor
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptFromArtifact
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
@@ -88,7 +91,7 @@ class FeatureTaskRuntimeImplementationContinuationTest {
         ),
       )
 
-    val directive = implementationContinuationDirective("implement", continuation)
+    val directive = ImplementationPromptSections.continuationDirective(continuation, SegmentKind.IMPLEMENTATION)
 
     assertTrue(directive.contains("segment 2"), directive)
     listOf("segment one prose", "keep going on task-2").forEach { expected ->
@@ -112,7 +115,7 @@ class FeatureTaskRuntimeImplementationContinuationTest {
         ),
       )
 
-    val directive = implementationContinuationDirective("simplify", continuation)
+    val directive = ImplementationPromptSections.continuationDirective(continuation, SegmentKind.SIMPLIFICATION)
 
     assertTrue(directive.contains("Continue this simplification"))
     assertTrue(directive.contains("simplification_receipt"))
@@ -121,16 +124,24 @@ class FeatureTaskRuntimeImplementationContinuationTest {
   }
 
   @Test
-  fun `the continuation directive is empty for a different phase or no continuation`() {
-    val continuation =
-      featureTaskRuntimeImplementationContinuationFrom(
-        "implement",
-        listOf(attempt(sequenceNumber = 1, value = "segment one")),
-        obligations(),
+  fun `the continuation section is empty for a different step or no continuation`() {
+    val inputs =
+      FeatureTaskRuntimePhasePromptComposeInputs(
+        issueKey = "SKILL-1",
+        briefing = promptComposerBriefingFor("implement"),
+        implementationContinuation =
+          featureTaskRuntimeImplementationContinuationFrom(
+            "implement",
+            listOf(attempt(sequenceNumber = 1, value = "segment one")),
+            obligations(),
+          ),
       )
 
-    assertEquals("", implementationContinuationDirective("audit", continuation))
-    assertEquals("", implementationContinuationDirective("implement", null))
+    assertEquals("", ImplementationPromptSections.simplify("simplify", inputs).continuation)
+    assertEquals(
+      "",
+      ImplementationPromptSections.implement("implement", inputs.copy(implementationContinuation = null)).continuation,
+    )
   }
 
   private fun obligations(): FeatureTaskRuntimeImplementationObligations =

@@ -29,7 +29,7 @@ class SkillBillUpdateService(
       return UpdateRunResult(status = UpdateRunStatus.DRY_RUN, exitCode = 0, plan = plan)
     }
     if (request.releaseTag == null) {
-      val updateCheck = updateCheckService.check(includePrereleases = false)
+      val updateCheck = updateCheckService.check(includePrereleases = request.includePrereleases)
       if (updateCheck.status != UpdateCheckStatus.UPDATE_AVAILABLE) {
         val exitCode = if (updateCheck.status == UpdateCheckStatus.UNKNOWN) 1 else 0
         val status =

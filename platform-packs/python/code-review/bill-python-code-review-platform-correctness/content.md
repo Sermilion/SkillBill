@@ -1,7 +1,7 @@
 ---
 name: bill-python-code-review-platform-correctness
 description: Review Python runtime correctness, typing edge cases, resources, concurrency, serialization, and time logic.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Python Platform Correctness Review

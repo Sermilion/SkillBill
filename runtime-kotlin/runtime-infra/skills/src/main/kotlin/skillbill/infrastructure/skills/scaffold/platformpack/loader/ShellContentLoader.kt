@@ -108,6 +108,7 @@ internal fun validatePlatformPack(
   pack: PlatformManifest,
   contractVersion: String,
   enforceContractVersion: Boolean = true,
+  enforceGovernedReviewStructure: Boolean = true,
 ) {
   if (enforceContractVersion && pack.contractVersion != contractVersion) {
     contractVersionMismatch(
@@ -132,5 +133,7 @@ internal fun validatePlatformPack(
   pack.declaredCodeReviewAreas.forEach { area ->
     validateGovernedSkill(pack, "areas.$area", declaredAreaFiles.getValue(area).toPath(), "code-review")
   }
-  validateReviewSkillStructure(pack)
+  if (enforceGovernedReviewStructure) {
+    validateReviewSkillStructure(pack)
+  }
 }

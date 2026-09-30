@@ -318,7 +318,7 @@ private fun malformedSpecialistContent(): String =
   ---
   name: bill-invalid-review-shape-code-review-architecture
   description: Malformed architecture specialist fixture.
-  internal-for: bill-code-review
+  internal-for: skill-bill
   ---
 
   # Malformed Architecture Specialist

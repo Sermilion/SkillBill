@@ -1,9 +1,7 @@
 package skillbill.nativeagent
 
-import skillbill.contracts.review.GovernedReviewEvidenceContracts.OPERATIONS
 import skillbill.infrastructure.skills.nativeagent.composition.NATIVE_AGENT_BUNDLE_FILE
 import skillbill.infrastructure.skills.nativeagent.composition.NATIVE_AGENT_SOURCE_DIR
-import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentBundle
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceFile
 import skillbill.testing.repoRootFromTest
 import java.nio.file.Files
@@ -12,7 +10,6 @@ import kotlin.io.path.extension
 import kotlin.io.path.name
 import kotlin.streams.toList
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
 
@@ -59,19 +56,5 @@ class NativeAgentCompositionValidatesExistingBundlesTest {
           failures.joinToString("\n"),
       )
     }
-  }
-
-  @Test
-  fun `the inline review worker declares only the governed evidence operations`() {
-    val bundle =
-      repoRootFromTest()
-        .resolve("skills/bill-code-review-inline/native-agents/agents.yaml")
-    val worker = parseNativeAgentBundle(bundle).single { it.name == "bill-code-review-inline" }
-
-    assertEquals(
-      OPERATIONS
-        .map { "mcp__skill-bill-review-evidence__$it" },
-      worker.tools,
-    )
   }
 }

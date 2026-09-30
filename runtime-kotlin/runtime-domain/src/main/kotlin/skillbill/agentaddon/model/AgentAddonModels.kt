@@ -3,17 +3,31 @@ package skillbill.agentaddon.model
 import skillbill.model.FileLocation
 
 enum class AgentAddonConsumer(val id: String) {
-  BILL_FEATURE("bill-feature"),
+  SKILL_BILL("skill-bill"),
   ;
 
   companion object {
+    const val LEGACY_BILL_FEATURE_ID: String = "bill-feature"
+
     fun fromId(id: String): AgentAddonConsumer =
       entries.firstOrNull { it.id == id }
         ?: throw IllegalArgumentException(
           "Unknown agent add-on consumer '$id'. Supported: ${entries.joinToString { it.id }}.",
         )
+
+    fun decode(id: String): AgentAddonConsumerDecoding =
+      if (id == LEGACY_BILL_FEATURE_ID) {
+        AgentAddonConsumerDecoding(SKILL_BILL, legacyId = id)
+      } else {
+        AgentAddonConsumerDecoding(fromId(id), legacyId = null)
+      }
   }
 }
+
+data class AgentAddonConsumerDecoding(
+  val consumer: AgentAddonConsumer,
+  val legacyId: String?,
+)
 
 enum class AgentAddonValidationStatus(val wireValue: String) {
   VALID("valid"),

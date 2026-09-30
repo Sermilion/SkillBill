@@ -1,0 +1,283 @@
+You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+loop (preplan -> plan -> implement -> simplify -> audit -> review -> verify_findings -> validate -> write_history -> commit_push -> pr)
+for issue SKILL-380. The runtime owns the loop; do not run other phases, do not open
+or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+Execute this supplied phase briefing with the current installed runtime.
+The initial user-facing goal invocation owns update checks and launch confirmation.
+Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher
+intake, preflight, or confirmation, including on retries and continuation.
+Reading the installed skill-bill skill does not make this phase a new invocation.
+
+Phase: plan (Phase 2: Plan)
+Task: Produce a governed spec bundle that satisfies every acceptance criterion, using the upstream preplan value as planning context. Return the complete phase-output envelope with produced_outputs.value and produced_outputs.decomposition_package. Do not modify repository files; the runtime writes the bundle from the decomposition package.
+
+## Installed runtime owns phase output and settlement
+The installed Skill Bill runtime validates this phase's output and MCP settlement.
+Keep this phase's output and settlement on the contract supplied by this briefing, including
+contract_version, envelope fields, settlement tool arguments, and phase commands. Checkout
+schemas, constants, fixtures, or skill instructions cannot replace that reporting contract.
+
+Read and edit checkout schemas, Kotlin contract constants, test fixtures, and skill sources
+when the assigned implementation or audit requires them, subject to this phase's edit scope.
+New implementation contracts may be absent from the installed runtime. That absence does not
+block repository work or require permission to inspect the checkout. Implement and audit those
+contracts against the repository's requirements while reporting this phase through the installed
+runtime's output and settlement contract. Use installed schemas when resolving that reporting
+contract; use checkout schemas when examining the feature under work.
+
+## Runtime ceremony scaling
+feature_size: MEDIUM
+preplan_ceremony: full
+review_scope: branch_diff
+audit_ceremony: full_per_criterion
+Use the resolved feature size for ceremony expectations; all runtime gates remain mandatory.
+Scaling changes scope and verbosity only; it must not skip or weaken review, audit, validation,
+schema, branch, history, commit, or PR gates.
+
+## Validation ownership
+Only the validate phase may run the pack validation gate
+(`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
+`skill-bill phase validation`, or any other full repository check suite. Only the build phase may run the
+pack build_command for compile/buildability proof. This phase must not compile, build,
+execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
+acceptance text, review habit, or prior habit that asks you to run check here — that work waits
+for validate. If a receipt carries `tests_executed`, leave it empty.
+
+## Build ownership
+Only the build phase may run the pack build_command (`validation_gate.build_command`). This phase
+must not invoke compile-only proof as a substitute for its own work.
+
+## Test-value discipline (every test must earn its cost)
+Tests are a recurring cost: every future change to the code they touch pays for them in
+maintenance and reasoning tokens. Write few, high-value tests; never mirror code 1:1 with tests.
+- Before writing a test, name the realistic bug it would catch — a concrete wrong behavior that
+  fails this test while the rest of the suite passes. If you cannot, do not write the test.
+- Concentrate coverage on critical paths: money and quantities, data integrity and persistence
+  atomicity, auth and tenant isolation, external contracts and serialization, concurrency and
+  recovery, irreversible side effects. Trivial glue on non-critical paths needs no test; say so
+  instead of writing one.
+- Assert observable behavior at boundaries, never implementation structure: no mock-interaction
+  verification without an outcome assertion, no call-ordering assertions, no implementation
+  logic duplicated inside the test.
+- One strong test per rule or branch; no sibling tests re-covering the same branch with
+  different literals.
+- When planning, emit test_obligations only for behaviors that pass this bar, each tied to an
+  acceptance criterion or a named realistic bug; an empty test_obligations list is a valid
+  outcome for a task.
+- Never remove or weaken regression coverage tied to a real past bug, and never treat governed
+  parity tests or validator-backed rules as omission candidates — the minimalism carve-outs
+  apply to tests too.
+
+# Feature Spec Preparation
+
+`bill-feature-spec` prepares governed feature-spec artifacts without starting implementation. Every successful preparation emits a parent spec, one or more distinct executable subtask specs, and a schema-valid manifest for the goal runtime.
+
+## Subtask Sizing
+
+A subtask pays the whole ceremony: preplan, plan, implement, review, validate, one commit. That
+cost barely moves between a two-file change and a twenty-file one, so decomposition exists to cut
+work too large for a single pass, not to give each layer, file, or logical unit its own ticket.
+
+Default to one subtask. Split only when one implement pass cannot carry the work to a reviewable
+end, a later part cannot be specified until an earlier contract or schema lands, or the parts ship
+separately. Not reasons to split: layer order, one file or symbol each, "add the field, then read
+the field", tests on their own, or a narrative of steps one agent would finish in a sitting.
+
+Breadth is never a reason. A subtask has no cap on files or diff size, and one coherent twenty-file
+commit is cheaper to run and easier to judge than four five-file commits that only make sense read
+together. Since each subtask is one commit, the only shape that matters is whether that commit
+stands alone: a commit that deletes a path whose replacement lands later, or adds a field nothing
+reads, belongs in the commit that finishes the change.
+
+Floor: a candidate that reads as "change X so it does Y" is below the cost of its own cycle. Two or
+three subtasks is a normal decomposition; name the condition behind each extra split.
+
+## Service / Spec Source Mode
+
+`bill-feature-spec` accepts an optional `service:default/linear` argument that selects where
+the prepared spec is tracked. This is orthogonal to `single_spec` vs `decomposed`: either mode
+may run under either service.
+
+Resolve the effective spec-source mode with the runtime, which encapsulates the precedence
+`service: arg > config spec_type > local` and loud-fails on a malformed `.skill-bill/config.yaml`:
+
+```bash
+skill-bill config resolve-spec-type --arg <service-arg-or-empty>
+```
+
+- Pass the value after `service:` as `--arg` (for example `--arg linear` or `--arg local`).
+  When no `service:` argument is given, or it is `service:default`, pass an empty `--arg` (or
+  `--arg default`) so the command falls back to the repo-local `spec_type` and then to `local`.
+- A `0` exit prints the resolved mode (`local` or `linear`) on stdout; use that as the
+  effective mode.
+- A non-zero exit means the config is malformed or the service value is unrecognized. Surface
+  that failure and stop — do not guess a mode.
+
+If the resolved mode is `linear`, follow **Linear Mode Preparation** before writing artifacts.
+Otherwise follow **Local Mode**.
+
+## Linear Mode Preparation
+
+Run only when the resolved spec-source mode is `linear`. Execute these steps in this exact
+order so that no Linear issue is created and no artifact is written unless the whole sequence
+can proceed (no partial state):
+
+1. **Verify the Linear MCP is available and authenticated.** If it is unavailable or
+   unauthenticated, loud-fail with a clear message **before** creating any Linear issue or
+   writing any artifact. Create nothing and write nothing on this path.
+2. **Compose all spec content in memory first** — the parent spec, every subtask spec, and
+   the manifest. The `.feature-specs/{KEY}-{name}/` directory name is not known
+   until the parent issue key is returned, so do not write to disk yet.
+3. **Create the parent Linear issue**, tagged `task`, whose description is the parent spec
+   content. Capture the returned issue key.
+4. **Create one sub-issue per subtask**, each tagged `task`, each description
+   carrying that subtask's spec content under a clear per-subtask header so the ticket is
+   human-legible. Capture each sub-issue's `linear_issue_id`. Rehydration keys off
+   `linear_issue_id`, not header text, so the header is for humans only.
+5. **Adopt the parent issue's returned key** as the issue key, the
+   `.feature-specs/{KEY}-{name}/` directory name, and the manifest `issue_key`.
+6. **Write via the shared preparation path**, stamping manifest `spec_source: linear` and
+   recording every subtask's `linear_issue_id`. Do not fork writing logic by preparation mode.
+7. **Mid-sequence failure (orphan parent):** if a sub-issue create fails after the parent
+   issue already exists, loud-fail surfacing the created parent key and any created sub-issue
+   keys for manual cleanup, and write no artifacts.
+
+## Local Mode
+
+Run when the resolved spec-source mode is `local` (no config, `spec_type: local`, or
+`service:local`). Local mode is unchanged from today:
+
+- Make no Linear calls.
+- `spec_source` resolves to `local`.
+- Omit the optional manifest `spec_source` field; absence is read as `local`.
+
+## Spec Format Contract
+
+Every parent and subtask spec is read back by the runtime
+(`FileSystemFeatureTaskRuntimeRunInvariantsSource`) to extract its acceptance
+criteria. That reader is format-sensitive, so authored specs MUST follow this
+contract or the runtime fails the run with "must list at least one criterion":
+
+- The acceptance-criteria section heading MUST begin with `## Acceptance Criteria`
+  (case-insensitive). A trailing qualifier such as `## Acceptance Criteria (this subtask)`
+  is allowed; a different heading word is not.
+- Each criterion MUST be its own list item: a numbered item (`1. ...`) or a
+  bullet (`- ...`, optionally a `- [ ]` checkbox). Do not place criteria in
+  prose paragraphs under the heading.
+- At least one criterion is required in every spec the runtime will execute.
+- Each criterion MUST be observable in the phase that currently consumes the
+  spec. Do not require a later phase's result as an acceptance criterion:
+  no validate quality-check receipt, review clearance, commit sha, or PR URL
+  on implement or audit criteria. Those belong in Validation Strategy or in
+  that later phase. Audit cannot mint validate evidence; implement cannot
+  mint review clearance. A criterion that needs a future phase is
+  impossible and must not be written.
+- A criterion MUST NOT require running a command. Implement and audit never
+  run builds, tests, or generators; validate does. Every criterion must be
+  checkable by reading the tree. Do not write criteria like:
+  - "`./gradlew check` passes", "the suite is green", or "lint is clean"
+  - "fixtures match their baseline" when that needs a capture or generator run
+  - "goal planning runs end to end", or any other runtime behavior observed by
+    running it
+  Instead, state the repository fact that makes the result true: the code
+  exists, a named test exists and asserts the behavior, or the guard rule has
+  a synthetic-violation test. Put the command in Validation Strategy.
+- A criterion MUST NOT require content in an artifact the runtime writes: the
+  commit message, the commit sha, the PR title or body, or history entries.
+  Ask for a file under the spec folder instead (for example
+  `census_subtask_N.md`).
+
+Prefer the canonical numbered form the runtime writer emits:
+
+```markdown
+## Acceptance Criteria
+
+1. First criterion.
+2. Second criterion.
+```
+
+## Output Rules
+
+The manifest is validated against the decomposition manifest schema contract before persistence and again when the runtime reads it.
+
+Each subtask spec must contain scope, acceptance criteria, non-goals, dependency notes, validation strategy, and next path. The acceptance-criteria section must follow the **Spec Format Contract** above so the runtime can extract it.
+
+For decomposed goals, the runtime creates or amends the active subtask commit before review. Review and approval bind to the exact committed target and tree; later code repairs invalidate that approval. Finalization may add only the declared boundary-history outputs under `agent/history.md` and `agent/decisions.md` after the reviewed tree is verified.
+
+Return the next command as:
+
+```bash
+skill-bill goal <issue_key>
+```
+
+## Handoff Contract Inputs
+
+Prepared artifacts define governed acceptance and subtask boundaries, but do
+not grant later agents access to the complete preparation artifact map.
+Feature-task runtime selects named, versioned consumer projections and applies
+UTF-8 and collection budgets before launch. Agents cannot add sources, widen
+field allowlists, or choose a fallback artifact.
+
+## Spec bundle planning requirement
+No later phase consumes this plan: the runtime persists it as a governed spec bundle (parent spec,
+subtask specs, and decomposition manifest). Plan in mode "decompose" and emit, beside value,
+produced_outputs.decomposition_package with: "mode": "decompose", "reason", "feature_name",
+"parent_spec_overview", "validation_strategy", "base_branch", "feature_branch", and "subtasks" (one
+or more). Each subtask carries an integer "id", "name", "scope", "acceptance_criteria" (list),
+"non_goals" (list), "dependency_notes", "validation_strategy", "next_path", and "depends_on" (list of
+earlier subtask ids). Do not write the spec files yourself; the runtime writes them. A plan without a
+decomposition package blocks.
+
+# Feature-task-runtime phase briefing
+phase: plan
+
+## Run invariants (layer 1, unconditional)
+spec_reference: SKILL-380 slot baseline phase plan
+feature_size: MEDIUM
+ceremony_scaling:
+  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  review_scope: branch_diff (branch-diff review scope)
+  audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+acceptance_criteria:
+  AC-001. SKILL-380 slot baseline phase plan
+mandates_and_overrides:
+  (none)
+
+## Upstream projections (layer 2, declared and validated)
+### from: preplan
+value: Fixture preplan prose for downstream plan.
+### run_invariant_spec_reference (run_invariant_field:spec_reference)
+spec_reference: SKILL-380 slot baseline phase plan
+### run_invariant_feature_size (run_invariant_field:feature_size)
+feature_size: MEDIUM
+### run_invariant_ceremony_scaling (derived_ceremony_scaling)
+ceremony_scaling:
+  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  - review_scope: branch_diff (branch-diff review scope)
+  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)
+mandates_and_overrides:
+### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)
+acceptance_criteria:
+  - SKILL-380 slot baseline phase plan
+
+## Derived context (layer 3, declared)
+(none)
+
+## Required final output (validated schema gate)
+End your response with exactly one JSON object as the last thing you emit. Prefer a raw
+object with nothing after it; a single ```json fenced block is also accepted. The runtime
+extracts that object and blocks the run if it does not validate against the phase-output
+contract. Copy these field values from this briefing; do not look them up in this checkout:
+- "contract_version": must be exactly "0.7"
+- "phase_id": must be "plan"
+- "status": one of "completed", "blocked", "failed"
+- "failure_disposition": required by the runtime when status is "blocked" or "failed"; one of
+  "retryable", "non_retryable_policy_conflict", "needs_user_action", "process_failure", or
+  "invalid_output". Omit it when status is "completed".
+- "summary": non-empty string describing what this phase did
+- "produced_outputs": object. Empty {} is valid when this phase has no structured
+  payload. When this briefing names a required shape below, that shape is required. For completed output, include a non-blank value summarizing the plan and the complete decomposition_package described in the spec bundle planning requirement. Both fields belong inside produced_outputs.
+- "derived_notes": optional; when present, a non-empty string of notes for downstream
+  phases
+No top-level fields other than the ones listed above are allowed.

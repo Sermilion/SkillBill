@@ -1,0 +1,25 @@
+{
+    "blocked_reason": null,
+    "blocked_step_id": null,
+    "completed_step_ids": [
+        "commit_push",
+        "pr"
+    ],
+    "invocation_id": "__NORMALIZED_INVOCATION_ID__",
+    "review_result": null,
+    "status": "completed",
+    "value": {
+        "contract_version": "0.7",
+        "phase_id": "pr",
+        "produced_outputs": {
+            "runtime_measured_facts": {
+                "pr_created": "unknown",
+                "pr_number": "unknown",
+                "pr_url": "unknown"
+            },
+            "value": "Opened the pull request for the branch."
+        },
+        "status": "completed",
+        "summary": "Phase produced a validated output."
+    }
+}

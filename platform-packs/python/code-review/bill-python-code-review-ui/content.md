@@ -1,7 +1,7 @@
 ---
 name: bill-python-code-review-ui
 description: Review Python-rendered UI, admin flows, templates, notebooks, dashboards, forms, and generated reports.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Python UI Review

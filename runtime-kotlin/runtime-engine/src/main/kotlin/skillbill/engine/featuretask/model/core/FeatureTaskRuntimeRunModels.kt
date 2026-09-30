@@ -10,31 +10,31 @@ import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Path
 import kotlin.time.Duration
 
 data class FeatureTaskRuntimeRunRequest(
-  val issueKey: String,
-  val workflowId: String,
+  override val issueKey: String,
+  override val workflowId: String,
   val sessionId: String,
-  val runInvariants: FeatureTaskRuntimeRunInvariants,
-  val invokedAgentId: String,
-  val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment(),
-  val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
-  val compactionSettings: CompactionSettings = CompactionSettings.DEFAULT,
-  val environment: Map<String, String> = emptyMap(),
-  val repoRoot: Path,
-  val timeout: Duration? = null,
-  val requestedCodeReviewMode: CodeReviewExecutionMode? = null,
-  val goalContinuation: FeatureTaskRuntimeGoalContinuationContext? = null,
+  override val runInvariants: FeatureTaskRuntimeRunInvariants,
+  override val invokedAgentId: String,
+  override val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment(),
+  override val modelAssignment: FeatureTaskRuntimeModelAssignment = FeatureTaskRuntimeModelAssignment(),
+  override val compactionSettings: CompactionSettings = CompactionSettings.DEFAULT,
+  override val environment: Map<String, String> = emptyMap(),
+  override val repoRoot: Path,
+  override val timeout: Duration? = null,
+  override val requestedCodeReviewMode: CodeReviewExecutionMode? = null,
+  override val goalContinuation: FeatureTaskRuntimeGoalContinuationContext? = null,
   val operatorDecision: GoalSubtaskOperatorDecision? = null,
-  val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
-  val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE,
-  val transitionsOverride: FeatureTaskRuntimeTransitionDeclaration? = null,
-) {
+  override val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
+  override val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE,
+  override val transitionsOverride: FeatureTaskRuntimeTransitionDeclaration? = null,
+) : FeatureTaskRuntimeRunFacts {
   init {
     require(issueKey.isNotBlank()) { "FeatureTaskRuntimeRunRequest.issueKey is required." }
     require(workflowId.isNotBlank()) { "FeatureTaskRuntimeRunRequest.workflowId is required." }

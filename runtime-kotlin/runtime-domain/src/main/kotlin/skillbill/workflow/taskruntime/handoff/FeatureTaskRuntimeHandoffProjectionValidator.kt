@@ -13,7 +13,7 @@ object FeatureTaskRuntimeHandoffProjectionValidator {
   const val COMPACT_REFERENCE_MAX_LENGTH: Int = 512
 
   fun validate(inputs: FeatureTaskRuntimeHandoffProjectionInputs): FeatureTaskRuntimeHandoffEnvelope {
-    FeatureTaskRuntimeHandoffProjectionDeclarationChecks.rejectConflictingGateReceipts(inputs)
+    FeatureTaskRuntimeHandoffProjectionDeclarationChecks.rejectUnselectedStepOutputs(inputs)
     FeatureTaskRuntimeHandoffProjectionDeclarationChecks.rejectDuplicateProjectionNames(inputs)
     val projections =
       inputs.declarations.mapNotNull { declaration ->

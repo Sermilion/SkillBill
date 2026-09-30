@@ -1,9 +1,6 @@
 package skillbill.workflow.taskruntime.handoff
 
 import skillbill.workflow.model.ValidationDepth
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection.BUILD
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection.VALIDATE
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
@@ -30,7 +27,9 @@ internal const val HANDOFF_VALIDATOR_VALIDATION_PHASE_PAYLOAD: String =
     """"repository_checkpoint":{"fingerprint":"tree-1"},"gate_run_count":1,"gate_runs":[],""" +
     """"validation_evidence":{"contract_version":"0.1","results":[{"command":"./gradlew check","exit_code":0}]}}}}"""
 internal const val HANDOFF_VALIDATOR_HISTORY_PHASE_PAYLOAD: String =
-  """{"produced_outputs":{"history_result":{"changed_paths":["src/Foo.kt"],"decisions_recorded":[]}}}"""
+  """{"produced_outputs":{"value":"Recorded the boundary history entry.",""" +
+    """"runtime_measured_facts":{"changed_paths":["agent/history.md"],"history_written":true,""" +
+    """"decisions_recorded":false}}}"""
 internal const val HANDOFF_VALIDATOR_COMMIT_PUSH_PHASE_PAYLOAD: String =
   """{"produced_outputs":{"commit_push_result":{"commit_sha":"abc","branch":"feat",""" +
     """"base_branch":"main","pushed":true}}}"""
@@ -85,7 +84,7 @@ internal data class HandoffProjectionValidatorInputsFixture(
   var resolvedCheckpoint: FeatureTaskRuntimeRepositoryCheckpoint? = null,
   var expectedCheckpoint: FeatureTaskRuntimeRepositoryCheckpoint? = null,
   var validationDepth: ValidationDepth = ValidationDepth.DEFAULT,
-  var qualityGateSelection: FeatureTaskRuntimeQualityGateSelection = VALIDATE,
+  var unselectedStepIds: Set<String> = setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD),
 ) {
   fun build(): FeatureTaskRuntimeHandoffProjectionInputs =
     FeatureTaskRuntimeHandoffProjectionInputs(
@@ -97,7 +96,7 @@ internal data class HandoffProjectionValidatorInputsFixture(
       expectedCheckpoint = expectedCheckpoint,
       workflowId = "wftr-1",
       validationDepth = validationDepth,
-      qualityGateSelection = qualityGateSelection,
+      unselectedStepIds = unselectedStepIds,
       planningProjectionValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator::validate,
     )
 }
@@ -193,22 +192,16 @@ internal fun assertValueOnlyConsumerLaunches(
   checkpoint: FeatureTaskRuntimeRepositoryCheckpoint,
 ) {
   val def = FeatureTaskRuntimePhaseWorkflowDefinition
-  val gateSelection =
-    if (consumer == def.PHASE_BUILD) {
-      BUILD
-    } else {
-      VALIDATE
-    }
   val declarations =
     if (consumer == def.PHASE_VALIDATE || consumer == def.PHASE_BUILD) {
       FeatureTaskRuntimePhaseWorkflowQueries
         .phaseDeclaration(consumer, FeatureTaskRuntimeFeatureSize.MEDIUM)
         .projectionDeclarations
     } else {
-      FeatureTaskRuntimePhaseWorkflowQueries.phaseDeclarationForQualityGate(
+      FeatureTaskRuntimePhaseWorkflowQueries.phaseDeclarationWithoutSteps(
         consumer,
         FeatureTaskRuntimeFeatureSize.MEDIUM,
-        gateSelection,
+        setOf(def.PHASE_BUILD),
       ).projectionDeclarations
     }
   val envelope =

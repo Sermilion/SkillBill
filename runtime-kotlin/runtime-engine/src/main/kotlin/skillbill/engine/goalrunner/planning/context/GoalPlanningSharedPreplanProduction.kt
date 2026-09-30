@@ -9,6 +9,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.planning.attempt.producePhase
+import skillbill.engine.goalrunner.planning.model.GoalPlanningLaunch
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseProduction
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProduceAttemptArgs
@@ -30,8 +31,9 @@ internal fun produceSharedPreplan(
   shared: GoalPlanningSharedContext,
   request: GoalRunnerRunRequest,
   provenance: GoalPlanningContractProvenance,
+  launch: GoalPlanningLaunch,
 ): Result<SharedGoalPreplanCheckpoint> =
-  produceSharedPreplanCheckpoint(sweep, shared, request, provenance).mapCatching { produced ->
+  produceSharedPreplanCheckpoint(sweep, shared, request, provenance, launch).mapCatching { produced ->
     produced.also { sweep.checkpoint.recheckpointSharedPreplan(it) }
   }
 
@@ -40,6 +42,7 @@ internal fun produceSharedPreplanCheckpoint(
   shared: GoalPlanningSharedContext,
   request: GoalRunnerRunRequest,
   provenance: GoalPlanningContractProvenance,
+  launch: GoalPlanningLaunch,
 ): Result<SharedGoalPreplanCheckpoint> =
   runCatching {
     val runInvariants = sweep.invariantsSource.read(shared.parentSpecPath)
@@ -55,6 +58,7 @@ internal fun produceSharedPreplanCheckpoint(
                   subtask = null,
                   runInvariants = runInvariants,
                   phaseId = GoalPlanningSweepConstants.PHASE_PREPLAN,
+                  launch = launch,
                 ),
               recordedOutputs = emptyList(),
             ),

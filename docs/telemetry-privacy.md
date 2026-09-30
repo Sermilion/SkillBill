@@ -225,6 +225,15 @@ reports a zero failure count, so it cannot land in a clean-gate numerator or den
 clean rate only over rows that are both `operator_completed` and `final_failure_count_availability:
 measured`.
 
+The pack build strategy emits `_started` after the first gate run and `_finished`
+when the gate settles, with `routed_skill: bill-code-check`. Failure counts and
+iterations come from the runtime's command results.
+
+`skill-bill phase validation` uses the same agent validation strategy as goal
+validate. It does not emit these pack-build quality-check events or infer measured
+failure counts from the agent's prose. Its result reports the validate step and
+the checks the agent ran.
+
 ### `skillbill_feature_verify_started` / `skillbill_feature_verify_finished`
 
 | Field | off | anonymous | full | Source |

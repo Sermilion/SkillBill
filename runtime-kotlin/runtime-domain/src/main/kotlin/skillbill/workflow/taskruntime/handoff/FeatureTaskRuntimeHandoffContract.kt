@@ -53,7 +53,7 @@ object FeatureTaskRuntimeHandoffContract {
       branchIdentity = request.branchIdentity,
       baseBranch = request.baseBranch,
       validationDepth = request.validationDepth,
-      qualityGateSelection = request.qualityGateSelection,
+      unselectedStepIds = request.unselectedStepIds,
       drivingVerdict = request.drivingVerdict,
       repairLedger = request.repairLedger,
     )

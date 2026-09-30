@@ -53,7 +53,7 @@ class GeneratedArtifactGuardTest {
   @Test
   fun `guard rejects generated agent addon pointer under governed skills`() {
     val repoRoot = tempRoot.resolve("agent-addon-pointer-output")
-    val skill = repoRoot.resolve("skills/bill-feature")
+    val skill = repoRoot.resolve("skills/skill-bill")
     Files.createDirectories(skill)
     Files.writeString(skill.resolve("agent-addon-review-helper.md"), "generated")
 
@@ -66,7 +66,7 @@ class GeneratedArtifactGuardTest {
   @Test
   fun `guard allows nested authored file whose basename resembles an agent addon pointer`() {
     val repoRoot = tempRoot.resolve("nested-agent-addon-reference")
-    val references = repoRoot.resolve("skills/bill-feature/references")
+    val references = repoRoot.resolve("skills/skill-bill/references")
     Files.createDirectories(references)
     Files.writeString(references.resolve("agent-addon-review-helper.md"), "authored")
 
@@ -78,13 +78,13 @@ class GeneratedArtifactGuardTest {
   @Test
   fun `guard remains dormant when source tree has no generated outputs`() {
     val repoRoot = tempRoot.resolve("baseline-repo")
-    val skillDir = repoRoot.resolve("skills/bill-code-review")
+    val skillDir = repoRoot.resolve("skills/skill-bill")
     Files.createDirectories(skillDir)
     Files.writeString(
       skillDir.resolve("content.md"),
       """
       ---
-      name: bill-code-review
+      name: skill-bill
       description: Authored source without generated wrapper.
       ---
 

@@ -142,7 +142,7 @@ class ReviewAttributionCanonicalizationTest {
   }
 
   @Test
-  fun `every governed review-scope label from code-review-shell resolves`() {
+  fun `every governed review-scope label resolves`() {
     val cases =
       mapOf(
         "staged changes" to CanonicalScope.STAGED,

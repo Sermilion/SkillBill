@@ -1,3 +1,9 @@
+## [2026-09-29] Audit may check application compilation after repairs
+
+Audit remains responsible for production criteria and sends repairs to `audit_implement_fix`. After repairs it may run the dominant pack's compile-only `validation_gate.build_command`. Compilation failures return to the repair step as production gaps. Audit does not run or compile test targets, lint, or full validation, and a passing compile check does not satisfy test requirements.
+
+The audit directive regression and prompt snapshots cover this exception. The 25 focused audit and snapshot tests passed before reinstalling base.
+
 # featuretask runtime boundary decisions
 
 ## [2026-09-27] Scoped replan prunes the cleared child's checkpoint refs
@@ -14,11 +20,18 @@ Reason: This completes "Active subtask owns every dirty path" (2026-09-11) for r
 Alternatives considered: carry the discarded child's owned paths forward at replan time (rejected: it needs new durable goal-level state, and it cannot repair children whose baseline already absorbed the leftovers).
 Revisit when: a goal branch must share its worktree with edits that start after the goal and must stay out of its commits, or completed goal children stop being retained.
 
+## [2026-09-26] Quality gate is a slot with two strategies; validate settles with a verdict
+Context: build and validate ran through a routing class that rewrote transitions per `quality_gate_selection`, the handoff carried the selection to drop the unselected gate's projections, and validate's shrink decision compared agent-reported `validation_passed` and remaining text.
+Decision: A `SkeletonDefinition` (standalone, goal child) lists the slots; its declaration equals the phase workflow's. The `quality_gate` slot has two strategies, `PackBuildStrategy` and `AgentValidateStrategy`, in their own packages. Selection facts pick one per run: a BUILD goal child runs build, the final child and a standalone run run validate. Traversal, lookup, and projection omission read the unselected steps generically; nothing rewrites transitions. Gate progress goes through `PhaseRunState`. Validate settles with the uniform output: completed means every check passed; blocked carries the remaining failures and a verdict, `progress` continues the repair and `no_progress`, absent, or unknown blocks with `needs_user_action` (absent or unknown is also a diagnostic). Resume derives validate success from the step status. `biuld` is a CLI usage error; the legacy heal to validate stays with its adoption record.
+Reason: Strategy slots keep shared runloop, phase, and runner code ignorant of gate kinds, and the agent that ran the checks is the one that knows whether its leftovers shrank.
+Supersedes: Validate keeps repairing until true (2026-09-20)
+
 ## [2026-09-20] Validate keeps repairing until true
 Context: Three honest `validation_passed: false` reports burned the output-gate cap while `./gradlew check` was still red. The agent knew the leftover detekt and Feed failures and stopped because the phase required a boolean handoff.
 Decision: Do not emit until `validation_passed` is true. Keep repairing in the same session. False is not a successful handoff: continue only when the remaining-failure text shrank; block when leftovers stay the same. Wall-clock timeout still stops the subtask. Malformed JSON retries twice.
 Reason: The operator chose a remaining-set stall over a false boolean as the stop. Raising the envelope cap would not finish a huge leftover pile, and treating false as schema failure hid real check work.
 Supersedes: Validate discovers project checks and retries up to three times (2026-09-20)
+Superseded by: Quality gate is a slot with two strategies; validate settles with a verdict (2026-09-26)
 
 ## [2026-09-20] Commit_push does not block on validate tree fingerprint
 Context: After validate, the worktree fingerprint no longer matched the capture. commit_push treated that as stale identity and blocked instead of committing.
@@ -131,3 +144,41 @@ Reason: The shipped topology already allows only `audit_gap` and `review_fix`. R
 Alternatives considered: Keep re-entering audit for any non-history dirty path (rejected: infinite bounce after a legal implement_fix). Stage history-only and leave implement_fix files dirty (rejected: the bounded fix round would never land).
 Revisit when: a later phase needs a declared backward edge, which would be a topology change rather than a finalisation side path.
 Superseded by: Active subtask owns every dirty path (2026-09-11)
+
+## [2026-09-28] Audit inspection and repairs use separate configured models
+
+Context: Audit repaired unfinished implementation inside reasoning-model sessions. Each remaining-criteria retry repeated that combined task.
+
+Decision: The acceptance-audit slot owns read-only `audit` and mutating `audit_implement_fix`. The execution matrix assigns them reasoning and implementation tiers. A persisted nonempty audit result enters `audit_repair`; repair returns to a full-list audit. Each repair pass uses one agent session, and a failed pass blocks for resume. The existing ledger owns loop position and attempt attribution. This supersedes the instruction to repair inside audit.
+
+Reason: Inspection and implementation need different configured models and separate resumable attempts. The repair step has a distinct id because code review already owns `implement_fix` and its review-specific receipts. The repair step precedes audit in the internal topology so the existing backward-edge machinery can reopen both steps without adding another state owner. Forward traversal skips this loop-only repair step until audit reports gaps.
+
+Revisit when: Audit requires structured per-criterion findings or a different repair budget.
+
+## [2026-09-29] Audit repair requires decreasing criterion counts
+
+Decision: Resolve remaining finding identities through the saved acceptance criterion catalog. Canonical briefing IDs and original spec labels identify the same entry. Count finding identities rather than references embedded in their explanations. After repair, allow another round only when the count decreases. Unidentified findings, conflicting aliases, and missing or unusable comparison evidence block through normal phase settlement. The existing accepted audit output and repair ledger remain the durable comparison authority.
+
+Reason: SKILL-384 repeated capability gaps while changing descriptions and label forms. The previous parser counted standalone S3 labels as one text item and allowed equal counts with different IDs. A suffix completion check also accepted a refusal ending in the marker text. Require the marker as a complete final content line and retain the independent fresh audit after repair.
+
+## [2026-09-29] Unfinished audit repairs block and resume with saved work
+
+Context: SKILL-384 launched eight more repair agents after partial final responses. The incomplete-work branch ignored the step's single-session policy. It saved reports but the audit-repair prompt omitted them. A no-progress audit block also retained the older accepted report instead of the latest valid findings.
+
+Decision: Persist partial repair output and block with needs_user_action when a single-session step ends unfinished. Render saved audit-repair reports on explicit resume. Persist the latest normalized audit output when progress blocks. An operator-authorized audit retry establishes one fresh baseline after criterion identity validation. The normal completion ledger consumes that authorization, so later automatic rounds still require decreasing counts.
+
+Reason: An explicit retry must receive current findings and previous edits. Automatic fresh sessions without those reports repeat work before audit can measure progress. The existing phase records, attempt history, retry artifact, and ledger own this state; no new durable fields are needed.
+
+## Audit repair continuation after a partial response
+
+An audit repair response can describe applied edits and unfinished production work without an external blocker. The repair policy continues incomplete output and retryable failures in the same phase under the existing retry budgets. The runtime retains repair reports and applied edits for the next continuation session. A completed repair still requires the final completion marker before a new audit. The audit remains a single read-only pass, and an unchanged or larger remaining-criterion list still blocks. A needs_user_action or non_retryable_policy_conflict disposition still stops for operator action. This supersedes the one-session repair stop described above.
+
+## [2026-09-30] Validation repairs all checks in one agent session
+
+Context: SKILL-384 reduced validation failures but returned a partial progress report. The runtime classified that accepted report as a schema correction. The next prompt told the agent to salvage the capture without doing phase work, then interpreted its unchanged report as a stalled repair.
+
+Decision: Validation keeps repairing in its original agent session until every required check passes. Remove the partial-report continuation and its schema-correction routing. Its policy does not relaunch after incomplete or malformed output. Concrete external blockers remain terminal, and their normalized output is retained for status and operator retry. Historical verdict words remain readable without launching another session.
+
+Reason: A formatting recovery cannot measure repair progress. Tests, static analysis, formatting and outdated fixtures are work for the validation agent. The existing phase record, process limits and explicit operator retry own termination and recovery.
+
+Revisit when: The agent launcher supports a governed continuation inside an existing live session.

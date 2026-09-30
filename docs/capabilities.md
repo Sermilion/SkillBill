@@ -1,6 +1,6 @@
 # Capability Deep-dive
 
-Under one `curl` command is a full system. Each capability below is doing real work behind the slash commands.
+Under one `curl` command is a full system. Each capability below is doing real work behind the one `/skill-bill` command.
 
 <details>
 <summary><b>1. One-shot multi-agent install via symlinks</b></summary>
@@ -10,7 +10,7 @@ Under one `curl` command is a full system. Each capability below is doing real w
 </details>
 
 <details>
-<summary><b>2. <code>bill-feature</code> — the end-to-end feature factory</b></summary>
+<summary><b>2. <code>/skill-bill</code> — the end-to-end feature factory</b></summary>
 
 One slash command takes a spec or design doc through the runtime-owned
 pipeline to a merged-ready PR, scaling ceremony to the size of the work. The
@@ -21,7 +21,7 @@ check → history/decisions → commit/push → PR description.
 Cross-cutting properties:
 
 - Every heavy phase runs in its own subagent with a self-contained briefing — orchestrator stays small, specialists go deep.
-- Durable workflow state at every phase boundary — crash anywhere and resume cleanly, even from a different agent: a runtime-mode run paused under Claude Code continues under Codex with the same `bill-feature <KEY>`.
+- Durable workflow state at every phase boundary — crash anywhere and resume cleanly, even from a different agent: a runtime-mode run paused under Claude Code continues under Codex with the same `/skill-bill <KEY>`.
 - Phase-to-artifact mapping is explicit (`assessment`, `preplan_digest`, `plan`, `implementation_summary`, `review_result`, `audit_report`, `validation_result`, `history_result`, `commit_push_result`, `pr_result`) — every step produces a named, persistable output.
 - Telemetry is mandatory and transport-resilient.
 - Stack-aware via platform packs.
@@ -30,29 +30,20 @@ Cross-cutting properties:
 
 It is a tiny CI/CD for the feature itself, not just the code.
 
-**The completeness audit is repair planning plus verification, not a pass/fail check.**
+The completeness audit has separate inspection and repair steps.
 
-The audit step does not just tell you an acceptance criterion is unmet. When it reports gaps it has to hand back a structured repair plan, and the runtime then holds the rest of the run to that plan.
+- `audit` uses the configured reasoning model and reads the complete planned criterion list against current production code. Test requirements never keep an AC open, including explicit test-only criteria and the test portions of mixed criteria. It reports production gaps without editing files.
+- `audit_implement_fix` uses the configured implementation model to address those findings. It accounts for every reported production gap and reports source evidence for each repair. It excludes test requests from older audit findings. Its report and attempt records are separate from audit and code-review repairs.
+- After repairs, audit checks every criterion again. Only an explicit empty remaining list allows review. Audit may run the dominant pack's compile-only build command after repairs and return compilation failures to audit_implement_fix. Test execution, lint, and full validation remain with validation.
 
-- **Every gap comes with a plan.** A gaps-found audit must produce one gap per unmet acceptance criterion, and each gap carries a stable id, the criterion it belongs to, concrete failure evidence, a diagnosis, the affected boundary, and one or more dependency-ordered repair items. Each repair item states its intended outcome, the implementation actions, the paths or symbols it touches, and the verification that proves it. A prose gap list with no complete plan fails loudly: it cannot trigger remediation and cannot advance the run.
-- **Remediation is one pass, all of it.** The repair pass gets the original pre-planning digest and implementation plan plus the whole accepted repair plan, and it has to come back with one terminal result per carried repair item — either `fixed` or `already_satisfied` — each with changed paths or symbols and the verification actually executed. A missing item, an unattempted item, or wording that hands carried work to a later review, audit, or validation phase is rejected: the pass cannot report completed and cannot advance to review. Later phases may discover new defects, but they are never where the accepted plan gets finished. An item that genuinely cannot be fixed blocks with its gap and repair-item ids and leaves the run resumable.
-- **Recurring vs new gaps.** A gap id is derived from its acceptance criterion plus a generation number, so it survives across iterations. The audit that follows a repair pass has to account for every gap it inherited: resolved, or recurring. A recurring gap keeps the same id and carries evidence for why the attempted repair did not satisfy it; only a genuinely different problem gets a new identity. The unresolved-gap ledger is cumulative — an audit cannot drop, rename, or quietly close an inherited gap, and it cannot report everything satisfied while an inherited gap is still recurring.
-- **Non-progress blocks loudly instead of looping.** There is no arbitrary cap on audit/repair iterations, because capping a correctness gate just ships an unmet criterion. Instead the runtime watches for a repeat that went nowhere: the same unresolved gap identities as the previous iteration, and either no change in the repository or no repair item newly resolved. That combination stops the run — the audit phase is left blocked, needing a human, with a reason saying the gap identities are unchanged and nothing moved. When you see it, the loop is not one more attempt away from converging: read the blocked gap and its repair items, fix or re-scope the criterion by hand, or correct the plan's diagnosis, then resume. Repair that is genuinely making progress — repository changing, items closing, gap set shrinking — keeps running untouched.
-
-Progress is visible without digging into the database:
-
-```bash
-skill-bill feature-task status <workflow_id>
-```
-
-prints the run's phase records and its blocked reason. Audit-loop accounting rides the finished telemetry event instead, at one grain: `audit_gap_iteration_count` (audit-gap rounds per run) and `audit_first_pass_convergence`, each paired with `audit_gap_availability` so an unmeasured run never reads as a converged one. Per-gap and per-repair-item counters are not produced; see `docs/review-telemetry.md`.
+The runtime persists the handoff and loop position so an interrupted repair resumes against the current tree. A repair invocation uses one agent session. An unfinished final response saves the partial report and blocks for an explicit operator resume. The resumed repair prompt includes saved reports so the agent can continue existing edits. An authorized retry of a blocked audit may establish one fresh baseline; subsequent automatic rounds must still shrink. Another automatic repair requires a lower count of open production criteria after repair. Equal or larger counts block with the previous and current IDs, even if the descriptions or IDs changed. The runtime resolves IDs and original spec labels against the saved plan and blocks when counting evidence or the prior baseline is unusable. Repair completes only when its exact final content line is `audit_repair_complete: true`; mentioning that marker in a refusal does not complete repair. Required architecture guards stay in scope even under a test source set. Audit repair emits a warning after three rounds. The `audit_gap_iteration_count` telemetry field counts repair rounds while retaining compatibility with earlier audit-retry records.
 
 </details>
 
 <details>
 <summary><b>3. Native platform overrides via platform packs</b></summary>
 
-Generic skills like `/bill-code-review` and `/bill-code-check` are routing shells. The real work lives in `platform-packs/<lang>/` (today: `go`, `ios`, `kotlin`, `kmp`, `php`, `python`, `rust`, `typescript`). Go, iOS, Kotlin, PHP, Python, Rust, and TypeScript directly declare all ten approved specialist areas. KMP covers Android and Kotlin Multiplatform: it declares seven areas of its own — `architecture`, `platform-correctness`, `security`, `persistence`, `reliability`, `ui`, and `ux-accessibility` — and composes the remaining three (`performance`, `testing`, `api-contracts`) from its required Kotlin baseline. Each dominant pack declares quality commands in its `validation_gate`; KMP uses its own gate without a Kotlin fallback. At runtime the generic entry point reads `routing_signals` from every discovered `platform.yaml` and hands off to the matching review pack. Adding a new language is purely additive—drop in a conforming `platform-packs/<lang>/`; no generic-shell platform enumeration is needed.
+The review phase (`/skill-bill phase:review`) routes to specialist guidance in `platform-packs/<lang>/` (today: `go`, `ios`, `kotlin`, `kmp`, `php`, `python`, `rust`, `typescript`). Go, iOS, Kotlin, PHP, Python, Rust, and TypeScript directly declare all ten approved specialist areas. KMP covers Android and Kotlin Multiplatform: it declares seven areas of its own — `architecture`, `platform-correctness`, `security`, `persistence`, `reliability`, `ui`, and `ux-accessibility` — and composes the remaining three (`performance`, `testing`, `api-contracts`) from its required Kotlin baseline. Each dominant pack declares quality commands in its `validation_gate`; KMP uses its own gate without a Kotlin fallback. Standalone validation (`/skill-bill phase:validation`) uses the same agent strategy as goal validate to discover, run, and repair the full project checks. At runtime the generic entry point reads `routing_signals` from every discovered `platform.yaml` and hands off to the matching review pack. Adding a new language is purely additive—drop in a conforming `platform-packs/<lang>/`; no generic-shell platform enumeration is needed.
 
 The shipped `generic` pack is the manifest-declared code-review fallback for
 unsupported, documentation-only, and unresolved paths. Its slug is a distribution
@@ -62,13 +53,13 @@ positive path matches and never create ownership.
 
 A team may replace the shipped fallback by moving `fallback_capabilities:
 [code-review]` to one conforming custom pack. Removing every fallback declaration
-preserves the horizontal `bill-code-review` base installation, while multiple
+preserves the horizontal base review installed with `skill-bill`, while multiple
 declarations fail validation. Delegated preflight and launch use the installed
 provider-native worker inventory and recorded digests, so neither the reviewed
 repository nor a surviving Skill Bill source checkout needs `skills/` or
 `platform-packs/` directories.
 
-`/bill-code-review` accepts an optional commit target and `mode:auto|inline|delegated`: with no arguments it prints the accepted argument list without starting a review; a commit target reviews that commit against its first parent; omission and `mode:auto` both resolve to `inline` for every pass and for a scope with no pass number; `mode:inline` runs the light judgment-depth tier in one review subagent covering the routed areas at reduced depth with full broker evidence delivery, with no specialist fan-out and not equivalent coverage to delegated; and `mode:delegated` is the experimental full-depth tier reached only by explicit selection on this skill, launching one specialist subagent per routed area. Feature and goal workflows review inline (`code-review:auto|inline`); they do not launch delegated review.
+`/skill-bill phase:review` accepts an optional `target:` (`HEAD`, `uncommitted`, `pr`, `staged`, `unstaged`, or a commit sha) and `mode:auto|inline|delegated`: a commit target reviews that commit against its first parent; omission and `mode:auto` both resolve to `inline` for every pass and for a scope with no pass number; `mode:inline` runs the light judgment-depth tier in one review subagent covering the routed areas at reduced depth with full broker evidence delivery, with no specialist fan-out and not equivalent coverage to delegated; and `mode:delegated` is the experimental full-depth tier reached only by explicit selection on this phase, launching one specialist subagent per routed area. Feature and goal workflows review inline (`code-review:auto|inline`); they do not launch delegated review.
 
 The shipped `rust` pack follows that same manifest-driven path: Cargo and first-party `.rs` signals route to `bill-rust-code-review`, with governed native agents for the baseline and all ten specialist lanes. Its `validation_gate` covers workspaces, features, targets, rustfmt, Clippy, nextest, cargo-deny, and cargo-audit; Rust-specific routing is not hard-coded into either generic shell.
 
@@ -81,7 +72,7 @@ The shipped `typescript` pack uses the same manifest-driven path: tsconfig and f
 
 When planning detects work is too big (rules of thumb: more than 15 atomic tasks, more than 6 boundaries, multiple independently resumable milestones, or sequencing with verify-able foundations), the feature factory switches into `mode: "decompose"` instead of implementing.
 
-- **Subtask specs are real artifacts**: planning writes `.feature-specs/{ISSUE_KEY}-{feature-name}/spec_subtask_1_foundation.md`, `_2_runtime-wiring.md`, etc. — each with its own acceptance criteria, non-goals, dependency notes, validation strategy, and the exact `bill-feature` prompt to run for it later.
+- **Subtask specs are real artifacts**: planning writes `.feature-specs/{ISSUE_KEY}-{feature-name}/spec_subtask_1_foundation.md`, `_2_runtime-wiring.md`, etc. — each with its own acceptance criteria, non-goals, dependency notes, validation strategy, and the exact `/skill-bill` prompt to run for it later.
 - **Schema-validated prepared state**: every prepared feature has a `decomposition-manifest.yaml` with one or more executable subtasks. A bare `spec.md` is intake, so the manifest is the sole prepared-feature authority marker.
 - **You only need the issue key**: when you come back and say "continue SKILL-51", the runtime resolves the parent manifest, finds the in-progress subtask at its last durable workflow step, and picks up there. If none is in-progress, it starts the first pending subtask whose dependencies are complete. You never have to remember "was I on subtask 2 step 4 or subtask 3 step 1."
 - **Fresh context per subtask, no context rot**: every subtask starts in a fresh session briefed from curated durable artifacts (the subtask spec, boundary `history.md`, recorded decisions) instead of inheriting a long-lived transcript. Long goals do not degrade as hours accumulate, because no context lives long enough to rot — continuity travels through durable state, not through an ever-growing conversation.
@@ -95,9 +86,9 @@ When planning detects work is too big (rules of thumb: more than 15 atomic tasks
 <details>
 <summary><b>5. Stateful, resumable workflows with native subagents</b></summary>
 
-`bill-feature` is not a monolithic prompt; it is the entry point for durable feature execution and a fleet of purpose-built subagents.
+`/skill-bill` is not a monolithic prompt; it is the entry point for durable feature execution and a fleet of purpose-built subagents.
 
-- **Durable state**: the Kotlin feature-task runtime owns the single feature engine. `skill-bill feature-task` / `skill-bill goal` mint and advance durable workflow rows; every phase boundary persists through the runtime, and resume continues from that state. If a session dies mid-run, continuation re-opens the exact phase from durable records — full durable state is available on demand through read-only workflow status surfaces. The run survives crashes, compaction, even a host reboot. The same durable shape exists for `bill-feature-verify` (`feature_verify_workflow_*`).
+- **Durable state**: the Kotlin feature-task runtime owns the single feature engine. `skill-bill feature-task` / `skill-bill goal` mint and advance durable workflow rows; every phase boundary persists through the runtime, and resume continues from that state. If a session dies mid-run, continuation re-opens the exact phase from durable records — full durable state is available on demand through read-only workflow status surfaces. The run survives crashes, compaction, even a host reboot. The same durable shape exists for `operation:verify` (`feature_verify_workflow_*`).
 - **Native subagents per review layer**: every shipped platform-pack bundle registers its baseline reviewer and each specialist reviewer as native subagents.
 - **Why this matters for tokens**: each review subagent gets a self-contained briefing scoped to its area instead of inheriting the full orchestrator transcript. The orchestrator stays small; specialists go deep on their narrow slice. Better focus and lower cost — the opposite of the usual "more steps = more context bloat" trap.
 - **Transport-resilient telemetry**: a packaged Kotlin `runtime-mcp` stdio fallback ensures a dropped MCP transport does not leave a workflow stuck in `running`.
@@ -133,14 +124,14 @@ Every skill reads the project's override file as part of its shared ceremony, so
 - **Action mandates at named lifecycle positions**: overrides can declare mandates that fire at specific orchestrator lifecycle points (e.g. before applying the skill body, at end-of-run for state writes). Skills cannot quietly skip them.
 - **Composable with `AGENTS.md`**: the shared ceremony loads both general project conventions and per-skill targeted tweaks.
 
-Net effect: you fine-tune `bill-code-review` with an extra checklist item, or force `bill-feature` to call a project-specific telemetry tool, by editing one markdown file in the repo. No skill fork, no agent reinstall.
+Net effect: you fine-tune review with an extra checklist item, or force the `/skill-bill` full run to call a project-specific telemetry tool, by editing one markdown file in the repo. No skill fork, no agent reinstall.
 
 </details>
 
 <details>
 <summary><b>8. Per-module memory</b></summary>
 
-Every module/package has its own `agent/decisions.md` and `agent/history.md`. The `/bill-boundary-decisions` and `/bill-boundary-history` skills know how to write high-signal entries with hygiene rules that keep history from rotting. Result: cross-session institutional knowledge attached to the code itself, not to your head or a wiki. You can see it in this very repo — `agent/decisions.md` records the exact incident that hardened the override read in #8. That is how the system stays self-aware across sessions and contributors.
+Every module/package has its own `agent/decisions.md` and `agent/history.md`. The `write_history` phase's `boundary-history` strategy knows how to write high-signal entries with hygiene rules that keep history from rotting. Result: cross-session institutional knowledge attached to the code itself, not to your head or a wiki. You can see it in this very repo — `agent/decisions.md` records the exact incident that hardened the override read in #8. That is how the system stays self-aware across sessions and contributors.
 
 </details>
 

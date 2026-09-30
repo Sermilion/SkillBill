@@ -68,7 +68,7 @@ removable.
 - `slug`, `description`, `agent_ids`, and `consumers` — required for
   `agent-addon`. Slugs use lowercase kebab-case, agents must come from the
   install-agent registry, and consumers must come from the agent-addon consumer
-  registry. The current consumer is `bill-feature`.
+  registry. The current consumer is `skill-bill`.
 
 ## Optional Keys
 
@@ -240,7 +240,7 @@ omit `baseline_layers` remain valid and generate no
 {
   "scaffold_payload_version": "1.0",
   "kind": "horizontal",
-  "name": "bill-pr-description",
+  "name": "bill-new-horizontal",
   "content_body": "## Focus\n\nReview API boundary regressions.\n\n## Review Guidance\n\n- Prefer client-visible contract issues.\n- Call out backward-compatibility breaks explicitly.\n"
 }
 ```

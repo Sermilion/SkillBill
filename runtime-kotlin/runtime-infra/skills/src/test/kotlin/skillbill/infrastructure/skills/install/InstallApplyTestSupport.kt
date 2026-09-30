@@ -17,6 +17,7 @@ import skillbill.install.model.SupportedAgent
 import skillbill.install.model.WindowsSymlinkDecision
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.ports.repository.toFileLocation
 import skillbill.testing.seedConformingPlatformPack
 import java.io.File
@@ -47,6 +48,7 @@ open class InstallApplyTestSupport {
   protected fun setupApplyFixture(): ApplyFixture {
     val repoRoot = Files.createTempDirectory("skillbill-install-apply-repo").also(tempDirs::add)
     val home = Files.createTempDirectory("skillbill-install-apply-home").also(tempDirs::add)
+    seedBaseSkill(repoRoot, PACK_SIDECAR_PARENT_SKILL)
     seedBaseSkill(repoRoot, "bill-code-review", nativeAgentName = "bill-code-review-worker")
     seedBaseSkill(repoRoot, "bill-code-check")
     seedBaseSkill(repoRoot, "bill-update-check")

@@ -1,7 +1,7 @@
 ---
 name: bill-ios-code-review
 description: Use when reviewing native iOS/Swift changes (UIKit/SwiftUI, Xcode projects, local SPM packages).
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Adaptive iOS PR Review

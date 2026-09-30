@@ -1,7 +1,7 @@
 ---
 name: bill-go-code-review-performance
 description: Use when reviewing measured Go latency, CPU, allocation, retention, lock, scheduler, batching, and resource regressions.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Go Performance Review Specialist

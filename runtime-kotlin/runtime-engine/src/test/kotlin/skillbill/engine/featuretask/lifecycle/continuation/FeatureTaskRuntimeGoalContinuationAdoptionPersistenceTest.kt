@@ -11,10 +11,10 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePreparation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
 import skillbill.engine.featuretask.runloop.observability.continuation
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunInvariantsStore
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunPreparation
-import skillbill.engine.featuretask.runner.reviewBaseline
+import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -33,12 +33,12 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection.BUILD
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection.VALIDATE
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.BUILD
+import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.VALIDATE
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
@@ -339,7 +339,13 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
       )
     return AdoptionHarness(
       repository = repository,
-      preparation = FeatureTaskRuntimeRunPreparation(recorder, continuationRecorder, runInvariantsStore),
+      preparation =
+        FeatureTaskRuntimeRunPreparation(
+          recorder,
+          continuationRecorder,
+          runInvariantsStore,
+          statusProjectionPhaseStrategies(),
+        ),
     )
   }
 

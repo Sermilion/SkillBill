@@ -2,9 +2,7 @@ package skillbill.infrastructure.launcher.process.launch
 
 import skillbill.infrastructure.launcher.process.support.newLauncherSha256Digest
 import skillbill.infrastructure.launcher.process.waitloop.ProcessWait
-import skillbill.infrastructure.launcher.process.waitloop.alignToLineStart
 import skillbill.infrastructure.launcher.process.waitloop.decodeAvailable
-import skillbill.infrastructure.launcher.process.waitloop.retain
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
@@ -78,28 +76,22 @@ internal sealed interface ProcessStart {
   data class Failed(val error: Exception) : ProcessStart
 }
 
-internal data class CappedUtf8DrainCapture(
+internal data class Utf8DrainCapture(
   val text: String,
   val bytes: ByteArray,
-  val truncated: Boolean,
   val totalByteSize: Long,
   val sha256: String,
   val incomplete: Boolean,
 )
 
-internal class CappedUtf8Drain(
+internal class Utf8Drain(
   private val input: InputStream,
-  internal val limitBytes: Int?,
   internal val outputStream: AgentRunOutputStream,
   internal val outputSink: AgentRunOutputSink,
   internal val onChunkRead: (String) -> Unit,
 ) {
-  internal val output =
-    ByteArrayOutputStream(
-      limitBytes?.coerceAtMost(INITIAL_OUTPUT_BUFFER_BYTES) ?: INITIAL_OUTPUT_BUFFER_BYTES,
-    )
+  private val output = ByteArrayOutputStream(INITIAL_OUTPUT_BUFFER_BYTES)
 
-  @Volatile internal var truncated = false
   internal var totalByteSize = 0L
   internal val digest = newLauncherSha256Digest()
 
@@ -109,14 +101,13 @@ internal class CappedUtf8Drain(
 
   @Volatile private var frozen = false
 
-  @Volatile private var frozenCapture: CappedUtf8DrainCapture? = null
+  @Volatile private var frozenCapture: Utf8DrainCapture? = null
   internal val stateLock = Any()
   internal val worker =
     thread(start = false, isDaemon = true, name = "skillbill-agent-run-output-drain") {
       runCatching {
         input.use { stream ->
           val buffer = ByteArray(DEFAULT_DRAIN_BUFFER_BYTES)
-          var remaining = limitBytes
           val decoder =
             StandardCharsets.UTF_8.newDecoder()
               .onMalformedInput(CodingErrorAction.REPLACE)
@@ -139,23 +130,19 @@ internal class CappedUtf8Drain(
                 }
               }
             if (frozenBeforeRead) return@use
-            val withinCap = remaining == null || remaining > 0
             carry.put(buffer, 0, read)
             carry.flip()
-            decodeAvailable(decoded, withinCap) { decoder.decode(carry, decoded, false) }
+            decodeAvailable(decoded) { decoder.decode(carry, decoded, false) }
             carry.compact()
 
-            val forwarded = remaining?.coerceAtMost(read) ?: read
-            if (forwarded > 0) remaining = remaining?.minus(forwarded)
             synchronized(stateLock) {
-              if (!frozen) retain(buffer, read)
+              if (!frozen) output.write(buffer, 0, read)
             }
           }
           if (frozen) return@use
-          val withinCap = remaining == null || remaining > 0
           carry.flip()
-          decodeAvailable(decoded, withinCap) { decoder.decode(carry, decoded, true) }
-          decodeAvailable(decoded, withinCap) { decoder.flush(decoded) }
+          decodeAvailable(decoded) { decoder.decode(carry, decoded, true) }
+          decodeAvailable(decoded) { decoder.flush(decoded) }
         }
       }.onFailure { failure ->
         workerFailure = failure
@@ -184,19 +171,18 @@ internal class CappedUtf8Drain(
     return incomplete
   }
 
-  fun capture(): CappedUtf8DrainCapture =
+  fun capture(): Utf8DrainCapture =
     frozenCapture ?: freezeCapture(incomplete = workerFailure != null || !workerCompleted)
 
-  private fun freezeCapture(incomplete: Boolean): CappedUtf8DrainCapture {
+  private fun freezeCapture(incomplete: Boolean): Utf8DrainCapture {
     synchronized(stateLock) {
       frozenCapture?.let { return it }
       frozen = true
-      val bytes = materializeBytes()
+      val bytes = output.toByteArray()
       val capture =
-        CappedUtf8DrainCapture(
+        Utf8DrainCapture(
           text = String(bytes, StandardCharsets.UTF_8),
           bytes = bytes,
-          truncated = truncated,
           totalByteSize = totalByteSize,
           sha256 = digest.digest().joinToString("") { "%02x".format(it) },
           incomplete = incomplete || workerFailure != null,
@@ -206,18 +192,9 @@ internal class CappedUtf8Drain(
     }
   }
 
-  private fun materializeBytes(): ByteArray {
-    val limit = limitBytes ?: return output.toByteArray()
-    val retained = output.toByteArray()
-    if (retained.size <= limit) return retained
-    return alignToLineStart(retained.copyOfRange(retained.size - limit, retained.size))
-  }
-
   fun text(): String = capture().text
 
   fun bytes(): ByteArray = capture().bytes
-
-  fun wasTruncated(): Boolean = capture().truncated
 
   fun totalByteSize(): Long = capture().totalByteSize
 

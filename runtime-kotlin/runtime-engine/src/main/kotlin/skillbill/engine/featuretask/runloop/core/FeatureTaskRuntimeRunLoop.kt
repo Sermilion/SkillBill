@@ -1,48 +1,23 @@
 package skillbill.engine.featuretask.runloop.core
 
-import skillbill.application.idestatus.AgentActivityStampWriter
-import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
-import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
+import me.tatarka.inject.annotations.Inject
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
-import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
-import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunEvidenceOwnership
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
-import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
-import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
-import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
-import java.time.Clock
 
 internal data class FeatureTaskRuntimeRunLoopContext(
-  val request: FeatureTaskRuntimeRunRequest,
-  val state: FeatureTaskRuntimeRunState,
-  val observability: FeatureTaskRuntimeRunObservability,
-  val specSource: SpecSource,
-  val transitions: FeatureTaskRuntimeTransitionDeclaration,
-  val recorder: FeatureTaskRuntimePhaseRecorder,
-  val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
-  val phaseGates: FeatureTaskRuntimePhaseGates,
-  val subtaskLauncher: GoalRunnerSubtaskLauncher,
-  val phaseSettlementService: FeatureTaskPhaseSettlementService,
-  val activityStampWriter: AgentActivityStampWriter,
-  val worktreeEditJournalWriter: WorktreeEditJournalWriter,
-  val clock: Clock,
-  val diagnostics: RuntimeDiagnostics,
-  val session: FeatureTaskRuntimeRunLoopSession,
-)
+  override val request: FeatureTaskRuntimeRunFacts,
+  override val runState: PhaseRunState,
+  val strategies: PhaseStrategyLookup,
+) : PhaseAttemptEnvironment
 
 internal data class LaunchRejectionAttribution(
   val projectionContractId: String,
@@ -118,6 +93,19 @@ fun resolveReviewPassNumber(
   return 1
 }
 
+@Inject
+open class FeatureTaskRuntimeRunLoopEntry {
+  internal open fun run(
+    context: FeatureTaskRuntimeRunLoopContext,
+    beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit = {},
+  ): FeatureTaskRuntimeRunReport {
+    val loop = FeatureTaskRuntimeRunLoop(context = context)
+    beforeDrive(loop)
+    loop.drive()
+    return loop.report()
+  }
+}
+
 class FeatureTaskRuntimeRunLoop internal constructor(
   internal val context: FeatureTaskRuntimeRunLoopContext,
 ) {
@@ -130,7 +118,7 @@ class FeatureTaskRuntimeRunLoop internal constructor(
 
   fun drive() {
     with(FeatureTaskRuntimeRunLoopDrive) {
-      context.invalidateReviewGenerationIfNeeded()
+      invalidateStaleEvidence(context)
       context.runPhaseDriveLoop(::advance)
     }
   }
@@ -146,20 +134,7 @@ class FeatureTaskRuntimeRunLoop internal constructor(
       )
       return PhaseSettlement.stop()
     }
-    if (phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW && isGoalContinuationRun(context.request)) {
-      FeatureTaskRuntimeRunLoopDrive.carriedForwardGoalReviewSettlement(
-        CarriedForwardGoalReviewArgs(
-          request = context.request,
-          state = context.state,
-          session = session,
-          recorder = context.recorder,
-          goalContinuationRecorder = context.goalContinuationRecorder,
-          outputValidator = context.outputValidator,
-        ),
-      )?.let { carriedForward ->
-        return carriedForward
-      }
-    }
+    FeatureTaskRuntimeRunLoopDrive.settleWithoutLaunch(context, phaseId)?.let { settled -> return settled }
     val reason = FeatureTaskRuntimeRunLoopDrive.advancePhaseReason(context, phaseId)
     return FeatureTaskRuntimeRunLoopDrive.settleAdvanceOutcome(
       context.request,

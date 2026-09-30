@@ -1,7 +1,7 @@
 ---
 name: bill-rust-code-review-ux-accessibility
 description: Use when reviewing accessibility and UX in Rust-owned UI, including semantics, keyboard and focus flow, feedback, localization, and assistive access.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # UX and Accessibility Review Specialist

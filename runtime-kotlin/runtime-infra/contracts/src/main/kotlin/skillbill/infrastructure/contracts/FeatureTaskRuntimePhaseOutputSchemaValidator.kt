@@ -80,6 +80,7 @@ class FeatureTaskRuntimePhaseOutputSchemaValidator : FeatureTaskRuntimePhaseOutp
     phaseOutputText: String,
     sourceLabel: String,
   ): FeatureTaskRuntimePhaseOutputValidationResult? {
+    if (!ProsePhaseOutputSynthesizer.isProsePhase(sourceLabel)) return null
     val envelope = ProsePhaseOutputSynthesizer.trySynthesize(phaseOutputText, sourceLabel) ?: return null
     return try {
       val canonical =

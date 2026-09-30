@@ -1,0 +1,70 @@
+Review the last commit `__NORMALIZED_SHA40__` against its first parent `__NORMALIZED_SHA40__`.
+Inspect with `git diff __NORMALIZED_SHA40__ __NORMALIZED_SHA40__` in this repository workspace.
+Do not use `origin/main...HEAD`, a merge base, the full feature branch, or a pre-baked diff blob.
+Do not launch `skill-bill phase review`, delegated review subagents, or an isolated review process.
+Fix every Blocker and Major finding in this same session before you emit.
+You may edit files. Leave Minor and Nit unfixed unless the edit is local and obvious.
+Do not commit, amend, reset, or stage changes; the runtime owns the review checkpoint.
+Criterion-gap detection remains exclusive to audit. Do not report unsatisfied acceptance criteria.
+Do not run `./gradlew check`, the pack collect-all gate, or `skill-bill phase validation`; validate owns those.
+Subtask spec path: `.feature-specs/SKILL-380-phase-slot-strategies/spec.md`.
+
+## Review mode argument
+
+`delegated` and `inline` are two review depths, not two ways to execute the same
+review. Report the requested mode and the resolved depth in the normal review
+metadata.
+
+`inline` is the default depth. `delegated` is the experimental full-depth tier and
+runs only on an explicit `mode:delegated` from this skill. Goal and feature-task
+runs never select it. Neither an omitted argument nor `mode:auto` ever reaches it.
+Choose it when a change genuinely warrants per-area depth, not by default.
+
+`delegated` always runs the normal routed delegated path
+including specialist selection. Inability to launch a required native worker
+blocks loudly; it never degrades to inline.
+
+`inline` is the single-prompt light tier: one review session, no per-area
+specialist workers, no nested baseline orchestrator, under a bounded budget at
+reduced depth. The worker traverses the delta exactly once against one combined
+checklist, holding all areas in mind simultaneously — it must never re-walk the
+same delta once per area. Never present it as equivalent to a delegated result.
+
+`auto` resolves to `inline` everywhere: a subtask's first review pass, a standalone
+review with no pass number, and every follow-up or remediation pass. Preserve and
+report the applicable named auto rule for telemetry. `auto` never reaches the
+experimental delegated tier — only an explicit `mode:delegated` on this skill does.
+
+Depth is the only thing the light tier lowers. The severity vocabulary, evidence
+and observable-consequence requirements, F-XXX register guidance, and telemetry
+are inherited unchanged and are never restated per tier. Register shape is
+best-effort guidance. The phase result is the agent output string; the runtime
+governs launch, evidence, and persistence rather than policing the format.
+
+With `context:feature-remediation`, the pass is bounded to the supplied
+remediation delta — all findings addressed in that round unioned with the
+pre-fix-to-post-fix diff — rather than the full base-to-current delta, and
+verification is its primary output. For every Blocker the prior pass emitted,
+state `resolved`, `unresolved`, or `superseded` under the durable
+`blocker_dispositions` key, and cite the specific changed lines that settle it.
+A disposition without that evidence is not admissible.
+
+## Depth
+
+**One pass over the delta. Never re-walk it per area. Full evidence still.**
+
+The parent supplies the baseline, rubrics, and required companion guidance in the launch. Merge them into one checklist before reading changed code. Then traverse the delta exactly once, holding all areas in mind simultaneously — each changed hunk is judged against every applicable area's concerns at the moment you read it.
+
+Reduced depth means no specialist fan-out and no per-area re-walk. Inline never launches one specialist per area. It does not mean sampling the catalog, skipping remaining changed files, or approving on a partial read.
+
+This is explicitly forbidden: reading the delta with architecture in mind, then reading it again for performance, then again for security, and so on. Iterating areas over the same code is not thoroughness — it is the same review repeated N times at N times the cost, and it produces worse findings than one pass with the full checklist loaded, because a defect that only shows up where two areas intersect is invisible to both single-area passes.
+
+Areas are a coverage-accounting dimension in the *output*, not an iteration order for the *work*. The per-area checklist you return records which concerns you carried through that single pass; it is not a log of separate passes.
+
+Verification is the purpose: confirm the change does what it claims and catch the defects a careful reader finds on one attentive pass. This is not an audit of every area in specialist depth. Signals focus the inspection within an area; they never remove a declared area from the checklist. Do not build a case for a marginal finding to justify having looked.
+
+After fixes, emit remaining findings in this register shape, one per line:
+- [F-001] Blocker | High | path/File.kt:12 | remaining defect after your edits
+End with exactly one line: `verdict: approved` or `verdict: changes_requested`.
+Use `changes_requested` when any Blocker or Major remains; otherwise `approved`.
+An explicit empty findings list plus `verdict: approved` means no remaining Blocker or Major.

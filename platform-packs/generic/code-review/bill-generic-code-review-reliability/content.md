@@ -1,7 +1,7 @@
 ---
 name: bill-generic-code-review-reliability
 description: Technology-neutral reliability review for retries, timeouts, cancellation, recovery, and telemetry.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Generic Reliability Review

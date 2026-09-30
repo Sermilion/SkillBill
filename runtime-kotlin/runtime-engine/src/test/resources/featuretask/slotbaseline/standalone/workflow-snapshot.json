@@ -1,0 +1,2717 @@
+{
+    "artifacts_json": {
+        "feature_task_runtime_checkpoint_identities": {
+            "checkpoints": [
+                {
+                    "branch": "feat/SKILL-380-phase-slot-strategies",
+                    "checkpoint_ref": "refs/skill-bill/checkpoints/SKILL-65/standalone/0",
+                    "commit_sha": "__NORMALIZED_SHA40__",
+                    "generation": 0,
+                    "issue_key": "SKILL-65",
+                    "owned_path_count": 1,
+                    "owned_path_digest": "__NORMALIZED_SHA64__",
+                    "phase_id": "commit_push",
+                    "recorded_at": "__NORMALIZED_TIMESTAMP__",
+                    "sequence_number": 0,
+                    "subtask_id": "standalone"
+                }
+            ],
+            "contract_version": "0.2"
+        },
+        "feature_task_runtime_delivered_projections": {
+            "wftr-20260602-test-0001|implement|1|implement#1,plan#1|not_required:implement": {
+                "consumer_delivery_iteration": 1,
+                "consumer_phase_id": "implement",
+                "contract_version": "0.2",
+                "handoff_envelope": {
+                    "consumer_phase_id": "implement",
+                    "contract_version": "0.1",
+                    "projections": [
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "value",
+                                    "text": "Fixture plan prose for downstream implement and audit."
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "plan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.phase_prose",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "plan_prose",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:plan"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "spec_reference",
+                                    "text": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_spec_reference",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:spec_reference"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "feature_size",
+                                    "text": "MEDIUM"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_feature_size",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:feature_size"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)",
+                                        "review_scope: branch_diff (branch-diff review scope)",
+                                        "audit_ceremony: full_per_criterion (full per-criterion completeness audit)"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "ceremony_scaling"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_ceremony_scaling",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "derived_ceremony_scaling"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "mandate-X"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "mandates_and_overrides"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_mandates_and_overrides",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:mandates_and_overrides"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "AC-1",
+                                        "AC-2"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "acceptance_criteria"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_acceptance_criteria",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:acceptance_criteria"
+                        }
+                    ]
+                },
+                "record_kind": "delivered_projection",
+                "repository_checkpoint": {
+                    "fingerprint": "not_required:implement"
+                },
+                "source_producer_iterations": [
+                    {
+                        "iteration": 1,
+                        "phase_id": "plan"
+                    },
+                    {
+                        "iteration": 1,
+                        "phase_id": "implement"
+                    }
+                ],
+                "workflow_id": "wftr-20260602-test-0001"
+            },
+            "wftr-20260602-test-0001|plan|1|plan#1,preplan#1|not_required:plan": {
+                "consumer_delivery_iteration": 1,
+                "consumer_phase_id": "plan",
+                "contract_version": "0.2",
+                "handoff_envelope": {
+                    "consumer_phase_id": "plan",
+                    "contract_version": "0.1",
+                    "projections": [
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "value",
+                                    "text": "Fixture preplan prose for downstream plan."
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "preplan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.phase_prose",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "preplan_prose",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:preplan"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "spec_reference",
+                                    "text": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "plan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_spec_reference",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:spec_reference"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "feature_size",
+                                    "text": "MEDIUM"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "plan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_feature_size",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:feature_size"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)",
+                                        "review_scope: branch_diff (branch-diff review scope)",
+                                        "audit_ceremony: full_per_criterion (full per-criterion completeness audit)"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "ceremony_scaling"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "plan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_ceremony_scaling",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "derived_ceremony_scaling"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "mandate-X"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "mandates_and_overrides"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "plan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_mandates_and_overrides",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:mandates_and_overrides"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "AC-1",
+                                        "AC-2"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "acceptance_criteria"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "plan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_acceptance_criteria",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:acceptance_criteria"
+                        }
+                    ]
+                },
+                "record_kind": "delivered_projection",
+                "repository_checkpoint": {
+                    "fingerprint": "not_required:plan"
+                },
+                "source_producer_iterations": [
+                    {
+                        "iteration": 1,
+                        "phase_id": "preplan"
+                    },
+                    {
+                        "iteration": 1,
+                        "phase_id": "plan"
+                    }
+                ],
+                "workflow_id": "wftr-20260602-test-0001"
+            },
+            "wftr-20260602-test-0001|preplan|1|preplan#1|not_required:preplan": {
+                "consumer_delivery_iteration": 1,
+                "consumer_phase_id": "preplan",
+                "contract_version": "0.2",
+                "handoff_envelope": {
+                    "consumer_phase_id": "preplan",
+                    "contract_version": "0.1",
+                    "projections": [
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "spec_reference",
+                                    "text": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "preplan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_spec_reference",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:spec_reference"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "feature_size",
+                                    "text": "MEDIUM"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "preplan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_feature_size",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:feature_size"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)",
+                                        "review_scope: branch_diff (branch-diff review scope)",
+                                        "audit_ceremony: full_per_criterion (full per-criterion completeness audit)"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "ceremony_scaling"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "preplan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_ceremony_scaling",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "derived_ceremony_scaling"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "mandate-X"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "mandates_and_overrides"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "preplan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_mandates_and_overrides",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:mandates_and_overrides"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "AC-1",
+                                        "AC-2"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "acceptance_criteria"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "preplan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_acceptance_criteria",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:acceptance_criteria"
+                        }
+                    ]
+                },
+                "record_kind": "delivered_projection",
+                "repository_checkpoint": {
+                    "fingerprint": "not_required:preplan"
+                },
+                "source_producer_iterations": [
+                    {
+                        "iteration": 1,
+                        "phase_id": "preplan"
+                    }
+                ],
+                "workflow_id": "wftr-20260602-test-0001"
+            },
+            "wftr-20260602-test-0001|pr|1|commit_push#1,implement#1,pr#1|repository-checkpoint-831bf900": {
+                "consumer_delivery_iteration": 1,
+                "consumer_phase_id": "pr",
+                "contract_version": "0.2",
+                "handoff_envelope": {
+                    "consumer_phase_id": "pr",
+                    "contract_version": "0.1",
+                    "projections": [
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "value",
+                                    "text": "Fixture implement prose for downstream audit."
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.phase_prose",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "implement_prose",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:implement"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [],
+                                    "kind": "text_list",
+                                    "name": "changed_paths"
+                                },
+                                {
+                                    "kind": "text",
+                                    "name": "validation_summary",
+                                    "text": "completed"
+                                },
+                                {
+                                    "kind": "text",
+                                    "name": "base_branch",
+                                    "text": "main"
+                                },
+                                {
+                                    "kind": "text",
+                                    "name": "diff_reference",
+                                    "text": "repository-checkpoint-831bf900"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.pr_request",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "pr_request",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:implement"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "commit_sha",
+                                    "text": "__NORMALIZED_SHA40__"
+                                },
+                                {
+                                    "kind": "text",
+                                    "name": "branch",
+                                    "text": "feat/SKILL-380-phase-slot-strategies"
+                                },
+                                {
+                                    "kind": "text",
+                                    "name": "base_branch",
+                                    "text": "main"
+                                },
+                                {
+                                    "kind": "text",
+                                    "name": "pushed",
+                                    "text": "true"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "commit_push"
+                            },
+                            "projection_contract_id": "feature_task_runtime.commit_receipt",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "commit_receipt",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:commit_push"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "spec_reference",
+                                    "text": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "pr"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_spec_reference",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:spec_reference"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "feature_size",
+                                    "text": "MEDIUM"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "pr"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_feature_size",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:feature_size"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)",
+                                        "review_scope: branch_diff (branch-diff review scope)",
+                                        "audit_ceremony: full_per_criterion (full per-criterion completeness audit)"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "ceremony_scaling"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "pr"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_ceremony_scaling",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "derived_ceremony_scaling"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "mandate-X"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "mandates_and_overrides"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "pr"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_mandates_and_overrides",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:mandates_and_overrides"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "AC-1",
+                                        "AC-2"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "acceptance_criteria"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "pr"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_acceptance_criteria",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:acceptance_criteria"
+                        }
+                    ],
+                    "repository_checkpoint": {
+                        "base_ref": "__NORMALIZED_SHA40__",
+                        "fingerprint": "repository-checkpoint-831bf900",
+                        "head_ref": "__NORMALIZED_SHA40__"
+                    }
+                },
+                "record_kind": "delivered_projection",
+                "repository_checkpoint": {
+                    "fingerprint": "repository-checkpoint-831bf900"
+                },
+                "source_producer_iterations": [
+                    {
+                        "iteration": 1,
+                        "phase_id": "implement"
+                    },
+                    {
+                        "iteration": 1,
+                        "phase_id": "commit_push"
+                    },
+                    {
+                        "iteration": 1,
+                        "phase_id": "pr"
+                    }
+                ],
+                "workflow_id": "wftr-20260602-test-0001"
+            },
+            "wftr-20260602-test-0001|review|1|review#1|repository-checkpoint-831bf900": {
+                "consumer_delivery_iteration": 1,
+                "consumer_phase_id": "review",
+                "contract_version": "0.2",
+                "handoff_envelope": {
+                    "consumer_phase_id": "review",
+                    "contract_version": "0.1",
+                    "projections": [
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "spec_reference",
+                                    "text": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "review"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_spec_reference",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:spec_reference"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "feature_size",
+                                    "text": "MEDIUM"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "review"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_feature_size",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:feature_size"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)",
+                                        "review_scope: branch_diff (branch-diff review scope)",
+                                        "audit_ceremony: full_per_criterion (full per-criterion completeness audit)"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "ceremony_scaling"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "review"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_ceremony_scaling",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "derived_ceremony_scaling"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "mandate-X"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "mandates_and_overrides"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "review"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_mandates_and_overrides",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:mandates_and_overrides"
+                        }
+                    ],
+                    "repository_checkpoint": {
+                        "base_ref": "__NORMALIZED_SHA40__",
+                        "fingerprint": "repository-checkpoint-831bf900",
+                        "head_ref": "__NORMALIZED_SHA40__"
+                    }
+                },
+                "record_kind": "delivered_projection",
+                "repository_checkpoint": {
+                    "fingerprint": "repository-checkpoint-831bf900"
+                },
+                "source_producer_iterations": [
+                    {
+                        "iteration": 1,
+                        "phase_id": "review"
+                    }
+                ],
+                "workflow_id": "wftr-20260602-test-0001"
+            },
+            "wftr-20260602-test-0001|verify_findings|1|review#1,verify_findings#1|repository-checkpoint-831bf900": {
+                "consumer_delivery_iteration": 1,
+                "consumer_phase_id": "verify_findings",
+                "contract_version": "0.2",
+                "handoff_envelope": {
+                    "consumer_phase_id": "verify_findings",
+                    "contract_version": "0.1",
+                    "projections": [
+                        {
+                            "fields": [
+                                {
+                                    "items": [],
+                                    "kind": "text_list",
+                                    "name": "findings"
+                                },
+                                {
+                                    "kind": "compact_reference",
+                                    "name": "repository_checkpoint",
+                                    "reference_kind": "repository_checkpoint",
+                                    "reference_value": "repository-checkpoint-831bf900+producer-claimed:repository-checkpoint-831bf900"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "review"
+                            },
+                            "projection_contract_id": "feature_task_runtime.findings_verification_input",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "review_findings_for_verification",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:review"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "spec_reference",
+                                    "text": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "verify_findings"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_spec_reference",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:spec_reference"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "feature_size",
+                                    "text": "MEDIUM"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "verify_findings"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_feature_size",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:feature_size"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)",
+                                        "review_scope: branch_diff (branch-diff review scope)",
+                                        "audit_ceremony: full_per_criterion (full per-criterion completeness audit)"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "ceremony_scaling"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "verify_findings"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_ceremony_scaling",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "derived_ceremony_scaling"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "mandate-X"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "mandates_and_overrides"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "verify_findings"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_mandates_and_overrides",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:mandates_and_overrides"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "AC-1",
+                                        "AC-2"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "acceptance_criteria"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "verify_findings"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_acceptance_criteria",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:acceptance_criteria"
+                        }
+                    ],
+                    "repository_checkpoint": {
+                        "base_ref": "__NORMALIZED_SHA40__",
+                        "fingerprint": "repository-checkpoint-831bf900",
+                        "head_ref": "__NORMALIZED_SHA40__"
+                    }
+                },
+                "record_kind": "delivered_projection",
+                "repository_checkpoint": {
+                    "fingerprint": "repository-checkpoint-831bf900"
+                },
+                "source_producer_iterations": [
+                    {
+                        "iteration": 1,
+                        "phase_id": "review"
+                    },
+                    {
+                        "iteration": 1,
+                        "phase_id": "verify_findings"
+                    }
+                ],
+                "workflow_id": "wftr-20260602-test-0001"
+            },
+            "wftr-20260602-test-0001|write_history|1|implement#1,validate#1,write_history#1|repository-checkpoint-831bf900": {
+                "consumer_delivery_iteration": 1,
+                "consumer_phase_id": "write_history",
+                "contract_version": "0.2",
+                "handoff_envelope": {
+                    "consumer_phase_id": "write_history",
+                    "contract_version": "0.1",
+                    "projections": [
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "value",
+                                    "text": "Fixture implement prose for downstream audit."
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.phase_prose",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "implement_prose",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:implement"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [],
+                                    "kind": "text_list",
+                                    "name": "changed_paths"
+                                },
+                                {
+                                    "items": [],
+                                    "kind": "text_list",
+                                    "name": "boundary_candidates"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.boundary_candidates",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "boundary_candidates",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:implement"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "value",
+                                    "text": "Project checks passed."
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "validate"
+                            },
+                            "projection_contract_id": "feature_task_runtime.validation_receipt",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "validation_receipt",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:validate"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "spec_reference",
+                                    "text": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "write_history"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_spec_reference",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:spec_reference"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "feature_size",
+                                    "text": "MEDIUM"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "write_history"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_feature_size",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:feature_size"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)",
+                                        "review_scope: branch_diff (branch-diff review scope)",
+                                        "audit_ceremony: full_per_criterion (full per-criterion completeness audit)"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "ceremony_scaling"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "write_history"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_ceremony_scaling",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "derived_ceremony_scaling"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "mandate-X"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "mandates_and_overrides"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "write_history"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_mandates_and_overrides",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:mandates_and_overrides"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [],
+                                    "kind": "text_list",
+                                    "name": "finalization_context"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "write_history"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_finalization_context",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:finalization_context"
+                        }
+                    ],
+                    "repository_checkpoint": {
+                        "base_ref": "__NORMALIZED_SHA40__",
+                        "fingerprint": "repository-checkpoint-831bf900",
+                        "head_ref": "__NORMALIZED_SHA40__"
+                    }
+                },
+                "record_kind": "delivered_projection",
+                "repository_checkpoint": {
+                    "fingerprint": "repository-checkpoint-831bf900"
+                },
+                "source_producer_iterations": [
+                    {
+                        "iteration": 1,
+                        "phase_id": "implement"
+                    },
+                    {
+                        "iteration": 1,
+                        "phase_id": "validate"
+                    },
+                    {
+                        "iteration": 1,
+                        "phase_id": "write_history"
+                    }
+                ],
+                "workflow_id": "wftr-20260602-test-0001"
+            }
+        },
+        "feature_task_runtime_finding_verification_boundary_selection": null,
+        "feature_task_runtime_finding_verification_checkpoint": null,
+        "feature_task_runtime_implementation_attempts": {
+            "attempts": [
+                {
+                    "agent_id": "agent-implement",
+                    "attempt_number": 1,
+                    "phase_id": "implement",
+                    "recorded_at": "__NORMALIZED_TIMESTAMP__",
+                    "sequence_number": 0,
+                    "status": "completed",
+                    "value": "Fixture implement prose for downstream audit."
+                },
+                {
+                    "agent_id": "agent-simplify",
+                    "attempt_number": 1,
+                    "phase_id": "simplify",
+                    "recorded_at": "__NORMALIZED_TIMESTAMP__",
+                    "sequence_number": 1,
+                    "status": "completed",
+                    "value": "{\"projection_kind\":\"simplification_receipt\",\"contract_version\":\"0.1\",\"changed_paths\":[],\"reductions\":[],\"unresolved_items\":[],\"reconciliation_evidence\":{\"reconciled\":true,\"evidence\":\"fixture\"},\"reconciled_state\":{\"reconciled\":true,\"evidence\":\"fixture\"}}"
+                }
+            ],
+            "contract_version": "0.2"
+        },
+        "feature_task_runtime_phase_briefings": {
+            "implement": {
+                "acceptance_criteria": [
+                    "AC-1",
+                    "AC-2"
+                ],
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: implement\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nacceptance_criteria:\n  AC-001\n  AC-002\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: plan\nvalue: Fixture plan prose for downstream implement and audit.\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)\nacceptance_criteria:\n  - AC-1\n  - AC-2\n\n## Derived context (layer 3, declared)\n(none)",
+                "contract_version": "0.2",
+                "derived_context_keys": [],
+                "feature_size": "MEDIUM",
+                "handoff_envelope": {
+                    "consumer_phase_id": "implement",
+                    "contract_version": "0.1",
+                    "projections": [
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "value",
+                                    "text": "Fixture plan prose for downstream implement and audit."
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "plan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.phase_prose",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "plan_prose",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:plan"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "spec_reference",
+                                    "text": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_spec_reference",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:spec_reference"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "feature_size",
+                                    "text": "MEDIUM"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_feature_size",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:feature_size"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)",
+                                        "review_scope: branch_diff (branch-diff review scope)",
+                                        "audit_ceremony: full_per_criterion (full per-criterion completeness audit)"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "ceremony_scaling"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_ceremony_scaling",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "derived_ceremony_scaling"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "mandate-X"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "mandates_and_overrides"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_mandates_and_overrides",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:mandates_and_overrides"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "AC-1",
+                                        "AC-2"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "acceptance_criteria"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_acceptance_criteria",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:acceptance_criteria"
+                        }
+                    ]
+                },
+                "mandates_and_overrides": [
+                    "mandate-X"
+                ],
+                "phase_id": "implement",
+                "spec_reference": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+            },
+            "plan": {
+                "acceptance_criteria": [
+                    "AC-1",
+                    "AC-2"
+                ],
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: plan\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nacceptance_criteria:\n  AC-001\n  AC-002\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: preplan\nvalue: Fixture preplan prose for downstream plan.\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)\nacceptance_criteria:\n  - AC-1\n  - AC-2\n\n## Derived context (layer 3, declared)\n(none)",
+                "contract_version": "0.2",
+                "derived_context_keys": [],
+                "feature_size": "MEDIUM",
+                "handoff_envelope": {
+                    "consumer_phase_id": "plan",
+                    "contract_version": "0.1",
+                    "projections": [
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "value",
+                                    "text": "Fixture preplan prose for downstream plan."
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "preplan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.phase_prose",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "preplan_prose",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:preplan"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "spec_reference",
+                                    "text": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "plan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_spec_reference",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:spec_reference"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "feature_size",
+                                    "text": "MEDIUM"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "plan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_feature_size",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:feature_size"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)",
+                                        "review_scope: branch_diff (branch-diff review scope)",
+                                        "audit_ceremony: full_per_criterion (full per-criterion completeness audit)"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "ceremony_scaling"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "plan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_ceremony_scaling",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "derived_ceremony_scaling"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "mandate-X"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "mandates_and_overrides"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "plan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_mandates_and_overrides",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:mandates_and_overrides"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "AC-1",
+                                        "AC-2"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "acceptance_criteria"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "plan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_acceptance_criteria",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:acceptance_criteria"
+                        }
+                    ]
+                },
+                "mandates_and_overrides": [
+                    "mandate-X"
+                ],
+                "phase_id": "plan",
+                "spec_reference": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+            },
+            "pr": {
+                "acceptance_criteria": [
+                    "AC-1",
+                    "AC-2"
+                ],
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: pr\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nacceptance_criteria:\n  AC-001\n  AC-002\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: implement\nvalue: Fixture implement prose for downstream audit.\n### from: implement\nchanged_paths:\nvalidation_summary: completed\nbase_branch: main\ndiff_reference: repository-checkpoint-831bf900\n### from: commit_push\ncommit_sha: __NORMALIZED_SHA40__\nbranch: feat/SKILL-380-phase-slot-strategies\nbase_branch: main\npushed: true\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)\nacceptance_criteria:\n  - AC-1\n  - AC-2\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: repository-checkpoint-831bf900\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n- pr_branch_diff: read the branch diff yourself; it is not delivered in this briefing",
+                "contract_version": "0.2",
+                "derived_context_keys": [
+                    "pr_branch_diff"
+                ],
+                "feature_size": "MEDIUM",
+                "handoff_envelope": {
+                    "consumer_phase_id": "pr",
+                    "contract_version": "0.1",
+                    "projections": [
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "value",
+                                    "text": "Fixture implement prose for downstream audit."
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.phase_prose",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "implement_prose",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:implement"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [],
+                                    "kind": "text_list",
+                                    "name": "changed_paths"
+                                },
+                                {
+                                    "kind": "text",
+                                    "name": "validation_summary",
+                                    "text": "completed"
+                                },
+                                {
+                                    "kind": "text",
+                                    "name": "base_branch",
+                                    "text": "main"
+                                },
+                                {
+                                    "kind": "text",
+                                    "name": "diff_reference",
+                                    "text": "repository-checkpoint-831bf900"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.pr_request",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "pr_request",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:implement"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "commit_sha",
+                                    "text": "__NORMALIZED_SHA40__"
+                                },
+                                {
+                                    "kind": "text",
+                                    "name": "branch",
+                                    "text": "feat/SKILL-380-phase-slot-strategies"
+                                },
+                                {
+                                    "kind": "text",
+                                    "name": "base_branch",
+                                    "text": "main"
+                                },
+                                {
+                                    "kind": "text",
+                                    "name": "pushed",
+                                    "text": "true"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "commit_push"
+                            },
+                            "projection_contract_id": "feature_task_runtime.commit_receipt",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "commit_receipt",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:commit_push"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "spec_reference",
+                                    "text": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "pr"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_spec_reference",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:spec_reference"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "feature_size",
+                                    "text": "MEDIUM"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "pr"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_feature_size",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:feature_size"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)",
+                                        "review_scope: branch_diff (branch-diff review scope)",
+                                        "audit_ceremony: full_per_criterion (full per-criterion completeness audit)"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "ceremony_scaling"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "pr"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_ceremony_scaling",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "derived_ceremony_scaling"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "mandate-X"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "mandates_and_overrides"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "pr"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_mandates_and_overrides",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:mandates_and_overrides"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "AC-1",
+                                        "AC-2"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "acceptance_criteria"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "pr"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_acceptance_criteria",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:acceptance_criteria"
+                        }
+                    ],
+                    "repository_checkpoint": {
+                        "base_ref": "__NORMALIZED_SHA40__",
+                        "fingerprint": "repository-checkpoint-831bf900",
+                        "head_ref": "__NORMALIZED_SHA40__"
+                    }
+                },
+                "mandates_and_overrides": [
+                    "mandate-X"
+                ],
+                "phase_id": "pr",
+                "spec_reference": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+            },
+            "preplan": {
+                "acceptance_criteria": [
+                    "AC-1",
+                    "AC-2"
+                ],
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: preplan\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nacceptance_criteria:\n  AC-001\n  AC-002\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)\nacceptance_criteria:\n  - AC-1\n  - AC-2\n\n## Derived context (layer 3, declared)\n(none)",
+                "contract_version": "0.2",
+                "derived_context_keys": [],
+                "feature_size": "MEDIUM",
+                "handoff_envelope": {
+                    "consumer_phase_id": "preplan",
+                    "contract_version": "0.1",
+                    "projections": [
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "spec_reference",
+                                    "text": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "preplan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_spec_reference",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:spec_reference"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "feature_size",
+                                    "text": "MEDIUM"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "preplan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_feature_size",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:feature_size"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)",
+                                        "review_scope: branch_diff (branch-diff review scope)",
+                                        "audit_ceremony: full_per_criterion (full per-criterion completeness audit)"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "ceremony_scaling"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "preplan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_ceremony_scaling",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "derived_ceremony_scaling"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "mandate-X"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "mandates_and_overrides"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "preplan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_mandates_and_overrides",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:mandates_and_overrides"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "AC-1",
+                                        "AC-2"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "acceptance_criteria"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "preplan"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_acceptance_criteria",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:acceptance_criteria"
+                        }
+                    ]
+                },
+                "mandates_and_overrides": [
+                    "mandate-X"
+                ],
+                "phase_id": "preplan",
+                "spec_reference": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+            },
+            "review": {
+                "acceptance_criteria": [
+                    "AC-1",
+                    "AC-2"
+                ],
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: review\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: repository-checkpoint-831bf900\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n- diff: read the branch diff yourself; it is not delivered in this briefing",
+                "contract_version": "0.2",
+                "derived_context_keys": [
+                    "diff"
+                ],
+                "feature_size": "MEDIUM",
+                "handoff_envelope": {
+                    "consumer_phase_id": "review",
+                    "contract_version": "0.1",
+                    "projections": [
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "spec_reference",
+                                    "text": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "review"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_spec_reference",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:spec_reference"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "feature_size",
+                                    "text": "MEDIUM"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "review"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_feature_size",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:feature_size"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)",
+                                        "review_scope: branch_diff (branch-diff review scope)",
+                                        "audit_ceremony: full_per_criterion (full per-criterion completeness audit)"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "ceremony_scaling"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "review"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_ceremony_scaling",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "derived_ceremony_scaling"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "mandate-X"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "mandates_and_overrides"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "review"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_mandates_and_overrides",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:mandates_and_overrides"
+                        }
+                    ],
+                    "repository_checkpoint": {
+                        "base_ref": "__NORMALIZED_SHA40__",
+                        "fingerprint": "repository-checkpoint-831bf900",
+                        "head_ref": "__NORMALIZED_SHA40__"
+                    }
+                },
+                "mandates_and_overrides": [
+                    "mandate-X"
+                ],
+                "phase_id": "review",
+                "spec_reference": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+            },
+            "verify_findings": {
+                "acceptance_criteria": [
+                    "AC-1",
+                    "AC-2"
+                ],
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: verify_findings\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nacceptance_criteria:\n  AC-001\n  AC-002\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: review\nfindings:\nrepository_checkpoint: repository_checkpoint=repository-checkpoint-831bf900+producer-claimed:repository-checkpoint-831bf900\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)\nacceptance_criteria:\n  - AC-1\n  - AC-2\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: repository-checkpoint-831bf900\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n(none)",
+                "contract_version": "0.2",
+                "derived_context_keys": [],
+                "feature_size": "MEDIUM",
+                "handoff_envelope": {
+                    "consumer_phase_id": "verify_findings",
+                    "contract_version": "0.1",
+                    "projections": [
+                        {
+                            "fields": [
+                                {
+                                    "items": [],
+                                    "kind": "text_list",
+                                    "name": "findings"
+                                },
+                                {
+                                    "kind": "compact_reference",
+                                    "name": "repository_checkpoint",
+                                    "reference_kind": "repository_checkpoint",
+                                    "reference_value": "repository-checkpoint-831bf900+producer-claimed:repository-checkpoint-831bf900"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "review"
+                            },
+                            "projection_contract_id": "feature_task_runtime.findings_verification_input",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "review_findings_for_verification",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:review"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "spec_reference",
+                                    "text": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "verify_findings"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_spec_reference",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:spec_reference"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "feature_size",
+                                    "text": "MEDIUM"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "verify_findings"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_feature_size",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:feature_size"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)",
+                                        "review_scope: branch_diff (branch-diff review scope)",
+                                        "audit_ceremony: full_per_criterion (full per-criterion completeness audit)"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "ceremony_scaling"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "verify_findings"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_ceremony_scaling",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "derived_ceremony_scaling"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "mandate-X"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "mandates_and_overrides"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "verify_findings"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_mandates_and_overrides",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:mandates_and_overrides"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "AC-1",
+                                        "AC-2"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "acceptance_criteria"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "verify_findings"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_acceptance_criteria",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:acceptance_criteria"
+                        }
+                    ],
+                    "repository_checkpoint": {
+                        "base_ref": "__NORMALIZED_SHA40__",
+                        "fingerprint": "repository-checkpoint-831bf900",
+                        "head_ref": "__NORMALIZED_SHA40__"
+                    }
+                },
+                "mandates_and_overrides": [
+                    "mandate-X"
+                ],
+                "phase_id": "verify_findings",
+                "spec_reference": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+            },
+            "write_history": {
+                "acceptance_criteria": [
+                    "AC-1",
+                    "AC-2"
+                ],
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: write_history\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: implement\nvalue: Fixture implement prose for downstream audit.\n### from: implement\nchanged_paths:\nboundary_candidates:\n### from: validate\nvalue: Project checks passed.\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_finalization_context (run_invariant_field:finalization_context)\nfinalization_context:\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: repository-checkpoint-831bf900\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n(none)",
+                "contract_version": "0.2",
+                "derived_context_keys": [],
+                "feature_size": "MEDIUM",
+                "handoff_envelope": {
+                    "consumer_phase_id": "write_history",
+                    "contract_version": "0.1",
+                    "projections": [
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "value",
+                                    "text": "Fixture implement prose for downstream audit."
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.phase_prose",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "implement_prose",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:implement"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [],
+                                    "kind": "text_list",
+                                    "name": "changed_paths"
+                                },
+                                {
+                                    "items": [],
+                                    "kind": "text_list",
+                                    "name": "boundary_candidates"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "implement"
+                            },
+                            "projection_contract_id": "feature_task_runtime.boundary_candidates",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "boundary_candidates",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:implement"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "value",
+                                    "text": "Project checks passed."
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "validate"
+                            },
+                            "projection_contract_id": "feature_task_runtime.validation_receipt",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "validation_receipt",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "upstream_phase_output:validate"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "spec_reference",
+                                    "text": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "write_history"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_spec_reference",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:spec_reference"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "kind": "text",
+                                    "name": "feature_size",
+                                    "text": "MEDIUM"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "write_history"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_feature_size",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:feature_size"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)",
+                                        "review_scope: branch_diff (branch-diff review scope)",
+                                        "audit_ceremony: full_per_criterion (full per-criterion completeness audit)"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "ceremony_scaling"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "write_history"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_ceremony_scaling",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "derived_ceremony_scaling"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [
+                                        "mandate-X"
+                                    ],
+                                    "kind": "text_list",
+                                    "name": "mandates_and_overrides"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "write_history"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_mandates_and_overrides",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:mandates_and_overrides"
+                        },
+                        {
+                            "fields": [
+                                {
+                                    "items": [],
+                                    "kind": "text_list",
+                                    "name": "finalization_context"
+                                }
+                            ],
+                            "producer_iteration": {
+                                "iteration": 1,
+                                "phase_id": "write_history"
+                            },
+                            "projection_contract_id": "feature_task_runtime.run_invariant",
+                            "projection_contract_version": "0.1",
+                            "projection_name": "run_invariant_finalization_context",
+                            "prompt_visibility": "prompt_visible",
+                            "source_ref": "run_invariant_field:finalization_context"
+                        }
+                    ],
+                    "repository_checkpoint": {
+                        "base_ref": "__NORMALIZED_SHA40__",
+                        "fingerprint": "repository-checkpoint-831bf900",
+                        "head_ref": "__NORMALIZED_SHA40__"
+                    }
+                },
+                "mandates_and_overrides": [
+                    "mandate-X"
+                ],
+                "phase_id": "write_history",
+                "spec_reference": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+            }
+        },
+        "feature_task_runtime_phase_ledger": [
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "preplan",
+                "resolved_agent_id": "agent-preplan",
+                "sequence_number": 0,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "preplan",
+                "resolved_agent_id": "agent-preplan",
+                "sequence_number": 1,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "plan",
+                "resolved_agent_id": "agent-plan",
+                "sequence_number": 2,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "plan",
+                "resolved_agent_id": "agent-plan",
+                "sequence_number": 3,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "implement",
+                "resolved_agent_id": "agent-implement",
+                "sequence_number": 4,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "implement",
+                "resolved_agent_id": "agent-implement",
+                "sequence_number": 5,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "simplify",
+                "resolved_agent_id": "agent-simplify",
+                "sequence_number": 6,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "simplify",
+                "resolved_agent_id": "agent-simplify",
+                "sequence_number": 7,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "audit",
+                "resolved_agent_id": "agent-audit",
+                "sequence_number": 8,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "audit",
+                "resolved_agent_id": "agent-audit",
+                "sequence_number": 9,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "review",
+                "resolved_agent_id": "agent-review",
+                "sequence_number": 10,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "review",
+                "resolved_agent_id": "agent-review",
+                "sequence_number": 11,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "review",
+                "resolved_agent_id": "agent-review",
+                "sequence_number": 12,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "verify_findings",
+                "resolved_agent_id": "agent-verify_findings",
+                "sequence_number": 13,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "verify_findings",
+                "resolved_agent_id": "agent-verify_findings",
+                "sequence_number": 14,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "validate",
+                "resolved_agent_id": "agent-validate",
+                "sequence_number": 15,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "validate",
+                "resolved_agent_id": "agent-validate",
+                "sequence_number": 16,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "validate",
+                "resolved_agent_id": "agent-validate",
+                "sequence_number": 17,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "write_history",
+                "resolved_agent_id": "agent-write_history",
+                "sequence_number": 18,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "write_history",
+                "resolved_agent_id": "agent-write_history",
+                "sequence_number": 19,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "commit_push",
+                "resolved_agent_id": "agent-commit_push",
+                "sequence_number": 20,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "commit_push",
+                "resolved_agent_id": "agent-commit_push",
+                "sequence_number": 21,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "commit_push",
+                "resolved_agent_id": "agent-commit_push",
+                "sequence_number": 22,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "start",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "pr",
+                "resolved_agent_id": "agent-pr",
+                "sequence_number": 23,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            },
+            {
+                "action": "complete",
+                "attempt_count": 1,
+                "execution_origin": "agent-executed",
+                "phase_id": "pr",
+                "resolved_agent_id": "agent-pr",
+                "sequence_number": 24,
+                "timestamp": "__NORMALIZED_TIMESTAMP__"
+            }
+        ],
+        "feature_task_runtime_phase_records": {
+            "audit": {
+                "attempt_count": 1,
+                "contract_version": "0.2",
+                "duration_millis": "__NORMALIZED_DURATION__",
+                "execution_origin": "agent-executed",
+                "file_manifest_after": [
+                    "src/Foo.kt"
+                ],
+                "file_manifest_before": [
+                    "src/Foo.kt"
+                ],
+                "finished_at": "__NORMALIZED_TIMESTAMP__",
+                "first_started_at": "__NORMALIZED_TIMESTAMP__",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"audit\",\"status\":\"completed\",\"summary\":\"Every acceptance criterion is met.\",\"produced_outputs\":{\"value\":\"[]\"},\"verdict\":\"satisfied\"}",
+                "phase_id": "audit",
+                "record_kind": "private_phase_record",
+                "resolved_agent_id": "agent-audit",
+                "started_at": "__NORMALIZED_TIMESTAMP__",
+                "status": "completed"
+            },
+            "commit_push": {
+                "attempt_count": 1,
+                "contract_version": "0.2",
+                "duration_millis": "__NORMALIZED_DURATION__",
+                "execution_origin": "agent-executed",
+                "finished_at": "__NORMALIZED_TIMESTAMP__",
+                "first_started_at": "__NORMALIZED_TIMESTAMP__",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"commit_push\",\"status\":\"completed\",\"summary\":\"Runtime staged every dirty path, committed, and recorded commit_sha.\",\"produced_outputs\":{\"commit_push_result\":{\"commit_sha\":\"__NORMALIZED_SHA40__\",\"branch\":\"feat/SKILL-380-phase-slot-strategies\",\"base_branch\":\"main\",\"pushed\":true}}}",
+                "phase_id": "commit_push",
+                "record_kind": "private_phase_record",
+                "resolved_agent_id": "agent-commit_push",
+                "started_at": "__NORMALIZED_TIMESTAMP__",
+                "status": "completed"
+            },
+            "implement": {
+                "attempt_count": 1,
+                "contract_version": "0.2",
+                "duration_millis": "__NORMALIZED_DURATION__",
+                "execution_origin": "agent-executed",
+                "file_manifest_after": [
+                    "src/Foo.kt"
+                ],
+                "file_manifest_before": [
+                    "src/Foo.kt"
+                ],
+                "finished_at": "__NORMALIZED_TIMESTAMP__",
+                "first_started_at": "__NORMALIZED_TIMESTAMP__",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"implement\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Fixture implement prose for downstream audit.\"}}",
+                "phase_id": "implement",
+                "record_kind": "private_phase_record",
+                "resolved_agent_id": "agent-implement",
+                "started_at": "__NORMALIZED_TIMESTAMP__",
+                "status": "completed"
+            },
+            "plan": {
+                "attempt_count": 1,
+                "contract_version": "0.2",
+                "duration_millis": "__NORMALIZED_DURATION__",
+                "execution_origin": "agent-executed",
+                "file_manifest_after": [
+                    "src/Foo.kt"
+                ],
+                "file_manifest_before": [
+                    "src/Foo.kt"
+                ],
+                "finished_at": "__NORMALIZED_TIMESTAMP__",
+                "first_started_at": "__NORMALIZED_TIMESTAMP__",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"plan\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Fixture plan prose for downstream implement and audit.\"}}",
+                "phase_id": "plan",
+                "record_kind": "private_phase_record",
+                "resolved_agent_id": "agent-plan",
+                "started_at": "__NORMALIZED_TIMESTAMP__",
+                "status": "completed"
+            },
+            "pr": {
+                "attempt_count": 1,
+                "contract_version": "0.2",
+                "duration_millis": "__NORMALIZED_DURATION__",
+                "execution_origin": "agent-executed",
+                "file_manifest_after": [
+                    "src/Foo.kt"
+                ],
+                "file_manifest_before": [
+                    "src/Foo.kt"
+                ],
+                "finished_at": "__NORMALIZED_TIMESTAMP__",
+                "first_started_at": "__NORMALIZED_TIMESTAMP__",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"pr\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Opened the pull request for the branch.\",\"runtime_measured_facts\":{\"pr_url\":\"unknown\",\"pr_number\":\"unknown\",\"pr_created\":\"unknown\"}}}",
+                "phase_id": "pr",
+                "record_kind": "private_phase_record",
+                "resolved_agent_id": "agent-pr",
+                "started_at": "__NORMALIZED_TIMESTAMP__",
+                "status": "completed"
+            },
+            "preplan": {
+                "attempt_count": 1,
+                "contract_version": "0.2",
+                "duration_millis": "__NORMALIZED_DURATION__",
+                "execution_origin": "agent-executed",
+                "file_manifest_after": [
+                    "src/Foo.kt"
+                ],
+                "file_manifest_before": [
+                    "src/Foo.kt"
+                ],
+                "finished_at": "__NORMALIZED_TIMESTAMP__",
+                "first_started_at": "__NORMALIZED_TIMESTAMP__",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"preplan\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Fixture preplan prose for downstream plan.\"}}",
+                "phase_id": "preplan",
+                "record_kind": "private_phase_record",
+                "resolved_agent_id": "agent-preplan",
+                "started_at": "__NORMALIZED_TIMESTAMP__",
+                "status": "completed"
+            },
+            "review": {
+                "attempt_count": 1,
+                "contract_version": "0.2",
+                "duration_millis": "__NORMALIZED_DURATION__",
+                "execution_origin": "agent-executed",
+                "file_manifest_after": [
+                    "src/Foo.kt"
+                ],
+                "file_manifest_before": [
+                    "src/Foo.kt"
+                ],
+                "finished_at": "__NORMALIZED_TIMESTAMP__",
+                "first_started_at": "__NORMALIZED_TIMESTAMP__",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"review\",\"status\":\"completed\",\"summary\":\"{\\\"contract_version\\\":\\\"0.3\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"produced_outputs\":{\"findings\":[],\"review_run_id\":\"__NORMALIZED_REVIEW_RUN_ID__\",\"repository_checkpoint\":{\"fingerprint\":\"repository-fingerprint-3\"}},\"verdict\":\"approved\"}",
+                "phase_id": "review",
+                "record_kind": "private_phase_record",
+                "resolved_agent_id": "agent-review",
+                "review_pass_number": 1,
+                "review_run_id": "__NORMALIZED_REVIEW_RUN_ID__",
+                "started_at": "__NORMALIZED_TIMESTAMP__",
+                "status": "completed"
+            },
+            "simplify": {
+                "attempt_count": 1,
+                "contract_version": "0.2",
+                "duration_millis": "__NORMALIZED_DURATION__",
+                "execution_origin": "agent-executed",
+                "file_manifest_after": [
+                    "src/Foo.kt"
+                ],
+                "file_manifest_before": [
+                    "src/Foo.kt"
+                ],
+                "finished_at": "__NORMALIZED_TIMESTAMP__",
+                "first_started_at": "__NORMALIZED_TIMESTAMP__",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"simplify\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"{\\\"projection_kind\\\":\\\"simplification_receipt\\\",\\\"contract_version\\\":\\\"0.1\\\",\\\"changed_paths\\\":[],\\\"reductions\\\":[],\\\"unresolved_items\\\":[],\\\"reconciliation_evidence\\\":{\\\"reconciled\\\":true,\\\"evidence\\\":\\\"fixture\\\"},\\\"reconciled_state\\\":{\\\"reconciled\\\":true,\\\"evidence\\\":\\\"fixture\\\"}}\"}}",
+                "phase_id": "simplify",
+                "record_kind": "private_phase_record",
+                "resolved_agent_id": "agent-simplify",
+                "started_at": "__NORMALIZED_TIMESTAMP__",
+                "status": "completed"
+            },
+            "validate": {
+                "attempt_count": 1,
+                "contract_version": "0.2",
+                "duration_millis": "__NORMALIZED_DURATION__",
+                "execution_origin": "agent-executed",
+                "finished_at": "__NORMALIZED_TIMESTAMP__",
+                "first_started_at": "__NORMALIZED_TIMESTAMP__",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"validate\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Project checks passed.\",\"validation_passed\":true}}",
+                "phase_id": "validate",
+                "record_kind": "private_phase_record",
+                "resolved_agent_id": "agent-validate",
+                "started_at": "__NORMALIZED_TIMESTAMP__",
+                "status": "completed"
+            },
+            "verify_findings": {
+                "attempt_count": 1,
+                "contract_version": "0.2",
+                "duration_millis": "__NORMALIZED_DURATION__",
+                "execution_origin": "agent-executed",
+                "file_manifest_after": [
+                    "src/Foo.kt"
+                ],
+                "file_manifest_before": [
+                    "src/Foo.kt"
+                ],
+                "finished_at": "__NORMALIZED_TIMESTAMP__",
+                "first_started_at": "__NORMALIZED_TIMESTAMP__",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"verify_findings\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"verdict\":\"no_findings_verified\",\"produced_outputs\":{\"finding_dispositions\":[]}}",
+                "phase_id": "verify_findings",
+                "record_kind": "private_phase_record",
+                "resolved_agent_id": "agent-verify_findings",
+                "started_at": "__NORMALIZED_TIMESTAMP__",
+                "status": "completed"
+            },
+            "write_history": {
+                "attempt_count": 1,
+                "contract_version": "0.2",
+                "duration_millis": "__NORMALIZED_DURATION__",
+                "execution_origin": "agent-executed",
+                "file_manifest_after": [
+                    "src/Foo.kt"
+                ],
+                "file_manifest_before": [
+                    "src/Foo.kt"
+                ],
+                "finished_at": "__NORMALIZED_TIMESTAMP__",
+                "first_started_at": "__NORMALIZED_TIMESTAMP__",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"write_history\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Recorded the boundary history entry.\",\"runtime_measured_facts\":{\"changed_paths\":[],\"history_written\":false,\"decisions_recorded\":false}}}",
+                "phase_id": "write_history",
+                "record_kind": "private_phase_record",
+                "resolved_agent_id": "agent-write_history",
+                "started_at": "__NORMALIZED_TIMESTAMP__",
+                "status": "completed"
+            }
+        },
+        "feature_task_runtime_readiness_evidence": {
+            "base_ref_sha": "__NORMALIZED_SHA40__",
+            "check_results": [],
+            "contract_version": "0.1",
+            "head_sha": "__NORMALIZED_SHA40__",
+            "selected_checks": [],
+            "source_tree_sha": "__NORMALIZED_SHA40__"
+        },
+        "feature_task_runtime_resolved_branch": {
+            "baseline_owned_paths": [],
+            "boundary_history_paths": [],
+            "boundary_history_roots": [],
+            "branch": "feat/SKILL-380-phase-slot-strategies",
+            "created": false,
+            "review_base_sha": "__NORMALIZED_SHA40__",
+            "workflow_owned_paths": []
+        },
+        "feature_task_runtime_run_invariants": {
+            "acceptance_criteria": [
+                "AC-1",
+                "AC-2"
+            ],
+            "agent_addon_selection": [],
+            "code_review_mode": "inline",
+            "contract_version": "0.1",
+            "feature_size": "MEDIUM",
+            "mandates_and_overrides": [
+                "mandate-X"
+            ],
+            "spec_reference": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+        }
+    },
+    "contract_version": "0.3",
+    "current_step_id": "pr",
+    "mode": "runtime",
+    "session_id": "__NORMALIZED_SESSION_ID__",
+    "steps_json": [
+        {
+            "attempt_count": 1,
+            "status": "completed",
+            "step_id": "preplan"
+        },
+        {
+            "attempt_count": 1,
+            "status": "completed",
+            "step_id": "plan"
+        },
+        {
+            "attempt_count": 1,
+            "status": "completed",
+            "step_id": "implement"
+        },
+        {
+            "attempt_count": 1,
+            "status": "completed",
+            "step_id": "simplify"
+        },
+        {
+            "attempt_count": 0,
+            "status": "pending",
+            "step_id": "audit_implement_fix"
+        },
+        {
+            "attempt_count": 1,
+            "status": "completed",
+            "step_id": "audit"
+        },
+        {
+            "attempt_count": 1,
+            "status": "completed",
+            "step_id": "review"
+        },
+        {
+            "attempt_count": 1,
+            "status": "completed",
+            "step_id": "verify_findings"
+        },
+        {
+            "attempt_count": 0,
+            "status": "pending",
+            "step_id": "implement_fix"
+        },
+        {
+            "attempt_count": 0,
+            "status": "pending",
+            "step_id": "build"
+        },
+        {
+            "attempt_count": 1,
+            "status": "completed",
+            "step_id": "validate"
+        },
+        {
+            "attempt_count": 1,
+            "status": "completed",
+            "step_id": "write_history"
+        },
+        {
+            "attempt_count": 1,
+            "status": "completed",
+            "step_id": "commit_push"
+        },
+        {
+            "attempt_count": 1,
+            "status": "completed",
+            "step_id": "pr"
+        }
+    ],
+    "workflow_id": "wftr-20260602-test-0001",
+    "workflow_name": "bill-feature-task",
+    "workflow_status": "completed"
+}

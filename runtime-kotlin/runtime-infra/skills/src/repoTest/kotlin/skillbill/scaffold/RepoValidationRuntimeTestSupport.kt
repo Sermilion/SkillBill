@@ -73,26 +73,26 @@ internal fun createRepoValidationSkillFixture(
     Files.createDirectories(target.parent)
     Files.writeString(target, "contract\n")
   }
-  val skillDir = repoRoot.resolve("skills/bill-code-review")
+  val skillDir = repoRoot.resolve("skills/skill-bill")
   Files.createDirectories(skillDir)
   Files.writeString(
     skillDir.resolve("content.md"),
     """
     ---
-    name: bill-code-review
-    description: Review code.
+    name: skill-bill
+    description: Run governed work.
     ---
 
-    # Code Review Content
+    # Skill Bill Content
 
-    Authored review guidance for the code-review baseline skill fixture.
+    Authored dispatcher guidance for the skill-bill fixture.
     """.trimIndent(),
   )
   if (!writeSidecars) {
     return
   }
   val targets = supportingFileTargets(repoRoot)
-  requiredSupportingFilesForSkill("bill-code-review", repoRoot).filterNot { it == skipSidecar }.forEach { fileName ->
+  requiredSupportingFilesForSkill("skill-bill", repoRoot).filterNot { it == skipSidecar }.forEach { fileName ->
     val sidecar = skillDir.resolve(fileName)
     val target = overrideTargets[fileName] ?: targets.getValue(fileName)
     val relativeTarget = sidecar.parent.relativize(target).toString()

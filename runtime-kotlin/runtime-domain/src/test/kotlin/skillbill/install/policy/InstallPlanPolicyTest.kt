@@ -166,8 +166,7 @@ class InstallPlanPolicyTest {
                     manualAgents = setOf(SupportedAgent.CODEX),
                   ),
               ),
-            defaultAgentTargets = emptyList(),
-          ),
+          ).copy(defaultAgentTargets = emptyList()),
         )
       }
     assertContains(
@@ -487,19 +486,41 @@ class InstallPlanPolicyTest {
     assertEquals(listOf("python"), draft.selectedPlatformSlugs)
   }
 
+  @Test
+  fun `review fallback pack is selected only when the pack sidecar parent is a base skill`() {
+    val platformPacks = listOf(platformPack(slug = "generic"), platformPack(slug = "kotlin"))
+
+    val withParent =
+      policyInput(
+        baseSkills = listOf(baseSkill(PACK_SIDECAR_PARENT_SKILL)),
+        platformPacks = platformPacks,
+        resolvedReviewFallbackSlug = "generic",
+      )
+    assertEquals(listOf("generic"), selectedPlatformSlugs(withParent))
+
+    val withoutParent =
+      policyInput(
+        baseSkills = listOf(baseSkill("bill-code-review")),
+        platformPacks = platformPacks,
+        resolvedReviewFallbackSlug = "generic",
+      )
+    assertEquals(emptyList(), selectedPlatformSlugs(withoutParent))
+  }
+
   private fun policyInput(
     request: InstallPlanRequest = request(),
     baseSkills: List<InstallPlanSkill> = listOf(baseSkill("bill-code-review")),
     platformPacks: List<InstallPlatformPackSnapshot> = listOf(platformPack()),
+    resolvedReviewFallbackSlug: String? = null,
     detectedAgentTargets: List<InstallAgentTarget> = emptyList(),
-    defaultAgentTargets: List<InstallAgentDefaultTarget> = defaultAgentTargets(),
   ): InstallPolicyInput =
     InstallPolicyInput(
       request = request,
       baseSkills = baseSkills,
       platformPacks = platformPacks,
+      resolvedReviewFallbackSlug = resolvedReviewFallbackSlug,
       detectedAgentTargets = detectedAgentTargets,
-      defaultAgentTargets = defaultAgentTargets,
+      defaultAgentTargets = defaultAgentTargets(),
     )
 
   private fun defaultAgentTargets(): List<InstallAgentDefaultTarget> =

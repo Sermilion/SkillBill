@@ -486,7 +486,7 @@ $defs:
         minLength: 1
       phase_id:
         type: string
-        enum: [preplan, plan, implement]
+        enum: [preplan, plan, implement, simplify, audit, audit_implement_fix, validate, write_history, pr]
       attempt:
         type: integer
         minimum: 1
@@ -497,6 +497,9 @@ $defs:
         type: string
         minLength: 1
       summary:
+        type: string
+        minLength: 1
+      verdict:
         type: string
         minLength: 1
 
@@ -520,7 +523,7 @@ $defs:
         minLength: 1
       phase_id:
         type: string
-        enum: [preplan, plan, implement, audit]
+        enum: [preplan, plan, implement, simplify, audit, audit_implement_fix, validate, write_history, pr]
       attempt:
         type: integer
         minimum: 1
@@ -529,6 +532,9 @@ $defs:
         minLength: 1
       failure_disposition:
         $ref: "#/$defs/featureTaskRuntimeFailureDispositionEnum"
+      verdict:
+        type: string
+        minLength: 1
 
   updateCheckEvent:
     type: object

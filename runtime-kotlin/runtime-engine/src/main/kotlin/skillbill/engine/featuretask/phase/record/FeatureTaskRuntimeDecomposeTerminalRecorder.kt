@@ -11,7 +11,6 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decomposeTerminalFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 
 @Inject
@@ -24,6 +23,7 @@ class FeatureTaskRuntimeDecomposeTerminalRecorder(
   fun recordDecomposeTerminal(
     workflowId: String,
     terminal: FeatureTaskRuntimeDecomposeTerminal,
+    planStepId: String,
   ): Boolean =
     database.transaction { unitOfWork ->
       val record =
@@ -36,7 +36,7 @@ class FeatureTaskRuntimeDecomposeTerminalRecorder(
           WorkflowUpdateInput(
             terminalInstant = clock.instant(),
             workflowStatus = WorkflowStatus.COMPLETED,
-            currentStepId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+            currentStepId = planStepId,
             stepUpdates = null,
             artifactsPatch =
               WorkflowArtifactPatch.from(

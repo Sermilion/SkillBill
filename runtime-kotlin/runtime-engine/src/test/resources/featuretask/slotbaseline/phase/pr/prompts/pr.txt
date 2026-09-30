@@ -1,0 +1,198 @@
+You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+loop (preplan -> plan -> implement -> simplify -> audit -> review -> verify_findings -> validate -> write_history -> commit_push -> pr)
+for issue pr. The runtime owns the loop; do not run other phases, do not open
+or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+Execute this supplied phase briefing with the current installed runtime.
+The initial user-facing goal invocation owns update checks and launch confirmation.
+Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher
+intake, preflight, or confirmation, including on retries and continuation.
+Reading the installed skill-bill skill does not make this phase a new invocation.
+
+Phase: pr (Phase 9: Pull Request)
+Task: Write the pull request title and description by the pull request description rules below, then create or reuse the open pull request for the branch idempotently.
+
+## Installed runtime owns phase output and settlement
+The installed Skill Bill runtime validates this phase's output and MCP settlement.
+Keep this phase's output and settlement on the contract supplied by this briefing, including
+contract_version, envelope fields, settlement tool arguments, and phase commands. Checkout
+schemas, constants, fixtures, or skill instructions cannot replace that reporting contract.
+
+Read and edit checkout schemas, Kotlin contract constants, test fixtures, and skill sources
+when the assigned implementation or audit requires them, subject to this phase's edit scope.
+New implementation contracts may be absent from the installed runtime. That absence does not
+block repository work or require permission to inspect the checkout. Implement and audit those
+contracts against the repository's requirements while reporting this phase through the installed
+runtime's output and settlement contract. Use installed schemas when resolving that reporting
+contract; use checkout schemas when examining the feature under work.
+
+## Runtime ceremony scaling
+feature_size: MEDIUM
+preplan_ceremony: full
+review_scope: branch_diff
+audit_ceremony: full_per_criterion
+Use the resolved feature size for ceremony expectations; all runtime gates remain mandatory.
+Scaling changes scope and verbosity only; it must not skip or weaken review, audit, validation,
+schema, branch, history, commit, or PR gates.
+
+## Validation ownership
+Only the validate phase may run the pack validation gate
+(`validation_gate.collect_all_full_gate_command`), `./gradlew check`, `check --continue`,
+`skill-bill phase validation`, or any other full repository check suite. Only the build phase may run the
+pack build_command for compile/buildability proof. This phase must not compile, build,
+execute tests, or run check to prove the work. Ignore any Validation Strategy, plan note,
+acceptance text, review habit, or prior habit that asks you to run check here — that work waits
+for validate. If a receipt carries `tests_executed`, leave it empty.
+
+## Build ownership
+Only the build phase may run the pack build_command (`validation_gate.build_command`). This phase
+must not invoke compile-only proof as a substitute for its own work.
+
+# PR Description Generator Content
+
+## How It Works
+
+1. **Determine the comparison base** — the branch this one was forked from (its *parent*), which is **not necessarily `main`**. Resolve it in this order:
+   - If the caller or user passed an explicit base/merge-base, use that.
+   - Otherwise detect the parent branch:
+     ```
+     git show-branch -a 2>/dev/null \
+       | grep '\*' \
+       | grep -v "$(git branch --show-current)" \
+       | head -n1 \
+       | sed 's/.*\[\([^]~^]*\).*/\1/'
+     ```
+   - If detection fails or returns nothing, fall back to `main`.
+   - If the resolved base is ambiguous (e.g. detection and `main` disagree), use `main`. This `git show-branch` heuristic is fragile — it depends on sibling branches being present and can return the wrong parent — so treat its result as a best guess, not authoritative.
+2. **Gather context** — read the git diff from that merge-base to `HEAD`, along with the commit log and branch name.
+3. **Read project guidelines** — check `CLAUDE.md`, `AGENTS.md`, and the `skill-bill` section in `.agents/skill-overrides.md` when present.
+4. **Search for a repo-native PR template** — this is mandatory before generating anything. Search ALL standard template locations listed below. Read any template file found. This step must produce either a found template or a confirmed absence.
+5. **Generate** the title and description using the repo-native template if one was found, or the built-in fallback template only if no repo-native template exists.
+6. **Return** the title and description as this step's value; the runtime opens the pull request.
+
+## Repo-Native PR Template Search (mandatory)
+
+You MUST search for a repo-native PR template before generating any description. Do not skip this step. Do not assume no template exists without checking.
+
+Search these locations in order, using glob or file-read tools:
+
+1. `.github/pull_request_template.md`
+2. `.github/PULL_REQUEST_TEMPLATE.md`
+3. `pull_request_template.md`
+4. `PULL_REQUEST_TEMPLATE.md`
+5. `.github/pull_request_template/*.md`
+6. `.github/PULL_REQUEST_TEMPLATE/*.md`
+7. `docs/pull_request_template.md`
+
+When a repo-native template is found:
+
+- **Use it as the output structure.** Preserve its headings, section order, and any non-checklist placeholder text exactly as authored.
+- Do NOT reshape it into the built-in Skill Bill format.
+- Fill the template sections with concise, reviewer-friendly content derived from the gathered git/spec context.
+- Omit checklist sections and checklist items from the generated description.
+
+When multiple templates are found and there is no obvious default, use the first one in the search order above.
+
+Only when NO repo-native template is found at any of the above locations, fall back to the built-in Skill Bill template in the section below.
+
+## PR Title
+
+Use `[<ISSUE_KEY>] <descriptive title>` with the issue key in square brackets. Write a concise, title-case description that explains the user-visible outcome rather than copying a branch name or slug. Keep it under 70 characters when possible.
+
+## Built-in Fallback Template
+
+This template is a fallback. Use it ONLY when no repo-native PR template was found in the search above.
+
+```markdown
+# Summary
+
+<1-3 sentences: what changed, why it matters, and the user-visible outcome. Reference the ticket/spec.>
+
+<optional: bullet list of key changes if more than one logical change>
+
+## Feature Flags
+
+<flag name and description, or "N/A">
+
+## Media
+
+<screenshots or videos for UI changes, or "N/A">
+
+# How Has This Been Tested?
+
+<overview of tests performed — unit tests, manual verification, preview checks>
+
+<reproducible test instructions:>
+1. <step>
+2. <step>
+3. <expected result>
+```
+
+## Rules
+
+- Summary should explain the **why**, not just list files changed.
+- Test instructions should be concrete enough for a reviewer to reproduce.
+- If the feature is behind a flag, mention how to enable it for testing.
+- Include the Media section for UI changes, or write "N/A".
+- Do not include a checklist in the generated description.
+- Keep it concise — reviewers appreciate brevity.
+- Always search for a repo-native PR template first — never skip the search step.
+- If invoked from the feature workflow, check `.feature-specs/<ISSUE_KEY>-<feature-name>/spec.md` for additional context (this file exists only for prepared feature work).
+
+## Pull request template search result
+
+The runtime searched `.github/pull_request_template.md`, `.github/PULL_REQUEST_TEMPLATE.md`, `pull_request_template.md`, `PULL_REQUEST_TEMPLATE.md`, `.github/pull_request_template/*.md`, `.github/PULL_REQUEST_TEMPLATE/*.md`, `docs/pull_request_template.md` and found no repo-native template. Use the built-in fallback template.
+
+# Feature-task-runtime phase briefing
+phase: pr
+
+## Run invariants (layer 1, unconditional)
+spec_reference: phase:pr
+feature_size: MEDIUM
+ceremony_scaling:
+  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  review_scope: branch_diff (branch-diff review scope)
+  audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+acceptance_criteria:
+  AC-001. The phase leaves no unresolved Blocker or Major finding.
+mandates_and_overrides:
+  (none)
+
+## Upstream projections (layer 2, declared and validated)
+### from: commit_push
+commit_sha: __NORMALIZED_SHA40__
+branch: feat/existing-runtime-branch
+base_branch: main
+pushed: true
+### run_invariant_spec_reference (run_invariant_field:spec_reference)
+spec_reference: phase:pr
+### run_invariant_feature_size (run_invariant_field:feature_size)
+feature_size: MEDIUM
+### run_invariant_ceremony_scaling (derived_ceremony_scaling)
+ceremony_scaling:
+  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  - review_scope: branch_diff (branch-diff review scope)
+  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)
+mandates_and_overrides:
+### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)
+acceptance_criteria:
+  - The phase leaves no unresolved Blocker or Major finding.
+
+## Derived context (layer 3, declared)
+- pr_branch_diff: read the branch diff yourself; it is not delivered in this briefing
+
+## Value content
+Carry, as prose, the pull request URL and the title you set. The runtime looks the pull request up for the
+branch itself before and after this step to record its number and whether this step created it.
+
+## Required final output
+End your response with exactly one JSON object as the last thing you emit. Prefer a raw
+object with nothing after it; a single ```json fenced block is also accepted. The runtime
+stamps the contract version and phase id itself. Fields:
+- "status": one of "completed", "blocked", "failed"
+- "summary": one sentence describing what this phase did
+- "value": non-blank prose carrying everything the next phase needs
+- "verdict": optional; set it only when this briefing names a verdict for this phase
+- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
+  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
+  Omit it when status is "completed".

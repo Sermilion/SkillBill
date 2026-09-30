@@ -1,7 +1,6 @@
 package skillbill.workflow.taskruntime.handoff
 
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FEATURE_TASK_RUNTIME_FORBIDDEN_PROJECTION_FIELD_NAMES
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionField
@@ -12,41 +11,15 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 internal object FeatureTaskRuntimeHandoffProjectionDeclarationChecks {
   val supportedProjectionContractVersions: Set<String> = setOf("0.1", "0.2", "0.3")
 
-  fun rejectConflictingGateReceipts(inputs: FeatureTaskRuntimeHandoffProjectionInputs) {
-    val consumer = inputs.consumerPhaseId
-    if (
-      consumer != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY &&
-      consumer != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH
-    ) {
-      return
-    }
-    val buildCompleted =
-      inputs.resolvedUpstream.outputsByPhaseId.containsKey(
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
+  fun rejectUnselectedStepOutputs(inputs: FeatureTaskRuntimeHandoffProjectionInputs) {
+    val declaration = inputs.declarations.firstOrNull() ?: return
+    inputs.unselectedStepIds.firstOrNull(inputs.resolvedUpstream.outputsByPhaseId::containsKey)?.let { stepId ->
+      rejectFeatureTaskRuntimeHandoffProjection(
+        inputs,
+        declaration,
+        FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD,
+        "the run did not select step '$stepId', so it cannot carry a settled output from '$stepId'.",
       )
-    val validateCompleted =
-      inputs.resolvedUpstream.outputsByPhaseId.containsKey(
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
-      )
-    when (inputs.qualityGateSelection) {
-      FeatureTaskRuntimeQualityGateSelection.BUILD ->
-        if (validateCompleted) {
-          rejectFeatureTaskRuntimeHandoffProjection(
-            inputs,
-            inputs.declarations.first(),
-            FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD,
-            "build-stamped child cannot carry a settled validation_receipt from validate.",
-          )
-        }
-      FeatureTaskRuntimeQualityGateSelection.VALIDATE ->
-        if (buildCompleted) {
-          rejectFeatureTaskRuntimeHandoffProjection(
-            inputs,
-            inputs.declarations.first(),
-            FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD,
-            "validate-stamped child cannot carry a settled build_receipt from build.",
-          )
-        }
     }
   }
 

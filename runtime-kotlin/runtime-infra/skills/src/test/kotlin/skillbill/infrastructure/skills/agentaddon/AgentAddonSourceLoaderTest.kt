@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.agentaddon
 
+import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.error.core.InvalidAgentAddonAgentIdError
 import skillbill.error.shellcontent.InvalidAgentAddonSchemaError
 import skillbill.error.shellcontent.MissingAgentAddonDeclarationError
@@ -237,12 +238,30 @@ class AgentAddonSourceLoaderTest {
       repo,
       "fixture",
       listOf("codex"),
-      AddonOverrides(consumers = listOf("bill-feature", "bill-feature")),
+      AddonOverrides(consumers = listOf("skill-bill", "skill-bill")),
     )
 
     val error = assertFailsWith<InvalidAgentAddonSchemaError> { discoverAgentAddons(repo) }
 
     assertTrue(error.reason.contains("consumers"), error.reason)
+  }
+
+  @Test
+  fun `legacy bill-feature consumer loads as skill-bill and emits one migration record`() {
+    val repo = Files.createTempDirectory("agent-addon-legacy-consumer")
+    writeAddon(repo, "fixture", listOf("codex"), AddonOverrides(consumers = listOf("bill-feature")))
+    val diagnostics = RecordingAgentAddonDiagnostics()
+
+    val declaration = discoverAgentAddons(repo, diagnostics = diagnostics).single()
+
+    assertEquals(listOf(AgentAddonConsumer.SKILL_BILL), declaration.consumers)
+    assertEquals(
+      listOf(
+        "skillbill agent-addon: record_kind=migration; seam=$AGENT_ADDON_DECLARED_CONSUMER_SEAM; " +
+          "value_used=skill-bill; value_expected=skill-bill; cause=legacy_consumer_bill-feature",
+      ),
+      diagnostics.migrationRecords,
+    )
   }
 
   @Test
@@ -312,6 +331,6 @@ class AgentAddonSourceLoaderTest {
     val description: String = "Fixture guidance.",
     val contractVersion: String = "1.0",
     val manifestSlug: String? = null,
-    val consumers: List<String> = listOf("bill-feature"),
+    val consumers: List<String> = listOf("skill-bill"),
   )
 }

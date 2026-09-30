@@ -1,12 +1,23 @@
 package skillbill.engine
 
 import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
+import skillbill.config.model.ExecutionMatrix
+import skillbill.config.model.ExecutionTier
+import skillbill.config.model.PhaseModelDirective
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.engine.featuretask.slot.ApprovingReviewPhaseRunner
+import skillbill.engine.featuretask.slot.PhaseRunner
+import skillbill.engine.featuretask.slot.PhaseStepInput
+import skillbill.engine.featuretask.slot.PhaseStepOutput
+import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -16,40 +27,321 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeAuditAcListRetryTest {
-  private val remainingHint = "- AC-002. Missing meaningful test coverage."
+  private val remainingHint = "- AC-002. Missing production admission before recovery."
 
   @Test
-  fun `nonempty then empty audit retries only the unresolved criteria`() {
+  fun `unfinished audit repair continues before audit runs again`() {
     var auditLaunches = 0
+    var repairLaunches = 0
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+        when (phaseId) {
+          "audit" -> {
+            auditLaunches += 1
+            if (auditLaunches ==
+              1
+            ) {
+              facts(auditRemainingAcOutput(remainingHint))
+            } else {
+              facts(auditSatisfiedOutput())
+            }
+          }
+          "audit_implement_fix" -> {
+            repairLaunches += 1
+            if (repairLaunches == 1) {
+              facts(
+                defaultPhaseOutput(request).replace(
+                  "audit_repair_complete: true",
+                  "Deliberately not claiming audit_repair_complete: true",
+                ),
+              )
+            } else {
+              facts(defaultPhaseOutput(request))
+            }
+          }
+          else -> facts(defaultPhaseOutput(request))
+        }
+      }
+    val harness =
+      runnerHarness(
+        RuntimeHarnessConfig(
+          launcher = launcher,
+          validator = realFeatureTaskRuntimePhaseOutputValidator,
+        ),
+      )
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(harness.runner.run(harness.request()))
+
+    assertEquals(2, auditLaunches)
+    assertEquals(2, repairLaunches)
+    assertEquals(
+      listOf("audit", "audit_implement_fix", "audit_implement_fix", "audit"),
+      harness.launchedPromptPhaseOrder().filter { it == "audit" || it == "audit_implement_fix" },
+    )
+    val repairPrompts =
+      harness.launcher.requests
+        .map { requireNotNull(it.skillRunRequest.promptOverride) }
+        .filter { phaseIdFromPrompt(it) == "audit_implement_fix" }
+    assertContains(repairPrompts.last(), "Deliberately not claiming")
+  }
+
+  @Test
+  fun `retryable audit repair keeps fixing without another audit or operator resume`() {
+    var auditLaunches = 0
+    var repairLaunches = 0
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
+          "audit" -> {
+            auditLaunches += 1
+            facts(if (auditLaunches == 1) auditRemainingAcOutput(remainingHint) else auditSatisfiedOutput())
+          }
+          "audit_implement_fix" -> {
+            repairLaunches += 1
+            if (repairLaunches ==
+              1
+            ) {
+              facts(terminalRepairOutput("retryable"))
+            } else {
+              facts(defaultPhaseOutput(request))
+            }
+          }
+          else -> facts(defaultPhaseOutput(request))
+        }
+      }
+    val harness =
+      runnerHarness(
+        RuntimeHarnessConfig(launcher = launcher, validator = realFeatureTaskRuntimePhaseOutputValidator),
+      )
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(harness.runner.run(harness.request()))
+
+    assertEquals(2, auditLaunches)
+    assertEquals(2, repairLaunches)
+    assertEquals(
+      listOf("audit", "audit_implement_fix", "audit_implement_fix", "audit"),
+      harness.launchedPromptPhaseOrder().filter { it == "audit" || it == "audit_implement_fix" },
+    )
+    val repairPrompts =
+      harness.launcher.requests
+        .map { requireNotNull(it.skillRunRequest.promptOverride) }
+        .filter { phaseIdFromPrompt(it) == "audit_implement_fix" }
+    assertContains(repairPrompts.last(), "Runner removal remains unfinished")
+  }
+
+  @Test
+  fun `audit repair stops for a concrete operator blocker`() {
+    var repairLaunches = 0
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
+          "audit" -> facts(auditRemainingAcOutput(remainingHint))
+          "audit_implement_fix" -> {
+            repairLaunches += 1
+            facts(
+              terminalRepairOutput(
+                "needs_user_action",
+                "Required external schema is unavailable; operator must provide it.",
+              ),
+            )
+          }
+          else -> facts(defaultPhaseOutput(request))
+        }
+      }
+    val harness =
+      runnerHarness(
+        RuntimeHarnessConfig(launcher = launcher, validator = realFeatureTaskRuntimePhaseOutputValidator),
+      )
+
+    val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
+
+    assertEquals("audit_implement_fix", report.lastIncompletePhase)
+    assertContains(report.blockedReason, "operator must provide it")
+    assertEquals(1, repairLaunches)
+    assertTrue("review" !in harness.launchOrder())
+  }
+
+  @Test
+  fun `repeated retryable audit repair failures exhaust the failure budget`() {
+    var repairLaunches = 0
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
+          "audit" -> facts(auditRemainingAcOutput(remainingHint))
+          "audit_implement_fix" -> {
+            repairLaunches += 1
+            check(repairLaunches <= 10) { "Repair retry budget did not stop the loop." }
+            facts(terminalRepairOutput("retryable"))
+          }
+          else -> facts(defaultPhaseOutput(request))
+        }
+      }
+    val harness =
+      runnerHarness(
+        RuntimeHarnessConfig(launcher = launcher, validator = realFeatureTaskRuntimePhaseOutputValidator),
+      )
+
+    val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
+
+    assertEquals("audit_implement_fix", report.lastIncompletePhase)
+    assertEquals(3, repairLaunches)
+    assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "audit" })
+    assertTrue("review" !in harness.launchOrder())
+  }
+
+  private fun terminalRepairOutput(
+    disposition: String,
+    value: String = "Runner removal remains unfinished",
+  ) = """{"contract_version":"0.7","phase_id":"audit_implement_fix","status":"blocked",""" +
+    """"summary":"$value","failure_disposition":"$disposition","produced_outputs":{"value":"$value"}}"""
+
+  @Test
+  fun `audit blocks when an unresolved repair recheck does not shrink`() {
+    var auditLaunches = 0
+    var repairLaunches = 0
+    val warnings = mutableListOf<String>()
+    val diagnostics =
+      object : RuntimeDiagnostics {
+        override fun warning(
+          message: String,
+          error: Throwable?,
+        ) {
+          warnings += message
+        }
+
+        override fun error(
+          message: String,
+          error: Throwable?,
+        ) = Unit
+      }
     val launcher =
       RuntimeRecordingLauncher { request ->
         val prompt = requireNotNull(request.skillRunRequest.promptOverride)
-        if (phaseIdFromPrompt(prompt) != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
-        auditLaunches += 1
-        if (auditLaunches == 1) {
-          CRITERIA.forEach { assertContains(prompt, it) }
-        } else {
-          val scopedCriteria =
-            prompt.substringAfter("acceptance_criteria:")
-              .substringBefore("mandates_and_overrides:")
-          assertContains(scopedCriteria, remainingHint)
-          assertFalse(scopedCriteria.contains("AC-001. First criterion."))
-        }
-        assertContains(prompt, "remaining acceptance criteria")
-        when (auditLaunches) {
-          1 -> {
-            assertFalse(prompt.contains(remainingHint))
+        when (phaseIdFromPrompt(prompt)) {
+          "audit" -> {
+            auditLaunches += 1
+            CRITERIA.forEach { assertContains(prompt, it) }
+            assertTrue(request.skillRunRequest.readOnlyPhase)
+            assertEquals("configured-reasoner", request.skillRunRequest.modelOverride)
+            assertEquals("high", request.skillRunRequest.effortOverride)
             facts(auditRemainingAcOutput(remainingHint))
           }
-          2 -> {
-            val focusSection =
-              prompt
-                .substringAfter("## Prior audit focus hint (remaining criteria only)")
-                .substringBefore("## Required final output (validated schema gate)")
-            assertEquals(remainingHint, focusSection.lineSequence().last { it.isNotBlank() }.trim())
-            facts(auditSatisfiedOutput())
+          "audit_implement_fix" -> {
+            repairLaunches += 1
+            assertContains(prompt, remainingHint)
+            assertFalse(request.skillRunRequest.readOnlyPhase)
+            assertEquals("configured-implementer", request.skillRunRequest.modelOverride)
+            assertEquals("medium", request.skillRunRequest.effortOverride)
+            facts(defaultPhaseOutput(request))
           }
-          else -> error("unexpected audit launch $auditLaunches")
+          else -> facts(defaultPhaseOutput(request))
+        }
+      }
+    val harness =
+      runnerHarness(
+        RuntimeHarnessConfig(
+          acceptanceCriteria = CRITERIA,
+          launcher = launcher,
+          validator = realFeatureTaskRuntimePhaseOutputValidator,
+          diagnostics = diagnostics,
+        ),
+      )
+    val matrix =
+      ExecutionMatrix(
+        agents =
+          mapOf(
+            SupportedAgent.CLAUDE to
+              mapOf(
+                ExecutionTier.REASONING to PhaseModelDirective("configured-reasoner", "high"),
+                ExecutionTier.IMPLEMENTATION to PhaseModelDirective("configured-implementer", "medium"),
+              ),
+          ),
+      )
+    val report =
+      harness.runner.run(
+        harness.request().copy(
+          modelAssignment = FeatureTaskRuntimeModelAssignment(matrix = matrix),
+          agentAssignment = FeatureTaskRuntimeAgentAssignment(override = "claude"),
+        ),
+      )
+    assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, report.toString())
+    assertEquals(2, auditLaunches)
+    assertEquals(1, repairLaunches)
+    assertEquals(0, warnings.count { "audit_repair" in it && "warning threshold" in it })
+    assertEquals(
+      listOf("audit", "audit_implement_fix", "audit"),
+      harness.launchedPromptPhaseOrder().filter {
+        it == "audit" || it == "audit_implement_fix"
+      },
+    )
+    assertTrue("review" !in harness.launchOrder())
+  }
+
+  @Test
+  fun `audit repair reenters when JSON aliases identify a shrinking remaining list`() {
+    var auditLaunches = 0
+    var repairLaunches = 0
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+        when (phaseId) {
+          "audit" -> {
+            auditLaunches += 1
+            when (auditLaunches) {
+              1 -> facts(auditRemainingAcOutput("AC-001 remains; AC-002 remains"))
+              2 ->
+                facts(
+                  auditRemainingAcOutput(
+                    """[{"criterion_id":"AC-002","criterion":"S3-AC6. Guard misses helper access"}]""",
+                  ),
+                )
+              else -> facts(auditSatisfiedOutput())
+            }
+          }
+          "audit_implement_fix" -> {
+            repairLaunches += 1
+            facts(defaultPhaseOutput(request))
+          }
+          else -> facts(defaultPhaseOutput(request))
+        }
+      }
+    val harness =
+      runnerHarness(
+        RuntimeHarnessConfig(
+          acceptanceCriteria = listOf("S3-AC3. First criterion.", "S3-AC6. Second criterion."),
+          launcher = launcher,
+          validator = realFeatureTaskRuntimePhaseOutputValidator,
+        ),
+      )
+
+    val report = assertIs<FeatureTaskRuntimeRunReport.Completed>(harness.runner.run(harness.request()))
+
+    assertEquals(3, auditLaunches)
+    assertEquals(2, repairLaunches)
+    assertTrue(harness.launchOrder().indexOf("review") > harness.launchOrder().lastIndexOf("audit"))
+  }
+
+  @Test
+  fun `audit blocks when the remaining criterion list grows after repair`() {
+    var auditLaunches = 0
+    var repairLaunches = 0
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
+          "audit" -> {
+            auditLaunches += 1
+            if (auditLaunches == 1) {
+              facts(auditRemainingAcOutput("AC-001 remains"))
+            } else {
+              facts(auditRemainingAcOutput("AC-001 remains; AC-002 remains"))
+            }
+          }
+          "audit_implement_fix" -> {
+            repairLaunches += 1
+            facts(defaultPhaseOutput(request))
+          }
+          else -> facts(defaultPhaseOutput(request))
         }
       }
     val harness =
@@ -60,11 +352,13 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
           validator = realFeatureTaskRuntimePhaseOutputValidator,
         ),
       )
-    val report = harness.runner.run(harness.request())
-    assertIs<FeatureTaskRuntimeRunReport.Completed>(report)
+
+    val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
+
+    assertContains(report.toString(), "did not shrink")
     assertEquals(2, auditLaunches)
-    assertTrue("implement" !in harness.launchedPromptPhaseOrder().dropWhile { it != "audit" }.drop(1))
-    assertTrue(harness.launchOrder().indexOf("review") > harness.launchOrder().lastIndexOf("audit"))
+    assertEquals(1, repairLaunches)
+    assertTrue("review" !in harness.launchOrder())
   }
 
   @Test
@@ -86,6 +380,11 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
   fun `process failure overrides an empty result and never retries or advances review`() {
     val outcomes =
       listOf(
+        "satisfied with remaining criteria" to
+          auditFacts(
+            auditRemainingAcOutput(remainingHint).trimEnd().removeSuffix("}") +
+              """, "verdict": "satisfied" }""",
+          ),
         "nonzero exit" to auditFacts(auditSatisfiedOutput(), AgentRunTermination.Exited(1)),
         "timeout" to auditFacts(auditSatisfiedOutput(), AgentRunTermination.TimedOut),
         "interruption" to auditFacts(auditSatisfiedOutput(), AgentRunTermination.Interrupted),
@@ -100,7 +399,11 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
       val launcher =
         RuntimeRecordingLauncher { request ->
           val prompt = requireNotNull(request.skillRunRequest.promptOverride)
-          if (phaseIdFromPrompt(prompt) != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
+          if (phaseIdFromPrompt(prompt) !=
+            "audit"
+          ) {
+            return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
+          }
           auditLaunches += 1
           outcome
         }
@@ -126,7 +429,11 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
     val launcher =
       RuntimeRecordingLauncher { request ->
         val prompt = requireNotNull(request.skillRunRequest.promptOverride)
-        if (phaseIdFromPrompt(prompt) != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
+        if (phaseIdFromPrompt(prompt) !=
+          "audit"
+        ) {
+          return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
+        }
         auditLaunches += 1
         when (auditLaunches) {
           1 ->
@@ -161,9 +468,19 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
       val launcher =
         RuntimeRecordingLauncher { request ->
           val prompt = requireNotNull(request.skillRunRequest.promptOverride)
-          if (phaseIdFromPrompt(prompt) != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
+          if (phaseIdFromPrompt(prompt) !=
+            "audit"
+          ) {
+            return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
+          }
           auditLaunches += 1
-          if (auditLaunches == 1) facts(auditRemainingAcOutput(remainingText)) else facts(auditSatisfiedOutput())
+          if (auditLaunches ==
+            1
+          ) {
+            facts(auditRemainingAcOutput(remainingText))
+          } else {
+            facts(auditSatisfiedOutput())
+          }
         }
       val harness =
         runnerHarness(
@@ -173,7 +490,8 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
           ),
         )
 
-      assertIs<FeatureTaskRuntimeRunReport.Completed>(harness.runner.run(harness.request()), remainingText)
+      val report = harness.runner.run(harness.request())
+      assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
       assertEquals(2, auditLaunches, remainingText)
     }
   }
@@ -185,7 +503,11 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
     val launcher =
       RuntimeRecordingLauncher { request ->
         val prompt = requireNotNull(request.skillRunRequest.promptOverride)
-        if (phaseIdFromPrompt(prompt) != "audit") return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
+        if (phaseIdFromPrompt(prompt) !=
+          "audit"
+        ) {
+          return@RuntimeRecordingLauncher facts(defaultPhaseOutput(request))
+        }
         auditPrompts += prompt
         auditLaunches += 1
         when (auditLaunches) {
@@ -205,7 +527,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
     assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
     assertIs<FeatureTaskRuntimeRunReport.Completed>(harness.runner.run(harness.request()))
     assertEquals(3, auditPrompts.size)
-    assertContains(auditPrompts[1], remainingHint)
+    assertFalse(auditPrompts[1].contains("Prior audit focus hint"))
     assertFalse(auditPrompts[2].contains("Prior audit focus hint"))
   }
 
@@ -213,17 +535,44 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
   fun `each completed audit round checkpoints before retry and review`() {
     val git = RecordingWorkflowGitOperations(currentBranchValue = "feat/existing-runtime-branch")
     var auditLaunches = 0
+    var headBeforeGap = ""
+    var repairCheckpoint = ""
+    var reviewObserved = false
+    val reviewRunner =
+      object : PhaseRunner {
+        override fun run(
+          input: PhaseStepInput,
+          state: PhaseLaunchState,
+        ): PhaseStepOutput {
+          assertTrue(repairCheckpoint.isNotBlank())
+          assertTrue(git.headCommitShaValue != repairCheckpoint, "Review must see the committed repair.")
+          reviewObserved = true
+          return ApprovingReviewPhaseRunner.run(input, state)
+        }
+      }
     val launcher =
       RuntimeRecordingLauncher { request ->
         val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-        if (phaseId == "implement" || phaseId == "audit") {
+        if (phaseId == "audit_implement_fix") {
+          assertTrue(git.headCommitShaValue.isNotBlank())
+          assertTrue(git.headCommitShaValue != headBeforeGap, "Repair must start after its checkpoint.")
+          repairCheckpoint = git.headCommitShaValue
+        }
+        if (phaseId == "implement" || phaseId == "audit_implement_fix") {
           git.worktreeStatusValue = " M src/AuditRepair.kt"
           git.ownedPathsValue = listOf("src/AuditRepair.kt")
         }
         when (phaseId) {
           "audit" -> {
             auditLaunches += 1
-            if (auditLaunches == 1) facts(auditRemainingAcOutput(remainingHint)) else facts(auditSatisfiedOutput())
+            if (auditLaunches == 1) headBeforeGap = git.headCommitShaValue
+            if (auditLaunches ==
+              1
+            ) {
+              facts(auditRemainingAcOutput(remainingHint))
+            } else {
+              facts(auditSatisfiedOutput())
+            }
           }
           else -> facts(defaultPhaseOutput(request))
         }
@@ -232,14 +581,14 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
       runnerHarness(
         RuntimeHarnessConfig(
           branchSetup = BranchSetupTestConfig(gitOperations = git),
+          reviewRunner = reviewRunner,
           launcher = launcher,
           validator = realFeatureTaskRuntimePhaseOutputValidator,
         ),
       )
 
     assertIs<FeatureTaskRuntimeRunReport.Completed>(harness.runner.run(harness.request()))
-    assertEquals(1, git.createCommitMessages.size, git.createCommitMessages.toString())
-    assertEquals(2, git.amendCommitMessages.size, git.amendCommitMessages.toString())
+    assertTrue(reviewObserved)
     assertEquals(2, auditLaunches)
     assertTrue(harness.launchOrder().indexOf("review") > harness.launchOrder().lastIndexOf("audit"))
   }
@@ -257,7 +606,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
     val launcher =
       RuntimeRecordingLauncher { request ->
         val phaseId = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
-        if (phaseId == "implement" || phaseId == "audit") {
+        if (phaseId == "implement" || phaseId == "audit_implement_fix") {
           git.worktreeStatusValue = " M src/AuditRepair.kt"
           git.ownedPathsValue = listOf("src/AuditRepair.kt")
         }

@@ -1,7 +1,7 @@
 ---
 name: bill-go-code-review
 description: Use when conducting a Go PR code review across services, CLIs, APIs, workers, tests, modules, concurrency, persistence, and Go-rendered UI surfaces.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Adaptive Go PR Review
@@ -44,7 +44,7 @@ Add other specialists only when the changed files justify them.
 - `http.Server.Shutdown`, hijacked connections, `signal.NotifyContext`, queue delivery or acknowledgement, external clients, workers, draining, retries, deadlines, observability, degradation, or backpressure -> `reliability` specialist.
 - Auth/authz, sessions, OAuth/OIDC, CSRF, secrets, unsafe parsing, symlink or archive traversal, subprocess option injection, SSRF, uploads, templates, sensitive logs -> `security` specialist.
 - Test files, table tests, fixtures, fakes, golden files, race-sensitive tests, integration boundaries, weak assertions, missing regression proof -> `testing` specialist.
-- Changed tests look suspiciously weak, tautological, or coverage-padding -> `bill-unit-test-value-check`.
+- Changed tests look suspiciously weak, tautological, or coverage-padding -> `operation:unit-test-value-check`.
 - Hot paths, allocations, reflection, goroutine leaks, unbounded buffers, N+1 queries, repeated network/filesystem work, serialization waste -> `performance` specialist.
 - `html/template`, templ components, htmx request/response headers, form rendering, Bubble Tea, terminal layout, progress, or redraw state -> `ui` specialist.
 - Labels, error association, headings, live regions, keyboard/focus flow, localization, color-independent status, or accessible terminal interaction -> `ux-accessibility` specialist.

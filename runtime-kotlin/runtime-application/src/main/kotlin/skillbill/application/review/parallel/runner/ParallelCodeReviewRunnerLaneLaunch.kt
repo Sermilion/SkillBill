@@ -4,8 +4,10 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.getOrElseUnlessCooperative
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.review.model.ParallelCodeReviewRequest
+import skillbill.application.review.model.ReviewEvidenceReadCount
 import skillbill.application.review.model.ReviewSpecialistLaunchRequest
 import skillbill.application.review.model.ReviewWorkerKind
+import skillbill.application.review.model.boundedReviewLane
 import skillbill.application.review.packet.ReviewLocatorHunkBodyExtractor
 import skillbill.application.review.parallel.verification.ParallelCodeReviewRunnerFailureAdmission
 import skillbill.application.review.parallel.verification.parallelCodeReviewCaptureLane
@@ -30,7 +32,6 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPo
 import skillbill.review.context.model.accounting.ReviewAccountingTerminalOutcome
 import skillbill.review.context.model.bundle.ReviewLaneBundle
 import skillbill.review.context.model.bundle.ReviewLaneBundleEntry
-import skillbill.review.context.model.execution.ResolvedReviewExecutionMode
 import skillbill.review.context.model.hunk.ReviewBudgetEvaluator
 import skillbill.review.context.model.hunk.ReviewContextBudgetExceededException
 import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
@@ -65,7 +66,6 @@ class ParallelCodeReviewRunnerLaneLaunch(
             budget = initial.budget,
             request = request,
             modelOverride = null,
-            resolvedMode = initial.resolvedMode,
           ),
         )
       }
@@ -84,7 +84,6 @@ class ParallelCodeReviewRunnerLaneLaunch(
           ParallelCodeReviewRunnerParentPrompt.build(
             selected,
             args.routedManifests,
-            args.resolvedMode,
             args.agentId,
           ),
         bundleState = parallelCodeReviewAggregateBundleCompletion(bundleStates),
@@ -99,7 +98,6 @@ class ParallelCodeReviewRunnerLaneLaunch(
             budget = args.budget,
             request = args.request,
             modelOverride = args.modelOverride,
-            resolvedMode = args.resolvedMode,
           ),
         )
     }
@@ -107,7 +105,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
 
   private fun launchedBoundParent(args: LaunchedBoundParentArgs): ParallelReviewLaneOutcome =
     args.bound.endpoint.use {
-      if (args.launch.agentId == "cursor" && args.resolvedMode == ResolvedReviewExecutionMode.DELEGATED) {
+      if (args.launch.agentId == "cursor") {
         reviewLaunchAgentStaging.stage(
           ReviewLaunchAgentStagingRequest(
             agentId = args.launch.agentId,
@@ -134,11 +132,8 @@ class ParallelCodeReviewRunnerLaneLaunch(
                 modelOverride = args.modelOverride,
                 reviewEvidenceBroker = args.bound.broker,
                 reviewEvidenceEndpoint = args.bound.endpoint,
-                nativeReviewWorkerName =
-                  PARALLEL_REVIEW_INLINE_NATIVE_WORKER
-                    .takeIf { args.resolvedMode == ResolvedReviewExecutionMode.INLINE },
-                reviewFanOut = args.resolvedMode == ResolvedReviewExecutionMode.DELEGATED,
-              ),
+                reviewFanOut = true,
+              ).boundedReviewLane(args.request.laneProgressIdleTimeout, args.bound.evidenceReads),
           ),
         )
       when (outcome) {
@@ -160,24 +155,29 @@ class ParallelCodeReviewRunnerLaneLaunch(
           )
         }
     return runCatching {
-      val onEvidenceRead =
-        request.activityWorkflowId?.takeIf(String::isNotBlank)?.let { workflowId ->
-          {
-            activityStampWriter.recordEvidenceRead(
-              workflowId = workflowId,
-              parentWorkflowId = request.activityParentWorkflowId,
-            )
-          }
-        }
+      val evidenceReads = ReviewEvidenceReadCount()
+      val onEvidenceRead = evidenceReadCallback(request, evidenceReads)
       ParallelCodeReviewGovernedEvidenceBind.Bound(
         broker,
         governedEvidenceEndpointBinder.bind(broker.accounting().lane, broker, onEvidenceRead),
+        evidenceReads,
       )
     }.getOrElseUnlessCooperative {
       ParallelCodeReviewGovernedEvidenceBind.Unbound(
         ReviewEvidenceBoundaryAccounting.GOVERNED_EVIDENCE_SEAM,
         ParallelCodeReviewGovernedEvidenceBindFault.ENDPOINT,
       )
+    }
+  }
+
+  internal fun evidenceReadCallback(
+    request: ParallelCodeReviewRequest,
+    evidenceReads: ReviewEvidenceReadCount,
+  ): () -> Unit {
+    val workflowId = request.activityWorkflowId?.takeIf(String::isNotBlank)
+    return {
+      evidenceReads.increment()
+      workflowId?.let { activityStampWriter.recordEvidenceRead(it, request.activityParentWorkflowId) }
     }
   }
 

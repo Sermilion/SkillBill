@@ -8,7 +8,6 @@ import skillbill.application.install.ExternalAddonOverlayService
 import skillbill.application.install.ExternalPlatformPackResolutionService
 import skillbill.application.install.InstallService
 import skillbill.application.learning.LearningService
-import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.review.service.ReviewService
 import skillbill.application.review.snapshot.ReviewSnapshotPruneService
 import skillbill.application.runtime.RuntimeSingleton
@@ -24,6 +23,7 @@ import skillbill.application.work.WorkListService
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.di.featurespec.RuntimeFeatureSpecProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskProvides
+import skillbill.di.featuretask.RuntimeFeatureTaskSlotProvides
 import skillbill.di.featuretask.RuntimeFeatureTaskValidatorProvides
 import skillbill.di.goal.RuntimeGoalPlanningProvides
 import skillbill.di.goal.RuntimeGoalPlanningSweepProvides
@@ -33,6 +33,7 @@ import skillbill.di.install.RuntimeExternalPlatformPackProvides
 import skillbill.di.install.RuntimeInstallPlanProvides
 import skillbill.di.install.RuntimeInstallTargetProvides
 import skillbill.di.install.RuntimeInstallerProvides
+import skillbill.di.operation.RuntimeOperationProvides
 import skillbill.di.review.RuntimeReviewAddonCatalogProvides
 import skillbill.di.review.RuntimeReviewEvidenceProvides
 import skillbill.di.review.RuntimeReviewLaunchProvides
@@ -44,6 +45,7 @@ import skillbill.di.workflow.RuntimeWorkflowValidatorProvides
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
+import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.goalrunner.GoalOperatorDecisionService
@@ -52,6 +54,8 @@ import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.planning.GoalPlanningLogService
 import skillbill.engine.goalrunner.preflight.GoalPreflightService
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
+import skillbill.engine.operation.core.OperationExecutor
+import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.work.IdeStatusService
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
 import skillbill.model.EnvironmentContext
@@ -96,6 +100,8 @@ abstract class RuntimeComponent(
     RuntimeReviewAddonCatalogProvides,
     RuntimeReviewEvidenceProvides,
     RuntimeFeatureTaskProvides,
+    RuntimeFeatureTaskSlotProvides,
+    RuntimeOperationProvides,
     RuntimeFeatureSpecProvides,
     RuntimeWorkflowProvides,
     RuntimeWorkflowValidatorProvides,
@@ -158,7 +164,9 @@ abstract class RuntimeComponent(
   abstract val featureTaskPhaseSettlementService: FeatureTaskPhaseSettlementService
   abstract val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService
 
-  abstract val parallelCodeReviewRunner: ParallelCodeReviewRunner
+  abstract val phaseRunEntry: PhaseRunEntry
+  abstract val operationExecutor: OperationExecutor
+  abstract val operationRegistry: OperationRegistry
   abstract val configResolutionService: ConfigResolutionService
   abstract val externalAgentAddonSourceConfigPort: ExternalAgentAddonSourceConfigPort
   abstract val installService: InstallService

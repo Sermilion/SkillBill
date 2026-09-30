@@ -20,8 +20,8 @@ data class FeatureTaskRuntimeDecomposePlanOutcome(
   init {
     require(reason.isNotBlank()) { "FeatureTaskRuntimeDecomposePlanOutcome.reason must be non-blank." }
     require(featureName.isNotBlank()) { "FeatureTaskRuntimeDecomposePlanOutcome.featureName must be non-blank." }
-    require(subtasks.size >= 2) {
-      "FeatureTaskRuntimeDecomposePlanOutcome.subtasks must contain at least two subtasks."
+    require(subtasks.isNotEmpty()) {
+      "FeatureTaskRuntimeDecomposePlanOutcome.subtasks must contain at least one subtask."
     }
     if (specSource == SpecSource.LINEAR) {
       require(subtasks.all { !it.linearIssueId.isNullOrBlank() }) {
@@ -68,7 +68,7 @@ internal fun featureTaskRuntimeDecomposePlanOutcomeOrNull(
         "feature"
       },
     parentSpecOverview = packageMap.firstString("parent_spec_overview", "overview").ifBlank { summary },
-    validationStrategy = packageMap.firstString("validation_strategy").ifBlank { "bill-code-check" },
+    validationStrategy = packageMap.firstString("validation_strategy").ifBlank { "skill-bill phase validation" },
     baseBranch = packageMap.firstString(DecompositionPlanningPayloadKeys.BASE_BRANCH).ifBlank { "main" },
     featureBranch = packageMap.firstString(DecompositionManifestPayloadKeys.FEATURE_BRANCH),
     specSource = specSource,

@@ -1,0 +1,57 @@
+{
+    "attempts": [
+        {
+            "agent_id": null,
+            "attempt": 1,
+            "duration_ms": "__NORMALIZED_DURATION__",
+            "finished_at": "__NORMALIZED_TIMESTAMP__",
+            "outcome": "succeeded",
+            "phase_id": "preplan",
+            "reason": null,
+            "rejected_output_bytes": null,
+            "rejected_output_identity": null,
+            "rule": null,
+            "started_at": "__NORMALIZED_TIMESTAMP__",
+            "subtask_id": 0,
+            "timestamps_inconsistent": false
+        },
+        {
+            "agent_id": null,
+            "attempt": 1,
+            "duration_ms": "__NORMALIZED_DURATION__",
+            "finished_at": "__NORMALIZED_TIMESTAMP__",
+            "outcome": "succeeded",
+            "phase_id": "plan:1",
+            "reason": null,
+            "rejected_output_bytes": null,
+            "rejected_output_identity": null,
+            "rule": null,
+            "started_at": "__NORMALIZED_TIMESTAMP__",
+            "subtask_id": 1,
+            "timestamps_inconsistent": false
+        },
+        {
+            "agent_id": null,
+            "attempt": 1,
+            "duration_ms": "__NORMALIZED_DURATION__",
+            "finished_at": "__NORMALIZED_TIMESTAMP__",
+            "outcome": "succeeded",
+            "phase_id": "plan:2",
+            "reason": null,
+            "rejected_output_bytes": null,
+            "rejected_output_identity": null,
+            "rule": null,
+            "started_at": "__NORMALIZED_TIMESTAMP__",
+            "subtask_id": 2,
+            "timestamps_inconsistent": false
+        }
+    ],
+    "failed_attempts": 0,
+    "first_attempt_failures": 0,
+    "issue_key": "SKILL-380",
+    "parent_workflow_id": "wfl-skill-380-parent",
+    "phases_observed": 3,
+    "succeeded_attempts": 3,
+    "total_attempts": 3,
+    "total_planning_ms": 0
+}

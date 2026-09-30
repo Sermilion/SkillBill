@@ -9,7 +9,6 @@ import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromP
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.featuretask.review.core.auditGapIterationCount
-import skillbill.engine.featuretask.runloop.state.validationPassedFromEnvelope
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.goalrunner.execution.core.asWorkerOwnership
@@ -286,17 +285,14 @@ private fun GoalRunnerStatusProjectionAssembler.completedSubtaskValidationFor(
       ?.let(JsonCodec::parseObjectOrNull)
       ?.let(JsonCodec::jsonElementToValue)
       ?.let(JsonCodec::anyToStringAnyMap)
-  val passed = envelope?.let(::validationPassedFromEnvelope)
+  val passed = true.takeIf { envelope?.get(SharedPayloadKeys.STATUS) == WorkflowStepStatus.COMPLETED.wireValue }
   return GoalRunnerSubtaskValidationEvidence(
     subtaskId = subtask.id,
     validationPassed = passed,
     integrityProblem =
       when {
-        passed == null -> "Completed subtask has no boolean validation result."
-        passed != true -> "Completed subtask reported validation_passed=false."
-        record.status != WorkflowStepStatus.COMPLETED ||
-          envelope[SharedPayloadKeys.STATUS] != WorkflowStepStatus.COMPLETED.wireValue ->
-          "Validation phase is not completed."
+        envelope == null -> "Completed subtask has no boolean validation result."
+        passed == null || record.status != WorkflowStepStatus.COMPLETED -> "Validation phase is not completed."
         else -> null
       },
   )

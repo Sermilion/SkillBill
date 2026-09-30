@@ -10,6 +10,7 @@ import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.d
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.resolveSkillClass
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.supportingFileTargets
 import skillbill.infrastructure.skills.scaffold.runtime.service.support.requiredSupportingFilesForSkill
+import skillbill.install.model.ListedSkillNames
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.isDirectory
@@ -18,9 +19,14 @@ import kotlin.io.path.name
 import kotlin.io.path.relativeTo
 
 internal val repoValidationBoundaryLedgerDir: Path = Path.of("skills", "agent")
-internal val repoValidationSkillReferencePattern = Regex("""(?<![A-Za-z0-9.-])(bill-[a-z0-9-]+)(?![A-Za-z0-9-])""")
+internal val repoValidationSkillReferencePattern =
+  Regex(
+    """(?<![A-Za-z0-9.-])(bill-[a-z0-9-]+)(?![A-Za-z0-9-])""" +
+      """|(?<![A-Za-z0-9./-])/(${ListedSkillNames.DISPATCHER})(?![A-Za-z0-9-])""",
+  )
 internal val repoValidationOrchestrationPathPattern = Regex("""orchestration/[\w/.-]+""")
-internal val repoValidationReadmeSkillRowPattern = Regex("""^\| `/(bill-[a-z0-9-]+)` \|""")
+internal val repoValidationReadmeSkillRowPattern =
+  Regex("""^\| `/(bill-[a-z0-9-]+|${ListedSkillNames.DISPATCHER})` \|""")
 internal val repoValidationOverrideSectionPattern = Regex("""^## (bill-[a-z0-9-]+)$""")
 internal val repoValidationExternalPlaybookReferencePatterns =
   listOf(
@@ -92,7 +98,10 @@ internal fun validateSkillReferences(
 
 internal fun isSkillReferenceScanTarget(relativePath: Path): Boolean {
   val parts = relativePath.map(Path::toString)
-  if (relativePath.startsWith(repoValidationBoundaryLedgerDir)) {
+  val inBoundaryLedger =
+    relativePath.parent?.fileName?.toString() == "agent" &&
+      relativePath.fileName.toString() in BOUNDARY_LEDGER_FILE_NAMES
+  if (relativePath.startsWith(repoValidationBoundaryLedgerDir) || inBoundaryLedger) {
     return false
   }
   if (NATIVE_AGENT_SOURCE_DIR in parts) {
@@ -109,7 +118,7 @@ internal fun validateSkillReferencesInFile(
 ) {
   val text = Files.readString(file)
   repoValidationSkillReferencePattern.findAll(text).forEach { match ->
-    val referenced = match.value
+    val referenced = match.groupValues[1].ifEmpty { match.groupValues[2] }
     if (referenced !in skillNames && !isDocumentedExampleReference(file, root, referenced)) {
       issues += "${file.relativeTo(root)}: references unknown skill '$referenced'"
     }
@@ -156,7 +165,7 @@ internal fun validateFeatureAddonDeclarations(
   val staticTargets = supportingFileTargets(root).keys
   val classes = if (root.resolve(SKILL_CLASSES_DIR).isDirectory()) discoverSkillClasses(root) else emptyList()
   val featureClassPointers =
-    resolveSkillClass("bill-feature", classes)
+    resolveSkillClass("skill-bill", classes)
       ?.pointers
       ?.map { pointer -> "$pointer.md" }
       .orEmpty()
@@ -185,3 +194,5 @@ internal fun validateFeatureAddonDeclarations(
       }
   }
 }
+
+private val BOUNDARY_LEDGER_FILE_NAMES = setOf("history.md", "decisions.md")

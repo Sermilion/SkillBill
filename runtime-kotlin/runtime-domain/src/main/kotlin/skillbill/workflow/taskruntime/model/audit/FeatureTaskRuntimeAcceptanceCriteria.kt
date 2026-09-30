@@ -10,3 +10,31 @@ fun canonicalAcceptanceCriterionRef(ordinal: Int): String {
 }
 
 private const val ACCEPTANCE_CRITERION_REF_DIGITS: Int = 3
+
+fun acceptanceCriterionIdentity(
+  criterion: String,
+  ordinal: Int,
+): AcceptanceCriterionIdentity? {
+  val label = ACCEPTANCE_CRITERION_LABEL.find(criterion.trim())?.value
+  val canonical =
+    if (label != null && !label.startsWith("S", ignoreCase = true)) {
+      val number = label.substringAfter("AC", "").trimStart('-').toIntOrNull() ?: return null
+      if (number !in 1..MAX_ACCEPTANCE_CRITERION_ORDINAL) return null
+      canonicalAcceptanceCriterionRef(number)
+    } else {
+      canonicalAcceptanceCriterionRef(ordinal)
+    }
+  return AcceptanceCriterionIdentity(canonical, label?.uppercase())
+}
+
+data class AcceptanceCriterionIdentity(val canonicalRef: String, val originalLabel: String?) {
+  fun identifiedText(criterion: String): String =
+    if (originalLabel != null && !originalLabel.startsWith("S")) {
+      canonicalRef + criterion.trim().substring(originalLabel.length)
+    } else {
+      "$canonicalRef. $criterion"
+    }
+}
+
+private val ACCEPTANCE_CRITERION_LABEL =
+  Regex("""^(?:S\d+-)?AC-?\d+(?=$|[.:\s/])""", RegexOption.IGNORE_CASE)

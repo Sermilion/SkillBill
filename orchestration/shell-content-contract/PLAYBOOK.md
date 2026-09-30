@@ -68,7 +68,7 @@ Optional top-level fields:
 - `display_name` — human-readable label for installers and docs.
 - `notes` — free-form maintainer notes.
 - `validation_gate` — optional command and findings declaration for a pack that
-  can win dominant quality-check routing. `bill-code-check` uses the winning
+  can win dominant quality-check routing. `skill-bill phase validation` uses the winning
   pack's collect-all and cache-bypassing collect-all argv exactly.
 
 ## Required Content Files
@@ -226,8 +226,8 @@ Loader precedence is authoritative and must stay stable:
 
 ### Quality-check gate
 
-The `bill-code-check` shell resolves the dominant pack through
-`routeQualityCheck`. The winning pack must declare `validation_gate`; otherwise
+`skill-bill phase validation` resolves the dominant pack through
+manifest-driven routing. The winning pack must declare `validation_gate`; otherwise
 the runtime raises the typed `MissingValidationGateError`. Collect-all and
 confirmation commands come only from that declaration. The shell never reads a
 quality-check sidecar, rediscovers a command, or substitutes another pack.

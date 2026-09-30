@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phase.briefing
 
-import skillbill.workflow.taskruntime.model.audit.canonicalAcceptanceCriterionRef
+import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
+import skillbill.workflow.taskruntime.model.audit.acceptanceCriterionIdentity
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseHandoff
@@ -44,9 +45,11 @@ fun StringBuilder.appendProjections(envelope: FeatureTaskRuntimeHandoffEnvelope)
 fun escapeBriefingLineBreaks(value: String): String =
   value.replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n")
 
-fun StringBuilder.appendAllowlistedRunInvariants(handoff: FeatureTaskRuntimePhaseHandoff) {
+fun StringBuilder.appendAllowlistedRunInvariants(
+  handoff: FeatureTaskRuntimePhaseHandoff,
+  allowlist: Set<FeatureTaskRuntimeRunInvariantPromptField>,
+) {
   val invariants = handoff.runInvariants
-  val allowlist = FeatureTaskRuntimeRunInvariantPromptAllowlist.forPhase(handoff.phaseId)
   appendLine("## Run invariants (layer 1, unconditional)")
   if (FeatureTaskRuntimeRunInvariantPromptField.SPEC_REFERENCE in allowlist) {
     appendLine("spec_reference: ${invariants.specReference}")
@@ -73,17 +76,15 @@ fun StringBuilder.appendAllowlistedRunInvariants(handoff: FeatureTaskRuntimePhas
   }
 }
 
-private val EXISTING_ACCEPTANCE_CRITERION_PREFIX = Regex("^AC-[0-9]+[.: ]")
-
 fun StringBuilder.appendAcceptanceCriteria(handoff: FeatureTaskRuntimePhaseHandoff) {
   appendLine("acceptance_criteria:")
   handoff.runInvariants.acceptanceCriteria.forEachIndexed { index, criterion ->
     val identified =
-      if (EXISTING_ACCEPTANCE_CRITERION_PREFIX.containsMatchIn(criterion)) {
-        criterion
-      } else {
-        "${canonicalAcceptanceCriterionRef(index + 1)}. $criterion"
-      }
+      acceptanceCriterionIdentity(criterion, index + 1)?.identifiedText(criterion)
+        ?: throw InvalidFeatureTaskRuntimePhaseHandoffSchemaError(
+          "acceptance_criteria",
+          "Invalid criterion identity at ordinal ${index + 1}.",
+        )
     appendLine("  $identified")
   }
 }
@@ -129,13 +130,14 @@ private fun derivedContextInstruction(
 fun renderFeatureTaskRuntimePhaseBriefing(
   handoff: FeatureTaskRuntimePhaseHandoff,
   envelope: FeatureTaskRuntimeHandoffEnvelope,
+  invariantFields: Set<FeatureTaskRuntimeRunInvariantPromptField>,
 ): String =
   buildString {
     appendLine("# Feature-task-runtime phase briefing")
     appendLine("phase: ${handoff.phaseId}")
     handoff.drivingVerdict?.let { verdict -> appendLine("driving_verdict: ${verdict.wireValue}") }
     appendLine()
-    appendAllowlistedRunInvariants(handoff)
+    appendAllowlistedRunInvariants(handoff, invariantFields)
     appendLine()
     appendLine("## Upstream projections (layer 2, declared and validated)")
     appendProjections(envelope)

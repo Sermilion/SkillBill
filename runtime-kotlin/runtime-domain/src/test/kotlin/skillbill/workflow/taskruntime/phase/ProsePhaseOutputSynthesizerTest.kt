@@ -1,6 +1,7 @@
 package skillbill.workflow.taskruntime.phase
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.workflow.taskruntime.model.handoff.envelope.SettlementEnvelopeRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,7 +15,7 @@ class ProsePhaseOutputSynthesizerTest {
     val raw =
       """
       {
-        "contract_version": "0.6",
+        "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
         "phase_id": "implement",
         "status": "completed",
         "summary": "Did the work.",
@@ -42,7 +43,7 @@ class ProsePhaseOutputSynthesizerTest {
     val raw =
       """
       {
-        "contract_version": "0.6",
+        "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
         "phase_id": "implement",
         "status": "completed",
         "summary": "Consolidated the run loop.",
@@ -65,7 +66,7 @@ class ProsePhaseOutputSynthesizerTest {
       Final static verification is complete.
 
       ```json
-      {"contract_version":"0.6","phase_id":"implement",
+      {"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"implement",
        "produced_outputs":{"value":"{\"summary\":\"Deleted the dead ports.\",\"tests_executed\":[]}"}}
       ```
       """.trimIndent()
@@ -82,7 +83,7 @@ class ProsePhaseOutputSynthesizerTest {
     val raw =
       """
       {
-        "contract_version": "0.6",
+        "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
         "phase_id": "simplify",
         "status": "completed",
         "summary": "Reduced local excess.",
@@ -108,36 +109,26 @@ class ProsePhaseOutputSynthesizerTest {
   }
 
   @Test
-  fun `audit with explicit empty remaining list synthesizes satisfied verdict`() {
+  fun `minimal final object for a step with no workflow recovers a stamped envelope`() {
     val raw =
       """
-      {
-        "contract_version": "0.6",
-        "phase_id": "audit",
-        "status": "completed",
-        "summary": "All good.",
-        "produced_outputs": { "value": "[]" }
-      }
+      Done with the custom step.
+
+      {"status":"blocked","summary":"Needs a credential.","value":"The deploy key is missing.",
+       "verdict":"no_progress","failure_disposition":"needs_user_action"}
       """.trimIndent()
 
-    val envelope = assertNotNull(ProsePhaseOutputSynthesizer.trySynthesize(raw, "audit"))
-    assertEquals("satisfied", envelopeMap(envelope)["verdict"])
-  }
+    val map = assertNotNull(ProsePhaseOutputSynthesizer.recoverFinalObject(raw, "some_custom_step"))
+    val produced = assertNotNull(JsonCodec.anyToStringAnyMap(map["produced_outputs"]))
 
-  @Test
-  fun `audit without recoverable verdict rejects`() {
-    val raw =
-      """
-      {
-        "contract_version": "0.6",
-        "phase_id": "audit",
-        "status": "completed",
-        "summary": "Checked criteria.",
-        "produced_outputs": { "value": "gaps remain on AC-1" }
-      }
-      """.trimIndent()
-
-    assertNull(ProsePhaseOutputSynthesizer.trySynthesize(raw, "audit"))
+    assertEquals(FEATURE_TASK_RUNTIME_CONTRACT_VERSION, map["contract_version"])
+    assertEquals("some_custom_step", map["phase_id"])
+    assertEquals("blocked", map["status"])
+    assertEquals("Needs a credential.", map["summary"])
+    assertEquals("The deploy key is missing.", produced["value"])
+    assertEquals("no_progress", map["verdict"])
+    assertEquals("needs_user_action", map["failure_disposition"])
+    assertNull(ProsePhaseOutputSynthesizer.trySynthesize(raw, "some_custom_step"))
   }
 
   @Test
@@ -145,7 +136,7 @@ class ProsePhaseOutputSynthesizerTest {
     val raw =
       """
       {
-        "contract_version": "0.6",
+        "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
         "phase_id": "plan",
         "status": "completed",
         "summary": "Empty.",
@@ -166,7 +157,7 @@ class ProsePhaseOutputSynthesizerTest {
     val raw =
       """
       {
-        "contract_version": "0.6",
+        "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
         "phase_id": "plan",
         "status": "completed",
         "summary": "Wrong slot.",
@@ -198,7 +189,7 @@ class ProsePhaseOutputSynthesizerTest {
     val raw =
       """
       {
-        "contract_version": "0.6",
+        "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
         "phase_id": "plan",
         "status": "queued",
         "summary": "Bad status.",
@@ -214,7 +205,7 @@ class ProsePhaseOutputSynthesizerTest {
     val raw =
       """
       {
-        "contract_version": "0.6",
+        "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
         "phase_id": "implement",
         "status": "complete",
         "summary": "Applied every plan task.",
@@ -250,11 +241,11 @@ class ProsePhaseOutputSynthesizerTest {
   }
 
   @Test
-  fun `audit with verdict field synthesizes`() {
+  fun `a supplied verdict is carried for a completed step`() {
     val raw =
       """
       {
-        "contract_version": "0.6",
+        "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
         "phase_id": "audit",
         "status": "completed",
         "summary": "All good.",
@@ -268,7 +259,7 @@ class ProsePhaseOutputSynthesizerTest {
   }
 
   @Test
-  fun `blocked audit external settlement omits verdict`() {
+  fun `blocked external settlement without a verdict omits it and keeps the failure disposition`() {
     val envelope =
       ProsePhaseOutputSynthesizer.envelopeFromSettlement(
         SettlementEnvelopeRequest(

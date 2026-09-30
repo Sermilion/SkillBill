@@ -1,6 +1,19 @@
 package skillbill.contracts.workflow.featuretask
 
-const val FEATURE_TASK_RUNTIME_CONTRACT_VERSION: String = "0.6"
+const val FEATURE_TASK_RUNTIME_CONTRACT_VERSION: String = "0.7"
+
+const val FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION: String = "0.6"
+
+val FEATURE_TASK_RUNTIME_READABLE_CONTRACT_VERSIONS: Set<String> =
+  setOf(
+    "0.1",
+    "0.2",
+    "0.3",
+    "0.4",
+    "0.5",
+    FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION,
+    FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+  )
 
 const val FEATURE_TASK_RUNTIME_REPAIR_RECEIPT_CONTRACT_VERSION: String = "0.3"
 

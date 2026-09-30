@@ -110,6 +110,20 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink",
         "skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport",
         "skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest",
+        "skillbill.engine.featuretask.model.core.PhaseInstructions",
+        "skillbill.engine.featuretask.model.review.ReviewInvocation",
+        "skillbill.engine.featuretask.model.review.ReviewTarget",
+        "skillbill.engine.featuretask.phaserun.PhaseRunEntry",
+        "skillbill.engine.featuretask.phaserun.PhaseRunRequest",
+        "skillbill.engine.featuretask.phaserun.PhaseRunResult",
+        "skillbill.engine.featuretask.phaserun.PhaseRunSpecBundle",
+        "skillbill.engine.operation.core.OperationArguments",
+        "skillbill.engine.operation.core.OperationOutputFormat",
+        "skillbill.engine.operation.core.OperationExecutor",
+        "skillbill.engine.operation.core.OperationOutcome",
+        "skillbill.engine.operation.core.OperationRegistry",
+        "skillbill.engine.operation.core.OperationRequest",
+        "skillbill.engine.operation.core.OperationResult",
         "skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusProjection",
         "skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest",
         "skillbill.engine.featuretask.model.core.FeatureTaskRuntimeSubtaskOutcome",
@@ -156,6 +170,7 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.work.model.IdeStatusResult",
         "skillbill.engine.work.model.IdeStatusSnapshot",
         "skillbill.engine.work.model.IdeStatusProblemCode",
+        "skillbill.engine.operation.updatecheck.updateCheckContract",
       )
   }
 }

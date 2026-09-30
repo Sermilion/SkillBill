@@ -1,7 +1,7 @@
 ---
 name: bill-php-code-review-reliability
 description: Use when reviewing PHP workers, queues, schedulers, retries, caches, timeouts, shutdown behavior, and production recovery.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # PHP Reliability Review Specialist

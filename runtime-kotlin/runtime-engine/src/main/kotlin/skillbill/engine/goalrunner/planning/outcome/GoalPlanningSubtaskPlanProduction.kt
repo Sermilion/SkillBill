@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.planning.outcome
 
 import skillbill.engine.goalrunner.execution.core.ProduceMissingPlansArgs
 import skillbill.engine.goalrunner.planning.attempt.producePhase
+import skillbill.engine.goalrunner.planning.model.GoalPlanningLaunch
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseProduction
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProduceAttemptArgs
@@ -10,7 +11,6 @@ import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
-import skillbill.engine.goalrunner.planning.sweep.produceMissingPlansLoop
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
@@ -21,25 +21,11 @@ import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 
-internal fun DefaultGoalPlanningSweep.produceMissingPlans(args: ProduceMissingPlansArgs): GoalPlanningSweepOutcome {
-  val shared = args.shared
-  val descriptors =
-    runCatching {
-      args.activeSubtasks.mapIndexed { order, subtask -> descriptor(shared, subtask, order) }
-    }.getOrElse { error ->
-      return stopped(
-        shared,
-        0,
-        "Goal planning governed subtask provenance could not be computed: ${error.message.orEmpty()}",
-      )
-    }
-  return produceMissingPlansLoop(args, descriptors)
-}
-
 internal fun DefaultGoalPlanningSweep.producePlan(
   args: ProduceMissingPlansArgs,
   subtask: DecompositionSubtask,
   descriptor: GovernedGoalSubtaskDescriptor,
+  launch: GoalPlanningLaunch,
 ): GoalPlanningSweepOutcome.Stopped? {
   val shared = args.shared
   val request = args.request
@@ -64,6 +50,7 @@ internal fun DefaultGoalPlanningSweep.producePlan(
                 subtask = subtask,
                 runInvariants = runInvariants,
                 phaseId = GoalPlanningSweepConstants.PHASE_PLAN,
+                launch = launch,
                 outputSink = request.outputSink,
               ),
             recordedOutputs =

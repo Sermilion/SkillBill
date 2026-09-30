@@ -5,6 +5,7 @@ import skillbill.infrastructure.skills.scaffold.rendering.canonicalSeverityClose
 import skillbill.infrastructure.skills.scaffold.validation.review.ReviewSkillStructureValidator
 import skillbill.infrastructure.skills.scaffold.validation.review.severityRatings
 import skillbill.infrastructure.skills.scaffold.validation.review.severityViolations
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.testing.repoRootFromTest
 import java.nio.file.Files
 import java.nio.file.Path
@@ -20,6 +21,17 @@ class ReviewSkillStructureConformanceTest {
         .flatMap(::severityViolations)
 
     assertEquals(emptyList(), violations, violations.joinToString("\n"))
+  }
+
+  @Test
+  fun `no repository content declares a retired review or check parent`() {
+    val repoRoot = repoRootFromTest()
+    val retiredParent = Regex("(?m)^internal-for:\\s*[\"']?(bill-code-review|bill-code-check)[\"']?\\s*$")
+    val offenders =
+      (allContentFiles(repoRoot.resolve("platform-packs")) + allContentFiles(repoRoot.resolve("skills")))
+        .filter { file -> retiredParent.containsMatchIn(Files.readString(file)) }
+
+    assertEquals(emptyList(), offenders, "content.md files must declare internal-for: $PACK_SIDECAR_PARENT_SKILL")
   }
 
   @Test
@@ -114,7 +126,7 @@ class ReviewSkillStructureConformanceTest {
     writeConformingFixture(pack)
     Files.writeString(
       pack.resolve("code-review/bill-fixture-code-review/content.md"),
-      fixtureBaseline.replace("internal-for: bill-code-review", "internal-for: bill-code-check"),
+      fixtureBaseline.replace("internal-for: skill-bill", "internal-for: bill-code-review"),
     )
     assertTrue(structureViolations(pack).any { it.rule == "code-review internal parent" })
 
@@ -484,7 +496,7 @@ private val fixtureBaseline =
   ---
   name: bill-fixture-code-review
   description: Fixture baseline review.
-  internal-for: bill-code-review
+  internal-for: skill-bill
   ---
 
   ## Classification Rules
@@ -511,7 +523,7 @@ private val fixtureSpecialist =
   ---
   name: bill-fixture-code-review-security
   description: Fixture security review.
-  internal-for: bill-code-review
+  internal-for: skill-bill
   ---
 
   ## Focus
@@ -545,7 +557,7 @@ private val fixtureQualityCheck =
   ---
   name: bill-fixture-code-check
   description: Fixture quality check.
-  internal-for: bill-code-check
+  internal-for: skill-bill
   ---
 
   ## Purpose
@@ -760,7 +772,7 @@ private val ownSeverityVocabularySpecialist =
   ---
   name: bill-fixture-code-review-security
   description: Fixture security review.
-  internal-for: bill-code-review
+  internal-for: skill-bill
   ---
 
   ## Focus
@@ -792,7 +804,7 @@ private val missingConsequenceSpecialist =
   ---
   name: bill-fixture-code-review-security
   description: Fixture security review.
-  internal-for: bill-code-review
+  internal-for: skill-bill
   ---
 
   ## Focus

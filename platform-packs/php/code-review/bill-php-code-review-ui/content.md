@@ -1,7 +1,7 @@
 ---
 name: bill-php-code-review-ui
 description: Use when reviewing PHP-owned templates, forms, server-driven components, and server/client state handoff.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # PHP UI Review Specialist

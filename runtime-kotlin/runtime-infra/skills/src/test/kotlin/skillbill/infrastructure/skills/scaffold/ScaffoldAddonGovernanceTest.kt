@@ -249,7 +249,7 @@ private fun seedQualityCheckOnlyRepo(): Path {
     ---
     name: bill-qualityonly-code-review
     description: Quality Only review.
-    internal-for: bill-code-review
+    internal-for: skill-bill
     ---
     # Baseline
 
@@ -262,7 +262,7 @@ private fun seedQualityCheckOnlyRepo(): Path {
     ---
     name: bill-qualityonly-code-review-architecture
     description: Quality Only architecture review.
-    internal-for: bill-code-review
+    internal-for: skill-bill
     ---
     # Architecture
 

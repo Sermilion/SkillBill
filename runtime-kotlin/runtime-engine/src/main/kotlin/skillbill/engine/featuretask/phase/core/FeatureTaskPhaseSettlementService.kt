@@ -13,12 +13,9 @@ import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
 import skillbill.workflow.taskruntime.artifact.decodeValidationEvidenceFromArtifact
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
-import skillbill.workflow.taskruntime.feature.FeatureTaskRuntimeAuditRemainingAcInterpretation
-import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeAuditRemainingAcResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.envelope.SettlementEnvelopeRequest
 import skillbill.workflow.taskruntime.phase.ProsePhaseOutputSynthesizer
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 
 @Inject
@@ -27,24 +24,7 @@ class FeatureTaskPhaseSettlementService(
   private val clock: Clock,
 ) {
   fun complete(request: FeatureTaskPhaseSettlementCompleteRequest): FeatureTaskPhaseSettlementAcknowledgment {
-    require(ProsePhaseOutputSynthesizer.isProsePhase(request.phaseId)) {
-      "phase_id must be a prose phase (preplan|plan|implement|simplify|audit)."
-    }
-    val verdict =
-      when (request.phaseId) {
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT ->
-          request.verdict?.takeIf { it == "satisfied" }
-            ?: when (FeatureTaskRuntimeAuditRemainingAcInterpretation.interpret(request.value)) {
-              FeatureTaskRuntimeAuditRemainingAcResult.EmptyRemainingList -> "satisfied"
-              else -> null
-            }.let { resolved ->
-              requireNotNull(resolved) {
-                "feature_task_phase_complete requires an explicit empty remaining-criteria list " +
-                  "or verdict=satisfied when phase_id=audit."
-              }
-            }
-        else -> request.verdict
-      }
+    require(ProsePhaseOutputSynthesizer.isProsePhase(request.phaseId)) { PROSE_PHASE_REQUIREMENT }
     val envelope =
       ProsePhaseOutputSynthesizer.envelopeFromSettlement(
         SettlementEnvelopeRequest(
@@ -53,7 +33,7 @@ class FeatureTaskPhaseSettlementService(
           value = request.value,
           summary = request.summary?.takeIf { it.any { ch -> !ch.isWhitespace() } } ?: truncateSummary(request.value),
           prompt = request.prompt,
-          verdict = verdict,
+          verdict = request.verdict?.takeIf(String::isNotBlank),
         ),
       ).toWorkflowArtifactMap()
     return persist(
@@ -68,9 +48,7 @@ class FeatureTaskPhaseSettlementService(
   }
 
   fun block(request: FeatureTaskPhaseSettlementBlockRequest): FeatureTaskPhaseSettlementAcknowledgment {
-    require(ProsePhaseOutputSynthesizer.isProsePhase(request.phaseId)) {
-      "phase_id must be a prose phase (preplan|plan|implement|simplify|audit)."
-    }
+    require(ProsePhaseOutputSynthesizer.isProsePhase(request.phaseId)) { PROSE_PHASE_REQUIREMENT }
     require(request.failureDisposition.any { !it.isWhitespace() }) {
       "feature_task_phase_block requires a non-blank failure_disposition."
     }
@@ -81,6 +59,7 @@ class FeatureTaskPhaseSettlementService(
           status = "blocked",
           value = request.reason,
           summary = truncateSummary(request.reason),
+          verdict = request.verdict?.takeIf(String::isNotBlank),
           failureDisposition = request.failureDisposition,
         ),
       ).toWorkflowArtifactMap()
@@ -169,6 +148,9 @@ class FeatureTaskPhaseSettlementService(
   companion object {
     val KIND_COMPLETE: FeatureTaskPhaseSettlementKind = FeatureTaskPhaseSettlementKind.Complete
     val KIND_BLOCK: FeatureTaskPhaseSettlementKind = FeatureTaskPhaseSettlementKind.Block
+    private const val PROSE_PHASE_REQUIREMENT: String =
+      "phase_id must be a step that settles with the uniform output " +
+        "(preplan|plan|implement|simplify|audit|validate|write_history|pr)."
     private const val SUMMARY_MAX_CHARS: Int = 240
     private const val SUMMARY_ELLIPSIS_PREFIX: Int = 237
   }

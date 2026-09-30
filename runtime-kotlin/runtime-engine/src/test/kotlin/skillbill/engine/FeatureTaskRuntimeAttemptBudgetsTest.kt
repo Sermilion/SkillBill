@@ -1,6 +1,8 @@
 package skillbill.engine
 
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
+import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -16,17 +18,11 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
   }
 
   @Test
-  fun `the same remaining-criteria list as the prior audit session is a stall not another retry`() {
-    val reason = FeatureTaskRuntimeAttemptBudgets.auditRemainingUnchangedBlockReason()
-    assertContains(reason, "same remaining-criteria")
-    assertContains(reason, "no progress")
-  }
-
-  @Test
   fun `a phase that keeps dying before its output gate blocks on its own budget, not a repair loop`() {
     val below =
       FeatureTaskRuntimeAttemptBudgets.processFailureBlockReason(
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
+        RELAUNCHING_POLICY,
         processFailureCount = FeatureTaskRuntimeAttemptBudgets.MAX_PROCESS_FAILURE_ATTEMPTS - 1,
         lastFailureReason = "agent exited with non-zero status 1",
       )
@@ -36,6 +32,7 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
       requireNotNull(
         FeatureTaskRuntimeAttemptBudgets.processFailureBlockReason(
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
+          RELAUNCHING_POLICY,
           processFailureCount = FeatureTaskRuntimeAttemptBudgets.MAX_PROCESS_FAILURE_ATTEMPTS,
           lastFailureReason = "agent exited with non-zero status 1",
         ),
@@ -48,24 +45,18 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
   }
 
   @Test
-  fun `validate malformed envelopes retry twice then block`() {
+  fun `validate malformed output blocks after its single session`() {
     val phase = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
-    assertEquals(null, FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, 1))
-    val blocked = requireNotNull(FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, 2))
-    assertContains(blocked, "cap=2")
-    assertContains(blocked, "2 attempts")
-  }
-
-  @Test
-  fun `the same remaining check failures as the prior validate repair is a stall`() {
-    val reason = FeatureTaskRuntimeAttemptBudgets.validateRemainingUnchangedBlockReason()
-    assertContains(reason, "leftover set did not shrink")
-    assertContains(reason, "no progress")
+    val policy = productionPolicy(phase)
+    assertContains(requireNotNull(FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, policy, 1)), "cap=1")
+    assertEquals(false, policy.relaunchOnInvalidOutput)
+    assertEquals(true, policy.singleAgentSession)
   }
 
   @Test
   fun `the first schema-invalid output blocks instead of relaunching`() {
-    val reason = FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason("audit", 1)
+    val phase = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+    val reason = FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, productionPolicy(phase), 1)
     assertContains(requireNotNull(reason), "cap=1")
     assertContains(reason, "blocks rather than relaunching")
   }
@@ -141,8 +132,8 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
     val phase = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
     (0..3).forEach { priorFailures ->
       assertEquals(
-        FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, priorFailures + 1) != null,
-        FeatureTaskRuntimeAttemptBudgets.outputGateRejectionExhaustsBudget(phase, priorFailures),
+        FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, RELAUNCHING_POLICY, priorFailures + 1) != null,
+        FeatureTaskRuntimeAttemptBudgets.outputGateRejectionExhaustsBudget(phase, RELAUNCHING_POLICY, priorFailures),
         "the rejection record and the block decision must agree at $priorFailures prior failures",
       )
     }
@@ -153,9 +144,25 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
     assertTrue(
       FeatureTaskRuntimeAttemptBudgets.outputGateRejectionExhaustsBudget(
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+        RELAUNCHING_POLICY.copy(relaunchOnInvalidOutput = false, singleAgentSession = true),
         priorOutputGateFailures = 0,
       ),
       "a single-agent-session phase blocks on its first rejection, so that rejection spent the budget",
     )
+  }
+
+  private companion object {
+    val RELAUNCHING_POLICY =
+      PhaseStepPolicy(
+        mutating = false,
+        relaunchOnInvalidOutput = true,
+        singleAgentSession = false,
+        readOnlyIdle = false,
+        fileMutating = true,
+        generationScoped = false,
+      )
+
+    fun productionPolicy(stepId: String): PhaseStepPolicy =
+      statusProjectionPhaseStrategies().registry.strategies.first { stepId in it.steps }.policyFor(stepId)
   }
 }

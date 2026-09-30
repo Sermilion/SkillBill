@@ -1,7 +1,7 @@
 ---
 name: bill-ios-code-review-platform-correctness
 description: Use when reviewing Swift concurrency, state, effect, and iOS lifecycle correctness.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Platform Correctness Review Specialist

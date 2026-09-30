@@ -16,6 +16,8 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequ
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.core.ReconstructFixLoopBudgetBasesArgs
 import skillbill.engine.featuretask.runner.serializeTokenData
+import skillbill.engine.featuretask.slot.audit.AcceptanceAuditResumeRules
+import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.engine.goalrunner.status.completed
 import skillbill.engine.runnerHarness
 import skillbill.engine.satisfiedAuditLauncher
@@ -43,17 +45,19 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+private val RESUME_RULES = statusProjectionPhaseStrategies().resumeRules()
+
 class FeatureTaskRuntimeRunStateReconstructionTest {
   @Test
-  fun `resume keeps only a true validation result and invalidates successors of false or missing results`() {
+  fun `resume keeps a completed validation step and invalidates successors of a failed one`() {
     listOf(true to "completed", false to "completed", null to "completed", true to "failed")
-      .forEach { (signal, status) ->
+      .forEach { (legacySignal, status) ->
         val payload =
           validJsonOutput("validate").let { output ->
-            when (signal) {
+            when (legacySignal) {
               true -> output
               false -> output.replace("\"validation_passed\":true", "\"validation_passed\":false")
-              null -> output.replace("validation_passed", "missing_signal")
+              null -> output.replace(",\"validation_passed\":true", "")
             }
           }
         val validation =
@@ -71,8 +75,9 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
             initialRecords = mapOf("validate" to validation, "write_history" to history),
             transitions = FeatureTaskRuntimeTransitionDeclaration(listOf("validate", "write_history")),
             outputValidator = realFeatureTaskRuntimePhaseOutputValidator,
+            resumeRules = RESUME_RULES,
           )
-        val valid = signal == true && status == "completed"
+        val valid = status == "completed"
         assertEquals(valid, "validate" in state.completedPhaseIds())
         assertEquals(valid, "write_history" in state.completedPhaseIds())
         assertEquals(!valid, "validate" in state.phasesRequiringDurableGateInvalidation())
@@ -87,6 +92,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         initialRecords = emptyMap(),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
+        resumeRules = RESUME_RULES,
       )
     val output =
       FeatureTaskRuntimePhaseOutput(
@@ -110,6 +116,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         initialRecords = emptyMap(),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
+        resumeRules = RESUME_RULES,
       )
 
     state.recordPhaseTokenUsage("implement", 11, 17)
@@ -142,12 +149,14 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         initialRecords = durableRecords,
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
+        resumeRules = RESUME_RULES,
       )
     val resumed =
       FeatureTaskRuntimeRunState(
         initialRecords = durableRecords,
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
+        resumeRules = RESUME_RULES,
       )
 
     live.recordPhaseTokenUsage("review", 13, 21)
@@ -167,6 +176,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         initialRecords = emptyMap(),
         transitions = transitions,
         outputValidator = AlwaysValidValidator,
+        resumeRules = RESUME_RULES,
       )
     val output =
       FeatureTaskRuntimePhaseOutput(
@@ -207,6 +217,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
             ),
           ),
         outputValidator = AlwaysValidValidator,
+        resumeRules = RESUME_RULES,
       )
 
     assertEquals(live.completedPhaseIds(), resumed.completedPhaseIds())
@@ -259,6 +270,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         initialRecords = emptyMap(),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
+        resumeRules = RESUME_RULES,
       ).also {
         it.recordEdgeIteration(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID, 2)
         it.recordCompleted(output)
@@ -269,6 +281,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         durableInitialLedger = recorder.loadPhaseLedger(workflowId).orEmpty(),
         outputValidator = AlwaysValidValidator,
+        resumeRules = RESUME_RULES,
       )
 
     assertEquals(live.completedPhaseIds(), resumed.completedPhaseIds())
@@ -327,7 +340,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
     invalidated += FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
     val completedView = settlement.completed
     val invalidatedView = settlement.gateInvalidatedPhases
-    settlement.invalidateValidationPhase()
+    settlement.invalidateValidationPhase("validate")
 
     assertEquals(
       setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE),
@@ -355,13 +368,13 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
       )
     val normalized =
       FeatureTaskRuntimeRunStateReconstruction
-        .normalizeInitialRecordsForStatelessAudit(mapOf("audit" to raw))
+        .normalizeInitialRecordsForStatelessAudit(mapOf("audit" to raw), RESUME_RULES)
         .getValue("audit")
     assertEquals(WorkflowStepStatus.PENDING, normalized.status)
     assertNull(normalized.loopId)
     assertNull(normalized.outputArtifact)
     assertNull(normalized.blockedReason)
-    assertFalse(FeatureTaskRuntimeRunStateReconstruction.isLegacyAuditGapPersistedBlock(normalized))
+    assertFalse(AcceptanceAuditResumeRules.isLegacyAuditGapPersistedBlock(normalized))
   }
 
   @Test
@@ -373,7 +386,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
       )
     val normalized =
       FeatureTaskRuntimeRunStateReconstruction
-        .normalizeInitialRecordsForStatelessAudit(mapOf("audit" to raw))
+        .normalizeInitialRecordsForStatelessAudit(mapOf("audit" to raw), RESUME_RULES)
         .getValue("audit")
     assertEquals(WorkflowStepStatus.PENDING, normalized.status)
     assertNull(normalized.outputArtifact)
@@ -407,6 +420,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         initialRecords = harness.recorder.loadPhaseRecords(WORKFLOW_ID).orEmpty(),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         outputValidator = AlwaysValidValidator,
+        resumeRules = RESUME_RULES,
       )
     assertNull(state.persistedBlockedReason("audit"))
     assertEquals(WorkflowStepStatus.PENDING, state.recordFor("audit")?.status)
@@ -435,6 +449,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
       FeatureTaskRuntimeRunStateReconstruction.normalizeForStatelessAudit(
         mapOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to rawAudit),
         rawLedger,
+        RESUME_RULES,
       )
     assertEquals(WorkflowStepStatus.PENDING, normalized.records.getValue("audit").status)
     assertTrue(normalized.ledger.isEmpty())
@@ -471,6 +486,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
       FeatureTaskRuntimeRunStateReconstruction.normalizeLedgerForStatelessAudit(
         ledger,
         mapOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to rawAudit),
+        RESUME_RULES,
       )
     assertTrue(normalized.isEmpty())
   }
@@ -494,11 +510,13 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
           attemptCount = 1,
         ),
       )
-    val firstPass = FeatureTaskRuntimeRunStateReconstruction.normalizeForStatelessAudit(rawRecords, rawLedger)
+    val firstPass =
+      FeatureTaskRuntimeRunStateReconstruction.normalizeForStatelessAudit(rawRecords, rawLedger, RESUME_RULES)
     val secondPass =
       FeatureTaskRuntimeRunStateReconstruction.normalizeLedgerForStatelessAudit(
         rawLedger,
         firstPass.records,
+        RESUME_RULES,
       )
     assertTrue(secondPass.isEmpty())
     assertEquals(firstPass.ledger, secondPass)
@@ -556,6 +574,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
           completed = setOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT),
           gateInvalidatedPhases = emptySet(),
           nextIteration = { 1 },
+          resumeRules = RESUME_RULES,
         ),
       )
     assertEquals(mapOf(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to 2), bases)

@@ -31,7 +31,7 @@ internal fun agentAddonWizardPayload(
     put("description", promptRequired(state, inputs, "Description"))
     inputs.liveStdout("Supported agents: ${SupportedAgent.supportedIds.joinToString(", ")}\n")
     put("agent_ids", requiredCommaSeparated(state, inputs, "Agent IDs (comma-separated)"))
-    put("consumers", requiredCommaSeparated(state, inputs, "Consumers (comma-separated, supported: bill-feature)"))
+    put("consumers", requiredCommaSeparated(state, inputs, "Consumers (comma-separated, supported: skill-bill)"))
   }
 
 internal fun platformPackWizardPayload(

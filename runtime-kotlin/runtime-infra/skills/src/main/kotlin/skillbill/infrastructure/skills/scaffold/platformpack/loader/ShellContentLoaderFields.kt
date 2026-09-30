@@ -5,6 +5,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.contract.CONTENT
 import skillbill.infrastructure.skills.scaffold.validation.shape.parseSkillFrontmatter
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateAuthoredContent
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMdShape
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Files
@@ -82,11 +83,11 @@ internal fun validateGovernedSkill(
   validateSkillMdShape(skillPath, validateBodyShape = false)
   if (family == "quality-check") {
     val internalFor = parseSkillFrontmatter(text)["internal-for"]
-    if (internalFor != "bill-code-check") {
+    if (internalFor != PACK_SIDECAR_PARENT_SKILL) {
       invalidManifestSchema(
         "Platform pack '${pack.slug}': declared content file for slot '$slot' must declare " +
-          "'internal-for: bill-code-check' so stack-specific quality-check overrides install as " +
-          "sidecars of bill-code-check.",
+          "'internal-for: $PACK_SIDECAR_PARENT_SKILL' so stack-specific quality-check overrides install as " +
+          "sidecars of $PACK_SIDECAR_PARENT_SKILL.",
       )
     }
   }

@@ -3,8 +3,8 @@ package skillbill.engine.featuretask.lifecycle.core
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelReviewLaneStatus
 import skillbill.engine.envelope
-import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewCycleContext
-import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewEnvelope
+import skillbill.engine.featuretask.slot.codereview.InlineReviewCycle
+import skillbill.engine.featuretask.slot.codereview.InlineReviewEnvelope
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewStructuredFindingsParse
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
@@ -55,17 +55,17 @@ class FeatureTaskRuntimeMalformedCitationIngestionTest {
           ),
       )
     val outputText =
-      FeatureTaskRuntimeReviewEnvelope.assemble(
+      InlineReviewEnvelope.assemble(
         result = result,
         reviewRunId = "rvw-malformed-citation",
         cycle =
-          FeatureTaskRuntimeReviewCycleContext(
+          InlineReviewCycle(
             passNumber = 1,
             resolvedTier = CodeReviewExecutionMode.INLINE,
             repositoryFingerprint = "checkpoint-1",
           ),
       )
-    val envelope = FeatureTaskRuntimeReviewEnvelope.envelopeMap(outputText)
+    val envelope = InlineReviewEnvelope.envelopeMap(outputText)
     val findings = GoalSubtaskReviewStructuredFindingsParse.structuredFindings(envelope)
     assertEquals(1, findings.size)
     assertEquals(

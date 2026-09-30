@@ -8,12 +8,10 @@ import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadK
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
-import skillbill.engine.featuretask.validation.model.ValidationGateCycleRequest
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
-import skillbill.engine.featuretask.validation.model.ValidationGateProgressStore
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
@@ -22,45 +20,15 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationCommandResult
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
-import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 private const val VALIDATE_PHASE_STATUS_COMPLETED = "completed"
 
-class FeatureTaskRuntimeValidationGateProgressStore private constructor(
-  private val recorder: FeatureTaskRuntimePhaseRecorder?,
-  private val delegate: ValidationGateProgressStore?,
-) : ValidationGateProgressStore {
-  @Inject
-  constructor(recorder: FeatureTaskRuntimePhaseRecorder) : this(recorder, null)
-
-  internal constructor(delegate: ValidationGateProgressStore) : this(null, delegate)
-
-  override fun persist(
-    workflowId: String,
-    progress: FeatureTaskRuntimeValidationGateProgress,
-  ) {
-    when {
-      delegate != null -> delegate.persist(workflowId, progress)
-      recorder != null -> recorder.persistValidationGateProgress(workflowId, progress)
-      else -> error("FeatureTaskRuntimeValidationGateProgressStore has no backing store.")
-    }
-  }
-
-  override fun load(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
-    when {
-      delegate != null -> delegate.load(workflowId)
-      recorder != null -> recorder.loadValidationGateProgress(workflowId)
-      else -> error("FeatureTaskRuntimeValidationGateProgressStore has no backing store.")
-    }
-}
-
 @Inject
 class FeatureTaskRuntimeValidationGateCoordinator {
-  fun execute(cycle: ValidationGateCycleRequest): ValidationGateCycleResult =
+  fun execute(agentRepairLauncher: ValidationGateAgentRepairLauncher): ValidationGateCycleResult =
     when (
-      val result = cycle.agentRepairLauncher.launch(ValidationFindingSetProjection(emptyList()), 1, null)
+      val result = agentRepairLauncher.launch(ValidationFindingSetProjection(emptyList()), 1, null)
     ) {
       is ValidationGateAgentRepairResult.Paused ->
         ValidationGateCycleResult.Terminal(
@@ -82,6 +50,7 @@ class FeatureTaskRuntimeValidationGateCoordinator {
       "No installed platform pack declares validation_gate."
 
     fun runtimeOwnedValidationOutput(
+      phaseId: String,
       repositoryCheckpoint: String,
       measurements: List<FeatureTaskRuntimeValidationGateRunRecord>,
       requiredCommand: String,
@@ -94,11 +63,11 @@ class FeatureTaskRuntimeValidationGateCoordinator {
         }
       if (evidence.isEmpty()) {
         throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(
-          "validate",
+          phaseId,
           "runtime-owned validation evidence has no command results.",
         )
       }
-      FeatureTaskRuntimeValidationEvidence(evidence).requireSuccessfulCommand(requiredCommand, "validate")
+      FeatureTaskRuntimeValidationEvidence(evidence).requireSuccessfulCommand(requiredCommand, phaseId)
       val gateExecutionEvidence = FeatureTaskRuntimeValidationGateExecutionEvidence.fromGateMeasurements(measurements)
       val validationResult =
         linkedMapOf<String, Any?>().apply {
@@ -112,7 +81,7 @@ class FeatureTaskRuntimeValidationGateCoordinator {
         JsonCodec.mapToJsonString(
           mapOf(
             SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-            SharedPayloadKeys.PHASE_ID to FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
+            SharedPayloadKeys.PHASE_ID to phaseId,
             SharedPayloadKeys.STATUS to VALIDATE_PHASE_STATUS_COMPLETED,
             SharedPayloadKeys.SUMMARY to "Validation satisfied by runtime-owned gate execution.",
             SharedPayloadKeys.VERDICT to FeatureTaskRuntimeVerdict.SATISFIED.wireValue,
@@ -125,7 +94,7 @@ class FeatureTaskRuntimeValidationGateCoordinator {
           ),
         )
       return FeatureTaskRuntimePhaseOutput(
-        phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE,
+        phaseId = phaseId,
         iteration = 1,
         payload = payload,
       )

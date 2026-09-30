@@ -27,7 +27,7 @@ internal sealed class SharedPreplanSettlement {
     val shared: GoalPlanningSharedContext,
   ) : SharedPreplanSettlement()
 
-  class Halt(val outcome: GoalPlanningSweepOutcome) : SharedPreplanSettlement()
+  class Halt(val outcome: GoalPlanningSweepOutcome.Stopped) : SharedPreplanSettlement()
 }
 
 internal data class RefreshedSharedPreplan(
@@ -48,7 +48,7 @@ internal fun DefaultGoalPlanningSweep.settleSharedPreplan(args: SharedPreplanSet
       is GoalPlanningProvenanceRecoverability.Reuse -> {
         val settled =
           args.existingShared
-            ?: produceSharedPreplan(this, working, args.request, recoverability.provenance)
+            ?: produceSharedPreplan(this, working, args.request, recoverability.provenance, args.launch)
               .getOrElse { error ->
                 return SharedPreplanSettlement.Halt(
                   stopped(working, 0, error.message.orEmpty(), GoalPlanningSweepConstants.PHASE_PREPLAN),
@@ -66,6 +66,7 @@ internal fun DefaultGoalPlanningSweep.settleSharedPreplan(args: SharedPreplanSet
             request = args.request,
             identity = args.identity,
             refreshedThisPrepare = false,
+            launch = args.launch,
           ),
         )
       }
@@ -87,6 +88,7 @@ internal fun DefaultGoalPlanningSweep.settleStaleValidSharedPreplan(
         request = args.request,
         currentProvenance = args.currentProvenance,
         refreshedThisPrepare = alreadyRefreshed,
+        launch = args.launch,
       ),
     ).getOrElse { error ->
       return SharedPreplanSettlement.Halt(refreshHaltOutcome(working, error))
@@ -112,7 +114,7 @@ internal fun DefaultGoalPlanningSweep.settleStaleValidSharedPreplan(
 private fun DefaultGoalPlanningSweep.refreshHaltOutcome(
   working: GoalPlanningSharedContext,
   error: Throwable,
-): GoalPlanningSweepOutcome =
+): GoalPlanningSweepOutcome.Stopped =
   when (error) {
     is RefreshRefused -> stopped(working, 0, error.reason, GoalPlanningSweepConstants.PHASE_PREPLAN)
     else -> stopped(working, 0, error.message.orEmpty(), GoalPlanningSweepConstants.PHASE_PREPLAN)
@@ -121,7 +123,7 @@ private fun DefaultGoalPlanningSweep.refreshHaltOutcome(
 private sealed interface SharedPreplanAfterRefresh {
   class Ready(val checkpoint: SharedGoalPreplanCheckpoint) : SharedPreplanAfterRefresh
 
-  class Halt(val outcome: GoalPlanningSweepOutcome) : SharedPreplanAfterRefresh
+  class Halt(val outcome: GoalPlanningSweepOutcome.Stopped) : SharedPreplanAfterRefresh
 }
 
 private fun DefaultGoalPlanningSweep.loadSharedPreplanAfterRefresh(
@@ -170,6 +172,7 @@ private fun DefaultGoalPlanningSweep.reclassifyAfterStaleRefresh(
           request = args.settlement.request,
           currentProvenance = args.settlement.currentProvenance,
           refreshedThisPrepare = args.alreadyRefreshed,
+          launch = args.settlement.launch,
         ),
       ).fold(
         onSuccess = { SharedPreplanSettlement.Ready(it.provenance, it.checkpoint, working) },
@@ -226,7 +229,7 @@ internal fun DefaultGoalPlanningSweep.refreshStaleSharedPreplan(
     }
     val refreshShared = shared.copy(planningPacket = freshPlanningPacket(shared, state))
     val produced =
-      produceSharedPreplanCheckpoint(this, refreshShared, request, currentProvenance)
+      produceSharedPreplanCheckpoint(this, refreshShared, request, currentProvenance, args.launch)
         .getOrElse { throw it }
     val savedValueHash = preplanProseValueHash(existing.preplanPayload)
     val newValueHash = preplanProseValueHash(produced.preplanPayload)

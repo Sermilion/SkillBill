@@ -75,10 +75,8 @@ goalContinuationRecorder/phaseSettlementService ports those paths use.
 audit/checkpoint and accepted-output persistence tail inside
 `settleValidatedOutputAfterFingerprint`; implement-fix repair-receipt settlement
 and commit finalisation now receive their request/state/recorder/goal-recorder/
-diagnostics ports directly. Review
-narrows `prepareRuntimeOwnedReview` to explicit request/recorder/
-goalContinuationRecorder/phaseGates/clock/state parameters; driver execution
-remains on context where launch capture still needs session and phase gates.
+diagnostics ports directly. Review runs in `InlineReviewStrategy` and reaches
+durable state only through `PhaseRunState`.
 PhaseAttempts keeps `blockAndPersist` context and top-level overloads; governed
 block paths prefer the top-level `blockAndPersist(request, state, recorder,
 goalContinuationRecorder, args)` seam. `FeatureTaskRuntimeRunLoop` exposes only
@@ -107,9 +105,11 @@ inputs:
   settlement takes request/state/recorder/goal-recorder/diagnostics; the
   audit/checkpoint and accepted-output persistence tail retains
   `settlementContext`.
-- Review preparation takes request/recorder/goal-recorder/phase-gates/clock/
-  state; review driver execution and its worktree checkpoint retain context
-  for session and phase-gate ownership.
+- Review preparation and the review step live in the `code_review` slot
+  (`slot.codereview`). They reach durable run state, git operations, the
+  output validator, and the clock only through `PhaseStepState` and its
+  attempt scope. Since SKILL-380 subtask 7, no slot class takes the run-loop
+  context.
 - PhaseAttempts exposes top-level block/pause seams with request/state/
   recorder/goal-recorder/observability arguments; its context overloads remain
   only for the generic attempt-loop adjacency.
@@ -252,7 +252,7 @@ with Clean Architecture, SOLID, or YAGNI.
 
 Feature-task continuation is repository-scoped and database-authoritative. At workflow creation, an immutable identity row binds the workflow id to a normalized issue key, canonical real-path Git-root identity, repository-relative governed spec path, persisted mode, and standalone/goal-child route scope. Read-only lookup never chooses among multiple eligible rows by timestamp.
 
-The feature `spec.md` remains the governed product contract; it is not a mutable workflow ledger. A sibling `decomposition-manifest.yaml` is the sole prepared-feature authority marker and always contains one or more executable subtasks; a bare `spec.md` is preparation intake. Continuation lookup remains authoritative and precedes artifact discovery. Pre-planning, planning, phase outputs, and the phase ledger remain durable database artifacts. Initial implementation continuation is hydrated from the completed `plan`. Audit is stateless: every invocation receives the complete planned acceptance-criteria list, inspects implementation and meaningful test coverage, runs up to three repair cycles in the same agent session, re-checks the full list after each cycle, and emits only terminal completion (`satisfied`) or an ordinary blocked/failed outcome with `failure_disposition` and no verdict. Remaining-criteria text that is not an explicit empty list names each leftover criterion and why it could not be fixed; the runtime does not validate that shape. The remaining-criteria briefing is runtime-owned and identical for every dominant platform pack; packs do not author it. That text starts a fresh audit session as a focus hint; `scoped_owned_paths` is checkpoint evidence, not a write allowlist, and files audit writes are checkpointed into the next round. The same remaining list as the prior session blocks rather than looping. Audit performs no audit-specific persistence, does not route to `implement`, and does not hand findings to downstream phases. Audit launch briefings and delivered projections stay in memory. Readers ignore retired audit briefing and projection entries before decoding their contents. No audit delivery measurements or completion fingerprints are persisted. Each resumed invocation starts a fresh process-failure budget while retaining ordinary attempt attribution. Criterion rendering preserves existing identifiers and never excludes previously checked criteria. Legacy `gaps_found` records, inner gap payloads, and `audit_gap` loop markers are normalized in memory on resume and status reconstruction through `normalizeForStatelessAudit` before run-state, status, budget, and continuation derivation without writing compatibility state. Fresh databases do not create audit-generation storage. Historical databases may retain migration version 23 and its audit-generation table; stateless audit does not read or write that legacy storage. Lifecycle telemetry never reads or writes audit-gap counters. Retired `prior_gap_memory` handoff sources loud-fail at parse and envelope validation; `FeatureTaskRuntimePriorGapMemory.fromMap` and audit-gap artifact decoders stay decode-only for legacy rows with no active writers or downstream projections. Review remediation is a single bounded round: `review` runs once, `changes_requested` may launch one `implement_fix` pass (`review_fix` cap 1, then advance to `validate`), and review does not run again after that fix.
+The feature `spec.md` remains the governed product contract; it is not a mutable workflow ledger. A sibling `decomposition-manifest.yaml` is the sole prepared-feature authority marker and always contains one or more executable subtasks; a bare `spec.md` is preparation intake. Continuation lookup remains authoritative and precedes artifact discovery. Pre-planning, planning, phase outputs, and the phase ledger remain durable database artifacts. Initial implementation continuation is hydrated from the completed `plan`. Audit uses two steps in the acceptance-audit slot. The read-only `audit` step uses the configured reasoning model, inspects the production behavior of every planned acceptance criterion against current code, and reports remaining production gaps. Audit excludes all test requirements, including explicit test-only criteria and the test portions of mixed criteria, without changing the spec. A nonempty list enters the `audit_repair` loop at `audit_implement_fix`, which uses the configured implementation model and the persisted audit output plus the plan. The repair step reconciles production behavior in the current tree, excludes test requests from persisted findings, saves its output, and returns to a fresh full-list audit. Only an explicit empty list completes audit and allows review. Each step has separate attempt attribution. Repair continues incomplete output and retryable failures before another audit, carrying saved repair reports and preserving applied edits. Retryable terminal failures stop after the three-attempt retry budget, while incomplete completed output follows the existing continuation and wall-clock limits. A concrete needs_user_action or non_retryable_policy_conflict output still blocks for operator intervention. Equal or larger remaining criterion counts after repair block and retain the latest normalized audit findings. An operator-authorized audit retry may establish one fresh baseline after identity validation. The completion ledger consumes that authorization, and subsequent automatic rounds must shrink. The loop checkpoints before repair, retains interrupted repairs for resume, and warns after three repair rounds without imposing a round cap while progress continues. Audit and repair do not run builds or tests. Validation owns execution. Ordinary phase records and the phase ledger own the findings handoff and resume state; no per-criterion gap store is introduced. Historical `audit_gap` state still normalizes through the existing compatibility readers. Uniform prose steps report reconciliation in their value; the legacy top-level reconciliation gate applies only to structured mutating outputs. Review remediation is a single bounded round: `review` runs once, `changes_requested` may launch one `implement_fix` pass (`review_fix` cap 1, then advance to `validate`), and review does not run again after that fix.
 
 Decomposed goals execute discovery and preplan once at the parent, then persist a distinct immutable plan checkpoint for each ordered subtask. Normalized checkpoint tables are the continuation authority. Status reads only bounded fields: shared-preplan readiness, planned and total counts, first missing subtask, and a concise reason. Resume reuses compatible checkpoints; hard reset atomically invalidates planning and child continuation state.
 
@@ -971,6 +971,386 @@ skillbill.workflow.verify
 - `skill-bill feature-task` and `feature-task-stats` are the CLI surfaces for
   this workflow family.
 
+## Listed skill catalog
+
+- `skill-bill` is the only listed skill (SKILL-383). Its full-run form
+  launches `skill-bill goal` after one confirmation gate. `phase:<name>`
+  translates to `skill-bill phase <name>` and `operation:<name>` to
+  `skill-bill operation <name>`; the dispatcher relays one operator
+  confirmation for operations that exit `awaiting_confirmation`.
+  `skill-bill goal status` stays CLI-only.
+- The text of the retired listed skills moved verbatim into
+  `skills/skill-bill/content.md` and into directive resources under
+  `runtime-engine/src/main/resources/skillbill/engine/<owner package path>/`,
+  each loaded by its owning strategy or operation.
+- Pack specialists install as unlisted `internal-for: skill-bill` sidecars in
+  the installed `skill-bill` directory. `InstallLegacySkillNames` lists every
+  retired name, so an install over an old home removes their links and copies.
+- Wire labels keep retired names: telemetry `skill` values, the verify
+  `workflow_name` default (`bill-feature-verify`) and its migration, the
+  workflow skill label `WorkflowStateWrites` writes, and the quality-check
+  `routed_skill` (`bill-code-check`). See `agent/decisions.md`.
+
+## Runtime operations
+
+An operation (`skillbill.engine.operation`) is a runtime command outside the
+feature-task workflow family. Only `verify` opens a workflow row, in its own
+verify family. Every invocation id has the `opr-` prefix.
+
+- `Operation` runs `pre`, `run`, and `post`. Agent steps launch only through
+  `OperationStepRunner` over the generic `PhaseRunner`. The launch-port rule in
+  `FeatureTaskLaunchPortScan` covers `operation/`, so no operation reaches
+  `GoalRunnerSubtaskLauncher` directly.
+- `OperationRegistry` is the explicit list in `RuntimeOperationProvides`
+  (runtime-core). `OperationExecutor` is the inbound API. runtime-cli reaches
+  it through `RuntimeComponent.operationExecutor` for `skill-bill operation`.
+- `OperationConfirmationGate` owns the two-invocation confirmation. Proposals
+  persist through `OperationProposalRepository` (runtime-ports) in the
+  `operation_proposals` table. `SqliteOperationProposalStore` owns the
+  `anchors_json` wire keys (`OperationProposalPayloadKeys`).
+- Operations: `update-check` shares the text formatter with
+  `skill-bill update-check`. `release` tags through
+  `WorkflowGitReleaseTagOperations`.
+- Checklist operations load the text of the skills they replace from their
+  directive resources (SKILL-383). Kotlin prompt objects keep only the
+  runtime output-contract text.
+  - `unit-test-value-check` is read-only and needs no confirmation. It reviews
+    the unit tests in the current staged, unstaged, and untracked changes, or
+    in `scope:<path|sha|ref>`. With no unit test in scope it says so and
+    launches no agent.
+  - `feature-guard` and `feature-guard-cleanup` confirm in two invocations. A
+    read-only step proposes the plan. Guard proposals anchor on HEAD and the
+    current branch only. On `confirm:<token>` an editing step gets the stored
+    proposal verbatim as its prior value.
+  - After the cleanup edits, `feature-guard-cleanup` runs the in-memory
+    `validation` definition through `PhaseRunEntry`. A blocked validation
+    leaves the edits in place and reports the verdict.
+- `OperationStepRunner.runReadOnly` compares the repository fingerprint before
+  and after each read-only step. A step that changes it fails, and the gate
+  stores no proposal. Only a confirmed `execute` calls `runEditing`.
+- `ConfirmableOperation.admit` checks a confirm invocation against the stored
+  proposal before the gate consumes the token, so a bad selection leaves the
+  token valid.
+- `pr-review-fix` (`operation.prreviewfix`) reads review threads through the
+  `PullRequestReviewThreadOperations` port (runtime-ports
+  `review.pullrequest`; adapter `GhPullRequestReviewThreads` over
+  `gh api graphql`, paged, never `gh pr view --comments`). The port has no
+  resolve member. Analysis is one read-only step over a runtime-rendered
+  thread digest. It proposes a matrix whose actionable (unresolved, not
+  outdated) threads carry runtime ordinals `T1..Tn`, anchored on the PR number,
+  PR head sha, and the actionable thread-id set. `scope:analyze-only` stores
+  nothing. `confirm:<token>` with `select:` runs one editing step per selected
+  thread, then `validation`, then posts (or, with `replies:draft`, prints) the
+  replies, and commits and pushes only with `push:on`. A failed step or gate
+  stops before any reply.
+- `verify` (`operation.verify`) is the one operation with a workflow row: a
+  `SelfConfirmingOperation` on the `bill-feature-verify` family. It is
+  report-only and never edits, fixes, or posts. The first invocation opens the
+  row, extracts the criteria read-only, and parks the row at
+  `extract_criteria`. The `confirm:` token is the workflow id, so no
+  `operation_proposals` row is written, and a newer run in the same repo root
+  abandons older parked rows. Confirm runs `gather_diff` through `finish` on
+  that row. Each evaluator's prior values are only its declared launch
+  projection. The rubrics come from the `operation/verify` directive
+  resource. `mode:delegated` runs the multi-agent
+  review as the `code_review` step's `PhaseStepSession`. Confirming an
+  interrupted row resumes it at `continueWorkflow`'s step.
+
+## Phase slots and strategies
+
+The feature-task runtime runs a fixed skeleton of slots. A slot is a stage of a
+run. A strategy is one in-process way to run the steps of a slot. The graph,
+the ledger, and the durable phase ids stay the same whichever strategy runs.
+
+Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
+`PhaseStepPolicy` in `runtime-domain`):
+
+- `PhaseSlot` partitions every phase id into exactly one slot.
+- `PhaseStrategy` declares a strategy's slot, id, steps, entry step, and the
+  policy and task directive of each step. It runs a step through its own
+  `PhaseRunner`.
+- `PhaseRunner` is the one AI-facing seam. It takes a `PhaseStepInput`
+  (step name, directive, prior step values, operator instructions, launch
+  facts, policy) and returns a `PhaseStepOutput` (status, value, summary,
+  verdict, failure disposition, stdout, stderr, termination, file manifest,
+  settled envelope, typed launch failure). `DefaultPhaseRunner` is the only
+  implementation, and it is the only featuretask type that depends on
+  `GoalRunnerSubtaskLauncher`.
+- The run state sits behind three ports. `PhaseLaunchState` is what a
+  `PhaseRunner` reads and writes around one launch: the settlement target,
+  launch observation, token accounting, and the settled envelope.
+  `PhaseRunState` extends it with everything one run reads and writes: the
+  in-memory progress, the session, telemetry, the attempt loop, strategy
+  selection, and the sub-ports in `slot.state` (`PhaseRunRecords`,
+  `PhaseRunGoal`, `PhaseRunSettlements`, `PhaseRunCheckpoints`).
+  `PhaseStepState` is the per-call port `runStep` receives. It adds the
+  review members of the `code_review` strategy. The run loop's entry takes
+  (definition, `PhaseRunState`, facts). `FeatureTaskRuntimeRunRequest` is
+  only the durable entry's input. The runner builds `DurablePhaseRunState`
+  and `DurablePhaseStepState` (`runloop.durable`). They are the only
+  run-loop and slot classes that hold the durable stores, writers, and
+  checkpoint git operations.
+- Strategies are context-free. No slot class references
+  `FeatureTaskRuntimeRunLoopContext`. A strategy builds its
+  `PhaseAttemptScope` (the run request and the run state) from the
+  `PhaseRun` and `PhaseStepState` it receives. Hooks and loop rules take a
+  `PhaseAttemptEnvironment`.
+- Shared code never names a step. It asks
+  `PhaseStrategyLookup.resumeRules(facts)` for the owning strategy's
+  `PhaseResumeRules` (tracks review passes, resumes past completion,
+  persisted-block retry). It asks a status projection's `reportedGate(stepId)`
+  (`BUILD` or `VALIDATION`) which step reports a gate. It reads entry and
+  loop steps from the transition declaration. The validation and readiness
+  gates and the review-generation writes take the step id from the calling
+  strategy.
+- `ReviewTarget` is a per-call fact on `PhaseRun`: `LastCommit` (the full-run
+  default), `Uncommitted`, `Commit(revision)` (a sha, branch, or tag), or
+  `Scoped` (the base and head `skill-bill code-review` resolves). It composes
+  the opening lines of the review prompt.
+- `SkeletonDefinition` (`runtime-domain`) lists a run's slots in order.
+  `STANDALONE` has every slot; `GOAL_CHILD` omits `pull_request`.
+  `forRun(goalContinuation)` picks one. The declaration derived from a
+  definition equals the phase workflow's, and a reorder raises a typed error.
+  `REVIEW` (the `code_review` slot), `VALIDATION` (the `quality_gate` slot),
+  `PLAN` (`preplan` and `plan`), `IMPLEMENT` (the `implementation` slot) and
+  `PR` (the `pull_request` slot) are in-memory definitions (`runStateKind`
+  `IN_MEMORY`) that a phase run drives on its own. Each carries a
+  `PhaseIntakeRequirement`: `plan` needs an issue key, `implement` needs an
+  existing governed spec, and the rest take an optional intake.
+  `GOAL_PLANNING` (`preplan` and `plan`) is the goal planning sweep's
+  definition. It selects `agent-preplan` for the shared preplan and
+  `goal-plan-fan-out` for the plans. `GoalPlanFanOutStrategy` runs
+  `agent-plan` once per active subtask, in waves capped by the burst
+  schedule, over the run state's `PhaseRunFanOut`. The sweep drives it through
+  `FeatureTaskRuntimeRunLoopEntry` over an in-memory
+  `GoalPlanningPhaseRunState`, whose attempt loop keeps the planning attempt
+  gate, budget, and checkpoints, and writes no feature-task workflow row.
+  `PhaseStrategyLookup.unselectedStepIds` counts every canonical step a run
+  does not select, including steps outside a short definition, so a step
+  drops its projections from producers the definition never runs.
+- A phase run (`skillbill.engine.featuretask.phaserun`) drives one in-memory
+  definition through the same `FeatureTaskRuntimeRunLoopEntry` as a full run.
+  `PhaseRunEntry` builds `InMemoryPhaseRunState` over `InMemoryPhaseRunRecords`
+  and the in-memory goal, settlement, and checkpoint adapters. It writes no
+  workflow row, session, phase record, ledger entry, run invariant, or
+  checkpoint ref, creates or switches no branch, and skips checkpoint commits.
+  `InMemoryPhaseRunRecords` answers the resolved branch with the checkout's
+  current branch (none when detached), read once at entry. A
+  checkpoint commit or a durable definition raises a typed error. The state
+  has no settlement target, so every step settles through the minimal final
+  object its agent prints, and a phase run has no resume. `PhaseRunState` adds
+  four no-op capabilities that the in-memory state implements:
+  `recordReviewRun` (review-pass claims, plus stage telemetry unless the
+  `CodeReviewPass` already recorded it), `qualityCheckStarted` /
+  `qualityCheckFinished` (quality_check telemetry around the pack build gate,
+  with the last gate run's failure count and rule or test ids), and
+  `qualityGateAbsent`. A durable run falls back to the runtime-owned build
+  when no pack gate is declared. A phase run fails with
+  `MissingValidationGateError` instead.
+  A phase run adds no telemetry event of its own and runs through
+  `FeatureTaskRuntimeRunEventSink.NONE`. It returns an invocation id (the
+  review session id when one is given, else `phr-<uuid>`) that the CLI prints.
+  `skill-bill phase <review|validation|plan|pr> [intake] [mode:..] [target:..]` takes
+  `mode:inline|delegated|auto` (`auto` resolves inline) and
+  `target:HEAD|uncommitted|pr|staged|unstaged|<commit-sha|branch|tag>`. An omitted target reviews
+  uncommitted changes when the worktree is dirty and `HEAD` when it is clean.
+  A target that names no commit is a usage error, and a worktree status that
+  cannot be read blocks the review step. `skill-bill code-review` routes
+  through `PhaseRunEntry` too, so both modes find, verify, and fix Blocker and
+  Major findings before it reports. `PhaseInstructions` carries the operator
+  instructions a phase run adds to its step prompts.
+  `PhaseRunIntakeResolver` turns the intake into the run's issue key and run
+  invariants as the definition's intake requirement says. An optional-intake
+  run takes its issue key from the intake, else the current branch, else the
+  definition id, so a `phase pr` title names the real issue. A missing issue key
+  raises `PhaseIntakeRequiredError`. The CLI rejects an empty plan intake as a
+  usage error. `skill-bill phase plan <KEY> [description]` sets
+  `specBundleRequired`: the plan prompt asks for a decomposition package, the
+  planning stopper writes the parent spec, subtask specs and decomposition
+  manifest through `FeatureSpecPreparationWriter` (spec type from
+  `ConfigResolutionService`), and a direct plan blocks. The result carries a
+  `PhaseRunSpecBundle` whose paths the CLI prints, so `skill-bill goal` can
+  run the bundle. Implementation and simplification run inside workflows and
+  consume their plan output. `skill-bill phase pr` refuses a detached, protected, or
+  base branch with `PullRequestBranchRefusedError`, pushes the branch when it
+  has unpushed commits, and runs the pull-request readiness gate only when the
+  run's forward steps include `commit_push`.
+  The `skill-bill` dispatcher, the only listed skill, translates
+  `phase:<name>` into this subcommand.
+  `FeatureTaskPhaseRunDefinitionScan` keeps the package off named definitions,
+  and the durable-store scan covers it.
+- `PhaseStrategyRegistry` holds the registered strategies. `PhaseStrategySelection`
+  binds each definition's slots to a strategy id, either fixed or keyed by a
+  selection fact (code review mode, quality gate). `PhaseStrategySelectionFacts`
+  carries the definition and the fact values. `PhaseStrategyLookup` resolves a
+  step id to its strategy and answers the selected and unselected steps and
+  the traversal for those facts. A duplicate registration, a step outside its
+  slot, an unknown strategy, a selection naming an unregistered strategy, and
+  a definition whose slots do not match its bindings each raise a typed error.
+
+| Slot | Steps | Strategy |
+| --- | --- | --- |
+| `preplan` | preplan | `agent-preplan` |
+| `plan` | plan | `agent-plan` |
+| `implementation` | implement, simplify | `implement-then-simplify` |
+| `audit` | audit | `acceptance-audit` |
+| `code_review` | review, verify_findings, implement_fix | `inline` or `delegated` |
+| `quality_gate` | build or validate | `pack-build` or `agent-validate` |
+| `write_history` | write_history | `boundary-history` |
+| `commit_push` | commit_push | `runtime-commit` |
+| `pull_request` | pr | `pr-description` |
+
+Composition:
+
+- A full run walks the skeleton. `runPreparedPhase` looks up the strategy for
+  the ready step and calls `runStep`. It has no phase-id branch. The shared
+  pre-launch block check lives in `FeatureTaskRuntimeRunLoopPreLaunch`.
+- `InlineReviewStrategy` (`slot.codereview`, id `inline`) owns the code_review
+  slot. Its review step prepares the pass, launches one agent through its own
+  `PhaseRunner` with the same launch facts as every other step (stamp sink,
+  worktree-edit observer, model and effort override), decodes the register,
+  and settles through `PhaseRunState`. `VerifyFindingsStep` and
+  `ImplementFixStep` own their step policy and run the shared attempt path.
+  No review driver, review-specific runner, or review binding in
+  `runtime-core` remains; `CodeReviewSlotBoundaryArchitectureTest` keeps the
+  package off the launcher, recorders, `FeatureTaskRuntimeRunState`,
+  persistence writers, checkpoint git, and run-loop types other than
+  `PhaseRun` and `PhaseOutcome`.
+- Run-loop decisions a slot owns sit behind `PhaseStrategy.loopRules`
+  (`PhaseLoopRules`). The loop asks the strategy selected for a step, or for a
+  backward edge's destination. It does not name the step or the loop.
+  `InlineReviewLoopRules` owns these review rules:
+  - reopening a stale capped review before the run starts;
+  - invalidating review-generation evidence;
+  - discarding or resuming an in-flight review_fix reentry, and its expected
+    checkpoint;
+  - reconciling the reserved goal review pass;
+  - carrying a capped or skipped goal review forward without a launch;
+  - routing the REVIEW_CAP_REACHED verdict.
+  Every read and write goes through `PhaseRunState`.
+- The `quality_gate` slot has two strategies. `PackBuildStrategy`
+  (`slot.qualitygate.packbuild`) runs the runtime-owned pack build gate and
+  its triage and repair sessions. `AgentValidateStrategy`
+  (`slot.qualitygate.agentvalidate`) runs the agent validate step. A BUILD goal
+  child selects build; the final child and a standalone run select validate.
+  Traversal filters the forward path to the selected steps, handoff projection
+  omits the unselected steps' outputs, and the handoff rejects a settled output
+  from an unselected step. Nothing rewrites transitions, and no shared
+  runloop, phase, runner, review, validation, or lifecycle code imports the
+  strategy packages. The gate cycles read and write gate progress through
+  `PhaseRunRecords`.
+- Validate runs all required project checks and repairs their failures in one
+  agent session. It returns the uniform completed output only after every check
+  passes. Partial progress reports do not start another agent or enter schema
+  recovery. A concrete external blocker ends the session with its reason and
+  remaining failures retained in the phase record. Malformed output and process
+  failures block after that session. An explicit operator retry starts a new
+  validation session. Resume reads success from the step status. Historical
+  `progress` and `no_progress` verdicts remain readable terminal reports.
+- A phase run executes one slot's strategy outside the full graph. Phase runs
+  arrive in later SKILL-380 subtasks and reuse the same runner, state port, and
+  input and output shapes.
+- Operations (SKILL-382) will compose the same runner and state port, and
+  name their steps with operation-local names outside the domain graph.
+- IDE status goes through the same lookup.
+  `FeatureTaskRuntimeCurrentPhaseExecutionDeriver` asks the step's strategy for
+  its execution counter through `PhaseStrategyStatusProjection`.
+- Every strategy owns its step code in its slot package:
+
+  | Strategy | Package | Owns |
+  | --- | --- | --- |
+  | `agent-preplan` | `slot.preplan` | Preplan directive, ceremony line, prose settlement |
+  | `agent-plan` | `slot.plan` | Plan directive, goal-continuation constraint, decomposition stop |
+  | `implement-then-simplify` | `slot.implementation` | Implement and simplify directives, continuation segments, simplify scope boundary, receipt checks |
+  | `acceptance-audit` | `slot.audit` | Audit directive, remaining-criteria retry prompt and briefing rewrite, unchanged-remainder block, audit verdict rule (`AcceptanceAuditVerdictRule`) and its `gaps_found` rejection, audit-to-review checkpoint (`AcceptanceAuditLoopRules.forwardCheckpoint`) |
+  | `inline` | `slot.codereview` | Review, verify_findings, and implement_fix prompts, review envelope decoding, finding-disposition gate, review briefing field set; standalone and goal-child selection maps `inline` and `auto` here, and `RuntimeOwnedReviewMode` rejects a requested `delegated` |
+  | `delegated` | `slot.codereview` | The same `CodeReviewSlot` steps, with a review step that runs `ParallelCodeReviewRunner` lanes (bounded by `withBoundedLaneProgress`) inside its `PhaseRunner` session and edits no files; the `REVIEW` definition selects it for `delegated`, standalone and goal-child runs do not |
+  | `pack-build` | `slot.qualitygate.packbuild` | Runtime-owned build gate, triage and repair sessions |
+  | `agent-validate` | `slot.qualitygate.agentvalidate` | Agent validate step, its repair session, retryable blocked disposition |
+  | `boundary-history` | `slot.writehistory` | write_history directive, the boundary history and decision rules (the `boundary-history-directive.md` and `boundary-decisions-directive.md` resources, with runtime inputs in `BoundaryMemoryPromptRules`; the prompt invokes no skill), finalization briefing field set, changed paths and history and decision writes measured by `WriteHistoryMeasurement` under `FeatureTaskRuntimeMeasuredFactKeys`; a fact it cannot measure is recorded as unknown with a diagnostics record |
+  | `runtime-commit` | `slot.commitpush` | Commit push cycle, upstream-head fallback, finalization briefing field set |
+  | `pr-description` | `slot.pullrequest` | PR directive, the pull request description rules (the `pr-description-directive.md` resource, with the template search result in `PrDescriptionPromptRules`; the prompt invokes no skill), the repo template search (`PullRequestTemplateSearch` over the `PullRequestTemplateFiles` port: a found template keeps its headings and drops its checklist, none falls back to the coded template, several with no default block the step), PR readiness gate (`PullRequestReadinessGate`), PR identity measured before and after the step through `PullRequestIdentityLookup`, and `pr_description_generated` emitted after a completed step through the lifecycle telemetry gate |
+
+- A strategy reaches shared code through hooks, never the other way round.
+  `PhaseStrategy.stepHooks` returns the step's `PhaseStepHooks` (launch,
+  pre-launch reconcile, completed-round settlement, accepted output, blocked
+  output disposition). `PhaseStrategy.verdictRule` returns a
+  `FeatureTaskRuntimeStepVerdictRule` that `FeatureTaskRuntimeRunState` settles
+  the step's verdict by. `PhaseStrategy.briefingInvariantFields` picks the
+  run-invariant field set the step's briefing renders.
+
+- Each strategy supplies its steps' prompt sections through
+  `PhaseStrategy.promptSections` (`PhaseStepPromptSections`: task directive,
+  ceremony line, gate flags, scope boundary, step context, continuation, retry
+  shape, value guidance, output contract). The composer
+  (`FeatureTaskRuntimePhasePromptComposer`) owns the shared header,
+  discipline, retry, and settlement sections and has no phase-keyed table.
+  Goal planning composes preplan and plan prompts from the registered
+  strategies through `PhaseStrategyLookup`.
+- Every step except the three `code_review` steps settles with the minimal
+  final object: status, summary, prose value, optional verdict, and a failure
+  disposition when not completed. The runtime stamps the contract version and
+  phase id, and the durable settlement directive is added whenever the step
+  has a settlement target. `DefaultPhaseRunner` prefers the MCP-settled
+  envelope and otherwise reads the minimal final object from stdout for any
+  step name, including a step outside the domain graph. A step whose prompt
+  sections set `settles = false` (the runtime-owned build and commit_push
+  turns) does not settle with the uniform output.
+
+Dispatch and policy:
+
+- Selection is a code binding in `RuntimeFeatureTaskSlotProvides`, not
+  operator config. The provider lists every strategy explicitly and gives each
+  one its own `PhaseRunner` from an unscoped provider.
+- Step policy (mutating, relaunch on invalid output, single agent session,
+  read-only idle, file mutating, generation scoped) is declared by the
+  strategy that owns the step. No phase-id set outside the strategies decides
+  launch policy.
+
+Guard rules (`RuntimeEngineBoundaryArchitectureTest`, scanning with
+`FeatureTaskSlotBoundaryScans`; each rule reports the files it read, has no
+baseline or exemption, and has synthetic violations that call its own scan):
+
+- Step identity: no shared file decides behaviour by step identity. The rule
+  scans every feature-task package outside `slot`, with no exemption. It
+  rejects a `FeatureTaskRuntimePhaseIds` or
+  `FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_*` constant (qualified,
+  aliased, or imported), a string literal equal to a step id, element access
+  on a slot's `steps` or `stepIds`, and any use of a non-private `slot`
+  declaration whose value is a single step id. That includes an entry of a
+  non-private `slot` enum whose constructor arguments wrap a step id, however
+  it is reached (qualified, import-aliased, star-imported, or bare). Shared
+  code asks the selection for the slot or strategy that owns the step, asks
+  that strategy's resume rules or reported gate, or takes the step id as a
+  parameter, instead.
+- Launch port: only the `PhaseRunner` implementation depends on
+  `GoalRunnerSubtaskLauncher`. The rule scans the feature-task packages and
+  `goalrunner.planning`, so goal planning launches only through a
+  `PhaseRunner`. Under `goalrunner.planning` the `PhaseRunner` exemption does
+  not apply: no planning class may hold the launcher, even behind a local
+  `PhaseRunner`.
+- Dependency direction: shared feature-task packages import no strategy
+  package; strategy packages import none of the run loop's drive, launch,
+  attempt, or planning-branch objects and do not reference
+  `FeatureTaskRuntimeRunState` by name. No slot file references
+  `FeatureTaskRuntimeRunLoopContext`. Strategies take collaborators by
+  constructor.
+- Durable stores: outside `runloop.durable`, no `runloop` or `slot` file
+  imports that package or names the phase recorder, goal-continuation
+  recorder, settlement service, activity-stamp and worktree-edit writers,
+  run-invariants store, probe writers, or the checkpoint git operations.
+
+Adding a phase strategy:
+
+1. Write the strategy class in its slot package under
+   `skillbill.engine.featuretask.slot`: declare the slot, strategy id, steps,
+   entry step, per-step policy, and prompt sections, and run each step
+   through the strategy's `PhaseRunner`.
+2. Add it to the registry provider in `RuntimeFeatureTaskSlotProvides` with
+   its own `PhaseRunner`.
+3. Name it in `PhaseStrategySelection` for the definitions and selection facts
+   that pick it.
+
 ## Runtime Contract And Schema Seams
 
 - Runtime contract schemas live in `orchestration/contracts/`. The
@@ -1637,7 +2017,7 @@ or declaration to another line leaves the baselines unchanged.
 property initializers on an `@Inject` class that declares no primary
 constructor, in every declared module main source root. Production wiring must
 bind every port explicitly in `RuntimeComponent`; test-only stubs such as
-`ApprovingReviewDriverStub` are never reachable through an unbound dependency.
+`ApprovingReviewPhaseRunner` are never reachable through an unbound dependency.
 
 The scanner strips comments and string and character literals before it walks
 delimiters, so a default whose literal holds an unbalanced brace or paren does

@@ -56,7 +56,7 @@ class FeatureTaskRuntimeReviewFixBudgetTest {
     )
 
     harness.appendAuditContinuation(FeatureTaskRuntimeContinuationKind.AUDIT_AC_RETRY)
-    harness.appendAuditContinuation(FeatureTaskRuntimeContinuationKind.AUDIT_AC_RETRY)
+    harness.appendLoopEdge(FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_REPAIR_LOOP_ID, edgeIteration = 1)
 
     assertEquals(
       2,

@@ -28,6 +28,7 @@ import skillbill.application.review.verification.ReviewClaimVerificationRunner
 import skillbill.application.reviewevidence.model.DiffResolutionException
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.config.model.RepoLocalConfig
+import skillbill.error.shellcontent.InlineParallelReviewUnsupportedError
 import skillbill.error.shellcontent.MissingInstalledNativeAgentError
 import skillbill.goalrunner.terminalStatus
 import skillbill.install.model.SupportedAgent
@@ -58,7 +59,6 @@ import skillbill.ports.review.model.ReviewEvidenceBatchRequest
 import skillbill.ports.review.model.ReviewEvidenceBatchResult
 import skillbill.ports.review.model.ReviewExpansionAuthorizationRequest
 import skillbill.ports.review.model.ReviewLaneAccounting
-import skillbill.ports.review.model.ReviewLaunchAgentStagingRequest
 import skillbill.ports.review.model.ReviewToolCall
 import skillbill.ports.review.model.ReviewToolCallResult
 import skillbill.ports.review.preparation.ReviewRubricResolver
@@ -118,37 +118,6 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 class ParallelCodeReviewRunnerTest {
-  @Test
-  fun `native worker preflight failure launches no parent agent`() {
-    val tempDir = createGitRepo()
-    createStagedFile(tempDir)
-    val launcher = ParallelSubtaskLauncher()
-    val runner =
-      createRunner(
-        launcher,
-        RunnerFixtureConfig(
-          nativeAgentPreflight =
-            ReviewNativeAgentPreflightPort {
-              throw MissingInstalledNativeAgentError(
-                "bill-code-review-inline",
-                "claude",
-                "/missing",
-                "managed inventory entry is missing",
-                "skill-bill install apply",
-              )
-            },
-        ),
-      )
-
-    val error =
-      assertFailsWith<MissingInstalledNativeAgentError> {
-        runner.run(baseRequest(repoRoot = tempDir))
-      }
-
-    assertTrue(launcher.requests.isEmpty())
-    assertContains(error.message.orEmpty(), "skill-bill install apply")
-  }
-
   @Test
   fun `unsupported agent1 id throws UsageValidationException`() {
     val launcher = ParallelSubtaskLauncher()
@@ -382,7 +351,7 @@ class ParallelCodeReviewRunnerTest {
       assertContains(prompt, "verdict: approved")
       assertContains(prompt, "verdict: changes_requested")
       assertContains(prompt, "optional `[F-XXX]` register lines")
-      assertContains(prompt, "best-effort verification hints")
+      assertContains(prompt, "parsed lines are optional verification enrichment")
       assertFalse(prompt.contains("Lines that still do not parse are ignored"))
       assertFalse(prompt.contains("prose-only is invalid"))
       assertFalse(prompt.contains("admit-or-drop"))
@@ -391,144 +360,67 @@ class ParallelCodeReviewRunnerTest {
   }
 
   @Test
-  fun `inline mode bypasses delegated specialist workers`() {
-    val launcher = ParallelSubtaskLauncher()
-    val runner = runner(launcher, diffResolver = RecordingDiffResolver(default = diffFor("A.kt")))
-
-    runner.run(
-      baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = CodeReviewExecutionMode.INLINE),
-    )
-
-    assertEquals(1, launcher.requests.size)
-    launcher.requests.forEach { request ->
-      assertNotNull(request.skillRunRequest.reviewEvidenceBroker)
-      assertEquals(null, request.skillRunRequest.timeout)
-      assertContains(request.skillRunRequest.promptOverride.orEmpty(), "bill-code-review mode:inline")
-      assertContains(request.skillRunRequest.promptOverride.orEmpty(), "do not launch specialists")
-      assertContains(request.skillRunRequest.promptOverride.orEmpty(), "governed generic rubric")
-      assertContains(request.skillRunRequest.promptOverride.orEmpty(), "paths=\"A.kt\"")
-    }
-  }
-
-  @Test
-  fun `inline mode issues exactly one review prompt per lane and launches no specialist`() {
-    val launcher = ParallelSubtaskLauncher()
-    val runner = runner(launcher, diffResolver = RecordingDiffResolver(default = diffFor("A.kt")))
-
-    runner.run(
-      baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = CodeReviewExecutionMode.INLINE),
-    )
-
-    assertEquals(
-      listOf("claude"),
-      launcher.requests.map { it.invokedAgentId },
-      "Inline runs one prompt for the single parent agent.",
-    )
-    launcher.requests.forEach { request ->
-      assertEquals(
-        "bill-code-review-inline",
-        request.skillRunRequest.nativeReviewWorkerName,
-        "An inline prompt runs as the declared inline worker, never a per-area specialist.",
-      )
-      assertContains(request.skillRunRequest.promptOverride.orEmpty(), "Resolved execution mode: inline")
-      assertContains(
-        request.skillRunRequest.promptOverride.orEmpty(),
-        "Run exactly one bill-code-review mode:inline review prompt in this context.",
-      )
-    }
-  }
-
-  @Test
-  fun `an omitted mode resolves to the inline tier on both lanes`() {
-    val launcher = ParallelSubtaskLauncher()
-    val runner = runner(launcher, diffResolver = RecordingDiffResolver(default = diffFor("A.kt")))
-
-    runner.run(
-      baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = CodeReviewExecutionMode.DEFAULT),
-    )
-
-    assertEquals(1, launcher.requests.size)
-    launcher.requests.forEach { request ->
-      val prompt = request.skillRunRequest.promptOverride.orEmpty()
-      assertContains(prompt, "bill-code-review mode:inline")
-      assertContains(prompt, "do not launch specialists")
-      assertFalse(prompt.contains("Launch one specialist worker per resolved rubric"))
-    }
-  }
-
-  @Test
-  fun `the parent lane inherits the resolved mode`() {
+  fun `an inline or auto request fails with a typed error before any launch`() {
     listOf(
-      CodeReviewExecutionMode.INLINE to "inline",
-      CodeReviewExecutionMode.DELEGATED to "delegated",
-      CodeReviewExecutionMode.AUTO to "inline",
-    ).forEach { (requested, expectedWire) ->
+      CodeReviewExecutionMode.INLINE,
+      CodeReviewExecutionMode.AUTO,
+    ).forEach { mode ->
       val launcher = ParallelSubtaskLauncher()
       val runner = runner(launcher, diffResolver = RecordingDiffResolver(default = diffFor("A.kt")))
 
-      runner.run(
-        baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = requested),
-      )
+      val error =
+        assertFailsWith<InlineParallelReviewUnsupportedError> {
+          runner.run(baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = mode))
+        }
 
-      assertEquals(1, launcher.requests.size, "$requested must run a single parent agent.")
-      launcher.requests.forEach { request ->
-        assertContains(
-          request.skillRunRequest.promptOverride.orEmpty(),
-          "Resolved execution mode: $expectedWire",
-        )
-      }
+      assertEquals(mode.wireValue, error.requestedMode)
+      assertTrue(launcher.requests.isEmpty(), "$mode must not launch a parent agent.")
     }
   }
 
   @Test
-  fun `delegated parent launches request a fan-out surface and inline launches do not`() {
-    listOf(
-      CodeReviewExecutionMode.DELEGATED to true,
-      CodeReviewExecutionMode.INLINE to false,
-    ).forEach { (mode, expectedFanOut) ->
-      val launcher = ParallelSubtaskLauncher()
-      val runner = runner(launcher, diffResolver = RecordingDiffResolver(default = diffFor("A.kt")))
+  fun `the delegated parent lane requests a fan-out surface`() {
+    val launcher = ParallelSubtaskLauncher()
+    val runner = runner(launcher, diffResolver = RecordingDiffResolver(default = diffFor("A.kt")))
 
-      runner.run(baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = mode))
+    runner.run(baseRequest(scope = ParallelReviewScope.STAGED))
 
-      launcher.requests.forEach { request ->
-        assertEquals(expectedFanOut, request.skillRunRequest.reviewFanOut, "$mode fan-out flag")
-      }
-    }
+    assertEquals(1, launcher.requests.size)
+    val request = launcher.requests.single()
+    assertTrue(request.skillRunRequest.reviewFanOut)
+    assertEquals(null, request.skillRunRequest.nativeReviewWorkerName)
+    assertContains(request.skillRunRequest.promptOverride.orEmpty(), "Resolved execution mode: delegated")
   }
 
   @Test
-  fun `inline mode accounting carries the parent prompt and stdout as one specialist-free turn`() {
+  fun `parent lane accounting carries the parent prompt and stdout as one turn`() {
     val launcher =
       GoalRunnerSubtaskLauncher { request ->
         simulateGovernedEvidenceReads(request.skillRunRequest)
         agentRunLaunchFacts(
           agent = SupportedAgent.fromNormalizedId(request.invokedAgentId, label = "agentId"),
-          stdout = "- [F-001] Major | High | path=\"A.kt\" | line=1 | Inline finding",
+          stdout = "- [F-001] Major | High | path=\"A.kt\" | line=1 | Parent finding",
           stderr = "",
         )
       }
     val runner = runner(launcher, diffResolver = RecordingDiffResolver(default = diffFor("A.kt")))
 
-    val result =
-      runner.run(
-        baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = CodeReviewExecutionMode.INLINE),
-      )
+    val result = runner.run(baseRequest(scope = ParallelReviewScope.STAGED))
 
     assertTrue(result.lane1.success)
     val accounting = assertNotNull(result.lane1.accounting)
     assertEquals("completed", accounting.terminalStatus)
-    assertEquals(1, accounting.modelTurns, "An inline lane is exactly one parent turn, never a specialist child.")
-    assertTrue(accounting.authorizedReadCount > 0, "The inline parent must read its assigned evidence.")
+    assertEquals(1, accounting.modelTurns, "The parent lane is exactly one parent turn.")
+    assertTrue(accounting.authorizedReadCount > 0, "The parent must read its assigned evidence.")
     assertTrue(accounting.launchBytes > 0, "The rendered parent prompt must be measured as launch bytes.")
     assertEquals(
-      "- [F-001] Major | High | path=\"A.kt\" | line=1 | Inline finding".toByteArray().size.toLong(),
+      "- [F-001] Major | High | path=\"A.kt\" | line=1 | Parent finding".toByteArray().size.toLong(),
       accounting.resultBytes,
     )
   }
 
   @Test
-  fun `inline mode accounting reports unsupported_provider without a session turn`() {
+  fun `parent lane accounting reports unsupported_provider without a session turn`() {
     val launcher =
       GoalRunnerSubtaskLauncher { request ->
         UnsupportedAgentRunLaunch(
@@ -538,10 +430,7 @@ class ParallelCodeReviewRunnerTest {
       }
     val runner = runner(launcher, diffResolver = RecordingDiffResolver(default = diffFor("A.kt")))
 
-    val result =
-      runner.run(
-        baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = CodeReviewExecutionMode.INLINE),
-      )
+    val result = runner.run(baseRequest(scope = ParallelReviewScope.STAGED))
 
     assertFalse(result.lane1.success)
     assertContains(result.lane1.failureReason.orEmpty(), "unsupported agent")
@@ -730,55 +619,6 @@ class ParallelCodeReviewCursorDelegatedLaunchTest {
   }
 
   @Test
-  fun `cursor inline parent does not fan out specialists or stage unused lane agents`() {
-    val endpointRoot = Files.createTempDirectory("cursor-inline-endpoint")
-    val stagedRequests = mutableListOf<ReviewLaunchAgentStagingRequest>()
-    val launcher = ParallelSubtaskLauncher()
-    val runner =
-      createRunner(
-        launcher,
-        RunnerFixtureConfig(
-          evidenceEndpointRoot = endpointRoot,
-          catalogGateway = stubCatalogGateway(listOf(platformManifest("kotlin", listOf("*.kt")))),
-          diffResolver = RecordingDiffResolver(default = diffFor("src/FooTest.kt")),
-          rubricResolver =
-            ReviewRubricResolver {
-              ResolvedReviewRubric(
-                "bill-kotlin-code-review",
-                "parent routing rubric",
-                specialists =
-                  listOf(
-                    ResolvedReviewRubric(
-                      "bill-kotlin-code-review-architecture",
-                      "architecture specialist rubric",
-                      area = "architecture",
-                    ),
-                    ResolvedReviewRubric(
-                      "bill-kotlin-code-review-testing",
-                      "testing specialist rubric",
-                      area = "testing",
-                    ),
-                  ),
-              )
-            },
-          reviewLaunchAgentStaging = ReviewLaunchAgentStagingPort { stagedRequests += it },
-        ),
-      )
-
-    runner.run(
-      baseRequest(agent1Id = "cursor", scope = ParallelReviewScope.STAGED)
-        .copy(codeReviewMode = CodeReviewExecutionMode.INLINE),
-    )
-
-    val request = launcher.requests.single()
-    assertEquals("bill-code-review-inline", request.skillRunRequest.nativeReviewWorkerName)
-    assertFalse(request.skillRunRequest.reviewFanOut)
-    val prompt = request.skillRunRequest.promptOverride.orEmpty()
-    assertFalse(Regex("/bill-kotlin-code-review-").containsMatchIn(prompt))
-    assertTrue(stagedRequests.isEmpty(), "inline review must not call reviewLaunchAgentStaging.stage")
-  }
-
-  @Test
   fun `cursor delegated missing selected specialist fails before parent launch`() {
     val launcher = ParallelSubtaskLauncher()
     val runner =
@@ -810,9 +650,9 @@ class ParallelCodeReviewCursorDelegatedLaunchTest {
   }
 }
 
-class ParallelCodeReviewInlineFindingTest {
+class ParallelCodeReviewParentFindingTest {
   @Test
-  fun `inline review keeps a rubric-tagged finding on a path owned by another selected specialist`() {
+  fun `parent review keeps a rubric-tagged finding on a path owned by another selected specialist`() {
     val persistencePath =
       "application/src/test/kotlin/dev/skillbill/application/slot/InMemoryPersistencePorts.kt"
     val finding =
@@ -829,7 +669,7 @@ class ParallelCodeReviewInlineFindingTest {
   }
 
   @Test
-  fun `inline review assigns an unknown specialist tag to a path-owning lane and still reports the finding`() {
+  fun `parent review assigns an unknown specialist tag to a path-owning lane and still reports the finding`() {
     val finding =
       "[F-001] Major | High | specialist=bill-kotlin-code-review-unknown | " +
         "path=\"src/FooTest.kt\" | line=12 | test dispatcher never advances"
@@ -845,7 +685,7 @@ class ParallelCodeReviewInlineFindingTest {
   }
 
   @Test
-  fun `inline review keeps an unowned path finding on the default lane without failing the run`() {
+  fun `parent review keeps an unowned path finding on the default lane without failing the run`() {
     val finding =
       "[F-001] Major | High | specialist=bill-kotlin-code-review-unknown | " +
         "path=\"docs/OUTSIDE.md\" | line=3 | cited a file the packet does not own"
@@ -895,7 +735,7 @@ class ParallelCodeReviewSuppliedDiffTest {
   }
 
   @Test
-  fun `supplied exact diff bypasses branch-scope resolution for the inline parent lane`() {
+  fun `supplied exact diff bypasses branch-scope resolution for the parent lane`() {
     val resolver = RecordingDiffResolver(default = "unexpected branch diff")
     val launcher = ParallelSubtaskLauncher()
     val runner =
@@ -912,7 +752,7 @@ class ParallelCodeReviewSuppliedDiffTest {
     assertEquals(1, launcher.requests.size)
     launcher.requests.forEach { request ->
       val prompt = request.skillRunRequest.promptOverride.orEmpty()
-      assertContains(prompt, "Resolved execution mode: inline")
+      assertContains(prompt, "Resolved execution mode: delegated")
       assertContains(prompt, "Owned paths: \"Child.kt\"")
       assertContains(prompt, "## Assigned bundle:")
       assertContains(prompt, "\"Child.kt\"")
@@ -922,7 +762,6 @@ class ParallelCodeReviewSuppliedDiffTest {
       assertContains(prompt, "evidence_locator:")
       assertContains(prompt, "they are not read_evidence arguments and passing one is refused")
       assertFalse(prompt.contains("unexpected branch diff"), "the supplied diff must replace branch resolution")
-      assertEquals("bill-code-review-inline", request.skillRunRequest.nativeReviewWorkerName)
     }
   }
 
@@ -1041,7 +880,6 @@ class ParallelCodeReviewSuppliedDiffTest {
     ).run(
       harnessRequest(
         reviewRunId = "runner-addons-stage",
-        codeReviewMode = CodeReviewExecutionMode.INLINE,
       ).copy(
         suppliedDiff = diffForPaths("src/Main.kt"),
         selectedAgentAddonsSection = formatted,
@@ -1748,7 +1586,7 @@ internal fun baseRequest(
   scope = scope,
   repoRoot = repoRoot,
   timeout = timeout,
-  codeReviewMode = CodeReviewExecutionMode.INLINE,
+  codeReviewMode = CodeReviewExecutionMode.DELEGATED,
   reviewRunId = "runner-test-${runnerRequestSequence.incrementAndGet()}",
   baseRevision = "base-revision",
   headRevision = "head-revision",

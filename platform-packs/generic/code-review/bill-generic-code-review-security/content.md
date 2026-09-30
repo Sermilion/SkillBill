@@ -1,7 +1,7 @@
 ---
 name: bill-generic-code-review-security
 description: Technology-neutral security review for trust boundaries, authorization, secrets, input, and side effects.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Generic Security Review

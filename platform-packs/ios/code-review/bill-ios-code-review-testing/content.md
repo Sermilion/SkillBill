@@ -1,7 +1,7 @@
 ---
 name: bill-ios-code-review-testing
 description: Use when reviewing iOS XCTest, Swift Testing, UI, snapshot, persistence, and relaunch evidence.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Testing Review Specialist

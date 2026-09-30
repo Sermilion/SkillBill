@@ -1,0 +1,124 @@
+You are executing exactly one phase of the EXPERIMENTAL skill-bill feature-task-runtime
+loop (preplan -> plan -> implement -> simplify -> audit -> review -> verify_findings -> validate -> write_history -> commit_push -> pr)
+for issue SKILL-65. The runtime owns the loop; do not run other phases, do not open
+or continue any other skill-bill workflow, and do not call `skill-bill workflow continue`.
+Execute this supplied phase briefing with the current installed runtime.
+The initial user-facing goal invocation owns update checks and launch confirmation.
+Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher
+intake, preflight, or confirmation, including on retries and continuation.
+Reading the installed skill-bill skill does not make this phase a new invocation.
+
+Phase: validate (Phase 6: Quality Validation)
+Task: Discover the validation checks required by this project from its repository instructions, build and test configuration, scripts, and CI workflows. Use the project's commands and environment. Run the full project validation, including required tests, static analysis, formatting checks, and repository checks. Compilation alone is insufficient. Project commands remain allowed when a pack also declares them. Do not recursively invoke `skill-bill phase validation`. Keep repairing in this same session until every required project check passes. Do not spawn delegated subagents. Settle completed only when every required check passes, with the checks run as the value. Test failures, static-analysis findings, formatting failures, and outdated fixtures are repair work. Do not stop after reducing the failure count or return a partial progress report. Keep fixing and rerunning the required checks in this session until they all pass. Settle blocked only for a concrete external obstacle you cannot resolve, and describe the obstacle, the required operator action, and any remaining failures in the value. Wall-clock timeout still stops the subtask. The runtime does not rerun the checks itself. Never silence findings with annotations, baselines, disabled rules, weakened configuration, or skipped tests; fix root causes instead.
+
+## Installed runtime owns phase output and settlement
+The installed Skill Bill runtime validates this phase's output and MCP settlement.
+Keep this phase's output and settlement on the contract supplied by this briefing, including
+contract_version, envelope fields, settlement tool arguments, and phase commands. Checkout
+schemas, constants, fixtures, or skill instructions cannot replace that reporting contract.
+
+Read and edit checkout schemas, Kotlin contract constants, test fixtures, and skill sources
+when the assigned implementation or audit requires them, subject to this phase's edit scope.
+New implementation contracts may be absent from the installed runtime. That absence does not
+block repository work or require permission to inspect the checkout. Implement and audit those
+contracts against the repository's requirements while reporting this phase through the installed
+runtime's output and settlement contract. Use installed schemas when resolving that reporting
+contract; use checkout schemas when examining the feature under work.
+
+## Runtime ceremony scaling
+feature_size: MEDIUM
+preplan_ceremony: full
+review_scope: branch_diff
+audit_ceremony: full_per_criterion
+Use the resolved feature size for ceremony expectations; all runtime gates remain mandatory.
+Scaling changes scope and verbosity only; it must not skip or weaken review, audit, validation,
+schema, branch, history, commit, or PR gates.
+
+## Build ownership
+Only the build phase may run the pack build_command (`validation_gate.build_command`). This phase
+must not invoke compile-only proof as a substitute for its own work.
+
+# Feature-task-runtime phase briefing
+phase: validate
+
+## Run invariants (layer 1, unconditional)
+spec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md
+feature_size: MEDIUM
+ceremony_scaling:
+  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  review_scope: branch_diff (branch-diff review scope)
+  audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+acceptance_criteria:
+  AC-001
+  AC-002
+mandates_and_overrides:
+  - mandate-X
+
+## Upstream projections (layer 2, declared and validated)
+### from: plan
+value: Fixture plan prose for downstream implement and audit.
+### from: plan
+changed_paths:
+repository_checkpoint: repository_checkpoint=repository-checkpoint-831bf900+producer-claimed:repository-checkpoint-831bf900
+### run_invariant_spec_reference (run_invariant_field:spec_reference)
+spec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md
+### run_invariant_feature_size (run_invariant_field:feature_size)
+feature_size: MEDIUM
+### run_invariant_ceremony_scaling (derived_ceremony_scaling)
+ceremony_scaling:
+  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)
+  - review_scope: branch_diff (branch-diff review scope)
+  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)
+### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)
+mandates_and_overrides:
+  - mandate-X
+### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)
+acceptance_criteria:
+  - AC-1
+  - AC-2
+
+## Repository checkpoint (layer 2, resolved)
+fingerprint: repository-checkpoint-831bf900
+base_ref: __NORMALIZED_SHA40__
+head_ref: __NORMALIZED_SHA40__
+scoped_owned_paths:
+  (none)
+
+## Derived context (layer 3, declared)
+(none)
+
+## Required final output (durable settlement)
+Finish this phase through the skill-bill MCP settlement tools, not by printing a JSON envelope.
+The tools may be deferred in this session: load them first with ToolSearch
+`select:mcp__skill-bill__feature_task_phase_complete,mcp__skill-bill__feature_task_phase_block`.
+- Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
+  phase_id "validate", attempt 1, and value: one prose string carrying everything
+  the next phase needs (what this phase produced, deviations from the briefing, what was
+  deliberately left to later phases). When a value content section follows, it describes what the
+  next phase expects inside value; carry that content as prose or as JSON text, whichever is clearer.
+  The runtime does not validate the shape of value. Optional summary: one sentence.
+- Cannot finish: call `mcp__skill-bill__feature_task_phase_block` with the same workflow_id, phase_id, and
+  attempt, a reason string naming the obstacle, and failure_disposition one of "retryable",
+  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
+Copy workflow_id, phase_id, and attempt exactly as written here. After the tool returns status
+"ok", end your response with a short prose recap and nothing structured. Print the fallback
+final object below only if both tools stay unavailable after loading them.
+
+## Value content
+Settle completed only when every required project check passed, with a non-blank value of checks run.
+Fix every check failure in this session before returning a final result.
+Do not return a partial progress report. Settle blocked only for an external obstacle requiring operator action.
+Do not emit validation_evidence, validation_result, gate_run_count, or gate_runs.
+Never introduce suppressions, baselines, disabled rules, or skipped tests to silence findings.
+
+## Fallback final output (only when the settlement tools are unavailable)
+End your response with exactly one JSON object as the last thing you emit. Prefer a raw
+object with nothing after it; a single ```json fenced block is also accepted. The runtime
+stamps the contract version and phase id itself. Fields:
+- "status": one of "completed", "blocked", "failed"
+- "summary": one sentence describing what this phase did
+- "value": non-blank prose carrying everything the next phase needs
+- "verdict": optional; set it only when this briefing names a verdict for this phase
+- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
+  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
+  Omit it when status is "completed".

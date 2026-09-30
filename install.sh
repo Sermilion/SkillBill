@@ -2184,7 +2184,7 @@ run_full_install() {
     info "Telemetry uses the default Skill Bill relay automatically. Override it with SKILL_BILL_TELEMETRY_PROXY_URL or ~/.skill-bill/config.json."
   fi
   info "Run './install.sh' again to reinstall with different agent, platform, telemetry, or MCP choices."
-  info "Next step:       open your agent and run /bill-feature or /bill-code-review"
+  info "Next step:       open your agent and run /skill-bill"
   echo ""
 }
 

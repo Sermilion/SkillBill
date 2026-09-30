@@ -71,12 +71,14 @@ internal object FeatureTaskRuntimePhaseOutputEnvelopeWalker {
     recoverSummary: Boolean,
   ): WalkedEnvelope? {
     val summarySource = if (recoverSummary) text.substring(0, span.first) else null
-    shapedEnvelope(text.substring(span), span, spliceOffset = null, phaseId, summarySource)?.let {
-      return it
-    }
-    if (!StructuralRepairSyntax.looksLikeObjectFieldContinuation(text, span.last + 1)) return null
-    val repaired = text.removeRange(span.last, span.last + 1).substring(span.first)
-    return shapedEnvelope(repaired, span, spliceOffset = span.last, phaseId, summarySource)
+    val spliced =
+      if (StructuralRepairSyntax.looksLikeObjectFieldContinuation(text, span.last + 1)) {
+        val repaired = text.removeRange(span.last, span.last + 1).substring(span.first)
+        shapedEnvelope(repaired, span, spliceOffset = span.last, phaseId, summarySource)
+      } else {
+        null
+      }
+    return spliced ?: shapedEnvelope(text.substring(span), span, spliceOffset = null, phaseId, summarySource)
   }
 
   private fun shapedEnvelope(
@@ -87,7 +89,7 @@ internal object FeatureTaskRuntimePhaseOutputEnvelopeWalker {
     summarySource: String?,
   ): WalkedEnvelope? {
     val parsed = parseObject(slice) ?: return null
-    val (alignedShape, shapeChanged) = PhaseOutputExpectedShape.align(parsed, phaseId)
+    val (alignedShape, shapeChanged) = PhaseOutputExpectedShape.align(parsed)
     val (aligned, summaryRecovered) =
       summarySource
         ?.let { PhaseOutputExpectedShape.withRecoveredSummary(alignedShape, phaseId, it) }
@@ -187,22 +189,19 @@ internal object PhaseOutputExpectedShape {
   ): Boolean {
     if (!node.isObject) return false
     if (node.path(SharedPayloadKeys.PHASE_ID).asText("") != phaseId) return false
-    return requiredFields(phaseId).all { field -> node.hasNonNull(field) }
+    return REQUIRED_FIELDS.all { field -> node.hasNonNull(field) }
   }
 
-  fun requiredFields(phaseId: String): List<String> =
-    buildList {
-      addAll(
-        listOf(
-          SharedPayloadKeys.CONTRACT_VERSION,
-          SharedPayloadKeys.PHASE_ID,
-          SharedPayloadKeys.STATUS,
-          SharedPayloadKeys.SUMMARY,
-          SharedPayloadKeys.PRODUCED_OUTPUTS,
-        ),
-      )
-      if (phaseId == "audit") add(SharedPayloadKeys.VERDICT)
-    }
+  val REQUIRED_FIELDS: List<String> =
+    listOf(
+      SharedPayloadKeys.CONTRACT_VERSION,
+      SharedPayloadKeys.PHASE_ID,
+      SharedPayloadKeys.STATUS,
+      SharedPayloadKeys.SUMMARY,
+      SharedPayloadKeys.PRODUCED_OUTPUTS,
+    )
+
+  private val HOISTABLE_FIELDS: List<String> = REQUIRED_FIELDS + SharedPayloadKeys.VERDICT
 
   val ENVELOPE_ROOT_FIELDS: Set<String> =
     setOf(
@@ -216,14 +215,11 @@ internal object PhaseOutputExpectedShape {
       SharedPayloadKeys.VERDICT,
     )
 
-  fun align(
-    node: JsonNode,
-    phaseId: String,
-  ): Pair<JsonNode, Boolean> {
+  fun align(node: JsonNode): Pair<JsonNode, Boolean> {
     val root = (node as? ObjectNode)?.deepCopy() ?: return node to false
     val produced = root.get(SharedPayloadKeys.PRODUCED_OUTPUTS) as? ObjectNode ?: return node to false
     var changed = false
-    requiredFields(phaseId).forEach { field ->
+    HOISTABLE_FIELDS.forEach { field ->
       if (!root.hasNonNull(field) && produced.hasNonNull(field)) {
         root.set<JsonNode>(field, produced.get(field))
         produced.remove(field)
@@ -295,7 +291,7 @@ internal object PhaseOutputExpectedShape {
   ): Boolean =
     root.path(SharedPayloadKeys.PHASE_ID).asText("") == phaseId &&
       !root.hasNonNull(SUMMARY_FIELD) &&
-      requiredFields(phaseId).none { field -> field != SUMMARY_FIELD && !root.hasNonNull(field) }
+      REQUIRED_FIELDS.none { field -> field != SUMMARY_FIELD && !root.hasNonNull(field) }
 
   private fun absentSummaryMarker(phaseId: String): String =
     "Phase '$phaseId' reported no summary; its produced_outputs carries the phase's output."
@@ -319,7 +315,7 @@ internal object PhaseOutputExpectedShape {
     originalText: String,
   ): FeatureTaskRuntimePhaseOutputStructuralRepairDecision {
     val accepted = decision as? FeatureTaskRuntimePhaseOutputStructuralRepairDecision.Accepted ?: return decision
-    val (alignedShape, shapeChanged) = align(accepted.node, phaseId)
+    val (alignedShape, shapeChanged) = align(accepted.node)
 
     val (aligned, summaryRecovered) = withRecoveredSummary(alignedShape, phaseId, precedingText = "")
     val changed = shapeChanged || summaryRecovered

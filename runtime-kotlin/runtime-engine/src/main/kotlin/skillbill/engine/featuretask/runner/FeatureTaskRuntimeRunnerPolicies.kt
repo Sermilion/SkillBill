@@ -3,12 +3,14 @@ package skillbill.engine.featuretask.runner
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
+import skillbill.workflow.taskruntime.phase.ProsePhaseOutputSynthesizer
+import skillbill.workflow.taskruntime.phase.task.declaration
 
 const val STATUS_RUNNING = "running"
 const val STATUS_COMPLETED = "completed"
@@ -20,12 +22,6 @@ const val STATUS_ABANDONED = "abandoned"
 const val BRANCH_SETUP_AGENT_ID = "branch-setup"
 const val SCHEMA_GATE_DETAIL_MAX_CHARS = 500
 
-val NON_FILE_MUTATING_PHASES =
-  setOf(
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
-    FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
-  )
-
 fun serializeTokenData(accumulator: Map<String, Pair<Int, Int>>): Pair<String?, Int?> {
   if (accumulator.isEmpty()) return null to null
   val breakdown =
@@ -36,47 +32,21 @@ fun serializeTokenData(accumulator: Map<String, Pair<Int, Int>>): Pair<String?, 
   return JsonCodec.mapToJsonString(breakdown) to total
 }
 
-fun isFileMutating(phaseId: String): Boolean = phaseId !in NON_FILE_MUTATING_PHASES
+fun skeletonDefinitionFor(request: FeatureTaskRuntimeRunFacts): SkeletonDefinition =
+  request.skeletonDefinition ?: SkeletonDefinition.forRun(isGoalContinuationRun(request))
 
-fun transitionsFor(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimeTransitionDeclaration =
-  request.transitionsOverride ?: phasesFor(request).let { phases ->
-    FeatureTaskRuntimeTransitionDeclaration(
-      forwardPhaseIds = phases,
-      backwardEdges =
-        FeatureTaskRuntimePhaseWorkflowDefinition.transitions.backwardEdges
-          .filter { it.fromPhaseId in phases && it.destinationPhaseId in phases },
-      loopOnlyPhaseIds =
-        FeatureTaskRuntimePhaseWorkflowDefinition.transitions.loopOnlyPhaseIds
-          .filter { it in phases }.toSet(),
-      entryGates =
-        FeatureTaskRuntimePhaseWorkflowDefinition.transitions.entryGates
-          .filter { it.phaseId in phases && it.requiredPhaseId in phases },
-      loopOnlySuccessors =
-        FeatureTaskRuntimePhaseWorkflowDefinition.transitions.loopOnlySuccessors
-          .filterKeys { it in phases }
-          .filterValues { it in phases },
-    )
-  }
-
-fun phasesFor(request: FeatureTaskRuntimeRunRequest): List<String> {
-  val phases = FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds
-  return if (isGoalContinuationRun(request)) {
-    phases.takeWhile { it != FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PR }
-  } else {
-    phases
-  }
-}
+fun transitionsFor(request: FeatureTaskRuntimeRunFacts): FeatureTaskRuntimeTransitionDeclaration =
+  request.transitionsOverride ?: skeletonDefinitionFor(request).declaration()
 
 internal fun mutatingReconciliationGateReason(
   phaseId: String,
+  mutating: Boolean,
   outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
 ): String? {
-  if (phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT ||
-    phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY
-  ) {
+  if (ProsePhaseOutputSynthesizer.isProsePhase(phaseId)) {
     return null
   }
-  if (!FeatureTaskRuntimePhaseWorkflowDefinition.isMutatingPhase(phaseId)) return null
+  if (!mutating) return null
 
   if ((outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() != WorkflowStepStatus.COMPLETED) return null
   val producedOutputs = outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS] as? Map<*, *>

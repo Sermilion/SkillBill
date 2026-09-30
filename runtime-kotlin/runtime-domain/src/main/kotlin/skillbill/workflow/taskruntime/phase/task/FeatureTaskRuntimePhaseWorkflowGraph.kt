@@ -58,7 +58,8 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN to "Phase 2: Plan",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to "Phase 3: Implement",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to "Phase 3b: Simplify",
-          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to "Phase 4: Completeness Audit",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to "Phase 4a: Completeness Audit",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to "Phase 4b: Implement Fix",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW to "Phase 5: Code Review",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS to "Phase 5a: Verify Findings",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX to "Phase 5b: Implement Fix",
@@ -78,6 +79,11 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to
             listOf(
               FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
+            ),
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to
+            listOf(
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
             ),
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to
             listOf(
@@ -132,9 +138,11 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX to
             "Resume the implement-fix phase from the latest verified findings, reconciling the " +
             "current tree, then persist the validated output.",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to
+            "Repair the latest audit findings against the current tree, then return to audit.",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to
-            "Start a fresh audit session, inspect every planned criterion against current code and tests, " +
-            "repair gaps in that session, and recheck the full list before terminal completion.",
+            "Inspect every planned criterion against current code and tests without editing files. " +
+            "Report remaining criteria for the implementation repair step.",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW to
             "Resume code review over its repository scope after audit completes.",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS to

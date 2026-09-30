@@ -1,7 +1,7 @@
 ---
 name: bill-kotlin-code-review-ux-accessibility
 description: Review standalone Kotlin desktop, server-rendered, CLI, and TUI usability and accessibility behavior.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # UX and Accessibility Review Specialist

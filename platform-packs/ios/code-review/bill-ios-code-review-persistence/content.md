@@ -1,7 +1,7 @@
 ---
 name: bill-ios-code-review-persistence
 description: Use when reviewing iOS persistence, migration, transaction, and offline-sync risks.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Persistence Review Specialist

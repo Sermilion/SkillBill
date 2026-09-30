@@ -1,0 +1,20 @@
+{
+    "blocked_reason": null,
+    "blocked_step_id": null,
+    "completed_step_ids": [
+        "validate"
+    ],
+    "invocation_id": "__NORMALIZED_INVOCATION_ID__",
+    "review_result": null,
+    "status": "completed",
+    "value": {
+        "contract_version": "0.7",
+        "phase_id": "validate",
+        "produced_outputs": {
+            "validation_passed": true,
+            "value": "Project checks passed."
+        },
+        "status": "completed",
+        "summary": "Phase produced a validated output."
+    }
+}

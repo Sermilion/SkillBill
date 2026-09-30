@@ -1,5 +1,5 @@
 package skillbill.engine.featuretask.lifecycle.continuation
 
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 
-fun isGoalContinuationRun(request: FeatureTaskRuntimeRunRequest): Boolean = request.goalContinuation != null
+fun isGoalContinuationRun(request: FeatureTaskRuntimeRunFacts): Boolean = request.goalContinuation != null

@@ -3,22 +3,6 @@ package skillbill.engine.featuretask.phase.core
 import skillbill.workflow.taskruntime.model.handoff.task.MAX_BOUNDED_POINTER_LENGTH
 
 object FeatureTaskRuntimeSchemaFailureCorrections {
-  fun unreconciledReceipt(priorSchemaFailure: String): String {
-    val namesReconciled =
-      priorSchemaFailure.contains("reconciliation_evidence.reconciled") ||
-        priorSchemaFailure.contains("reconciliation_evidence/reconciled")
-    if (!namesReconciled || !priorSchemaFailure.contains("must be the constant value")) {
-      return ""
-    }
-    return """
-
-      A 'completed' implementation_receipt asserts a reconciled working tree: reconciliation_evidence.reconciled
-      must be true, and 'completed' is the only status that may carry this receipt. Do not report 'completed'
-      with reconciled false, and do not flip the flag to true unless the tree really is at target. If the work
-      is genuinely incomplete, leave this phase through a 'blocked' or 'failed' envelope instead.
-      """.trimIndent()
-  }
-
   fun lengthViolation(priorSchemaFailure: String): String {
     val cap = statedCap(priorSchemaFailure) ?: return ""
 

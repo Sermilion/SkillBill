@@ -19,8 +19,10 @@ internal fun isContentManagedSkill(sourceSkillDir: Path): Boolean {
     Files.isRegularFile(contentMd, LinkOption.NOFOLLOW_LINKS)
 }
 
-internal fun installedSkillSlug(sourceSkillDir: Path): String {
-  val raw = sourceSkillDir.fileName?.toString().orEmpty()
+internal fun installedSkillSlug(sourceSkillDir: Path): String =
+  installedSkillNameSlug(sourceSkillDir.fileName?.toString().orEmpty())
+
+internal fun installedSkillNameSlug(raw: String): String {
   if (raw.isEmpty()) {
     return ""
   }
@@ -36,11 +38,9 @@ internal fun agentAddonPointersForSkill(
   repoRoot: Path,
   skillName: String,
 ): List<AgentAddonPointer> =
-  if (skillName == AgentAddonConsumer.BILL_FEATURE.id) {
-    AgentAddonDeliveryResolver().resolve(repoRoot.toAbsolutePath().normalize(), AgentAddonConsumer.BILL_FEATURE)
-  } else {
-    emptyList()
-  }
+  AgentAddonConsumer.entries.firstOrNull { consumer -> consumer.id == skillName }
+    ?.let { consumer -> AgentAddonDeliveryResolver().resolve(repoRoot.toAbsolutePath().normalize(), consumer) }
+    .orEmpty()
 
 internal fun validateAgentAddonPointerNamespace(
   skillName: String,

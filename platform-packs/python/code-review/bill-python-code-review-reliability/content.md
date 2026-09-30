@@ -1,7 +1,7 @@
 ---
 name: bill-python-code-review-reliability
 description: Review Python reliability risks in external clients, retries, timeouts, workers, schedulers, queues, observability, and graceful degradation.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Python Reliability Review

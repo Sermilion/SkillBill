@@ -16,6 +16,7 @@ import skillbill.ports.workflow.gitops.SuppressionEvidenceGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitBranchOperations
 import skillbill.ports.workflow.gitops.WorkflowGitCommitHistoryOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.ports.workflow.gitops.WorkflowGitReleaseTagOperations
 import skillbill.ports.workflow.gitops.WorkflowGitRemoteOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -36,14 +37,16 @@ class GitWorkflowGitOperations :
   ReadinessTreeIdentityGitOperations by GitReadinessTreeIdentityOperations,
   RepositoryOwnedPathsGitOperations by GitRepositoryOwnedPathsOperations,
   RuntimePhaseFileManifestGitOperations by GitRuntimePhaseFileManifestOperations,
-  ScopedStagingGitOperations by GitScopedStagingOperations
+  ScopedStagingGitOperations by GitScopedStagingOperations,
+  WorkflowGitReleaseTagOperations by GitStandardWorkflowGitOperations
 
 internal object GitRepositoryOwnedPathsOperations : RepositoryOwnedPathsGitOperations {
   override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult {
     val untracked = runGitCommand(repoRoot, "ls-files", "--others", "--exclude-standard", "-z")
     if (untracked !is WorkflowGitOperationResult.Ok) return WorkflowGitNameListResult.Failed(untracked.error)
     val tracked = runGitCommand(repoRoot, "diff", "--name-only", "-z", "HEAD")
-    val trackedValue = tracked.value.takeIf { tracked is WorkflowGitOperationResult.Ok }.orEmpty()
+    if (tracked !is WorkflowGitOperationResult.Ok) return WorkflowGitNameListResult.Failed(tracked.error)
+    val trackedValue = tracked.value
     return WorkflowGitNameListResult.Listed(
       (untracked.value.orEmpty() + trackedValue).split(GIT_NUL).filter(String::isNotEmpty),
     )

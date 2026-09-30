@@ -57,6 +57,7 @@ class FeatureTaskRuntimeValidationEvidenceSettlementTest {
   fun `runtime owned output preserves every gate command and exit code`() {
     val output =
       FeatureTaskRuntimeValidationGateCoordinator.runtimeOwnedValidationOutput(
+        phaseId = "validate",
         repositoryCheckpoint = "checkpoint",
         measurements =
           listOf(

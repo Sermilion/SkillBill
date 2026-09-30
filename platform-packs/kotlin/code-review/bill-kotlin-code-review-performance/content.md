@@ -1,7 +1,7 @@
 ---
 name: bill-kotlin-code-review-performance
 description: Review Kotlin blocking, allocation, Flow, serialization, persistence, queue, and measurement performance risks.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Performance Review Specialist

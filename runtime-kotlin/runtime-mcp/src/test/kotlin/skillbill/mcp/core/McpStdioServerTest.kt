@@ -1,6 +1,8 @@
 package skillbill.mcp.core
 
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.mcp.McpToolPayloadKeys
 import skillbill.mcp.shared.McpRuntimeContext
 import skillbill.mcp.shared.assertStrictSchemaCoveragePublished
 import skillbill.mcp.shared.callTool
@@ -13,11 +15,13 @@ import skillbill.mcp.shared.properties
 import skillbill.mcp.shared.schemaFor
 import skillbill.mcp.shared.toolPayload
 import skillbill.mcp.shared.toolsList
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class McpStdioServerTest {
@@ -89,6 +93,54 @@ class McpStdioServerTest {
       assertEquals(emptyMap<String, Any?>(), schema.properties(), toolName)
       assertEquals(emptyList<String>(), schema["required"], toolName)
     }
+  }
+
+  @Test
+  fun `audit repair can complete and block through the advertised settlement tools`() {
+    val phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX
+    val identity =
+      mapOf(
+        SharedPayloadKeys.WORKFLOW_ID to "wftr-audit-repair",
+        SharedPayloadKeys.PHASE_ID to phaseId,
+        SharedPayloadKeys.ATTEMPT to 2,
+      )
+    val completed =
+      toolPayload(
+        context.callTool(
+          "feature_task_phase_complete",
+          identity + (SharedPayloadKeys.VALUE to "AC-008: repaired admission at both transactions."),
+        ),
+      )
+    assertEquals("ok", completed[SharedPayloadKeys.STATUS], completed.toString())
+    assertEquals(phaseId, completed[SharedPayloadKeys.PHASE_ID])
+    assertEquals(2, completed[SharedPayloadKeys.ATTEMPT])
+    val blocked =
+      toolPayload(
+        context.callTool(
+          "feature_task_phase_block",
+          identity +
+            mapOf(
+              SharedPayloadKeys.ATTEMPT to 3,
+              McpToolPayloadKeys.REASON to "Required dependency is unavailable.",
+            ),
+        ),
+      )
+    assertEquals("ok", blocked[SharedPayloadKeys.STATUS], blocked.toString())
+    assertEquals(phaseId, blocked[SharedPayloadKeys.PHASE_ID])
+    assertEquals(3, blocked[SharedPayloadKeys.ATTEMPT])
+    val settlements = context.mcpComponent().featureTaskPhaseSettlementService
+    val completedEnvelope = assertNotNull(settlements.findEnvelope("wftr-audit-repair", phaseId, 2)).envelope
+    val blockedEnvelope = assertNotNull(settlements.findEnvelope("wftr-audit-repair", phaseId, 3)).envelope
+    assertEquals("completed", completedEnvelope[SharedPayloadKeys.STATUS])
+    assertEquals("blocked", blockedEnvelope[SharedPayloadKeys.STATUS])
+    assertEquals(
+      "AC-008: repaired admission at both transactions.",
+      completedEnvelope.fieldMap(SharedPayloadKeys.PRODUCED_OUTPUTS)[SharedPayloadKeys.VALUE],
+    )
+    assertEquals(
+      "Required dependency is unavailable.",
+      blockedEnvelope.fieldMap(SharedPayloadKeys.PRODUCED_OUTPUTS)[SharedPayloadKeys.VALUE],
+    )
   }
 
   @Test

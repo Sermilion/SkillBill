@@ -85,7 +85,7 @@ class FeatureTaskRuntimeValidationGateTest {
     )
 
   @Test
-  fun `catalog gate wins when review routing only selects a no-gate fallback pack`() {
+  fun `a no-gate fallback pack does not borrow an unrelated catalog gate`() {
     val resolver =
       ValidationGateResolver {
         listOf(
@@ -94,8 +94,8 @@ class FeatureTaskRuntimeValidationGateTest {
         )
       }
     val resolution = resolver.resolve(listOf("notes.txt"))
-    val declared = assertIs<ValidationGateResolution.Declared>(resolution)
-    assertEquals("kotlin", declared.packSlug)
+    val absent = assertIs<ValidationGateResolution.Absent>(resolution)
+    assertEquals("generic", absent.routedPackSlug)
   }
 
   private fun progressArtifact(

@@ -1,0 +1,9 @@
+{
+    "detected_stack": "kotlin",
+    "fallback": false,
+    "initial_failure_count": 1,
+    "orchestrated": false,
+    "routed_skill": "bill-code-check",
+    "scope_type": "branch_diff",
+    "session_id": "__NORMALIZED_SESSION_ID__"
+}

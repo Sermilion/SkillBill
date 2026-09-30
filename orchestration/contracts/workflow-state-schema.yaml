@@ -136,6 +136,7 @@ $defs:
           - review
           - verify_findings
           - build
+          - audit_implement_fix
           - audit
           - validate
           - write_history
@@ -158,6 +159,7 @@ $defs:
                     - review
                     - verify_findings
                     - build
+                    - audit_implement_fix
                     - audit
                     - validate
                     - write_history

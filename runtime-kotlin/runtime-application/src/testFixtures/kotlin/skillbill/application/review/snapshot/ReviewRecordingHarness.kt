@@ -569,7 +569,7 @@ fun harnessRequest(
   timeout: Duration? = null,
   reviewRunId: String? = null,
   prelaunchExpansions: List<ReviewPrelaunchExpansion> = emptyList(),
-  codeReviewMode: CodeReviewExecutionMode = CodeReviewExecutionMode.INLINE,
+  codeReviewMode: CodeReviewExecutionMode = CodeReviewExecutionMode.DELEGATED,
   scope: ParallelReviewScope = ParallelReviewScope.BRANCH,
 ) = ParallelCodeReviewRequest(
   agent1Id = agent1Id,

@@ -16,4 +16,5 @@ interface WorkflowGitOperations :
   ReadinessTreeIdentityGitOperations,
   RepositoryOwnedPathsGitOperations,
   RuntimePhaseFileManifestGitOperations,
-  ScopedStagingGitOperations
+  ScopedStagingGitOperations,
+  WorkflowGitReleaseTagOperations

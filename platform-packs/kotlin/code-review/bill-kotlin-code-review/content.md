@@ -1,7 +1,7 @@
 ---
 name: bill-kotlin-code-review
 description: Use when conducting a thorough Kotlin PR code review across shared, backend, desktop, server-rendered, CLI, or TUI code, or when providing the baseline Kotlin review layer for Android/KMP reviews. Routes all ten governed areas while preserving KMP ownership of Android and Compose Multiplatform behavior. Produces a structured review with risk register and prioritized action items. Use when user mentions Kotlin review, review Kotlin PR, Kotlin code review, or asks to review .kt files.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Adaptive Kotlin PR Review

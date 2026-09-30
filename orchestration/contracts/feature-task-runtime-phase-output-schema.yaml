@@ -26,10 +26,17 @@
 #
 # - `contract_version` is pinned by `FEATURE_TASK_RUNTIME_CONTRACT_VERSION`
 #   in
-#   `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/workflow/FeatureTaskRuntimeSchemaPaths.kt`.
-# - The parity test `FeatureTaskRuntimePhaseOutputSchemaContractVersionTest`
-#   fails the build if they diverge. To bump the contract, edit BOTH
-#   constants in the same change.
+#   `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/workflow/featuretask/FeatureTaskRuntimeContractVersions.kt`.
+# - The repo test `PhaseOutputContractVersionPinParityTest` fails the build
+#   when any pin diverges: this const, the goal-planning preparation
+#   `phase_output_contract_version` const, both goal-planning SQL checks, and
+#   the latest goal-planning phase-output migration. A bump moves every pin in
+#   the same change.
+# - Envelopes stored at the immediately previous version
+#   (`FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION`) keep decoding: the
+#   runtime reads them against this schema with `contract_version` pinned to
+#   that version and without `$defs.uniformSettlement`. Older versions stay
+#   rejected.
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://skill-bill.dev/contracts/feature-task-runtime-phase-output-schema.yaml"
 title: "Feature-task-runtime phase output"
@@ -227,6 +234,28 @@ $defs:
         type: string
         minLength: 1
         pattern: ".*\\S.*"
+  uniformSettlement:
+    description: >-
+      The one settlement rule for every step that settles with the uniform output. The step
+      carries a non-blank prose produced_outputs.value, and a blocked or failed step carries
+      failure_disposition. An optional verdict word stays allowed; the step's strategy decides
+      what it means. Stored envelopes at the previous contract_version are read without this rule.
+    if:
+      properties:
+        phase_id:
+          enum: [preplan, plan, implement, simplify, audit, audit_implement_fix, validate, write_history, pr]
+      required: [phase_id]
+    then:
+      properties:
+        produced_outputs: { $ref: "#/$defs/phaseProseProducedOutputs" }
+      allOf:
+        - if:
+            properties:
+              status:
+                enum: [blocked, failed]
+            required: [status]
+          then:
+            required: [failure_disposition]
 required:
   - contract_version
   - phase_id
@@ -236,7 +265,7 @@ required:
 properties:
   contract_version:
     type: string
-    const: "0.6"
+    const: "0.7"
   phase_id:
     type: string
     minLength: 1
@@ -248,9 +277,11 @@ properties:
       omit it for completed output. The runtime treats policy conflicts and
       user-action requirements as durable non-retryable blocks; retryable,
       process-failure, and invalid-output dispositions may be relaunched under
-      the applicable bounded retry policy. Optional for compatibility with
-      existing durable 0.1 outputs; absent blocked output defaults to
-      needs_user_action and absent failed output defaults to retryable.
+      the applicable bounded retry policy. Required for blocked or failed
+      output of a uniform step (`$defs.uniformSettlement`). Elsewhere it stays
+      optional for compatibility with existing durable outputs; absent blocked
+      output defaults to needs_user_action and absent failed output defaults
+      to retryable.
     $ref: "#/$defs/failureDisposition"
   summary:
     type: string
@@ -289,51 +320,19 @@ properties:
     minLength: 1
   verdict:
     description: >
-      Optional structured verdict emitted by a verifying phase (e.g. `review`)
-      that the runtime reads to decide whether to advance or take a remediation
-      backward edge. For `review` the values are `approved` (no unresolved
-      advance-blocking findings) or `changes_requested` (one or more unresolved
-      Blocker or Major findings present); Blocker and Major both block advancing
-      and both reopen the remediation span, while Minor and Nit stay advisory. The
-      runtime classifies the verdict from the carried review
-      findings, which travel inside `produced_outputs` (e.g. a `findings` array
-      of severity/message entries) and are forwarded into the `implement_fix`
-      handoff. For completed `audit` output the remaining acceptance-criteria list lives in
-      `produced_outputs.value`; an explicit empty list `[]` completes audit after
-      same-session inspection and repair of every planned acceptance criterion.
-      Blocked or failed audit output omits verdict and carries
-      `failure_disposition` instead. Either absent (not set) or a non-empty
-      string; `null` is not a valid value. Completed audit may omit this field when
-      `produced_outputs.value` carries an explicit empty list; the runtime stamps
-      `satisfied` internally for review entry. Legacy `gaps_found` records must be regenerated.
+      Optional verdict word. Any step may carry one; the step's strategy reads it
+      to decide whether to advance or take a remediation backward edge. For
+      `review` the values are `approved` (no unresolved advance-blocking findings)
+      or `changes_requested` (one or more unresolved Blocker or Major findings
+      present). A uniform step may settle with a verdict too, for example a
+      completed `audit` with `satisfied`. Historical blocked `validate` outputs
+      may carry `progress` or `no_progress`; those words do not start another
+      validation session. The schema does not interpret the word for uniform steps.
+      Either absent (not set) or a non-empty string; `null` is not a valid value.
     type: string
     minLength: 1
 allOf:
-  - if:
-      properties:
-        phase_id: { const: audit }
-        status: { const: completed }
-      required: [phase_id, status]
-    then:
-      properties:
-        verdict: { enum: [satisfied] }
-        produced_outputs:
-          allOf:
-            - { $ref: "#/$defs/phaseProseProducedOutputs" }
-  - if:
-      properties:
-        phase_id: { const: audit }
-        status:
-          enum: [blocked, failed]
-      required: [phase_id, status]
-    then:
-      required: [failure_disposition]
-      not:
-        required: [verdict]
-      properties:
-        produced_outputs:
-          allOf:
-            - { $ref: "#/$defs/phaseProseProducedOutputs" }
+  - $ref: "#/$defs/uniformSettlement"
   - if:
       properties:
         phase_id: { const: verify_findings }
@@ -381,60 +380,3 @@ allOf:
           required: [repair_receipt]
           properties:
             repair_receipt: { $ref: "#/$defs/repairReceipt" }
-  - if:
-      properties:
-        phase_id: { const: preplan }
-        status: { const: completed }
-      required: [phase_id, status]
-    then:
-      properties:
-        produced_outputs:
-          allOf:
-            - { $ref: "#/$defs/phaseProseProducedOutputs" }
-  - if:
-      properties:
-        phase_id: { const: plan }
-        status: { const: completed }
-      required: [phase_id, status]
-    then:
-      properties:
-        produced_outputs:
-          allOf:
-            - { $ref: "#/$defs/phaseProseProducedOutputs" }
-  - if:
-      properties:
-        phase_id: { const: implement }
-        status: { const: completed }
-      required: [phase_id, status]
-    then:
-      properties:
-        produced_outputs:
-          allOf:
-            - { $ref: "#/$defs/phaseProseProducedOutputs" }
-  - if:
-      properties:
-        phase_id: { const: simplify }
-        status: { const: completed }
-      required: [phase_id, status]
-    then:
-      properties:
-        produced_outputs:
-          allOf:
-            - { $ref: "#/$defs/phaseProseProducedOutputs" }
-  - if:
-      properties:
-        phase_id: { const: validate }
-        status: { const: completed }
-      required: [phase_id, status]
-    then:
-      properties:
-        produced_outputs:
-          allOf:
-            - { $ref: "#/$defs/phaseProseProducedOutputs" }
-          required: [validation_passed]
-          properties:
-            validation_passed:
-              type: boolean
-              description: >-
-                Agent-reported result of project-discovered checks. True advances;
-                false consumes a bounded validation retry. This is not execution attestation.

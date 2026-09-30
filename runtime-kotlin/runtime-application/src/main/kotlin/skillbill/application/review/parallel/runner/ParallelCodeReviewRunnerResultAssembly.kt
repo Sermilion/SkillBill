@@ -25,7 +25,6 @@ import skillbill.review.context.model.accounting.ReviewAccountingTerminalOutcome
 import skillbill.review.context.model.accounting.ReviewCommitRoutingAccounting
 import skillbill.review.context.model.accounting.ReviewIntegrationAccounting
 import skillbill.review.context.model.accounting.ReviewParentAnalysisConsumption
-import skillbill.review.context.model.execution.ResolvedReviewExecutionMode
 import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.context.model.launch.ReviewIntegrationTerminalOutcome
 import skillbill.review.context.model.packet.ReviewContextPacket
@@ -66,12 +65,6 @@ class ParallelCodeReviewRunnerResultAssembly(
           PARALLEL_REVIEW_NO_SEQUENCE_DIGEST,
           "the review compiled no specialist lane, so there is no commit sequence to integrate over",
         )
-    if (initial.resolvedMode == ResolvedReviewExecutionMode.INLINE) {
-      return ReviewIntegrationPassOutcome.skipped(
-        packet.commitSequenceDigest,
-        "this review ran inline, so commit-focused delegated sequencing does not apply",
-      )
-    }
     runtimeOwnedPersistence.durableIntegrationOutcome(initial.request.reviewRunId, packet.commitSequenceDigest)
       ?.let { return it }
     val findingsByLane =

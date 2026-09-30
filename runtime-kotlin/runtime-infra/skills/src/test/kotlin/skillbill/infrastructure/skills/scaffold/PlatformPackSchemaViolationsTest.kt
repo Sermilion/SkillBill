@@ -4,6 +4,10 @@ import skillbill.error.shellcontent.ContractVersionMismatchError
 import skillbill.error.shellcontent.InvalidManifestSchemaError
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
+import skillbill.infrastructure.skills.scaffold.platformpack.loader.validateGovernedSkill
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
+import skillbill.model.toPath
+import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -687,6 +691,55 @@ class PlatformPackSchemaViolationsTest {
     val message = error.message.orEmpty()
     assertContains(message, "declared_filez")
     assertContains(message, "declared_files")
+  }
+
+  @Test
+  fun `quality-check override declaring the skill-bill parent passes governed skill validation`() {
+    val (pack, qualityCheck) = qualityCheckOverridePack(internalFor = PACK_SIDECAR_PARENT_SKILL)
+
+    validateGovernedSkill(pack, "declared_quality_check_file", qualityCheck, "quality-check")
+  }
+
+  @Test
+  fun `quality-check override declaring a retired parent fails governed skill validation`() {
+    val (pack, qualityCheck) = qualityCheckOverridePack(internalFor = "bill-code-check")
+
+    val error =
+      assertFailsWith<InvalidManifestSchemaError> {
+        validateGovernedSkill(pack, "declared_quality_check_file", qualityCheck, "quality-check")
+      }
+    assertContains(error.message.orEmpty(), "internal-for: $PACK_SIDECAR_PARENT_SKILL")
+  }
+
+  private fun qualityCheckOverridePack(internalFor: String): Pair<PlatformManifest, Path> {
+    val manifest =
+      """
+      platform: scenarioslug
+      contract_version: "1.8"
+      routing_signals:
+        strong: [".kt"]
+      declared_code_review_areas: []
+      declared_quality_check_file: quality-check/bill-scenarioslug-code-check/content.md
+      """.trimIndent()
+    val packRoot = newTempPackRoot("scenarioslug", manifest)
+    val qualityCheck = packRoot.resolve("quality-check/bill-scenarioslug-code-check/content.md")
+    Files.createDirectories(qualityCheck.parent)
+    Files.writeString(
+      qualityCheck,
+      """
+      ---
+      name: bill-scenarioslug-code-check
+      description: Scenario quality-check override.
+      internal-for: $internalFor
+      ---
+
+      # Scenario Quality Check
+
+      Run the scenario stack checks and report root causes first.
+      """.trimIndent() + "\n",
+    )
+    val pack = loadPlatformManifest(packRoot)
+    return pack to requireNotNull(pack.declaredQualityCheckFile).toPath()
   }
 
   private fun loadPackFromInMemory(

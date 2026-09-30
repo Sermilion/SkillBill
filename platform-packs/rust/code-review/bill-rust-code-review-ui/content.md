@@ -1,7 +1,7 @@
 ---
 name: bill-rust-code-review-ui
 description: Use when reviewing Rust wasm, server-rendered, desktop GUI, terminal UI, and interactive CLI behavior.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # UI Review Specialist

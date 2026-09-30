@@ -1,7 +1,7 @@
 ---
 name: bill-typescript-code-review-api-contracts
 description: Use when reviewing TypeScript declarations, JavaScript consumers, runtime schemas, HTTP or RPC behavior, serialization, events, and version compatibility.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # API Contracts Review Specialist

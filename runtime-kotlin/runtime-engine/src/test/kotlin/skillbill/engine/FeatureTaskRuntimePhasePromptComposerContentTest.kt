@@ -1,7 +1,8 @@
 
 package skillbill.engine
 
-import skillbill.engine.featuretask.phase.prompt.directives.auditPhaseTaskDirective
+import skillbill.engine.featuretask.slot.audit.AcceptanceAuditPromptSections
+import skillbill.engine.featuretask.slot.pullrequest.PullRequestTemplateSearch
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
@@ -12,6 +13,47 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class FeatureTaskRuntimePhasePromptComposerContentTest {
+  @Test
+  fun `implementation and audit may inspect new checkout contracts without replacing their settlement contract`() {
+    listOf("implement", "audit").forEach { phaseId ->
+      listOf<String?>(null, "Prior output was not an object").forEach { failure ->
+        val prompt =
+          composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(phaseId)) {
+            copy(priorSchemaFailure = failure)
+          }
+
+        assertContains(
+          prompt,
+          "Read and edit checkout schemas, Kotlin contract constants, test fixtures, and skill sources",
+        )
+        assertContains(prompt, "New implementation contracts may be absent from the installed runtime.")
+        assertContains(prompt, "block repository work or require permission to inspect the checkout.")
+        assertContains(prompt, "Keep this phase's output and settlement on the contract supplied by this briefing")
+        assertFalse(prompt.contains("never this checkout"))
+      }
+    }
+  }
+
+  @Test
+  fun `phase workers and retries cannot reopen the dispatcher update confirmation`() {
+    listOf("preplan", "plan", "implement", "audit", "review", "validate", "pr").forEach { phaseId ->
+      listOf<String?>(null, "Prior output was not an object").forEach { failure ->
+        val prompt =
+          composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(phaseId)) {
+            copy(priorSchemaFailure = failure)
+          }
+
+        assertContains(prompt, "The initial user-facing goal invocation owns update checks and launch confirmation.")
+        assertContains(
+          prompt,
+          "Do not call `mcp__skill-bill__update_check`, ask whether to update, or repeat dispatcher",
+        )
+        assertContains(prompt, "including on retries and continuation.")
+        assertContains(prompt, "Reading the installed skill-bill skill does not make this phase a new invocation.")
+      }
+    }
+  }
+
   @Test
   fun `each phase carries its own task directive`() {
     val preplanPrompt = composePromptForPhase("preplan")
@@ -34,7 +76,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     )
     assertContains(implementPrompt, "Mutating-phase idempotency contract")
     assertContains(implementPrompt, "implementation_receipt JSON")
-    assertContains(implementPrompt, "Inner object to stuff into value")
+    assertContains(implementPrompt, "Carry this JSON object as the value text")
     assertTrue(
       !implementPrompt.contains("reconciliation report missing or \"reconciled\" not true fails the schema gate"),
       "implement must not keep the sibling reconciled_state schema-gate prompt",
@@ -47,13 +89,23 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
       !historyPrompt.contains("Mutating-phase idempotency contract"),
       "non-mutating write_history phase must not carry the idempotency directive",
     )
-    assertContains(historyPrompt, "bill-boundary-history")
-    assertContains(historyPrompt, "history_result")
+    mapOf("write_history" to historyPrompt, "pr" to prPrompt).forEach { (phaseId, prompt) ->
+      assertFalse(prompt.contains("Invoke "), "the $phaseId prompt must invoke no skill")
+    }
+    assertContains(historyPrompt, "Always write for `MEDIUM` and `LARGE` features.")
+    assertContains(historyPrompt, "## Write/Skip Rules")
+    assertContains(historyPrompt, "### Supersession and delete")
+    assertContains(historyPrompt, "Acceptance criteria: <count>/<count> implemented")
+    assertContains(historyPrompt, "Reason: <why this approach over alternatives — 1-3 lines>")
+    assertFalse(historyPrompt.contains("history_result"), "write_history must not ask the agent for history_result")
     assertContains(commitPrompt, "does not launch an agent")
     assertContains(commitPrompt, "records commit_sha")
-    assertContains(prPrompt, "bill-pr-description")
+    assertContains(prPrompt, PullRequestTemplateSearch.SEARCH_ORDER.joinToString(", ") { "`$it`" })
+    assertContains(prPrompt, "## Repo-Native PR Template Search (mandatory)")
+    assertContains(prPrompt, "`[<ISSUE_KEY>] <descriptive title>`")
+    assertContains(prPrompt, "# How Has This Been Tested?")
     assertContains(prPrompt, "create or reuse the open")
-    assertContains(prPrompt, "pr_result")
+    assertFalse(prPrompt.contains("pr_result"), "pr must not ask the agent for pr_result")
   }
 
   @Test
@@ -210,6 +262,28 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(prompt, "Never block planning merely because a later implementation or validation action")
     assertContains(prompt, "genuinely missing input or an irreconcilable constraint")
     assertTrue(!prompt.contains("return a blocked plan"))
+    assertFalse(prompt.contains("## Subtask Sizing"), "goal-child plan omits the spec directive")
+    assertFalse(prompt.contains("## Spec Format Contract"), "goal-child plan omits the spec directive")
+    assertContains(prompt, "stamps the contract version and phase id itself")
+  }
+
+  @Test
+  fun `spec bundle plan carries the feature-spec directive and allows a single subtask`() {
+    val prompt =
+      composePhasePrompt(
+        PROMPT_COMPOSER_ISSUE_KEY,
+        promptComposerBriefingFor("plan"),
+      ) { copy(specBundleRequired = true) }
+
+    assertContains(prompt, "## Subtask Sizing")
+    assertContains(prompt, "## Spec Format Contract")
+    assertContains(prompt, "Spec bundle planning requirement")
+    assertContains(prompt, "\"phase_id\": must be \"plan\"")
+    assertContains(prompt, "Both fields belong inside produced_outputs")
+    assertFalse(prompt.contains("stamps the contract version and phase id itself"))
+    assertFalse(prompt.contains("\"mode\": \"direct\""))
+    assertFalse(prompt.contains("Do not forward the complete plan envelope"))
+    assertFalse(prompt.contains("at least two"), "a spec bundle may hold one subtask")
   }
 
   @Test
@@ -248,34 +322,42 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
   }
 
   @Test
-  fun `verifying phases name the structured signal the schema gate keys on`() {
+  fun `review names its schema-gate signal and audit names its remaining-criteria value`() {
     val reviewPrompt = composePromptForPhase("review")
     val auditPrompt = composePromptForPhase("audit")
 
     assertContains(reviewPrompt, "VERIFYING phase", false, "review names itself a verifying phase")
     assertContains(reviewPrompt, "\"findings\" array", false, "review names the findings signal")
     assertContains(reviewPrompt, "\"approved\" or \"changes_requested\"", false, "review names the verdict values")
-    assertContains(auditPrompt, "VERIFYING phase", false, "audit names itself a verifying phase")
-    assertAuditPromptNamesSignal(auditPrompt, "produced_outputs.value", "the audit prose signal")
+    assertFalse(auditPrompt.contains("VERIFYING phase"), "audit carries no envelope verifying-signal addendum")
+    assertAuditPromptNamesSignal(
+      auditPrompt,
+      "value carries the remaining acceptance criteria only",
+      "the audit prose signal",
+    )
     assertAuditPromptNamesSignal(auditPrompt, "explicit empty list", "the remaining-criteria completion contract")
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "Ignore the optional-verdict bullet above for audit completion",
-      "the audit-specific completion rule",
+      "Omit verdict unless the list is empty, then use satisfied",
+      "the audit-specific verdict rule",
     )
   }
 
   @Test
-  fun `audit requires meaningful test coverage and repairs without execution or handoff`() {
+  fun `audit excludes explicit and mixed test requirements while inspecting production behavior`() {
     val prompt = composePromptForPhase("audit")
 
-    assertContains(prompt, "test cases whose assertions verify that behavior")
-    assertContains(prompt, "Missing implementation, missing tests")
-    assertContains(prompt, "mock-only interaction, or tautological assertion is not coverage")
-    assertContains(prompt, "Repair every fixable gap in this same agent session")
+    assertContains(prompt, "Exclude all test requirements from audit, even when the plan or a criterion")
+    assertContains(prompt, "For a mixed criterion, evaluate only its production behavior")
+    assertContains(prompt, "Omit test-only criteria from the remaining list")
+    assertContains(prompt, "including when only test requirements remain")
+    val repairPrompt = composePromptForPhase("audit_implement_fix")
+    assertContains(repairPrompt, "even when a persisted audit finding or the plan explicitly requests tests")
+    assertContains(repairPrompt, "record test-only findings as excluded from audit")
+    assertContains(prompt, "Audit is read-only: do not edit files or repair gaps")
     assertContains(prompt, "re-check the entire in-scope criterion list from the beginning")
-    assertContains(prompt, "Do not spawn subagents, invoke repair skills, or hand findings")
-    assertContains(prompt, "Validation owns test execution")
+    assertContains(prompt, "Do not spawn subagents or invoke repair skills")
+    assertContains(prompt, "validation owns test execution")
     assertTrue(!prompt.contains("TEST EXCLUSION"))
     assertTrue(!prompt.contains("free-form note prose"))
   }
@@ -296,7 +378,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
           )
         }
       assertEquals(baseline, prompt, "audit remaining-criteria contract forked for pack $slug")
-      assertContains(prompt, auditPhaseTaskDirective())
+      assertContains(prompt, AcceptanceAuditPromptSections.DIRECTIVE)
       assertTrue(!prompt.contains("collect-all-$slug"))
       assertTrue(!prompt.contains("confirm-$slug"))
       assertTrue(!prompt.contains("build-$slug"))

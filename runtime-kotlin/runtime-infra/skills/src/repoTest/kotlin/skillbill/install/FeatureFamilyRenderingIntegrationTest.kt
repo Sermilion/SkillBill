@@ -38,13 +38,12 @@ class FeatureFamilyRenderingIntegrationTest {
       stageInstalledSkill(
         StageInstalledSkillInput(
           repoRoot = repoRoot,
-          sourceSkillDir = repoRoot.resolve("skills/bill-feature"),
+          sourceSkillDir = repoRoot.resolve("skills/skill-bill"),
           home = home,
           manifests = listOf(kmpManifest),
           selectedPlatformSlugs = setOf("kmp"),
         ),
       )
-    val stagedReview = stageInstalledSkill(repoRoot, repoRoot.resolve("skills/bill-code-review"), home)
 
     val feature = staged.renderedSkillFile.toPath().readText()
 
@@ -87,20 +86,13 @@ class FeatureFamilyRenderingIntegrationTest {
       Files.exists(staged.stagingDir.resolve("bill-over-engineering-review.md").toPath()),
       "retired over-engineering skill must not be recreated during source installation",
     )
-    assertContains(feature, "code-review:auto|inline")
-    assertFalse(feature.contains("code-review:auto|inline|delegated"))
-    assertContains(stagedReview.renderedSkillFile.toPath().readText(), "mode:auto|inline|delegated")
-    assertFalse(stagedReview.renderedSkillFile.toPath().readText().contains("execution-mode:auto|inline|delegated"))
+    assertContains(feature, "mode:auto|inline|delegated")
+    assertFalse(feature.contains("execution-mode:auto|inline|delegated"))
     assertTrue(sourceFilesBefore.all { (path, bytes) -> bytes.contentEquals(Files.readAllBytes(path)) })
   }
 
   private fun reviewSourceFiles(repoRoot: Path): List<Path> =
-    Files.walk(repoRoot.resolve("skills")).use { paths ->
-      paths
-        .filter(Files::isRegularFile)
-        .filter { path ->
-          path.parent.toString().contains("bill-feature") || path.parent.toString().contains("bill-code-review")
-        }
-        .toList()
+    Files.walk(repoRoot.resolve("skills/skill-bill")).use { paths ->
+      paths.filter(Files::isRegularFile).toList()
     }
 }

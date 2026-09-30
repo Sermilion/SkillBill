@@ -11,6 +11,7 @@ import skillbill.install.model.InstallApplyResult
 import skillbill.install.model.InstallApplyStatus
 import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.SupportedAgent
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.ports.install.addon.ExternalAddonOverlayPort
 import skillbill.ports.install.addon.model.ExternalAddonOverlayRequest
@@ -32,7 +33,7 @@ class InstallExternalAddonOverlayIntegrationTest : InstallApplyTestSupport() {
     val result = applyInstallForTest(plan)
 
     assertEquals(InstallApplyStatus.SUCCESS, result.status, "apply failures: ${result.failures}")
-    val staging = result.skills.first { it.skillName == "bill-code-review" }.staging
+    val staging = result.skills.first { it.skillName == PACK_SIDECAR_PARENT_SKILL }.staging
     val stagingDir =
       staging.stagingDir
         ?: error("ios code-review skill was not staged")
@@ -156,8 +157,8 @@ class InstallExternalAddonOverlayIntegrationTest : InstallApplyTestSupport() {
     name: String,
   ): String {
     val stagingDir =
-      result.skills.first { it.skillName == "bill-code-review" }.staging.stagingDir
-        ?: error("bill-code-review was not staged")
+      result.skills.first { it.skillName == PACK_SIDECAR_PARENT_SKILL }.staging.stagingDir
+        ?: error("$PACK_SIDECAR_PARENT_SKILL was not staged")
     return Files.readString(stagingDir.resolve("$name.md").toPath())
   }
 

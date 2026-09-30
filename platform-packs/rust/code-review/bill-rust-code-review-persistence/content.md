@@ -1,7 +1,7 @@
 ---
 name: bill-rust-code-review-persistence
 description: Use when reviewing Rust database access, ORM or query code, transactions, migrations, locking, and durable consistency.
-internal-for: bill-code-review
+internal-for: skill-bill
 ---
 
 # Persistence Review Specialist

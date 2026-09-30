@@ -2,6 +2,7 @@ package skillbill.application.review.spec
 
 import skillbill.application.review.model.ReviewSpecAdjudicationOutcome
 import skillbill.application.review.model.ReviewSpecAdjudicationRunRequest
+import skillbill.application.review.model.boundedReviewLane
 import skillbill.application.review.packet.toAdjudicationLaunchEnvelope
 import skillbill.application.review.preparation.ReviewPreparationService
 import skillbill.application.review.verification.appendPromptSuffix
@@ -75,6 +76,7 @@ class ReviewSpecAdjudicationRunner(
                 timeout = request.launch.timeout,
                 modelOverride = request.launch.modelOverride,
                 promptSuffix = request.launch.promptSuffix,
+                laneProgressIdleTimeout = request.launch.laneProgressIdleTimeout,
               ),
               recordedAt,
             ).also { outcome -> citationDiagnostics += outcome.citationDiagnostics }
@@ -185,6 +187,7 @@ class ReviewSpecAdjudicationRunner(
     val timeout: Duration?,
     val modelOverride: String?,
     val promptSuffix: String,
+    val laneProgressIdleTimeout: Duration,
   )
 
   private data class AdjudicationFindingOutcome(
@@ -210,7 +213,7 @@ class ReviewSpecAdjudicationRunner(
               timeout = env.timeout,
               promptOverride = prompt,
               modelOverride = env.modelOverride,
-            ),
+            ).boundedReviewLane(env.laneProgressIdleTimeout),
         ),
       )
     return when (outcome) {

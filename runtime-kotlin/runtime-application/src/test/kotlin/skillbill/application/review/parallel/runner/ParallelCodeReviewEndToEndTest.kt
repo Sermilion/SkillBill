@@ -25,7 +25,7 @@ class ParallelCodeReviewEndToEndTest {
   private val kotlinAreas = listOf("architecture", "security", "testing")
   private val kmpAreas = listOf("platform-correctness", "ui")
 
-  @Test fun `kotlin diff discovers once and launches one inline parent lane`() {
+  @Test fun `kotlin diff discovers once and launches one parent lane`() {
     val recorder = ReviewRecorder()
     val runner =
       reviewHarness(
@@ -59,14 +59,14 @@ class ParallelCodeReviewEndToEndTest {
         kotlinAreas.forEach { area ->
           assertTrue(
             prompt.contains("bill-kotlin-code-review-$area"),
-            "Inline prompt dropped routed rubric identity '$area'.",
+            "Parent prompt dropped routed rubric identity '$area'.",
           )
         }
       }
     assertTrue(result.lane1.success)
   }
 
-  @Test fun `inline prompts carry no rediscovery affordance`() {
+  @Test fun `parent prompts carry no rediscovery affordance`() {
     val recorder = ReviewRecorder()
 
     reviewHarness(kotlinConfig(), recorder).run(harnessRequest())
@@ -74,7 +74,7 @@ class ParallelCodeReviewEndToEndTest {
     assertTrue(recorder.parentPrompts.isNotEmpty())
     recorder.parentPrompts.forEach { prompt ->
       listOf("git diff", "gh pr", "merge-base", "AGENTS.md", "platform-packs/").forEach { affordance ->
-        assertTrue(!prompt.contains(affordance), "Inline prompt leaked '$affordance'.")
+        assertTrue(!prompt.contains(affordance), "Parent prompt leaked '$affordance'.")
       }
     }
   }
@@ -99,7 +99,7 @@ class ParallelCodeReviewEndToEndTest {
     val expected = kmpAreas.map { "bill-kmp-code-review-$it" } + kotlinAreas.map { "bill-kotlin-code-review-$it" }
     recorder.parentPrompts.forEach { prompt ->
       expected.forEach { specialist ->
-        assertTrue(prompt.contains(specialist), "Composed inline prompt dropped '$specialist'.")
+        assertTrue(prompt.contains(specialist), "Composed parent prompt dropped '$specialist'.")
       }
     }
   }
@@ -144,7 +144,7 @@ class ParallelCodeReviewEndToEndTest {
     val summary = assertNotNull(runner.run(harnessRequest()).accountingSummary)
 
     val lanes = summary.lanes.filter { it.children.isEmpty() }
-    assertEquals(1, lanes.size, "Single-agent inline review owns exactly one accounting node.")
+    assertEquals(1, lanes.size, "Single-agent review owns exactly one accounting node.")
     lanes.forEach { lane ->
       assertTrue(lane.counters.launchBytes > 0, "Lane '${lane.lane}' reported no launch bytes.")
       assertEquals(0, lane.counters.evidenceBytes, "Assigned hunk envelopes require no filesystem evidence reads.")

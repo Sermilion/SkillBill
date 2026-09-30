@@ -14,10 +14,11 @@ import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistenc
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.engine.featuretask.runner.operatorDecisionPause
+import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
@@ -108,10 +109,10 @@ class FeatureTaskRuntimeStatusServiceTest {
 
     assertEquals("LARGE", projection.featureSize)
     assertEquals(0, projection.completeCount)
-    assertEquals(13, projection.pendingCount)
+    assertEquals(14, projection.pendingCount)
     assertEquals(0, projection.blockedCount)
     assertEquals("preplan", projection.currentPhaseId)
-    assertEquals(List(13) { "pending" }, projection.phases.map { it.status })
+    assertEquals(List(14) { "pending" }, projection.phases.map { it.status })
   }
 
   @Test
@@ -517,6 +518,7 @@ class FeatureTaskRuntimeStatusServiceTest {
             ".feature-specs/SKILL-65-runtime/spec_subtask_2_runtime.md",
           ),
       ),
+      "plan",
     )
 
     val projection =
@@ -1161,7 +1163,12 @@ internal fun statusHarness(): StatusHarness {
     recorder,
     decomposeTerminalRecorder,
     runInvariantsStore,
-    FeatureTaskRuntimeStatusService(recorder, runInvariantsStore, decomposeTerminalRecorder),
+    FeatureTaskRuntimeStatusService(
+      recorder,
+      runInvariantsStore,
+      decomposeTerminalRecorder,
+      statusProjectionPhaseStrategies(),
+    ),
     repository,
   )
 }

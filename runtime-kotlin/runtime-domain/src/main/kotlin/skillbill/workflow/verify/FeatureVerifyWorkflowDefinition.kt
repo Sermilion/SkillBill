@@ -8,6 +8,11 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 
 object FeatureVerifyWorkflowDefinition {
+  const val DIRECTIVE_PATH: String =
+    "runtime-kotlin/runtime-engine/src/main/resources/skillbill/engine/operation/verify/verify-directive.md"
+
+  private fun directiveSection(heading: String): String = "$DIRECTIVE_PATH :: $heading"
+
   private val criteriaFields =
     setOf(
       "acceptance_criteria",
@@ -151,10 +156,10 @@ object FeatureVerifyWorkflowDefinition {
           "feature_flag_audit" to
             "Reuse criteria_summary, feature_flag_policy, and diff_projection; persist feature_flag_audit_receipt.",
           "code_review" to
-            "Run bill-code-review independently against criteria, its rubric, and diff_projection, then persist " +
-            "code_review_receipt.",
+            "Run `skill-bill phase review` independently against criteria, its rubric, and diff_projection, then " +
+            "persist code_review_receipt.",
           "unit_test_value_check" to
-            "Run bill-unit-test-value-check independently against criteria, its rubric, and diff_projection.",
+            "Run operation:unit-test-value-check independently against criteria, its rubric, and diff_projection.",
           "completeness_audit" to
             "Run completeness independently against criteria, its rubric, and diff_projection.",
           SharedPayloadKeys.VERDICT to
@@ -164,45 +169,27 @@ object FeatureVerifyWorkflowDefinition {
         ),
       continuationReferenceSections =
         mapOf(
-          "collect_inputs" to listOf("content.md :: Workflow State", "content.md :: Step 1: Collect Inputs"),
-          "extract_criteria" to
-            listOf(
-              "content.md :: Workflow State",
-              "content.md :: Step 2: Extract Acceptance Criteria",
-            ),
-          "gather_diff" to listOf("content.md :: Continuation Mode", "content.md :: Step 3: Gather PR Diff"),
+          "collect_inputs" to listOf(directiveSection("Step 1: Collect Inputs")),
+          "extract_criteria" to listOf(directiveSection("Step 2: Extract Acceptance Criteria")),
+          "gather_diff" to listOf(directiveSection("Step 3: Gather PR Diff")),
           "feature_flag_audit" to
             listOf(
-              "content.md :: Continuation Mode",
-              "content.md :: Step 4: Feature Flag Audit (conditional)",
-              "content.md :: Feature Flag Audit",
+              directiveSection("Step 4: Feature Flag Audit (conditional)"),
+              directiveSection("Feature Flag Audit"),
             ),
-          "code_review" to
-            listOf(
-              "content.md :: Continuation Mode",
-              "content.md :: Step 5: Code Review",
-              "content.md :: Nested child tools",
-            ),
-          "unit_test_value_check" to
-            listOf(
-              "content.md :: Continuation Mode",
-              "content.md :: Step 6: Unit Test Value Check",
-              "skills/bill-unit-test-value-check/content.md :: Workflow",
-              "skills/bill-unit-test-value-check/content.md :: Output",
-            ),
+          "code_review" to listOf(directiveSection("Step 5: Code Review")),
+          "unit_test_value_check" to listOf(directiveSection("Step 6: Unit Test Value Check")),
           "completeness_audit" to
             listOf(
-              "content.md :: Continuation Mode",
-              "content.md :: Step 7: Completeness Audit",
-              "content.md :: Completeness Audit",
+              directiveSection("Step 7: Completeness Audit"),
+              directiveSection("Completeness Audit"),
             ),
           SharedPayloadKeys.VERDICT to
             listOf(
-              "content.md :: Continuation Mode",
-              "content.md :: Step 8: Consolidated Verdict",
-              "content.md :: Consolidated Verdict",
+              directiveSection("Step 8: Consolidated Verdict"),
+              directiveSection("Consolidated Verdict"),
             ),
-          "finish" to listOf("content.md :: Telemetry", "content.md :: Workflow State"),
+          "finish" to listOf(directiveSection("Step 8: Consolidated Verdict")),
         ),
       continuationDirectives =
         mapOf(
@@ -220,8 +207,8 @@ object FeatureVerifyWorkflowDefinition {
             "Reuse criteria_summary, feature_flag_policy, and diff_projection. Run the audit only when applicable, " +
             "then persist feature_flag_audit_receipt.",
           "code_review" to
-            "Reuse criteria_summary, review_rubric, and diff_projection, pass orchestrated=true to bill-code-review, " +
-            "persist code_review_receipt, and keep telemetry in its dedicated store.",
+            "Reuse criteria_summary, review_rubric, and diff_projection, pass orchestrated=true to " +
+            "`skill-bill phase review`, persist code_review_receipt, and keep telemetry in its dedicated store.",
           "unit_test_value_check" to
             "Run independently from sibling evaluators using criteria_summary, unit_test_value_rubric, and the " +
             "checkpoint-scoped diff_projection.",

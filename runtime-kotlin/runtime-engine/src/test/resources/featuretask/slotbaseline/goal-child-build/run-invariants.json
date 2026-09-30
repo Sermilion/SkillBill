@@ -1,0 +1,14 @@
+{
+    "acceptance_criteria": [
+        "AC-1",
+        "AC-2"
+    ],
+    "agent_addon_selection": [],
+    "code_review_mode": "inline",
+    "contract_version": "0.1",
+    "feature_size": "MEDIUM",
+    "mandates_and_overrides": [
+        "mandate-X"
+    ],
+    "spec_reference": ".feature-specs/SKILL-380-phase-slot-strategies/spec.md"
+}

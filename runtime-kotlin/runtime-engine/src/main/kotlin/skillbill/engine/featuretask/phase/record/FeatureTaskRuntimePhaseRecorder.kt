@@ -30,12 +30,12 @@ import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeDiagnosticSignal
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FeatureTaskRuntimeCheckpointIdentity
+import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttempt
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
@@ -153,8 +153,10 @@ class FeatureTaskRuntimePhaseRecorder
     fun completeGoalReviewPhase(completion: GoalReviewPhaseCompletionRequest): Boolean =
       goalReviewCompletion.completeGoalReviewPhase(completion)
 
-    fun persistReviewGenerationInvalidation(workflowId: String): Int? =
-      reviewCheckpoint.persistReviewGenerationInvalidation(workflowId)
+    fun persistReviewGenerationInvalidation(
+      workflowId: String,
+      reviewStepId: String,
+    ): Int? = reviewCheckpoint.persistReviewGenerationInvalidation(workflowId, reviewStepId)
 
     fun reconcileReviewGeneration(workflowId: String): Int = reviewCheckpoint.reconcileReviewGeneration(workflowId)
 
@@ -251,8 +253,8 @@ class FeatureTaskRuntimePhaseRecorder
     fun loadBuildGateProgress(workflowId: String): FeatureTaskRuntimeValidationGateProgress? =
       gateProgress.loadBuildGateProgress(workflowId)
 
-    fun loadGoalContinuationQualityGateSelection(workflowId: String): FeatureTaskRuntimeQualityGateSelection? =
-      gateProgress.loadGoalContinuationQualityGateSelection(workflowId)
+    fun loadGoalContinuation(workflowId: String): FeatureTaskRuntimeGoalContinuationArtifact? =
+      gateProgress.loadGoalContinuation(workflowId)
 
     fun persistBuildGateProgress(
       workflowId: String,

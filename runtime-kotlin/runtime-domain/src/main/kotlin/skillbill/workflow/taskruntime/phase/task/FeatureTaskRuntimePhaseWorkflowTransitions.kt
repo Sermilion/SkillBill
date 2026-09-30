@@ -28,6 +28,14 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
       backwardEdges =
         listOf(
           FeatureTaskRuntimeBackwardEdge(
+            fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+            triggeringVerdict = FeatureTaskRuntimeVerdict.ADVANCE,
+            destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
+            loopId = FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_REPAIR_LOOP_ID,
+            perEdgeCap = null,
+            warnAfterIterations = FeatureTaskRuntimePhaseWorkflowDefinition.SEMANTIC_LOOP_WARNING_THRESHOLD,
+          ),
+          FeatureTaskRuntimeBackwardEdge(
             fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS,
             triggeringVerdict = FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED,
             destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
@@ -39,6 +47,7 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
         ),
       loopOnlyPhaseIds =
         setOf(
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
         ),

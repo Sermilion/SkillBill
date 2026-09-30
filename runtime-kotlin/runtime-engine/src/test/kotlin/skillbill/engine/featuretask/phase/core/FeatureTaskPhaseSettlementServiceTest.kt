@@ -100,19 +100,25 @@ class FeatureTaskPhaseSettlementServiceTest {
   }
 
   @Test
-  fun `audit completion rejects remaining criteria without a satisfied verdict`() {
+  fun `write_history settles with the uniform output and keeps the supplied verdict`() {
     val service = FeatureTaskPhaseSettlementService(InMemoryFeatureTaskPhaseSettlementRepository(), testHarnessClock)
 
-    assertFailsWith<IllegalArgumentException> {
-      service.complete(
-        FeatureTaskPhaseSettlementCompleteRequest(
-          workflowId = "wftr-test",
-          phaseId = "audit",
-          attempt = 1,
-          value = "- AC-001 remains incomplete",
-        ),
-      )
-    }
+    service.complete(
+      FeatureTaskPhaseSettlementCompleteRequest(
+        workflowId = "wftr-test",
+        phaseId = "write_history",
+        attempt = 1,
+        value = "Recorded the boundary history entry for the run.",
+        verdict = "recorded",
+      ),
+    )
+
+    val envelope = assertNotNull(service.findEnvelope("wftr-test", "write_history", 1)).envelope
+    assertEquals("write_history", envelope[SharedPayloadKeys.PHASE_ID])
+    assertEquals("completed", envelope[SharedPayloadKeys.STATUS])
+    assertEquals("recorded", envelope[SharedPayloadKeys.VERDICT])
+    val produced = assertNotNull(JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]))
+    assertEquals("Recorded the boundary history entry for the run.", produced[SharedPayloadKeys.VALUE])
   }
 
   @Test

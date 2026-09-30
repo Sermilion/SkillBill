@@ -406,7 +406,7 @@ If a parent skill forgets to pass `orchestrated=true` to a child, the child emit
 | `skillbill_quality_check_finished` | standalone quality-check lifecycle | `quality_check_finished(orchestrated=true)` returns payload |
 | `skillbill_feature_verify_started` | `bill-feature-verify` (standalone) | skipped in orchestrated mode |
 | `skillbill_feature_verify_finished` | `bill-feature-verify` (standalone) | `feature_verify_finished(orchestrated=true)` returns payload |
-| `skillbill_pr_description_generated` | `bill-pr-description` (standalone) | `pr_description_generated(orchestrated=true)` returns payload |
+| `skillbill_pr_description_generated` | `bill-pr-description` (standalone), and the runtime `pr` step after it completes (skeleton run and `skill-bill phase pr`) | `pr_description_generated(orchestrated=true)` returns payload |
 
 ## Quality-check telemetry
 
@@ -557,7 +557,7 @@ Runtime-mode feature-task sessions report their own terminal event directly from
 |-------|------|-------------|
 | `audit_gap_availability` | string | `measured` when the run held a durable phase ledger to count from; `unavailable_no_durable_state` when it did not; `unknown` on a row written before this field existed. |
 | `audit_gap_measurement_grain` | string | Always `audit_gap_rounds_per_run`. Stated on the wire so no consumer has to guess what one unit counts. |
-| `audit_gap_iteration_count` | integer \| null | Audit-gap rounds the run durably entered: one per `audit_ac_retry` continuation the audit phase recorded, plus one per legacy `audit_gap` loop edge on runs that predate the stateless audit. Null unless `audit_gap_availability` is `measured`. |
+| `audit_gap_iteration_count` | integer \| null | Audit-gap rounds the run durably entered: one per `audit_repair` loop edge, plus one per older `audit_ac_retry` continuation and legacy `audit_gap` loop edge on runs that predate the stateless audit. Null unless `audit_gap_availability` is `measured`. |
 | `audit_first_pass_convergence` | boolean \| null | Whether the first audit was satisfied outright. True only when `audit_gap_iteration_count` is 0; null whenever that count is null. |
 | `audit_repair_item_availability` | string | Always `unavailable_unsupported`. Per-gap and per-repair-item accounting has no durable identity in runtime state, so no such counter is emitted. |
 

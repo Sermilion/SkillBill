@@ -11,12 +11,12 @@ import kotlin.test.assertTrue
 
 class AgentAddonDeliveryResolverTest {
   @Test
-  fun `resolves bill feature pointers dynamically in deterministic order`() {
+  fun `resolves skill-bill pointers dynamically in deterministic order`() {
     val repo = Files.createTempDirectory("agent-addon-delivery")
     writeAddon(repo, "z-last", "Z body\r\n")
     writeAddon(repo, "a-first", "A body")
 
-    val pointers = AgentAddonDeliveryResolver().resolve(repo, AgentAddonConsumer.BILL_FEATURE)
+    val pointers = AgentAddonDeliveryResolver().resolve(repo, AgentAddonConsumer.SKILL_BILL)
 
     assertEquals(listOf("a-first", "z-last"), pointers.map { it.slug })
     assertEquals(listOf("agent-addon-a-first.md", "agent-addon-z-last.md"), pointers.map { it.name })
@@ -34,7 +34,7 @@ class AgentAddonDeliveryResolverTest {
     assertEquals("agent-addon:review-helper", entry.identity)
     assertEquals("Review helper", entry.description)
     assertEquals(listOf("codex"), entry.agentIds)
-    assertEquals(listOf("bill-feature"), entry.consumers)
+    assertEquals(listOf("skill-bill"), entry.consumers)
     assertTrue(entry.manifestPath.toPath().endsWith("agent-addon.yaml"))
   }
 
@@ -54,7 +54,7 @@ class AgentAddonDeliveryResolverTest {
       agent_ids:
         - codex
       consumers:
-        - bill-feature
+        - skill-bill
       """.trimIndent() + "\n",
     )
     Files.writeString(root.resolve("content.md"), content)

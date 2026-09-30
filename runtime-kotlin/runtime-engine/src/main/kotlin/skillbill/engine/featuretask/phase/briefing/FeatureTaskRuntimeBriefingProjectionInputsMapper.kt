@@ -23,5 +23,5 @@ fun briefingProjectionInputs(
     planningProjectionValidator = inputs.planningProjectionValidator::validate,
     addonContentBySlug = inputs.addonContentBySlug,
     validationDepth = inputs.handoff.validationDepth,
-    qualityGateSelection = inputs.handoff.qualityGateSelection,
+    unselectedStepIds = inputs.handoff.unselectedStepIds,
   )

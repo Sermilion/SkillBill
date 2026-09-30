@@ -10,6 +10,7 @@ import skillbill.infrastructure.sqlite.core.migration.addReviewRunLaneAttributio
 import skillbill.infrastructure.sqlite.core.migration.area.FeatureTaskPhaseSettlementsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.FeedbackEventMigration
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
+import skillbill.infrastructure.sqlite.core.migration.area.OperationProposalsMigration
 import skillbill.infrastructure.sqlite.core.migration.area.ReviewAttributionBackfillMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxDeliveryIdentityMigration
 import skillbill.infrastructure.sqlite.core.migration.area.TelemetryOutboxLastErrorMigration
@@ -18,6 +19,7 @@ import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPl
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion4
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion5
 import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion6
+import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion7
 import skillbill.infrastructure.sqlite.core.migration.area.rekeyDiagnosticEvidenceByRepairTurn
 import skillbill.infrastructure.sqlite.core.migration.area.requireGoalPlanningPhaseOutputVersion2
 import skillbill.infrastructure.sqlite.core.migration.dropDelegatedReviewLifecycleTables
@@ -688,5 +690,15 @@ internal val databaseMigrations: List<DatabaseMigration> =
           statement.execute("DROP TABLE IF EXISTS experiment_pairs")
         }
       },
+    ),
+    DatabaseMigration(
+      version = 46,
+      name = "allow-goal-planning-phase-output-0-7",
+      operation = ::rebuildGoalPlanningPlansForPhaseOutputVersion7,
+    ),
+    DatabaseMigration(
+      version = 47,
+      name = "add-operation-proposals",
+      operation = OperationProposalsMigration::apply,
     ),
   )

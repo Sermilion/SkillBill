@@ -1,0 +1,20 @@
+{
+    "blocked_reason": null,
+    "blocked_step_id": null,
+    "completed_step_ids": [
+        "preplan",
+        "plan"
+    ],
+    "invocation_id": "__NORMALIZED_INVOCATION_ID__",
+    "review_result": null,
+    "spec_bundle": {
+        "decomposition_manifest_path": ".feature-specs/SKILL-380-runtime-decomposition-parity/decomposition-manifest.yaml",
+        "parent_spec_path": ".feature-specs/SKILL-380-runtime-decomposition-parity/spec.md",
+        "subtask_spec_paths": [
+            ".feature-specs/SKILL-380-runtime-decomposition-parity/spec_subtask_1_domain-contracts.md",
+            ".feature-specs/SKILL-380-runtime-decomposition-parity/spec_subtask_2_runtime-stop.md"
+        ]
+    },
+    "status": "completed",
+    "value": "Plan needs ordered subtasks."
+}

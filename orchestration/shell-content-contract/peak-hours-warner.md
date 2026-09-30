@@ -1,6 +1,6 @@
 # Peak-Hours Warner
 
-This sidecar applies to `bill-feature` and the feature-task runtime launch
+This sidecar applies to `/skill-bill` and the feature-task runtime launch
 surface.
 
 After any required update check and before intake, confirmation, workflow open,

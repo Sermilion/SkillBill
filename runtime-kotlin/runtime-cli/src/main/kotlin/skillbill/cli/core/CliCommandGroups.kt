@@ -10,6 +10,8 @@ import skillbill.cli.featuretask.FeatureTaskRuntimeRunCommand
 import skillbill.cli.goal.core.GoalRunCommand
 import skillbill.cli.install.core.InstallTopLevelCommands
 import skillbill.cli.learning.LearningsCommand
+import skillbill.cli.operation.OperationCommand
+import skillbill.cli.phase.PhaseCommand
 import skillbill.cli.repovalidation.RepoValidationCliCommands
 import skillbill.cli.review.ReviewTopLevelCommands
 import skillbill.cli.scaffold.commands.ScaffoldTopLevelCommands
@@ -86,6 +88,8 @@ class CliSystemCommands(
 @Inject
 class CliMiscCommands(
   codeReviewCommand: CodeReviewCommand,
+  phaseCommand: PhaseCommand,
+  operationCommand: OperationCommand,
   configCommand: ConfigCommand,
   workCommands: WorkTopLevelCommands,
   agentAddonCommand: AgentAddonCommand,
@@ -93,6 +97,8 @@ class CliMiscCommands(
   val commands: List<CliktCommand> =
     listOf(
       codeReviewCommand,
+      phaseCommand,
+      operationCommand,
       configCommand,
       workCommands.command,
       agentAddonCommand,

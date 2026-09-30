@@ -14,6 +14,7 @@ import skillbill.install.model.InstallPolicyInput
 import skillbill.install.model.SupportedAgent
 import skillbill.install.model.validateInstallPlanWireSnapshot
 import skillbill.install.policy.InstallPlanPolicy
+import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.ports.install.InstallPlanWireValidator
 import skillbill.ports.install.plan.model.InstallPlanningFacts
@@ -48,11 +49,12 @@ private fun buildInstallPolicyInput(
   request: InstallPlanRequest,
   platformManifests: List<PlatformManifest>,
   enforceContractVersion: Boolean,
+  enforceGovernedReviewStructure: Boolean = true,
 ): InstallPolicyInput {
   val baseSkills = discoverBaseSkills(request.targetPaths.skillsRoot.toPath())
   val resolvedReviewFallback =
     baseSkills
-      .takeIf { skills -> skills.any { it.name == "bill-code-review" } }
+      .takeIf { skills -> skills.any { it.name == PACK_SIDECAR_PARENT_SKILL } }
       ?.let { ReviewFallbackResolver.resolveOptional(platformManifests) }
   val discoveredPlatformPacks = platformManifests.toDiscoverySnapshots()
   val materializationPlan =
@@ -78,7 +80,12 @@ private fun buildInstallPolicyInput(
           packRoot = manifest.packRoot,
           skills =
             if (manifest.slug in selectedPlatformSlugs) {
-              platformSkills(manifest, enforceContractVersion, packRootsBySlug(platformManifests))
+              platformSkills(
+                manifest,
+                enforceContractVersion,
+                packRootsBySlug(platformManifests),
+                enforceGovernedReviewStructure,
+              )
             } else {
               emptyList()
             },
@@ -101,12 +108,24 @@ internal fun enumerateInstallPlanSkills(
   request: InstallPlanRequest,
   enforceContractVersion: Boolean = true,
   catalogLoader: PlatformPackCatalogLoader? = null,
+  enforceGovernedReviewStructure: Boolean = true,
 ): List<InstallPlanSkill> {
   requireSupportedAgentContract()
-  val platformManifests = discoverPlatformManifests(request, enforceContractVersion, catalogLoader)
+  val platformManifests =
+    discoverPlatformManifests(
+      request,
+      enforceContractVersion,
+      catalogLoader,
+      enforceGovernedReviewStructure,
+    )
   val skills =
     InstallPlanPolicy.buildPlanDraft(
-      buildInstallPolicyInput(request, platformManifests, enforceContractVersion),
+      buildInstallPolicyInput(
+        request,
+        platformManifests,
+        enforceContractVersion,
+        enforceGovernedReviewStructure,
+      ),
     ).skills
   validateInstallPlanInternalSkills(skills)
   return skills

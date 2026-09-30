@@ -153,14 +153,22 @@ internal fun enumerateSkills(
   val skillEntries =
     if (Files.isDirectory(roots.skillsRoot)) {
       val request = reconcileEnumerationRequest(roots, home, environment)
+      val enforceGovernedReviewStructure = sourceSide == ReconcileSourceSide.UPSTREAM
       val platformManifests =
         discoverPlatformManifests(
           request,
           enforceContractVersion,
           roots.catalogLoader,
+          enforceGovernedReviewStructure,
         )
 
-      val skills = enumerateInstallPlanSkills(request, enforceContractVersion, roots.catalogLoader)
+      val skills =
+        enumerateInstallPlanSkills(
+          request,
+          enforceContractVersion,
+          roots.catalogLoader,
+          enforceGovernedReviewStructure,
+        )
       val selectedPackSkills =
         skills.filter { candidate ->
           candidate.kind == InstallPlanSkillKind.PLATFORM_PACK && candidate.internalFor != null
