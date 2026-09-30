@@ -37,7 +37,9 @@ import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
 import skillbill.engine.goalrunner.model.GoalRunnerEventSink
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
+import skillbill.engine.goalrunner.model.GoalRunnerPauseStatus
 import skillbill.engine.goalrunner.model.GoalRunnerResetRequest
+import skillbill.engine.goalrunner.model.GoalRunnerResumeStatus
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
@@ -2696,7 +2698,7 @@ class GoalRunnerPauseStatusTest {
         repoRoot = Path.of("/tmp/skillbill-goal-runner"),
       )
 
-    assertEquals("paused", result.status)
+    assertEquals(GoalRunnerPauseStatus.PAUSED, result.status)
     assertTrue(result.paused)
     assertTrue(result.pauseRequested)
     assertTrue(store.controlState.paused)
@@ -2720,7 +2722,7 @@ class GoalRunnerPauseStatusTest {
         repoRoot = Path.of("/tmp/skillbill-goal-runner"),
       )
 
-    assertEquals("resumed", result.status)
+    assertEquals(GoalRunnerResumeStatus.RESUMED, result.status)
     assertEquals("operator_request", result.clearedPauseReason)
     assertFalse(store.controlState.pauseRequested)
     assertFalse(store.controlState.paused)
@@ -2742,7 +2744,7 @@ class GoalRunnerPauseStatusTest {
         repoRoot = Path.of("/tmp/skillbill-goal-runner"),
       )
 
-    assertEquals("not_paused", result.status)
+    assertEquals(GoalRunnerResumeStatus.NOT_PAUSED, result.status)
   }
 }
 

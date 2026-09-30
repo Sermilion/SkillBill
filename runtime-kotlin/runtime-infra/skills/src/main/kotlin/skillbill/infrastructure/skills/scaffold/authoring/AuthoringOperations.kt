@@ -250,14 +250,4 @@ object AuthoringOperations {
       mutation = mutation,
     )
   }
-
-  fun retiredInteractiveMessage(
-    command: String,
-    replacement: String,
-  ): String = "$command interactive mode was retired in SKILL-32; use `$replacement` instead."
-
-  fun retiredEditorMessage(
-    command: String,
-    replacement: String,
-  ): String = "$command editor mode was retired in SKILL-32; use `$replacement` instead."
 }

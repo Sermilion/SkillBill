@@ -1,5 +1,6 @@
 package skillbill.cli.install.core
 
+import com.github.ajalt.clikt.core.CliktCommand
 import me.tatarka.inject.annotations.Inject
 import skillbill.cli.install.apply.InstallApplyExternalAddonsCommand
 import skillbill.cli.install.mcp.InstallRegisterMcpCommand
@@ -21,30 +22,44 @@ import skillbill.cli.install.nativeagent.NativeAgentJunieCliCommands
 
 @Inject
 class InstallPlanCliSubcommands(
-  val plan: InstallPlanCommand,
-  val apply: InstallApplyCommand,
-  val applyExternalAddons: InstallApplyExternalAddonsCommand,
-  val reconcile: InstallReconcileCommand,
-  val replayLastSelection: InstallReplayLastSelectionCommand,
-)
+  plan: InstallPlanCommand,
+  apply: InstallApplyCommand,
+  applyExternalAddons: InstallApplyExternalAddonsCommand,
+  reconcile: InstallReconcileCommand,
+  replayLastSelection: InstallReplayLastSelectionCommand,
+) {
+  val commands: List<CliktCommand> = listOf(plan, apply, applyExternalAddons, reconcile, replayLastSelection)
+}
 
 @Inject
 class InstallAgentDiscoveryCliSubcommands(
-  val agentPath: InstallAgentPathCommand,
-  val detectAgents: InstallDetectAgentsCommand,
-  val claudeRoots: InstallClaudeRootsCommand,
-  val codexRoots: InstallCodexRootsCommand,
-)
+  agentPath: InstallAgentPathCommand,
+  detectAgents: InstallDetectAgentsCommand,
+  claudeRoots: InstallClaudeRootsCommand,
+  codexRoots: InstallCodexRootsCommand,
+) {
+  val commands: List<CliktCommand> = listOf(agentPath, detectAgents, claudeRoots, codexRoots)
+}
 
 @Inject
 class InstallAgentPathsCliSubcommands(
-  val linkSkill: InstallLinkSkillCommand,
-  val codexAgentsPath: InstallCodexAgentsPathCommand,
-  val claudeAgentsPath: InstallClaudeAgentsPathCommand,
-  val junieAgentsPath: InstallJunieAgentsPathCommand,
-  val cursorAgentsPath: InstallCursorAgentsPathCommand,
-  val cleanupAgentTarget: InstallCleanupAgentTargetCommand,
-)
+  linkSkill: InstallLinkSkillCommand,
+  codexAgentsPath: InstallCodexAgentsPathCommand,
+  claudeAgentsPath: InstallClaudeAgentsPathCommand,
+  junieAgentsPath: InstallJunieAgentsPathCommand,
+  cursorAgentsPath: InstallCursorAgentsPathCommand,
+  cleanupAgentTarget: InstallCleanupAgentTargetCommand,
+) {
+  val commands: List<CliktCommand> =
+    listOf(
+      linkSkill,
+      codexAgentsPath,
+      claudeAgentsPath,
+      junieAgentsPath,
+      cursorAgentsPath,
+      cleanupAgentTarget,
+    )
+}
 
 @Inject
 class InstallNativeAgentCliSubcommands(
@@ -53,18 +68,13 @@ class InstallNativeAgentCliSubcommands(
   junie: NativeAgentJunieCliCommands,
   cursor: NativeAgentCursorCliCommands,
 ) {
-  val linkClaudeAgents = claude.link
-  val unlinkClaudeAgents = claude.unlink
-  val linkCodexAgents = codex.link
-  val unlinkCodexAgents = codex.unlink
-  val linkJunieAgents = junie.link
-  val unlinkJunieAgents = junie.unlink
-  val linkCursorAgents = cursor.link
-  val unlinkCursorAgents = cursor.unlink
+  val commands: List<CliktCommand> = claude.commands + codex.commands + junie.commands + cursor.commands
 }
 
 @Inject
 class InstallMcpCliSubcommands(
-  val registerMcp: InstallRegisterMcpCommand,
-  val unregisterMcp: InstallUnregisterMcpCommand,
-)
+  registerMcp: InstallRegisterMcpCommand,
+  unregisterMcp: InstallUnregisterMcpCommand,
+) {
+  val commands: List<CliktCommand> = listOf(registerMcp, unregisterMcp)
+}

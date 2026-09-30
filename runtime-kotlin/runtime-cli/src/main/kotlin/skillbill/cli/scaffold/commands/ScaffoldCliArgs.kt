@@ -8,7 +8,6 @@ import skillbill.cli.model.CliFormat
 import skillbill.cli.model.CliRunInputs
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
 import skillbill.ports.scaffold.ScaffoldGateway
-import skillbill.ports.scaffold.UnsupportedScaffoldGateway
 import java.time.Clock
 
 internal data class NativeScaffoldRunArgs(
@@ -54,7 +53,6 @@ internal data class CreateAndFillArgs(
   val inputs: CliRunInputs,
   val clock: Clock,
   val scaffoldGateway: ScaffoldGateway,
-  val unsupportedScaffoldGateway: UnsupportedScaffoldGateway,
 )
 
 internal data class NewAddonPayloadArgs(

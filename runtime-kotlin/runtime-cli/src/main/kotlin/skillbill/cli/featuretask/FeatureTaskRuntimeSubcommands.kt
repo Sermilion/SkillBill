@@ -1,19 +1,24 @@
 package skillbill.cli.featuretask
 
+import com.github.ajalt.clikt.core.CliktCommand
 import me.tatarka.inject.annotations.Inject
 
 @Inject
-data class FeatureTaskRuntimeControlSubcommands(
-  val status: FeatureTaskRuntimeStatusCommand,
-  val resume: FeatureTaskRuntimeResumeCommand,
-  val abandon: FeatureTaskRuntimeAbandonCommand,
-  val retryBlocked: FeatureTaskRuntimeRetryBlockedCommand,
-  val repairIdentity: FeatureTaskRuntimeRepairIdentityCommand,
-  val lookup: FeatureTaskLookupCommand,
-)
+class FeatureTaskRuntimeControlSubcommands(
+  status: FeatureTaskRuntimeStatusCommand,
+  resume: FeatureTaskRuntimeResumeCommand,
+  abandon: FeatureTaskRuntimeAbandonCommand,
+  retryBlocked: FeatureTaskRuntimeRetryBlockedCommand,
+  repairIdentity: FeatureTaskRuntimeRepairIdentityCommand,
+  lookup: FeatureTaskLookupCommand,
+) {
+  val commands: List<CliktCommand> = listOf(status, resume, abandon, retryBlocked, repairIdentity, lookup)
+}
 
 @Inject
-data class FeatureTaskRejectedOutputSubcommands(
-  val inspect: RejectedOutputInspectCliCommand,
-  val cleanup: RejectedOutputCleanupCliCommand,
-)
+class FeatureTaskRejectedOutputSubcommands(
+  inspect: RejectedOutputInspectCliCommand,
+  cleanup: RejectedOutputCleanupCliCommand,
+) {
+  val commands: List<CliktCommand> = listOf(inspect, cleanup)
+}

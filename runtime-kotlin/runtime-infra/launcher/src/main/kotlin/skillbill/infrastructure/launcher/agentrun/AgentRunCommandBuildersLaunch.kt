@@ -2,6 +2,7 @@ package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.agentaddon.AGENT_ADDON_SELECTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.error.shellcontent.GovernedReviewLaunchCapabilityError
@@ -136,7 +137,7 @@ internal fun MutableList<String>.addGoalContinuationArguments(context: SkillRunG
     add(
       JsonCodec.mapToJsonString(
         linkedMapOf(
-          SharedPayloadKeys.CONTRACT_VERSION to "0.1",
+          SharedPayloadKeys.CONTRACT_VERSION to AGENT_ADDON_SELECTION_CONTRACT_VERSION,
           FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ENTRIES to
             context.agentAddonSelection.entries.map { entry ->
               linkedMapOf(

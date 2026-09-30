@@ -104,10 +104,9 @@ internal fun createAndFillResult(args: CreateAndFillArgs): CliExecutionResult {
   return when {
     content.interactive || content.payload == null ->
       unsupportedNativeScaffoldResult(
-        args.unsupportedScaffoldGateway.retiredUnsupportedMessage(
+        retiredInteractiveModeMessage(
           "create-and-fill",
           "skill-bill create-and-fill --payload <file> --body-file <file>",
-          editor = false,
         ),
         format,
       )
@@ -201,6 +200,16 @@ internal fun ScaffoldRenderResult.toCliPayload(dryRun: Boolean): Map<String, Any
       },
     "dry_run" to dryRun,
   )
+
+internal fun retiredInteractiveModeMessage(
+  command: String,
+  replacement: String,
+): String = "$command interactive mode was retired in SKILL-32; use `$replacement` instead."
+
+internal fun retiredEditorModeMessage(
+  command: String,
+  replacement: String,
+): String = "$command editor mode was retired in SKILL-32; use `$replacement` instead."
 
 internal fun unsupportedNativeScaffoldResult(
   message: String,

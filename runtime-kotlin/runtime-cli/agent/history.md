@@ -1,3 +1,27 @@
+## [2026-09-30] SKILL-386 — cross-module contract ownership seen from the CLI (subtask 2)
+Areas: runtime-kotlin/runtime-cli (scaffold, goal, agentaddon, kernel, system, workflow, featuretask), runtime-ports/scaffold, runtime-infra/{skills,launcher}, runtime-engine/goalrunner, runtime-contracts/agentaddon, runtime-core (RuntimeComponent, scaffold provides, architecture repoTests), ARCHITECTURE.md
+- Deleted the UnsupportedScaffoldGateway and its RuntimeComponent accessor; retired scaffold modes now fail with the exact baseline error text, pinned by CliAuthoringParityTest.
+- Goal pause/resume results carry typed status enums (pinned in the engine inbound API inventory) instead of raw strings; the CLI exit-code and presenter code consume the enums.
+- The agent-addon contract version is one contracts constant, reused by the launcher command builders and the CLI selection messages.
+- Continuation-candidate payload building lives in one kernel payload file shared by feature-task and workflow commands; malformed-JSON handling catches the single typed error.
+- reusable PATTERN: a CLI-visible wire string or version gets one owning-module constant or enum; adapters consume it and never re-declare the literal.
+- Repair: subtask 1 leftovers failing comment/KDoc and package-sibling-count architecture tests were fixed by removing comments and folding VerifyRuntimeResume into FeatureTaskRuntimeRunPreparation.
+- Known limitation: agnix was not run locally; CI validate-agent-configs covers it.
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented
+
+## [2026-09-30] SKILL-386 — runtime-cli composition without dependency bags (subtask 1)
+Areas: runtime-kotlin/runtime-cli (featuretask, goal, install, nativeagent, learning, review, scaffold, workflow command groups), runtime-kotlin/runtime-core (InjectConstructorDefaultsArchitectureTest)
+- Replaced the feature-task run dependency bag with two injected CLI classes, run preparation and run execution, with all-private constructor params; the resolved workflow id is passed as a value, not a thunk.
+- Deprecated feature-task-runtime alias commands now delegate to the same code as feature-task and add only hiddenFromHelp and the unchanged deprecation note.
+- Inlined the scaffold-new dependency bag and deleted the goal-run execution wrapper; GoalRunCommand holds GoalRunner directly.
+- Subcommand holders expose a body `commands` list built from private constructor params, following core/CliCommandGroups.kt; command order is unchanged from dfb489641.
+- reusable PATTERN: compose CLI behavior through @Inject classes with private params, not `@Inject data class` bundles or function-typed params.
+- The runtime-cli main guard now runs injectConstructorPropertyViolations over RUNTIME_CLI_MAIN with an empty baseline.
+- Known limitation: the UnsupportedScaffoldGateway parameter stays where the scaffold bag carried it; subtask 2 deletes it.
+Feature flag: N/A
+Acceptance criteria: 10/10 implemented
+
 ## [2026-09-23] SKILL-371 — single owners for cross-adapter contracts (subtask 3)
 Areas: runtime-kotlin/runtime-cli, runtime-kotlin/runtime-application, runtime-contracts, runtime-engine, runtime-infra, runtime-mcp, orchestration/shell-content-contract
 - Repository identity now comes from the canonical enclosing-root port; governed spec-path resolution and the goal-child launch tokens have single owners outside the CLI.

@@ -3,8 +3,10 @@ package skillbill.cli.goal.core
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
 import skillbill.engine.goalrunner.model.GoalRunnerPauseResult
+import skillbill.engine.goalrunner.model.GoalRunnerPauseStatus
 import skillbill.engine.goalrunner.model.GoalRunnerReplanResult
 import skillbill.engine.goalrunner.model.GoalRunnerResetResult
+import skillbill.engine.goalrunner.model.GoalRunnerResumeStatus
 import skillbill.engine.goalrunner.model.GoalRunnerStopStatus
 import skillbill.engine.goalrunner.model.GoalRunnerStopVerbResult
 import skillbill.goalrunner.model.GoalRunnerRunReport
@@ -46,9 +48,11 @@ internal fun goalStatusExitCode(
   databaseUnavailable: Boolean = false,
 ): Int = if (projection != null && !databaseUnavailable) 0 else 1
 
-internal fun goalPauseExitCode(result: GoalRunnerPauseResult): Int = if (result.status == "not_found") 1 else 0
+internal fun goalPauseExitCode(result: GoalRunnerPauseResult): Int =
+  if (result.status == GoalRunnerPauseStatus.NOT_FOUND) 1 else 0
 
-internal fun goalResumeExitCode(status: String): Int = if (status == "not_found") 1 else 0
+internal fun goalResumeExitCode(status: GoalRunnerResumeStatus): Int =
+  if (status == GoalRunnerResumeStatus.NOT_FOUND) 1 else 0
 
 internal fun goalStopExitCode(result: GoalRunnerStopVerbResult): Int =
   when (result.status) {

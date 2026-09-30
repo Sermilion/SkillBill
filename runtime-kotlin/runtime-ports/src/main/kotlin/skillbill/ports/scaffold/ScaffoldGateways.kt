@@ -92,11 +92,3 @@ interface ScaffoldCatalogGateway {
 
   fun discoverBaselineReviewCatalog(packsRoot: Path): BaselineReviewCatalog
 }
-
-interface UnsupportedScaffoldGateway {
-  fun retiredUnsupportedMessage(
-    command: String,
-    replacement: String,
-    editor: Boolean,
-  ): String
-}

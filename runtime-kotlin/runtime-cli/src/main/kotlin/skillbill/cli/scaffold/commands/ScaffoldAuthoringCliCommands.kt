@@ -17,7 +17,6 @@ import skillbill.cli.scaffold.payload.authoringResult
 import skillbill.cli.scaffold.payload.completeRenderText
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.ports.scaffold.ScaffoldGateway
-import skillbill.ports.scaffold.UnsupportedScaffoldGateway
 
 @Inject
 class ListSkillsCommand(
@@ -184,7 +183,6 @@ class EditSkillCommand(
   private val state: CliRunState,
   private val inputs: CliRunInputs,
   private val scaffoldGateway: ScaffoldGateway,
-  private val unsupportedScaffoldGateway: UnsupportedScaffoldGateway,
 ) : DocumentedCliCommand("edit", "Edit a content-managed skill's authored content.md and validate render output.") {
   private val skillName by argument(help = "Governed skill name to edit.")
   private val repoRoot by option(
@@ -203,7 +201,6 @@ class EditSkillCommand(
           state = state,
           inputs = inputs,
           scaffoldGateway = scaffoldGateway,
-          unsupportedScaffoldGateway = unsupportedScaffoldGateway,
           skillName = skillName,
           repoRoot = resolveCliRepositoryRoot(repoRoot, inputs).toString(),
           bodyFile = bodyFile,
