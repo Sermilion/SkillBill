@@ -1,6 +1,6 @@
 # SKILL-386 Subtask 2 - cross-module contract ownership seen from the CLI
 
-Parent spec: [.feature-specs/SKILL-386-runtime-cli-architecture/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-386-runtime-cli-architecture/spec.md](spec.md)
 Issue key: SKILL-386
 
 ## Scope

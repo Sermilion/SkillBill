@@ -1,27 +1,36 @@
 package skillbill.cli.install.nativeagent
 
+import com.github.ajalt.clikt.core.CliktCommand
 import me.tatarka.inject.annotations.Inject
 
 @Inject
 class NativeAgentClaudeCliCommands(
-  val link: InstallLinkClaudeAgentsCommand,
-  val unlink: InstallUnlinkClaudeAgentsCommand,
-)
+  link: InstallLinkClaudeAgentsCommand,
+  unlink: InstallUnlinkClaudeAgentsCommand,
+) {
+  val commands: List<CliktCommand> = listOf(link, unlink)
+}
 
 @Inject
 class NativeAgentCodexCliCommands(
-  val link: InstallLinkCodexAgentsCommand,
-  val unlink: InstallUnlinkCodexAgentsCommand,
-)
+  link: InstallLinkCodexAgentsCommand,
+  unlink: InstallUnlinkCodexAgentsCommand,
+) {
+  val commands: List<CliktCommand> = listOf(link, unlink)
+}
 
 @Inject
 class NativeAgentJunieCliCommands(
-  val link: InstallLinkJunieAgentsCommand,
-  val unlink: InstallUnlinkJunieAgentsCommand,
-)
+  link: InstallLinkJunieAgentsCommand,
+  unlink: InstallUnlinkJunieAgentsCommand,
+) {
+  val commands: List<CliktCommand> = listOf(link, unlink)
+}
 
 @Inject
 class NativeAgentCursorCliCommands(
-  val link: InstallLinkCursorAgentsCommand,
-  val unlink: InstallUnlinkCursorAgentsCommand,
-)
+  link: InstallLinkCursorAgentsCommand,
+  unlink: InstallUnlinkCursorAgentsCommand,
+) {
+  val commands: List<CliktCommand> = listOf(link, unlink)
+}

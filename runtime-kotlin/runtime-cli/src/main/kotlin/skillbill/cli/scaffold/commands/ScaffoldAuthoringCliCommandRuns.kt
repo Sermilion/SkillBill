@@ -8,16 +8,16 @@ import skillbill.cli.model.CliRunInputs
 import skillbill.cli.scaffold.payload.authoringResult
 import skillbill.cli.scaffold.payload.errorResult
 import skillbill.cli.scaffold.payload.readCliTextFile
+import skillbill.cli.scaffold.payload.retiredEditorModeMessage
+import skillbill.cli.scaffold.payload.retiredInteractiveModeMessage
 import skillbill.cli.scaffold.payload.unsupportedNativeScaffoldResult
 import skillbill.ports.scaffold.ScaffoldGateway
-import skillbill.ports.scaffold.UnsupportedScaffoldGateway
 import java.nio.file.Path
 
 internal data class EditSkillRunArgs(
   val state: CliRunState,
   val inputs: CliRunInputs,
   val scaffoldGateway: ScaffoldGateway,
-  val unsupportedScaffoldGateway: UnsupportedScaffoldGateway,
   val skillName: String,
   val repoRoot: String,
   val bodyFile: String?,
@@ -54,10 +54,9 @@ internal fun editSkillResult(args: EditSkillRunArgs): CliExecutionResult =
   when {
     args.editor ->
       unsupportedNativeScaffoldResult(
-        args.unsupportedScaffoldGateway.retiredUnsupportedMessage(
+        retiredEditorModeMessage(
           "edit --editor",
           "skill-bill fill ${args.skillName} --body-file <file>",
-          editor = true,
         ),
         args.format,
       )
@@ -72,10 +71,9 @@ internal fun editSkillResult(args: EditSkillRunArgs): CliExecutionResult =
       }
     else ->
       unsupportedNativeScaffoldResult(
-        args.unsupportedScaffoldGateway.retiredUnsupportedMessage(
+        retiredInteractiveModeMessage(
           "edit",
           "skill-bill fill ${args.skillName} --body-file <file>",
-          editor = false,
         ),
         args.format,
       )

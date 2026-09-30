@@ -4,7 +4,9 @@ import skillbill.engine.goalrunner.execution.core.asWorkerOwnership
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.isAtUnlaunchedBoundary
 import skillbill.engine.goalrunner.model.GoalRunnerPauseResult
+import skillbill.engine.goalrunner.model.GoalRunnerPauseStatus
 import skillbill.engine.goalrunner.model.GoalRunnerResumeResult
+import skillbill.engine.goalrunner.model.GoalRunnerResumeStatus
 import skillbill.engine.goalrunner.model.GoalRunnerStopStatus
 import skillbill.engine.goalrunner.model.GoalRunnerStopVerbResult
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP
@@ -33,12 +35,12 @@ class GoalRunnerStatusControlVerbs(
   ): GoalRunnerPauseResult {
     val loaded =
       manifestStore.loadByIssueKey(issueKey, repoRoot)
-        ?: return GoalRunnerPauseResult(issueKey = issueKey, status = "not_found")
+        ?: return GoalRunnerPauseResult(issueKey = issueKey, status = GoalRunnerPauseStatus.NOT_FOUND)
     val repositoryIdentity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
     manifestStore.bindRepositoryIdentity(loaded.parentWorkflowId, repositoryIdentity)
     val control =
       manifestStore.requestPause(loaded.parentWorkflowId)
-        ?: return GoalRunnerPauseResult(issueKey = issueKey, status = "not_found")
+        ?: return GoalRunnerPauseResult(issueKey = issueKey, status = GoalRunnerPauseStatus.NOT_FOUND)
     val effectiveControl =
       if (
         control.requiresPauseBoundary(loaded.manifest) && loaded.manifest.isAtUnlaunchedBoundary()
@@ -52,7 +54,7 @@ class GoalRunnerStatusControlVerbs(
     return GoalRunnerPauseResult(
       issueKey = issueKey,
       parentWorkflowId = loaded.parentWorkflowId,
-      status = if (effectiveControl.paused) "paused" else "requested",
+      status = if (effectiveControl.paused) GoalRunnerPauseStatus.PAUSED else GoalRunnerPauseStatus.REQUESTED,
       paused = effectiveControl.paused,
       pauseRequested = effectiveControl.pauseRequested,
       pauseReason = effectiveControl.pauseReason,
@@ -124,7 +126,7 @@ class GoalRunnerStatusControlVerbs(
   ): GoalRunnerResumeResult {
     val loaded =
       manifestStore.loadByIssueKey(issueKey, repoRoot)
-        ?: return GoalRunnerResumeResult(issueKey = issueKey, status = "not_found")
+        ?: return GoalRunnerResumeResult(issueKey = issueKey, status = GoalRunnerResumeStatus.NOT_FOUND)
     manifestStore.bindRepositoryIdentity(
       loaded.parentWorkflowId,
       goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort),
@@ -134,15 +136,15 @@ class GoalRunnerStatusControlVerbs(
       return GoalRunnerResumeResult(
         issueKey = issueKey,
         parentWorkflowId = loaded.parentWorkflowId,
-        status = "not_paused",
+        status = GoalRunnerResumeStatus.NOT_PAUSED,
       )
     }
     manifestStore.resume(loaded.parentWorkflowId)
-      ?: return GoalRunnerResumeResult(issueKey = issueKey, status = "not_found")
+      ?: return GoalRunnerResumeResult(issueKey = issueKey, status = GoalRunnerResumeStatus.NOT_FOUND)
     return GoalRunnerResumeResult(
       issueKey = issueKey,
       parentWorkflowId = loaded.parentWorkflowId,
-      status = "resumed",
+      status = GoalRunnerResumeStatus.RESUMED,
       clearedPauseReason = before.pauseReason,
     )
   }

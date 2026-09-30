@@ -85,7 +85,7 @@ internal fun GoalRunnerRunReport.toGoalRunCliMap(): Map<String, Any?> =
 
 internal fun GoalRunnerPauseResult.toGoalPauseCliMap(): Map<String, Any?> =
   linkedMapOf(
-    SharedPayloadKeys.STATUS to status,
+    SharedPayloadKeys.STATUS to status.wireValue,
     SharedPayloadKeys.ISSUE_KEY to issueKey,
     "parent_workflow_id" to parentWorkflowId,
     "paused" to paused,
@@ -95,7 +95,7 @@ internal fun GoalRunnerPauseResult.toGoalPauseCliMap(): Map<String, Any?> =
 
 internal fun goalPauseText(result: GoalRunnerPauseResult): String =
   buildString {
-    appendLine("goal ${result.issueKey}: ${result.status}")
+    appendLine("goal ${result.issueKey}: ${result.status.wireValue}")
     result.pauseReason?.let { appendLine("reason: $it") }
   }
 
@@ -118,7 +118,7 @@ internal fun goalStopText(result: GoalRunnerStopVerbResult): String =
 
 internal fun GoalRunnerResumeResult.toGoalResumeCliMap(): Map<String, Any?> =
   linkedMapOf(
-    SharedPayloadKeys.STATUS to status,
+    SharedPayloadKeys.STATUS to status.wireValue,
     SharedPayloadKeys.ISSUE_KEY to issueKey,
     "parent_workflow_id" to parentWorkflowId,
     "paused" to false,
@@ -128,7 +128,7 @@ internal fun GoalRunnerResumeResult.toGoalResumeCliMap(): Map<String, Any?> =
 
 internal fun goalResumeText(result: GoalRunnerResumeResult): String =
   buildString {
-    appendLine("goal ${result.issueKey}: ${result.status}")
+    appendLine("goal ${result.issueKey}: ${result.status.wireValue}")
     result.clearedPauseReason?.let { appendLine("cleared reason: $it") }
   }
 

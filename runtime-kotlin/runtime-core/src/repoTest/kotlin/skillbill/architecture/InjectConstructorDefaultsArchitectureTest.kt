@@ -53,6 +53,16 @@ class InjectConstructorDefaultsArchitectureTest {
   }
 
   @Test
+  fun `runtime-cli inject classes expose no constructor property`() {
+    val violations =
+      ArchitectureScanSupport.injectConstructorPropertyViolations(
+        baseline = emptySet(),
+        scanRoot = PrincipleEnforcementInventory.RUNTIME_CLI_MAIN,
+      )
+    assertEquals(emptyList(), violations, violations.joinToString("\n"))
+  }
+
+  @Test
   fun `inject constructor property scanner reports only non-private properties`() {
     val source =
       """

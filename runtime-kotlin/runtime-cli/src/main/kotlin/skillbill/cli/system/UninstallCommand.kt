@@ -10,6 +10,7 @@ import skillbill.application.uninstall.model.UninstallResult
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.formatOption
+import skillbill.cli.model.CliFormat
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
@@ -83,7 +84,7 @@ class UninstallCommand(
     payload: Map<String, Any?>,
     exitCode: Int = 0,
   ) {
-    if (format.wireName == "json") {
+    if (format == CliFormat.JSON) {
       state.complete(payload, format, exitCode)
     } else {
       state.completeText(text, payload, exitCode)

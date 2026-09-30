@@ -5,6 +5,7 @@ import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.agentaddon.AGENT_ADDON_SELECTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 
@@ -26,9 +27,11 @@ internal fun parseAgentAddonSelection(raw: String?): AgentAddonSelection {
       SharedPayloadKeys.CONTRACT_VERSION,
       FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ENTRIES,
     ) ||
-    map[SharedPayloadKeys.CONTRACT_VERSION] != "0.1"
+    map[SharedPayloadKeys.CONTRACT_VERSION] != AGENT_ADDON_SELECTION_CONTRACT_VERSION
   ) {
-    invalidAgentAddonSelection("Agent add-on selection must contain only contract_version=0.1 and entries.")
+    invalidAgentAddonSelection(
+      "Agent add-on selection must contain only contract_version=$AGENT_ADDON_SELECTION_CONTRACT_VERSION and entries.",
+    )
   }
   val entries =
     map[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ENTRIES] as? List<*>

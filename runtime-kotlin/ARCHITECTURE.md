@@ -482,7 +482,7 @@ runtime-core
   JSON output, help, completion surfaces, and CLI runtime context creation.
   SKILL-52.2 subtask 5 narrows the main-source project dependency allow-list to
   `runtime-application`, `runtime-contracts`, `runtime-core`, `runtime-domain`,
-  and `runtime-ports`. Every `runtime-infra` module is dropped
+  `runtime-engine`, and `runtime-ports`. Every `runtime-infra` module is dropped
   — runtime-cli has no concrete `skillbill.infrastructure.*` imports outside
   test sources; the infrastructure adapters are resolved through
   `RuntimeComponent` (kotlin-inject). The allow-list is enforced by
@@ -491,7 +491,7 @@ runtime-core
   server, MCP telemetry schema validation, and MCP runtime context creation.
   SKILL-52.2 subtask 5 narrows the main-source project dependency allow-list to
   `runtime-application`, `runtime-contracts`, `runtime-core`, `runtime-domain`,
-  and `runtime-ports`. Every `runtime-infra` module is dropped
+  `runtime-engine`, and `runtime-ports`. Every `runtime-infra` module is dropped
   — runtime-mcp has no concrete `skillbill.infrastructure.*` imports outside
   test sources; the infrastructure adapters are resolved through
   `RuntimeComponent`. The allow-list is enforced by
