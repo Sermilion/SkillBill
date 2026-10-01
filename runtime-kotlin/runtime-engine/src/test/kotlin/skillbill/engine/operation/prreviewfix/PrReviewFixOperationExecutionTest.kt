@@ -1,9 +1,9 @@
 package skillbill.engine.operation.prreviewfix
 
+import skillbill.engine.operation.core.InvalidOperationSelectionError
+import skillbill.engine.operation.core.MissingOperationSelectionError
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationOutcome
-import skillbill.error.operation.InvalidOperationSelectionError
-import skillbill.error.operation.MissingOperationSelectionError
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertContains

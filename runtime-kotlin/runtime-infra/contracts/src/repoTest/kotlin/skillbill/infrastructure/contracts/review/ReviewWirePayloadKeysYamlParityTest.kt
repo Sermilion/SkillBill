@@ -1,8 +1,12 @@
-package skillbill.contracts.review
+package skillbill.infrastructure.contracts.review
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.review.ReviewAccountingPayloadKeys
+import skillbill.contracts.review.ReviewFindingPayloadKeys
+import skillbill.contracts.review.ReviewFinishedTelemetryPayloadKeys
+import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.infrastructure.contracts.locator.ReviewContextSchemaPaths
 import skillbill.testing.repoRootFromTest

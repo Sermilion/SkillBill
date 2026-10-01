@@ -1,6 +1,6 @@
 package skillbill.engine.operation.release
 
-import skillbill.error.operation.MissingReleaseBumpError
+import skillbill.engine.operation.core.MissingReleaseBumpError
 
 enum class ReleaseBump(val wireValue: String) {
   PATCH("patch"),

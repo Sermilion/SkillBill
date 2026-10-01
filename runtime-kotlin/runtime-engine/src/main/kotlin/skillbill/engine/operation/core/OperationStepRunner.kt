@@ -11,7 +11,6 @@ import skillbill.engine.featuretask.slot.PhaseStepSession
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
-import skillbill.error.operation.OperationAnchorUnreadableError
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.workflow.gitops.WorkflowGitOperations

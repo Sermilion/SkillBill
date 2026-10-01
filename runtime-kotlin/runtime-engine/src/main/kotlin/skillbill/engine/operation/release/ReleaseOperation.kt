@@ -7,9 +7,9 @@ import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepResult
+import skillbill.engine.operation.core.ReleaseBranchBehindRemoteError
+import skillbill.engine.operation.core.ReleaseWorktreeDirtyError
 import skillbill.engine.operation.core.requireGitValue
-import skillbill.error.operation.ReleaseBranchBehindRemoteError
-import skillbill.error.operation.ReleaseWorktreeDirtyError
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 

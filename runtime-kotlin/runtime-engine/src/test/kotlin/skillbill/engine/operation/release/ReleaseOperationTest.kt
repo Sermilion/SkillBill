@@ -8,6 +8,9 @@ import skillbill.engine.featuretask.slot.reviewStepOutput
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.operation.core.ConfirmableOperation
 import skillbill.engine.operation.core.ConfirmedOperationProposal
+import skillbill.engine.operation.core.ConsumedOperationTokenError
+import skillbill.engine.operation.core.ForeignOperationTokenError
+import skillbill.engine.operation.core.MovedOperationAnchorsError
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationConfirmationGate
 import skillbill.engine.operation.core.OperationContext
@@ -17,13 +20,10 @@ import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepRunner
-import skillbill.error.operation.ConsumedOperationTokenError
-import skillbill.error.operation.ForeignOperationTokenError
-import skillbill.error.operation.MovedOperationAnchorsError
-import skillbill.error.operation.ReleaseBranchBehindRemoteError
-import skillbill.error.operation.ReleaseWorktreeDirtyError
-import skillbill.error.operation.SupersededOperationTokenError
-import skillbill.error.operation.UnknownOperationTokenError
+import skillbill.engine.operation.core.ReleaseBranchBehindRemoteError
+import skillbill.engine.operation.core.ReleaseWorktreeDirtyError
+import skillbill.engine.operation.core.SupersededOperationTokenError
+import skillbill.engine.operation.core.UnknownOperationTokenError
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations

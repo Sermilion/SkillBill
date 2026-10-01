@@ -2,13 +2,13 @@ package skillbill.engine.operation.featureguard
 
 import skillbill.engine.operation.core.ConfirmableOperation
 import skillbill.engine.operation.core.ConfirmedOperationProposal
+import skillbill.engine.operation.core.MissingOperationIntakeError
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepResult
 import skillbill.engine.operation.core.applyStoredProposal
 import skillbill.engine.operation.core.proposeFromStep
-import skillbill.error.operation.MissingOperationIntakeError
 
 class FeatureGuardOperation : ConfirmableOperation {
   override val id: String = "feature-guard"

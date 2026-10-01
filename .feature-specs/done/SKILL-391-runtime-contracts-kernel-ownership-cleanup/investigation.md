@@ -22,7 +22,7 @@ The fixes remove or narrow code. They add no layer, module, guard class or basel
   - AGENTS.md;
   - runtime-kotlin/ARCHITECTURE.md: placement rule L376-397, L596-616 and L940-946, and the EXACT_PACKAGE_SCC note L670-674;
   - runtime-contracts/agent/history.md (SKILL-349 entries only; the module has no decisions.md);
-  - `.feature-specs/done/SKILL-374-runtime-contracts-shared-kernel/investigation.md`, read in full;
+  - `../SKILL-374-runtime-contracts-shared-kernel/investigation.md`, read in full;
   - the untracked sibling bundles SKILL-389, SKILL-392, SKILL-393 and SKILL-395.
 
 ## Census
@@ -137,12 +137,12 @@ Other measurements:
 ## Guard matrix (opened and checked)
 
 - **Purity lock**, RuntimeArchitectureTest:40-58.
-  - It filters `relativePath` on `runtime-kotlin/runtime-contracts/src/main/kotlin/`.
+  - It filters `relativePath` on `../../../runtime-kotlin/runtime-contracts/src/main/kotlin`.
   - It asserts the file set is non-empty (L45-48) and has a synthetic fixture (L60-98).
   - Its ban lists are at RuntimeArchitectureTestSupport.kt:827-844.
 - **No SchemaPaths in the kernel**, RuntimeArchitectureTest:206-210. It resolves the module directory through RuntimeModuleCatalog.
 - **Per-module scan case**, PrincipleEnforcementInventory:26-50.
-  - Scan root: `runtime-kotlin/runtime-contracts/src/main/kotlin`.
+  - Scan root: `../../../runtime-kotlin/runtime-contracts/src/main/kotlin`.
   - Package prefix: `skillbill.`, the L60 fallback, because there is no moduleMainPackageRoots entry. The prefix therefore covers both kernel roots.
   - EXACT_PACKAGE_SCC applies at L41-42.
   - The four baselines `runtime-contracts-{package-cycle,ambient-clock,ambient-environment,inject-constructor-defaults}-baseline.txt` are empty.

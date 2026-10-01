@@ -1,7 +1,6 @@
 package skillbill.mcp.shared
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.InvalidMcpToolArgumentError
 
 internal class McpToolArguments(
   private val toolName: String,

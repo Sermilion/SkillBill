@@ -4,13 +4,13 @@ import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.operation.core.ConfirmableOperation
 import skillbill.engine.operation.core.ConfirmedOperationProposal
+import skillbill.engine.operation.core.MissingOperationIntakeError
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepResult
 import skillbill.engine.operation.core.applyStoredProposal
 import skillbill.engine.operation.core.proposeFromStep
-import skillbill.error.operation.MissingOperationIntakeError
 
 class FeatureGuardCleanupOperation(
   private val runPhase: (PhaseRunRequest) -> PhaseRunResult,

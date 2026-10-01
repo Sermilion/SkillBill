@@ -1,9 +1,9 @@
 package skillbill.engine.operation.verify
 
+import skillbill.engine.operation.core.MissingOperationIntakeError
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
-import skillbill.error.operation.MissingOperationIntakeError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import kotlin.test.Test
 import kotlin.test.assertEquals

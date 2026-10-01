@@ -1,6 +1,6 @@
 package skillbill.engine.operation.prreviewfix
 
-import skillbill.error.operation.InvalidOperationSelectionError
+import skillbill.engine.operation.core.InvalidOperationSelectionError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

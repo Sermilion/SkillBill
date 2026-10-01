@@ -1,7 +1,8 @@
-package skillbill.contracts.workflow.featuretask
+package skillbill.infrastructure.contracts.workflow.featuretask
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITY_CONTRACT_VERSION
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeCheckpointIdentitySchemaPaths
 import java.nio.file.Files
 import java.nio.file.Path
