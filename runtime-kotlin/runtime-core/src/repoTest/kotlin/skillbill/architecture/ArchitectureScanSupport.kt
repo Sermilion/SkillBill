@@ -555,8 +555,8 @@ object ArchitectureScanSupport {
     return CommentBoundary(blockComment, end + 2, isLineComment = false)
   }
 
-  private val PACKAGE_PATTERN = Regex("""^\s*package\s+([A-Za-z0-9_.]+)""", RegexOption.MULTILINE)
-  private val IMPORT_PATTERN = Regex("""^\s*import\s+([A-Za-z0-9_.]+)""", RegexOption.MULTILINE)
+  private val PACKAGE_PATTERN = Regex("""^package\s+([A-Za-z0-9_.]+)""", RegexOption.MULTILINE)
+  private val IMPORT_PATTERN = Regex("""^import\s+([A-Za-z0-9_.]+)""", RegexOption.MULTILINE)
   private val TOP_LEVEL_DECLARATION_PATTERN =
     Regex(
       """^\s*((?:(?:public|internal|private|protected|abstract|sealed|open|final|data|enum|value|fun)\s+)*)""" +

@@ -1,5 +1,6 @@
 package skillbill.di.core
 
+import skillbill.infrastructure.host.FileTelemetryConfigStore
 import skillbill.model.EnvironmentContext
 import skillbill.ports.telemetry.model.RemoteTransportResponse
 import skillbill.ports.telemetry.transport.RemoteTransportPort
@@ -37,9 +38,12 @@ class RuntimeComponentInvocationSnapshotTest {
           Clock.systemUTC(),
           component.runtimeDiagnostics,
           NoOpWorkflowSnapshotValidator,
+          component.runtimeVersion(),
         )
           .resolveDbPath().toAbsolutePath().normalize()
-      val firstConfigPath = component.telemetryConfigStorePort.configPath().toAbsolutePath().normalize()
+      val firstConfigPath =
+        component.telemetryConfigStore(FileTelemetryConfigStore(environment))
+          .configPath().toAbsolutePath().normalize()
       assertEquals(homeA, environment.userHome.toAbsolutePath().normalize())
 
       System.setProperty("user.home", homeB.toString())
@@ -51,8 +55,11 @@ class RuntimeComponentInvocationSnapshotTest {
           Clock.systemUTC(),
           component.runtimeDiagnostics,
           NoOpWorkflowSnapshotValidator,
+          component.runtimeVersion(),
         ).resolveDbPath().toAbsolutePath().normalize()
-      val secondConfigPath = component.telemetryConfigStorePort.configPath().toAbsolutePath().normalize()
+      val secondConfigPath =
+        component.telemetryConfigStore(FileTelemetryConfigStore(afterMutationEnvironment))
+          .configPath().toAbsolutePath().normalize()
 
       assertEquals(homeA, afterMutationEnvironment.userHome.toAbsolutePath().normalize())
       assertEquals(firstDbPath, secondDbPath)
@@ -151,12 +158,14 @@ class RuntimeComponentInvocationSnapshotTest {
         Clock.systemUTC(),
         componentA.runtimeDiagnostics,
         NoOpWorkflowSnapshotValidator,
+        componentA.runtimeVersion(),
       ),
       componentB.databaseSessionFactory(
         componentB.resolvedEnvironmentContext,
         Clock.systemUTC(),
         componentB.runtimeDiagnostics,
         NoOpWorkflowSnapshotValidator,
+        componentB.runtimeVersion(),
       ),
     )
   }

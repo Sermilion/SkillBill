@@ -12,6 +12,7 @@ import skillbill.engine.work.model.IdeStatusProblemCode
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
 import skillbill.goalrunner.model.GoalRunnerControlState
+import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.ensureTestDatabase
@@ -20,6 +21,8 @@ import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
+import skillbill.ports.goalrunner.runner.GoalRunnerManifestStoreDefaults
+import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.idestatus.NoopIdeStatusValidator
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.system.CheckedOutBranchSource
@@ -210,9 +213,36 @@ private class SnapshotFixture(
       branchSource = CheckedOutBranchSource { "feat/SKILL-999-snapshot" },
       clock = Clock.fixed(observedAt, ZoneOffset.UTC),
       repositoryEnclosingRootPort = CanonicalRepositoryRoot,
-      manifestStore = component.goalRunnerManifestStore,
+      manifestStore = EmptyManifestStore,
     )
   }
+}
+
+private object EmptyManifestStore : GoalRunnerManifestStoreDefaults() {
+  override fun loadByIssueKey(
+    issueKey: String,
+    repoRoot: Path?,
+  ): GoalRunnerManifestState? = null
+
+  override fun acquireExecutionLease(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+    expectedOwnerToken: String?,
+  ): Boolean = error("Unused in the IDE status snapshot fixture.")
+
+  override fun heartbeatExecutionLease(
+    parentWorkflowId: String,
+    lease: GoalRunnerExecutionLease,
+  ): Boolean = error("Unused in the IDE status snapshot fixture.")
+
+  override fun releaseExecutionLease(
+    parentWorkflowId: String,
+    ownerToken: String,
+    generation: Long,
+  ): Boolean = error("Unused in the IDE status snapshot fixture.")
+
+  override fun save(state: GoalRunnerManifestState): GoalRunnerManifestState =
+    error("Unused in the IDE status snapshot fixture.")
 }
 
 private object NoopSnapshotValidator : WorkflowSnapshotValidator {
