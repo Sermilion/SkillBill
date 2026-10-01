@@ -4,7 +4,6 @@ import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
-import skillbill.infrastructure.sqlite.core.ops.attachSqliteDiagnostics
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.core.schema.DatabaseIdentity
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
@@ -1562,39 +1561,25 @@ class DatabaseMigrationsReviewAttributionTest {
     seedLegacyGoalRunnerControlsMigrationFixture(dbPath)
     SqliteTestDiagnostics.reset()
 
-    val delegate = DriverManager.getDriver("jdbc:sqlite:$dbPath")
-    val observingDriver =
-      SqliteConnectionRecordingDriver(delegate) { connection ->
-        connection.attachSqliteDiagnostics(SqliteTestDiagnostics)
-      }
-    DriverManager.deregisterDriver(delegate)
-    DriverManager.registerDriver(observingDriver)
-    DriverManager.registerDriver(delegate)
-    try {
-      DatabaseRuntime.establishSchemaReadiness(dbPath)
-      DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
-        val store = GoalRunnerControlStore(connection)
-        assertEquals(
-          GoalRunnerReviewPolicy(CodeReviewExecutionMode.INLINE),
-          store.reviewPolicy("wftr-legacy-goal-parent"),
-        )
-        assertEquals(
-          mapOf(
-            2 to
-              GoalRunnerOutOfBandAcceptance(
-                subtaskId = 2,
-                commitSha = "legacy-commit",
-                reason = "accepted outside the normal review path",
-                acceptedAt = "2026-09-17T10:00:00Z",
-              ),
-          ),
-          store.outOfBandAcceptances("wftr-legacy-goal-parent"),
-        )
-      }
-    } finally {
-      DriverManager.deregisterDriver(observingDriver)
-      DriverManager.deregisterDriver(delegate)
-      DriverManager.registerDriver(delegate)
+    DatabaseRuntime.establishSchemaReadiness(dbPath, SqliteTestDiagnostics)
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      val store = GoalRunnerControlStore(connection)
+      assertEquals(
+        GoalRunnerReviewPolicy(CodeReviewExecutionMode.INLINE),
+        store.reviewPolicy("wftr-legacy-goal-parent"),
+      )
+      assertEquals(
+        mapOf(
+          2 to
+            GoalRunnerOutOfBandAcceptance(
+              subtaskId = 2,
+              commitSha = "legacy-commit",
+              reason = "accepted outside the normal review path",
+              acceptedAt = "2026-09-17T10:00:00Z",
+            ),
+        ),
+        store.outOfBandAcceptances("wftr-legacy-goal-parent"),
+      )
     }
 
     val migrationWarnings =

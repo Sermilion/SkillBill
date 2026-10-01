@@ -8,7 +8,7 @@ import java.sql.Connection
 class ReviewAccountingTestHandle internal constructor(
   private val connection: Connection,
 ) {
-  fun load(reviewId: String) = loadReviewAccounting(connection, reviewId, "test-runtime-version")
+  fun load(reviewId: String) = loadReviewAccounting(connection, reviewId, "test-runtime-version", SqliteTestDiagnostics)
 
   fun upsert(record: ReviewAccountingRecord) {
     upsertReviewAccounting(connection, record)

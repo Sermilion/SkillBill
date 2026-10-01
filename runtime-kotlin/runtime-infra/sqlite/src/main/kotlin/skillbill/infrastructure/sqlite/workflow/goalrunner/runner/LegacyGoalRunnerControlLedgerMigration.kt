@@ -8,8 +8,8 @@ import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.error.shellcontent.InvalidAgentAddonSelectionError
 import skillbill.infrastructure.sqlite.core.ops.recordMigrationNormalization
-import skillbill.infrastructure.sqlite.core.ops.sqliteDiagnostics
 import skillbill.infrastructure.sqlite.workflow.toFeatureTaskWorkflowStateRecord
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.workflow.model.toSnapshot
@@ -17,7 +17,10 @@ import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import java.sql.Connection
 
-internal fun applyLegacyGoalRunnerControlLedgerMigration(connection: Connection) {
+internal fun applyLegacyGoalRunnerControlLedgerMigration(
+  connection: Connection,
+  diagnostics: RuntimeDiagnostics,
+) {
   val store = GoalRunnerControlStore(connection)
   connection.prepareStatement(
     """
@@ -49,7 +52,7 @@ internal fun applyLegacyGoalRunnerControlLedgerMigration(connection: Connection)
           movedKeys += DurableWorkflowArtifactFamily.GOAL_OUT_OF_BAND_ACCEPTANCE.label()
         }
         if (movedKeys.isNotEmpty()) {
-          connection.sqliteDiagnostics().recordMigrationNormalization(
+          diagnostics.recordMigrationNormalization(
             seam = "goal_runner_controls.legacy_artifacts",
             parentWorkflowId = workflowId,
             movedArtifactKeys = movedKeys,

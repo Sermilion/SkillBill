@@ -2,18 +2,14 @@ package skillbill.infrastructure.sqlite.core.schema
 
 import java.nio.file.Path
 
-internal class DatabaseWriteReadinessGate(
-  private val onSchemaEstablishment: () -> Unit = {},
-) {
+internal class DatabaseWriteReadinessGate {
   @Volatile
   private var published: DatabaseIdentity? = null
   private val lock = Any()
 
   fun ensureReady(
     dbPath: Path,
-    establishSchema: () -> Unit = {
-      DatabaseRuntime.establishSchemaReadiness(dbPath)
-    },
+    establishSchema: () -> Unit,
   ) {
     val normalized = dbPath.toAbsolutePath().normalize()
     val cached = published
@@ -29,7 +25,6 @@ internal class DatabaseWriteReadinessGate(
       }
       published = null
       runCatching {
-        onSchemaEstablishment()
         establishSchema()
         published = DatabaseIdentity.read(normalized)
           ?: error("Database readiness completed but identity could not be read at '$normalized'.")

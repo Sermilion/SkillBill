@@ -1,6 +1,8 @@
 package skillbill.infrastructure.sqlite.telemetry.lifecycle
 
+import skillbill.infrastructure.sqlite.SqliteTestDiagnostics
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
+import skillbill.infrastructure.sqlite.ensureDatabase
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceOutcome
 import java.nio.file.Files
@@ -13,7 +15,7 @@ class FeatureTaskRuntimeSharedEvidenceTelemetryStoreTest {
   fun `shared evidence measurement is enqueued under the new event name with its bounded payload`() {
     val dbPath = Files.createTempDirectory("shared-evidence-telemetry").resolve("metrics.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       val record =
         FeatureTaskRuntimeSharedEvidenceMeasurement(
           workflowId = "wftr-1",

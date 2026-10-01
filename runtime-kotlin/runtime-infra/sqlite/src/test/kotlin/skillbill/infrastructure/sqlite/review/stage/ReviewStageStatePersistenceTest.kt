@@ -3,6 +3,7 @@ package skillbill.infrastructure.sqlite.review.stage
 import skillbill.error.shellcontent.InvalidReviewContextSchemaError
 import skillbill.infrastructure.sqlite.SQLiteReviewRunCompletenessRepository
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
+import skillbill.infrastructure.sqlite.ensureDatabase
 import skillbill.infrastructure.sqlite.tempDbConnection
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewSeverity

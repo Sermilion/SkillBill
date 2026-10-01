@@ -5,7 +5,6 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleSessionCompletion
 import skillbill.contracts.telemetry.TelemetryMeasurementAvailability
 import skillbill.error.core.ShellContentContractException
-import skillbill.infrastructure.sqlite.core.ops.InternalSqliteDiagnostics
 import skillbill.infrastructure.sqlite.core.ops.degradedValuePreview
 import skillbill.infrastructure.sqlite.core.ops.recordDegradedValue
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
@@ -63,7 +62,7 @@ internal fun featureTaskRuntimeFinishedPayload(
   row: Map<String, Any?>,
   level: String,
   salt: String,
-  diagnostics: RuntimeDiagnostics = InternalSqliteDiagnostics,
+  diagnostics: RuntimeDiagnostics,
 ): Map<String, Any?> =
   linkedMapOf<String, Any?>(LifeKeys.SESSION_ID to row.stringOrEmpty(LifeKeys.SESSION_ID)).apply {
     putAll(correlationFields(row, level, salt))
@@ -215,7 +214,7 @@ internal fun qualityCheckStartedPayload(row: Map<String, Any?>): Map<String, Any
 internal fun qualityCheckFinishedPayload(
   row: Map<String, Any?>,
   level: String,
-  diagnostics: RuntimeDiagnostics = InternalSqliteDiagnostics,
+  diagnostics: RuntimeDiagnostics,
 ): Map<String, Any?> {
   val result = row.stringOrEmpty(LifeKeys.RESULT).ifBlank { "skipped" }
   val reconcilerStale = result == STALE_TERMINAL_VALUE
@@ -282,7 +281,7 @@ internal fun featureVerifyStartedPayload(
 internal fun featureVerifyFinishedPayload(
   row: Map<String, Any?>,
   level: String,
-  diagnostics: RuntimeDiagnostics = InternalSqliteDiagnostics,
+  diagnostics: RuntimeDiagnostics,
 ): Map<String, Any?> =
   featureVerifyStartedPayload(row, level).toMutableMap().apply {
     put(LifeKeys.FEATURE_FLAG_AUDIT_PERFORMED, row.booleanFromInt(LifeKeys.FEATURE_FLAG_AUDIT_PERFORMED))

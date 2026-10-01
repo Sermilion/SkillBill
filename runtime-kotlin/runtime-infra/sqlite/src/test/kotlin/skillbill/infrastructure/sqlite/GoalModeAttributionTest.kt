@@ -18,7 +18,7 @@ class GoalModeAttributionTest {
   @Test
   fun `prose lifecycle full sequence retains mode=prose row but emits runtime-only goal stats`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
 
       store.goalStarted(startedRecord("wf-prose-1", mode = "prose"), level = "full")
       store.goalSubtaskFinished(subtask(id = 1, workflowId = "wf-prose-1", status = "complete"), "full")
@@ -63,7 +63,7 @@ class GoalModeAttributionTest {
   @Test
   fun `calling goal_started twice with same workflow_id produces exactly one row (idempotent re-emit)`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       val record = startedRecord("wf-prose-idem", mode = "prose")
 
       store.goalStarted(record, level = "full")
@@ -78,7 +78,7 @@ class GoalModeAttributionTest {
   @Test
   fun `calling goal_finished twice with same workflow_id produces exactly one row (idempotent re-emit)`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       store.goalStarted(startedRecord("wf-prose-fin-idem", mode = "prose"), level = "full")
       val finished =
         GoalFinishedRecord(
@@ -159,7 +159,7 @@ class GoalModeAttributionTest {
   @Test
   fun `goal_stats byMode breakdown emits runtime-only buckets and excludes legacy prose rows`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
 
       finishedRun(store, workflowId = "wf-rt-1", mode = "runtime", status = "completed", durationMs = 60_000)
       finishedRun(store, workflowId = "wf-rt-2", mode = "runtime", status = "blocked", durationMs = 120_000)

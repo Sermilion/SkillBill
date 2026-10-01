@@ -13,6 +13,7 @@ import skillbill.infrastructure.sqlite.telemetry.goal.saveGoalFinished
 import skillbill.infrastructure.sqlite.telemetry.goal.saveGoalIssueFinished
 import skillbill.infrastructure.sqlite.telemetry.goal.saveGoalStarted
 import skillbill.infrastructure.sqlite.telemetry.goal.saveGoalSubtaskFinished
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.telemetry.lifecycle.GoalLifecycleTelemetryRepository
 import skillbill.telemetry.model.GoalFinishedRecord
 import skillbill.telemetry.model.GoalIssueFinishedRecord
@@ -23,6 +24,7 @@ import java.sql.Connection
 internal class LifecycleTelemetryGoalSessionAdapter(
   private val connection: Connection,
   private val runtimeVersion: String,
+  private val diagnostics: RuntimeDiagnostics,
 ) : GoalLifecycleTelemetryRepository {
   override fun goalStarted(
     record: GoalStartedRecord,
@@ -54,7 +56,7 @@ internal class LifecycleTelemetryGoalSessionAdapter(
     level: String,
   ) {
     saveGoalSubtaskFinished(connection, record)
-    emitGoalSubtaskFinished(connection, runtimeVersion, record, level)
+    emitGoalSubtaskFinished(connection, runtimeVersion, record, level, diagnostics)
   }
 
   override fun goalFinished(
@@ -80,8 +82,8 @@ internal class LifecycleTelemetryGoalSessionAdapter(
     record: GoalIssueFinishedRecord,
     level: String,
   ) {
-    if (saveGoalIssueFinished(connection, record).persisted) {
-      emitGoalIssueFinished(connection, runtimeVersion, record.parentWorkflowId, record.issueKey, level)
+    if (saveGoalIssueFinished(connection, record, diagnostics).persisted) {
+      emitGoalIssueFinished(connection, runtimeVersion, record.parentWorkflowId, record.issueKey, level, diagnostics)
     }
   }
 }

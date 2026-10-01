@@ -18,7 +18,7 @@ fun telemetryReliabilityEmittedEnvelope(
 ): LinkedHashMap<String, Any?> {
   val dbPath = Files.createTempDirectory("telemetry-reliability-emitter").resolve("metrics.db")
   return ensureTestDatabase(dbPath).use { connection ->
-    emit(LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version"), connection)
+    emit(LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics), connection)
     val payloadJson =
       connection.prepareStatement(
         "SELECT payload_json FROM telemetry_outbox WHERE event_name = ? ORDER BY id DESC LIMIT 1",
@@ -52,7 +52,7 @@ fun telemetryReliabilityReviewFinishedEnvelope(
   val dbPath = Files.createTempDirectory("telemetry-reliability-review").resolve("metrics.db")
   return ensureTestDatabase(dbPath).use { connection ->
     val review = ReviewParser.parseReview(reviewMarkdown)
-    SQLiteReviewRepository(connection, Clock.systemUTC(), "test-runtime-version")
+    SQLiteReviewRepository(connection, Clock.systemUTC(), "test-runtime-version", SqliteTestDiagnostics)
       .saveImportedReview(review, sourcePath = null)
     linkedMapOf<String, Any?>().apply {
       put("event_name", "skillbill_review_finished")

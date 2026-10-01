@@ -2,10 +2,10 @@ package skillbill.infrastructure.sqlite.telemetry.goal
 
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.core.ops.sqliteDiagnostics
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.enqueueTelemetry
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.stringOrEmpty
 import skillbill.infrastructure.sqlite.telemetry.redaction.telemetryRedactionSalt
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.telemetry.model.GoalSubtaskFinishedRecord
 import java.sql.Connection
 import java.sql.ResultSet
@@ -46,6 +46,7 @@ internal fun emitGoalIssueFinished(
   parentWorkflowId: String,
   issueKey: String,
   level: String,
+  diagnostics: RuntimeDiagnostics,
 ) {
   val row = goalIssueProgressRow(connection, parentWorkflowId, issueKey) ?: return
   if (row.stringOrEmpty("finished_event_emitted_at").isNotBlank()) {
@@ -56,7 +57,7 @@ internal fun emitGoalIssueFinished(
       row,
       level,
       telemetryRedactionSalt(connection),
-      connection.sqliteDiagnostics(),
+      diagnostics,
     )
   enqueueTelemetry(connection, runtimeVersion, TelemetryOutboxEvent.GOAL_ISSUE_FINISHED, payload)
   markGoalIssueProgressEmitted(connection, parentWorkflowId, issueKey)
@@ -67,6 +68,7 @@ internal fun emitGoalSubtaskFinished(
   runtimeVersion: String,
   record: GoalSubtaskFinishedRecord,
   level: String,
+  diagnostics: RuntimeDiagnostics,
 ) {
   val row = goalSubtaskEventRow(connection, record.issueKey, record.subtaskId, record.workflowId) ?: return
   if (row.stringOrEmpty("subtask_event_emitted_at").isNotBlank()) {
@@ -77,7 +79,7 @@ internal fun emitGoalSubtaskFinished(
       row,
       level,
       telemetryRedactionSalt(connection),
-      connection.sqliteDiagnostics(),
+      diagnostics,
     )
   enqueueTelemetry(connection, runtimeVersion, TelemetryOutboxEvent.GOAL_SUBTASK_FINISHED, payload)
   markGoalSubtaskEventEmitted(connection, record.issueKey, record.subtaskId, record.workflowId)

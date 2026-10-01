@@ -21,7 +21,7 @@ class GoalIssueProgressStoreTest {
   @Test
   fun `goal issue progress state entry metadata changes only on real status transitions`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       val parentWorkflowId = "wf-state-parent"
       val initial = startedRecord(parentWorkflowId, "seg:1", resumed = false, startedAt = "2026-06-04T10:00:00Z")
       store.goalStarted(initial, "full")
@@ -43,7 +43,7 @@ class GoalIssueProgressStoreTest {
   @Test
   fun `delayed blocked segments cannot replace a terminal goal issue state`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       val parentWorkflowId = "wf-terminal-parent"
       store.goalStarted(startedRecord(parentWorkflowId, "seg:1", resumed = false), "full")
       val completed = goalIssueFinishedRecord(parentWorkflowId)
@@ -58,7 +58,7 @@ class GoalIssueProgressStoreTest {
   @Test
   fun `late goal segment starts cannot replace a terminal goal issue state`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       val parentWorkflowId = "wf-terminal-start-parent"
       val firstSegment = startedRecord(parentWorkflowId, "seg:1", resumed = false)
       store.goalStarted(firstSegment, "full")
@@ -73,7 +73,7 @@ class GoalIssueProgressStoreTest {
   @Test
   fun `goal issue completion recovers aggregates from persisted segments when progress is missing`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       val firstStart = startedRecord("wf-recover", "seg:1", resumed = false, startedAt = "2026-06-04T10:00:00Z")
       val secondStart = startedRecord("wf-recover", "seg:2", resumed = true, startedAt = "2026-06-04T10:10:00Z")
       store.goalStarted(firstStart, "full")
@@ -93,7 +93,7 @@ class GoalIssueProgressStoreTest {
   @Test
   fun `goal issue completion without trustworthy history suppresses terminal emission`() {
     withConnection { connection ->
-      LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version").goalIssueFinished(
+      LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics).goalIssueFinished(
         goalIssueFinishedRecord("wf-missing").copy(issueKey = "SKILL-NO-HISTORY"),
         "full",
       )
@@ -104,7 +104,7 @@ class GoalIssueProgressStoreTest {
   @Test
   fun `paused goal segments record a resumable status without counting a block`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       val parentWorkflowId = "wf-paused-parent"
       store.goalStarted(startedRecord(parentWorkflowId, "seg:1", resumed = false), "full")
 
