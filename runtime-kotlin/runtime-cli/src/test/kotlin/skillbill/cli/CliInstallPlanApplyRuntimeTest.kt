@@ -2,7 +2,7 @@ package skillbill.cli
 
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.install.apply.installApplyPayload
-import skillbill.cli.install.core.installPlanPayload
+import skillbill.cli.install.apply.installPlanPayload
 import skillbill.cli.kernel.cli.CliOutput
 import skillbill.cli.model.CliFormat
 import skillbill.cli.model.CliRuntimeContext

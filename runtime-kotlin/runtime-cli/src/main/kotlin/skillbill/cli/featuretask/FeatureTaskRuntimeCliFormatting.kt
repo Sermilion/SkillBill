@@ -8,7 +8,6 @@ import skillbill.application.workflow.persist.openFeatureTask
 import skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.cli.model.CliRunInputs
-import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -33,16 +32,6 @@ internal fun WorkflowService.openRuntimeWorkflowId(args: WorkflowServiceOpenFeat
     is WorkflowOpenResult.Ok -> opened.workflowId
     is WorkflowOpenResult.Error -> throw UsageError("Could not open a feature-task workflow: ${opened.error}")
   }
-
-internal data class VerifyRuntimeResumeArgs(
-  val lookupService: FeatureTaskContinuationLookupService,
-  val workflowId: String,
-  val issueKey: String,
-  val specPath: String,
-  val repoRoot: Path,
-  val goalChild: Boolean,
-  val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
-)
 
 internal fun runtimeRunEventSink(
   inputs: CliRunInputs,

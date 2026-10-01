@@ -6,6 +6,7 @@ import skillbill.application.install.ExternalAddonOverlayService
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.ShellContentContractException
@@ -51,7 +52,7 @@ class InstallApplyExternalAddonsCommand(
     if (result.appliedSources.isEmpty() && result.skippedSources.isEmpty()) {
       state.completeText(
         "no external addon sources\n",
-        mapOf(SharedPayloadKeys.STATUS to "ok", "touched" to false),
+        mapOf(SharedPayloadKeys.STATUS to CliPayloadStatus.OK, "touched" to false),
       )
       return
     }
@@ -66,7 +67,7 @@ class InstallApplyExternalAddonsCommand(
     state.completeText(
       applied + skipped,
       mapOf(
-        SharedPayloadKeys.STATUS to "ok",
+        SharedPayloadKeys.STATUS to CliPayloadStatus.OK,
         "touched" to result.touched,
         "applied" to result.appliedSources.map { it.platform },
         "skipped" to result.skippedSources.map { it.platform },

@@ -8,6 +8,7 @@ import skillbill.application.install.ExternalPlatformPackResolutionService
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.ShellContentContractException
@@ -64,7 +65,7 @@ class ConfigRegisterExternalPlatformPackCommand(
     if (dryRun) {
       state.completeText(
         "Would register ${resolvedPath.toAbsolutePath().normalize()} for platform pack '$slug'.\n",
-        mapOf(SharedPayloadKeys.STATUS to "ok", "dry_run" to true, "slug" to slug),
+        mapOf(SharedPayloadKeys.STATUS to CliPayloadStatus.OK, "dry_run" to true, "slug" to slug),
       )
       return
     }
@@ -85,7 +86,7 @@ class ConfigRegisterExternalPlatformPackCommand(
       }
     state.completeText(
       "Registered ${sources.size} external platform pack source(s).\n",
-      mapOf(SharedPayloadKeys.STATUS to "ok", "slug" to slug, "count" to sources.size),
+      mapOf(SharedPayloadKeys.STATUS to CliPayloadStatus.OK, "slug" to slug, "count" to sources.size),
     )
   }
 }

@@ -21,6 +21,7 @@ import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
@@ -32,6 +33,7 @@ class FeatureTaskRuntimeRunPreparation(
   private val agentAddonSelectionPort: AgentAddonSelectionPort,
   private val executableLookup: ExecutableLookup,
   private val lookupService: FeatureTaskContinuationLookupService,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val inputs: CliRunInputs,
 ) {
   internal fun prepareRun(
@@ -53,18 +55,38 @@ class FeatureTaskRuntimeRunPreparation(
   ): PreparedRuntimeRun {
     val resolvedRepoRoot = resolveCliRepositoryRoot(options.repoRoot, inputs)
     val prepared = prepare(options, resolvedRepoRoot, issueKey, specPath)
-    verifyRuntimeResume(
-      VerifyRuntimeResumeArgs(
-        lookupService = lookupService,
-        workflowId = workflowId,
-        issueKey = issueKey,
-        specPath = specPath,
-        repoRoot = prepared.repoRoot,
-        goalChild = options.goalParentIssueKey != null,
-        repositoryEnclosingRootPort = inputs.repositoryEnclosingRootPort,
-      ),
-    )
+    verifyRuntimeResume(workflowId, issueKey, specPath, prepared.repoRoot, options.goalParentIssueKey != null)
     return prepared
+  }
+
+  private fun verifyRuntimeResume(
+    workflowId: String,
+    issueKey: String,
+    specPath: String,
+    repoRoot: Path,
+    goalChild: Boolean,
+  ) {
+    val identity = repositoryEnclosingRootPort.repositoryIdentity(repoRoot)
+    val result =
+      if (goalChild) {
+        lookupService.lookupGoalChild(issueKey, identity, workflowId)
+      } else {
+        lookupService.lookup(issueKey, identity, workflowId)
+      }
+    val candidate = resumableRuntimeCandidate(workflowId, result)
+    requireRuntimeMode(workflowId, candidate.mode)
+    requireMatchingGovernedSpec(workflowId, candidate.governedSpecPath, repoRoot, Path.of(specPath))
+  }
+
+  private fun requireMatchingGovernedSpec(
+    workflowId: String,
+    persistedPath: String,
+    repoRoot: Path,
+    specPath: Path,
+  ) {
+    if (persistedPath != repositoryEnclosingRootPort.governedSpecPathForCli(repoRoot, specPath)) {
+      throw UsageError("Workflow '$workflowId' was persisted with a different governed spec path.")
+    }
   }
 
   private fun resolveSpecPath(
@@ -161,20 +183,6 @@ class FeatureTaskRuntimeRunPreparation(
   }
 }
 
-private fun verifyRuntimeResume(args: VerifyRuntimeResumeArgs) {
-  val effectiveRoot = args.repoRoot
-  val identity = args.repositoryEnclosingRootPort.repositoryIdentity(effectiveRoot)
-  val result =
-    if (args.goalChild) {
-      args.lookupService.lookupGoalChild(args.issueKey, identity, args.workflowId)
-    } else {
-      args.lookupService.lookup(args.issueKey, identity, args.workflowId)
-    }
-  val candidate = resumableRuntimeCandidate(args.workflowId, result)
-  requireRuntimeMode(args.workflowId, candidate.mode)
-  requireMatchingGovernedSpec(args, candidate.governedSpecPath, effectiveRoot, Path.of(args.specPath))
-}
-
 private fun resumableRuntimeCandidate(
   workflowId: String,
   result: FeatureTaskContinuationLookupResult,
@@ -196,20 +204,5 @@ private fun requireRuntimeMode(
 ) {
   if (mode != FeatureTaskWorkflowMode.RUNTIME) {
     throw UsageError("Workflow '$workflowId' was persisted in ${mode.wireValue} mode.")
-  }
-}
-
-private fun requireMatchingGovernedSpec(
-  args: VerifyRuntimeResumeArgs,
-  persistedPath: String,
-  effectiveRoot: Path,
-  specPath: Path,
-) {
-  val workflowId = args.workflowId
-  if (
-    persistedPath !=
-    args.repositoryEnclosingRootPort.governedSpecPathForCli(effectiveRoot, specPath)
-  ) {
-    throw UsageError("Workflow '$workflowId' was persisted with a different governed spec path.")
   }
 }

@@ -38,7 +38,7 @@ object PrincipleEnforcementInventory {
       packagePrefix = packagePrefixForModule(moduleName),
       packageCycleBaseline = packageCycleBaselineForModule(moduleName, baselineStem),
       packageCycleGranularity =
-        if (moduleName == "runtime-domain" || moduleName == "runtime-contracts") {
+        if (moduleName == "runtime-domain" || moduleName == "runtime-contracts" || moduleName == "runtime-cli") {
           ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC
         } else {
           ArchitectureScanSupport.PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR
@@ -99,7 +99,7 @@ object PrincipleEnforcementInventory {
       else -> "$baselineStem-inject-constructor-defaults-baseline.txt"
     }
 
-  val cliSharedLeafAreas: Set<String> = setOf("codereview", "kernel", "model")
+  val cliSharedLeafAreas: Set<String> = setOf("kernel", "model")
 
   const val CLI_COMPOSITION_ROOT_AREA: String = "core"
 

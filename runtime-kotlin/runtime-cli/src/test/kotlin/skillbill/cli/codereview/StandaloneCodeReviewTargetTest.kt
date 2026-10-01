@@ -2,6 +2,8 @@ package skillbill.cli.codereview
 
 import com.github.ajalt.clikt.core.UsageError
 import skillbill.application.reviewevidence.model.ParallelReviewScope
+import skillbill.cli.kernel.cli.DEFAULT_CODE_REVIEW_SCOPE
+import skillbill.cli.kernel.cli.resolveStandaloneCodeReviewTarget
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

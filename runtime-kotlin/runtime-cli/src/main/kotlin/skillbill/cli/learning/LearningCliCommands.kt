@@ -21,6 +21,8 @@ import skillbill.cli.kernel.payload.toPayload
 import skillbill.cli.model.CliFormat
 import skillbill.learnings.model.LearningScope
 
+private val learningScopeChoices = LearningScope.entries.associateBy(LearningScope::wireName)
+
 @Inject
 class LearningsQueryCommands(
   listCommand: LearningsListCommand,
@@ -109,11 +111,7 @@ class LearningsAddCommand(
   private val service: LearningService,
   private val state: CliRunState,
 ) : DocumentedCliCommand("add", "Create a learning from a rejected review finding.") {
-  private val scope by option("--scope").choice(
-    "global" to LearningScope.GLOBAL,
-    "repo" to LearningScope.REPO,
-    "skill" to LearningScope.SKILL,
-  ).default(LearningScope.GLOBAL)
+  private val scope by option("--scope").choice(learningScopeChoices).default(LearningScope.GLOBAL)
   private val scopeKey by option("--scope-key").default("")
   private val title by option("--title").required()
   private val rule by option("--rule").required()
@@ -137,11 +135,7 @@ class LearningsEditCommand(
   private val state: CliRunState,
 ) : DocumentedCliCommand("edit", "Edit a local learning entry.") {
   private val id by option("--id").int().required()
-  private val scope by option("--scope").choice(
-    "global" to LearningScope.GLOBAL,
-    "repo" to LearningScope.REPO,
-    "skill" to LearningScope.SKILL,
-  )
+  private val scope by option("--scope").choice(learningScopeChoices)
   private val scopeKey by option("--scope-key")
   private val title by option("--title")
   private val rule by option("--rule")

@@ -4,9 +4,8 @@ import skillbill.application.install.ExternalAddonOverlayService
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.model.CliFormat
 import skillbill.cli.model.CliRunInputs
-import skillbill.cli.scaffold.commands.NativeScaffoldRunArgs
-import skillbill.cli.scaffold.payload.runNativeScaffoldPayload
-import skillbill.infrastructure.host.CanonicalRepositoryRoot
+import skillbill.cli.scaffold.payload.NativeScaffoldPayloadRun
+import skillbill.cli.scaffold.payload.NativeScaffoldRunOptions
 import skillbill.model.FileLocation
 import skillbill.ports.install.addon.ExternalAddonOverlayPort
 import skillbill.ports.install.addon.ExternalAddonSourceConfigPort
@@ -38,30 +37,27 @@ class CliScaffoldPartialOutcomeTest {
         environment = emptyMap(),
         userHome = repositoryRoot,
         repositoryRoot = repositoryRoot,
-        repositoryEnclosingRootPort = CanonicalRepositoryRoot,
         liveStdout = {},
         liveStderr = {},
       )
-    val result =
-      runNativeScaffoldPayload(
-        mapOf(
-          "scaffold_payload_version" to "1.0",
-          "kind" to "add-on",
-          "name" to "partial-addon",
-          "platform" to "kotlin",
-          "addon_location_path" to repositoryRoot.resolve("external-addons").toString(),
-        ),
-        NativeScaffoldRunArgs(
-          dryRun = false,
-          format = CliFormat.JSON,
-          state = CliRunState(null),
-          inputs = inputs,
-          clock = Clock.systemUTC(),
-          scaffoldGateway = gateway,
-          externalAddonOverlayService =
-            ExternalAddonOverlayService(FailingSourceConfigPort(), NoopOverlayPort()),
-        ),
-      )
+    val state = CliRunState(null)
+    NativeScaffoldPayloadRun(
+      state = state,
+      inputs = inputs,
+      clock = Clock.systemUTC(),
+      scaffoldGateway = gateway,
+      externalAddonOverlayService = ExternalAddonOverlayService(FailingSourceConfigPort(), NoopOverlayPort()),
+    ).runPayload(
+      mapOf(
+        "scaffold_payload_version" to "1.0",
+        "kind" to "add-on",
+        "name" to "partial-addon",
+        "platform" to "kotlin",
+        "addon_location_path" to repositoryRoot.resolve("external-addons").toString(),
+      ),
+      NativeScaffoldRunOptions(dryRun = false, format = CliFormat.JSON, withExternalAddonOverlay = true),
+    )
+    val result = assertNotNull(state.result)
 
     val payload = assertNotNull(result.payload)
     assertEquals(1, result.exitCode)

@@ -2,7 +2,6 @@ package skillbill.cli.model
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
-import skillbill.ports.repository.RepositoryEnclosingRootPort
 import java.nio.file.Path
 
 data class CliRunInputs(
@@ -10,7 +9,6 @@ data class CliRunInputs(
   val environment: Map<String, String>,
   val userHome: Path,
   val repositoryRoot: Path,
-  val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   val featureTaskRuntimeRunOverride: ((FeatureTaskRuntimeRunRequest) -> FeatureTaskRuntimeRunReport)? = null,
   val liveStdout: (String) -> Unit,
   val liveStderr: (String) -> Unit,

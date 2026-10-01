@@ -1,7 +1,12 @@
-package skillbill.cli.goal.core
+package skillbill.cli.goal.status
 
-import skillbill.cli.goal.status.appendDiffStatusLines
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
+
+internal fun goalStatusExitCode(
+  projection: GoalRunnerStatusProjection?,
+  databaseUnavailable: Boolean = false,
+): Int = if (projection != null && !databaseUnavailable) 0 else 1
 
 internal data class GoalWatchRefreshPresentation(
   val refreshIndex: Int,
@@ -26,7 +31,7 @@ internal fun goalWatchStopReason(
   idleStop: Boolean,
 ): String? =
   when {
-    projection == null -> "not_found"
+    projection == null -> CliPayloadStatus.NOT_FOUND
     projection.paused -> "goal_paused"
     projection.pendingCount == 0 -> "goal_terminal"
     idleStop -> "goal_idle"
@@ -36,8 +41,10 @@ internal fun goalWatchStopReason(
 
 internal fun goalWatchText(presentation: GoalWatchPresentation): String =
   buildString {
+    val status =
+      if (presentation.latestRefresh?.projection == null) CliPayloadStatus.NOT_FOUND else CliPayloadStatus.OK
     appendLine("goal: ${presentation.issueKey}")
-    appendLine("status: ${if (presentation.latestRefresh?.projection == null) "not_found" else "ok"}")
+    appendLine("status: $status")
     appendLine("refresh_count: ${presentation.refreshCount}")
     appendLine("interval_seconds: ${presentation.intervalSeconds}")
     appendLine("stop_reason: ${presentation.stopReason}")
@@ -47,8 +54,9 @@ internal fun goalWatchText(presentation: GoalWatchPresentation): String =
 internal fun goalWatchRefreshText(refresh: GoalWatchRefreshPresentation): String =
   buildString {
     val projection = refresh.projection
+    val status = if (projection == null) CliPayloadStatus.NOT_FOUND else CliPayloadStatus.OK
     appendLine(
-      "watch_refresh: index=${refresh.refreshIndex} status=${if (projection == null) "not_found" else "ok"} " +
+      "watch_refresh: index=${refresh.refreshIndex} status=$status " +
         "current_subtask=${projection?.currentSubtaskId ?: "none"} " +
         "current_step=${projection?.currentStep ?: "none"} " +
         "execution_liveness=${projection?.executionLiveness?.wireValue ?: "unknown"} " +

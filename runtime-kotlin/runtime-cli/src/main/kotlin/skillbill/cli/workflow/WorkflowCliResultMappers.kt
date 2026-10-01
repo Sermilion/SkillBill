@@ -6,6 +6,7 @@ import skillbill.application.workflow.model.WorkflowListResult
 import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowResumeResult
 import skillbill.application.workflow.persist.WorkflowWireProjections
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.contracts.SharedPayloadKeys
 
 internal fun WorkflowOpenResult.toCliMap(): Map<String, Any?> =
@@ -13,7 +14,7 @@ internal fun WorkflowOpenResult.toCliMap(): Map<String, Any?> =
     is WorkflowOpenResult.Ok ->
       workflowSnapshotCliMap(snapshot, goalObservability).apply {
         launchProjection?.let { put("launch_projection", WorkflowWireProjections.inputProjectionMap(it).toPayload()) }
-        put(SharedPayloadKeys.STATUS, "ok")
+        put(SharedPayloadKeys.STATUS, CliPayloadStatus.OK)
         put("db_path", dbPath)
       }
     is WorkflowOpenResult.Error ->
@@ -28,7 +29,7 @@ internal fun WorkflowGetResult.toCliMap(): Map<String, Any?> =
   when (this) {
     is WorkflowGetResult.Ok ->
       workflowSnapshotCliMap(snapshot, goalObservability).apply {
-        put(SharedPayloadKeys.STATUS, "ok")
+        put(SharedPayloadKeys.STATUS, CliPayloadStatus.OK)
         put("db_path", dbPath)
       }
     is WorkflowGetResult.Error ->
@@ -42,7 +43,7 @@ internal fun WorkflowGetResult.toCliMap(): Map<String, Any?> =
 
 internal fun WorkflowListResult.toCliMap(): Map<String, Any?> =
   linkedMapOf(
-    SharedPayloadKeys.STATUS to "ok",
+    SharedPayloadKeys.STATUS to CliPayloadStatus.OK,
     "db_path" to dbPath,
     "workflow_count" to workflowCount,
     "workflows" to workflows.map { WorkflowWireProjections.summaryMap(it).toPayload() },
@@ -52,7 +53,7 @@ internal fun WorkflowLatestResult.toCliMap(): Map<String, Any?> =
   when (this) {
     is WorkflowLatestResult.Ok ->
       LinkedHashMap(WorkflowWireProjections.summaryMap(summary).toPayload()).apply {
-        put(SharedPayloadKeys.STATUS, "ok")
+        put(SharedPayloadKeys.STATUS, CliPayloadStatus.OK)
         put("db_path", dbPath)
       }
     is WorkflowLatestResult.Error ->
@@ -67,7 +68,7 @@ internal fun WorkflowResumeResult.toCliMap(): Map<String, Any?> =
   when (this) {
     is WorkflowResumeResult.Ok ->
       LinkedHashMap(WorkflowWireProjections.resumeMap(resume).toPayload()).apply {
-        put(SharedPayloadKeys.STATUS, "ok")
+        put(SharedPayloadKeys.STATUS, CliPayloadStatus.OK)
         put("db_path", dbPath)
       }
     is WorkflowResumeResult.Error ->

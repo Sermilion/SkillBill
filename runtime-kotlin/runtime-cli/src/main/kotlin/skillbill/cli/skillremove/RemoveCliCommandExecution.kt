@@ -1,9 +1,8 @@
 
 package skillbill.cli.skillremove
 
-import skillbill.cli.kernel.cli.CliOutput
-import skillbill.cli.model.CliExecutionResult
-import skillbill.cli.model.CliFormat
+import skillbill.cli.kernel.cli.CliRunState
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.skillremove.SkillRemovalRefusedException
 import skillbill.skillremove.SkillRemoveErrorSanitizer
@@ -13,15 +12,20 @@ import skillbill.skillremove.model.SkillRemovalResult
 import skillbill.skillremove.model.SkillRemovalTarget
 import java.nio.file.Path
 
-internal fun executeRemoveCommand(request: RemoveCommandExecutionRequest): CliExecutionResult {
+internal fun executeRemoveCommand(
+  request: RemoveCommandExecutionRequest,
+  state: CliRunState,
+) {
+  val format = request.format
   if (request.rawTarget == null) {
-    return errorResult(removeUsageMessage(), request.format)
+    return state.complete(errorPayload(removeUsageMessage()), format, exitCode = 1)
   }
   val parsed =
     parseRemoveTarget(request.rawTarget, request.allowShipped)
-      ?: return errorResult(
-        "Invalid remove target: '${request.rawTarget}'.\n\n${removeUsageMessage()}",
-        request.format,
+      ?: return state.complete(
+        errorPayload("Invalid remove target: '${request.rawTarget}'.\n\n${removeUsageMessage()}"),
+        format,
+        exitCode = 1,
       )
   val absoluteRepoRoot = Path.of(request.repoRoot).toAbsolutePath().normalize().toString()
   val removalRequest =
@@ -39,15 +43,16 @@ internal fun executeRemoveCommand(request: RemoveCommandExecutionRequest): CliEx
         request.skillRemove.executeRemoval(removalRequest)
       }
     } catch (refusal: SkillRemovalRefusedException) {
-      return errorResult(
-        refusalErrorMessage(refusal, request.rawTarget, absoluteRepoRoot),
-        request.format,
+      return state.complete(
+        errorPayload(refusalErrorMessage(refusal, request.rawTarget, absoluteRepoRoot)),
+        format,
+        exitCode = 1,
       )
     }
-  return when (outcome) {
-    is SkillRemovalResult.Preview -> previewResult(outcome, request.format)
-    is SkillRemovalResult.Success -> successResult(outcome, request.format)
-    is SkillRemovalResult.Failed -> failedResult(outcome, absoluteRepoRoot, request.format)
+  when (outcome) {
+    is SkillRemovalResult.Preview -> state.complete(previewPayload(outcome), format)
+    is SkillRemovalResult.Success -> state.complete(successPayload(outcome), format)
+    is SkillRemovalResult.Failed -> state.complete(failedPayload(outcome, absoluteRepoRoot), format, exitCode = 1)
   }
 }
 
@@ -91,68 +96,47 @@ internal fun refusalErrorMessage(
     """.trimIndent()
 }
 
-internal fun previewResult(
-  preview: SkillRemovalResult.Preview,
-  format: CliFormat,
-): CliExecutionResult {
-  val payload =
-    mapOf(
-      SharedPayloadKeys.STATUS to "preview",
-      "filesystem_paths" to preview.preview.filesystemPaths,
-      "manifest_edits" to
-        preview.preview.manifestEdits.map {
-          mapOf("manifest" to it.manifestPath, "kind" to it.editKind.name, "detail" to it.detail)
-        },
-      "agent_symlink_unlinks" to
-        preview.preview.agentSymlinkUnlinks.map {
-          mapOf("provider" to it.provider.name, "path" to it.path)
-        },
-      "readme_catalog_edits" to
-        preview.preview.readmeCatalogEdits.map {
-          mapOf("readme" to it.readmePath, "kind" to it.kind.name)
-        },
-      "cascaded_skill_names" to preview.preview.cascadedSkillNames,
-      "skill_dir_root" to preview.preview.skillDirRoot,
-    )
-  return CliExecutionResult(exitCode = 0, stdout = CliOutput.emit(payload, format), payload = payload)
-}
+internal fun previewPayload(preview: SkillRemovalResult.Preview): Map<String, Any?> =
+  mapOf(
+    SharedPayloadKeys.STATUS to "preview",
+    "filesystem_paths" to preview.preview.filesystemPaths,
+    "manifest_edits" to
+      preview.preview.manifestEdits.map {
+        mapOf("manifest" to it.manifestPath, "kind" to it.editKind.name, "detail" to it.detail)
+      },
+    "agent_symlink_unlinks" to
+      preview.preview.agentSymlinkUnlinks.map {
+        mapOf("provider" to it.provider.name, "path" to it.path)
+      },
+    "readme_catalog_edits" to
+      preview.preview.readmeCatalogEdits.map {
+        mapOf("readme" to it.readmePath, "kind" to it.kind.name)
+      },
+    "cascaded_skill_names" to preview.preview.cascadedSkillNames,
+    "skill_dir_root" to preview.preview.skillDirRoot,
+  )
 
-internal fun successResult(
-  success: SkillRemovalResult.Success,
-  format: CliFormat,
-): CliExecutionResult {
-  val payload =
-    mapOf(
-      SharedPayloadKeys.STATUS to "ok",
-      "removed_paths" to success.removedPaths,
-      "edited_manifests" to success.editedManifests,
-      "unlinked_symlinks" to success.unlinkedSymlinks,
-    )
-  return CliExecutionResult(exitCode = 0, stdout = CliOutput.emit(payload, format), payload = payload)
-}
+internal fun successPayload(success: SkillRemovalResult.Success): Map<String, Any?> =
+  mapOf(
+    SharedPayloadKeys.STATUS to CliPayloadStatus.OK,
+    "removed_paths" to success.removedPaths,
+    "edited_manifests" to success.editedManifests,
+    "unlinked_symlinks" to success.unlinkedSymlinks,
+  )
 
-internal fun failedResult(
+internal fun failedPayload(
   failed: SkillRemovalResult.Failed,
   repoRootAbsolutePath: String,
-  format: CliFormat,
-): CliExecutionResult {
-  val payload =
-    mapOf(
-      SharedPayloadKeys.STATUS to "error",
-      "exception" to failed.exceptionName,
-      "error" to SkillRemoveErrorSanitizer.sanitize(failed.exceptionMessage, repoRootAbsolutePath),
-      "rollback_complete" to failed.rollbackComplete,
-    )
-  return CliExecutionResult(exitCode = 1, stdout = CliOutput.emit(payload, format), payload = payload)
-}
+): Map<String, Any?> =
+  mapOf(
+    SharedPayloadKeys.STATUS to "error",
+    "exception" to failed.exceptionName,
+    "error" to SkillRemoveErrorSanitizer.sanitize(failed.exceptionMessage, repoRootAbsolutePath),
+    "rollback_complete" to failed.rollbackComplete,
+  )
 
-internal fun errorResult(
-  message: String,
-  format: CliFormat,
-): CliExecutionResult {
-  val payload = mapOf(SharedPayloadKeys.STATUS to "error", "error" to message)
-  return CliExecutionResult(exitCode = 1, stdout = CliOutput.emit(payload, format), payload = payload)
-}
+internal fun errorPayload(message: String): Map<String, Any?> =
+  mapOf(SharedPayloadKeys.STATUS to "error", "error" to message)
 
 internal fun removeUsageMessage(): String =
   """

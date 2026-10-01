@@ -1,176 +1,164 @@
 package skillbill.cli.scaffold.payload
 
 import kotlinx.serialization.json.JsonObject
+import me.tatarka.inject.annotations.Inject
+import skillbill.application.install.ExternalAddonOverlayService
 import skillbill.application.scaffold.decodeScaffoldPayloadObject
 import skillbill.application.scaffold.model.ScaffoldInvocationArgs
 import skillbill.application.scaffold.runScaffoldInvocation
-import skillbill.cli.kernel.cli.CliOutput
 import skillbill.cli.kernel.cli.CliRunState
-import skillbill.cli.model.CliExecutionResult
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.cli.model.CliFormat
-import skillbill.cli.scaffold.commands.CreateAndFillArgs
-import skillbill.cli.scaffold.commands.NativeScaffoldPayloadPathArgs
-import skillbill.cli.scaffold.commands.NativeScaffoldRunArgs
+import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.scaffold.ScaffoldGateway
 import skillbill.ports.scaffold.model.ScaffoldRenderResult
 import java.nio.file.Path
+import java.time.Clock
 
-internal fun runNativeScaffoldPayload(args: NativeScaffoldPayloadPathArgs): CliExecutionResult {
-  val payload =
-    try {
-      args.transform(readScaffoldPayload(args.payloadPath, args.run.state))
-    } catch (error: SkillBillRuntimeException) {
-      return errorResult(error.message.orEmpty(), args.run.format)
-    } catch (error: IllegalArgumentException) {
-      return errorResult(error.message.orEmpty(), args.run.format)
-    }
-  return runNativeScaffoldPayload(payload, args.run)
-}
-
-internal fun runNativeScaffoldPayload(
-  payload: Map<String, *>,
-  run: NativeScaffoldRunArgs,
-): CliExecutionResult {
-  val payloadText =
-    try {
-      JsonCodec.mapToJsonString(payload.mapValues { (_, value) -> value })
-    } catch (error: SkillBillRuntimeException) {
-      return errorResult(error.message.orEmpty(), run.format)
-    }
-  val payloadObject =
-    try {
-      decodeScaffoldPayloadObject(payloadText)
-    } catch (error: IllegalArgumentException) {
-      return errorResult(error.message.orEmpty(), run.format)
-    }
-  return runNativeScaffoldPayload(payloadObject, run)
-}
-
-internal fun runNativeScaffoldPayload(
-  payload: JsonObject,
-  run: NativeScaffoldRunArgs,
-): CliExecutionResult {
-  val dryRun = run.dryRun
-  val format = run.format
-  val inputs = run.inputs
-  val scaffoldGateway = run.scaffoldGateway
-  val outcome =
-    try {
-      runScaffoldInvocation(
-        scaffoldGateway,
-        ScaffoldInvocationArgs(
-          payload = payload,
-          invocationRepositoryRoot = inputs.repositoryRoot,
-          dryRun = dryRun,
-          registerExternalSources = true,
-          externalAddonOverlayService = run.externalAddonOverlayService,
-          userHome = inputs.userHome,
-          environment = inputs.environment,
-          clock = run.clock,
-        ),
-      )
-    } catch (error: SkillBillRuntimeException) {
-      return errorResult(error.message.orEmpty(), format)
-    }
-  val result = outcome.scaffoldResult
-  val created = result.run { createdFiles }.map { path -> path.toString() }
-  val presentation =
-    buildMap {
-      put(SharedPayloadKeys.STATUS, if (outcome.registrationFailure == null) "ok" else "partial")
-      put("session_id", outcome.sessionId)
-      put("skill_path", result.skillPath.toString())
-      put("dry_run", dryRun)
-      put("created_files", created)
-      put("manifest_edits", result.manifestEdits.map { path -> path.toString() })
-      put("manifest_edit_previews", result.manifestPreviews.mapKeys { (path, _) -> path.toString() })
-      put("notes", result.notes)
-      outcome.registrationFailure?.let { failure ->
-        put("registration_error", failure)
+@Inject
+class NativeScaffoldPayloadRun(
+  private val state: CliRunState,
+  private val inputs: CliRunInputs,
+  private val clock: Clock,
+  private val scaffoldGateway: ScaffoldGateway,
+  private val externalAddonOverlayService: ExternalAddonOverlayService,
+) {
+  internal fun runPayloadFile(
+    payloadPath: String?,
+    options: NativeScaffoldRunOptions,
+    transform: (JsonObject) -> JsonObject = { it },
+  ) {
+    val payload =
+      try {
+        transform(readScaffoldPayload(payloadPath, state))
+      } catch (error: SkillBillRuntimeException) {
+        return state.completeScaffoldError(error.message.orEmpty(), options.format)
+      } catch (error: IllegalArgumentException) {
+        return state.completeScaffoldError(error.message.orEmpty(), options.format)
       }
-    }
-  return CliExecutionResult(
-    exitCode = if (outcome.registrationFailure == null) 0 else 1,
-    stdout = CliOutput.emit(presentation, format),
-    payload = presentation,
-  )
-}
+    runPayload(payload, options)
+  }
 
-internal fun createAndFillResult(args: CreateAndFillArgs): CliExecutionResult {
-  val content = args.content
-  val format = args.format
-  return when {
-    content.interactive || content.payload == null ->
-      unsupportedNativeScaffoldResult(
-        retiredInteractiveModeMessage(
-          "create-and-fill",
-          "skill-bill create-and-fill --payload <file> --body-file <file>",
-        ),
-        format,
-      )
-    content.editor ->
-      unsupportedNativeScaffoldResult(
-        "create-and-fill --payload --editor is not supported by the native Kotlin scaffold path yet.",
-        format,
-      )
-    content.body != null && content.bodyFile != null ->
-      errorResult("--body and --body-file are mutually exclusive.", format)
-    else ->
-      runNativeScaffoldPayload(
-        NativeScaffoldPayloadPathArgs(
-          payloadPath = content.payload,
-          run =
-            NativeScaffoldRunArgs(
-              dryRun = args.dryRun,
-              format = format,
-              state = args.state,
-              inputs = args.inputs,
-              clock = args.clock,
-              scaffoldGateway = args.scaffoldGateway,
-            ),
-          transform = { scaffoldPayload ->
-            createAndFillScaffoldPayload(scaffoldPayload, content.body, content.bodyFile, args.state)
-          },
-        ),
-      )
+  internal fun runPayload(
+    payload: Map<String, *>,
+    options: NativeScaffoldRunOptions,
+  ) {
+    val payloadText =
+      try {
+        JsonCodec.mapToJsonString(payload.mapValues { (_, value) -> value })
+      } catch (error: SkillBillRuntimeException) {
+        return state.completeScaffoldError(error.message.orEmpty(), options.format)
+      }
+    val payloadObject =
+      try {
+        decodeScaffoldPayloadObject(payloadText)
+      } catch (error: IllegalArgumentException) {
+        return state.completeScaffoldError(error.message.orEmpty(), options.format)
+      }
+    runPayload(payloadObject, options)
+  }
+
+  internal fun createAndFill(
+    content: CreateAndFillContentArgs,
+    options: NativeScaffoldRunOptions,
+  ) {
+    val format = options.format
+    when {
+      content.interactive || content.payload == null ->
+        state.completeUnsupportedScaffold(
+          retiredInteractiveModeMessage(
+            "create-and-fill",
+            "skill-bill create-and-fill --payload <file> --body-file <file>",
+          ),
+          format,
+        )
+      content.editor ->
+        state.completeUnsupportedScaffold(
+          "create-and-fill --payload --editor is not supported by the native Kotlin scaffold path yet.",
+          format,
+        )
+      content.body != null && content.bodyFile != null ->
+        state.completeScaffoldError("--body and --body-file are mutually exclusive.", format)
+      else ->
+        runPayloadFile(content.payload, options) { scaffoldPayload ->
+          createAndFillScaffoldPayload(scaffoldPayload, content.body, content.bodyFile, state)
+        }
+    }
+  }
+
+  private fun runPayload(
+    payload: JsonObject,
+    options: NativeScaffoldRunOptions,
+  ) {
+    val outcome =
+      try {
+        runScaffoldInvocation(
+          scaffoldGateway,
+          ScaffoldInvocationArgs(
+            payload = payload,
+            invocationRepositoryRoot = inputs.repositoryRoot,
+            dryRun = options.dryRun,
+            registerExternalSources = true,
+            externalAddonOverlayService = externalAddonOverlayService.takeIf { options.withExternalAddonOverlay },
+            userHome = inputs.userHome,
+            environment = inputs.environment,
+            clock = clock,
+          ),
+        )
+      } catch (error: SkillBillRuntimeException) {
+        return state.completeScaffoldError(error.message.orEmpty(), options.format)
+      }
+    val result = outcome.scaffoldResult
+    val created = result.run { createdFiles }.map { path -> path.toString() }
+    val presentation =
+      buildMap {
+        put(SharedPayloadKeys.STATUS, if (outcome.registrationFailure == null) CliPayloadStatus.OK else "partial")
+        put("session_id", outcome.sessionId)
+        put("skill_path", result.skillPath.toString())
+        put("dry_run", options.dryRun)
+        put("created_files", created)
+        put("manifest_edits", result.manifestEdits.map { path -> path.toString() })
+        put("manifest_edit_previews", result.manifestPreviews.mapKeys { (path, _) -> path.toString() })
+        put("notes", result.notes)
+        outcome.registrationFailure?.let { failure ->
+          put("registration_error", failure)
+        }
+      }
+    state.complete(presentation, options.format, if (outcome.registrationFailure == null) 0 else 1)
   }
 }
 
-internal fun errorResult(
+internal fun CliRunState.completeScaffoldError(
   message: String,
   format: CliFormat,
-): CliExecutionResult {
-  val presentation =
+) {
+  complete(
     mapOf(
       SharedPayloadKeys.STATUS to "error",
       "error" to message,
-    )
-  return CliExecutionResult(
+    ),
+    format,
     exitCode = 1,
-    stdout = CliOutput.emit(presentation, format),
-    payload = presentation,
   )
 }
 
-internal fun authoringResult(
+internal fun CliRunState.completeAuthoring(
   format: CliFormat,
   successExitCode: (Map<String, Any?>) -> Int = { 0 },
   block: () -> Map<String, Any?>,
-): CliExecutionResult =
+) {
   try {
     val payload = block()
-    CliExecutionResult(
-      exitCode = successExitCode(payload),
-      stdout = CliOutput.emit(payload, format),
-      payload = payload,
-    )
+    complete(payload, format, successExitCode(payload))
   } catch (error: SkillBillRuntimeException) {
-    errorResult(error.message.orEmpty(), format)
+    completeScaffoldError(error.message.orEmpty(), format)
   } catch (error: IllegalArgumentException) {
-    errorResult(error.message.orEmpty(), format)
+    completeScaffoldError(error.message.orEmpty(), format)
   }
+}
 
 internal fun completeRenderText(
   state: CliRunState,
@@ -182,9 +170,9 @@ internal fun completeRenderText(
   val rendered = scaffoldGateway.render(repoRoot, skillName)
   state.completeText(rendered.stdout, rendered.toCliPayload(dryRun))
 } catch (error: SkillBillRuntimeException) {
-  state.result = errorResult(error.message.orEmpty(), CliFormat.TEXT)
+  state.completeScaffoldError(error.message.orEmpty(), CliFormat.TEXT)
 } catch (error: IllegalArgumentException) {
-  state.result = errorResult(error.message.orEmpty(), CliFormat.TEXT)
+  state.completeScaffoldError(error.message.orEmpty(), CliFormat.TEXT)
 }
 
 internal fun ScaffoldRenderResult.toCliPayload(dryRun: Boolean): Map<String, Any?> =
@@ -211,18 +199,16 @@ internal fun retiredEditorModeMessage(
   replacement: String,
 ): String = "$command editor mode was retired in SKILL-32; use `$replacement` instead."
 
-internal fun unsupportedNativeScaffoldResult(
+internal fun CliRunState.completeUnsupportedScaffold(
   message: String,
   format: CliFormat,
-): CliExecutionResult {
-  val presentation =
+) {
+  complete(
     mapOf(
       SharedPayloadKeys.STATUS to "unsupported",
       "error" to message,
-    )
-  return CliExecutionResult(
+    ),
+    format,
     exitCode = 1,
-    stdout = CliOutput.emit(presentation, format),
-    payload = presentation,
   )
 }

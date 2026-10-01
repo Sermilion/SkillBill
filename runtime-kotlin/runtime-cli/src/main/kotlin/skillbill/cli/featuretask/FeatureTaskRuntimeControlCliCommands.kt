@@ -22,11 +22,13 @@ import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLo
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeStatusRequest
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
 import skillbill.goalrunner.model.GoalContinuation
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import java.nio.file.Path
 
 @Inject
 class FeatureTaskLookupCommand(
   private val lookupService: FeatureTaskContinuationLookupService,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand(
@@ -48,7 +50,7 @@ class FeatureTaskLookupCommand(
     val result =
       lookupService.lookup(
         issueKey,
-        inputs.repositoryEnclosingRootPort.repositoryIdentity(resolveCliRepositoryRoot(repoRoot, inputs)),
+        repositoryEnclosingRootPort.repositoryIdentity(resolveCliRepositoryRoot(repoRoot, inputs)),
         workflowId,
       )
     val payload = result.toCliPayload()
@@ -155,6 +157,7 @@ class FeatureTaskRuntimeRetryBlockedCommand(
 @Inject
 class FeatureTaskRuntimeRepairIdentityCommand(
   private val workflowService: WorkflowService,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand(
@@ -178,9 +181,8 @@ class FeatureTaskRuntimeRepairIdentityCommand(
         RepairFeatureTaskRuntimeIdentityArgs(
           workflowId = workflowId,
           issueKey = issueKey,
-          repositoryIdentity = inputs.repositoryEnclosingRootPort.repositoryIdentity(root),
-          governedSpecPath =
-            inputs.repositoryEnclosingRootPort.governedSpecPathForCli(root, Path.of(specPath)),
+          repositoryIdentity = repositoryEnclosingRootPort.repositoryIdentity(root),
+          governedSpecPath = repositoryEnclosingRootPort.governedSpecPathForCli(root, Path.of(specPath)),
           reason = reason,
         ),
       )

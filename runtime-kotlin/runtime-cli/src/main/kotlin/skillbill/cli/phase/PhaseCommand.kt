@@ -7,13 +7,13 @@ import com.github.ajalt.clikt.parameters.options.option
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.config.ConfigResolutionService
 import skillbill.application.review.service.RequestedReviewMode
-import skillbill.cli.codereview.namedStandaloneScope
-import skillbill.cli.codereview.usageError
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
+import skillbill.cli.kernel.cli.namedStandaloneScope
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
+import skillbill.cli.kernel.cli.usageError
 import skillbill.cli.model.CliRunInputs
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.engine.featuretask.model.review.ReviewTarget

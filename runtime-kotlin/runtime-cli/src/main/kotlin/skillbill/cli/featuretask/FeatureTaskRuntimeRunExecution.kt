@@ -14,6 +14,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
@@ -34,6 +35,7 @@ class FeatureTaskRuntimeRunExecution(
   private val workflowService: WorkflowService,
   private val telemetryService: TelemetryService,
   private val diagnostics: RuntimeDiagnostics,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
 ) {
@@ -62,9 +64,9 @@ class FeatureTaskRuntimeRunExecution(
         FeatureTaskExecutionIdentity(
           workflowId = workflowId,
           normalizedIssueKey = issueKey.trim().uppercase(),
-          repositoryIdentity = inputs.repositoryEnclosingRootPort.repositoryIdentity(prepared.repoRoot),
+          repositoryIdentity = repositoryEnclosingRootPort.repositoryIdentity(prepared.repoRoot),
           governedSpecPath =
-            inputs.repositoryEnclosingRootPort.governedSpecPathForCli(
+            repositoryEnclosingRootPort.governedSpecPathForCli(
               prepared.repoRoot,
               Path.of(specPath),
             ),
@@ -126,9 +128,9 @@ class FeatureTaskRuntimeRunExecution(
           sessionId = "",
           currentStepId = null,
           issueKey = prepared.issueKey,
-          repositoryIdentity = inputs.repositoryEnclosingRootPort.repositoryIdentity(prepared.repoRoot),
+          repositoryIdentity = repositoryEnclosingRootPort.repositoryIdentity(prepared.repoRoot),
           governedSpecPath =
-            inputs.repositoryEnclosingRootPort.governedSpecPathForCli(
+            repositoryEnclosingRootPort.governedSpecPathForCli(
               prepared.repoRoot,
               Path.of(prepared.specPath),
             ),

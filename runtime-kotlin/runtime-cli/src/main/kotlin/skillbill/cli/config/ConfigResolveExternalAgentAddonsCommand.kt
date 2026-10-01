@@ -3,6 +3,7 @@ package skillbill.cli.config
 import me.tatarka.inject.annotations.Inject
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.ShellContentContractException
@@ -36,7 +37,7 @@ class ConfigResolveExternalAgentAddonsCommand(
     state.completeText(
       text,
       mapOf(
-        SharedPayloadKeys.STATUS to "ok",
+        SharedPayloadKeys.STATUS to CliPayloadStatus.OK,
         "sources" to sources.map { source -> mapOf("path" to source.path.toString()) },
       ),
     )

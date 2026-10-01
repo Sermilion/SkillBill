@@ -673,10 +673,10 @@ and `:runtime-infra:sqlite`.
   planning projection use cases owned by `runtime-engine`.
 
 Package-cycle enforcement uses exact declared-package strongly connected
-components for `runtime-domain`, including nested model packages. Other module
-scan cases retain the existing first-segment mutual-pair algorithm and their
-recorded baselines; the scanner does not infer package nodes from imported
-symbol suffixes.
+components for `runtime-domain` (including nested model packages),
+`runtime-contracts` and `runtime-cli`. Other module scan cases retain the
+existing first-segment mutual-pair algorithm and their recorded baselines; the
+scanner does not infer package nodes from imported symbol suffixes.
 
 ### Goal-runner execution lifetime (`DefaultGoalRunnerExecutionCoordinator`)
 

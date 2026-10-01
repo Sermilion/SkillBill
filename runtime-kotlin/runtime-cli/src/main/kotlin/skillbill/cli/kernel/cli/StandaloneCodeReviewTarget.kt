@@ -1,4 +1,4 @@
-package skillbill.cli.codereview
+package skillbill.cli.kernel.cli
 
 import com.github.ajalt.clikt.core.UsageError
 import skillbill.application.reviewevidence.model.ParallelReviewScope

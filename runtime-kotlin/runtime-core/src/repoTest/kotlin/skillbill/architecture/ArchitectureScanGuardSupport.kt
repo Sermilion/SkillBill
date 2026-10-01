@@ -22,6 +22,27 @@ private val CONSTRUCTOR_PROPERTY_PATTERN =
     """^(?:@[\w.]+(?:\([^)]*\))?\s+)*((?:(?:$CONSTRUCTOR_PROPERTY_MODIFIERS)\s+)*)(?:val|var)\s+""" +
       """([A-Za-z_][A-Za-z0-9_]*)""",
   )
+private val INTERNAL_DATA_CLASS_PATTERN =
+  Regex("""\binternal\s+data\s+class\s+([A-Za-z_][A-Za-z0-9_]*)""")
+private val DATA_CLASS_PROPERTY_PATTERN =
+  Regex(
+    """^(?:@[\w.]+(?:\([^)]*\))?\s+)*(?:(?:$CONSTRUCTOR_PROPERTY_MODIFIERS)\s+)*(?:val|var)\s+""" +
+      """([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.+)$""",
+    RegexOption.DOT_MATCHES_ALL,
+  )
+private val COLLABORATOR_EXACT_TYPE_NAMES = setOf("CliRunState", "Clock")
+private val COLLABORATOR_TYPE_SUFFIXES =
+  listOf(
+    "Service",
+    "Port",
+    "Gateway",
+    "Lookup",
+    "Repository",
+    "Coordinator",
+    "Runner",
+    "Launcher",
+    "Diagnostics",
+  )
 private val CLASS_HEADER_TERMINATOR = Regex("""\n\s*\n|\}|\b(?:class|object|interface|fun|typealias)\b""")
 
 private val AMBIENT_CLOCK_FORMS: List<Pair<Regex, String>> =
@@ -445,6 +466,53 @@ private fun nonPrivateConstructorProperties(constructorBody: String): List<Strin
       ?.get(2)
   }
 }
+
+fun ArchitectureScanSupport.dataClassCollaboratorPropertySites(
+  scanRoot: String,
+): List<ArchitectureScanSupport.InjectConstructorDefaultSite> =
+  kotlinFilesUnder(runtimeRoot.resolve(scanRoot))
+    .flatMap { sourceFile ->
+      val relativePath = runtimeRoot.relativize(sourceFile).toString().replace('\\', '/')
+      dataClassCollaboratorPropertySitesInSource(relativePath, sourceFile.readText())
+    }
+    .sortedWith(compareBy({ it.relativePath }, { it.symbol }, { it.parameter }))
+
+fun ArchitectureScanSupport.dataClassCollaboratorPropertyViolations(scanRoot: String): List<String> =
+  dataClassCollaboratorPropertySites(scanRoot).map { site ->
+    "${site.relativePath}::${site.symbol}::${site.parameter} is a collaborator property on an internal data class."
+  }
+
+fun ArchitectureScanSupport.dataClassCollaboratorPropertySitesInSource(
+  relativePath: String,
+  source: String,
+): List<ArchitectureScanSupport.InjectConstructorDefaultSite> {
+  val scannable = sourceWithoutCommentsOrLiterals(source)
+  return INTERNAL_DATA_CLASS_PATTERN.findAll(scannable).flatMap { match ->
+    val headerEnd = afterClassTypeParameters(scannable, match.range.last + 1)
+    val constructor =
+      if (scannable.getOrNull(headerEnd) == '(') extractBalanced(scannable, headerEnd, '(', ')') else null
+    collaboratorPropertyNames(constructor.orEmpty()).map { parameter ->
+      ArchitectureScanSupport.InjectConstructorDefaultSite(relativePath, match.groupValues[1], parameter)
+    }
+  }.toList()
+}
+
+private fun collaboratorPropertyNames(constructorBody: String): List<String> {
+  val inner = constructorBody.trim().removePrefix("(").removeSuffix(")").replace("->", "~~")
+  if (inner.isBlank()) return emptyList()
+  return splitTopLevelParameters(inner).mapNotNull { parameter ->
+    DATA_CLASS_PROPERTY_PATTERN.find(parameter.trim())?.let { match ->
+      val type = match.groupValues[2].substringBefore('=').trim()
+      match.groupValues[1].takeIf { "~~" !in type && isCollaboratorTypeName(simpleTypeName(type)) }
+    }
+  }
+}
+
+private fun simpleTypeName(type: String): String =
+  type.substringBefore('<').removeSuffix("?").trim().substringAfterLast('.')
+
+private fun isCollaboratorTypeName(name: String): Boolean =
+  name in COLLABORATOR_EXACT_TYPE_NAMES || COLLABORATOR_TYPE_SUFFIXES.any(name::endsWith)
 
 private fun afterClassTypeParameters(
   source: String,

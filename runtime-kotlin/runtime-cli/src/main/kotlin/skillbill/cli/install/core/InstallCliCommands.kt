@@ -9,6 +9,7 @@ import skillbill.application.install.InstallService
 import skillbill.application.scaffold.InstallAgentService
 import skillbill.cli.install.apply.InstallRequestCommand
 import skillbill.cli.install.apply.installApplyPayload
+import skillbill.cli.install.apply.installPlanPayload
 import skillbill.cli.install.apply.reconcileMachineReport
 import skillbill.cli.install.apply.reconcilePayload
 import skillbill.cli.install.apply.refuseInstallMutationDuringGoalContinuation

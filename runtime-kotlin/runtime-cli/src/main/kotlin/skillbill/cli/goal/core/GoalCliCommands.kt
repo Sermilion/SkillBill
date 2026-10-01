@@ -27,17 +27,16 @@ import skillbill.cli.goal.run.GoalFindingsCommand
 import skillbill.cli.goal.run.GoalPlanningLogCommand
 import skillbill.cli.goal.run.GoalPreflightCommand
 import skillbill.cli.goal.run.GoalRunAgentAddonHydrationArgs
+import skillbill.cli.goal.run.GoalRunInputPreparation
 import skillbill.cli.goal.run.GoalRunInputValidationArgs
 import skillbill.cli.goal.run.GoalRunPresenter
 import skillbill.cli.goal.run.RUNTIME_CLASSPATH_ENV
 import skillbill.cli.goal.run.RUNTIME_EXECUTABLE_ENV
 import skillbill.cli.goal.run.RUNTIME_PATH_SEPARATOR_ENV
 import skillbill.cli.goal.run.goalRunText
-import skillbill.cli.goal.run.hydrateGoalRunAgentAddonSelection
 import skillbill.cli.goal.run.parseCodeReviewMode
 import skillbill.cli.goal.run.resolveInvokedAgentId
 import skillbill.cli.goal.run.toGoalRunCliMap
-import skillbill.cli.goal.run.validateGoalRunInputs
 import skillbill.cli.goal.status.GoalStatusCommand
 import skillbill.cli.goal.status.GoalWatchCommand
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
@@ -51,9 +50,6 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinua
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.model.DEFAULT_GOAL_PLANNING_BUDGET
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
-import skillbill.ports.agentaddon.AgentAddonSelectionPort
-import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
-import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.system.HostPlatformPort
 import java.nio.file.Path
@@ -105,9 +101,7 @@ class GoalRunSubcommands(
 class GoalRunCommand(
   private val goalRunner: GoalRunner,
   private val runtimeProvenanceService: RuntimeProvenanceService,
-  private val agentAddonSelectionPort: AgentAddonSelectionPort,
-  private val externalAgentAddonSourceConfigPort: ExternalAgentAddonSourceConfigPort,
-  private val executableLookup: ExecutableLookup,
+  private val inputPreparation: GoalRunInputPreparation,
   private val telemetryService: TelemetryService,
   private val diagnostics: RuntimeDiagnostics,
   private val state: CliRunState,
@@ -189,7 +183,7 @@ class GoalRunCommand(
     }
     val effectiveRepoRoot = resolveCliRepositoryRoot(repoRoot, inputs)
     val invokedAgentId = resolveInvokedAgentId(agent, inputs.environment)
-    validateGoalRunInputs(
+    inputPreparation.validate(
       GoalRunInputValidationArgs(
         issueKey = issueKey,
         stopAfterSubtask = stopAfterSubtask,
@@ -197,8 +191,6 @@ class GoalRunCommand(
         agentAddonSelectionJson = agentAddonSelectionJson,
         agent = agent,
         agentOverride = agentOverride,
-        inputs = inputs,
-        executableLookup = executableLookup,
       ),
     )
     val runIssueKey = issueKey!!
@@ -208,15 +200,12 @@ class GoalRunCommand(
         agentOverride?.takeIf(String::isNotBlank),
       ).distinct()
     val hydratedSelection =
-      hydrateGoalRunAgentAddonSelection(
+      inputPreparation.hydrateAgentAddonSelection(
         GoalRunAgentAddonHydrationArgs(
           agentAddonSlugs = agentAddonSlugs,
           agentAddonSelectionJson = agentAddonSelectionJson,
           receivingAgents = receivingAgents,
           effectiveRepoRoot = effectiveRepoRoot,
-          inputs = inputs,
-          agentAddonSelectionPort = agentAddonSelectionPort,
-          externalAgentAddonSourceConfigPort = externalAgentAddonSourceConfigPort,
         ),
       )
     val presenter =

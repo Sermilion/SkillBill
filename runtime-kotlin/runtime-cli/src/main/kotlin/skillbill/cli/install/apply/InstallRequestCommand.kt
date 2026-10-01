@@ -41,8 +41,8 @@ abstract class InstallRequestCommand(
     help = "Platform packs root. Defaults to <repo-root>/platform-packs.",
   )
   private val agentMode by option("--agent-mode", help = "Agent selection mode.")
-    .choice("detected", "manual")
-    .default("detected")
+    .choice("detected" to InstallAgentSelectionMode.DETECTED, "manual" to InstallAgentSelectionMode.MANUAL)
+    .default(InstallAgentSelectionMode.DETECTED)
   private val agents by option(
     "--agent",
     help = "Manual agent to include. Repeat for ${SupportedAgent.supportedIds.joinToString(", ")}.",
@@ -52,16 +52,19 @@ abstract class InstallRequestCommand(
     help = "Manual target override in agent=path form. Repeat to override multiple agents.",
   ).multiple()
   private val platformMode by option("--platform-mode", help = "Platform pack selection mode.")
-    .choice("none", "selected", "all")
-    .default("none")
+    .choice(
+      "none" to PlatformPackSelectionMode.NONE,
+      "selected" to PlatformPackSelectionMode.SELECTED,
+      "all" to PlatformPackSelectionMode.ALL,
+    ).default(PlatformPackSelectionMode.NONE)
   private val platforms by option("--platform", help = "Selected platform pack slug. Repeat for multiple packs.")
     .multiple()
   private val telemetry by option("--telemetry", help = "Telemetry level to configure during apply.")
-    .choice("anonymous", "full", "off")
-    .default("anonymous")
+    .choice(InstallTelemetryLevel.entries.associateBy(InstallTelemetryLevel::id))
+    .default(InstallTelemetryLevel.ANONYMOUS)
   private val mcp by option("--mcp", help = "Whether apply should register the runtime MCP server.")
-    .choice("register", "skip")
-    .default("register")
+    .choice("register" to true, "skip" to false)
+    .default(true)
   private val runtimeInstallRoot by option(
     "--runtime-install-root",
     help = "Runtime install root. Defaults to <home>/.skill-bill/runtime.",
@@ -94,14 +97,21 @@ abstract class InstallRequestCommand(
     "--windows-symlink-state",
     help = "Structured Windows symlink preflight state.",
   )
-    .choice("not-windows", "available", "requires-elevation-or-developer-mode", "decision-required")
-    .default("not-windows")
+    .choice(
+      "not-windows" to WindowsSymlinkPreflightState.NOT_WINDOWS,
+      "available" to WindowsSymlinkPreflightState.AVAILABLE,
+      "requires-elevation-or-developer-mode" to WindowsSymlinkPreflightState.REQUIRES_ELEVATION_OR_DEVELOPER_MODE,
+      "decision-required" to WindowsSymlinkPreflightState.DECISION_REQUIRED,
+    ).default(WindowsSymlinkPreflightState.NOT_WINDOWS)
   private val windowsSymlinkDecision by option(
     "--windows-symlink-decision",
     help = "Structured Windows symlink decision.",
   )
-    .choice("not-required", "proceed-with-symlinks", "require-user-action")
-    .default("not-required")
+    .choice(
+      "not-required" to WindowsSymlinkDecision.NOT_REQUIRED,
+      "proceed-with-symlinks" to WindowsSymlinkDecision.PROCEED_WITH_SYMLINKS,
+      "require-user-action" to WindowsSymlinkDecision.REQUIRE_USER_ACTION,
+    ).default(WindowsSymlinkDecision.NOT_REQUIRED)
   private val windowsSymlinkMessage by option("--windows-symlink-message", help = "Structured Windows symlink message.")
     .default("")
   private val replaceExistingSkillBillLinks by option(
@@ -127,10 +137,10 @@ abstract class InstallRequestCommand(
           mode = selectedPlatformMode(),
           selectedSlugs = platforms.toSet(),
         ),
-      telemetryLevel = telemetryLevel(),
+      telemetryLevel = telemetry,
       mcpRegistrationChoice =
         McpRegistrationChoice(
-          register = mcp == "register",
+          register = mcp,
           runtimeMcpBin = runtimeMcpBin?.let(Path::of)?.toFileLocation(),
         ),
       runtimeDistributionInputs =
@@ -156,8 +166,8 @@ abstract class InstallRequestCommand(
         ),
       windowsSymlinkPreflight =
         WindowsSymlinkPreflight(
-          state = windowsSymlinkPreflightState(),
-          decision = windowsSymlinkPreflightDecision(),
+          state = windowsSymlinkState,
+          decision = windowsSymlinkDecision,
           message = windowsSymlinkMessage,
         ),
       replaceExistingSkillBillLinks = replaceExistingSkillBillLinks,
@@ -170,7 +180,7 @@ abstract class InstallRequestCommand(
     explicitTargets: List<InstallAgentTarget>,
   ): InstallAgentSelectionMode =
     if (
-      agentMode == "manual" ||
+      agentMode == InstallAgentSelectionMode.MANUAL ||
       manualAgents.isNotEmpty() ||
       explicitTargets.isNotEmpty()
     ) {
@@ -180,37 +190,7 @@ abstract class InstallRequestCommand(
     }
 
   private fun selectedPlatformMode(): PlatformPackSelectionMode =
-    when {
-      platforms.isNotEmpty() -> PlatformPackSelectionMode.SELECTED
-      platformMode == "selected" -> PlatformPackSelectionMode.SELECTED
-      platformMode == "all" -> PlatformPackSelectionMode.ALL
-      else -> PlatformPackSelectionMode.NONE
-    }
-
-  private fun telemetryLevel(): InstallTelemetryLevel =
-    when (telemetry) {
-      "full" -> InstallTelemetryLevel.FULL
-      "off" -> InstallTelemetryLevel.OFF
-      "anonymous" -> InstallTelemetryLevel.ANONYMOUS
-      else -> InstallTelemetryLevel.ANONYMOUS
-    }
-
-  private fun windowsSymlinkPreflightState(): WindowsSymlinkPreflightState =
-    when (windowsSymlinkState) {
-      "available" -> WindowsSymlinkPreflightState.AVAILABLE
-      "requires-elevation-or-developer-mode" -> WindowsSymlinkPreflightState.REQUIRES_ELEVATION_OR_DEVELOPER_MODE
-      "decision-required" -> WindowsSymlinkPreflightState.DECISION_REQUIRED
-      "not-windows" -> WindowsSymlinkPreflightState.NOT_WINDOWS
-      else -> WindowsSymlinkPreflightState.NOT_WINDOWS
-    }
-
-  private fun windowsSymlinkPreflightDecision(): WindowsSymlinkDecision =
-    when (windowsSymlinkDecision) {
-      "proceed-with-symlinks" -> WindowsSymlinkDecision.PROCEED_WITH_SYMLINKS
-      "require-user-action" -> WindowsSymlinkDecision.REQUIRE_USER_ACTION
-      "not-required" -> WindowsSymlinkDecision.NOT_REQUIRED
-      else -> WindowsSymlinkDecision.NOT_REQUIRED
-    }
+    if (platforms.isNotEmpty()) PlatformPackSelectionMode.SELECTED else platformMode
 }
 
 private fun parseAgentTargets(rawTargets: List<String>): List<InstallAgentTarget> =
