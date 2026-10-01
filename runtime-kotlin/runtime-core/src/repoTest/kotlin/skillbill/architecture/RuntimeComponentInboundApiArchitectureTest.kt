@@ -146,7 +146,7 @@ class RuntimeComponentInboundApiArchitectureTest {
 
         @Provides @RuntimeSingleton
         fun databaseSessionFactory(context: EnvironmentContext): DatabaseSessionFactory =
-          RuntimeBootstrapBindings.databaseSessionFactory(context)
+          error("fixture")
       }
       """.trimIndent()
     assertTrue(ArchitectureScanSupport.runtimeComponentPublicCallableViolationsInSource("example.kt", source).isEmpty())

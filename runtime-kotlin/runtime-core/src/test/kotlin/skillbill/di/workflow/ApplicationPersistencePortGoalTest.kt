@@ -1,4 +1,4 @@
-package skillbill.application
+package skillbill.di.workflow
 
 import skillbill.application.review.model.GoalStatsResult
 import skillbill.application.review.service.ReviewService

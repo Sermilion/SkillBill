@@ -1,4 +1,4 @@
-package skillbill.application
+package skillbill.di.workflow
 
 import skillbill.application.learning.LearningService
 import skillbill.application.learning.model.AddLearningInput

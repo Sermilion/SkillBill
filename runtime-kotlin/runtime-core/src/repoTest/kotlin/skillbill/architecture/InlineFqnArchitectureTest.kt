@@ -37,6 +37,7 @@ class InlineFqnArchitectureTest {
     val keepListFixture =
       """
 
+      import java.time.Instant
 
       interface Clean {
         /**

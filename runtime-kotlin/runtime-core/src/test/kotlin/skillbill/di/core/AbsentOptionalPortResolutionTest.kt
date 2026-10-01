@@ -1,11 +1,5 @@
-package skillbill.di.absent
+package skillbill.di.core
 
-import skillbill.di.core.OptionalCallbacks
-import skillbill.di.core.RuntimeBootstrapBindings
-import skillbill.di.core.RuntimeContext
-import skillbill.di.core.RuntimeOptionalCallbackProvides
-import skillbill.di.core.TransportContext
-import skillbill.di.core.WorkflowOpsContext
 import skillbill.error.core.UnresolvedRemoteTransportPortError
 import skillbill.infrastructure.http.JdkHttpRequester
 import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
@@ -55,7 +49,14 @@ class AbsentOptionalPortResolutionTest {
   @Test
   fun `an unresolved transport context raises a typed error`() {
     assertFailsWith<UnresolvedRemoteTransportPortError> {
-      RuntimeBootstrapBindings.remoteTransportPort(TransportContext())
+      RuntimeComponent::class.create(
+        RuntimeContext(
+          environment = EnvironmentContext(),
+          transport = TransportContext(),
+          workflowOps = WorkflowOpsContext(),
+          callbacks = OptionalCallbacks(),
+        ),
+      ).remoteTransportPort(TransportContext())
     }
   }
 

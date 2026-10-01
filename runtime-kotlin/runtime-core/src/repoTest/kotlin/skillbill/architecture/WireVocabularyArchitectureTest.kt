@@ -91,6 +91,8 @@ class WireVocabularyArchitectureTest {
           "fixture/Owner.kt",
           """
 
+          package fixture
+
           enum class Owner(val wireValue: String) {
             READY("ready"),
 
@@ -110,6 +112,9 @@ class WireVocabularyArchitectureTest {
         syntheticSourceFile(
           "fixture/Consumer.kt",
           """
+
+          package fixture
+          import fixture.Owner as AliasOwner
 
 
           fun consume(value: AliasOwner) = value.wireValue

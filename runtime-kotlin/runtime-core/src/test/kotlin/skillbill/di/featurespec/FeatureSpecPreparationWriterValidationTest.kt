@@ -1,4 +1,4 @@
-package skillbill.application.featurespec
+package skillbill.di.featurespec
 
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.decompositionManifestPath
