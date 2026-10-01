@@ -24,7 +24,7 @@ The subtask spec (`spec_subtask_1_mcp-vocabulary-ownership-and-adapter-hygiene.m
 
 1. `McpToolPayloadKeys` is an `internal object` in runtime-mcp `skillbill.mcp.shared`, no runtime-contracts file declares it, and runtime-infra/sqlite `ReviewRowMappers` reads the session column through `ReviewFinishedTelemetryPayloadKeys.REVIEW_SESSION_ID` (subtask AC 1-2).
 2. `McpToolPayloadKeys` restates no value a runtime-contracts key object declares, and the existing `WireVocabularyArchitectureTest` enforces that with one added method (subtask AC 3-4).
-3. `runtime-kotlin/agent/decisions.md` records the new owner and supersedes the clause that kept the object in runtime-contracts (subtask AC 5).
+3. `../../../runtime-kotlin/agent/decisions.md` records the new owner and supersedes the clause that kept the object in runtime-contracts (subtask AC 5).
 4. MCP telemetry and orchestrated-payload maps use `LifecycleTelemetryPayloadKeys` constants instead of literal keys (subtask AC 6).
 5. `McpToolDispatcher.dispatch` rethrows `CancellationException` before mapping `IllegalStateException` (subtask AC 7).
 6. runtime-mcp main has no public top-level declaration other than `fun main`, the review import-skipped payload takes `findingCount: Int`, `McpResultMappers.kt` is gone, and `McpToolArguments.toolName` is private (subtask AC 8-9).
@@ -34,7 +34,7 @@ The subtask spec (`spec_subtask_1_mcp-vocabulary-ownership-and-adapter-hygiene.m
 
 - No new module, port, class hierarchy, framework or architecture-test class; no baseline growth.
 - Byte-identical MCP wire output.
-- Follow `runtime-kotlin/ARCHITECTURE.md` Design Principles and `docs/code-principles.md`.
+- Follow `../../../runtime-kotlin/ARCHITECTURE.md` Design Principles and `docs/code-principles.md`.
 
 ## Non-Goals
 

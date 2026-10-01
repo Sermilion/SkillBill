@@ -3,9 +3,9 @@ package skillbill.mcp.scaffold
 import skillbill.application.scaffold.model.ScaffoldInvocationArgs
 import skillbill.application.scaffold.runScaffoldInvocation
 import skillbill.contracts.JsonCodec
-import skillbill.contracts.mcp.McpToolPayloadKeys
 import skillbill.mcp.shared.McpComponent
 import skillbill.mcp.shared.McpToolArguments
+import skillbill.mcp.shared.McpToolPayloadKeys
 import kotlin.coroutines.cancellation.CancellationException
 
 internal fun newSkillScaffold(

@@ -1,10 +1,16 @@
 package skillbill.architecture
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.learning.LearningPayloadKeys
+import skillbill.contracts.review.ReviewAccountingPayloadKeys
 import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.contracts.review.ReviewFinishedTelemetryPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
+import skillbill.contracts.system.UpdateCheckPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
+import skillbill.contracts.telemetry.TelemetryProxyPayloadKeys
+import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
+import skillbill.contracts.workflow.session.WorkflowContinueSessionSummaryPayloadKeys
 import skillbill.infrastructure.contracts.locator.DecompositionManifestSchemaPaths
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
@@ -53,6 +59,35 @@ class WireVocabularyArchitectureTest {
       emptyList(),
       restatements,
       "SQLite adapter key objects must reference the shared owner instead of restating its wire value",
+    )
+  }
+
+  @Test
+  fun `mcp tool payload keys restate no shared payload key value`() {
+    val owner = "skillbill.mcp.shared.McpToolPayloadKeys"
+    val mcpValues =
+      WireVocabularyArchitectureSupport.scanRuntimeMainSources().declarations
+        .filter { it.owner == owner }
+        .map { it.value }
+    assertTrue(mcpValues.isNotEmpty(), "Wire vocabulary scan found no declarations for $owner")
+    val sharedValues =
+      payloadKeyValues(
+        SharedPayloadKeys::class.java,
+        LifecycleTelemetryPayloadKeys::class.java,
+        ReviewFinishedTelemetryPayloadKeys::class.java,
+        ReviewVerificationSignalKeys::class.java,
+        ReviewAccountingPayloadKeys::class.java,
+        UpdateCheckPayloadKeys::class.java,
+        TelemetryProxyPayloadKeys::class.java,
+        WorkflowWirePayloadKeys::class.java,
+        LearningPayloadKeys::class.java,
+        WorkflowContinueSessionSummaryPayloadKeys::class.java,
+      )
+
+    assertEquals(
+      emptyList(),
+      (mcpValues intersect sharedValues).sorted(),
+      "The MCP key object must reference the shared owner instead of restating its wire value",
     )
   }
 

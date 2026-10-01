@@ -1,3 +1,14 @@
+## [2026-10-01] SKILL-395 subtask 1 — MCP vocabulary ownership and adapter hygiene
+Areas: runtime-kotlin/runtime-{mcp,contracts,core}, runtime-kotlin/runtime-infra/sqlite
+- Deleted the contracts-side MCP payload keys object; the 19 MCP-only keys now live in an internal object in runtime-mcp shared, values unchanged. Every other key use points at its existing owner object (lifecycle telemetry, workflow wire, shared, telemetry proxy, review verification, learning, update check, review accounting).
+- The sqlite review row mapper reads its SQL column label from the review-finished telemetry owner instead of the MCP object.
+- Adapter hygiene: MCP adapter contract types are internal, the telemetry skill parameter is gone, the result-mapper forwarder file and the standard-map helper were inlined or removed, tool name is private, and the dispatcher rethrows CancellationException first.
+- New guard in WireVocabularyArchitectureTest: MCP payload keys must not restate a shared payload key value; no baseline added. reusable
+- Pattern followed: wire vocabulary has one owner; adapter-local keys stay internal to the adapter module.
+- Limits: no feature flag; key order and values stay byte-identical (parity and golden suites are the evidence).
+Feature flag: N/A
+Acceptance criteria: all implemented (validate passed `./gradlew check`)
+
 ## [2026-10-01] SKILL-393 subtask 2 — behaviour out of runtime-ports, guard carve-outs removed
 Areas: runtime-kotlin/runtime-{ports,application,engine,core,cli}, runtime-kotlin/runtime-infra/{host,launcher,contracts}, ARCHITECTURE.md
 - Manifest DTOs, manifest discovery, parent-discovery and projection-failure persistence moved from ports to application decomposition packages; the goal parent projection writer is now an internal engine class.

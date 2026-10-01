@@ -6,11 +6,11 @@ import skillbill.application.workflow.model.WorkflowUpdateRequest
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningResult
-import skillbill.contracts.mcp.McpToolPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowArtifactKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.mcp.shared.McpComponent
 import skillbill.mcp.shared.McpToolArguments
+import skillbill.mcp.shared.McpToolPayloadKeys
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.model.FeatureTaskRouteScope
@@ -24,9 +24,9 @@ internal fun workflowOpen(
   component.workflowService.open(
     WorkflowServiceOpenArgs(
       kind = VERIFY,
-      sessionId = arguments.string(McpToolPayloadKeys.SESSION_ID),
-      currentStepId = arguments.optionalString(McpToolPayloadKeys.CURRENT_STEP_ID),
-      issueKey = arguments.optionalString(McpToolPayloadKeys.ISSUE_KEY),
+      sessionId = arguments.string(WorkflowWirePayloadKeys.SESSION_ID),
+      currentStepId = arguments.optionalString(WorkflowWirePayloadKeys.CURRENT_STEP_ID),
+      issueKey = arguments.optionalString(SharedPayloadKeys.ISSUE_KEY),
       repositoryIdentity = arguments.optionalString(McpToolPayloadKeys.REPOSITORY_IDENTITY),
       governedSpecPath = arguments.optionalString(McpToolPayloadKeys.GOVERNED_SPEC_PATH),
       routeScope = FeatureTaskRouteScope.STANDALONE,
@@ -42,15 +42,15 @@ internal fun workflowUpdate(
     arguments.optionalMap(McpToolPayloadKeys.ARTIFACTS_PATCH).let { artifactsPatch ->
       WorkflowUpdateRequest(
         workflowId = arguments.string(SharedPayloadKeys.WORKFLOW_ID),
-        workflowStatus = arguments.string(McpToolPayloadKeys.WORKFLOW_STATUS),
-        currentStepId = arguments.string(McpToolPayloadKeys.CURRENT_STEP_ID),
+        workflowStatus = arguments.string(WorkflowWirePayloadKeys.WORKFLOW_STATUS),
+        currentStepId = arguments.string(WorkflowWirePayloadKeys.CURRENT_STEP_ID),
         stepUpdates = arguments.optionalListMap(McpToolPayloadKeys.STEP_UPDATES)?.let(WorkflowStepUpdates::from),
         artifactsPatch = artifactsPatch?.let(WorkflowArtifactPatch::from),
         planningResult =
           artifactsPatch?.get(WorkflowArtifactKeys.PLAN)
             ?.let(JsonCodec::anyToStringAnyMap)
             ?.let { DecompositionPlanningResult.fromWireMap(it, "mcp.artifacts_patch.plan") },
-        sessionId = arguments.string(McpToolPayloadKeys.SESSION_ID),
+        sessionId = arguments.string(WorkflowWirePayloadKeys.SESSION_ID),
       )
     },
   ).toMcpMap()
