@@ -115,14 +115,17 @@ class IdeStatusService(
     branch: String,
     repoRoot: Path,
   ): Boolean {
-    if (candidate.workflowFamily != IdeStatusWorkflowFamily.FEATURE_GOAL ||
+    val issueKey = candidate.issueKey
+    if (issueKey == null ||
+      candidate.workflowFamily != IdeStatusWorkflowFamily.FEATURE_GOAL ||
       candidate.lifecycleState == IdeStatusLifecycleState.TERMINAL
     ) {
       return false
     }
-    val issueKey = candidate.issueKey ?: return false
-    val state = manifestStore.readByIssueKey(issueKey, repoRoot) ?: return false
-    if (state.parentWorkflowId != candidate.workflowId || state.manifest.baseBranch != branch) return false
+    val state = manifestStore.readByIssueKey(issueKey, repoRoot)
+    if (state == null || state.parentWorkflowId != candidate.workflowId || state.manifest.baseBranch != branch) {
+      return false
+    }
     val planning =
       manifestStore.planningStatus(
         state.parentWorkflowId,

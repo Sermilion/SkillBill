@@ -31,6 +31,9 @@ exclude = [
   # They quote runtime text such as `select:<thread>=<option>`, which agnix
   # would read as unclosed XML tags; they are not agent config.
   "runtime-kotlin/runtime-engine/src/test/resources/operation/**",
+  # This snapshot records MCP protocol output, not an agent configuration.
+  # Operator confirmation belongs to the runtime and dispatcher contracts.
+  "runtime-kotlin/runtime-mcp/src/test/resources/golden/mcp-tools-list.json",
 ]
 
 # SKILL-21: skill-bill deliberately extends the Agent Skills frontmatter

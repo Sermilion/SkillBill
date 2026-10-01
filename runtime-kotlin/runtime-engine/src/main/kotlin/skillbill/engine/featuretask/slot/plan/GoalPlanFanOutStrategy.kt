@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseFanOutUnits
 import skillbill.engine.featuretask.slot.state.PhasePlanningStepBinding
@@ -31,9 +32,6 @@ class GoalPlanFanOutStrategy(
   override val entryStep: String = plan.entryStep
 
   override fun policyFor(stepId: String): PhaseStepPolicy = plan.policyFor(stepId)
-
-  internal override fun acceptsAttemptStrategy(attemptStrategyId: String): Boolean =
-    attemptStrategyId == plan.strategyId
 
   override fun directiveFor(stepId: String): String = plan.directiveFor(stepId)
 
@@ -100,7 +98,7 @@ class GoalPlanFanOutStrategy(
     val sink = UnitAttributedOutputSink(fanOutPort, fanOut.outputSink, unitId)
     val state = fanOut.unitState(unitId, sink)
     return try {
-      plan.runStep(run, state)
+      runAgentStep(run, state)
     } finally {
       state.finishStepExecution()
       sink.flushTrailingLines()

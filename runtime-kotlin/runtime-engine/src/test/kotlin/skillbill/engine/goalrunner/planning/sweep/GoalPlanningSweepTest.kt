@@ -1875,17 +1875,22 @@ class GoalPlanningSweepTimingTest {
   }
 
   @Test
-  fun `plan session edits its sub-spec and the checkpointed hash equals the post-write file hash`() {
+  fun `goal planner receives the write directive and checkpoints its completed sub-spec`() {
     lateinit var store: CountingManifestFileStore
     val harness =
-      sweepHarness { phase, subtaskId, _ ->
+      sweepHarness { phase, subtaskId, request ->
         if (phase == "plan") {
+          val prompt = request.skillRunRequest.promptOverride.orEmpty()
+          assertContains(prompt, "write the plan into that same file")
+          assertContains(prompt, "## Implementation Details")
+          assertFalse(prompt.contains("Do not modify repository files during this phase."))
           val file = "spec_subtask_$subtaskId.md"
           store.replaceSpec(file, readySubSpec(file) + "- Edited by the plan session.\n")
         }
         validPhaseOutcome(phase)
       }
     store = harness.manifestFileStore
+    store.replaceSpec("spec_subtask_1.md", legacySubSpec("spec_subtask_1.md"))
     val state = harness.stateFor(manifest(subtaskCount = 1))
 
     val outcome = harness.sweep.prepare(state, harness.request())
