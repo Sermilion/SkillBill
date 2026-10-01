@@ -1,7 +1,6 @@
 package skillbill.architecture
 
 import java.nio.file.Files
-import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

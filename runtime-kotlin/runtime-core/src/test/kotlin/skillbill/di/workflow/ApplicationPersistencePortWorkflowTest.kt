@@ -1,4 +1,4 @@
-package skillbill.application
+package skillbill.di.workflow
 
 import skillbill.application.workflow.model.WorkflowContinueResult
 import skillbill.application.workflow.model.WorkflowFamilyKind

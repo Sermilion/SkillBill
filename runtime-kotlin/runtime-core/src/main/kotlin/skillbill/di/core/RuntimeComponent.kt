@@ -141,8 +141,7 @@ abstract class RuntimeComponent(
   fun optionalCallbacks(ctx: RuntimeContext): OptionalCallbacks = ctx.callbacks
 
   @Provides
-  fun repositoryEnclosingRootPort(): RepositoryEnclosingRootPort =
-    CanonicalRepositoryRoot
+  fun repositoryEnclosingRootPort(): RepositoryEnclosingRootPort = CanonicalRepositoryRoot
 
   @Provides @RuntimeSingleton
   fun databaseSessionFactory(

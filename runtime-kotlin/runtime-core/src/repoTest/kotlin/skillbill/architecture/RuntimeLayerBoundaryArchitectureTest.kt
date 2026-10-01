@@ -1,6 +1,5 @@
 package skillbill.architecture
 
-import skillbill.application.learningRecord
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains

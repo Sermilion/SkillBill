@@ -135,7 +135,7 @@ object PrincipleEnforcementInventory {
         "Dynamic ReviewRepository proxy passes typed args through erased invoke; casts mirror the repository contract",
       ),
       SuppressionAllowListRow(
-        "runtime-core/src/test/kotlin/skillbill/application/ApplicationPersistencePortTestSupport.kt",
+        "runtime-core/src/test/kotlin/skillbill/di/workflow/ApplicationPersistencePortTestSupport.kt",
         "noopPort",
         "UNCHECKED_CAST",
         "Dynamic port proxy returns typed facade from erased invoke",
@@ -283,6 +283,10 @@ object PrincipleEnforcementInventory {
         "Composition-only construction: no main-source site outside skillbill.di constructs a concrete class " +
           "censused from @Provides parameter types and explicit Provides constructions; import aliases count, " +
           "comments and string literals are ignored, and unrelated same-named functions are skipped.",
+        RuntimeCompositionGuardArchitectureTest::class,
+      ),
+      EnforcedRule(
+        "Runtime-core tests declare packages under skillbill.di and avoid retired absent and runtime packages.",
         RuntimeCompositionGuardArchitectureTest::class,
       ),
       EnforcedRule(

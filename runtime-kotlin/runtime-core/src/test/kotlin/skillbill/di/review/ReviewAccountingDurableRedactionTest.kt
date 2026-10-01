@@ -1,4 +1,4 @@
-package skillbill.review.review
+package skillbill.di.review
 
 import skillbill.application.review.model.ReviewPrelaunchExpansion
 import skillbill.application.review.snapshot.RecordedWorkerResponse

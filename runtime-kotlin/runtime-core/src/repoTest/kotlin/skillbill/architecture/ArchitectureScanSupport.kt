@@ -56,6 +56,26 @@ object ArchitectureScanSupport {
 
   fun declaredPackage(source: String): String? = PACKAGE_PATTERN.find(source)?.groupValues?.get(1)
 
+  fun runtimeCoreTestPackagePlacementViolationsInSource(
+    relativePath: String,
+    source: String,
+  ): List<String> {
+    val packageLine =
+      sourceWithoutCommentsAndStringLiterals(source).lineSequence().firstOrNull { line ->
+        line.startsWith("package") && line.getOrNull(7)?.isWhitespace() == true
+      }
+    val packageName =
+      packageLine?.let { line -> RUNTIME_CORE_TEST_PACKAGE_PATTERN.matchEntire(line)?.groupValues?.get(1) }
+        ?: return listOf("$relativePath has no valid column-zero Kotlin package declaration.")
+    if (packageName != "skillbill.di" && !packageName.startsWith("skillbill.di.")) {
+      return listOf("$relativePath declares package $packageName outside skillbill.di.")
+    }
+    if (packageName == "skillbill.di.absent" || packageName == "skillbill.di.runtime") {
+      return listOf("$relativePath declares retired runtime-core test package $packageName.")
+    }
+    return emptyList()
+  }
+
   fun primaryTopLevelDeclarationName(source: String): String? {
     var braceDepth = 0
     source.lineSequence().forEach { rawLine ->
@@ -556,6 +576,8 @@ object ArchitectureScanSupport {
   }
 
   private val PACKAGE_PATTERN = Regex("""^package\s+([A-Za-z0-9_.]+)""", RegexOption.MULTILINE)
+  private val RUNTIME_CORE_TEST_PACKAGE_PATTERN =
+    Regex("""package\s+([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)\s*;?\s*(?://.*)?""")
   private val IMPORT_PATTERN = Regex("""^import\s+([A-Za-z0-9_.]+)""", RegexOption.MULTILINE)
   private val TOP_LEVEL_DECLARATION_PATTERN =
     Regex(
