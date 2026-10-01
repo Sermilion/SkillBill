@@ -12,12 +12,12 @@ import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.RecordingPullRequestPort
 import skillbill.engine.goalrunner.RecordingSubtaskLauncher
 import skillbill.engine.goalrunner.completeOutcome
-import skillbill.engine.goalrunner.execution.support.withWorkflowId
 import skillbill.engine.goalrunner.launchFacts
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerEventSink
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.goalrunner.model.GoalRunnerRunReport
+import skillbill.workflow.decomposition.withWorkflowId
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant

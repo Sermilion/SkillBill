@@ -21,7 +21,9 @@ import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.runtime.invalidManifest
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestWriteResult
+import skillbill.workflow.decomposition.withPreservedRuntimeState
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.model.DecompositionSubtaskAction
 import java.io.IOException
 import java.nio.file.Path
 
@@ -248,7 +250,11 @@ class DecompositionManifestWriter {
       baseBranch = typedPlan.baseBranch,
       featureBranch = typedPlan.featureBranch,
       stackBranches = typedPlan.stackBranches,
-      currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = typedPlan.currentSubtaskId, action = "start"),
+      currentSubtaskIntent =
+        CurrentSubtaskIntent(
+          subtaskId = typedPlan.currentSubtaskId,
+          action = DecompositionSubtaskAction.START.wireValue,
+        ),
       subtasks = typedPlan.subtasks,
     )
   }

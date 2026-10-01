@@ -1,10 +1,10 @@
 package skillbill.engine.goalrunner.execution.support
 
-import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
-import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
+import skillbill.ports.goalrunner.runner.model.GoalPullRequestRequest
+import skillbill.workflow.decomposition.branchForFinalPullRequest
+import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
-import skillbill.workflow.model.DecompositionStatus
-import skillbill.workflow.model.decompositionStatus
+import java.nio.file.Path
 
 internal data class GoalRunnerBranchPlan(
   val branch: String,
@@ -12,121 +12,57 @@ internal data class GoalRunnerBranchPlan(
   val validateBase: Boolean,
 )
 
-fun DecompositionManifest.withAttemptedSubtask(subtaskId: Int): DecompositionManifest =
-  copy(
-    status = "in_progress",
-    currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = subtaskId, action = "resume"),
-    subtasks =
-      subtasks.map { subtask ->
-        if (subtask.id == subtaskId && subtask.status.decompositionStatus() in
-          setOf(
-            DecompositionStatus.BLOCKED,
-            DecompositionStatus.PENDING,
-          )
-        ) {
-          subtask.copy(
-            status = "in_progress",
-            blockedReason = null,
-            lastResumableStep = if (subtask.workflowId.isNullOrBlank()) null else subtask.lastResumableStep,
-          )
-        } else {
-          subtask
-        }
-      },
-  )
-
-fun DecompositionManifest.withWorkflowId(
-  subtaskId: Int,
-  workflowId: String,
-): DecompositionManifest =
-  copy(
-    subtasks =
-      subtasks.map { subtask ->
-        if (subtask.id == subtaskId) subtask.copy(workflowId = workflowId) else subtask
-      },
-  )
-
-fun DecompositionManifest.knownWorkflowId(
-  subtaskId: Int,
-  outcome: GoalRunnerReconciledOutcome.Stop,
-): String? = outcome.workflowId ?: subtasks.firstOrNull { it.id == subtaskId }?.workflowId?.takeIf(String::isNotBlank)
-
-fun DecompositionManifest.withCompletedSubtask(
-  subtaskId: Int,
-  outcome: GoalRunnerReconciledOutcome.Complete,
-): DecompositionManifest {
-  val updated =
-    copy(
-      currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 0, action = "complete"),
-      subtasks =
-        subtasks.map { subtask ->
-          if (subtask.id == subtaskId) {
-            subtask.copy(
-              status = DecompositionStatus.COMPLETE.wireValue,
-              workflowId = outcome.workflowId,
-              commitSha = outcome.commitSha,
-              blockedReason = null,
-              lastResumableStep = outcome.lastResumableStep,
-            )
-          } else {
-            subtask
-          }
-        },
-    )
-  return if (updated.subtasks.all {
-      it.status.decompositionStatus() in setOf(DecompositionStatus.COMPLETE, DecompositionStatus.SKIPPED)
+fun DecompositionManifest.toPullRequestRequest(repoRoot: Path): GoalPullRequestRequest {
+  val title = "[$issueKey] ${featureName.toPullRequestTitle()}"
+  val body =
+    buildString {
+      appendLine("# Summary")
+      appendLine()
+      appendLine("This pull request delivers ${featureName.toPullRequestTitle()} through the completed goal subtasks:")
+      subtasks.forEach { subtask ->
+        append("- ${subtask.name}")
+        appendLine()
+      }
+      appendLine()
+      appendLine("## Feature Flags")
+      appendLine()
+      appendLine("N/A")
+      appendLine()
+      appendLine("## Media")
+      appendLine()
+      appendLine("N/A")
+      appendLine()
+      appendLine("# How Has This Been Tested?")
+      appendLine()
+      appendLine(
+        "Every subtask completed the configured review, audit, validation, and history gates before " +
+          "this pull request was opened.",
+      )
     }
-  ) {
-    updated.copy(status = DecompositionStatus.COMPLETE.wireValue)
-  } else {
-    updated.copy(status = DecompositionStatus.IN_PROGRESS.wireValue)
-  }
+  return GoalPullRequestRequest(
+    repoRoot = repoRoot,
+    issueKey = issueKey,
+    featureName = featureName,
+    baseBranch = baseBranch,
+    headBranch = featureBranch.orEmpty().ifBlank { branchForFinalPullRequest() },
+    title = title,
+    body = body,
+  )
 }
 
-fun DecompositionManifest.withStoppedSubtask(
-  subtaskId: Int,
-  outcome: GoalRunnerReconciledOutcome.Stop,
-  knownWorkflowId: String? = outcome.workflowId,
-): DecompositionManifest =
-  copy(
-    status = "blocked",
-    currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = subtaskId, action = "blocked"),
-    subtasks =
-      subtasks.map { subtask ->
-        if (subtask.id == subtaskId) {
-          subtask.copy(
-            status = "blocked",
-            workflowId = knownWorkflowId ?: subtask.workflowId,
-            commitSha = outcome.commitSha ?: subtask.commitSha,
-            blockedReason = outcome.blockedReason,
-            lastResumableStep = outcome.lastResumableStep,
-          )
-        } else {
-          subtask
-        }
-      },
-  )
+private fun String.toPullRequestTitle(): String =
+  split(Regex("[-_\\s]+"))
+    .filter(String::isNotBlank)
+    .joinToString(" ") { word ->
+      word.replaceFirstChar { character -> character.uppercase() }
+    }
 
-fun DecompositionManifest.withResumableSubtask(
-  subtaskId: Int,
-  outcome: GoalRunnerReconciledOutcome.Stop,
-  knownWorkflowId: String? = outcome.workflowId,
-): DecompositionManifest =
-  copy(
-    status = "in_progress",
-    currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = subtaskId, action = "resume"),
-    subtasks =
-      subtasks.map { subtask ->
-        if (subtask.id == subtaskId) {
-          subtask.copy(
-            status = "in_progress",
-            workflowId = knownWorkflowId ?: subtask.workflowId,
-            commitSha = outcome.commitSha ?: subtask.commitSha,
-            blockedReason = null,
-            lastResumableStep = outcome.lastResumableStep,
-          )
-        } else {
-          subtask
-        }
-      },
-  )
+internal fun DecompositionManifest.branchPlanFor(subtaskId: Int): GoalRunnerBranchPlan =
+  when (executionModel) {
+    DecompositionExecutionModel.SAME_BRANCH_COMMIT_PER_SUBTASK ->
+      GoalRunnerBranchPlan(branch = featureBranch.orEmpty(), baseBranch = baseBranch, validateBase = false)
+    DecompositionExecutionModel.STACKED_BRANCHES -> {
+      val stackBranch = stackBranches.first { it.subtaskId == subtaskId }
+      GoalRunnerBranchPlan(branch = stackBranch.branch, baseBranch = stackBranch.baseBranch, validateBase = true)
+    }
+  }

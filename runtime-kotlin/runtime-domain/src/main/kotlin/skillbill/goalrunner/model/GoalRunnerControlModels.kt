@@ -140,3 +140,34 @@ data class GoalRunnerControlState(
         }
     )
 }
+
+fun GoalRunnerControlState.pauseAtOperatorBoundary(
+  pausedAtNow: String,
+  targetReached: Boolean = false,
+): GoalRunnerControlState =
+  when {
+    paused -> copy(stopAfterConsumed = stopAfterConsumed || targetReached)
+    pauseRequested ->
+      copy(
+        pauseConsumed = true,
+        paused = true,
+        pauseReason = pauseReason ?: GOAL_PAUSE_REASON_OPERATOR_REQUEST,
+        pausedAt = pausedAtNow,
+        stopAfterConsumed = stopAfterConsumed || targetReached,
+      )
+    targetReached ->
+      copy(
+        paused = true,
+        pauseReason = GOAL_PAUSE_REASON_STOP_AFTER_SUBTASK,
+        pausedAt = pausedAtNow,
+        stopAfterConsumed = true,
+      )
+    else -> this
+  }
+
+fun GoalRunnerControlState.targetReached(manifest: DecompositionManifest): Boolean =
+  stopAfterSubtaskId?.let { targetId ->
+    manifest.subtasks.any {
+      it.id == targetId && it.status.decompositionStatus() == DecompositionStatus.COMPLETE
+    }
+  } == true && !stopAfterConsumed

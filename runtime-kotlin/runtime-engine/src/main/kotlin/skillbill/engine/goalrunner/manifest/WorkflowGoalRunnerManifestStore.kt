@@ -14,7 +14,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerChildWorkflowPersistence
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerScopedReplanPersistence
-import skillbill.engine.goalrunner.reset.afterIncompatibleChildDeletion
 import skillbill.engine.goalrunner.status.GoalRunnerControlCoordinator
 import skillbill.engine.goalrunner.status.acquireExecutionLease
 import skillbill.engine.goalrunner.status.bindRepositoryIdentity
@@ -41,6 +40,7 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.workflow.decomposition.afterIncompatibleChildDeletion
 import skillbill.workflow.engine.WorkflowEngine
 import java.nio.file.Path
 import java.time.Clock

@@ -29,7 +29,6 @@ import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerManifest
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.execution.core.testWorktreeEditJournalWriter
 import skillbill.engine.goalrunner.execution.support.progressProbe
-import skillbill.engine.goalrunner.execution.support.withWorkflowId
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.TestNoopGoalRunnerSubtaskLauncher
@@ -168,6 +167,7 @@ import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
+import skillbill.workflow.decomposition.withWorkflowId
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskExecutionIdentity

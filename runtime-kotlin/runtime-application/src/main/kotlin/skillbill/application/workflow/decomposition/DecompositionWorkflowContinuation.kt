@@ -35,6 +35,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.runtime.normalizedBlockedReason
 import skillbill.workflow.decomposition.withParentStatus
+import skillbill.workflow.decomposition.withStartedSubtask
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts

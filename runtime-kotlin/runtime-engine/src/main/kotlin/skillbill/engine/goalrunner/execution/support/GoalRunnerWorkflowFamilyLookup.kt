@@ -6,9 +6,6 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.error.shellcontent.InvalidAgentAddonSelectionError
 import skillbill.error.shellcontent.LegacyProseWorkflowError
-import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_REQUEST
-import skillbill.goalrunner.model.GOAL_PAUSE_REASON_STOP_AFTER_SUBTASK
-import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -30,30 +27,6 @@ fun workflowFamilyFor(
     null
   }
 }
-
-fun GoalRunnerControlState.pauseAtOperatorBoundary(
-  pausedAtNow: String,
-  targetReached: Boolean = false,
-): GoalRunnerControlState =
-  when {
-    paused -> copy(stopAfterConsumed = stopAfterConsumed || targetReached)
-    pauseRequested ->
-      copy(
-        pauseConsumed = true,
-        paused = true,
-        pauseReason = pauseReason ?: GOAL_PAUSE_REASON_OPERATOR_REQUEST,
-        pausedAt = pausedAtNow,
-        stopAfterConsumed = stopAfterConsumed || targetReached,
-      )
-    targetReached ->
-      copy(
-        paused = true,
-        pauseReason = GOAL_PAUSE_REASON_STOP_AFTER_SUBTASK,
-        pausedAt = pausedAtNow,
-        stopAfterConsumed = true,
-      )
-    else -> this
-  }
 
 fun decodeGoalAgentAddonSelection(raw: Any?): AgentAddonSelection {
   val values = raw ?: return AgentAddonSelection()

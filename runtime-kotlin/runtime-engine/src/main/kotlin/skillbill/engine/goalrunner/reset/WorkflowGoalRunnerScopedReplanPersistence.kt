@@ -8,9 +8,7 @@ import skillbill.goalrunner.planning.cascadeEligiblePlanSubtaskIds
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
-import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
-import skillbill.workflow.decomposition.model.DecompositionManifest
-import skillbill.workflow.decomposition.withParentStatus
+import skillbill.workflow.decomposition.afterReplanChildDeletion
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
@@ -102,26 +100,6 @@ internal class WorkflowGoalRunnerScopedReplanPersistence(
   }
 }
 
-internal fun DecompositionManifest.afterIncompatibleChildDeletion(subtaskId: Int): DecompositionManifest =
-  copy(
-    currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = subtaskId, action = "start"),
-    subtasks =
-      subtasks.map { subtask ->
-        if (subtask.id != subtaskId) {
-          subtask
-        } else {
-          subtask.copy(
-            status = "pending",
-            branch = null,
-            commitSha = null,
-            workflowId = null,
-            blockedReason = null,
-            lastResumableStep = null,
-          )
-        }
-      },
-  ).withParentStatus()
-
 internal fun deleteStaleReplanChildren(
   unitOfWork: UnitOfWork,
   state: GoalRunnerManifestState,
@@ -145,24 +123,3 @@ internal fun deleteStaleReplanChildren(
       ) == 1
     }
   }
-
-internal fun DecompositionManifest.afterReplanChildDeletion(subtaskIds: List<Int>): DecompositionManifest {
-  if (subtaskIds.isEmpty()) return this
-  return copy(
-    subtasks =
-      subtasks.map { subtask ->
-        if (subtask.id !in subtaskIds) {
-          subtask
-        } else {
-          subtask.copy(
-            status = "pending",
-            branch = null,
-            commitSha = null,
-            workflowId = null,
-            blockedReason = null,
-            lastResumableStep = null,
-          )
-        }
-      },
-  ).withParentStatus()
-}
