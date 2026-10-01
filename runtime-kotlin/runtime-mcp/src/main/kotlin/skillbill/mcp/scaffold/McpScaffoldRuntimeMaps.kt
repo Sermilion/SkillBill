@@ -1,6 +1,7 @@
 package skillbill.mcp.scaffold
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.scaffold.model.ScaffoldResult
 
 internal fun scaffoldSuccessMap(
@@ -18,20 +19,20 @@ internal fun scaffoldSuccessMap(
       "platform" to payload["platform"].orEmpty(),
       "family" to payload["family"].orEmpty(),
       "area" to payload["area"].orEmpty(),
-      "result" to outcome,
-      "skill" to "skill-bill-scaffold",
+      LifecycleTelemetryPayloadKeys.RESULT to outcome,
+      LifecycleTelemetryPayloadKeys.SKILL to "skill-bill-scaffold",
     )
   return if (orchestrated) {
     mapOf(
-      "mode" to "orchestrated",
-      "telemetry_payload" to baseTelemetryPayload,
+      LifecycleTelemetryPayloadKeys.MODE to "orchestrated",
+      LifecycleTelemetryPayloadKeys.TELEMETRY_PAYLOAD to baseTelemetryPayload,
       "skill_path" to result.skillPath.toString(),
       "notes" to result.notes,
     )
   } else {
     mapOf(
       SharedPayloadKeys.STATUS to "ok",
-      "session_id" to sessionId,
+      LifecycleTelemetryPayloadKeys.SESSION_ID to sessionId,
       "skill_path" to result.skillPath.toString(),
       "notes" to result.notes,
     )
@@ -46,25 +47,25 @@ internal fun scaffoldFailureMap(
 ): Map<String, Any?> =
   if (orchestrated) {
     mapOf(
-      "mode" to "orchestrated",
-      "telemetry_payload" to
+      LifecycleTelemetryPayloadKeys.MODE to "orchestrated",
+      LifecycleTelemetryPayloadKeys.TELEMETRY_PAYLOAD to
         mapOf(
           "kind" to payload["kind"].orEmpty(),
           "skill_name" to payload["name"].orEmpty(),
           "platform" to payload["platform"].orEmpty(),
           "family" to payload["family"].orEmpty(),
           "area" to payload["area"].orEmpty(),
-          "result" to "failed",
-          "skill" to "skill-bill-scaffold",
-          "error" to error.message.orEmpty(),
+          LifecycleTelemetryPayloadKeys.RESULT to "failed",
+          LifecycleTelemetryPayloadKeys.SKILL to "skill-bill-scaffold",
+          LifecycleTelemetryPayloadKeys.ERROR to error.message.orEmpty(),
         ),
-      "error" to error.message.orEmpty(),
+      LifecycleTelemetryPayloadKeys.ERROR to error.message.orEmpty(),
     )
   } else {
     mapOf(
       SharedPayloadKeys.STATUS to "error",
-      "session_id" to sessionId,
-      "error" to error.message.orEmpty(),
+      LifecycleTelemetryPayloadKeys.SESSION_ID to sessionId,
+      LifecycleTelemetryPayloadKeys.ERROR to error.message.orEmpty(),
     )
   }
 

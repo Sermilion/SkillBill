@@ -2,7 +2,7 @@ package skillbill.mcp.core
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.mcp.McpToolPayloadKeys
+import skillbill.contracts.system.UpdateCheckPayloadKeys
 import skillbill.mcp.shared.McpRuntimeContext
 import skillbill.mcp.shared.assertStrictSchemaCoveragePublished
 import skillbill.mcp.shared.callTool
@@ -121,7 +121,7 @@ class McpStdioServerTest {
           identity +
             mapOf(
               SharedPayloadKeys.ATTEMPT to 3,
-              McpToolPayloadKeys.REASON to "Required dependency is unavailable.",
+              UpdateCheckPayloadKeys.REASON to "Required dependency is unavailable.",
             ),
         ),
       )

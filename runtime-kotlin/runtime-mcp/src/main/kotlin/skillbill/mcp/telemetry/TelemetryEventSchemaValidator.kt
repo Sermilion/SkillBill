@@ -9,11 +9,11 @@ import com.networknt.schema.PathType
 import com.networknt.schema.SchemaValidatorsConfig
 import com.networknt.schema.SpecVersion
 import com.networknt.schema.ValidationMessage
-import skillbill.contracts.mcp.McpToolPayloadKeys
 import skillbill.contracts.telemetry.LifecycleSessionCompletion
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.error.shellcontent.InvalidTelemetryEventSchemaError
+import skillbill.mcp.shared.McpToolPayloadKeys
 import java.io.IOException
 import java.util.Locale
 
