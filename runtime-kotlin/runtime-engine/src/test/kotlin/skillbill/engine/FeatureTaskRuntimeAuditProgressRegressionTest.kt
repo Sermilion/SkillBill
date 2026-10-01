@@ -34,7 +34,6 @@ class FeatureTaskRuntimeAuditProgressRegressionTest {
         RuntimeHarnessConfig(
           acceptanceCriteria = CRITERIA,
           launcher = launcher,
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
         ),
       )
     val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))

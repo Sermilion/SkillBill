@@ -1,6 +1,6 @@
 # SKILL-387 Subtask 1 - shared prose output and persisted spec handoff
 
-Parent spec: [.feature-specs/SKILL-387-prose-phase-output-and-spec-handoff/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-387-prose-phase-output-and-spec-handoff/spec.md](spec.md)
 Issue key: SKILL-387
 
 ## Scope

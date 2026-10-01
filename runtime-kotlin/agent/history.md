@@ -1,3 +1,14 @@
+## [2026-10-01] SKILL-387 subtask 1 — shared prose output and persisted spec handoff
+Areas: runtime-kotlin/{runtime-domain,runtime-engine,runtime-application,runtime-infra,runtime-ports,runtime-contracts,runtime-core,runtime-cli,runtime-mcp}, orchestration/contracts, docs
+- Routed agent content through the existing PhaseOutput prose value across runtime phases; removed response-only schema, repair, and formatting-relaunch machinery while retaining runtime-owned terminal, evidence, settlement, review, audit, validation, build, and PR authority.
+- Standalone and goal planning now author and validate authorized governed spec artifacts, persist post-write hashes and readiness, and hand implementation the selected spec path/details without duplicate response plans or parallel planning trees.
+- Historical readers recover supported legacy envelopes at persistence boundaries while retaining accepted identity, attempts, completed effects, terminal precedence, and typed recovery for unsupported pending plans.
+- New patterns: prose as content, existing semantic owners for decisions, and atomic artifact/readiness/hash handoff. reusable
+- Reusable components: common PhaseOutput admission/settlement and governed spec handoff/recovery paths. reusable
+- Breaking changes or known limitations: ordinary response contracts and response-only schemas are retired; ambiguous prose remains unresolved/blocking, and legacy pending plans without ready selected specs require typed recovery.
+Feature flag: N/A
+Acceptance criteria: 13/13 implemented
+
 ## [2026-09-29] SKILL-384 subtask 2: resolve composition once and preserve its semantics on durable resume
 Areas: runtime-kotlin/runtime-{engine,domain,application,ports,contracts,core,cli}, runtime-kotlin/runtime-infra/{contracts,sqlite,launcher}, orchestration/contracts
 - One immutable resolved plan owns selected strategies, steps, traversal, and effective execution policies. Composition rejects ambiguous selections, invalid ownership, and incoherent traversal before execution.
