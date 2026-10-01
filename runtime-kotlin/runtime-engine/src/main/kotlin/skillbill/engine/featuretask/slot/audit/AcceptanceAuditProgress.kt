@@ -81,17 +81,24 @@ internal object AcceptanceAuditProgress {
         } else {
           AcceptanceAuditProgressOutcome.Advance
         }
-    val prior = AcceptanceAuditRemainingCriteriaParser.parse(priorText, catalog)
-    if (prior is AcceptanceAuditRemainingCriteria.Unusable) {
-      return AcceptanceAuditProgressOutcome.Rejected("Audit comparison baseline is unusable: ${prior.reason}")
+    return when (val prior = AcceptanceAuditRemainingCriteriaParser.parse(priorText, catalog)) {
+      is AcceptanceAuditRemainingCriteria.Unusable ->
+        AcceptanceAuditProgressOutcome.Rejected("Audit comparison baseline is unusable: ${prior.reason}")
+      AcceptanceAuditRemainingCriteria.Complete -> AcceptanceAuditProgressOutcome.Advance
+      is AcceptanceAuditRemainingCriteria.Known -> shrinkOutcome(current, prior, input)
     }
-    prior as AcceptanceAuditRemainingCriteria.Known
-    return when {
+  }
+
+  private fun shrinkOutcome(
+    current: AcceptanceAuditRemainingCriteria.Known,
+    prior: AcceptanceAuditRemainingCriteria.Known,
+    input: AcceptanceAuditProgressInput,
+  ): AcceptanceAuditProgressOutcome =
+    when {
       current.identities.size < prior.identities.size -> AcceptanceAuditProgressOutcome.Advance
       input.nonShrinkingRounds < MAX_NON_SHRINKING_ROUNDS -> AcceptanceAuditProgressOutcome.NonShrinking
       else -> AcceptanceAuditProgressOutcome.Rejected(capReachedReason(current, prior))
     }
-  }
 
   private fun capReachedReason(
     current: AcceptanceAuditRemainingCriteria.Known,

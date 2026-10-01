@@ -329,7 +329,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     )
     assertAuditPromptNamesSignal(
       auditPrompt,
-      "say plainly that no production criteria remain",
+      "the whole value is the single line",
       "the remaining-criteria completion contract",
     )
     assertAuditPromptNamesSignal(

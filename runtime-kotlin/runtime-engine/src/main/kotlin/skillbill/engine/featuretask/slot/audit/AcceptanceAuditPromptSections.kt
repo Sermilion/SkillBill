@@ -22,8 +22,9 @@ internal object AcceptanceAuditPromptSections {
       "criteria with criterion identifiers, concrete missing production behavior, and relevant production " +
       "paths. The runtime passes those findings to audit_implement_fix using the configured implementation " +
       "model. After repairs, re-check the entire in-scope criterion list from the beginning, including previously " +
-      "satisfied criteria, applying the same test exclusion. Say plainly that no production criteria remain " +
-      "when all required production behavior is implemented, including when only test requirements remain. " +
+      "satisfied criteria, applying the same test exclusion. When all required production behavior is " +
+      "implemented, including when only test requirements remain, report that no production criteria remain " +
+      "with only the line \"${AcceptanceAuditRemainingCriteriaParser.COMPLETION_LINE}\" " +
       "Block with a concrete failure_disposition when the criterion list is missing or unreadable or an " +
       "external dependency prevents inspection. " + AUDIT_READONLY_EVIDENCE_SENTENCE
 
@@ -37,15 +38,15 @@ internal object AcceptanceAuditPromptSections {
           "production behavior even under a test source set; its example and regression cases stay excluded.",
       valueContent =
         "Report the remaining acceptance criteria in prose. When all production requirements are met, " +
-          "say plainly that no production criteria remain and give the satisfied rationale. Exclude test-only " +
-          "criteria and test-related parts of mixed criteria. " +
-          "Otherwise name each remaining criterion by its briefing criterion ID, the missing production " +
-          "behavior, and relevant production paths. " +
+          "the whole value is the single line \"${AcceptanceAuditRemainingCriteriaParser.COMPLETION_LINE}\" " +
+          "with no rationale and no criterion list. Exclude test-only criteria and test-related parts of " +
+          "mixed criteria. Otherwise list only the open criteria: start each on its own line with its briefing " +
+          "criterion ID, then give the missing production behavior and relevant production paths. Never name " +
+          "a satisfied criterion. " +
           "Open criteria route to audit_implement_fix. Do not repair gaps in audit. Only a report that no " +
           "criteria remain allows downstream review. Every audit " +
           "checks the complete planned criterion list against the current tree. " +
-          "Original spec labels are accepted aliases. Name a satisfied criterion only to say it is satisfied. " +
-          "For capability " +
+          "Original spec labels are accepted aliases. For capability " +
           "gaps, identify the actual consumer, helper or cast path, and reachable forbidden operation. A cast " +
           "inside an authorized review consumer alone does not prove a non-review access path. " +
           "Another automatic repair requires fewer open criterion IDs than before repair; equal or larger " +

@@ -78,9 +78,6 @@ class AcceptanceAuditProgressParsingTest {
     listOf(
       "- AC-001 / S3-AC3: conflicting aliases",
       "- AC-001: resolved",
-      "- AC-001: gap\n- Unidentified missing behavior",
-      "  - AC-001: gap\n  - Unidentified missing behavior",
-      "- AC-001: gap\nAC1 has no remaining production gap.",
       "- AC-099: unknown criterion",
       """[{"criterion_id":"AC-001","criterion":"S3-AC3. Another criterion"}]""",
       """[{"criterion_id":"AC-001","criterion":"AC-099. Unknown criterion"}]""",
@@ -99,12 +96,43 @@ class AcceptanceAuditProgressParsingTest {
   }
 
   @Test
-  fun `plain prose that no criteria remain completes the audit`() {
+  fun `explanation lines under an open criterion do not block the count`() {
     val catalog = assertIs<AcceptanceAuditCatalog.Known>(AcceptanceAuditCatalog.create(CRITERIA))
     listOf(
-      "All acceptance criteria are met; no production criteria remain.",
+      "- AC-001: gap\n- Unidentified missing behavior",
+      "  - AC-001: gap\n  - Unidentified missing behavior",
+      "- AC-001: gap\nAC2 has no remaining production gap.",
+      "AC-001: export wiring is missing.\n\nPaths:\n- runtime-engine/src/main/kotlin/Export.kt: 6",
+    ).forEach { report ->
+      val parsed =
+        assertIs<AcceptanceAuditRemainingCriteria.Known>(AcceptanceAuditRemainingCriteriaParser.parse(report, catalog))
+      assertEquals(setOf("AC-001"), parsed.identities, report)
+    }
+  }
+
+  @Test
+  fun `prose without the completion line does not complete the audit`() {
+    val catalog = assertIs<AcceptanceAuditCatalog.Known>(AcceptanceAuditCatalog.create(CRITERIA))
+    listOf(
       "Both AC1 and AC2 are satisfied. Nothing remains to repair.",
       "There are no remaining production gaps.",
+      "No production criteria remain except the export path",
+    ).forEach { report ->
+      assertIs<AcceptanceAuditRemainingCriteria.Unusable>(
+        AcceptanceAuditRemainingCriteriaParser.parse(report, catalog),
+        report,
+      )
+    }
+  }
+
+  @Test
+  fun `the completion line completes the audit`() {
+    val catalog = assertIs<AcceptanceAuditCatalog.Known>(AcceptanceAuditCatalog.create(CRITERIA))
+    listOf(
+      AcceptanceAuditRemainingCriteriaParser.COMPLETION_LINE,
+      "```\nno production criteria remain\n```",
+      "All acceptance criteria are met; no production criteria remain.",
+      "No production criteria remain.\nAC-001 is satisfied.\n- AC-002: resolved",
     ).forEach { report ->
       assertIs<AcceptanceAuditRemainingCriteria.Complete>(
         AcceptanceAuditRemainingCriteriaParser.parse(report, catalog),
@@ -124,7 +152,16 @@ class AcceptanceAuditProgressParsingTest {
   }
 
   @Test
-  fun `satisfied rationale preserves remaining gaps and rejects conflicting status`() {
+  fun `SKILL-393 completed audit with bulleted rationale advances past audit`() {
+    val criteria = (1..6).map { "AC-00$it. Required behavior $it" }
+    val report = checkNotNull(javaClass.getResource("/featuretask/audit/skill-393-completed-audit.txt")).readText()
+
+    assertTrue(AcceptanceAuditProgress.declaresComplete(criteria, report))
+    assertEquals(null, AcceptanceAuditProgress.rejectionReason(criteria, report, null, false, false))
+  }
+
+  @Test
+  fun `satisfied notes are skipped and completion beside open criteria is rejected`() {
     val catalog = assertIs<AcceptanceAuditCatalog.Known>(AcceptanceAuditCatalog.create(CRITERIA))
     val report = "AC-001 is satisfied. Its implementation meets the requirement.\nAC-002: export wiring is missing."
 
@@ -132,9 +169,8 @@ class AcceptanceAuditProgressParsingTest {
       assertIs<AcceptanceAuditRemainingCriteria.Known>(AcceptanceAuditRemainingCriteriaParser.parse(report, catalog))
     assertEquals(setOf("AC-002"), parsed.identities)
     listOf(
-      "AC-001 is satisfied.\n- AC-001: wiring is missing.",
-      "No production criteria remain.\nAC-001 is satisfied.\nCriterion AC-001 is still missing its export wiring.",
-      "No production criteria remain.\n- AC-001: resolved",
+      "No production criteria remain.\n- AC-002: export wiring is missing.",
+      "AC-002: export wiring is missing.\nAll acceptance criteria are met; no production criteria remain.",
     ).forEach {
       assertIs<AcceptanceAuditRemainingCriteria.Unusable>(AcceptanceAuditRemainingCriteriaParser.parse(it, catalog), it)
     }
@@ -142,15 +178,15 @@ class AcceptanceAuditProgressParsingTest {
 
   @Test
   fun `prose naming the same or a larger set after repair blocks as stalled`() {
-    val before = "Criteria AC1 and AC2 are still open because of missing production behavior."
+    val before = "- AC1: first production behavior is missing.\n- AC2: second production behavior is missing."
     listOf(
-      "Criteria AC1 and AC2 are still open because the gaps remain.",
-      "Open criteria: AC1, AC2 and again AC1 without an admission path.",
+      "- AC1: the gap remains.\n- AC2: the gap remains.",
+      "- AC1: open\n- AC2: open\n- AC1: open again without an admission path.",
     ).forEach { after ->
       val reason = AcceptanceAuditProgress.rejectionReason(CRITERIA, after, before, true, false)
       assertTrue(reason.orEmpty().contains("did not shrink"), after)
     }
-    val shrunk = "Criterion AC2 is still open."
+    val shrunk = "AC2: still open."
     assertEquals(null, AcceptanceAuditProgress.rejectionReason(CRITERIA, shrunk, before, true, false))
   }
 

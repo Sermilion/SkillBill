@@ -2463,3 +2463,13 @@ Decision: Re-read the workflow, route identity, ownership, and descriptor inside
 Reason: Lookup is advisory. Claim must check the authoritative descriptor under the same transaction as its mutation, and its consumer needs the plan that passed that check. FeatureTaskContinuationAdmissionTest exercises SQLite preservation, distinct descriptor refusals, same-timestamp descriptor changes, stale ownership, cosmetic ordering, and diagnostic failure without launching phases.
 
 Revisit when: Production launchers resolve effective inputs and consume the returned plan. Worker acquisition, creation, runner preparation, and recovery remain separate admission gaps. This change does not authorize those boundaries or gate receipt regeneration.
+
+## [2026-10-01] Audit reports open criteria only and completes on one fixed line
+
+Context: SKILL-387 accepted ordinary prose for the audit outcome and asked for a satisfied rationale on success. Every rationale line that began with a criterion ID then read as a remaining finding. SKILL-393 subtask 1 blocked on a fully satisfied audit whose rationale carried path bullets and a "the production part is satisfied" line.
+
+Decision: The audit prompt asks for the single line `No production criteria remain.` on success and, otherwise, one line per open criterion starting with its ID. The parser counts only ID-leading lines and skips ones whose first sentence declares the criterion met. It ignores explanation lines and bullets, and completes on a sentence ending in the completion phrase. Narrative prose without ID-leading lines or the completion line is unusable. A prior audit that parsed as complete gives no shrink baseline, so the comparison advances instead of casting.
+
+Reason: A fixed success line and an open-only list give the runtime a branch signal it can read without guessing at prose. Skipping satisfied notes and ignoring bullets keeps older-style reports from blocking a completed phase.
+
+Revisit when: A model regularly lists open criteria without leading IDs, or the completion phrase appears beside open criteria in real reports.
