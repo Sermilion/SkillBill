@@ -12,10 +12,10 @@ import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.review.model.ReviewIntegrationPassOutcome
+import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcome
 import skillbill.review.context.model.execution.ReviewSpecialistSummaryCoverage
-import skillbill.review.context.model.execution.structuredString
+import skillbill.review.context.model.hunk.structuredString
 import skillbill.review.context.model.launch.GovernedReviewIntegrationLaunch
-import skillbill.review.context.model.launch.ReviewIntegrationTerminalOutcome
 import skillbill.review.context.model.launch.ReviewSpecialistSummary
 import skillbill.review.context.model.packet.ReviewContextPacket
 import skillbill.review.context.model.packet.ReviewPacketConsumerContract

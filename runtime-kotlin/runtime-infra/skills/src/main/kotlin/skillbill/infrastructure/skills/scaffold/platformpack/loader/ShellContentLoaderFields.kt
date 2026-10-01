@@ -5,7 +5,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.contract.CONTENT
 import skillbill.infrastructure.skills.scaffold.validation.shape.parseSkillFrontmatter
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateAuthoredContent
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMdShape
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Files

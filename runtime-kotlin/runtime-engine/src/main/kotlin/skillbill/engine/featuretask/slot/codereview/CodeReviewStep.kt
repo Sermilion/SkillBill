@@ -25,12 +25,12 @@ import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
-import skillbill.review.context.model.hunk.ReviewContextBudgetExceededException
-import skillbill.workflow.model.goalreview.FeatureTaskRuntimeReviewPassSequence
+import skillbill.review.context.model.accounting.ReviewContextBudgetExceededException
 import skillbill.workflow.model.goalreview.GoalSubtaskBlockerDisposition
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewPassSequence
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.coroutines.cancellation.CancellationException
 

@@ -8,8 +8,8 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.review.context.model.launch.ReviewIntegrationTerminalOutcome
+import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcome
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ReviewFindingCitation
 import skillbill.review.model.ReviewFindingCitationDiagnosticKeys

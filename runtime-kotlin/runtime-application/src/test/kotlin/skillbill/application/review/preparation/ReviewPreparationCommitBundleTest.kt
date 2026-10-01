@@ -17,7 +17,7 @@ import skillbill.review.context.model.commit.ReviewCommitLaneDisposition
 import skillbill.review.context.model.commit.ReviewCommitLaneRoutingMatrix
 import skillbill.review.context.model.commit.ReviewCommitSource
 import skillbill.review.context.model.commit.ReviewCommitUnit
-import skillbill.review.context.model.execution.ReviewLaneDecision
+import skillbill.review.context.model.commit.ReviewLaneDecision
 import skillbill.review.context.model.hunk.ReviewChangedHunk
 import skillbill.review.context.model.hunk.ReviewRevision
 import kotlin.test.Test

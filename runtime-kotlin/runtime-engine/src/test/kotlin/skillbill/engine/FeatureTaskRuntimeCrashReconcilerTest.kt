@@ -28,7 +28,7 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.featureTaskRuntimeCheckpointRefName
+import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeCheckpointRefName
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import java.nio.file.Files
 import java.nio.file.Path

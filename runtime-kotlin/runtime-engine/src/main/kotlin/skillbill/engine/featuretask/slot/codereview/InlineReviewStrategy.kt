@@ -26,13 +26,13 @@ import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ParallelReviewLaneResult
 import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.parallel.ParallelReviewFindingParser
 import skillbill.review.parallel.ParallelReviewMerger
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path

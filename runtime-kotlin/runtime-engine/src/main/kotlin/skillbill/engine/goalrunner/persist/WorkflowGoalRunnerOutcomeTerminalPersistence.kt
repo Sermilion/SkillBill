@@ -23,7 +23,7 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.workflowStatus
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuation
+import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 import java.nio.file.Path
 import java.time.Clock
 

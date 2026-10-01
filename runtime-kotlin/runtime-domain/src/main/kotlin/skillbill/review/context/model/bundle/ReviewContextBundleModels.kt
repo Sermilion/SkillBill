@@ -1,8 +1,8 @@
 package skillbill.review.context.model.bundle
 
-import skillbill.review.context.model.execution.canonicalFieldList
-import skillbill.review.context.model.execution.canonicalFields
-import skillbill.review.context.model.execution.sha256
+import skillbill.review.context.model.hunk.canonicalFieldList
+import skillbill.review.context.model.hunk.canonicalFields
+import skillbill.text.sha256HexUtf8
 
 data class ReviewLaneBundleEntry(val commitSha: String, val orderIndex: Int, val hunkIds: List<String>) {
   init {
@@ -29,7 +29,7 @@ data class ReviewLaneBundle(val entries: List<ReviewLaneBundleEntry> = emptyList
 
   val hunkIds: List<String> get() = entries.flatMap { it.hunkIds }
   val canonical: String get() = canonicalFieldList(entries.map { it.canonical })
-  val bundleDigest: String get() = sha256(canonical)
+  val bundleDigest: String get() = sha256HexUtf8(canonical)
 
   companion object {
     val EMPTY: ReviewLaneBundle = ReviewLaneBundle()

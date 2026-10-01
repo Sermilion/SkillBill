@@ -18,7 +18,7 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import java.nio.file.Files
 import java.sql.DriverManager
 import java.time.Clock

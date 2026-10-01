@@ -14,7 +14,7 @@ import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.baseForSubtask
 import skillbill.workflow.decomposition.branchForSubtask
 import skillbill.workflow.decomposition.model.DecompositionContinuationSelection

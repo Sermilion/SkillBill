@@ -21,7 +21,7 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.artifact.decodeCheckpointIdentitiesFromArtifact
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock

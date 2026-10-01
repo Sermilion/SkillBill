@@ -7,7 +7,7 @@ import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.DatabaseSchema
 import skillbill.infrastructure.sqlite.worklist.SQLiteWorkListRepository
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import java.nio.file.Files
 import java.nio.file.Path

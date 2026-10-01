@@ -1,9 +1,7 @@
 package skillbill.review.context.model.hunk
 
-import skillbill.review.context.model.execution.SHA256_HEX
-import skillbill.review.context.model.execution.canonicalFields
-import skillbill.review.context.model.execution.sha256
 import skillbill.review.model.requireRepositoryRelativePath
+import skillbill.text.sha256HexUtf8
 
 data class ReviewHunkEvidenceLocator(
   val storePath: String,
@@ -80,13 +78,13 @@ data class ReviewChangedHunk(
     indexedHunkId?.let { require(it.matches(SHA256_HEX)) { "Changed hunk id must be lowercase SHA-256." } }
   }
 
-  val contentDigest: String = indexedContentDigest ?: sha256(content.replace("\r\n", "\n"))
+  val contentDigest: String = indexedContentDigest ?: sha256HexUtf8(content.replace("\r\n", "\n"))
 
   val evidenceLocator: ReviewHunkEvidenceLocator =
     indexedEvidenceLocator
       ?: ReviewHunkEvidenceLocator.inProcess(contentDigest, oldStart, oldCount, newStart, newCount)
 
-  val hunkId: String = indexedHunkId ?: sha256(canonicalIdentity(this, content))
+  val hunkId: String = indexedHunkId ?: sha256HexUtf8(canonicalIdentity(this, content))
 
   val contentBytes: Long =
     indexedContentBytes
@@ -118,12 +116,12 @@ data class ReviewChangedHunk(
   }
 
   companion object {
-    fun digestOfBody(body: String): String = sha256(body.replace("\r\n", "\n"))
+    fun digestOfBody(body: String): String = sha256HexUtf8(body.replace("\r\n", "\n"))
 
     fun idFor(
       hunk: ReviewChangedHunk,
       body: String = hunk.content,
-    ): String = sha256(canonicalIdentity(hunk, body))
+    ): String = sha256HexUtf8(canonicalIdentity(hunk, body))
 
     private fun canonicalIdentity(
       hunk: ReviewChangedHunk,

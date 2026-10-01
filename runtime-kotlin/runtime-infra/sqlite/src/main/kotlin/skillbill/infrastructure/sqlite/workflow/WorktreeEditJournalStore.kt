@@ -4,7 +4,7 @@ import skillbill.idestatus.model.WorktreeEditSource
 import skillbill.idestatus.model.WorktreeEditTick
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
-import skillbill.workflow.model.goalreview.GoalObservabilityFileDiffStat
+import skillbill.workflow.model.goalobservability.GoalObservabilityFileDiffStat
 import java.sql.Connection
 import java.time.Instant
 import java.time.format.DateTimeParseException

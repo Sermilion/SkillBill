@@ -2,20 +2,16 @@
 package skillbill.workflow.taskruntime.model.phase
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PLANNING_PROJECTIONS_CONTRACT_VERSION
+import skillbill.text.sha256HexUtf8
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeCompactReferenceKind
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionField
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionValue
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvidenceArtifact
-import java.security.MessageDigest
 
 object FeatureTaskRuntimePlanningProjectionContract {
   const val SHARED_REVIEW_EVIDENCE_ID: String = "feature_task_runtime.shared_review_evidence"
   val VERSION: String = FEATURE_TASK_RUNTIME_PLANNING_PROJECTIONS_CONTRACT_VERSION
 }
-
-internal const val FEATURE_TASK_RUNTIME_PROJECTION_LIST_MAX_COUNT: Int = 128
-
-internal const val FEATURE_TASK_RUNTIME_CHANGED_PATH_MAX_COUNT: Int = 512
 
 data class FeatureTaskRuntimeSharedReviewEvidenceReference(
   val storePath: String,
@@ -121,15 +117,11 @@ data class FeatureTaskRuntimeSharedReviewEvidenceReference(
 
     fun fileHunkIndexDigest(artifact: FeatureTaskRuntimeSharedEvidenceArtifact): String {
       val hunkCounts = artifact.hunks.groupingBy { it.path }.eachCount()
-      val digest = MessageDigest.getInstance("SHA-256")
-      artifact.files
-        .map { file -> "${file.changeKind} ${file.path} hunks=${hunkCounts[file.path] ?: 0}" }
-        .sorted()
-        .forEach { entry ->
-          digest.update(entry.toByteArray())
-          digest.update(0)
-        }
-      return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+      val entries =
+        artifact.files
+          .map { file -> "${file.changeKind} ${file.path} hunks=${hunkCounts[file.path] ?: 0}" }
+          .sorted()
+      return sha256HexUtf8(entries.joinToString("") { entry -> entry + '\u0000' })
     }
   }
 }

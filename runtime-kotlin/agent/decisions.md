@@ -1,5 +1,11 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-01] Goal-review accounting types stay in workflow.model.goalreview
+Context: SKILL-397 subtask 3 planned to move review accounting helpers into review.context.model.accounting to break a package cycle.
+Decision: GoalSubtaskCommitFocusedAccounting and ReviewAccountingBoundedJson stay in skillbill.workflow.model.goalreview.
+Reason: The first uses goalreview-internal decoders, so moving it creates an accounting-goalreview cycle. The second is JSON projection, which the typed-domain guards reject in a review domain package that the CLI imports.
+Revisit when: the decoders become shareable without importing goalreview internals.
+
 ## 2026-09-29: Retain complete agent process output
 
 Agent stdout and stderr have no byte retention limit. The previous 1 MiB

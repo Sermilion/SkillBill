@@ -32,9 +32,9 @@ import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope
 import skillbill.goalrunner.subtaskreview.verificationBoundaryFindingPaths
 import skillbill.ports.repository.toFileLocation
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.execution.SpecIntentProjectionResolveRequest
 import skillbill.review.context.model.execution.SpecIntentResolution
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap

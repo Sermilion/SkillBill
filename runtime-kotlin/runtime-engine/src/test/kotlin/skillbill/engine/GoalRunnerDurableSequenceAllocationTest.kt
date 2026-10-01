@@ -14,8 +14,8 @@ import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.model.FeatureTaskWorkflowMode
-import skillbill.workflow.model.goalreview.GoalProgressEventKind
-import skillbill.workflow.model.goalreview.GoalProgressOutcome
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant

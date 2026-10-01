@@ -9,7 +9,6 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaE
 import skillbill.workflow.model.persistence.artifact.DurableArtifactMapReader
 import skillbill.workflow.model.persistence.artifact.toStringKeyedArtifactMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeHandoffPromptVisibility
 
 data class FeatureTaskRuntimeHandoffEnvelope(
   val consumerPhaseId: String,

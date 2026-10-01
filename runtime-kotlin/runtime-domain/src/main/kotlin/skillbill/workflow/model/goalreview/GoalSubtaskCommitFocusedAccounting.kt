@@ -2,8 +2,8 @@ package skillbill.workflow.model.goalreview
 
 import skillbill.contracts.scaffold.wire.optionalList
 import skillbill.contracts.scaffold.wire.optionalString
-import skillbill.review.context.model.execution.SHA256_HEX
-import skillbill.review.context.model.launch.ReviewIntegrationTerminalOutcome
+import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcome
+import skillbill.review.context.model.hunk.SHA256_HEX
 import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
 import skillbill.workflow.model.persistence.artifact.asExactLongOrNull
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap

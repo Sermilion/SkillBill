@@ -1,12 +1,11 @@
 package skillbill.workflow.taskruntime.phase.task
 
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
+import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY
 import skillbill.workflow.engine.model.WorkflowDefinition
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.taskruntime.artifact.FeatureTaskRuntimeRequiredArtifactPresenceResolver
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY
 
 internal object FeatureTaskRuntimePhaseWorkflowGraph {
   val definition: WorkflowDefinition =

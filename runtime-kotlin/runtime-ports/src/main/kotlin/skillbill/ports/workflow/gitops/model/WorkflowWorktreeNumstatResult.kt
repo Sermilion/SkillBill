@@ -1,6 +1,6 @@
 package skillbill.ports.workflow.gitops.model
 
-import skillbill.workflow.model.goalreview.GoalObservabilityFileDiffStat
+import skillbill.workflow.model.goalobservability.GoalObservabilityFileDiffStat
 
 data class WorkflowWorktreeNumstatResult(
   val status: WorkflowGitOperationStatus,

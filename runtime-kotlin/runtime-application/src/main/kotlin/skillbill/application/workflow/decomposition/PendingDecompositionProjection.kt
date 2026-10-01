@@ -6,7 +6,7 @@ import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.runtime.isGoalContinuationChildWorkflow
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 
 internal data class PendingDecompositionProjection(
   val ownerWorkflowId: String,

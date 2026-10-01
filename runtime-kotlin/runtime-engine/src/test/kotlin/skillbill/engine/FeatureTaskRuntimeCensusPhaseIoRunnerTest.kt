@@ -7,7 +7,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.slot.scriptedReviewPhaseRunner
 import skillbill.goalrunner.model.UNADDRESSED_FINDING_REJECTED_DISPOSITION
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains

@@ -9,7 +9,7 @@ import skillbill.error.featuretask.PhaseStrategySelectionSlotMismatchError
 import skillbill.error.featuretask.PhaseStrategyStepOutsideSlotError
 import skillbill.error.featuretask.UnknownPhaseStrategyError
 import skillbill.error.featuretask.UnregisteredPhaseStrategySelectionError
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition

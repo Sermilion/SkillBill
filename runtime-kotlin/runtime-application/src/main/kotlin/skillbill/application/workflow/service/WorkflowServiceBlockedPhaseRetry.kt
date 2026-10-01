@@ -33,11 +33,11 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_MAX_LENGTH
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
+import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_MAX_LENGTH
 import java.time.Clock
 import java.time.ZoneOffset
 

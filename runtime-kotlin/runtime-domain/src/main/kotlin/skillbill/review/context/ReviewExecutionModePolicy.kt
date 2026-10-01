@@ -1,8 +1,8 @@
 package skillbill.review.context
 
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.context.model.execution.ResolvedReviewDepth
 import skillbill.review.context.model.execution.ResolvedReviewExecutionMode
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
 
 object ReviewExecutionModePolicy {
   const val PASS_NUMBER_RULE: String = "auto_mode_by_pass_number"

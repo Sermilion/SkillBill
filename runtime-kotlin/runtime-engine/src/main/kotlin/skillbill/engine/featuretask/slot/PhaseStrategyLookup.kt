@@ -5,7 +5,7 @@ import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot

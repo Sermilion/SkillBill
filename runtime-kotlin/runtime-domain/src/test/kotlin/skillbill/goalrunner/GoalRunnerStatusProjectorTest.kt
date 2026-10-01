@@ -6,7 +6,7 @@ import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.WorkflowStatus
-import skillbill.workflow.model.goalreview.GoalObservabilityEvent
+import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

@@ -1,6 +1,7 @@
 package skillbill.review.context.model.execution
 
 import skillbill.review.context.model.commit.ReviewAssignment
+import skillbill.review.context.model.commit.ReviewLaneDecision
 import skillbill.review.context.model.hunk.ReviewDependencyAllowlist
 import skillbill.review.context.model.hunk.ReviewRevision
 import skillbill.review.context.model.packet.ReviewPacketConsumerContract

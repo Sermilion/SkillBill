@@ -1,7 +1,6 @@
 package skillbill.review.context.model.accounting
 
 import skillbill.contracts.review.REVIEW_CONTEXT_CONTRACT_VERSION
-import skillbill.review.context.model.launch.ReviewIntegrationTerminalOutcome
 import skillbill.review.context.model.packet.ReviewLaneSegmentAccounting
 
 data class ReviewAccountingCounters(

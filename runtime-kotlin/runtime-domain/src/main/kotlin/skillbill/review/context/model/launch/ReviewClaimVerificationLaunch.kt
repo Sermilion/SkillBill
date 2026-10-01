@@ -1,6 +1,6 @@
 package skillbill.review.context.model.launch
 
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.hunk.ReviewDependencyAllowlist
 import skillbill.review.context.model.packet.ReviewContextPacket
 import skillbill.review.model.ParallelReviewMergedFinding

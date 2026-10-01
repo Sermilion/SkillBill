@@ -645,29 +645,30 @@ and `:runtime-infra:sqlite`.
 - `skillbill.workflow.decomposition` and
   `skillbill.workflow.decomposition.model`: decomposition manifest codec,
   wire-map conversion, and decomposition models owned by `runtime-domain`.
-- `skillbill.workflow.goal` and `skillbill.workflow.goal.model`: goal
-  observability, progress events, subtask review artifacts, and goal models
-  owned by `runtime-domain`.
-- `skillbill.workflow.taskruntime` and
-  `skillbill.workflow.taskruntime.model`: feature-task runtime phase workflow,
+- `skillbill.workflow.model.goalobservability`: goal observability models and
+  parsing owned by `runtime-domain`.
+- `skillbill.workflow.taskruntime.*` and
+  `skillbill.workflow.taskruntime.model.*`: feature-task runtime phase workflow,
   handoff projections, phase records, and taskruntime models owned by
-  `runtime-domain`.
+  `runtime-domain`. The declared packages are `taskruntime.artifact`,
+  `.handoff`, `.phase.task`, `.phaseartifacts`, `.validation`, and
+  `taskruntime.model.{audit, core, feature, handoff, handoff.assembly,
+  handoff.task, persistence, phase, repair, review, skeleton, validation}`.
 - `skillbill.workflow.model.goalreview` and
   `skillbill.workflow.model.persistence.artifact`: shared goal-review vocabulary
   and durable artifact-map access owned by `runtime-domain`. These lower model
   packages are the common vocabulary below their workflow consumers.
 - `skillbill.review.parsing`: review finding and lane parsing owned by
   `runtime-domain`; review model types remain under `skillbill.review.model`.
-- `skillbill.workflow.idestatus`: IDE status validation owned by
-  `runtime-domain`.
 - `skillbill.workflow.specsource`: spec-source reading owned by
   `runtime-domain`.
 - `skillbill.workflow.verify`: Feature Verify workflow definition
   (`FeatureVerifyWorkflowDefinition`) owned by `runtime-domain`.
-- `skillbill.goalrunner` and `skillbill.goalrunner.model`: pure goal-runner
-  liveness policy, worker-subtask parsing, status projection, accounting, and
-  attempt-ledger models owned by `runtime-domain`.
-- `skillbill.idestatus` and `skillbill.idestatus.model`: agent activity label
+- `skillbill.goalrunner`, `skillbill.goalrunner.model`, and
+  `skillbill.goalrunner.ledger`: pure goal-runner liveness policy,
+  worker-subtask parsing, status projection, accounting, and attempt-ledger
+  models and decoding owned by `runtime-domain`.
+- `skillbill.idestatus.model`: agent activity label
   and stamp types for IDE status presentation owned by `runtime-domain`.
 - `skillbill.engine`: feature-task run loop, goal runner, goal planning, and
   planning projection use cases owned by `runtime-engine`.
@@ -732,8 +733,9 @@ reads through the production coordinator and recorders.
 - `skillbill.review` and `skillbill.review.model`: pure review parsing, triage
   decision normalization, and review models owned by `runtime-domain`.
 - `skillbill.review.context.model.claim` and
-  `skillbill.workflow.taskruntime.model.persistence.task.runtime.store`:
-  claim-admission and task-runtime persistence vocabulary owned by
+  `skillbill.workflow.taskruntime.model.persistence`:
+  claim-admission and task-runtime persistence vocabulary (checkpoint, run,
+  implementation, prior-gap, goal, and store models) owned by
   `runtime-domain`.
 - `skillbill.telemetry.model`: telemetry settings normalization and lifecycle
   telemetry records owned by `runtime-domain`.
@@ -1598,13 +1600,13 @@ Adding a phase strategy:
 - Goal declared-progress event schema validation
   (`orchestration/contracts/goal-progress-event-schema.yaml`) is owned by
   `skillbill.infrastructure.contracts.workflow.GoalProgressEventSchemaValidator` in
-  `runtime-infra/contracts`, reached through the domain-owned port
-  `skillbill.workflow.goal.GoalProgressEventValidator` (wired in `RuntimeComponent`
-  to `skillbill.infrastructure.contracts.GoalProgressEventValidatorAdapter`, mirroring
-  `GoalObservabilityEventValidator`). The owning durable write/parse seam is
+  `runtime-infra/contracts`, reached through the ports-owned
+  `skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator` (the
+  `FeatureTaskRuntimeWireArtifactValidator` adapter in `runtime-infra/contracts`
+  dispatches to it). The owning durable write/parse seam is
   `skillbill.engine.goalrunner.persist.WorkflowGoalRunnerOutcomeStore.recordProgressEvent`,
-  which validates the declared-progress event map through the injected port
-  before it is appended to the bounded `goal_progress_run_history` /
+  which validates the declared-progress event map through the injected
+  `goalProgressEventValidator` before it is appended to the bounded `goal_progress_run_history` /
   `goal_progress_latest_event` workflow artifacts. The supervisor read seam
   (`WorkflowGoalRunnerOutcomeStore.progress`) decodes the latest declared event
   softly so a malformed stored record cannot disable deterministic liveness.
@@ -2574,7 +2576,7 @@ or a versioned durable payload whose vocabulary is intentionally owned by that b
 - `skillbill.review.context.model.ReviewAccountingInput.terminalOutcome` and
   `ReviewAccountingNode.terminalOutcome` use `ReviewAccountingTerminalOutcome`; integration
   accounting continues to use `ReviewIntegrationTerminalOutcome`.
-- `skillbill.workflow.goal.model.GoalSubtaskCommitFocusedAccounting.integrationTerminalOutcome`
+- `skillbill.workflow.model.goalreview.GoalSubtaskCommitFocusedAccounting.integrationTerminalOutcome`
   uses `ReviewIntegrationTerminalOutcome`; durable artifact decoding uses `fromWire` and emission
   uses `wireValue`, preserving the existing integration tokens, unknown-value rejection, and
   skipped-pass reason rule.

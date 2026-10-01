@@ -5,11 +5,11 @@ import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.recordedVerdicts
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
-import skillbill.workflow.model.goalreview.GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY
+import skillbill.workflow.engine.model.GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.GoalSubtaskReviewArtifactDecoder
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.GoalSubtaskReviewArtifacts
+import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
+import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifacts
 
 fun DurableWorkflowArtifacts.goalSubtaskReviewArtifacts(): GoalSubtaskReviewArtifacts? =
   GoalSubtaskReviewArtifactDecoder.decode(this)

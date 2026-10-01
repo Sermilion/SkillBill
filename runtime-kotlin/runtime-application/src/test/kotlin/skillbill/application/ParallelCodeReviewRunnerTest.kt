@@ -72,9 +72,9 @@ import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 import skillbill.ports.scaffold.model.PilotedPlatformPackProjection
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.review.context.ReviewContextWireMap
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.review.context.model.packet.ReviewExpansionRecord
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewParseResult
 import skillbill.review.model.ReviewFindingVerdict

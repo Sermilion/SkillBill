@@ -1,8 +1,8 @@
 package skillbill.goalrunner.model
 
-import skillbill.workflow.model.goalreview.GoalObservabilityChangedFileSummary
-import skillbill.workflow.model.goalreview.GoalObservabilityDiffStat
-import skillbill.workflow.model.goalreview.GoalObservabilityEvent
+import skillbill.workflow.model.goalobservability.GoalObservabilityChangedFileSummary
+import skillbill.workflow.model.goalobservability.GoalObservabilityDiffStat
+import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 data class GoalRunnerObservabilityRecordRequest(

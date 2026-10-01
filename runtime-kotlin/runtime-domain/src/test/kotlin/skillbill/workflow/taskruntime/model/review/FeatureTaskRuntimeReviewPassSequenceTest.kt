@@ -1,8 +1,7 @@
 package skillbill.workflow.taskruntime.model.review
 
 import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.workflow.model.goalreview.FeatureTaskRuntimeReviewPassSequence
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import kotlin.test.Test
 import kotlin.test.assertEquals

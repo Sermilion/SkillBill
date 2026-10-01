@@ -31,10 +31,10 @@ import skillbill.ports.review.repository.ReviewSpecialistContractProvider
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.review.context.ReviewExecutionModePolicy
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.execution.SpecIntentProjectionResolveRequest
 import skillbill.review.context.model.execution.SpecIntentResolution
 import skillbill.review.context.model.execution.toCodeReviewExecutionMode
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.scaffold.model.PlatformManifest

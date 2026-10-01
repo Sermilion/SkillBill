@@ -33,8 +33,8 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import java.nio.file.Path
 import java.time.Clock
 

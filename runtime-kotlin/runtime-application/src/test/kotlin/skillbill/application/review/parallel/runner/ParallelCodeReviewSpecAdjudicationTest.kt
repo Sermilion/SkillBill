@@ -13,7 +13,7 @@ import skillbill.application.review.spec.ReviewSpecAdjudicationRunner
 import skillbill.application.review.verification.ReviewClaimVerificationRunner
 import skillbill.application.runner
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ReviewClaimVerdict
 import skillbill.review.model.ReviewStage
 import skillbill.review.model.ReviewStageReached

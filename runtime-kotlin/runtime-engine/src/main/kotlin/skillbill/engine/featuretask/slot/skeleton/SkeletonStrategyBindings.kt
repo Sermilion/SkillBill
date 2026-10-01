@@ -14,7 +14,7 @@ import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidate
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition

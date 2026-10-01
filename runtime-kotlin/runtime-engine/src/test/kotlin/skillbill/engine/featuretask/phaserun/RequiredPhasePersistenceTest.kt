@@ -43,7 +43,7 @@ import skillbill.ports.validation.model.ValidationGateRunRequest
 import skillbill.ports.validation.model.ValidationGateRunResult
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
 import java.nio.file.Files
 import java.util.concurrent.CancellationException

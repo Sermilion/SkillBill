@@ -149,7 +149,7 @@ import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.specscratch.SpecScratchStore
 import skillbill.ports.workflow.toRecord
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.scaffold.model.DeclaredFiles
 import skillbill.scaffold.model.PlatformManifest

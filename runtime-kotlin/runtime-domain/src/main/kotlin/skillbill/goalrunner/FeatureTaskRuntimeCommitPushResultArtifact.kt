@@ -6,8 +6,8 @@ import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.goalrunner.model.FeatureTaskRuntimeGoalContinuationOutcome
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_OUTCOME_ARTIFACT_KEY
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_OUTCOME_ARTIFACT_KEY
 
 data class FeatureTaskRuntimeCommitPushResultArtifact(
   val commitSha: String?,

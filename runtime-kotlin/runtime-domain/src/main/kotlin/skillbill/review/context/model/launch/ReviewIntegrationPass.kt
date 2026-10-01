@@ -1,7 +1,7 @@
 package skillbill.review.context.model.launch
 
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.execution.ReviewSpecialistSummaryCoverage
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.context.model.hunk.ReviewEvidenceTarget
 import skillbill.review.context.model.packet.ReviewContextPacket
 import skillbill.review.context.model.packet.ReviewLaneCompletionState
@@ -54,29 +54,6 @@ data class ReviewSpecialistSummary(
         unreviewedUnits = completion.unreviewedUnits,
         summary = coverage.summary.replace("\r\n", "\n").take(MAX_SUMMARY_LENGTH),
       )
-  }
-}
-
-enum class ReviewIntegrationTerminalOutcome {
-  COMPLETED,
-  SKIPPED_NOT_APPLICABLE,
-  REVIEW_CONTEXT_BUDGET_EXCEEDED,
-  FAILED,
-  TIMEOUT,
-  INTERRUPTED,
-  SPAWN_FAILURE,
-  PROCESS_FAILURE,
-  UNSUPPORTED_PROVIDER,
-  NO_OP_RESUME,
-  ;
-
-  val wireValue: String get() = name.lowercase()
-
-  val isDurablyComplete: Boolean
-    get() = this == COMPLETED || this == SKIPPED_NOT_APPLICABLE || this == NO_OP_RESUME
-
-  companion object {
-    fun fromWire(value: String): ReviewIntegrationTerminalOutcome? = entries.firstOrNull { it.wireValue == value }
   }
 }
 

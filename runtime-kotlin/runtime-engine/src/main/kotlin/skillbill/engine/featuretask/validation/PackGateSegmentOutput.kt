@@ -4,7 +4,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 
 internal fun repairSegmentOutput(
   run: PhaseRun,

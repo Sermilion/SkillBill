@@ -14,6 +14,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.REVIEW_CONTEXT_CONTRACT_VERSION
 import skillbill.error.shellcontent.InvalidReviewContextSchemaError
 import skillbill.infrastructure.contracts.review.ReviewContextSchemaValidator
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.bundle.ReviewLaneBundle
 import skillbill.review.context.model.bundle.ReviewLaneBundleEntry
 import skillbill.review.context.model.commit.ReviewAssignment
@@ -23,10 +24,9 @@ import skillbill.review.context.model.commit.ReviewCommitLaneDisposition
 import skillbill.review.context.model.commit.ReviewCommitLaneRoutingMatrix
 import skillbill.review.context.model.commit.ReviewCommitSource
 import skillbill.review.context.model.commit.ReviewCommitUnit
-import skillbill.review.context.model.execution.ReviewLaneDecision
+import skillbill.review.context.model.commit.ReviewLaneDecision
 import skillbill.review.context.model.hunk.ReviewBuildTestFact
 import skillbill.review.context.model.hunk.ReviewChangedHunk
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.context.model.hunk.ReviewDependencyAllowlist
 import skillbill.review.context.model.hunk.ReviewEvidenceTarget
 import skillbill.review.context.model.hunk.ReviewLearningsReference

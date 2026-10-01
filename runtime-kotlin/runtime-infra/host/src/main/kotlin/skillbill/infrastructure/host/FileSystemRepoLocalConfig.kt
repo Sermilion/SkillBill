@@ -17,7 +17,7 @@ import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import java.io.IOException
 import java.math.BigInteger
 import java.nio.file.Files

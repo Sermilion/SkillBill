@@ -6,7 +6,7 @@ import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition

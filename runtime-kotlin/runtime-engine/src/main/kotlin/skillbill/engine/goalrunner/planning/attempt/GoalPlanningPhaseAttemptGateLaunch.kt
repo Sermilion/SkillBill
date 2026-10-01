@@ -16,7 +16,7 @@ import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffAssemblyRequest
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffAssemblyRequest
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 
 internal fun DefaultGoalPlanningSweep.launchPlanningAttempt(

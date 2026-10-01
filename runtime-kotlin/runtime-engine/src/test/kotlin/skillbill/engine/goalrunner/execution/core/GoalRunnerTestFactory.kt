@@ -64,7 +64,7 @@ import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.specscratch.SpecScratchStore
 import skillbill.ports.workflow.specscratch.UnavailableSpecScratchStore
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path

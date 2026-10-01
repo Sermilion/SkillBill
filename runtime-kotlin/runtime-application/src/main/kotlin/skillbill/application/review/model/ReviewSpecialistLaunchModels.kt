@@ -1,8 +1,8 @@
 package skillbill.application.review.model
 
 import skillbill.ports.review.model.ReviewExpansionAuthorizationRequest
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.commit.ReviewAssignment
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.context.model.packet.ReviewContextPacket
 import java.nio.file.Path
 

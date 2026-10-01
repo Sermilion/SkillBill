@@ -20,10 +20,10 @@ import skillbill.workflow.engine.model.WorkflowUpdateAcknowledgementView
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.goalreview.GoalObservabilityDiffStat
-import skillbill.workflow.model.goalreview.GoalObservabilitySelectedDiffHunk
-import skillbill.workflow.model.goalreview.GoalObservabilitySelectedDiffHunks
-import skillbill.workflow.model.goalreview.goalObservabilityLatestEventFromArtifacts
+import skillbill.workflow.model.goalobservability.GoalObservabilityDiffStat
+import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffHunk
+import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffHunks
+import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Files
 import java.nio.file.Path

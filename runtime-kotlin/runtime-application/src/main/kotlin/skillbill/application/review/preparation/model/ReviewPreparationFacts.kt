@@ -3,7 +3,7 @@ package skillbill.application.review.preparation.model
 import skillbill.review.context.model.commit.ReviewCommitCoverageFact
 import skillbill.review.context.model.commit.ReviewCommitLaneRoutingMatrix
 import skillbill.review.context.model.commit.ReviewCommitUnit
-import skillbill.review.context.model.execution.ReviewLaneDecision
+import skillbill.review.context.model.commit.ReviewLaneDecision
 import skillbill.review.context.model.hunk.ReviewBuildTestFact
 import skillbill.review.context.model.hunk.ReviewChangedHunk
 import skillbill.review.context.model.hunk.ReviewLearningsReference

@@ -160,7 +160,7 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionDependency
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
@@ -174,10 +174,10 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.WorkflowStatus
-import skillbill.workflow.model.goalreview.GoalObservabilityDiffStat
-import skillbill.workflow.model.goalreview.GoalProgressEvent
-import skillbill.workflow.model.goalreview.GoalProgressEventKind
-import skillbill.workflow.model.goalreview.GoalProgressOutcome
+import skillbill.workflow.model.goalobservability.GoalObservabilityDiffStat
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState

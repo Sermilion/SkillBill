@@ -31,13 +31,13 @@ import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.NoopGoalPlanningPreparationEnvelopeValidator
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionDependency
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
-import skillbill.workflow.model.goalreview.GoalProgressEvent
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.assertIs

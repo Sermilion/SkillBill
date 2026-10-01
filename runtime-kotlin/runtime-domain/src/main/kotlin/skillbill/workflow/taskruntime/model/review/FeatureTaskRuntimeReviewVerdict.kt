@@ -1,7 +1,5 @@
 package skillbill.workflow.taskruntime.model.review
 
-import skillbill.workflow.model.goalreview.FeatureTaskRuntimeReviewSeverity
-import skillbill.workflow.model.goalreview.blocksAdvance
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 
 data class FeatureTaskRuntimeReviewFinding(

@@ -23,7 +23,7 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.goalreview.appendBoundedHistoryBySequence
+import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
@@ -32,15 +32,15 @@ import skillbill.workflow.taskruntime.artifact.implementationAttemptRecordWorkfl
 import skillbill.workflow.taskruntime.artifact.operatorBlockRetryFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttempt
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttemptStatus
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.featureTaskRuntimeAppendImplementationAttempt
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
+import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
+import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeAppendImplementationAttempt
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction.COMPLETE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
-import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeOperatorBlockRetry
+import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import java.time.Clock
 import java.time.Instant
 

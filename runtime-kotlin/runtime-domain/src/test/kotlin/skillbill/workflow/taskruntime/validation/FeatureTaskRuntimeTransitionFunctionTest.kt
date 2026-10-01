@@ -1,7 +1,6 @@
 package skillbill.workflow.taskruntime.validation
 
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
-import skillbill.workflow.model.goalreview.FeatureTaskRuntimeReviewSeverity
 import skillbill.workflow.model.goalreview.blocksAdvance
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
@@ -9,6 +8,7 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeCapExhaustio
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewFinding
+import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewSeverity
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewVerdict
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -4,6 +4,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.engine.model.RUNTIME_REPOSITORY_EVIDENCE_ARTIFACT_KEY
 import skillbill.workflow.engine.model.WorkflowContinueDecision
 import skillbill.workflow.engine.model.WorkflowContinueDecisionOverrides
 import skillbill.workflow.engine.model.WorkflowDefinition

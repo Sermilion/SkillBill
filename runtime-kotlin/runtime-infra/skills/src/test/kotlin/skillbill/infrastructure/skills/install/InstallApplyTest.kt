@@ -12,12 +12,12 @@ import skillbill.install.model.McpRegistrationApplyStatus
 import skillbill.install.model.McpRegistrationChoice
 import skillbill.install.model.NativeAgentApplyStatus
 import skillbill.install.model.NativeAgentProviderId
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.model.SupportedAgent
 import skillbill.install.model.WindowsSymlinkDecision
 import skillbill.install.model.WindowsSymlinkFallbackState
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import java.nio.file.Files

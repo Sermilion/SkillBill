@@ -31,7 +31,7 @@ import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
-import skillbill.workflow.model.goalreview.GoalProgressEvent
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import java.nio.file.Path

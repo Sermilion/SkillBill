@@ -69,13 +69,13 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
-import skillbill.workflow.model.goalreview.ReviewPassResolution
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
 private open class FeatureTaskRuntimeRunLoopAgentStepBinding(

@@ -5,7 +5,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionTemplate
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseDeclaration
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
 object FeatureTaskRuntimePhaseWorkflowDefinition {

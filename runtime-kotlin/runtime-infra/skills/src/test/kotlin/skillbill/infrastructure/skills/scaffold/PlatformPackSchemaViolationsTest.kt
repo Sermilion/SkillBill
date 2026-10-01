@@ -5,7 +5,7 @@ import skillbill.error.shellcontent.InvalidManifestSchemaError
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.validateGovernedSkill
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
 import java.nio.file.Files

@@ -10,7 +10,7 @@ import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.GoalRunnerCont
 import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.LEGACY_UNKNOWN_PAUSED_AT
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import java.nio.file.Files
 import java.sql.Connection
 import java.time.Instant

@@ -1,3 +1,14 @@
+## [2026-10-01] SKILL-397 subtask 3 — domain package graph repair
+Areas: runtime-kotlin/runtime-{domain,application,engine,cli,core,ports}, runtime-kotlin/runtime-infra/*, ARCHITECTURE.md
+- runtime-domain package graph is acyclic: the cycle baseline file is empty and stays empty; test packages and directories now mirror main packages.
+- Artifact keys are internal to workflow.engine.model; selectedPlatformSlugs moved to install.model; the planning package folded into phase.task; SHA-256 hashing lives only in skillbill.text.
+- Package names persistence.task.runtime, handoff.envelope and repair.task are gone; handoff assembly types sit in taskruntime.model.handoff.assembly, because a loose FeatureTaskRuntime* file beside a child package named task trips the clustering guard.
+- The package-name-specific file ceiling became a generic sibling ceiling; goalrunner and goalreview stay within 12 files.
+- Placement traps: GoalSubtaskCommitFocusedAccounting and ReviewAccountingBoundedJson stay in workflow.model.goalreview (moving them creates an accounting-goalreview cycle or puts JSON projection in a review domain package). reusable
+- Limits: no feature flag; agnix not run headless; empty leftover directories under src may remain untracked.
+Feature flag: N/A
+Acceptance criteria: all implemented (validate passed `./gradlew check --continue` and agent-config validation)
+
 ## [2026-10-01] SKILL-397 subtask 1 — domain wire boundary honesty
 Areas: runtime-kotlin/runtime-{domain,application,engine,core}, runtime-kotlin/runtime-infra/skills, ARCHITECTURE.md
 - The 33 public domain wrappers that returned exact Any now return the typed workflow-artifact map carrier (which gained equals, hashCode, toString); the gate-run record's entry helper was deleted in favour of its presentation wire map, and the phase-output envelope payload is internal.

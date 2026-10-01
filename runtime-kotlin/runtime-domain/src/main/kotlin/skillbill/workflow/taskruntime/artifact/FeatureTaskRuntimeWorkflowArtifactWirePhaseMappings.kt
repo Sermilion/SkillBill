@@ -11,7 +11,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProje
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRejectionMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.toArtifactMap
+import skillbill.workflow.taskruntime.model.persistence.toArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 

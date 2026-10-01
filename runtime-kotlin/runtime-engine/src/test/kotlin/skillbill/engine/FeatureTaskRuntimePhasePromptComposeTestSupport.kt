@@ -7,7 +7,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 

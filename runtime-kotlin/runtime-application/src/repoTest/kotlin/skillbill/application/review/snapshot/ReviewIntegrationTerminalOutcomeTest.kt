@@ -1,6 +1,6 @@
 package skillbill.application.review.snapshot
 
-import skillbill.review.context.model.launch.ReviewIntegrationTerminalOutcome
+import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcome
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test

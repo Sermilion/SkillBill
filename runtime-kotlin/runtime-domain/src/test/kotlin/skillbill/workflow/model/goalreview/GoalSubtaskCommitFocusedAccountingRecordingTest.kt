@@ -1,7 +1,7 @@
 package skillbill.workflow.model.goalreview
 
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.review.context.model.launch.ReviewIntegrationTerminalOutcome
+import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcome
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -92,7 +92,7 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
@@ -112,9 +112,9 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
-import skillbill.workflow.model.goalreview.GOAL_PROGRESS_HISTORY_LIMIT
-import skillbill.workflow.model.goalreview.GoalProgressEvent
-import skillbill.workflow.model.goalreview.GoalProgressEventKind
+import skillbill.workflow.model.goalobservability.GOAL_PROGRESS_HISTORY_LIMIT
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition

@@ -19,6 +19,7 @@ import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.review.context.ReviewContextWireMap
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.commit.ReviewCommitCoverageFact
 import skillbill.review.context.model.commit.ReviewCommitSource
 import skillbill.review.context.model.commit.ReviewCommitUnit
@@ -27,7 +28,6 @@ import skillbill.review.context.model.execution.SpecIntentProjection
 import skillbill.review.context.model.execution.SpecIntentProjectionResolveRequest
 import skillbill.review.context.model.execution.SpecIntentProvenance
 import skillbill.review.context.model.execution.SpecIntentResolution
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.context.model.launch.GovernedReviewLaunch
 import skillbill.review.plan.model.ReviewLaunchLane
 import skillbill.workflow.decomposition.model.DecompositionManifestRepairEvidence

@@ -6,7 +6,7 @@ import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.scaffold.model.ValidationGateDeclaration
 import skillbill.workflow.model.ValidationDepth
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRepairWindowPhase

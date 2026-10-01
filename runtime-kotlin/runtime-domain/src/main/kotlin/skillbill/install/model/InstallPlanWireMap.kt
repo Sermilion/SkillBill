@@ -3,7 +3,6 @@ package skillbill.install.model
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
 import skillbill.contracts.install.InstallPlanContract
-import skillbill.install.policy.selectedPlatformSlugs
 
 class InstallPlanWireMap private constructor(
   private val delegate: Map<String, Any?>,

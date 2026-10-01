@@ -1,6 +1,6 @@
 package skillbill.review.parallel
 
-import skillbill.review.context.model.execution.structuredString
+import skillbill.review.context.model.hunk.structuredString
 import skillbill.review.model.ParallelReviewLaneResult
 import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.review.model.ParallelReviewMergedFinding

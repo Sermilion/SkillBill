@@ -11,6 +11,7 @@ import skillbill.install.model.InstallPlatformPackSnapshot
 import skillbill.install.model.InstallPolicyInput
 import skillbill.install.model.PlatformPackSelectionMode
 import skillbill.install.model.SupportedAgent
+import skillbill.install.model.selectedPlatformSlugs
 
 internal fun validateAgentSelection(input: InstallPolicyInput) {
   val selection = input.request.agentSelection

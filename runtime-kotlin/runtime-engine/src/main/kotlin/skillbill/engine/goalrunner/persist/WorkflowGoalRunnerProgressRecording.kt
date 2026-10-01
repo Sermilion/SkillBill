@@ -9,20 +9,20 @@ import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.WORKER_SUBTASK_REQUEST_OUTCOME_LIMIT
-import skillbill.goalrunner.backwardEdgeCountsFromLedger
-import skillbill.goalrunner.declaredProgressEventFrom
-import skillbill.goalrunner.decodeDeclaredGoalProgressEvent
+import skillbill.goalrunner.ledger.backwardEdgeCountsFromLedger
+import skillbill.goalrunner.ledger.declaredProgressEventFrom
+import skillbill.goalrunner.ledger.decodeDeclaredGoalProgressEvent
+import skillbill.goalrunner.ledger.progressEventFrom
+import skillbill.goalrunner.ledger.summarizeAttemptLedgerFromEntries
+import skillbill.goalrunner.ledger.summary
+import skillbill.goalrunner.ledger.toProgressEvent
 import skillbill.goalrunner.model.GOAL_ATTEMPT_LEDGER_LIMIT
 import skillbill.goalrunner.model.GoalObservabilityRuntimeEventInput
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
-import skillbill.goalrunner.progressEventFrom
-import skillbill.goalrunner.summarizeAttemptLedgerFromEntries
-import skillbill.goalrunner.summary
 import skillbill.goalrunner.toPersistenceWire
-import skillbill.goalrunner.toProgressEvent
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -35,14 +35,14 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.engine.progressToken
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.goalreview.GOAL_PROGRESS_HISTORY_LIMIT
-import skillbill.workflow.model.goalreview.GoalProgressEvent
-import skillbill.workflow.model.goalreview.appendBoundedHistoryBySequence
-import skillbill.workflow.model.goalreview.goalObservabilityLatestEventFromArtifacts
+import skillbill.workflow.model.goalobservability.GOAL_PROGRESS_HISTORY_LIMIT
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
+import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
+import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.taskruntime.artifact.phaseRecordsFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuation
+import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 
 private fun nextSequence(highest: Int?): Int = highest?.let { it + 1 } ?: 0
 

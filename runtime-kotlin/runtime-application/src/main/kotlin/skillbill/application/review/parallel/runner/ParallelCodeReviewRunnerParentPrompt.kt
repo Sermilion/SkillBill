@@ -2,7 +2,7 @@ package skillbill.application.review.parallel.runner
 
 import skillbill.application.review.model.ReviewSpecialistLaunchRequest
 import skillbill.application.review.model.ReviewWorkerKind
-import skillbill.review.context.model.execution.structuredString
+import skillbill.review.context.model.hunk.structuredString
 import skillbill.scaffold.model.PlatformManifest
 
 internal object ParallelCodeReviewRunnerParentPrompt {

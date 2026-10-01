@@ -14,7 +14,7 @@ import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import java.nio.file.Path
 
 interface GoalRunnerManifestQueries {

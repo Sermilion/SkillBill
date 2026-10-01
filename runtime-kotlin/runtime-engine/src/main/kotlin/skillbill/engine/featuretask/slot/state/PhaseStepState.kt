@@ -12,10 +12,10 @@ import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
-import skillbill.workflow.model.goalreview.ReviewPassResolution
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import java.time.Clock
 

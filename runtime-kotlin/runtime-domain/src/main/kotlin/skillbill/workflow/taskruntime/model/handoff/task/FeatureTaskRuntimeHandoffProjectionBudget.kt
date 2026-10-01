@@ -1,7 +1,8 @@
 package skillbill.workflow.taskruntime.model.handoff.task
 
-import skillbill.workflow.taskruntime.model.phase.FEATURE_TASK_RUNTIME_CHANGED_PATH_MAX_COUNT
-import skillbill.workflow.taskruntime.model.phase.FEATURE_TASK_RUNTIME_PROJECTION_LIST_MAX_COUNT
+internal const val FEATURE_TASK_RUNTIME_PROJECTION_LIST_MAX_COUNT: Int = 128
+
+internal const val FEATURE_TASK_RUNTIME_CHANGED_PATH_MAX_COUNT: Int = 512
 
 data class FeatureTaskRuntimeHandoffProjectionBudget(
   val maxUtf8Bytes: Int,

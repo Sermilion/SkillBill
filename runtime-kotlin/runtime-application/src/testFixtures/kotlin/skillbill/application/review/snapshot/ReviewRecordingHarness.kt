@@ -75,8 +75,8 @@ import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPo
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.review.context.ReviewContextWireMap
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.context.model.packet.LANE_EVIDENCE_BYTES_DIMENSION
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewParseResult

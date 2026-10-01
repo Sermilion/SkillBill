@@ -4,7 +4,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryChe
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDelivery
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionShape
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeHandoffPromptVisibility
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

@@ -9,7 +9,7 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaEr
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.decodeValidationEvidenceFromArtifact
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence

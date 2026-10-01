@@ -22,7 +22,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.model.SpecSource
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.time.Clock

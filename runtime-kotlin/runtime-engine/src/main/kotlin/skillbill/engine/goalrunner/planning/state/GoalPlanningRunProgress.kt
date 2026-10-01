@@ -33,7 +33,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import java.util.concurrent.ConcurrentHashMap
 

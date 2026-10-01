@@ -26,7 +26,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.planCodeReviewAr
 import skillbill.infrastructure.skills.scaffold.runtime.service.renderDeclaredPackContentSheet
 import skillbill.infrastructure.skills.scaffold.runtime.service.scaffold
 import skillbill.infrastructure.skills.scaffold.runtime.service.support.requiredSupportingFilesForSkill
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
 import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestRenderRequest

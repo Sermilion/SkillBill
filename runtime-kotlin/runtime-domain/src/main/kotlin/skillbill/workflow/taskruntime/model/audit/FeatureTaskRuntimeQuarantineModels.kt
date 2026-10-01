@@ -7,9 +7,6 @@ import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
 
-internal const val FEATURE_TASK_RUNTIME_QUARANTINED_RECORDS_ARTIFACT_KEY: String =
-  "feature_task_runtime_quarantined_records"
-
 private const val FEATURE_TASK_RUNTIME_QUARANTINE_ARTIFACT_CONTRACT_VERSION: String = "0.3"
 
 const val QUARANTINE_REJECTION_CLASS_PLANNING_PROJECTION: String = "planning_projection_schema"

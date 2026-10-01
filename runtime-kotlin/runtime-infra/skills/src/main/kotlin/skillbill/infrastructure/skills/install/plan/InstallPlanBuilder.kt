@@ -11,10 +11,10 @@ import skillbill.install.model.InstallPlanSkill
 import skillbill.install.model.InstallPlatformPackSnapshot
 import skillbill.install.model.InstallPlatformSkillMaterializationRequest
 import skillbill.install.model.InstallPolicyInput
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.model.SupportedAgent
 import skillbill.install.model.buildInstallPlanWireMap
 import skillbill.install.policy.InstallPlanPolicy
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.ports.install.InstallPlanWireValidator
 import skillbill.ports.install.plan.model.InstallPlanningFacts

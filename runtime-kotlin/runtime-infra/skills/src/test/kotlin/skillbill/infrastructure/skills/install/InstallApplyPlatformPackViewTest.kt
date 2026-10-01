@@ -2,8 +2,8 @@ package skillbill.infrastructure.skills.install
 
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.install.model.InstallApplyStatus
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.model.SupportedAgent
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import kotlin.test.Test

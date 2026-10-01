@@ -2,10 +2,10 @@ package skillbill.ports.review.model
 
 import skillbill.ports.review.evidence.ReviewStoredHunkBodyExtractor
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPort
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.commit.ReviewAssignment
 import skillbill.review.context.model.hunk.ReviewChangedHunk
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
-import skillbill.review.context.model.packet.ReviewExpansionRecord
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import java.nio.file.Path
 
 data class ReviewEvidenceBrokerBinding(

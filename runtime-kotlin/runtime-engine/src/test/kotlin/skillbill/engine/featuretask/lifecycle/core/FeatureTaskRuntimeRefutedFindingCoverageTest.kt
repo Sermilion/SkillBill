@@ -2,7 +2,7 @@ package skillbill.engine.featuretask.lifecycle.core
 
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeOmittedFindingsRetryReason
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptOmittedFindings
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairOutcome
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceiptEntry

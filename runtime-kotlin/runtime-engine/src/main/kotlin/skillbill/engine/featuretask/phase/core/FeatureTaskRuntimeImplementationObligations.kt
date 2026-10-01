@@ -1,7 +1,7 @@
 package skillbill.engine.featuretask.phase.core
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttempt
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
 
 internal data class FeatureTaskRuntimeImplementationObligations(
   val plannedTaskIds: List<String>,

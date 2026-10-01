@@ -9,8 +9,8 @@ import skillbill.engine.promptComposerBriefingFor
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptFromArtifact
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttempt
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttemptStatus
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull

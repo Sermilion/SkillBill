@@ -3,7 +3,7 @@ package skillbill.infrastructure.skills.scaffold.validation.review
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentBundle
 import skillbill.infrastructure.skills.scaffold.authoring.parentViolation
 import skillbill.infrastructure.skills.scaffold.platformpack.packRootsBySlug
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path

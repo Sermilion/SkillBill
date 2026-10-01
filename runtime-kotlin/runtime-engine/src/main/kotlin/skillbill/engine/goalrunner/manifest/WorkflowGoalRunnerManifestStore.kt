@@ -39,7 +39,7 @@ import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.model.WorkflowFamily
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.afterIncompatibleChildDeletion
 import skillbill.workflow.engine.WorkflowEngine
 import java.nio.file.Path

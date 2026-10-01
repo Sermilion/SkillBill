@@ -37,7 +37,7 @@ import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.decomposition.withWorkflowId
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskWorkflowMode
-import skillbill.workflow.model.goalreview.GoalObservabilityFileDiffStat
+import skillbill.workflow.model.goalobservability.GoalObservabilityFileDiffStat
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path

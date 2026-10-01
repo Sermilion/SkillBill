@@ -11,6 +11,7 @@ import skillbill.install.model.InstallPolicyValidationResult
 import skillbill.install.model.InstallPolicyValidationStatus
 import skillbill.install.model.McpRegistrationIntent
 import skillbill.install.model.PlannedPlatformPack
+import skillbill.install.model.selectedPlatformSlugs
 
 object InstallPlanPolicy {
   fun validateRequest(input: InstallPolicyInput): InstallPolicyValidationResult {

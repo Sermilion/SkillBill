@@ -39,3 +39,26 @@ enum class ReviewBudgetKind(val wireValue: String) {
     fun fromWire(value: String): ReviewBudgetKind? = entries.firstOrNull { it.wireValue == value }
   }
 }
+
+enum class ReviewIntegrationTerminalOutcome {
+  COMPLETED,
+  SKIPPED_NOT_APPLICABLE,
+  REVIEW_CONTEXT_BUDGET_EXCEEDED,
+  FAILED,
+  TIMEOUT,
+  INTERRUPTED,
+  SPAWN_FAILURE,
+  PROCESS_FAILURE,
+  UNSUPPORTED_PROVIDER,
+  NO_OP_RESUME,
+  ;
+
+  val wireValue: String get() = name.lowercase()
+
+  val isDurablyComplete: Boolean
+    get() = this == COMPLETED || this == SKIPPED_NOT_APPLICABLE || this == NO_OP_RESUME
+
+  companion object {
+    fun fromWire(value: String): ReviewIntegrationTerminalOutcome? = entries.firstOrNull { it.wireValue == value }
+  }
+}

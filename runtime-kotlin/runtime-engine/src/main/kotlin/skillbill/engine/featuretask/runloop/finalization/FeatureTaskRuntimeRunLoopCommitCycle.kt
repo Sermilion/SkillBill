@@ -43,7 +43,7 @@ import skillbill.engine.featuretask.validation.ReadinessCommitPushSettleRequest
 import skillbill.engine.featuretask.validation.ReadinessCommitPushSettleResult
 import skillbill.engine.featuretask.validation.ReadinessCommittedHeadBindRequest
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind

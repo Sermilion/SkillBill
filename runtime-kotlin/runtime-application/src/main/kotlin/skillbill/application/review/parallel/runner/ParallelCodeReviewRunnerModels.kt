@@ -12,10 +12,10 @@ import skillbill.ports.review.model.ParallelReviewLaneRunResult
 import skillbill.ports.review.model.ReviewIntegrationPassOutcome
 import skillbill.ports.review.model.ReviewLaneAccounting
 import skillbill.review.context.model.accounting.ReviewAccountingTerminalOutcome
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.commit.ReviewAssignment
 import skillbill.review.context.model.execution.ResolvedReviewExecutionMode
 import skillbill.review.context.model.execution.SpecIntentResolution
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.context.model.hunk.ReviewLearningsReference
 import skillbill.review.context.model.launch.GovernedReviewLaunch
 import skillbill.review.context.model.packet.LANE_EVIDENCE_BYTES_DIMENSION

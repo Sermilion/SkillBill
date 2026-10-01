@@ -6,8 +6,8 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHando
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjection
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionField
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionValue
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffPromptVisibility
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeHandoffPromptVisibility
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals

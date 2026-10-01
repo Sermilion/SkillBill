@@ -2,9 +2,11 @@ package skillbill.goalrunner
 
 import skillbill.contracts.JsonCodec
 import skillbill.error.shellcontent.InvalidGoalProgressEventSchemaError
+import skillbill.goalrunner.ledger.declaredProgressEventFrom
+import skillbill.goalrunner.ledger.decodeDeclaredGoalProgressEvent
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
-import skillbill.workflow.model.goalreview.GOAL_PROGRESS_RUN_HISTORY_ARTIFACT_KEY
-import skillbill.workflow.model.goalreview.GoalProgressEvent
+import skillbill.workflow.engine.model.GOAL_PROGRESS_RUN_HISTORY_ARTIFACT_KEY
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
 
 internal fun DurableWorkflowArtifacts.goalProgressLatestEvent(): GoalProgressEvent? = declaredProgressEventFrom(this)
 

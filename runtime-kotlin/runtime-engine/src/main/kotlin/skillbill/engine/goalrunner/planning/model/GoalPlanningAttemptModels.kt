@@ -11,11 +11,11 @@ import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.planning.model.GoalPlanningResolvedBoundaryBodies
 import skillbill.workflow.decomposition.model.DecompositionSubtask
-import skillbill.workflow.model.goalreview.GoalProgressEventKind
-import skillbill.workflow.model.goalreview.GoalProgressOutcome
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.model.goalobservability.GoalProgressOutcome
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 internal data class GoalPlanningAttemptScope(

@@ -15,7 +15,7 @@ import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestRejectionReason
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.model.toSnapshot
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict

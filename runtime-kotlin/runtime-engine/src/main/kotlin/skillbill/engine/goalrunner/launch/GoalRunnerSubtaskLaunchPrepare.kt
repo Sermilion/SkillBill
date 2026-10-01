@@ -33,7 +33,7 @@ import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaselineResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.withAttemptedSubtask
 import skillbill.workflow.decomposition.withBranchSetupBlockedSubtask
 import skillbill.workflow.decomposition.withWorkflowId

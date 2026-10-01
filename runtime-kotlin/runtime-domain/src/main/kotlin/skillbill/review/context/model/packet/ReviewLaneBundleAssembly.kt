@@ -1,16 +1,15 @@
 package skillbill.review.context.model.packet
 
 import skillbill.review.context.model.commit.ReviewAssignment
-import skillbill.review.context.model.execution.SHA256_HEX
-import skillbill.review.context.model.execution.canonicalFieldList
-import skillbill.review.context.model.execution.canonicalFields
 import skillbill.review.context.model.hunk.REVIEW_BUNDLE_SEGMENT_ID_PAD_WIDTH
 import skillbill.review.context.model.hunk.REVIEW_MIN_ORDER_INDEX
 import skillbill.review.context.model.hunk.REVIEW_MIN_SEGMENT_MEASURED_BYTES
 import skillbill.review.context.model.hunk.ReviewChangedHunk
+import skillbill.review.context.model.hunk.SHA256_HEX
+import skillbill.review.context.model.hunk.canonicalFieldList
+import skillbill.review.context.model.hunk.canonicalFields
 import skillbill.review.model.ReviewLaneReviewDisposition
-import skillbill.workflow.taskruntime.model.repair.sha256Hex
-import java.security.MessageDigest
+import skillbill.text.sha256HexUtf8
 
 data class ReviewLaneAssembledEntry(
   val commitSha: String,
@@ -51,7 +50,7 @@ data class ReviewLaneAssembledBundle(val entries: List<ReviewLaneAssembledEntry>
 
   val canonical: String get() = canonicalFieldList(entries.map { it.canonical })
 
-  val compositionDigest: String get() = sha256Hex(canonical)
+  val compositionDigest: String get() = sha256HexUtf8(canonical)
 
   companion object {
     val ENTRY_ORDER: Comparator<ReviewLaneAssembledEntry> =
@@ -110,7 +109,7 @@ data class ReviewLaneBundleSegment(
     require(entries == ordered) { "Bundle segment entries must preserve assembled-bundle order." }
   }
 
-  val compositionDigest: String get() = sha256Hex(canonicalFieldList(entries.map { it.canonical }))
+  val compositionDigest: String get() = sha256HexUtf8(canonicalFieldList(entries.map { it.canonical }))
 }
 
 data class ReviewLaneBundleSegmentation(
@@ -259,7 +258,7 @@ internal fun ReviewLaneBundleSegmentation.toCompletionState(
             segmentId = ReviewLaneBundleSegmentation.UNREVIEWABLE_SEGMENT_ID,
             measuredBytes = 0,
             entryCount = unreviewableEntries.size,
-            compositionDigest = sha256Hex(canonicalFieldList(unreviewableEntries.map { it.canonical })),
+            compositionDigest = sha256HexUtf8(canonicalFieldList(unreviewableEntries.map { it.canonical })),
           ),
       unreviewedSegmentIds = listOf(ReviewLaneBundleSegmentation.UNREVIEWABLE_SEGMENT_ID),
       budgetDimension = "lane_launch_bytes",
@@ -319,8 +318,3 @@ fun ReviewLaneCompletionState.asFailedLaneRun(assignedUnits: List<String>): Revi
 
 private const val FAILED_RUN_SEGMENT_ID = "seg-lane-run-failed"
 private const val FAILED_RUN_UNIT = "entire assigned bundle"
-
-private fun sha256Hex(value: String): String =
-  MessageDigest.getInstance("SHA-256")
-    .digest(value.toByteArray(Charsets.UTF_8))
-    .joinToString("") { byte -> "%02x".format(byte) }

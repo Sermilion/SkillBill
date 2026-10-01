@@ -6,7 +6,7 @@ import skillbill.infrastructure.skills.scaffold.rendering.areaReviewContent
 import skillbill.infrastructure.skills.scaffold.rendering.baselineReviewContent
 import skillbill.infrastructure.skills.scaffold.rendering.renderFrontmatter
 import skillbill.install.model.InstallPlan
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import java.nio.file.Files
 import java.nio.file.Path

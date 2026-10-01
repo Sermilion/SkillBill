@@ -7,7 +7,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.time.parsePersistedInstant
 import java.time.Instant
 
-internal const val GOAL_ATTEMPT_LEDGER_ARTIFACT_KEY: String = "goal_attempt_ledger"
 const val GOAL_ATTEMPT_LEDGER_LIMIT: Int = 200
 
 enum class GoalAttemptLedgerAction(val wireValue: String) {

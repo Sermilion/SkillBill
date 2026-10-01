@@ -15,14 +15,14 @@ import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ReviewFindingVerdict
-import skillbill.workflow.model.goalreview.ReviewPassResolution
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.model.review.ReviewPassResolution
 
 /**
  * The launch and output behaviour one strategy step adds to the shared attempt path. The shared launch

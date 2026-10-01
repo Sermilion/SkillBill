@@ -4,11 +4,11 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuatio
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.runloop.observability.continuation
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals

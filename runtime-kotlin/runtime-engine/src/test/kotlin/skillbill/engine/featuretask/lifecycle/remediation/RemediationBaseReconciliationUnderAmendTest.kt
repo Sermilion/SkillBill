@@ -23,7 +23,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
@@ -36,9 +36,9 @@ import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.asCheckpointIdentitiesArtifactEntry
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FeatureTaskRuntimeCheckpointIdentity
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.featureTaskRuntimeCheckpointRefName
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeCheckpointRefName
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Files
 import java.nio.file.Path

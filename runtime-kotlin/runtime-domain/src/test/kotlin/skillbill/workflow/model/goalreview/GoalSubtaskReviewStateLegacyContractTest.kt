@@ -2,7 +2,7 @@ package skillbill.workflow.model.goalreview
 
 import skillbill.contracts.workflow.identity.subtask.GOAL_SUBTASK_REVIEW_STATE_CONTRACT_VERSION
 import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

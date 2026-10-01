@@ -14,7 +14,7 @@ import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminal
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationCommandResult
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence

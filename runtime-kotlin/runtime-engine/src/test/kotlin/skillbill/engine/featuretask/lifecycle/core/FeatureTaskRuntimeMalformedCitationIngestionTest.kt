@@ -7,7 +7,7 @@ import skillbill.engine.featuretask.slot.codereview.InlineReviewEnvelope
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewStructuredFindingsParse
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewSeverity

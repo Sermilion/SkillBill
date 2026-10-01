@@ -1,6 +1,6 @@
 package skillbill.ports.review.model
 
-import skillbill.review.context.model.launch.ReviewIntegrationTerminalOutcome
+import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcome
 import skillbill.review.model.ParallelReviewRawFinding
 import skillbill.review.model.ReviewFindingCitationDiagnosticWithFinding
 

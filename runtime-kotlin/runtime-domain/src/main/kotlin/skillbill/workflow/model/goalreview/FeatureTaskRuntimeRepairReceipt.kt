@@ -6,16 +6,14 @@ import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_REPAIR_RECEIPT_CONTRACT_VERSION
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeRepairReceiptError
-import skillbill.workflow.taskruntime.model.repair.task.receiptError
-import skillbill.workflow.taskruntime.model.repair.task.requireReceiptFileBasename
-import skillbill.workflow.taskruntime.model.repair.task.requireReceiptIdentityText
-import skillbill.workflow.taskruntime.model.repair.task.requireReceiptSanitizedText
-import skillbill.workflow.taskruntime.model.repair.task.requireReceiptSymbol
-import skillbill.workflow.taskruntime.model.repair.task.salvageCompactReceiptSymbol
+import skillbill.workflow.taskruntime.model.repair.receiptError
+import skillbill.workflow.taskruntime.model.repair.requireReceiptFileBasename
+import skillbill.workflow.taskruntime.model.repair.requireReceiptIdentityText
+import skillbill.workflow.taskruntime.model.repair.requireReceiptSanitizedText
+import skillbill.workflow.taskruntime.model.repair.requireReceiptSymbol
+import skillbill.workflow.taskruntime.model.repair.salvageCompactReceiptSymbol
 
 internal const val REPAIR_RECEIPT_MAX_ENTRIES: Int = 50
-internal const val REPAIR_RECEIPT_MAX_CONSTRUCT_SYMBOL_UTF8_BYTES: Int = 256
-internal const val REPAIR_RECEIPT_MAX_CONSTRUCT_FILE_UTF8_BYTES: Int = 128
 private const val REPAIR_RECEIPT_MAX_NO_EDIT_REASON_UTF8_BYTES: Int = 356
 const val REPAIR_RECEIPT_MAX_UNRESOLVED_REASON_UTF8_BYTES: Int = 356
 private const val REPAIR_RECEIPT_MAX_LABEL_UTF8_BYTES: Int = 256

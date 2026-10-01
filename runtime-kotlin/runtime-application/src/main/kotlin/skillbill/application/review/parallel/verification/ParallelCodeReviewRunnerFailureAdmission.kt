@@ -16,7 +16,7 @@ import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.review.model.ParallelReviewLaneOutcome
 import skillbill.ports.review.model.ReviewLaneAccounting
 import skillbill.review.context.model.accounting.ReviewAccountingTerminalOutcome
-import skillbill.review.context.model.hunk.ReviewRegisterParseSeamException
+import skillbill.review.context.model.accounting.ReviewRegisterParseSeamException
 import skillbill.review.context.model.packet.ReviewLaneAssembledBundle
 import skillbill.review.model.ParallelReviewParseResult
 import skillbill.review.model.ParallelReviewRawFinding

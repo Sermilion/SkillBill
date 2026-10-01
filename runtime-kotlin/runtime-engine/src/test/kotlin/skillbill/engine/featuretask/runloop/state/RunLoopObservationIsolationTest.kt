@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.runloop.state
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import kotlin.test.Test
 import kotlin.test.assertEquals

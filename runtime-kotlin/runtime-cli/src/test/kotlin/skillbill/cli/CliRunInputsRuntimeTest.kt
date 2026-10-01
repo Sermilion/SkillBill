@@ -15,7 +15,7 @@ import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntim
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.ports.system.HostPlatformPort
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition

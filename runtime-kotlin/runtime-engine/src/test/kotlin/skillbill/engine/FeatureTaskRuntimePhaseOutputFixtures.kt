@@ -9,7 +9,7 @@ import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.review.model.ParallelReviewLaneResult
 import skillbill.review.parallel.ParallelReviewFindingParser
 import skillbill.review.parallel.ParallelReviewMerger
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 
 private const val VERSION: String = FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 

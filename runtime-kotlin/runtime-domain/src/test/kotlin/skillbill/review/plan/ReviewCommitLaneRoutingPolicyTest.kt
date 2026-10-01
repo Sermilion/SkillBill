@@ -1,5 +1,6 @@
 package skillbill.review.plan
 
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.commit.REVIEW_ROUTING_REASON_MAX_CHARS
 import skillbill.review.context.model.commit.ReviewCommitLaneDecision
 import skillbill.review.context.model.commit.ReviewCommitLaneDisposition
@@ -7,7 +8,6 @@ import skillbill.review.context.model.commit.ReviewCommitLaneRoutingMatrix
 import skillbill.review.context.model.commit.ReviewCommitSource
 import skillbill.review.context.model.commit.ReviewCommitUnit
 import skillbill.review.context.model.hunk.ReviewChangedHunk
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.plan.model.ReviewLaunchLane
 import skillbill.review.plan.model.ReviewRoutedLane
 import kotlin.test.Test

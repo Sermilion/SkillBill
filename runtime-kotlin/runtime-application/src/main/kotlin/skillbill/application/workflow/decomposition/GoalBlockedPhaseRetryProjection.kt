@@ -14,7 +14,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowUpdateInput
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 
 fun WorkflowEngine.updateGoalParentForBlockedPhaseRetry(
   unitOfWork: GoalRunnerPersistenceSession,

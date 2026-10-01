@@ -26,7 +26,7 @@ import skillbill.engine.telemetryRunnerHarness
 import skillbill.engine.validJsonOutput
 import skillbill.engine.verifyFindingsOutput
 import skillbill.engine.writePlanBundle
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.toReviewAccountingBoundedJson
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX

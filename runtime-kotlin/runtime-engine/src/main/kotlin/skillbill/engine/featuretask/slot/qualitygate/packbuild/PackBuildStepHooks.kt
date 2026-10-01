@@ -9,7 +9,7 @@ import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.validation.repairSegmentOutput
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 
 internal object PackBuildStepHooks : PhaseStepHooks {
   override val carriesPackBuildCommand: Boolean = true

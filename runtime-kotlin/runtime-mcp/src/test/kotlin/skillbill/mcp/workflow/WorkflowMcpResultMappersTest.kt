@@ -10,7 +10,7 @@ import skillbill.workflow.engine.model.WorkflowStepState
 import skillbill.workflow.engine.model.WorkflowUpdateAcknowledgementView
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.goalreview.goalObservabilityLatestEventFromArtifacts
+import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

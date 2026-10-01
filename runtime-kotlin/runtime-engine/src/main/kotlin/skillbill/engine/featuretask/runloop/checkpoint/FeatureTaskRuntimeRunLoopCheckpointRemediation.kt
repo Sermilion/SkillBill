@@ -24,7 +24,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshot
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshotResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FeatureTaskRuntimeCheckpointIdentity
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal data class RemediationCommitPrepared(
