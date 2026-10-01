@@ -12,6 +12,7 @@ import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testRepositoryRoot
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.application.workflow.decomposition.alignSubtaskResumeStep
+import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.application.workflow.decomposition.persistParentDecompositionRuntime
 import skillbill.application.workflow.model.RepairFeatureTaskRuntimeIdentityArgs
 import skillbill.application.workflow.model.WorkflowContinueResult
@@ -82,7 +83,6 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
-import skillbill.ports.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline

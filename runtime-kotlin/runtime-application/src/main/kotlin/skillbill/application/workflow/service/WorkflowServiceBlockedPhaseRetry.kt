@@ -1,6 +1,9 @@
 package skillbill.application.workflow.service
 
 import skillbill.application.decomposition.DecompositionManifestWriter
+import skillbill.application.decomposition.clearDecompositionManifestProjectionFailure
+import skillbill.application.decomposition.model.DecompositionManifestProjectionFailurePersistence
+import skillbill.application.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.application.workflow.decomposition.PendingDecompositionProjection
 import skillbill.application.workflow.decomposition.goalContinuationParentWorkflowIdForSettlement
 import skillbill.application.workflow.decomposition.updateGoalParentForBlockedPhaseRetry
@@ -14,11 +17,8 @@ import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
-import skillbill.ports.workflow.decomposition.DecompositionManifestProjectionFailurePersistence
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.clearDecompositionManifestProjectionFailure
-import skillbill.ports.workflow.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
 import skillbill.workflow.engine.WorkflowEngine

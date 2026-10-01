@@ -4,6 +4,7 @@ import skillbill.engine.goalrunner.execution.core.lease
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.status.liveLease
 import skillbill.engine.work.model.IdeStatusRequest
+import skillbill.engine.work.model.toStatusWireMap
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
@@ -12,7 +13,6 @@ import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
-import skillbill.ports.idestatus.model.toStatusWireMap
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition

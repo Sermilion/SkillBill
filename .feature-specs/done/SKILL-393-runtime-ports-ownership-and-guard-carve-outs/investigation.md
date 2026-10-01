@@ -19,7 +19,7 @@ Neither is a production incident. Both are the pattern the user flagged: a plann
 
 - Baseline: `ae23f4f28f16d851a0548e8149e0fe6fadbbc612` (detached HEAD in the `skill-bill-SKILL-380-base` worktree, equal to `base/SKILL-380-phase-slot-strategies`), 2026-09-30. HEAD was unchanged at the final recheck.
 - Method: Python and grep censuses written for this investigation (declaration parse, import census per module and source set, supertype-list implementer parse plus SAM constructors, declaration-level movability fixpoint, exact-package Tarjan SCC, interface-default body scan). I read in full every file a finding cites and every guard it cites or extends. No review work was delegated. No build or test ran.
-- Context read: `AGENTS.md`, `runtime-kotlin/ARCHITECTURE.md` (Design Principles, Gradle Modules, Package Ownership, Boundary Rules, Architecture Guardrails), `docs/code-principles.md`, `runtime-kotlin/runtime-ports/agent/history.md` (runtime-ports has no `decisions.md`), and the runtime-ports entries in `runtime-kotlin/agent/decisions.md`: SKILL-377 (2026-09-25, two entries), SKILL-372 (2026-09-24), SKILL-376 (2026-09-25 "Adapters hold no port-only coordination"), SKILL-358 (2026-09-18), SKILL-233 subtask 2 (2026-09-06 (a)-(c)), SKILL-231 subtask 3 (2026-09-03).
+- Context read: `../../../AGENTS.md`, `runtime-kotlin/ARCHITECTURE.md` (Design Principles, Gradle Modules, Package Ownership, Boundary Rules, Architecture Guardrails), `docs/code-principles.md`, `runtime-kotlin/runtime-ports/agent/history.md` (runtime-ports has no `decisions.md`), and the runtime-ports entries in `runtime-kotlin/agent/decisions.md`: SKILL-377 (2026-09-25, two entries), SKILL-372 (2026-09-24), SKILL-376 (2026-09-25 "Adapters hold no port-only coordination"), SKILL-358 (2026-09-18), SKILL-233 subtask 2 (2026-09-06 (a)- (c)), SKILL-231 subtask 3 (2026-09-03).
 - Prior work on this module: SKILL-377 "runtime-ports-contract-cleanup" (landed `a89dea7d9`) is the most recent investigation; I read its investigation, spec, and subtasks in full. SKILL-358 precedes it. The SKILL-372 bundle (domain) and SKILL-378 bundle (engine, with its unscheduled follow-up) are read where they moved code into or out of ports.
 
 ## Census
@@ -180,7 +180,7 @@ SKILL-377 retention decisions stand, including the `GoalRunnerManifestStore` rol
 | Rule | Guard | Scan root | Reads ports main | Carve-out on ports |
 | --- | --- | --- | --- | --- |
 | No top-level object / non-DTO class / `(this as` / throwing or constant default | `PortsDeclarationArchitectureTest` | `moduleMainKotlinRoot("runtime-ports")` (line 8) | yes | File exemption for `GoalParentProjectionWriter.kt` (line 128) |
-| Public models in `model` packages | `RuntimeLayerBoundaryArchitectureTest` "public model declarations live in model packages" | `sourceFiles()` filtered on `runtime-kotlin/runtime-ports/` (lines 327-333) | yes | File exemption for `DecompositionManifestProjectionFailurePersistence.kt` (lines 336-341) |
+| Public models in `model` packages | `RuntimeLayerBoundaryArchitectureTest` "public model declarations live in model packages" | `sourceFiles()` filtered on `../../../runtime-kotlin/runtime-ports` (lines 327-333) | yes | File exemption for `DecompositionManifestProjectionFailurePersistence.kt` (lines 336-341) |
 | No public raw map | `RuntimeRawMapArchitectureTest` (lines 105-116) | `moduleMainKotlinRoot` | yes | FQN allow-list entry `skillbill.ports.goalrunner.GoalParentProjectionWriter.artifacts` (`RuntimeArchitectureTestSupport.kt:454-468`, consulted at :497) |
 | No adapter imports | `RuntimeContractModuleImportRulesTest` (lines 50-51, prefixes :77-83) | `moduleMainKotlinRoot` | yes | none |
 | No null-object substitutes | `PortNullObjectAbsenceArchitectureTest` case 1 | every module main root | yes | none |
@@ -256,7 +256,7 @@ Fix:
   - The enum and the seven DTOs go to `application/decomposition/model`.
   - `listFeatureTaskWorkflowsForParentDiscovery` has no caller outside its file and becomes private.
 - Delete the four carve-outs, leaving the ports cycle baseline empty. The other eleven `rawMapBoundaryAccessors` entries target domain declarations, and the domain owner handles them (see Coordination).
-- Record in `runtime-kotlin/agent/decisions.md` that 2026-09-06 (b) is superseded for `LoadedDecompositionManifest` and `ValidatedDecompositionManifestYaml`.
+- Record in `../../../runtime-kotlin/agent/decisions.md` that 2026-09-06 (b) is superseded for `LoadedDecompositionManifest` and `ValidatedDecompositionManifestYaml`.
 - Function bodies, error messages, and transaction extents are unchanged.
 
 Feasibility:

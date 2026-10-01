@@ -8,6 +8,7 @@ import skillbill.application.decomposition.decompositionPlanningResult
 import skillbill.application.decomposition.decompositionPlanningSubtask
 import skillbill.application.decomposition.defaultFeatureBranch
 import skillbill.application.decomposition.loadValidatedDecompositionManifestPersistingRepair
+import skillbill.application.decomposition.model.DecompositionManifestWriteRequest
 import skillbill.application.decomposition.model.DecompositionPlanningResultOptions
 import skillbill.application.decomposition.model.DecompositionPlanningSubtaskOptions
 import skillbill.application.decomposition.parentSpecPath
@@ -23,7 +24,6 @@ import skillbill.featurespec.model.FeatureSpecWriteRequest
 import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestWriteRequest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
 import java.io.IOException

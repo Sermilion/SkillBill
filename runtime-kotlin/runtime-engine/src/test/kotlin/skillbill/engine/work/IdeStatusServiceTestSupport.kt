@@ -28,6 +28,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
+import skillbill.engine.work.model.toStatusWireMap
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalPlanningStatusState
@@ -46,7 +47,6 @@ import skillbill.ports.goalrunner.GoalRunnerControlRepository
 import skillbill.ports.idestatus.IdeStatusValidator
 import skillbill.ports.idestatus.NoopIdeStatusValidator
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
-import skillbill.ports.idestatus.model.toStatusWireMap
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults

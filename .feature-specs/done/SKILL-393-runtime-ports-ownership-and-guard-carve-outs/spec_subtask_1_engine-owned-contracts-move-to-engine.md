@@ -53,7 +53,7 @@ Build compiles every module; kotlin-inject resolution of the store providers is 
 
 ## Implementation Details
 
-Planned against HEAD `2815b2064`. SKILL-389 has landed, so no `RuntimeComponent` accessor names a moved type. SKILL-390 and SKILL-392 have not landed, so `IdeStatusReadSnapshotConcurrencyTest` is still in runtime-cli. Every path below is relative to `runtime-kotlin/`. "Ports" means `runtime-ports/src/main/kotlin/skillbill/ports`, and "engine" means `runtime-engine/src/main/kotlin/skillbill/engine`.
+Planned against HEAD `2815b2064`. SKILL-389 has landed, so no `RuntimeComponent` accessor names a moved type. SKILL-390 and SKILL-392 have not landed, so `IdeStatusReadSnapshotConcurrencyTest` is still in runtime-cli. Every path below is relative to `../../../runtime-kotlin`. "Ports" means `runtime-ports/src/main/kotlin/skillbill/ports`, and "engine" means `runtime-engine/src/main/kotlin/skillbill/engine`.
 
 ### Placement of the 56 declarations
 
@@ -201,4 +201,4 @@ Rules:
 - **The validate phase** runs:
   - the runtime-ports, runtime-engine, runtime-cli and runtime-core suites, plus `:runtime-core:repoTest`
   - those suites cover AC-004 (inbound API, engine boundary and sibling-count tests) and AC-006 (`GoalRunnerRepairTest`, `GoalRunnerStopVerbTest`, `GoalHardResetCommitSpanRecoveryTest`, `GoalRunnerPurgeCoordinatorTest`, the `GoalRunnerTest` replan and reset cases, `IdeStatusService*Test`, `IdeStatusModelsTest`, `CliWorkStatusTest`, `IdeStatusReadSnapshotConcurrencyTest`).
-- **Docs:** none of `runtime-kotlin/ARCHITECTURE.md` or `docs/` names a moved file. The documentation update is subtask 2 (parent AC-12).
+- **Docs:** none of `../../../runtime-kotlin/ARCHITECTURE.md` or `docs/` names a moved file. The documentation update is subtask 2 (parent AC-12).

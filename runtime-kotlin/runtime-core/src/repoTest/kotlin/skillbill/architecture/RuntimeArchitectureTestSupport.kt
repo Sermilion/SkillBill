@@ -464,7 +464,6 @@ private val rawMapBoundaryAccessors =
     "skillbill.goalrunner.missingResultPrefixTerminalOutcomeArtifact",
     "skillbill.goalrunner.goalReviewArtifacts",
     "skillbill.goalrunner.validatedGoalReviewPasses",
-    "skillbill.ports.goalrunner.GoalParentProjectionWriter.artifacts",
   )
 
 private fun rawMapViolationForLine(

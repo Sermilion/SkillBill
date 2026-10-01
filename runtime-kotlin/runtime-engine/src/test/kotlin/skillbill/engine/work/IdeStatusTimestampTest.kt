@@ -2,13 +2,13 @@ package skillbill.engine.work
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
+import skillbill.engine.work.model.toStatusWireMap
 import skillbill.ports.idestatus.model.IdeStatusCurrentSubtask
 import skillbill.ports.idestatus.model.IdeStatusFreshness
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusSnapshot
 import skillbill.ports.idestatus.model.IdeStatusStep
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
-import skillbill.ports.idestatus.model.toStatusWireMap
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -3,6 +3,7 @@ package skillbill.di.workflow
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.executionModel
+import skillbill.application.decomposition.loadDecompositionManifest
 import skillbill.application.review.service.ReviewService
 import skillbill.application.review.snapshot.HARNESS_ORIGIN_UNAVAILABLE
 import skillbill.application.telemetry.model.GoalFinishedRequest
@@ -71,7 +72,6 @@ import skillbill.ports.work.EmptyWorkListRepository
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.WorkflowStateRepositoryDefaults
 import skillbill.ports.workflow.WorkflowStatsRepository
-import skillbill.ports.workflow.decomposition.loadDecompositionManifest
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperationsTestBase

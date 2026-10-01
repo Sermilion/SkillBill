@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.status
 
+import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.engine.goalrunner.execution.support.pauseAtOperatorBoundary
 import skillbill.engine.goalrunner.manifest.SavedManifestProjection
 import skillbill.engine.goalrunner.manifest.mergeConcurrentGoalProgress
@@ -16,7 +17,6 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.model.WorkflowStateSnapshot

@@ -42,14 +42,14 @@ Next command: `skill-bill goal SKILL-393`.
 9. `ReviewAttributionPort.composedLaunchPlan` has no default body. runtime-ports main declares neither `REVIEW_EVIDENCE_BATCH_SIZE` nor the installer output cap and truncation sentinel, and each value has one declaration in its adapter module.
 10. The companion-`NONE` census case of `PortNullObjectAbsenceArchitectureTest` reads runtime-ports main as well as runtime-engine main, and it passes.
 11. Decomposition manifest discovery, parent discovery, projection-failure persistence, goal-parent projection, and review preparation are byte-identical to baseline. That covers returned values, persisted rows, `error(...)` messages, the governed review evidence `maxItems`, and the installer truncation text. CLI and MCP wire output is unchanged.
-12. `runtime-kotlin/ARCHITECTURE.md` describes the landed ports surface and the new declaration rule. `runtime-kotlin/agent/decisions.md` records that 2026-09-06 (b) is superseded for `LoadedDecompositionManifest` and `ValidatedDecompositionManifestYaml`, with the SQLite-no-longer-reads evidence.
+12. `../../../runtime-kotlin/ARCHITECTURE.md` describes the landed ports surface and the new declaration rule. `runtime-kotlin/agent/decisions.md` records that 2026-09-06 (b) is superseded for `LoadedDecompositionManifest` and `ValidatedDecompositionManifestYaml`, with the SQLite-no-longer-reads evidence.
 
 ## Constraints
 
 - Run on the current tree, and do not wait for another issue. If a sibling bundle has already changed a named file, apply this bundle's criteria to what is present.
 - No module, framework, dependency bag, parameter object, or architecture-test class. The only scanner changes are F-005's rule in `PortsDeclarationArchitectureTest` and F-008's root list in `PortNullObjectAbsenceArchitectureTest`. Grow no baseline, pinned-type list excepted: the pinned list names the four moved CLI-rendered repair results and drops two alias-only entries.
 - Keep every interface that has a test substitute or a cross-module consumer. Keep the role splits and the SKILL-377 and SKILL-358 retention decisions listed under What stays.
-- Follow `runtime-kotlin/ARCHITECTURE.md` Design Principles and `docs/code-principles.md`: no `//` comments in Kotlin, KDoc only on interfaces, wire keys through their `*Keys` owners, and the package sibling limits.
+- Follow `../../../runtime-kotlin/ARCHITECTURE.md` Design Principles and `docs/code-principles.md`: no `//` comments in Kotlin, KDoc only on interfaces, wire keys through their `*Keys` owners, and the package sibling limits.
 - CLI and MCP wire output, persisted bytes, schemas, contract versions, and transaction extents stay unchanged.
 - Test doubles live in testFixtures and compose with `by` delegation. Name the regression each changed test catches.
 

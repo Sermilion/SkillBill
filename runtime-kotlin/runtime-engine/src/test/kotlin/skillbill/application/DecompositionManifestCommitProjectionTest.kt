@@ -2,9 +2,15 @@ package skillbill.application
 
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.baseBranch
+import skillbill.application.decomposition.clearDecompositionManifestProjectionFailure
 import skillbill.application.decomposition.decompositionPlanningResult
 import skillbill.application.decomposition.decompositionPlanningSubtask
+import skillbill.application.decomposition.loadDecompositionManifest
+import skillbill.application.decomposition.model.DecompositionManifestProjectionFailurePersistence
+import skillbill.application.decomposition.model.DecompositionManifestRuntimeUpdate
+import skillbill.application.decomposition.model.DecompositionManifestWriteRequest
 import skillbill.application.decomposition.parentSpecPath
+import skillbill.application.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.application.workflow.model.WorkflowContinueResult
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.application.workflow.model.WorkflowOpenResult
@@ -18,14 +24,8 @@ import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.model.RepositoryRoot
 import skillbill.model.toPath
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
-import skillbill.ports.workflow.decomposition.DecompositionManifestProjectionFailurePersistence
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
-import skillbill.ports.workflow.decomposition.clearDecompositionManifestProjectionFailure
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
-import skillbill.ports.workflow.decomposition.loadDecompositionManifest
-import skillbill.ports.workflow.decomposition.persistDecompositionManifestProjectionFailure
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestRuntimeUpdate
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestWriteRequest
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.NoopGoalPlanningPreparationEnvelopeValidator

@@ -41,8 +41,8 @@ Constants (F-007):
 Companion census (F-008): the companion-`NONE` case of `PortNullObjectAbsenceArchitectureTest` scans runtime-ports main and runtime-engine main. Replace the single `COMPANION_VAL_MODULE` constant with a list of both.
 
 Documentation:
-- Update the runtime-ports Gradle Modules entry in `runtime-kotlin/ARCHITECTURE.md` so it lists no removed item. It must also say that ports holds contracts crossing a module boundary.
-- Add a `runtime-kotlin/agent/decisions.md` entry. It records that 2026-09-06 (b) is superseded for `LoadedDecompositionManifest` and `ValidatedDecompositionManifestYaml` (SQLite no longer reads them; only application does), and it records the new declaration rule with its reason: SKILL-233's cleanup regressed within 18 days.
+- Update the runtime-ports Gradle Modules entry in `../../../runtime-kotlin/ARCHITECTURE.md` so it lists no removed item. It must also say that ports holds contracts crossing a module boundary.
+- Add a `../../../runtime-kotlin/agent/decisions.md` entry. It records that 2026-09-06 (b) is superseded for `LoadedDecompositionManifest` and `ValidatedDecompositionManifestYaml` (SQLite no longer reads them; only application does), and it records the new declaration rule with its reason: SKILL-233's cleanup regressed within 18 days.
 
 ## Acceptance Criteria
 
@@ -55,7 +55,7 @@ Documentation:
 7. runtime-ports main declares neither `REVIEW_EVIDENCE_BATCH_SIZE`, `INSTALLER_PROCESS_OUTPUT_CAP_BYTES`, nor `INSTALLER_OUTPUT_TRUNCATION_SENTINEL`. Each value has exactly one declaration in its adapter module.
 8. The companion-`NONE` census reads runtime-ports main and runtime-engine main, and passes.
 9. These outputs are byte-identical to baseline under the existing suites: parent-discovery results and ambiguity messages, manifest discovery with archived bundles excluded, projection-failure artifact writes and clears, goal-parent artifact projection, the governed review evidence schema `maxItems`, the installer truncation text, and CLI/MCP workflow output.
-10. `runtime-kotlin/ARCHITECTURE.md` and `runtime-kotlin/agent/decisions.md` describe the landed state as listed in scope.
+10. `../../../runtime-kotlin/ARCHITECTURE.md` and `runtime-kotlin/agent/decisions.md` describe the landed state as listed in scope.
 
 ## Non-Goals
 
@@ -74,7 +74,7 @@ Runs after subtask 1, for branch order and so the guards see a tree without the 
 Build compiles every module. The risks are kotlin-inject resolving `DecompositionManifestWriter` directly, and engine seeing the moved application functions. Validate runs the runtime-application, runtime-engine, runtime-core, runtime-cli, runtime-ports, and runtime-infra launcher, host, workflow, and contracts suites, `:runtime-core:repoTest`, and the routed pack quality gate. The regressions to catch:
 
 - parent discovery choosing another parent or losing its ambiguity error;
-- manifest discovery including a `.feature-specs/done/` bundle;
+- manifest discovery including a `..` bundle;
 - projection-failure persistence leaving its artifact behind;
 - a validator call using the wrong artifact kind after the forwarders go;
 - the review evidence codec accepting a 33-item batch;
@@ -84,7 +84,7 @@ Changed tests go through `skill-bill operation unit-test-value-check`.
 
 ## Implementation Details
 
-The plan was censused at HEAD `2815b2064`, before subtask 1 landed. Implementation runs after subtask 1, so it starts by re-running each census grep named below and applies the tasks to the tree it finds. Where subtask 1 has moved a type that this plan imports, such as `GoalRunnerPersistenceSession` into runtime-engine, use subtask 1's location. Paths are relative to `runtime-kotlin/`. Ports main means `runtime-ports/src/main/kotlin/skillbill/ports`.
+The plan was censused at HEAD `2815b2064`, before subtask 1 landed. Implementation runs after subtask 1, so it starts by re-running each census grep named below and applies the tasks to the tree it finds. Where subtask 1 has moved a type that this plan imports, such as `GoalRunnerPersistenceSession` into runtime-engine, use subtask 1's location. Paths are relative to `../../../runtime-kotlin`. Ports main means `runtime-ports/src/main/kotlin/skillbill/ports`.
 
 Every task follows these constraints:
 
@@ -280,7 +280,7 @@ In `PortNullObjectAbsenceArchitectureTest.kt`:
 
 ### Task 12: documentation (AC-010)
 
-`runtime-kotlin/ARCHITECTURE.md`:
+`../../../runtime-kotlin/ARCHITECTURE.md`:
 
 - **Gradle Modules runtime-ports entry (~L403-411).**
   - State that runtime-ports holds only contracts that cross a module boundary: interfaces and DTOs implemented or consumed in more than one module, plus derived extensions on its own types.
@@ -293,7 +293,7 @@ In `PortNullObjectAbsenceArchitectureTest.kt`:
   - Drop the type-alias and extension-helper sentences.
 - **Installer sentinel mention (~L849).** If it names a ports owner, say that the cap and sentinel are `internal` to `runtime-infra/host` `skillbill.infrastructure.host.process`.
 
-`runtime-kotlin/agent/decisions.md`: add one dated entry, in the existing "supersedes X only for Y" form. Recheck the date at write time. The entry records:
+`../../../runtime-kotlin/agent/decisions.md`: add one dated entry, in the existing "supersedes X only for Y" form. Recheck the date at write time. The entry records:
 
 - **The supersession.** It supersedes `[2026-09-06] SKILL-233 subtask 2 audit round 3` decision (b) only for `LoadedDecompositionManifest` and `ValidatedDecompositionManifestYaml`. The evidence: no `runtime-infra/sqlite` file reads them. Their readers are application main and tests, engine main (`FeatureSpecPreparationWriter`, `DecompositionManifestEngineEncoding`), and core and engine tests. They now live in `skillbill.application.decomposition.model`, and the `WorkflowRecordMapping` half of (b) stands.
 - **The new declaration rule and its reason.** SKILL-233's ports cleanup regressed within 18 days, when SKILL-372 moved repository-driving functions back into ports behind file exemptions.
@@ -313,6 +313,6 @@ In `PortNullObjectAbsenceArchitectureTest.kt`:
 - **Mechanical edits:** the test changes in Tasks 1-9 are import rewrites, two method-reference-to-lambda changes, one private test helper, and one fixture override. They change no assertion.
 - **No new tests:**
   - F-006, F-007 and F-008 change no behaviour.
-  - The 32-item `maxItems` and 33-item rejection, the installer truncation text, parent-discovery ambiguity and stale lineage, archived `.feature-specs/done/` exclusion, projection-failure clear, and wrong-kind validation all have coverage in existing launcher, host, application, engine and contracts suites. Validate runs those suites.
+  - The 32-item `maxItems` and 33-item rejection, the installer truncation text, parent-discovery ambiguity and stale lineage, archived `..` exclusion, projection-failure clear, and wrong-kind validation all have coverage in existing launcher, host, application, engine and contracts suites. Validate runs those suites.
 - **No test is removed or weakened.**
 - **Parent AC 4 wording ("no top-level non-DTO class"):** the private `ReviewFinishedTelemetryPayloadContract` class in `ports/telemetry/model/ReviewFinishedTelemetryPayload.kt` is a SKILL-358/377 retention. The class guard skips private classes, so it stays and is not a violation.

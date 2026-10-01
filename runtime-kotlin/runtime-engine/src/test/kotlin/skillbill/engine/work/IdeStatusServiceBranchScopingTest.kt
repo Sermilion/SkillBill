@@ -6,6 +6,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.status.liveLease
 import skillbill.engine.work.model.IdeStatusRequest
+import skillbill.engine.work.model.toStatusWireMap
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
@@ -15,7 +16,6 @@ import skillbill.ports.idestatus.model.IdeStatusFreshness
 import skillbill.ports.idestatus.model.IdeStatusLifecycleState
 import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
-import skillbill.ports.idestatus.model.toStatusWireMap
 import skillbill.ports.work.model.WorkItemKind
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent

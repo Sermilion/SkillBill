@@ -1,20 +1,19 @@
 package skillbill.engine.goalrunner.manifest
 
+import skillbill.application.decomposition.DecompositionManifestWriter
+import skillbill.application.decomposition.clearDecompositionManifestProjectionFailure
+import skillbill.application.decomposition.persistDecompositionManifestProjectionFailure
+import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.application.workflow.decomposition.requireRuntimeModeForEngineWrite
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.status.reconcileControlStateForManifest
 import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.decomposition.DecompositionManifestProjectionWriter
-import skillbill.ports.goalrunner.GoalParentProjectionWriter
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.clearDecompositionManifestProjectionFailure
-import skillbill.ports.workflow.decomposition.findDecomposedParentWorkflow
-import skillbill.ports.workflow.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
@@ -35,7 +34,7 @@ internal class WorkflowGoalRunnerManifestProjectionPersistence(
   private val engine: WorkflowEngine,
   private val parentProjection: GoalParentProjectionWriter,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
-  private val decompositionManifestWriter: DecompositionManifestProjectionWriter,
+  private val decompositionManifestWriter: DecompositionManifestWriter,
   private val repositoryRoot: RepositoryRoot,
   private val decompositionManifestValidator: DecompositionManifestValidator,
   private val decompositionManifestStore: DecompositionManifestStore,

@@ -1,17 +1,17 @@
 package skillbill.engine.goalrunner.repair
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.decomposition.DecompositionManifestWriter
+import skillbill.application.decomposition.clearDecompositionManifestProjectionFailure
+import skillbill.application.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.engine.goalrunner.model.GoalRunnerChildRepairApplyRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildRepairApplyResult
 import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosis
 import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosisRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeRepairRequest
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.decomposition.DecompositionManifestProjectionWriter
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.clearDecompositionManifestProjectionFailure
-import skillbill.ports.workflow.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
 import skillbill.workflow.engine.WorkflowEngine
 
@@ -22,7 +22,7 @@ class WorkflowGoalRunnerChildRepairStore
     private val childRepairExecutor: GoalRunnerChildRepairRunnerPort,
     private val decompositionManifestValidator: DecompositionManifestValidator,
     private val decompositionManifestStore: DecompositionManifestStore,
-    private val decompositionManifestWriter: DecompositionManifestProjectionWriter,
+    private val decompositionManifestWriter: DecompositionManifestWriter,
   ) : GoalRunnerChildRepairStore {
     private val engine = WorkflowEngine()
 

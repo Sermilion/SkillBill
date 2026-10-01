@@ -1,7 +1,9 @@
-package skillbill.ports.workflow.decomposition
+package skillbill.application.decomposition
 
+import skillbill.application.decomposition.model.DecompositionManifestFileCandidate
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestFileCandidate
+import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationResult
 import skillbill.workflow.decomposition.model.requireAccepted
@@ -96,15 +98,4 @@ fun resolveDecompositionManifest(
     )
   }
   return activeCandidates.firstOrNull()?.manifest ?: candidates.firstOrNull()?.manifest
-}
-
-private fun archivedDecompositionManifest(
-  repoRoot: Path,
-  manifestPath: Path,
-): Boolean {
-  val relative =
-    runCatching { repoRoot.normalize().relativize(manifestPath.normalize()).toString() }
-      .getOrDefault(manifestPath.toString())
-      .replace('\\', '/')
-  return relative.startsWith(".feature-specs/done/")
 }

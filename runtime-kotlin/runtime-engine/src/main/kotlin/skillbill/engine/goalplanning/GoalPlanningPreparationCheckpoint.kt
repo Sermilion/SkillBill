@@ -16,11 +16,12 @@ import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.ports.taskruntime.validateGoalPlanningPreparationEnvelope
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 @Inject
 class GoalPlanningPreparationCheckpoint(
@@ -32,8 +33,9 @@ class GoalPlanningPreparationCheckpoint(
 
   fun checkpoint(record: GoalPlanningPreparationRecord) {
     val canonical = preparationValidator.canonicalize(record)
-    envelopeValidator.validateGoalPlanningPreparationEnvelope(
-      canonical.toEnvelopeMap(),
+    envelopeValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(canonical.toEnvelopeMap()),
       "${canonical.parentGoalWorkflowId}#${canonical.subtaskId}",
     )
     database.selfManagedWrite { unitOfWork ->
@@ -43,7 +45,11 @@ class GoalPlanningPreparationCheckpoint(
 
   fun validate(record: GoalPlanningPreparationRecord) {
     val sourceLabel = "${record.parentGoalWorkflowId}#${record.subtaskId}"
-    envelopeValidator.validateGoalPlanningPreparationEnvelope(record.toEnvelopeMap(), sourceLabel)
+    envelopeValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(record.toEnvelopeMap()),
+      sourceLabel,
+    )
     preparationValidator.validate(record)
   }
 
@@ -213,14 +219,22 @@ class GoalPlanningPreparationProjectionGate(
 ) {
   fun validateSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) {
     val label = checkpoint.identity.parentGoalWorkflowId
-    envelopeValidator.validateGoalPlanningPreparationEnvelope(checkpoint.toEnvelopeMap(), label)
+    envelopeValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(checkpoint.toEnvelopeMap()),
+      label,
+    )
     requirePlanningPayloadHash(checkpoint.payloadSha256, checkpoint.preplanPayload, label)
     readStoredPlanningRecord(checkpoint.preplanPayload, "preplan", label)
   }
 
   fun validateSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) {
     val label = "${checkpoint.identity.parentGoalWorkflowId}#${checkpoint.subtaskId}"
-    envelopeValidator.validateGoalPlanningPreparationEnvelope(checkpoint.toEnvelopeMap(), label)
+    envelopeValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(checkpoint.toEnvelopeMap()),
+      label,
+    )
     requirePlanningPayloadHash(checkpoint.payloadSha256, checkpoint.planPayload, label)
     readStoredPlanningRecord(checkpoint.planPayload, "plan", label)
   }

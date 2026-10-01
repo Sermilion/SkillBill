@@ -13,7 +13,7 @@ object PortNullObjectCensus {
   private val interfaceDeclaration = Regex("""^(?:public\s+|internal\s+)?(?:fun\s+)?interface\s+(\w+)""")
   private val companionNullObjectVal = Regex("""^\s*val\s+(NONE|IDLE|NOOP|DISABLED)\s*:""")
 
-  const val COMPANION_VAL_MODULE: String = "runtime-kotlin/runtime-engine"
+  val COMPANION_VAL_MODULES: List<String> = listOf("runtime-kotlin/runtime-ports", "runtime-kotlin/runtime-engine")
 
   fun namesIn(source: String): Set<String> = declaration.findAll(source).map { it.groupValues[1] }.toSet()
 
@@ -151,9 +151,10 @@ class PortNullObjectAbsenceArchitectureTest {
   private fun testOnlyCompanionNullObjects(): List<String> =
     PortNullObjectCensus.testOnlyCompanionNullObjectsIn(
       declaringSources =
-        ArchitectureScanSupport.kotlinFilesUnder(
-          runtimeRoot.resolve("${PortNullObjectCensus.COMPANION_VAL_MODULE}/src/main"),
-        )
+        PortNullObjectCensus.COMPANION_VAL_MODULES
+          .flatMap { module ->
+            kotlinFilesUnderWithArchitectureAsserts(runtimeRoot.resolve("$module/src/main"))
+          }
           .associate { path -> "${runtimeRoot.relativize(path)}" to Files.readString(path) },
       mainSources =
         ArchitectureScanSupport.kotlinFilesUnder(runtimeRoot.resolve("runtime-kotlin"))

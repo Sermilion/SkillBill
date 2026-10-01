@@ -400,13 +400,18 @@ runtime-core
   types live in area-owned `model` packages, including the
   `skillbill.model.FileLocation` value type that carries repo paths through domain
   signatures without a `java.nio` dependency.
-- `runtime-ports`: `skillbill.model.EnvironmentContext`, the
+- `runtime-ports`: holds only contracts that cross a module boundary: interfaces
+  and DTOs implemented or consumed in more than one module, plus derived
+  extensions on its own types. That covers `skillbill.model.EnvironmentContext`, the
   `skillbill.model.RuntimeVersion` packaged-version value type, persistence sessions,
   repositories, gateway interfaces, telemetry port interfaces, workflow git
-  operations, decomposition-manifest file-store ports, port-owned model types,
-  and shared payload projection for
+  operations, decomposition-manifest file-store and validator ports, port-owned
+  model types, and shared payload projection for
   boundary events that must be consumed by both application and infrastructure
-  adapters. `java.nio.file.Path` is the path type in port signatures; the
+  adapters. Repository-driving behaviour — decomposition manifest and parent
+  discovery, projection-failure persistence, goal-parent artifact projection —
+  lives in `runtime-application` or `runtime-engine`, not in ports.
+  `java.nio.file.Path` is the path type in port signatures; the
   `skillbill.model.toPath` and `skillbill.ports.repository.toFileLocation` bridges
   convert between that `Path` and the `FileLocation` domain value.
 - `runtime-application`: CLI/MCP/shared use cases outside the engine run loop,
@@ -846,7 +851,8 @@ in `runtime-infra/host`.
 
 `InstallerProcessAdapter` in `runtime-infra/host` starts an argv vector with an
 explicit environment map, closes child stdin immediately after start, captures
-merged stdout/stderr with a 1 MiB cap and `INSTALLER_OUTPUT_TRUNCATION_SENTINEL`,
+merged stdout/stderr with a 1 MiB cap and `INSTALLER_OUTPUT_TRUNCATION_SENTINEL`
+(both `internal` to `skillbill.infrastructure.host.process`),
 and applies `DEFAULT_INSTALLER_PROCESS_DEADLINE_SECONDS` (600s) from the request
 object. Tests inject shorter deadlines through that field; the CLI exposes no
 public timeout flag. Post-failure teardown uses `GIT_PROCESS_CLEANUP_BUDGET_SECONDS`
@@ -921,7 +927,11 @@ silently bypass the journal boundary.
    adapters, or composition roots. `runtime-ports/src/main` must not declare
    top-level objects, non-DTO top-level classes, `(this as` casts, interface
    default bodies that `error` or `throw`, or — outside a `fun interface` —
-   interface default bodies that return a bare constant;
+   interface default bodies that return a bare constant, or top-level functions
+   with a `*Repository` receiver or with a `UnitOfWork`,
+   `GoalRunnerPersistenceSession`, `DatabaseSessionFactory`, `WorkflowEngine`,
+   `*Repository`, or `*Store` parameter. Derived extensions on a `*Store` receiver
+   with plain parameters stay allowed;
    `PortsDeclarationArchitectureTest`
    enforces this beside `RuntimeContractModuleImportRulesTest`.
 5. Contracts packages must not depend on application, domain area packages,
@@ -1529,14 +1539,12 @@ Adding a phase strategy:
   `WorkflowWirePayloadKeys` and `SharedPayloadKeys`; there is no contracts-module
   ordering helper on that path.)
 - Feature-task runtime wire artifact schema validation ports live in
-  `runtime-domain` as `FeatureTaskRuntimeWireArtifactValidator` (closed
-  `FeatureTaskRuntimeWireArtifactKind`) plus `DecompositionManifestValidator`.
+  `runtime-ports`: `skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator`
+  and `skillbill.ports.workflow.decomposition.DecompositionManifestValidator`.
+  Callers name the closed `FeatureTaskRuntimeWireArtifactKind` explicitly.
   Infra implements them through
   `FeatureTaskRuntimeWireArtifactValidatorAdapter` and the decomposition adapters under `runtime-infra/contracts`; composition wires one adapter
-  instance per port. Goal progress, observability, and planning-preparation validator
-  names are type aliases to that same port and select their closed artifact kinds
-  through extension helpers. Extension helpers on the wire-artifact port preserve
-  call-site ergonomics without default port bodies. Goal-continuation artifact keys declare in
+  instance per port. Goal-continuation artifact keys declare in
   `FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys`; `WireVocabularyGovernedSeamInventory`
   scans that encode/decode pair. `SkillBillVersion` reads `skillbill/version.properties`
   from `runtime-core`; its `getResourceAsStream` call is the single documented
@@ -2487,7 +2495,7 @@ or a versioned durable payload whose vocabulary is intentionally owned by that b
   record crossing the SQLite and workflow-engine compatibility seam, so it preserves unknown
   definition values; consumers convert it with `workflowStatus()` before making closed decisions.
 - `skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate.workflowStatus`
-  and `skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestRuntimeUpdate.workflowStatus`
+  and `skillbill.application.decomposition.model.DecompositionManifestRuntimeUpdate.workflowStatus`
   are read from SQLite worker/decomposition update rows and preserve the workflow-definition token
   while crossing worker and decomposition update ports; their consumers convert it with
   `workflowStatus()` before closed dispatch.

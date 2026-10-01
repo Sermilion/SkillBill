@@ -2,6 +2,8 @@ package skillbill.di.workflow
 
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.baseBranch
+import skillbill.application.decomposition.model.DecompositionManifestWorkflowProjectionInput
+import skillbill.application.decomposition.model.DecompositionManifestWriteRequest
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decompositionPlanningPlan
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
@@ -9,8 +11,6 @@ import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionMa
 import skillbill.infrastructure.workflow.decomposition.FileSystemDecompositionManifestFileStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestWorkflowProjectionInput
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestWriteRequest
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.runtime.invalidManifest
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
