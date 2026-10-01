@@ -3,6 +3,10 @@ package skillbill.engine.goalrunner.persist
 import skillbill.contracts.JsonCodec
 import skillbill.engine.goalrunner.execution.support.maxHistorySequence
 import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
+import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
+import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
+import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
+import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.WORKER_SUBTASK_REQUEST_OUTCOME_LIMIT
 import skillbill.goalrunner.backwardEdgeCountsFromLedger
@@ -20,16 +24,7 @@ import skillbill.goalrunner.summary
 import skillbill.goalrunner.toPersistenceWire
 import skillbill.goalrunner.toProgressEvent
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.goalrunner.runner.GoalRunnerAttemptLedgerStore
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowLedgerWriteStore
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowProgressStore
-import skillbill.ports.goalrunner.runner.model.GoalRunnerAttemptLedgerRecordRequest
-import skillbill.ports.goalrunner.runner.model.GoalRunnerLedgerSequenceWatermarks
-import skillbill.ports.goalrunner.runner.model.GoalRunnerProgressEventRecordRequest
-import skillbill.ports.goalrunner.runner.model.GoalRunnerWorkflowProgress
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.ports.taskruntime.validateGoalObservabilityEvent
-import skillbill.ports.taskruntime.validateGoalProgressEvent
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
@@ -45,6 +40,8 @@ import skillbill.workflow.model.goalreview.GoalProgressEvent
 import skillbill.workflow.model.goalreview.appendBoundedHistoryBySequence
 import skillbill.workflow.model.goalreview.goalObservabilityLatestEventFromArtifacts
 import skillbill.workflow.taskruntime.artifact.phaseRecordsFromWorkflowArtifacts
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuation
 
 private fun nextSequence(highest: Int?): Int = highest?.let { it + 1 } ?: 0
@@ -127,7 +124,13 @@ internal class WorkflowGoalRunnerProgressRecording(
               artifacts = artifacts,
               request = request,
             ),
-          validator = goalObservabilityEventValidator::validateGoalObservabilityEvent,
+          validator = { event, sourceLabel ->
+            goalObservabilityEventValidator.validate(
+              FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT,
+              FeatureTaskRuntimeWorkflowArtifactMap.from(event),
+              sourceLabel,
+            )
+          },
         )
       val updated =
         engine.updateRecord(
@@ -157,8 +160,9 @@ internal class WorkflowGoalRunnerProgressRecording(
         ),
     ) { sequenceNumber ->
       GoalRunnerWirePayload.from(request.draft.toEvent(sequenceNumber).toPersistenceWire()).payload.also { entryMap ->
-        goalProgressEventValidator.validateGoalProgressEvent(
-          entryMap,
+        goalProgressEventValidator.validate(
+          FeatureTaskRuntimeWireArtifactKind.GOAL_PROGRESS_EVENT,
+          FeatureTaskRuntimeWorkflowArtifactMap.from(entryMap),
           DurableWorkflowArtifactFamily.GOAL_PROGRESS_LATEST_EVENT.label(),
         )
       }

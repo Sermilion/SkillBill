@@ -118,6 +118,64 @@ class PortsDeclarationArchitectureTest {
     )
   }
 
+  @Test
+  fun `the repository-driving function check rejects repository receivers and store parameters`() {
+    val receiverFixture =
+      """
+      fun WorkflowStateRepository.findParent(issueKey: String): String? = null
+      """.trimIndent()
+    assertEquals(
+      listOf("Forbidden.kt: fun findParent has a *Repository receiver"),
+      repositoryDrivingFunctionViolations("Forbidden.kt", receiverFixture),
+    )
+
+    val nestedGenericFixture =
+      """
+      fun <T : Comparable<T>> WorkflowStateRepository.f(): T? = null
+      """.trimIndent()
+    assertEquals(
+      listOf("Forbidden.kt: fun f has a *Repository receiver"),
+      repositoryDrivingFunctionViolations("Forbidden.kt", nestedGenericFixture),
+    )
+
+    val multiLineFixture =
+      """
+      fun persistFailure(
+        engine: WorkflowEngine,
+        unitOfWork: UnitOfWork,
+        workflowId: String,
+      ): Boolean
+      """.trimIndent()
+    assertEquals(
+      listOf(
+        "Forbidden.kt: fun persistFailure takes engine: WorkflowEngine",
+        "Forbidden.kt: fun persistFailure takes unitOfWork: UnitOfWork",
+      ),
+      repositoryDrivingFunctionViolations("Forbidden.kt", multiLineFixture),
+    )
+
+    val storeParameterFixture =
+      """
+      fun loadManifest(path: Path, fileStore: DecompositionManifestStore): String
+      """.trimIndent()
+    assertEquals(
+      listOf("Forbidden.kt: fun loadManifest takes fileStore: DecompositionManifestStore"),
+      repositoryDrivingFunctionViolations("Forbidden.kt", storeParameterFixture),
+    )
+
+    val derivedFixture =
+      """
+      fun TelemetryConfigStore.writeTelemetryLevel(level: String): Boolean {
+        return true
+      }
+
+      fun interface ProbeStore {
+        fun probe(): String?
+      }
+      """.trimIndent()
+    assertEquals(emptyList(), repositoryDrivingFunctionViolations("Allowed.kt", derivedFixture))
+  }
+
   private fun scanPortsMainSource(): List<String> {
     val sourceFiles = kotlinFilesUnderWithArchitectureAsserts(portsMainRoot)
     return buildList {
@@ -125,13 +183,111 @@ class PortsDeclarationArchitectureTest {
         val source = Files.readString(path)
         val fileName = portsMainRoot.relativize(path).toString()
         addAll(topLevelObjectViolations(fileName, source))
-        if (!fileName.endsWith("skillbill/ports/goalrunner/GoalParentProjectionWriter.kt")) {
-          addAll(forbiddenTopLevelClassViolations(fileName, source))
-        }
+        addAll(forbiddenTopLevelClassViolations(fileName, source))
         addAll(thisAsCastViolations(fileName, source))
         addAll(interfaceDefaultBodyViolations(fileName, source))
+        addAll(repositoryDrivingFunctionViolations(fileName, source))
       }
     }.sorted()
+  }
+
+  private val topLevelFunctionStart =
+    Regex("""^(?:(?:public|internal|private|inline|suspend|operator|infix|tailrec)\s+)*fun\s+""")
+
+  private val funInterfaceStart = Regex("""\bfun\s+interface\b""")
+
+  private val functionHeader = Regex("""fun\s+(?:<(?:[^<>]|<[^<>]*>)*>\s+)?(?:([^(]+?)\.)?(\w+)\s*\(""")
+
+  private val forbiddenParameterTypes =
+    setOf("UnitOfWork", "GoalRunnerPersistenceSession", "DatabaseSessionFactory", "WorkflowEngine")
+
+  private fun repositoryDrivingFunctionViolations(
+    fileName: String,
+    source: String,
+  ): List<String> =
+    topLevelFunctionSignatures(source).flatMap { signature ->
+      val header = functionHeader.find(signature) ?: return@flatMap emptyList()
+      val name = header.groupValues[2]
+      val receiver = header.groupValues[1].takeIf(String::isNotEmpty)?.let(::simpleTypeName)
+      buildList {
+        if (receiver != null && receiver.endsWith("Repository")) {
+          add("$fileName: fun $name has a *Repository receiver")
+        }
+        parameterDeclarations(signature, header.range.last).forEach { parameter ->
+          val type = parameter.substringAfter(':', "").substringBefore('=').trim()
+          if (type.isEmpty() || type.startsWith("(")) return@forEach
+          val typeName = simpleTypeName(type)
+          if (typeName in forbiddenParameterTypes || typeName.endsWith("Repository") || typeName.endsWith("Store")) {
+            add("$fileName: fun $name takes ${parameter.substringBefore(':').trim()}: $typeName")
+          }
+        }
+      }
+    }
+
+  private fun simpleTypeName(type: String): String =
+    type.substringBefore('<').trim().removeSuffix("?").substringAfterLast('.')
+
+  private fun topLevelFunctionSignatures(source: String): List<String> {
+    val lines = source.lines()
+    return buildList {
+      var index = 0
+      while (index < lines.size) {
+        val line = lines[index]
+        if (topLevelFunctionStart.containsMatchIn(line) && !funInterfaceStart.containsMatchIn(line)) {
+          var signature = line
+          while (parameterListEnd(signature, functionHeader.find(signature)?.range?.last) == null &&
+            index + 1 < lines.size
+          ) {
+            index++
+            signature += "\n" + lines[index]
+          }
+          add(signature)
+        }
+        index++
+      }
+    }
+  }
+
+  private fun parameterListEnd(
+    signature: String,
+    openIndex: Int?,
+  ): Int? {
+    if (openIndex == null) return signature.length
+    var depth = 0
+    for (index in openIndex until signature.length) {
+      when (signature[index]) {
+        '(' -> depth++
+        ')' -> {
+          depth--
+          if (depth == 0) return index
+        }
+      }
+    }
+    return null
+  }
+
+  private fun parameterDeclarations(
+    signature: String,
+    openIndex: Int,
+  ): List<String> {
+    val closeIndex = parameterListEnd(signature, openIndex) ?: signature.length
+    val parameters = mutableListOf<String>()
+    var depth = 0
+    var start = openIndex + 1
+    for (index in start until closeIndex) {
+      when (signature[index]) {
+        '(', '<' -> depth++
+        ')' -> depth--
+        '>' -> if (signature.getOrNull(index - 1) != '-') depth--
+        ',' ->
+          if (depth == 0) {
+            parameters += signature.substring(start, index)
+            start = index + 1
+          }
+      }
+    }
+    parameters += signature.substring(start, closeIndex)
+    return parameters.filter { it.isNotBlank() }
   }
 
   private fun topLevelObjectViolations(

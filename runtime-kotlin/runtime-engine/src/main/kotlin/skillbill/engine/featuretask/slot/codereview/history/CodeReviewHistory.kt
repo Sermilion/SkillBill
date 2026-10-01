@@ -3,8 +3,8 @@ package skillbill.engine.featuretask.slot.codereview.history
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.core.attemptPhaseExecution
 import skillbill.engine.featuretask.phase.core.defaultPhaseExecution
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction

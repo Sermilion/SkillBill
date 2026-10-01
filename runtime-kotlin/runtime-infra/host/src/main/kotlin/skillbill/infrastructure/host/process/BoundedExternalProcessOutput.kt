@@ -1,9 +1,13 @@
 package skillbill.infrastructure.host.process
 
-import skillbill.ports.process.INSTALLER_PROCESS_OUTPUT_CAP_BYTES
 import java.io.BufferedReader
 import java.io.InputStream
 import java.nio.file.Path
+
+internal const val INSTALLER_PROCESS_OUTPUT_CAP_BYTES: Int = 1024 * 1024
+
+internal const val INSTALLER_OUTPUT_TRUNCATION_SENTINEL: String =
+  "\n...[installer output truncated at $INSTALLER_PROCESS_OUTPUT_CAP_BYTES bytes]..."
 
 data class BoundedOutputLine(
   val text: String,

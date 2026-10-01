@@ -1,3 +1,14 @@
+## [2026-10-01] SKILL-393 subtask 1 — Engine-owned contracts move from ports to engine
+Areas: runtime-kotlin/runtime-engine/skillbill/engine/{goalrunner/{manifest,persist,repair,model,planning},work/model}, runtime-kotlin/runtime-ports/{goalrunner,idestatus}, runtime-kotlin/runtime-core/{di/goal,repoTest/architecture}, runtime-kotlin/runtime-cli
+- Goal-runner manifest, outcome and repair store interfaces, their request/result models and the child-planning hydrator port now live in the engine. Ports no longer holds `goalrunner/persistence`, the three runner store files or the reset-subtask snapshot.
+- IDE-status request, result, candidate, selection tier and repository resolution moved to the engine `work/model`; the 19 persistence aliases and the duplicate pause-label constant are gone.
+- The manifest-defaults and no-op ledger test fixtures moved to engine testFixtures; runtime-cli tests now depend on them.
+- Guards: the engine inbound-API pinned list gained four moved types and lost two IDE-status entries; the `featuretask|work` cycle-baseline row was removed.
+- Pattern: moves are byte-for-byte body copies, with imports rewritten across 128 files. reusable
+- Limitation: the persist package must stay at the 12-file sibling ceiling; compile, kotlin-inject wiring and tests were not proven before validate.
+Feature flag: N/A
+Acceptance criteria: implemented per spec; build and validate pending
+
 ## [2026-09-27] SKILL-380 subtask 11 — pr-description and boundary-history own their rules
 Areas: runtime-kotlin/runtime-engine/skillbill/engine/featuretask/{slot/{pullrequest,writehistory,attempt},lifecycle/core,phase/prompt/compose}, runtime-kotlin/runtime-core/di/{core,featuretask}, runtime-kotlin/runtime-ports/{goalrunner/runner,workflow/gitops}, runtime-kotlin/runtime-infra/workflow/git/{goal,standard}, docs, runtime-kotlin/ARCHITECTURE.md
 - The pr and write_history prompts no longer tell the agent to invoke a skill. Their rules come from the runtime-owned `PrDescriptionPromptRules` and `BoundaryMemoryPromptRules`. `BoundaryMemoryRulesParityTest` holds the history write/skip rules equal to the skill's.

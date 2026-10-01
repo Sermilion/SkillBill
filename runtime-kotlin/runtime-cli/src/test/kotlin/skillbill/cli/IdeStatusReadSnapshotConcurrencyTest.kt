@@ -6,9 +6,10 @@ import skillbill.di.core.RuntimeContext
 import skillbill.di.core.TransportContext
 import skillbill.di.core.WorkflowOpsContext
 import skillbill.di.core.create
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.work.IdeStatusProjector
 import skillbill.engine.work.IdeStatusService
-import skillbill.engine.work.model.IdeStatusProblemCode
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -21,9 +22,8 @@ import skillbill.model.EnvironmentContext
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStoreDefaults
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.idestatus.NoopIdeStatusValidator
+import skillbill.ports.idestatus.model.IdeStatusProblemCode
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.work.WorkListRepository

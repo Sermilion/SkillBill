@@ -1,8 +1,8 @@
 package skillbill.engine.featuretask.slot.audit
 
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 
 internal fun auditCurrentExecution(
   stepId: String,

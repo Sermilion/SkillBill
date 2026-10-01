@@ -1,6 +1,5 @@
 package skillbill.infrastructure.host.process
 
-import skillbill.ports.process.INSTALLER_OUTPUT_TRUNCATION_SENTINEL
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path

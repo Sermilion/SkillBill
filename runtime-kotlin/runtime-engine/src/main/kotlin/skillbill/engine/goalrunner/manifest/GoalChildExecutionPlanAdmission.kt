@@ -2,8 +2,8 @@ package skillbill.engine.goalrunner.manifest
 
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
+import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
-import skillbill.ports.goalrunner.runner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.runtime.decompositionRuntime

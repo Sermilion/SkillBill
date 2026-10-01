@@ -1,3 +1,15 @@
+## [2026-10-01] SKILL-393 subtask 2 — behaviour out of runtime-ports, guard carve-outs removed
+Areas: runtime-kotlin/runtime-{ports,application,engine,core,cli}, runtime-kotlin/runtime-infra/{host,launcher,contracts}, ARCHITECTURE.md
+- Manifest DTOs, manifest discovery, parent-discovery and projection-failure persistence moved from ports to application decomposition packages; the goal parent projection writer is now an internal engine class.
+- Removed the projection-writer interface (writer has no supertype and is injected directly), the wire-validator forwarder extensions (call sites use the kind-based validate), and the review evidence batch-size duplicate; the attribution launch plan is now abstract.
+- Installer output cap and truncation sentinel are internal to host.
+- PortsDeclarationArchitectureTest gained a repository-driving-function check with fixtures; the writer exemption and two layer-boundary carve-outs are gone, and the ports cycle baseline is empty.
+- New pattern: ports hold contracts only; behaviour that drives a repository lives in application or engine. reusable
+- Validate fixes: duplicate archived-manifest helper removed, a stale test import restored, and a host-dependent uninstall test made hermetic.
+- Limits: no feature flag; moves appear in git as delete plus add.
+Feature flag: N/A
+Acceptance criteria: 12/12 implemented
+
 ## [2026-10-01] SKILL-387 subtask 1 — shared prose output and persisted spec handoff
 Areas: runtime-kotlin/{runtime-domain,runtime-engine,runtime-application,runtime-infra,runtime-ports,runtime-contracts,runtime-core,runtime-cli,runtime-mcp}, orchestration/contracts, docs
 - Routed agent content through the existing PhaseOutput prose value across runtime phases; removed response-only schema, repair, and formatting-relaunch machinery while retaining runtime-owned terminal, evidence, settlement, review, audit, validation, build, and PR authority.

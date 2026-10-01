@@ -1,7 +1,6 @@
 package skillbill.infrastructure.launcher.review
 
 import skillbill.contracts.review.GovernedReviewEvidenceContracts
-import skillbill.ports.review.model.REVIEW_EVIDENCE_BATCH_SIZE
 import skillbill.review.context.model.hunk.ReviewEvidenceLimits
 
 internal object GovernedReviewEvidenceCodecWireSchemas {

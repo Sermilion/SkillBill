@@ -23,7 +23,7 @@ import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStepHook
 import skillbill.engine.featuretask.slot.qualitygate.runtimeOwnedPackValidationPhaseTask
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseQualityGateStepBinding
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition

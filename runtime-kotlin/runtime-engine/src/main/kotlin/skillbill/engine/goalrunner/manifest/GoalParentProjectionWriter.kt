@@ -1,6 +1,7 @@
-package skillbill.ports.goalrunner
+package skillbill.engine.goalrunner.manifest
 
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
+import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -14,7 +15,7 @@ import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 
-class GoalParentProjectionWriter(
+internal class GoalParentProjectionWriter(
   private val engine: WorkflowEngine,
   private val validator: DecompositionManifestValidator,
 ) {

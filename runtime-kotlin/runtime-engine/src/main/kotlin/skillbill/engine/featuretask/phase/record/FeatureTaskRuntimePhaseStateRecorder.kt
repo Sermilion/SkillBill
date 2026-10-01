@@ -20,7 +20,6 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.ports.taskruntime.validateImplementationAttemptRecord
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.WorkflowStepStatus
@@ -31,6 +30,8 @@ import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromA
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.artifact.implementationAttemptRecordWorkflowArtifact
 import skillbill.workflow.taskruntime.artifact.operatorBlockRetryFromWorkflowArtifacts
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttempt
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttemptStatus
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.featureTaskRuntimeAppendImplementationAttempt
@@ -276,8 +277,9 @@ fun FeatureTaskRuntimePhaseStateRecorder.implementationAttemptPatch(
         ),
     )
   val wire = implementationAttemptRecordWorkflowArtifact(appended)
-  implementationAttemptValidator.validateImplementationAttemptRecord(
-    wire,
+  implementationAttemptValidator.validate(
+    FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_ATTEMPT,
+    FeatureTaskRuntimeWorkflowArtifactMap.from(wire),
     DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.label(),
   )
   return mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.entry(wire))

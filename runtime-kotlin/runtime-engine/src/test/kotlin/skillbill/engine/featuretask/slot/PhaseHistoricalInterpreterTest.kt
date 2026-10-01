@@ -6,8 +6,8 @@ import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidate
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot

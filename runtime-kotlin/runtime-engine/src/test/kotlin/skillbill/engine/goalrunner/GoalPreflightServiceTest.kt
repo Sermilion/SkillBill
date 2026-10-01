@@ -17,7 +17,9 @@ import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.engine.ExecutionPlanAdmissionFixture
 import skillbill.engine.decomposition.encodeDecompositionManifestYaml
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
 import skillbill.engine.goalrunner.model.GoalPreflightRequest
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.preflight.GoalPreflightService
 import skillbill.error.shellcontent.InvalidAgentAddonSelectionError
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
@@ -29,8 +31,6 @@ import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
 import skillbill.ports.agentaddon.model.ExternalAgentAddonSourceConfigRequest
 import skillbill.ports.agentaddon.model.ExternalAgentAddonSourceConfigResult
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStoreDefaults
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore

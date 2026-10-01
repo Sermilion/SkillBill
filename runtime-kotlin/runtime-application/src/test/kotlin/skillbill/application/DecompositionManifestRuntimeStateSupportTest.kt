@@ -1,11 +1,11 @@
 package skillbill.application
 
 import skillbill.application.decomposition.baseBranch
+import skillbill.application.decomposition.model.DecompositionManifestRuntimeUpdate
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.statusFromUpdate
 import skillbill.application.decomposition.withRuntimeFields
 import skillbill.goalrunner.goalContinuationOutcome
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestRuntimeUpdate
 import skillbill.workflow.decomposition.intentFor
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest

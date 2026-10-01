@@ -1,4 +1,4 @@
-package skillbill.ports.workflow.decomposition.runtime.model
+package skillbill.application.decomposition.model
 
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionManifestRepairEvidence

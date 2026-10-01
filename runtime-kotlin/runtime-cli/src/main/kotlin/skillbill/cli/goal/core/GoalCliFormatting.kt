@@ -1,12 +1,12 @@
 package skillbill.cli.goal.core
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.engine.goalrunner.model.GoalRunnerAppliedRepair
+import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosis
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
 import skillbill.engine.goalrunner.model.GoalRunnerRepairResult
-import skillbill.ports.goalrunner.model.GoalRunnerResetSubtaskSnapshot
-import skillbill.ports.goalrunner.persistence.model.GoalRunnerAppliedRepair
-import skillbill.ports.goalrunner.persistence.model.GoalRunnerChildWedgeDiagnosis
-import skillbill.ports.goalrunner.persistence.model.GoalRunnerWedgeFinding
+import skillbill.engine.goalrunner.model.GoalRunnerResetSubtaskSnapshot
+import skillbill.engine.goalrunner.model.GoalRunnerWedgeFinding
 
 internal fun appendGoalResetSubtaskLines(
   builder: StringBuilder,

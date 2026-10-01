@@ -1,4 +1,4 @@
-package skillbill.ports.workflow.decomposition.runtime.model
+package skillbill.application.decomposition.model
 
 import skillbill.contracts.decomposition.DecompositionPlanningResult
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore

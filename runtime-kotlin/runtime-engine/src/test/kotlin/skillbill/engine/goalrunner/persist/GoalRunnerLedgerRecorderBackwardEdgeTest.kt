@@ -2,9 +2,9 @@ package skillbill.engine.goalrunner.persist
 
 import skillbill.application.testHarnessClock
 import skillbill.engine.goalrunner.RecordingOutcomeStore
+import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
-import skillbill.ports.goalrunner.runner.model.GoalRunnerLedgerSequenceWatermarks
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals

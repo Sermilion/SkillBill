@@ -2,7 +2,6 @@ package skillbill.application.workflow.decomposition
 
 import skillbill.application.workflow.service.ContinuationStepResult
 import skillbill.ports.persistence.UnitOfWork
-import skillbill.ports.workflow.decomposition.findDecomposedParentWorkflowForRuntime
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.runtime.isGoalContinuationChildWorkflow
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts

@@ -10,7 +10,6 @@ import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 
 internal data class GoalRunnerLaunchReconciliation(
   val refreshed: GoalRunnerManifestState,

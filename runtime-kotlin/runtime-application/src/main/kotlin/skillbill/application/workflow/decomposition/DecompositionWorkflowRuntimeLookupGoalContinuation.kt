@@ -2,7 +2,6 @@ package skillbill.application.workflow.decomposition
 
 import skillbill.application.continuation.model.GoalContinuationCandidate
 import skillbill.ports.workflow.WorkflowStateRepository
-import skillbill.ports.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.model.DecompositionStatus

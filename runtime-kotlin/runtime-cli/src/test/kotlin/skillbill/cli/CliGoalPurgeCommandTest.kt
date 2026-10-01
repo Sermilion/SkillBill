@@ -1,11 +1,11 @@
 package skillbill.cli
 
 import skillbill.application.TestDecompositionManifestStore
+import skillbill.application.decomposition.loadDecompositionManifest
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.cli.core.CliRuntime
 import skillbill.contracts.JsonCodec
 import skillbill.infrastructure.sqlite.ensureTestDatabase
-import skillbill.ports.workflow.decomposition.loadDecompositionManifest
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test

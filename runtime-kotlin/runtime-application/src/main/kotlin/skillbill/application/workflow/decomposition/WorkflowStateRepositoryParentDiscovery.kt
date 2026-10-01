@@ -1,4 +1,4 @@
-package skillbill.ports.workflow.decomposition
+package skillbill.application.workflow.decomposition
 
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.ports.workflow.WorkflowStateRepository
@@ -77,7 +77,7 @@ private fun WorkflowStateRecord.decompositionRuntimeOrNull(): DecompositionManif
     null
   }
 
-fun WorkflowStateRepository.listFeatureTaskWorkflowsForParentDiscovery(): List<WorkflowStateRecord> {
+private fun WorkflowStateRepository.listFeatureTaskWorkflowsForParentDiscovery(): List<WorkflowStateRecord> {
   val byId = LinkedHashMap<String, WorkflowStateRecord>()
   listFeatureTaskWorkflows(FeatureTaskWorkflowMode.RUNTIME, Int.MAX_VALUE).forEach { row ->
     byId[row.workflowId] = row

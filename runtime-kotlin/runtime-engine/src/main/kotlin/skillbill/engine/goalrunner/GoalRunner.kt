@@ -13,6 +13,7 @@ import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationPendingS
 import skillbill.engine.goalrunner.execution.support.GoalRunnerValidationQualityPendingState
 import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.model.GoalRunPreparation
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
@@ -23,7 +24,6 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerTelemetryEmitter
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 
 @Inject
 class GoalRunner(

@@ -26,9 +26,10 @@ import skillbill.engine.featuretask.validation.model.ValidationGateProgressStore
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult
 import skillbill.engine.featuretask.validation.repairSegmentOutput
-import skillbill.ports.taskruntime.validateBuildReceipt
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
@@ -240,9 +241,10 @@ internal class PackBuildGateCycle(
             accepted.envelopeWireMap()[SharedPayloadKeys.PRODUCED_OUTPUTS],
           )?.get(ValidationEvidencePayloadKeys.BUILD_RECEIPT),
       )
-    context.phaseGates.buildReceiptValidator.validateBuildReceipt(
-      buildReceipt ?: emptyMap<String, Any?>(),
-      sourceLabel = run.phaseId,
+    context.phaseGates.buildReceiptValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.BUILD_RECEIPT,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(buildReceipt ?: emptyMap<String, Any?>()),
+      run.phaseId,
     )
   }
 }

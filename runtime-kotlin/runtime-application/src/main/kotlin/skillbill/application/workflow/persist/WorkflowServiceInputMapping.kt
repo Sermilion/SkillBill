@@ -23,7 +23,6 @@ import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.model.GoalObservabilityProgressInput
 import skillbill.goalrunner.model.GoalObservabilityWorktreeActivity
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.ports.taskruntime.validateGoalObservabilityEvent
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -40,6 +39,8 @@ import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import java.nio.file.Path
 import java.time.Clock
 import java.time.ZoneOffset
@@ -208,7 +209,13 @@ internal fun WorkflowUpdateInput.withGoalObservabilityArtifacts(
                   )
                 },
           ),
-        validator = validator::validateGoalObservabilityEvent,
+        validator = { event, sourceLabel ->
+          validator.validate(
+            FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT,
+            FeatureTaskRuntimeWorkflowArtifactMap.from(event),
+            sourceLabel,
+          )
+        },
       )
     observabilityPatch?.let { patchValue ->
       val decoded = JsonCodec.anyToStringAnyMap(patchValue) ?: return this

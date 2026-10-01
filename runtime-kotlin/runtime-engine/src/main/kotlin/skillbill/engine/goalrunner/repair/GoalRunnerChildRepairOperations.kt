@@ -2,11 +2,10 @@ package skillbill.engine.goalrunner.repair
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
+import skillbill.engine.goalrunner.model.GoalRunnerChildRepairApplyRequest
+import skillbill.engine.goalrunner.model.GoalRunnerChildRepairApplyResult
+import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosis
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.goalrunner.persistence.GoalRunnerChildRepairRunnerPort
-import skillbill.ports.goalrunner.persistence.model.GoalRunnerChildRepairApplyRequest
-import skillbill.ports.goalrunner.persistence.model.GoalRunnerChildRepairApplyResult
-import skillbill.ports.goalrunner.persistence.model.GoalRunnerChildWedgeDiagnosis
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator

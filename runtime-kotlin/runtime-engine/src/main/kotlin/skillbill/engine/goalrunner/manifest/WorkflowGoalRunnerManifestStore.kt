@@ -1,7 +1,17 @@
 package skillbill.engine.goalrunner.manifest
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
+import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
+import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
+import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
+import skillbill.engine.goalrunner.model.GoalRunnerLaunchAuthorization
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
+import skillbill.engine.goalrunner.model.GoalRunnerPausePersistenceResult
+import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
+import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
+import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerChildWorkflowPersistence
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerScopedReplanPersistence
 import skillbill.engine.goalrunner.reset.afterIncompatibleChildDeletion
@@ -23,20 +33,8 @@ import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.decomposition.DecompositionManifestProjectionWriter
-import skillbill.ports.goalrunner.GoalParentProjectionWriter
-import skillbill.ports.goalrunner.persistence.GoalChildPlanningHydratorPort
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
-import skillbill.ports.goalrunner.runner.model.GoalRunnerChildExecutionPlanAdmission
-import skillbill.ports.goalrunner.runner.model.GoalRunnerChildWorkflowSetup
-import skillbill.ports.goalrunner.runner.model.GoalRunnerCompletionPersistenceResult
-import skillbill.ports.goalrunner.runner.model.GoalRunnerLaunchAuthorization
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
-import skillbill.ports.goalrunner.runner.model.GoalRunnerPausePersistenceResult
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
-import skillbill.ports.goalrunner.runner.model.GoalRunnerScopedReplanOptions
-import skillbill.ports.goalrunner.runner.model.GoalRunnerScopedReplanWriteResult
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -57,7 +55,7 @@ class WorkflowGoalRunnerManifestStore
     private val decompositionManifestStore: DecompositionManifestStore,
     private val clock: Clock,
     private val random: Random,
-    private val decompositionManifestWriter: DecompositionManifestProjectionWriter,
+    private val decompositionManifestWriter: DecompositionManifestWriter,
     private val repositoryRoot: RepositoryRoot,
     private val planningHydrator: GoalChildPlanningHydratorPort,
     private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,

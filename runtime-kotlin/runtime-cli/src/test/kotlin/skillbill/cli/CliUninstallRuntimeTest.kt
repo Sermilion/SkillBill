@@ -22,7 +22,7 @@ class CliUninstallRuntimeTest {
     assertEquals(
       "uninstall_status: dry_run\n" +
         "state_root: ${fixture.stateRoot}\n" +
-        "agent_targets: 8\n" +
+        "agent_targets: 7\n" +
         "skill_names: 1\n",
       result.stdout,
     )
@@ -148,7 +148,7 @@ class CliUninstallRuntimeTest {
     CliRuntimeContext(
       userHome = home,
       stdinText = stdinText,
-      environment = emptyMap(),
+      environment = mapOf("HOME" to home.toString()),
       liveStdout = liveStdout,
     ),
   )

@@ -1,4 +1,4 @@
-package skillbill.ports.goalrunner.persistence.model
+package skillbill.engine.goalrunner.model
 
 import skillbill.goalrunner.model.GoalContinuation
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome

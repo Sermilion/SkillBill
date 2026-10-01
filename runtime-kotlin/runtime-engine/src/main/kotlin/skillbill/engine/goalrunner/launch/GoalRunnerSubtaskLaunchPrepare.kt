@@ -15,6 +15,8 @@ import skillbill.engine.goalrunner.execution.support.branchPlanFor
 import skillbill.engine.goalrunner.execution.support.withAttemptedSubtask
 import skillbill.engine.goalrunner.execution.support.withBranchSetupBlockedSubtask
 import skillbill.engine.goalrunner.execution.support.withWorkflowId
+import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
@@ -28,8 +30,6 @@ import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryE
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
-import skillbill.ports.goalrunner.runner.model.GoalRunnerChildWorkflowSetup
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
