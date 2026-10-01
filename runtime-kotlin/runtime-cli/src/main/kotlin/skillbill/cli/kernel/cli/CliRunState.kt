@@ -6,6 +6,7 @@ import skillbill.cli.model.CliStdoutCompletion
 
 class CliRunState(private val stdinText: String?) {
   var result: CliExecutionResult? = null
+    private set
   private var stderrText: String = ""
   private var stdinLineIterator: Iterator<String>? = null
   private var wholeStdinCached: String? = null
@@ -27,7 +28,7 @@ class CliRunState(private val stdinText: String?) {
 
   fun completeText(
     stdout: String,
-    payload: Map<String, Any?>,
+    payload: Map<String, Any?>? = null,
     exitCode: Int = 0,
   ) {
     result =

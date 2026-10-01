@@ -1,41 +1,48 @@
 package skillbill.cli.scaffold.wizard
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.application.scaffold.InstallAgentService
 import skillbill.cli.kernel.cli.CliRunState
-import skillbill.cli.model.CliExecutionResult
 import skillbill.cli.model.CliRunInputs
-import skillbill.cli.scaffold.commands.AssistedScaffoldWizardArgs
-import skillbill.cli.scaffold.commands.ScaffoldWizardArgs
-import skillbill.cli.scaffold.payload.errorResult
-import skillbill.cli.scaffold.payload.runNativeScaffoldPayload
+import skillbill.cli.scaffold.payload.NativeScaffoldPayloadRun
+import skillbill.cli.scaffold.payload.NativeScaffoldRunOptions
+import skillbill.cli.scaffold.payload.completeScaffoldError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
 import skillbill.scaffold.model.SkillKind
 
-internal fun runNativeScaffoldWizard(args: ScaffoldWizardArgs): CliExecutionResult {
-  val run = args.run
-  val payload =
-    try {
-      collectScaffoldWizardPayload(run.state, run.inputs, args.scaffoldCatalogGateway)
-    } catch (error: SkillBillRuntimeException) {
-      return errorResult(error.message.orEmpty(), run.format)
-    } catch (error: IllegalArgumentException) {
-      return errorResult(error.message.orEmpty(), run.format)
-    }
-  return runNativeScaffoldPayload(payload, run)
-}
+@Inject
+class ScaffoldWizardRun(
+  private val state: CliRunState,
+  private val inputs: CliRunInputs,
+  private val scaffoldCatalogGateway: ScaffoldCatalogGateway,
+  private val installAgentService: InstallAgentService,
+  private val payloadRun: NativeScaffoldPayloadRun,
+) {
+  internal fun runWizard(options: NativeScaffoldRunOptions) {
+    runCollected(options) { collectScaffoldWizardPayload(state, inputs, scaffoldCatalogGateway) }
+  }
 
-internal fun runNativeAssistedScaffoldWizard(args: AssistedScaffoldWizardArgs): CliExecutionResult {
-  val run = args.run
-  val payload =
-    try {
-      collectAssistedScaffoldWizardPayload(run.state, run.inputs, args.scaffoldCatalogGateway, args.installAgentService)
-    } catch (error: SkillBillRuntimeException) {
-      return errorResult(error.message.orEmpty(), run.format)
-    } catch (error: IllegalArgumentException) {
-      return errorResult(error.message.orEmpty(), run.format)
+  internal fun runAssistedWizard(options: NativeScaffoldRunOptions) {
+    runCollected(options) {
+      collectAssistedScaffoldWizardPayload(state, inputs, scaffoldCatalogGateway, installAgentService)
     }
-  return runNativeScaffoldPayload(payload, run)
+  }
+
+  private fun runCollected(
+    options: NativeScaffoldRunOptions,
+    collect: () -> Map<String, Any?>,
+  ) {
+    val payload =
+      try {
+        collect()
+      } catch (error: SkillBillRuntimeException) {
+        return state.completeScaffoldError(error.message.orEmpty(), options.format)
+      } catch (error: IllegalArgumentException) {
+        return state.completeScaffoldError(error.message.orEmpty(), options.format)
+      }
+    payloadRun.runPayload(payload, options)
+  }
 }
 
 internal fun collectAssistedScaffoldWizardPayload(

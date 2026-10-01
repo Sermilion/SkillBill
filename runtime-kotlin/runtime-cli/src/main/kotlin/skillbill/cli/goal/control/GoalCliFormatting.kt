@@ -1,5 +1,6 @@
-package skillbill.cli.goal.core
+package skillbill.cli.goal.control
 
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.goalrunner.model.GoalRunnerAppliedRepair
 import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosis
@@ -145,7 +146,7 @@ internal fun GoalRunnerOperatorDecisionResult.toGoalOperatorDecisionCliMap(): Ma
   when (this) {
     is GoalRunnerOperatorDecisionResult.Recorded ->
       linkedMapOf(
-        SharedPayloadKeys.STATUS to "ok",
+        SharedPayloadKeys.STATUS to CliPayloadStatus.OK,
         SharedPayloadKeys.ISSUE_KEY to issueKey,
         "parent_workflow_id" to parentWorkflowId,
         SharedPayloadKeys.SUBTASK_ID to subtaskId,

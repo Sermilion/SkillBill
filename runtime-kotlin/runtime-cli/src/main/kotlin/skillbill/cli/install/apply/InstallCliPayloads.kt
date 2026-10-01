@@ -1,4 +1,4 @@
-package skillbill.cli.install.core
+package skillbill.cli.install.apply
 
 import skillbill.application.install.InstallService
 import skillbill.install.model.InstallPlan

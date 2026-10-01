@@ -1,6 +1,5 @@
 package skillbill.cli.goal.run
 
-import com.github.ajalt.clikt.core.UsageError
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.multiple
@@ -15,6 +14,7 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.formatOption
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
+import skillbill.cli.kernel.cli.usageError
 import skillbill.cli.kernel.payload.toFeatureTaskContinuationCliMap
 import skillbill.cli.kernel.payload.toGoalContinuationCliMap
 import skillbill.cli.model.CliRunInputs
@@ -92,9 +92,7 @@ internal fun parseCodeReviewMode(raw: String?) =
     try {
       RuntimeOwnedReviewMode.parse(value)
     } catch (error: IllegalArgumentException) {
-      throw UsageError(error.message ?: "Unknown code-review execution mode.").also { usage ->
-        runCatching { usage.initCause(error) }
-      }
+      usageError(error)
     }
   }
 

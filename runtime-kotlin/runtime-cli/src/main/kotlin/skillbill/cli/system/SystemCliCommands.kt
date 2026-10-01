@@ -20,7 +20,6 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.formatOption
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
-import skillbill.cli.model.CliExecutionResult
 import skillbill.cli.model.CliFormat
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
@@ -150,29 +149,30 @@ class DoctorCliCommand(
       state.complete(service.doctor().toPayload(), format)
     } else {
       val resolvedRoot = resolveCliRepositoryRoot(repoRoot, inputs).toString()
-      state.result = retiredSubjectResult(subject.orEmpty(), skillName.orEmpty(), resolvedRoot, content)
+      state.completeText(
+        retiredSubjectMessage(subject.orEmpty(), skillName.orEmpty(), resolvedRoot, content),
+        exitCode = 1,
+      )
     }
   }
 }
 
-private fun retiredSubjectResult(
+private fun retiredSubjectMessage(
   subject: String,
   skillName: String,
   repoRoot: String,
   content: String,
-): CliExecutionResult {
+): String {
   val replacementSkillName = skillName.ifBlank { "<skill-name>" }
   val replacement =
     when (subject) {
       "skill" -> "skill-bill show $replacementSkillName --repo-root $repoRoot --content $content"
       else -> "skill-bill doctor"
     }
-  val message =
-    when (subject) {
-      "skill" -> "doctor skill was retired in SKILL-32; use `$replacement` instead."
-      else -> "doctor subject '$subject' is unsupported; use `$replacement` instead."
-    }
-  return CliExecutionResult(exitCode = 1, stdout = message)
+  return when (subject) {
+    "skill" -> "doctor skill was retired in SKILL-32; use `$replacement` instead."
+    else -> "doctor subject '$subject' is unsupported; use `$replacement` instead."
+  }
 }
 
 private fun UpdateCheckResult.toPayload(): Map<String, Any?> = updateCheckContract(this).toPayload()

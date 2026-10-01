@@ -44,17 +44,17 @@ class RemoveCliCommand(
   private val format by formatOption()
 
   override fun run() {
-    state.result =
-      executeRemoveCommand(
-        RemoveCommandExecutionRequest(
-          inputs = inputs,
-          skillRemove = skillRemove,
-          rawTarget = target,
-          repoRoot = resolveCliRepositoryRoot(repoRoot, inputs).toString(),
-          dryRun = dryRun,
-          allowShipped = allowShipped,
-          format = format,
-        ),
-      )
+    executeRemoveCommand(
+      RemoveCommandExecutionRequest(
+        inputs = inputs,
+        skillRemove = skillRemove,
+        rawTarget = target,
+        repoRoot = resolveCliRepositoryRoot(repoRoot, inputs).toString(),
+        dryRun = dryRun,
+        allowShipped = allowShipped,
+        format = format,
+      ),
+      state,
+    )
   }
 }

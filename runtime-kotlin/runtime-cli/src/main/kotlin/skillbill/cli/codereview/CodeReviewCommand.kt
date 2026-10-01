@@ -20,8 +20,12 @@ import skillbill.application.reviewevidence.model.DiffResolutionException
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
 import skillbill.cli.kernel.cli.CliRunState
+import skillbill.cli.kernel.cli.DEFAULT_CODE_REVIEW_SCOPE
 import skillbill.cli.kernel.cli.DocumentedCliCommand
+import skillbill.cli.kernel.cli.StandaloneCodeReviewTarget
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
+import skillbill.cli.kernel.cli.resolveStandaloneCodeReviewTarget
+import skillbill.cli.kernel.cli.usageError
 import skillbill.cli.model.CliRunInputs
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.engine.featuretask.model.review.ReviewTarget
@@ -268,12 +272,6 @@ private fun runPhaseReview(
     state.completeText(error.message.orEmpty(), emptyMap(), exitCode = 1)
     null
   }
-
-internal fun usageError(error: Throwable): Nothing {
-  throw UsageError(error.message.orEmpty()).also { usage ->
-    runCatching { usage.initCause(error) }
-  }
-}
 
 private fun writePhaseReviewResult(
   state: CliRunState,

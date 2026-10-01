@@ -2,6 +2,7 @@ package skillbill.cli.featuretask
 
 import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.parentSpecPath
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePhaseStatus
@@ -11,7 +12,7 @@ import skillbill.workflow.taskruntime.artifact.presentationWireMap
 internal fun FeatureTaskRuntimeStatusProjection?.toRuntimeStatusCliMap(workflowId: String): Map<String, Any?> =
   this?.let {
     linkedMapOf<String, Any?>(
-      SharedPayloadKeys.STATUS to "ok",
+      SharedPayloadKeys.STATUS to CliPayloadStatus.OK,
       SharedPayloadKeys.WORKFLOW_ID to it.workflowId,
       "feature_size" to it.featureSize,
       "complete_count" to it.completeCount,
@@ -50,7 +51,7 @@ internal fun FeatureTaskRuntimeStatusProjection?.toRuntimeStatusCliMap(workflowI
       "phases" to it.phases.map(FeatureTaskRuntimePhaseStatus::toRuntimePhaseStatusCliMap),
     )
   } ?: linkedMapOf(
-    SharedPayloadKeys.STATUS to "not_found",
+    SharedPayloadKeys.STATUS to CliPayloadStatus.NOT_FOUND,
     SharedPayloadKeys.WORKFLOW_ID to workflowId,
     "feature_size" to null,
     "complete_count" to 0,
@@ -98,7 +99,8 @@ internal fun runtimeStatusText(
     appendPhaseStatuses(projection)
   }
 
-private fun FeatureTaskRuntimeStatusProjection?.statusText(): String = if (this == null) "not_found" else "ok"
+private fun FeatureTaskRuntimeStatusProjection?.statusText(): String =
+  if (this == null) CliPayloadStatus.NOT_FOUND else CliPayloadStatus.OK
 
 private fun StringBuilder.appendValidationGateStatus(projection: FeatureTaskRuntimeStatusProjection?) {
   projection?.validationGateExecutionEvidence?.let { evidence ->

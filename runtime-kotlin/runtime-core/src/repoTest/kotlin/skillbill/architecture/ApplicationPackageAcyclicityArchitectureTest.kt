@@ -22,16 +22,7 @@ class ApplicationPackageAcyclicityArchitectureTest {
 
   @Test
   fun `runtime-cli package cycles equal the recorded census`() {
-    val current =
-      ArchitectureScanSupport.packageCycles(
-        scanRoot = PrincipleEnforcementInventory.RUNTIME_CLI_MAIN,
-        packagePrefix = PrincipleEnforcementInventory.CLI_PACKAGE_PREFIX,
-      )
-    assertEquals(
-      baselineCycles("runtime-cli-package-cycle-baseline.txt"),
-      current,
-      "Re-record runtime-cli-package-cycle-baseline.txt with RECORD_ARCHITECTURE_BASELINES=1.",
-    )
+    assertPackageCyclesMatchBaseline("runtime-cli")
   }
 
   @Test

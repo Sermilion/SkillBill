@@ -1,4 +1,4 @@
-package skillbill.cli.scaffold.commands
+package skillbill.cli.scaffold.wizard
 
 internal data class AssistedPlatformProfile(
   val slug: String,

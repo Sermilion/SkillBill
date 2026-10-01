@@ -1,55 +1,60 @@
 package skillbill.cli.goal.run
 
 import com.github.ajalt.clikt.core.UsageError
+import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
-import skillbill.cli.codereview.usageError
+import skillbill.cli.kernel.agent.ConfiguredAgentAddonSelectionResolver
 import skillbill.cli.kernel.agent.parseAgentAddonSelection
 import skillbill.cli.kernel.agent.refuseUnavailableAgentLaunchers
 import skillbill.cli.kernel.agent.requireInvokingAgentId
 import skillbill.cli.kernel.agent.requireSupportedOptionalAgentId
+import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
-import skillbill.model.toPath
-import skillbill.ports.agentaddon.model.ExternalAgentAddonSourceConfigRequest
+import skillbill.ports.agentaddon.AgentAddonSelectionPort
+import skillbill.ports.agentrun.ExecutableLookup
 
-internal fun validateGoalRunInputs(args: GoalRunInputValidationArgs) {
-  val invokedAgentId = resolveInvokedAgentId(args.agent, args.inputs.environment)
-  requireSupportedOptionalAgentId(args.agentOverride, "--agent-override")
-  refuseUnavailableAgentLaunchers(listOf(invokedAgentId, args.agentOverride), args.executableLookup)
-  val usageError =
-    when {
-      args.issueKey == null -> "issue_key is required for goal run."
-      args.stopAfterSubtask != null && args.stopAfterSubtask <= 0 ->
-        "--stop-after-subtask must be a positive integer."
-      args.agentAddonSlugs.isNotEmpty() && args.agentAddonSelectionJson != null ->
-        "Use either --agent-addon or " +
-          "${FeatureTaskRuntimeGoalContinuationLaunchTokens.AGENT_ADDON_SELECTION_JSON_FLAG}, not both."
-      else -> null
+@Inject
+class GoalRunInputPreparation(
+  private val executableLookup: ExecutableLookup,
+  private val agentAddonSelectionPort: AgentAddonSelectionPort,
+  private val agentAddonResolver: ConfiguredAgentAddonSelectionResolver,
+  private val inputs: CliRunInputs,
+) {
+  internal fun validate(args: GoalRunInputValidationArgs) {
+    val invokedAgentId = resolveInvokedAgentId(args.agent, inputs.environment)
+    requireSupportedOptionalAgentId(args.agentOverride, "--agent-override")
+    refuseUnavailableAgentLaunchers(listOf(invokedAgentId, args.agentOverride), executableLookup)
+    val usageError =
+      when {
+        args.issueKey == null -> "issue_key is required for goal run."
+        args.stopAfterSubtask != null && args.stopAfterSubtask <= 0 ->
+          "--stop-after-subtask must be a positive integer."
+        args.agentAddonSlugs.isNotEmpty() && args.agentAddonSelectionJson != null ->
+          "Use either --agent-addon or " +
+            "${FeatureTaskRuntimeGoalContinuationLaunchTokens.AGENT_ADDON_SELECTION_JSON_FLAG}, not both."
+        else -> null
+      }
+    if (usageError != null) throw UsageError(usageError)
+  }
+
+  internal fun hydrateAgentAddonSelection(args: GoalRunAgentAddonHydrationArgs): HydratedAgentAddonSelection {
+    val persistedSelection = parseAgentAddonSelection(args.agentAddonSelectionJson)
+    return if (args.agentAddonSlugs.isNotEmpty()) {
+      agentAddonResolver.resolveInitial(
+        repoRoot = args.effectiveRepoRoot,
+        requestedSlugs = args.agentAddonSlugs,
+        receivingAgentIds = args.receivingAgents,
+      )
+    } else if (persistedSelection.entries.isEmpty()) {
+      HydratedAgentAddonSelection()
+    } else {
+      agentAddonSelectionPort.verifyPersisted(
+        persistedSelection,
+        AgentAddonConsumer.SKILL_BILL,
+        args.receivingAgents,
+      )
     }
-  if (usageError != null) throw UsageError(usageError)
-}
-
-internal fun hydrateGoalRunAgentAddonSelection(args: GoalRunAgentAddonHydrationArgs): HydratedAgentAddonSelection {
-  val persistedSelection = parseAgentAddonSelection(args.agentAddonSelectionJson)
-  return if (args.agentAddonSlugs.isNotEmpty()) {
-    args.agentAddonSelectionPort.resolveInitial(
-      repoRoot = args.effectiveRepoRoot,
-      requestedSlugs = args.agentAddonSlugs,
-      consumer = AgentAddonConsumer.SKILL_BILL,
-      receivingAgentIds = args.receivingAgents,
-      externalSourceRoots =
-        args.externalAgentAddonSourceConfigPort.readExternalAgentAddonSources(
-          ExternalAgentAddonSourceConfigRequest(args.inputs.userHome, args.inputs.environment),
-        ).sources.map { source -> source.path.toPath() },
-    )
-  } else if (persistedSelection.entries.isEmpty()) {
-    HydratedAgentAddonSelection()
-  } else {
-    args.agentAddonSelectionPort.verifyPersisted(
-      persistedSelection,
-      AgentAddonConsumer.SKILL_BILL,
-      args.receivingAgents,
-    )
   }
 }
 

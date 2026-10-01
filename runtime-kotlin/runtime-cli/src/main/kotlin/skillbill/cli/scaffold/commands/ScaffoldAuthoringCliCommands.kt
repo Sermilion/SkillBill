@@ -13,8 +13,13 @@ import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.formatOption
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.model.CliRunInputs
-import skillbill.cli.scaffold.payload.authoringResult
+import skillbill.cli.scaffold.payload.completeAuthoring
 import skillbill.cli.scaffold.payload.completeRenderText
+import skillbill.cli.scaffold.payload.completeScaffoldError
+import skillbill.cli.scaffold.payload.completeUnsupportedScaffold
+import skillbill.cli.scaffold.payload.readCliTextFile
+import skillbill.cli.scaffold.payload.retiredEditorModeMessage
+import skillbill.cli.scaffold.payload.retiredInteractiveModeMessage
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.ports.scaffold.ScaffoldGateway
 
@@ -36,10 +41,9 @@ class ListSkillsCommand(
 
   override fun run() {
     val root = resolveCliRepositoryRoot(repoRoot, inputs)
-    state.result =
-      authoringResult(format) {
-        scaffoldGateway.list(root, skillNames).toCliMap()
-      }
+    state.completeAuthoring(format) {
+      scaffoldGateway.list(root, skillNames).toCliMap()
+    }
   }
 }
 
@@ -64,10 +68,9 @@ class ShowSkillCommand(
 
   override fun run() {
     val root = resolveCliRepositoryRoot(repoRoot, inputs)
-    state.result =
-      authoringResult(format) {
-        scaffoldGateway.show(root, skillName, content).toCliMap()
-      }
+    state.completeAuthoring(format) {
+      scaffoldGateway.show(root, skillName, content).toCliMap()
+    }
   }
 }
 
@@ -89,10 +92,9 @@ class ExplainSkillCommand(
 
   override fun run() {
     val root = resolveCliRepositoryRoot(repoRoot, inputs)
-    state.result =
-      authoringResult(format) {
-        scaffoldGateway.explain(root, skillName).toCliMap()
-      }
+    state.completeAuthoring(format) {
+      scaffoldGateway.explain(root, skillName).toCliMap()
+    }
   }
 }
 
@@ -113,13 +115,12 @@ class ValidateSkillCommand(
   private val format by formatOption()
 
   override fun run() {
-    state.result =
-      authoringResult(
-        format,
-        successExitCode = { payload -> if (payload[SharedPayloadKeys.STATUS] == "pass") 0 else 1 },
-      ) {
-        scaffoldGateway.validate(resolveCliRepositoryRoot(repoRoot, inputs), skillNames).toCliMap()
-      }
+    state.completeAuthoring(
+      format,
+      successExitCode = { payload -> if (payload[SharedPayloadKeys.STATUS] == "pass") 0 else 1 },
+    ) {
+      scaffoldGateway.validate(resolveCliRepositoryRoot(repoRoot, inputs), skillNames).toCliMap()
+    }
   }
 }
 
@@ -170,11 +171,10 @@ open class WrapperRegenerationCommand(
   private val format by formatOption()
 
   override fun run() {
-    state.result =
-      authoringResult(format) {
-        scaffoldGateway.upgrade(resolveCliRepositoryRoot(repoRoot, inputs), skillNames, validate = !skipValidate)
-          .toCliMap()
-      }
+    state.completeAuthoring(format) {
+      scaffoldGateway.upgrade(resolveCliRepositoryRoot(repoRoot, inputs), skillNames, validate = !skipValidate)
+        .toCliMap()
+    }
   }
 }
 
@@ -195,20 +195,24 @@ class EditSkillCommand(
   private val format by formatOption()
 
   override fun run() {
-    state.result =
-      editSkillResult(
-        EditSkillRunArgs(
-          state = state,
-          inputs = inputs,
-          scaffoldGateway = scaffoldGateway,
-          skillName = skillName,
-          repoRoot = resolveCliRepositoryRoot(repoRoot, inputs).toString(),
-          bodyFile = bodyFile,
-          editor = editor,
-          section = section,
-          format = format,
-        ),
-      )
+    val root = resolveCliRepositoryRoot(repoRoot, inputs)
+    val editBodyFile = bodyFile
+    when {
+      editor ->
+        state.completeUnsupportedScaffold(
+          retiredEditorModeMessage("edit --editor", "skill-bill fill $skillName --body-file <file>"),
+          format,
+        )
+      editBodyFile != null ->
+        state.completeAuthoring(format) {
+          scaffoldGateway.editWithBodyFile(root, skillName, readCliTextFile(editBodyFile, state), section).toCliMap()
+        }
+      else ->
+        state.completeUnsupportedScaffold(
+          retiredInteractiveModeMessage("edit", "skill-bill fill $skillName --body-file <file>"),
+          format,
+        )
+    }
   }
 }
 
@@ -229,19 +233,19 @@ class FillSkillCommand(
   private val format by formatOption()
 
   override fun run() {
-    state.result =
-      fillSkillResult(
-        FillSkillRunArgs(
-          state = state,
-          inputs = inputs,
-          scaffoldGateway = scaffoldGateway,
-          skillName = skillName,
-          repoRoot = resolveCliRepositoryRoot(repoRoot, inputs).toString(),
-          body = body,
-          bodyFile = bodyFile,
-          section = section,
-          format = format,
-        ),
-      )
+    val root = resolveCliRepositoryRoot(repoRoot, inputs)
+    val fillBody = body
+    val fillBodyFile = bodyFile
+    when {
+      fillBody != null && fillBodyFile != null ->
+        state.completeScaffoldError("--body and --body-file are mutually exclusive.", format)
+      fillBody == null && fillBodyFile == null ->
+        state.completeScaffoldError("Either --body or --body-file is required.", format)
+      else ->
+        state.completeAuthoring(format) {
+          scaffoldGateway.fill(root, skillName, fillBody ?: readCliTextFile(fillBodyFile.orEmpty(), state), section)
+            .toCliMap()
+        }
+    }
   }
 }

@@ -1,5 +1,6 @@
 package skillbill.cli.install.apply
 
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.install.model.ReconciliationPlan
 import skillbill.install.model.SkillReconciliationOutcome
@@ -12,7 +13,7 @@ internal fun reconcilePayload(
   prunedPaths: List<String> = emptyList(),
 ): Map<String, Any?> =
   mapOf(
-    SharedPayloadKeys.STATUS to "ok",
+    SharedPayloadKeys.STATUS to CliPayloadStatus.OK,
     "applied" to applied,
     "baseline_refreshed" to refreshed,
     "installed_paths" to installedPaths,

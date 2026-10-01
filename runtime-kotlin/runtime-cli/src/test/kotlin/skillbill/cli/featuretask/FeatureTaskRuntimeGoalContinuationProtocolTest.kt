@@ -4,8 +4,8 @@ import com.github.ajalt.clikt.parsers.CommandLineParser
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunInput
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -24,7 +24,7 @@ class FeatureTaskRuntimeGoalContinuationProtocolTest {
   @Test
   fun `CliRuntime parses contract-built continuation argv into the run request`() {
     val fixture = continuationFixture()
-    var captured: FeatureTaskRuntimeRunRequest? = null
+    var captured: FeatureTaskRuntimeRunInput? = null
     val result =
       CliRuntime.run(
         continuationArguments(fixture.specPath),
@@ -48,8 +48,8 @@ class FeatureTaskRuntimeGoalContinuationProtocolTest {
             captured = request
             FeatureTaskRuntimeRunReport.Completed(
               issueKey = request.issueKey,
-              workflowId = request.workflowId,
-              featureSize = request.runInvariants.featureSize.name,
+              workflowId = request.explicitWorkflowId ?: "wfl-override",
+              featureSize = "SMALL",
               completedPhaseIds = emptyList(),
               resolvedBranch = null,
             )

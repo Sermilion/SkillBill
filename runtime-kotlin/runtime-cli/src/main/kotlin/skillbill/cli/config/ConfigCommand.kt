@@ -9,6 +9,7 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.DocumentedNoOpCliCommand
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.cli.model.CliRunInputs
 import skillbill.config.model.SpecType
 import skillbill.config.model.parseSpecType
@@ -68,7 +69,7 @@ class ConfigResolveSpecTypeCommand(
       }
     state.completeText(
       "${resolved.id}\n",
-      mapOf(SharedPayloadKeys.STATUS to "ok", "spec_type" to resolved.id),
+      mapOf(SharedPayloadKeys.STATUS to CliPayloadStatus.OK, "spec_type" to resolved.id),
     )
   }
 

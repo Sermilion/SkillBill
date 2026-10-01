@@ -2,7 +2,6 @@ package skillbill.cli.scaffold.wizard
 
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.model.CliRunInputs
-import skillbill.cli.scaffold.commands.assistedPlatformProfile
 import skillbill.install.model.SupportedAgent
 import skillbill.scaffold.model.SkillKind
 

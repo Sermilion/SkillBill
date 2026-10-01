@@ -8,7 +8,9 @@ import com.github.ajalt.clikt.parameters.options.option
 import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.agentaddon.model.AgentAddonPromptFormatter
+import skillbill.cli.kernel.agent.ConfiguredAgentAddonSelectionResolver
 import skillbill.cli.kernel.agent.parseAgentAddonSelection
+import skillbill.cli.kernel.agent.toCliEntryMaps
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.DocumentedNoOpCliCommand
@@ -19,10 +21,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.agentaddon.AGENT_ADDON_SELECTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.error.core.ShellContentContractException
-import skillbill.model.toPath
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
-import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
-import skillbill.ports.agentaddon.model.ExternalAgentAddonSourceConfigRequest
 
 @Inject
 class AgentAddonCommand(
@@ -36,8 +35,7 @@ class AgentAddonCommand(
 
 @Inject
 class AgentAddonResolveSelectionCommand(
-  private val resolver: AgentAddonSelectionPort,
-  private val externalSourceConfig: ExternalAgentAddonSourceConfigPort,
+  private val resolver: ConfiguredAgentAddonSelectionResolver,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand("resolve-selection", "Resolve ordered agent-addon:<slug> tokens without side effects.") {
@@ -59,26 +57,11 @@ class AgentAddonResolveSelectionCommand(
         resolver.resolveInitial(
           repoRoot = resolveCliRepositoryRoot(repoRoot, inputs),
           requestedSlugs = slugs,
-          consumer = AgentAddonConsumer.SKILL_BILL,
           receivingAgentIds = receivingAgents,
-          externalSourceRoots =
-            externalSourceConfig.readExternalAgentAddonSources(
-              ExternalAgentAddonSourceConfigRequest(inputs.userHome, inputs.environment),
-            ).sources.map { source -> source.path.toPath() },
         )
       linkedMapOf(
         SharedPayloadKeys.CONTRACT_VERSION to AGENT_ADDON_SELECTION_CONTRACT_VERSION,
-        FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ENTRIES to
-          selection.entries.map { entry ->
-            linkedMapOf(
-              FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SLUG to entry.persisted.slug,
-              FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SOURCE_IDENTITY to
-                entry.persisted.sourceIdentity,
-              FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256 to
-                entry.persisted.contentSha256,
-              "description" to entry.description,
-            )
-          },
+        FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ENTRIES to selection.toCliEntryMaps(),
       )
     }
   }
@@ -122,17 +105,7 @@ class AgentAddonVerifySelectionCommand(
       state.complete(
         linkedMapOf(
           SharedPayloadKeys.CONTRACT_VERSION to AGENT_ADDON_SELECTION_CONTRACT_VERSION,
-          FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ENTRIES to
-            hydrated.entries.map { entry ->
-              linkedMapOf(
-                FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SLUG to entry.persisted.slug,
-                FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SOURCE_IDENTITY to
-                  entry.persisted.sourceIdentity,
-                FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256 to
-                  entry.persisted.contentSha256,
-                "description" to entry.description,
-              )
-            },
+          FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ENTRIES to hydrated.toCliEntryMaps(),
           "prompt_section" to AgentAddonPromptFormatter.format(hydrated),
         ),
         format,

@@ -5,6 +5,7 @@ import skillbill.cli.goal.run.singleLineBounded
 import skillbill.cli.goal.run.toGoalDiffStatCliMap
 import skillbill.cli.goal.run.toGoalSelectedDiffHunksCliMap
 import skillbill.cli.kernel.agent.detectInvokingAgentId
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
@@ -15,6 +16,7 @@ import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerAcceptedSubtask
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.idestatus.model.WorktreeEditSource
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.gitops.model.DEFAULT_SELECTED_DIFF_MAX_BYTES
 import skillbill.ports.workflow.gitops.model.DEFAULT_SELECTED_DIFF_MAX_HUNKS
 import skillbill.ports.workflow.gitops.model.DEFAULT_SELECTED_DIFF_MAX_LINES
@@ -37,7 +39,10 @@ internal data class GoalStatusCliDiffOptions(
   val selectedDiffMaxBytes: Int = DEFAULT_SELECTED_DIFF_MAX_BYTES,
 )
 
-internal fun CliRunInputs.goalStatusRequest(options: GoalStatusCliRequestOptions): GoalRunnerStatusRequest =
+internal fun CliRunInputs.goalStatusRequest(
+  options: GoalStatusCliRequestOptions,
+  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+): GoalRunnerStatusRequest =
   GoalRunnerStatusRequest(
     issueKey = options.issueKey,
     invokedAgentId = detectInvokingAgentId(options.agent, environment),
@@ -62,7 +67,7 @@ internal fun CliRunInputs.goalStatusRequest(options: GoalStatusCliRequestOptions
 internal fun GoalRunnerStatusProjection?.toGoalStatusCliMap(issueKey: String): Map<String, Any?> =
   this?.let {
     linkedMapOf<String, Any?>(
-      SharedPayloadKeys.STATUS to "ok",
+      SharedPayloadKeys.STATUS to CliPayloadStatus.OK,
       SharedPayloadKeys.ISSUE_KEY to it.issueKey,
       "complete_count" to it.completeCount,
       "pending_count" to it.pendingCount,
@@ -79,7 +84,7 @@ internal fun GoalRunnerStatusProjection?.toGoalStatusCliMap(issueKey: String): M
       "stop_after_subtask" to it.stopAfterSubtaskId,
     ).apply { putGoalStatusDetails(it) }
   } ?: linkedMapOf(
-    SharedPayloadKeys.STATUS to "not_found",
+    SharedPayloadKeys.STATUS to CliPayloadStatus.NOT_FOUND,
     SharedPayloadKeys.ISSUE_KEY to issueKey,
     "complete_count" to 0,
     "pending_count" to 0,
@@ -173,9 +178,9 @@ internal fun GoalRunnerStatusProjection?.toBoundedGoalStatusCliMap(issueKey: Str
       }
     }
   } ?: linkedMapOf(
-    SharedPayloadKeys.STATUS to "not_found",
+    SharedPayloadKeys.STATUS to CliPayloadStatus.NOT_FOUND,
     SharedPayloadKeys.ISSUE_KEY to singleLineBounded(issueKey),
-    "resumable_state" to "not_found",
+    "resumable_state" to CliPayloadStatus.NOT_FOUND,
   )
 
 internal fun databaseUnavailableGoalStatusCliMap(
@@ -244,7 +249,7 @@ private fun StringBuilder.appendGoalStatusSummary(
   projection: GoalRunnerStatusProjection?,
 ) {
   appendLine("goal: ${projection?.issueKey ?: issueKey}")
-  appendLine("status: ${if (projection == null) "not_found" else "ok"}")
+  appendLine("status: ${if (projection == null) CliPayloadStatus.NOT_FOUND else CliPayloadStatus.OK}")
   appendLine("complete: ${projection?.completeCount ?: 0}")
   appendLine("pending: ${projection?.pendingCount ?: 0}")
   appendLine("blocked: ${projection?.blockedCount ?: 0}")
