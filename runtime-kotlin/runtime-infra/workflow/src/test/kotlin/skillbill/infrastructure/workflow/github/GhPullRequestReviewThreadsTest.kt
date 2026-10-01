@@ -1,6 +1,5 @@
-package skillbill.infrastructure.workflow.git.github
+package skillbill.infrastructure.workflow.github
 
-import skillbill.infrastructure.workflow.git.goal.GhCommandResult
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.review.pullrequest.model.ReviewThreadListing
 import java.nio.file.Path

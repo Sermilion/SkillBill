@@ -1,6 +1,6 @@
 # SKILL-396 Subtask 1 - Infra boundary and diagnostics repairs
 
-Parent spec: [.feature-specs/SKILL-396-runtime-infra-boundary-repairs/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-396-runtime-infra-boundary-repairs/spec.md](spec.md)
 Issue key: SKILL-396
 
 ## Scope
@@ -49,10 +49,10 @@ Goal build gate: compile all runtime-kotlin modules; run the sqlite, contracts a
 
 ## Implementation Details
 
-Scope is this subtask only: F-001 to F-005, criteria 1-14. F-006, the workflow git/github package moves, belongs to subtask 2 and is not planned here. Work against the current tree at `base/SKILL-380-phase-slot-strategies`. SKILL-387/388/389/391/392/393/395 have landed; SKILL-390 and SKILL-397 have not. All paths below are relative to `runtime-kotlin/` unless stated otherwise.
+Scope is this subtask only: F-001 to F-005, criteria 1-14. F-006, the workflow git/github package moves, belongs to subtask 2 and is not planned here. Work against the current tree at `base/SKILL-380-phase-slot-strategies`. SKILL-387/388/389/391/392/393/395 have landed; SKILL-390 and SKILL-397 have not. All paths below are relative to `../../../runtime-kotlin` unless stated otherwise.
 
 ### Task 1 — F-002: delete the vacuous guard (AC 4)
-- Delete `runtime-core/src/repoTest/kotlin/skillbill/architecture/InfrastructureSkillsImportDirectionArchitectureTest.kt`. No code references it. `agent/history.md` mentions it, but that file is append-only, so leave it alone.
+- Delete `runtime-core/src/repoTest/kotlin/skillbill/architecture/InfrastructureSkillsImportDirectionArchitectureTest.kt`. No code references it. `../../../agent/history.md` mentions it, but that file is append-only, so leave it alone.
 - Add no replacement guard and no new `*ArchitectureTest.kt`.
 - Tests: none.
 
@@ -200,7 +200,7 @@ Run these read-only greps; the build and validate phases own compilation, tests,
 - The `SQLiteDatabaseSessionFactory` constructor is unchanged.
 - SKILL-388's exact-int parsing is unchanged.
 - `GOAL_PLANNING_WAVE_CAP` stays in runtime-contracts.
-- Follow `runtime-kotlin/ARCHITECTURE.md` Design Principles and `docs/code-principles.md`.
+- Follow `../../../runtime-kotlin/ARCHITECTURE.md` Design Principles and `docs/code-principles.md`.
 - No ARCHITECTURE.md or docs edits are expected. If a grep finds a doc naming `InternalSqliteDiagnostics` or `skills.file`, update that line only.
 - Spotless runs in a regular clone, not a linked worktree. On a stale-cache error, rerun with `--no-configuration-cache`.
 - Risks the build phase must confirm:

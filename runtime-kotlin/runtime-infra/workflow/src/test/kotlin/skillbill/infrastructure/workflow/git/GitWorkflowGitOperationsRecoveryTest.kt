@@ -1,4 +1,4 @@
-package skillbill.infrastructure.workflow.git.workflow
+package skillbill.infrastructure.workflow.git
 
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaselineRecoveryRequest

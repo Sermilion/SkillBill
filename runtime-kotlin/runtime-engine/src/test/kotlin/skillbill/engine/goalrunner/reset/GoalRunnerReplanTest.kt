@@ -12,7 +12,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.model.GoalPlanningStatusState.NOT_STARTED
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult

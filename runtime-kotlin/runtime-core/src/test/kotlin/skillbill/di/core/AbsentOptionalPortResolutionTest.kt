@@ -2,7 +2,7 @@ package skillbill.di.core
 
 import skillbill.error.core.UnresolvedRemoteTransportPortError
 import skillbill.infrastructure.http.JdkHttpRequester
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.model.EnvironmentContext
 import skillbill.ports.telemetry.model.RemoteTransportResponse
 import skillbill.ports.telemetry.transport.RemoteTransportPort

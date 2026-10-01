@@ -213,7 +213,7 @@ class DatabaseMigrationsTest {
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       DatabaseMigrations.migrations
         .filter { migration -> migration.version in 42..44 }
-        .forEach { migration -> migration.apply(connection) }
+        .forEach { migration -> migration.apply(connection, SqliteTestDiagnostics) }
       connection.createStatement().use { statement ->
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version = 45")
         LEGACY_EXPERIMENT_ROWS.forEach { sql -> statement.executeUpdate(sql) }

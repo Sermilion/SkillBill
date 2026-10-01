@@ -5,7 +5,7 @@ import skillbill.application.decomposition.parentSpecPath
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointRefPruneRequest
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.manifest.pruneEligibleCheckpointRefsForManifest
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult

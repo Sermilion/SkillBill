@@ -55,7 +55,6 @@ fun tempDbConnection(prefix: String): Pair<Path, Connection> {
   return dbPath to DatabaseRuntime.ensureDatabase(dbPath)
 }
 
-// Test-side overloads that supply SqliteTestDiagnostics; production callers must pass diagnostics explicitly.
 internal fun DatabaseRuntime.ensureDatabase(path: Path): Connection = ensureDatabase(path, SqliteTestDiagnostics)
 
 internal fun DatabaseRuntime.establishSchemaReadiness(path: Path) =
@@ -92,7 +91,19 @@ internal fun reconcileStaleTelemetrySessions(
   runtimeVersion: String = "test-runtime-version",
   policy: StaleSessionReconciliationPolicy = StaleSessionReconciliationPolicy(),
 ): TelemetryReconciliationResult =
-  reconcileStaleTelemetrySessions(connection, clock, level, SqliteTestDiagnostics, runtimeVersion, policy)
+  reconcileStaleTelemetrySessions(
+    connection = connection,
+    request =
+      TelemetryReconciliationRequest(
+        level = level,
+        cadenceSeconds = 0L,
+        maximumBatchSize = Int.MAX_VALUE,
+        sessionThresholdSeconds = policy.sessionThresholdSeconds,
+        goalIssueAbandonmentDays = policy.goalIssueAbandonmentDays,
+        now = clock.instant(),
+      ),
+    runtimeVersion = runtimeVersion,
+  )
 
 internal fun reconcileStaleFeatureTaskRuntimeSessions(
   connection: Connection,

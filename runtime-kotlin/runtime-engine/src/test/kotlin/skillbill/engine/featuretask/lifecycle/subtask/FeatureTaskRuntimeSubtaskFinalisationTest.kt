@@ -11,7 +11,7 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinal
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinalisationResult
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinalised
 import skillbill.engine.featuretask.runloop.observability.blocked
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import java.nio.file.Files
 import java.nio.file.Path

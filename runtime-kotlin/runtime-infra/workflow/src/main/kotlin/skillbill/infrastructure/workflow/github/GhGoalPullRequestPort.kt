@@ -1,4 +1,4 @@
-package skillbill.infrastructure.workflow.git.goal
+package skillbill.infrastructure.workflow.github
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort

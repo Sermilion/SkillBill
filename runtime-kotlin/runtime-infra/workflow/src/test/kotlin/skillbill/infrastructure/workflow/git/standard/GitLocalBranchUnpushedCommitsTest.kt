@@ -1,7 +1,7 @@
 package skillbill.infrastructure.workflow.git.standard
 
-import skillbill.infrastructure.workflow.git.workflow.git
-import skillbill.infrastructure.workflow.git.workflow.runGit
+import skillbill.infrastructure.workflow.git.git
+import skillbill.infrastructure.workflow.git.runGit
 import skillbill.infrastructure.workflow.process.runGitCommand
 import java.nio.file.Files
 import java.nio.file.Path

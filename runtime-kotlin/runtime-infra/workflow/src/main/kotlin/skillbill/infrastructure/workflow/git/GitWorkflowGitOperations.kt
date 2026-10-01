@@ -1,4 +1,4 @@
-package skillbill.infrastructure.workflow.git.workflow
+package skillbill.infrastructure.workflow.git
 
 import skillbill.infrastructure.workflow.git.checkpoint.GitCheckpointHistoryOperations
 import skillbill.infrastructure.workflow.git.goal.GitGoalSubtaskReviewOperations

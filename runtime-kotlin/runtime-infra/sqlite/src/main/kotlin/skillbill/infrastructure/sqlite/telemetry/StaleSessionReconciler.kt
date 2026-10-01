@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite.telemetry
 
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import skillbill.infrastructure.sqlite.telemetry.goal.GoalIssueIdentity
 import skillbill.infrastructure.sqlite.telemetry.goal.emitGoalIssueFinished
 import skillbill.infrastructure.sqlite.telemetry.goal.nextGoalStateEnteredAtSql
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.emitFeatureTaskRuntimeFinished
@@ -11,7 +12,6 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.telemetry.model.TelemetryReconciliationRequest
 import skillbill.ports.telemetry.model.TelemetryReconciliationResult
 import java.sql.Connection
-import java.time.Clock
 import java.time.temporal.ChronoUnit
 
 internal const val STALE_SESSION_THRESHOLD_SECONDS: Long = 28_800L
@@ -71,29 +71,6 @@ private val lifecycleTargets =
 
 internal fun reconcileStaleTelemetrySessions(
   connection: Connection,
-  clock: Clock,
-  level: String,
-  diagnostics: RuntimeDiagnostics,
-  runtimeVersion: String = "test-runtime-version",
-  policy: StaleSessionReconciliationPolicy = StaleSessionReconciliationPolicy(),
-): TelemetryReconciliationResult =
-  reconcileStaleTelemetrySessions(
-    connection = connection,
-    request =
-      TelemetryReconciliationRequest(
-        level = level,
-        cadenceSeconds = 0L,
-        maximumBatchSize = Int.MAX_VALUE,
-        sessionThresholdSeconds = policy.sessionThresholdSeconds,
-        goalIssueAbandonmentDays = policy.goalIssueAbandonmentDays,
-        now = clock.instant(),
-      ),
-    diagnostics = diagnostics,
-    runtimeVersion = runtimeVersion,
-  )
-
-internal fun reconcileStaleTelemetrySessions(
-  connection: Connection,
   request: TelemetryReconciliationRequest,
   diagnostics: RuntimeDiagnostics,
   runtimeVersion: String = "test-runtime-version",
@@ -109,14 +86,7 @@ internal fun reconcileStaleTelemetrySessions(
         val issueKey = requireNotNull(candidate.secondaryIdentity)
         val goal = GoalIssueIdentity(candidate.primaryIdentity, issueKey)
         markGoalIssueAbandoned(connection, goal) &&
-          emitGoalIssueFinished(
-            connection,
-            runtimeVersion,
-            goal.parentWorkflowId,
-            goal.issueKey,
-            request.level,
-            diagnostics,
-          ).let { true }
+          emitGoalIssueFinished(connection, runtimeVersion, goal, request.level, diagnostics).let { true }
       } else {
         val target = requireNotNull(lifecycleTargets.firstOrNull { it.family == candidate.family })
         markLifecycleSessionStale(connection, target, candidate.primaryIdentity).also { marked ->
@@ -144,8 +114,14 @@ internal fun reconcileStaleFeatureTaskRuntimeSessions(
   diagnostics: RuntimeDiagnostics,
   runtimeVersion: String = "test-runtime-version",
   thresholdSeconds: Long = STALE_SESSION_THRESHOLD_SECONDS,
-): Int =
-  reconcileLifecycleTable(connection, lifecycleTargets[0], runtimeVersion, thresholdSeconds, "anonymous", diagnostics)
+): Int {
+  val target = lifecycleTargets[0]
+  return staleSessionIds(connection, target, thresholdSeconds).count { sessionId ->
+    markLifecycleSessionStale(connection, target, sessionId).also { marked ->
+      if (marked) target.emitFinished(connection, runtimeVersion, sessionId, "anonymous", diagnostics)
+    }
+  }
+}
 
 private fun claimReconciliationCadence(
   connection: Connection,
@@ -163,22 +139,6 @@ private fun claimReconciliationCadence(
   ).use { statement ->
     statement.bindAll(RECONCILIATION_STATE_KEY, completedAt, eligibleBefore)
     statement.executeUpdate() > 0
-  }
-}
-
-private fun reconcileLifecycleTable(
-  connection: Connection,
-  target: LifecycleReconciliationTarget,
-  runtimeVersion: String,
-  thresholdSeconds: Long,
-  level: String,
-  diagnostics: RuntimeDiagnostics,
-): Int {
-  val sessionIds = staleSessionIds(connection, target, thresholdSeconds)
-  return sessionIds.count { sessionId ->
-    markLifecycleSessionStale(connection, target, sessionId).also { marked ->
-      if (marked) target.emitFinished(connection, runtimeVersion, sessionId, level, diagnostics)
-    }
   }
 }
 
@@ -272,8 +232,6 @@ private fun latestSegmentCountSelect(columnName: String): String =
   "SELECT segment.$columnName FROM goal_run_sessions segment " +
     "WHERE segment.workflow_id = goal_issue_progress.latest_segment_workflow_id " +
     "AND segment.$columnName IS NOT NULL LIMIT 1"
-
-private data class GoalIssueIdentity(val parentWorkflowId: String, val issueKey: String)
 
 private const val GOAL_ISSUE_FAMILY = "goal_issue"
 private const val RECONCILIATION_STATE_KEY = "stale_session_reconciliation"

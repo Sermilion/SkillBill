@@ -215,6 +215,7 @@ class LifecycleTelemetryTruthfulnessTest {
         ),
         level = "full",
         salt = "salt",
+        diagnostics = SqliteTestDiagnostics,
       )
     assertEquals(
       TelemetryMeasurementAvailability.UNAVAILABLE_INCOMPLETE.wireValue,
@@ -239,6 +240,7 @@ class LifecycleTelemetryTruthfulnessTest {
         ),
         level = "full",
         salt = "salt",
+        diagnostics = SqliteTestDiagnostics,
       )
 
     assertEquals(
@@ -264,6 +266,7 @@ class LifecycleTelemetryTruthfulnessTest {
           sessionRow(connection, "ftr-truth"),
           level = "anonymous",
           salt = "salt",
+          diagnostics = SqliteTestDiagnostics,
         )
       listOf(
         LifecycleTelemetryPayloadKeys.REVIEW_FIX_CAP_EXHAUSTED_AVAILABILITY,
@@ -290,6 +293,7 @@ class LifecycleTelemetryTruthfulnessTest {
           LifecycleTelemetryPayloadKeys.COMPLETION_STATUS to "completed",
         ),
         level = "anonymous",
+        diagnostics = SqliteTestDiagnostics,
       )
 
     assertNull(

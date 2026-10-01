@@ -41,7 +41,7 @@ The subtask specs hold the checkable criteria. The feature is done when all of t
 - No new module, framework, port, dependency bag or architecture-test class; no baseline growth.
 - Wire, JSON, YAML, telemetry and persisted values stay byte-identical.
 - The `SQLiteDatabaseSessionFactory` constructor stays source-compatible with SKILL-389's inlining.
-- Follow `runtime-kotlin/ARCHITECTURE.md` Design Principles and `docs/code-principles.md`.
+- Follow `../../../runtime-kotlin/ARCHITECTURE.md` Design Principles and `docs/code-principles.md`.
 
 ## Non-Goals
 

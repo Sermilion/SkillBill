@@ -7,7 +7,7 @@ import skillbill.engine.phaseIdFromPrompt
 import skillbill.engine.telemetryRunnerHarness
 import skillbill.engine.validJsonOutput
 import skillbill.error.featuretask.PullRequestBranchRefusedError
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition

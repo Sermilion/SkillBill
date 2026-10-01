@@ -1,7 +1,7 @@
 package skillbill.mcp.workflow
 
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.mcp.shared.McpRuntimeContext
 import skillbill.mcp.shared.assertGoldenPayload
 import skillbill.mcp.shared.assertSqliteTimestampShape

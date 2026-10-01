@@ -17,7 +17,7 @@ import skillbill.engine.phasePerAgentAssignment
 import skillbill.engine.satisfiedAuditLauncher
 import skillbill.engine.telemetryRunnerHarness
 import skillbill.engine.validJsonOutput
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.validation.ValidationGateRunner

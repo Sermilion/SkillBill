@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.telemetry.lifecycle.session
 
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalFinishedSaveOutcome
+import skillbill.infrastructure.sqlite.telemetry.goal.GoalIssueIdentity
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalIssueSegmentStart
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalStartedSaveOutcome
 import skillbill.infrastructure.sqlite.telemetry.goal.emitGoalFinished
@@ -83,7 +84,8 @@ internal class LifecycleTelemetryGoalSessionAdapter(
     level: String,
   ) {
     if (saveGoalIssueFinished(connection, record, diagnostics).persisted) {
-      emitGoalIssueFinished(connection, runtimeVersion, record.parentWorkflowId, record.issueKey, level, diagnostics)
+      val goal = GoalIssueIdentity(record.parentWorkflowId, record.issueKey)
+      emitGoalIssueFinished(connection, runtimeVersion, goal, level, diagnostics)
     }
   }
 }

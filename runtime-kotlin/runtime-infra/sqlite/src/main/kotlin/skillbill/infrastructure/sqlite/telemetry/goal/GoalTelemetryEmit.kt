@@ -40,15 +40,16 @@ internal fun emitGoalFinished(
   markGoalRunSessionEmitted(connection, "finished_event_emitted_at", workflowId)
 }
 
+internal data class GoalIssueIdentity(val parentWorkflowId: String, val issueKey: String)
+
 internal fun emitGoalIssueFinished(
   connection: Connection,
   runtimeVersion: String,
-  parentWorkflowId: String,
-  issueKey: String,
+  goal: GoalIssueIdentity,
   level: String,
   diagnostics: RuntimeDiagnostics,
 ) {
-  val row = goalIssueProgressRow(connection, parentWorkflowId, issueKey) ?: return
+  val row = goalIssueProgressRow(connection, goal.parentWorkflowId, goal.issueKey) ?: return
   if (row.stringOrEmpty("finished_event_emitted_at").isNotBlank()) {
     return
   }
@@ -60,7 +61,7 @@ internal fun emitGoalIssueFinished(
       diagnostics,
     )
   enqueueTelemetry(connection, runtimeVersion, TelemetryOutboxEvent.GOAL_ISSUE_FINISHED, payload)
-  markGoalIssueProgressEmitted(connection, parentWorkflowId, issueKey)
+  markGoalIssueProgressEmitted(connection, goal.parentWorkflowId, goal.issueKey)
 }
 
 internal fun emitGoalSubtaskFinished(

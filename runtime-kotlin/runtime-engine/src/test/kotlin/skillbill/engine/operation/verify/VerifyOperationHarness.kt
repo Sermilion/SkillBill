@@ -33,7 +33,7 @@ import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.model.EnvironmentContext
 import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts

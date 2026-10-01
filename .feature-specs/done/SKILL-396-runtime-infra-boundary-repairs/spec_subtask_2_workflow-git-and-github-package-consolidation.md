@@ -1,6 +1,6 @@
 # SKILL-396 Subtask 2 - Workflow git and GitHub package consolidation
 
-Parent spec: [.feature-specs/SKILL-396-runtime-infra-boundary-repairs/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-396-runtime-infra-boundary-repairs/spec.md](spec.md)
 Issue key: SKILL-396
 
 ## Scope
@@ -39,7 +39,7 @@ Goal build gate: compile all runtime-kotlin modules and run the workflow, engine
 
 ## Implementation Details
 
-Scope is F-006 only. Subtask 1 (F-001 to F-005) touches runtime-infra/contracts, sqlite, skills, runtime-domain and one core DI import for the add-on store. None of the files below overlap with it, so this plan applies to the tree as it stands when the task runs. All paths are relative to `runtime-kotlin/runtime-infra/workflow/src/` unless stated otherwise. Use `git mv` so history follows the files. Only `package` and `import` lines change.
+Scope is F-006 only. Subtask 1 (F-001 to F-005) touches runtime-infra/contracts, sqlite, skills, runtime-domain and one core DI import for the add-on store. None of the files below overlap with it, so this plan applies to the tree as it stands when the task runs. All paths are relative to `../../../runtime-kotlin/runtime-infra/workflow/src` unless stated otherwise. Use `git mv` so history follows the files. Only `package` and `import` lines change.
 
 Census taken on `fe6244253`. Rerun the step 6 greps before editing, and treat any extra hit as one more consumer to rewrite.
 
@@ -94,7 +94,7 @@ Make these line-for-line replacements: `skillbill.infrastructure.workflow.git.wo
 - Add no baseline rows, and edit no baseline file.
 - The runtime-infra-workflow package-cycle scan is `FIRST_SEGMENT_MUTUAL_PAIR` over `skillbill.infrastructure.workflow.`. After the move, `github` imports nothing under `skillbill.infrastructure.workflow.*`, and nothing in runtime-infra/workflow main imports `github`. No `git`↔`github` pair can form, so `runtime-infra-workflow-package-cycle-baseline.txt` stays empty.
 - No baseline, `RuntimeModuleCatalog` entry or `build.gradle.kts` line names the moved files or packages, so nothing else needs editing.
-- `runtime-kotlin/ARCHITECTURE.md:1128` names `GhPullRequestReviewThreads` by class only, so leave it as is. Do not edit `agent/history.md` or `decisions.md` here; write_history owns them.
+- `runtime-kotlin/ARCHITECTURE.md:1128` names `GhPullRequestReviewThreads` by class only, so leave it as is. Do not edit `../../../agent/history.md` or `decisions.md` here; write_history owns them.
 
 ### 6. Self-check greps for the implement/audit phases (no compile or test runs here)
 - `grep -rlE --include='*.kt' 'skillbill\.infrastructure\.workflow\.git\.(workflow|github)' runtime-kotlin` must return nothing (AC-001, AC-002).

@@ -56,8 +56,7 @@ internal object ReviewStatsRuntime {
   fun featureVerifyStats(
     connection: Connection,
     diagnostics: RuntimeDiagnostics,
-  ): FeatureVerifyWorkflowStats =
-    buildFeatureVerifyStats(loadRows(connection, "feature_verify_sessions"), diagnostics)
+  ): FeatureVerifyWorkflowStats = buildFeatureVerifyStats(loadRows(connection, "feature_verify_sessions"), diagnostics)
 
   fun featureTaskRuntimeStats(
     connection: Connection,
