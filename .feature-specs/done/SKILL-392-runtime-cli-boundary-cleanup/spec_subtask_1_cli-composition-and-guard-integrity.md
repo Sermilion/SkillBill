@@ -59,7 +59,7 @@ Depends on: none.
 
 ## Implementation Details
 
-This child covers subtask 1 only (F-002 to F-010). F-001, F-011 and F-012 belong to the subtask 2 child. Paths below are relative to `runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/` unless they start with `runtime-kotlin/`. The plan was checked against HEAD `677d01c00`. SKILL-388, SKILL-389, SKILL-393 and SKILL-395 have landed, so edit the current text of `PrincipleEnforcementInventory.kt`, the scanner support files and the goal formatting files, which already use the SKILL-393 engine imports.
+This child covers subtask 1 only (F-002 to F-010). F-001, F-011 and F-012 belong to the subtask 2 child. Paths below are relative to `../../../runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli` unless they start with `runtime-kotlin/`. The plan was checked against HEAD `677d01c00`. SKILL-388, SKILL-389, SKILL-393 and SKILL-395 have landed, so edit the current text of `PrincipleEnforcementInventory.kt`, the scanner support files and the goal formatting files, which already use the SKILL-393 engine imports.
 
 ### Ordered tasks
 
@@ -163,7 +163,7 @@ This child covers subtask 1 only (F-002 to F-010). F-001, F-011 and F-012 belong
    - Help output stays the same, because Clikt prints choice keys in insertion order and does not show defaults.
 
 9. **Guards (AC 2, AC 4, AC 5, AC 12).**
-   - `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/ArchitectureScanGuardSupport.kt` (735 lines now): next to the inject-property scanner, add the following.
+   - `../../../runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/ArchitectureScanGuardSupport.kt` (735 lines now): next to the inject-property scanner, add the following.
      - An `INTERNAL_DATA_CLASS_PATTERN`.
      - The collaborator rule: exact names `CliRunState` and `Clock`, plus the suffixes `Service`, `Port`, `Gateway`, `Lookup`, `Repository`, `Coordinator`, `Runner`, `Launcher` and `Diagnostics`.
      - `ArchitectureScanSupport.dataClassCollaboratorPropertySites(scanRoot)` and `dataClassCollaboratorPropertySitesInSource(relativePath, source)`. These reuse `sourceWithoutCommentsOrLiterals`, `afterClassTypeParameters`, `extractBalanced`, `splitTopLevelParameters` and the `->` masking from `nonPrivateConstructorProperties`, and return `InjectConstructorDefaultSite`.

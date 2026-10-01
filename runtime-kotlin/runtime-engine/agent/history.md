@@ -1,3 +1,15 @@
+## [2026-10-01] SKILL-392 subtask 2 — Engine owns the feature-task run entry
+Areas: runtime-kotlin/runtime-engine/skillbill/engine/featuretask/{runner,lifecycle/execution,model/core}, runtime-kotlin/runtime-cli/{featuretask,goal/core,model}, runtime-kotlin/runtime-ports/system, runtime-kotlin/runtime-infra/host, runtime-kotlin/runtime-core/repoTest/architecture
+- New engine `FeatureTaskRuntimeRunEntry` opens the workflow, resolves inputs, derives the execution identity and runs inside the worker coordinator's lease wrapper; the CLI now only builds a `FeatureTaskRuntimeRunInput` and calls it.
+- Identity and governed-spec-path derivation live once in the execution entry as internal extensions on the repository-root port; admission reuses them.
+- The CLI run-override test seam is retyped to take the run input, so tests capture the input instead of CLI-built types.
+- `HostPlatformPort` gained `javaCommand`, so runtime-cli main no longer touches `ProcessHandle`. Handwritten port stubs must override it. reusable
+- Engine inbound-API pins gained the entry and input types and lost 15 zero-reference pins; one runtime-cli test moved to runtime-core.
+- Validate fixed subtask 1 leftovers: two scaffold files renamed to match their single declaration, an import-order fix, and a moved-file path in the install-policy guard.
+- Limitation: a malformed issue key on the explicit-workflow path now fails at key normalization, and an invalid spec path reports before an unknown-workflow error. agnix was not run headless.
+Feature flag: N/A
+Acceptance criteria: implemented per spec; validate passed
+
 ## [2026-10-01] SKILL-393 subtask 1 — Engine-owned contracts move from ports to engine
 Areas: runtime-kotlin/runtime-engine/skillbill/engine/{goalrunner/{manifest,persist,repair,model,planning},work/model}, runtime-kotlin/runtime-ports/{goalrunner,idestatus}, runtime-kotlin/runtime-core/{di/goal,repoTest/architecture}, runtime-kotlin/runtime-cli
 - Goal-runner manifest, outcome and repair store interfaces, their request/result models and the child-planning hydrator port now live in the engine. Ports no longer holds `goalrunner/persistence`, the three runner store files or the reset-subtask snapshot.

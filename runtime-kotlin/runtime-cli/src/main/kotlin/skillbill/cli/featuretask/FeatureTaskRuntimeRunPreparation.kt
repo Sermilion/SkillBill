@@ -44,7 +44,9 @@ class FeatureTaskRuntimeRunPreparation(
     val runIssueKey = issueKey ?: throw UsageError("issue_key is required for feature-task run.")
     val resolvedRepoRoot = resolveCliRepositoryRoot(options.repoRoot, inputs)
     val runSpecPath = resolveSpecPath(runIssueKey, explicitSpecPath, resolvedRepoRoot)
-    return prepare(options, resolvedRepoRoot, runIssueKey, runSpecPath)
+    val prepared = prepare(options, resolvedRepoRoot, runIssueKey, runSpecPath)
+    repositoryEnclosingRootPort.governedSpecPathForCli(prepared.repoRoot, Path.of(prepared.specPath))
+    return prepared
   }
 
   internal fun prepareResume(

@@ -219,7 +219,7 @@ class GoalRunCommand(
           runtimeProvenanceService.current(
             executablePathHint = inputs.environment[RUNTIME_EXECUTABLE_ENV],
             classPath = inputs.environment[RUNTIME_CLASSPATH_ENV] ?: hostPlatform.jvmClassPath,
-            javaCommand = ProcessHandle.current().info().command().orElse(null),
+            javaCommand = hostPlatform.javaCommand,
             pathSeparator = inputs.environment[RUNTIME_PATH_SEPARATOR_ENV] ?: hostPlatform.pathSeparator,
           ),
       )

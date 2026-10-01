@@ -113,7 +113,7 @@ class FeatureTaskRuntimeResumeCommand(
   private val specPath by argument(help = "Path to the governed spec the run implements.")
 
   override fun run() {
-    execution.execute(this, preparation.prepareResume(this, workflowId, issueKey, specPath), workflowId)
+    execution.run(this, preparation.prepareResume(this, workflowId, issueKey, specPath), workflowId)
   }
 }
 

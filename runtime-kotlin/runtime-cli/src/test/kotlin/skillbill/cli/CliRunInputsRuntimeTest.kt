@@ -265,5 +265,6 @@ private class StubHostPlatformPort(override val osName: String) : HostPlatformPo
   override fun resolveTemporaryDirectory(): Path = Path.of("/tmp")
 
   override val jvmClassPath: String = ""
+  override val javaCommand: String? = null
   override val pathSeparator: String = ":"
 }

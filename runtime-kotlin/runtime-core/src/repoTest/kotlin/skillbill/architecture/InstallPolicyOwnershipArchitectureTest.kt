@@ -19,7 +19,7 @@ class InstallPolicyOwnershipArchitectureTest {
     mapOf(
       "$infraSkillsModule/src/main/kotlin/skillbill/infrastructure/skills/install/plan/InstallPlanBuilder.kt" to
         "validateInstallPlanWireSnapshot",
-      "runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/install/core/InstallCliPayloads.kt" to
+      "runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/install/apply/InstallCliPayloads.kt" to
         "installService.validateInstallPlanWire",
     )
 

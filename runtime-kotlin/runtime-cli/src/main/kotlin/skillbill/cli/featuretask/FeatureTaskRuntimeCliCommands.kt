@@ -136,7 +136,11 @@ class FeatureTaskRuntimeRunCommand(
     if (currentContext.invokedSubcommand != null) {
       return
     }
-    execution.run(this, preparation.prepareRun(this, issueKey, specPath))
+    execution.run(
+      this,
+      preparation.prepareRun(this, issueKey, specPath),
+      explicitWorkflowId?.takeIf(String::isNotBlank),
+    )
   }
 }
 
@@ -152,6 +156,10 @@ class FeatureTaskRuntimeExplicitRunCommand(
   private val specPath by argument(help = "Path to the governed spec the run implements.").optional()
 
   override fun run() {
-    execution.run(this, preparation.prepareRun(this, issueKey, specPath))
+    execution.run(
+      this,
+      preparation.prepareRun(this, issueKey, specPath),
+      explicitWorkflowId?.takeIf(String::isNotBlank),
+    )
   }
 }

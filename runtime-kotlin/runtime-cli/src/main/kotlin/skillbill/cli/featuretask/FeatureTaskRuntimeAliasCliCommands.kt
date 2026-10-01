@@ -42,7 +42,11 @@ class FeatureTaskRuntimeDeprecatedRunCommand(
     if (currentContext.invokedSubcommand != null) {
       return
     }
-    execution.run(this, preparation.prepareRun(this, issueKey, specPath))
+    execution.run(
+      this,
+      preparation.prepareRun(this, issueKey, specPath),
+      explicitWorkflowId?.takeIf(String::isNotBlank),
+    )
   }
 }
 
@@ -59,6 +63,6 @@ class FeatureTaskRuntimeDeprecatedResumeCommand(
   private val specPath by argument(help = "Path to the governed spec the resumed run implements.")
 
   override fun run() {
-    execution.execute(this, preparation.prepareResume(this, workflowId, issueKey, specPath), workflowId)
+    execution.run(this, preparation.prepareResume(this, workflowId, issueKey, specPath), workflowId)
   }
 }

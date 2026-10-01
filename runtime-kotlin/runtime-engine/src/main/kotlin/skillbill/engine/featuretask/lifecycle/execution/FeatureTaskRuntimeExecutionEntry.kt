@@ -1,6 +1,8 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.workflow.model.FeatureTaskGovernedSpecPathResult
+import skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
@@ -9,6 +11,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.ValidationDepth
@@ -24,18 +27,12 @@ class FeatureTaskRuntimeExecutionEntry(
 ) {
   fun admit(request: FeatureTaskRuntimeRunRequest): AdmittedFeatureTaskRuntimeExecution {
     val root = repositories.canonicalPath(request.repoRoot)
-    val spec = Path.of(request.runInvariants.specReference).let { if (it.isAbsolute) it else root.resolve(it) }
-    val canonicalSpec = repositories.optionalRealPath(spec) ?: spec.toAbsolutePath().normalize()
-    if (!canonicalSpec.startsWith(root)) {
-      throw InvalidFeatureTaskExecutionIdentitySchemaError(request.workflowId, "spec escapes admitted repository")
-    }
     val expected =
-      FeatureTaskExecutionIdentity(
+      repositories.expectedFeatureTaskExecutionIdentity(
         request.workflowId,
-        request.issueKey.trim().uppercase(),
-        repositories.repositoryIdentity(root),
-        root.relativize(canonicalSpec).joinToString("/"),
-        FeatureTaskWorkflowMode.RUNTIME,
+        request.issueKey,
+        request.repoRoot,
+        Path.of(request.runInvariants.specReference),
         if (request.goalContinuation == null) FeatureTaskRouteScope.STANDALONE else FeatureTaskRouteScope.GOAL_CHILD,
       )
     val inputs =
@@ -72,3 +69,32 @@ class FeatureTaskRuntimeExecutionEntry(
 
   private fun CodeReviewExecutionMode.toRuntimeSelection() = RuntimeReviewSelection.valueOf(name)
 }
+
+internal fun RepositoryEnclosingRootPort.governedFeatureTaskSpecPath(
+  workflowId: String,
+  repoRoot: Path,
+  specPath: Path,
+): String =
+  when (val result = resolveFeatureTaskGovernedSpecPath(this, repoRoot, specPath)) {
+    is FeatureTaskGovernedSpecPathResult.Ok -> result.relativePath
+    is FeatureTaskGovernedSpecPathResult.OutsideRepository ->
+      throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "spec escapes admitted repository")
+    FeatureTaskGovernedSpecPathResult.InvalidGovernedPath ->
+      throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "spec is not Markdown beneath .feature-specs/")
+  }
+
+internal fun RepositoryEnclosingRootPort.expectedFeatureTaskExecutionIdentity(
+  workflowId: String,
+  issueKey: String,
+  repoRoot: Path,
+  specPath: Path,
+  routeScope: FeatureTaskRouteScope,
+): FeatureTaskExecutionIdentity =
+  FeatureTaskExecutionIdentity(
+    workflowId,
+    FeatureTaskExecutionIdentityPolicy.normalizeIssueKey(issueKey, workflowId),
+    repositoryIdentity(repoRoot),
+    governedFeatureTaskSpecPath(workflowId, repoRoot, specPath),
+    FeatureTaskWorkflowMode.RUNTIME,
+    routeScope,
+  )

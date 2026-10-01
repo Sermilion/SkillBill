@@ -43,7 +43,7 @@ Depends on: subtask 1. It waits for no other issue: if SKILL-387 or SKILL-389 (r
 
 SKILL-393 (runtime-ports) also edits `PINNED_ENGINE_INBOUND_API_TYPES` and deletes the engine `work.model` typealiases. Whichever lands second keeps both pin edits. If SKILL-393 lands first, the moved `IdeStatusReadSnapshotConcurrencyTest` imports `IdeStatusProblemCode` from `skillbill.ports.idestatus.model`.
 
-SKILL-387 has no shared symbol but rewrites engine phase-output admission. Whichever lands second rechecks `FeatureTaskRuntimeRunner.run`, `FeatureTaskRuntimeRunRequest` and `FeatureTaskRuntimeExecutionEntry` against the other's change. Before implementing, recheck `.feature-specs/` for runtime-engine `featuretask.runner` or runtime-ports `HostPlatformPort` bundles from parallel sessions.
+SKILL-387 has no shared symbol but rewrites engine phase-output admission. Whichever lands second rechecks `FeatureTaskRuntimeRunner.run`, `FeatureTaskRuntimeRunRequest` and `FeatureTaskRuntimeExecutionEntry` against the other's change. Before implementing, recheck `../..` for runtime-engine `featuretask.runner` or runtime-ports `HostPlatformPort` bundles from parallel sessions.
 
 ## Validation Strategy
 
@@ -59,11 +59,11 @@ SKILL-387 has no shared symbol but rewrites engine phase-output admission. Which
 
 Planned against HEAD `677d01c00` on `base/SKILL-380-phase-slot-strategies`. Subtask 1 lands first on the same feature branch. Apply each step to the files as subtask 1 left them. In particular, `VerifyRuntimeResumeArgs` is gone, `FeatureTaskRuntimeRunPreparation` injects `RepositoryEnclosingRootPort` directly, and `CliRunInputs` no longer carries `repositoryEnclosingRootPort`. Where subtask 1 has not removed something, use what is present.
 
-The byte-identity reference is `d13547842`. It is the rewritten SKILL-386 commit, and its tree differs from `ae23f4f28` only in `README.md`, so diffs compare against it.
+The byte-identity reference is `d13547842`. It is the rewritten SKILL-386 commit, and its tree differs from `ae23f4f28` only in `../../../README.md`, so diffs compare against it.
 
 ### Task 0: Pre-flight census (no code)
 
-- Recheck `.feature-specs/` for any new bundle that touches runtime-engine `featuretask.runner`, `featuretask.lifecycle.execution` or runtime-ports `HostPlatformPort`.
+- Recheck `../..` for any new bundle that touches runtime-engine `featuretask.runner`, `featuretask.lifecycle.execution` or runtime-ports `HostPlatformPort`.
 - SKILL-398 subtask 4: if it has landed, the two derivation throws in Task 1 use its coded `SkillBillRuntimeException` with the FeatureTaskRuntime area code instead of `InvalidFeatureTaskExecutionIdentitySchemaError`. Do not change the `SkillBillRuntimeException` arm in `CliRuntime`.
 - SKILL-387 has already landed. Implement against the current `FeatureTaskRuntimeRunner.run`, `FeatureTaskRuntimeRunRequest` and `FeatureTaskRuntimeExecutionEntry`.
 - SKILL-390 owns the other engine `trim().uppercase()` sites, the `FeatureTaskRuntimeRunner` getters and preflight add-on resolution. Leave them alone, including `validateAdmittedRequest`'s `request.issueKey.trim().uppercase()`.

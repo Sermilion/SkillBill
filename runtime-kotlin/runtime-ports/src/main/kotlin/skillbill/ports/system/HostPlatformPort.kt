@@ -5,6 +5,7 @@ import java.nio.file.Path
 interface HostPlatformPort {
   val osName: String
   val jvmClassPath: String
+  val javaCommand: String?
   val pathSeparator: String
 
   fun resolveUserHome(): Path

@@ -14,10 +14,10 @@ Every fix deletes, merges or moves code. None adds a module, a layer or a framew
 
 - Baseline: HEAD `ae23f4f28f16d851a0548e8149e0fe6fadbbc612` on `base/SKILL-380-phase-slot-strategies`. It equals `origin/base/SKILL-380-phase-slot-strategies` after `git fetch --all --prune`. The tree was clean.
 - I did the census myself with grep and Python: import graphs, exact-package Tarjan SCC, `@Inject` constructor parsing, data-class property parsing, literal-versus-enum-wire matching and body hashing for duplicate commands. No review subagents were used. No build or test was run.
-- Context read: AGENTS.md (CLAUDE.md points to it); runtime-kotlin/ARCHITECTURE.md (Design Principles, Gradle Modules, Package Ownership, Guardrails); docs/code-principles.md; runtime-cli/agent/history.md; the CLI entries in runtime-kotlin/agent/decisions.md. runtime-cli has no `agent/decisions.md`.
+- Context read: AGENTS.md (CLAUDE.md points to it); runtime-kotlin/ARCHITECTURE.md (Design Principles, Gradle Modules, Package Ownership, Guardrails); docs/code-principles.md; runtime-cli/agent/history.md; the CLI entries in runtime-kotlin/agent/decisions.md. runtime-cli has no `../../../agent/decisions.md`.
 - Prior work read: SKILL-386 in full (most recent), plus the relevant parts of SKILL-371, SKILL-373 (test ownership rule 8) and SKILL-229 history.
 - Sibling bundles read: SKILL-387 and SKILL-388, both committed in bd8ec1350 and both pending. When I wrote this bundle, no untracked bundle existed.
-- Key census, run immediately before writing, over `.feature-specs/`, `.feature-specs/done/`, `git branch -a` and `git log --all`: the highest key in use was SKILL-388. The bundle was first written as SKILL-389. A runtime-core plan run then wrote a second SKILL-389 bundle, and peer sessions claimed SKILL-390 (runtime-engine), SKILL-391 (runtime-contracts) and SKILL-396 (runtime-infra) for in-flight plan runs. This bundle re-keyed to SKILL-395 and then to SKILL-392, because the runtime-mcp session had reserved 395 for its plan run and runtime-domain holds 397.
+- Key census, run immediately before writing, over `../..`, `.feature-specs/done/`, `git branch -a` and `git log --all`: the highest key in use was SKILL-388. The bundle was first written as SKILL-389. A runtime-core plan run then wrote a second SKILL-389 bundle, and peer sessions claimed SKILL-390 (runtime-engine), SKILL-391 (runtime-contracts) and SKILL-396 (runtime-infra) for in-flight plan runs. This bundle re-keyed to SKILL-395 and then to SKILL-392, because the runtime-mcp session had reserved 395 for its plan run and runtime-domain holds 397.
 
 ## Census
 
@@ -138,7 +138,7 @@ SKILL-386 follow-ups: the domain/engine add-on decoder duplicate belongs to the 
 | Guard | Root resolution | Reads files | Enforces its documented rule |
 |---|---|---|---|
 | `RuntimeEngineInboundApiTest` | `runtimeArchitectureRoot.resolve("runtime-cli/src/main/kotlin")` | yes, `kotlinFilesUnderWithArchitectureAsserts` | yes |
-| `InjectConstructorDefaultsArchitectureTest` (CLI method) | `runtimeRoot.resolve(RUNTIME_CLI_MAIN)`, where `runtimeRoot` is the repo root and `RUNTIME_CLI_MAIN` is `runtime-kotlin/runtime-cli/src/main/kotlin` | yes; a missing root errors | only for `@Inject` constructors; argument bags are out of scope (F-002) |
+| `InjectConstructorDefaultsArchitectureTest` (CLI method) | `runtimeRoot.resolve(RUNTIME_CLI_MAIN)`, where `runtimeRoot` is the repo root and `RUNTIME_CLI_MAIN` is `../../../runtime-kotlin/runtime-cli/src/main/kotlin` | yes; a missing root errors | only for `@Inject` constructors; argument bags are out of scope (F-002) |
 | `ApplicationPackageAcyclicityArchitectureTest` (runtime-cli census) | same root | yes | no: the default `FIRST_SEGMENT_MUTUAL_PAIR` collapses `goal.core`/`goal.control` into one node (F-003) |
 | `RuntimeCliAreaIsolationArchitectureTest` | same root | yes | no: `cliSharedLeafAreas` = {codereview, kernel, model} (`PrincipleEnforcementInventory.kt:102`, added by SKILL-372 in 3973aa265), while ARCHITECTURE.md:2093-2095 and :2198-2201 allow kernel and model only (F-004) |
 | `RuntimeAdapterDependencyAllowlistTest` | `RuntimeModuleCatalog` | build files | yes |
@@ -369,7 +369,7 @@ Every fix removes or merges code. The only additions are the engine run entry an
 
 Global order: SKILL-388, then SKILL-387, then SKILL-389, then SKILL-392 (subtask 1, then 2), then SKILL-390 (runtime-engine). Subtask 1 is runtime-cli-internal and may land earlier than SKILL-387 under the rebase rules above. Subtask 2 waits for SKILL-387 and SKILL-389.
 
-Parallel sessions were starting on other modules when I wrote this bundle. Before implementing, recheck `.feature-specs/` for new runtime-engine `featuretask.runner`/`lifecycle.execution`, runtime-ports `HostPlatformPort` or repoTest scanner bundles.
+Parallel sessions were starting on other modules when I wrote this bundle. Before implementing, recheck `../..` for new runtime-engine `featuretask.runner`/`lifecycle.execution`, runtime-ports `HostPlatformPort` or repoTest scanner bundles.
 
 ## Follow-ups (not in this bundle)
 

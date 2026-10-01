@@ -2,11 +2,7 @@ package skillbill.cli.featuretask
 
 import com.github.ajalt.clikt.core.UsageError
 import skillbill.application.workflow.model.FeatureTaskGovernedSpecPathResult
-import skillbill.application.workflow.model.WorkflowOpenResult
-import skillbill.application.workflow.model.WorkflowServiceOpenFeatureTaskArgs
-import skillbill.application.workflow.persist.openFeatureTask
 import skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath
-import skillbill.application.workflow.service.WorkflowService
 import skillbill.cli.model.CliRunInputs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
@@ -25,12 +21,6 @@ internal fun RepositoryEnclosingRootPort.governedSpecPathForCli(
       throw UsageError("Governed spec path must remain inside repository '${result.repositoryRoot}'.")
     FeatureTaskGovernedSpecPathResult.InvalidGovernedPath ->
       throw UsageError("Governed spec path must be Markdown beneath .feature-specs/.")
-  }
-
-internal fun WorkflowService.openRuntimeWorkflowId(args: WorkflowServiceOpenFeatureTaskArgs): String =
-  when (val opened = openFeatureTask(args)) {
-    is WorkflowOpenResult.Ok -> opened.workflowId
-    is WorkflowOpenResult.Error -> throw UsageError("Could not open a feature-task workflow: ${opened.error}")
   }
 
 internal fun runtimeRunEventSink(

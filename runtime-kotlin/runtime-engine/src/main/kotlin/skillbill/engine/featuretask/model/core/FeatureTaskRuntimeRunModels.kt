@@ -46,6 +46,24 @@ data class FeatureTaskRuntimeRunRequest(
   }
 }
 
+data class FeatureTaskRuntimeRunInput(
+  val issueKey: String,
+  val specPath: String,
+  val repoRoot: Path,
+  val explicitWorkflowId: String?,
+  val invokedAgentId: String,
+  val agentAssignment: FeatureTaskRuntimeAgentAssignment,
+  val modelAssignment: FeatureTaskRuntimeModelAssignment,
+  val compactionSettings: CompactionSettings,
+  val environment: Map<String, String>,
+  val timeout: Duration?,
+  val requestedCodeReviewMode: CodeReviewExecutionMode?,
+  val goalContinuation: FeatureTaskRuntimeGoalContinuationContext?,
+  val operatorDecision: GoalSubtaskOperatorDecision?,
+  val agentAddonSelection: HydratedAgentAddonSelection,
+  val eventSink: FeatureTaskRuntimeRunEventSink,
+)
+
 data class FeatureTaskRuntimeGoalContinuationContext(
   val parentIssueKey: String,
   val subtaskId: Int,

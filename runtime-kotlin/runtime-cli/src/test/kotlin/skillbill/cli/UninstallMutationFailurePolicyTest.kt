@@ -160,6 +160,7 @@ private object StubUninstallHostPlatformPort : HostPlatformPort {
 
   override val osName: String = "Linux"
   override val jvmClassPath: String = ""
+  override val javaCommand: String? = null
   override val pathSeparator: String = ":"
 }
 
