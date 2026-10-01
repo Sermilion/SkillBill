@@ -46,7 +46,7 @@ class FeatureTaskRuntimeHandoffFoundationModelsTest {
     assertEquals(true, wire["allows_private_artifact_reference"])
     assertEquals("private_evidence_artifact", wire["inline_alternative"])
     assertFalse(wire.containsKey("source_ref"))
-    assertEquals(declaration, PhaseHandoffProjectionDeclaration.fromArtifactMap(wire) { _, _, _ -> })
+    assertEquals(declaration, PhaseHandoffProjectionDeclaration.fromArtifactMap(wire))
   }
 
   @Test

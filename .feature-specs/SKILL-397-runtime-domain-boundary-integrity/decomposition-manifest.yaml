@@ -3,22 +3,22 @@ contract_version: "0.5"
 issue_key: "SKILL-397"
 feature_name: "runtime-domain-boundary-integrity"
 parent_spec_path: ".feature-specs/SKILL-397-runtime-domain-boundary-integrity/spec.md"
-status: "pending"
+status: "in_progress"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feat/SKILL-397-runtime-domain-boundary-integrity"
 stack_branches: []
 current_subtask_intent:
   subtask_id: 1
-  action: "start"
+  action: "resume"
 subtasks:
 - id: 1
   name: "domain-wire-boundary-honesty"
   spec_path: ".feature-specs/SKILL-397-runtime-domain-boundary-integrity/spec_subtask_1_domain-wire-boundary-honesty.md"
-  status: "pending"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261001-195638-9tys"
   blocked_reason: null
   last_resumable_step: null
   linear_issue_id: null

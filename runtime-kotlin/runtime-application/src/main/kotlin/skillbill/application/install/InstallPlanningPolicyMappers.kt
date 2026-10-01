@@ -6,7 +6,7 @@ import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.InstallPlatformPackSnapshot
 import skillbill.install.model.InstallPolicyInput
 import skillbill.install.model.InstallStagingIntent
-import skillbill.install.policy.InstallPlanPolicy
+import skillbill.install.model.buildInstallPlanWireMap
 import skillbill.ports.install.InstallPlanWireValidator
 import skillbill.ports.install.plan.model.InstallPlanningFacts
 
@@ -30,6 +30,6 @@ internal fun validatedInstallPlan(
   validator: InstallPlanWireValidator,
 ): InstallPlan {
   val plan = draft.toInstallPlan(staging)
-  InstallPlanPolicy.validateInstallPlanSnapshot(plan, validator::validate)
+  validator.validate(buildInstallPlanWireMap(plan))
   return plan
 }

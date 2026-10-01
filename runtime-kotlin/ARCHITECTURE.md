@@ -984,10 +984,25 @@ silently bypass the journal boundary.
     `runtime-ports` MUST NOT return or accept `Map<String, Any?>`,
     `Map<String, Any>`, `Map<String, *>`, string-keyed `MutableMap`,
     `HashMap`, or `LinkedHashMap` variants, or type aliases to those
-    shapes. There is no curated FQN allow-list and no production
-    annotation escape hatch. `RuntimeRawMapArchitectureTest.runtime
+    shapes. Public declarations in those modules also MUST NOT be typed
+    exactly `Any`: a public `Any` return or property hides a raw map behind a
+    type the scanner cannot see, so it is rejected the same way. Use a typed
+    carrier (for example `FeatureTaskRuntimeWorkflowArtifactMap`,
+    `DurableWorkflowArtifacts`, or `WorkflowArtifactPatch`) instead.
+
+    The only allow-listed raw-map members are the four
+    `DurableWorkflowArtifactFamily` members `contains`, `value`, `putInto`,
+    and `removeFrom`. The family's `key` is private, so these four are the
+    single typed gate for reading or writing a durable artifact family, and
+    they must accept `Map<String, Any?>`. There is no other FQN allow-list and
+    no production annotation escape hatch. `RuntimeRawMapArchitectureTest.runtime
     architecture forbids public raw map shapes in inner layers` fails on
-    any new public raw-map surface in those modules.
+    any new public raw-map or exact-`Any` surface in those modules.
+
+    The domain accepts no validators. Schema validators live in
+    `runtime-ports` (`FeatureTaskRuntimeWireArtifactValidator`,
+    `InstallPlanWireValidator`); callers validate the wire map before or after
+    the domain builds it.
 
     Contain wire maps in `private` or `internal` adapter serializers, or
     replace them with typed models at the port or application boundary.
@@ -1949,8 +1964,8 @@ typed snapshots before calling the policy.
 
 The install-plan wire map remains the schema source of truth at both existing
 seams. `buildInstallPlan` still calls
-`validateInstallPlanWireSnapshot(plan)`, and the CLI emission boundary still
-revalidates the same helper output before emitting `installPlanPayload` or the
+`wireValidator.validate(buildInstallPlanWireMap(plan))`, and the CLI emission
+boundary still revalidates the same wire map before emitting `installPlanPayload` or the
 planning prefix of `installApplyPayload`. New install policy APIs must use typed
 request/result/snapshot models and must not add public raw `Map<String, Any?>`
 returns outside the documented open-boundary allow-list. Adapter modules may
@@ -2116,8 +2131,10 @@ boundary rules:
   agent-target cleanup, native-agent unlinking, and MCP unregistration.
 - The Raw Map Boundary Rule (rule 11) is enforced by
   `RuntimeRawMapArchitectureTest.runtime architecture forbids public raw map
-  shapes in inner layers` with zero-tolerance: no allow-list and no annotation
-  grandfather path.
+  shapes in inner layers` with zero-tolerance: the only allow-listed members
+  are the four `DurableWorkflowArtifactFamily` accessors (`contains`, `value`,
+  `putInto`, `removeFrom`), public declarations typed exactly `Any` are
+  rejected, and there is no annotation grandfather path.
 
 Architecture scanners use `ArchitectureScanSupport.runtimeRoot` as the
 repository root that contains `runtime-kotlin`. A named module source root is

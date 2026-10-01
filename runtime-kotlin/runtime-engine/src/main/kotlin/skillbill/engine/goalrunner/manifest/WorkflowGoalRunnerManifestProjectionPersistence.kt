@@ -21,7 +21,6 @@ import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
-import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 
 internal data class SavedManifestProjection(
@@ -78,10 +77,7 @@ internal class WorkflowGoalRunnerManifestProjectionPersistence(
           workflowStatus = existingSnapshot.workflowStatus,
           currentStepId = existingSnapshot.currentStepId,
           stepUpdates = null,
-          artifactsPatch =
-            WorkflowArtifactPatch.from(
-              parentProjection.artifacts(manifest, existingSnapshot.artifacts),
-            ),
+          artifactsPatch = parentProjection.artifacts(manifest, existingSnapshot.artifacts),
           sessionId = existingSnapshot.sessionId.orEmpty(),
           replaceArtifacts = true,
         ),

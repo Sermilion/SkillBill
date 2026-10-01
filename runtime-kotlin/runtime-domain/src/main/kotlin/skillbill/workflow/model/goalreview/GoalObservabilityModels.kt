@@ -4,6 +4,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.goal.GOAL_OBSERVABILITY_EVENT_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GOAL_PROGRESS_EVENT_CONTRACT_VERSION
 import skillbill.error.shellcontent.InvalidGoalProgressEventSchemaError
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.time.parsePersistedInstant
 import java.time.Instant
 
@@ -114,7 +115,8 @@ data class GoalProgressEvent(
     }
   }
 
-  fun toPersistenceWire(): Any = toArtifactMap()
+  fun toPersistenceWire(): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
   internal fun toArtifactMap(): Map<String, Any?> =
     linkedMapOf<String, Any?>(
@@ -288,7 +290,8 @@ data class GoalObservabilityEvent(
       }
     }
 
-  fun toCompactSummaryWire(): Any = toCompactSummaryMap()
+  fun toCompactSummaryWire(): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(toCompactSummaryMap())
 
   internal fun toCompactSummaryMap(): Map<String, Any?> =
     linkedMapOf<String, Any?>(

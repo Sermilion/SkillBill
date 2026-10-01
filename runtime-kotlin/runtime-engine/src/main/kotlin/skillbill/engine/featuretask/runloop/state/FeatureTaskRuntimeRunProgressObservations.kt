@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.runloop.state
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -104,8 +105,7 @@ internal fun detachedOutput(output: FeatureTaskRuntimePhaseOutput): FeatureTaskR
   )
 
 internal fun detachedEnvelope(normalized: NormalizedFeatureTaskRuntimePhaseOutput): Map<String, Any?> {
-  val envelope = normalized.envelopePayload() as Map<*, *>
-  return envelope.entries.associate { (key, value) -> key.toString() to detachedJsonValue(value) }
+  return normalized.envelopeWireMap().entries.associate { (key, value) -> key to detachedJsonValue(value) }
 }
 
 internal fun detachedRecord(record: FeatureTaskRuntimePhaseRecord): FeatureTaskRuntimePhaseRecord =

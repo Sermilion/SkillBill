@@ -30,6 +30,7 @@ import skillbill.workflow.model.goalreview.appendBoundedHistoryBySequence
 import skillbill.workflow.model.goalreview.unionRefutedBlockerDispositions
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
@@ -123,7 +124,7 @@ class FeatureTaskRuntimeGoalReviewCompletionRecorder(
     val envelope =
       requireNotNull(request.normalizedOutput) {
         "Goal review completion requires normalized output to persist the unaddressed-findings ledger."
-      }.envelopePayload().let(::workflowArtifactEntryMap)
+      }.envelopeWireMap()
     val recordedVerdicts =
       GoalSubtaskReviewSummaryReducer.recordedVerdicts(
         unitOfWork.reviews::fetchFindingVerdicts,
@@ -230,7 +231,7 @@ class FeatureTaskRuntimeGoalReviewCompletionRecorder(
     val output =
       requireNotNull(request.normalizedOutput) {
         "Goal review completion requires normalized output to persist the unaddressed-findings ledger."
-      }.envelopePayload().let(::workflowArtifactEntryMap)
+      }.envelopeWireMap()
     val recordedVerdicts =
       GoalSubtaskReviewSummaryReducer.recordedVerdicts(
         unitOfWork.reviews::fetchFindingVerdicts,

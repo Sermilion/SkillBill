@@ -1,6 +1,5 @@
 package skillbill.install.policy
 
-import skillbill.error.shellcontent.InvalidInstallPlanSchemaError
 import skillbill.error.shellcontent.MissingBaselinePlatformSelectionError
 import skillbill.install.model.InstallAgentDefaultTarget
 import skillbill.install.model.InstallAgentSelection
@@ -10,14 +9,10 @@ import skillbill.install.model.InstallAgentTargetSource
 import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.InstallPlanSkill
 import skillbill.install.model.InstallPlanSkillKind
-import skillbill.install.model.InstallPlanWireMap
 import skillbill.install.model.InstallPlatformPackDiscoverySnapshot
 import skillbill.install.model.InstallPlatformPackSnapshot
 import skillbill.install.model.InstallPlatformSkillMaterializationRequest
 import skillbill.install.model.InstallPolicyInput
-import skillbill.install.model.InstallPolicyValidationStatus
-import skillbill.install.model.InstallStagingIntent
-import skillbill.install.model.InstallStagingPathIntent
 import skillbill.install.model.InstallTelemetryLevel
 import skillbill.install.model.InstallationTargetPaths
 import skillbill.install.model.McpRegistrationChoice
@@ -320,46 +315,6 @@ class InstallPlanPolicyTest {
       }
     assertContains(duplicateSkill.message.orEmpty(), "duplicate skill name")
     assertContains(duplicateSkill.message.orEmpty(), "bill-code-review")
-  }
-
-  @Test
-  fun `validate install plan snapshot delegates to the injected wire validator port`() {
-    val draft = InstallPlanPolicy.buildPlanDraft(policyInput())
-    val plan =
-      draft.toInstallPlan(
-        staging =
-          InstallStagingIntent(
-            root = path("/home/.skill-bill/installed-skills"),
-            skillPaths =
-              draft.skills.map { skill ->
-                InstallStagingPathIntent(
-                  skillName = skill.name,
-                  sourceDir = skill.sourceDir,
-                  stagingRoot = path("/home/.skill-bill/installed-skills"),
-                  stagingDir = path("/home/.skill-bill/installed-skills/${skill.name}-abc"),
-                  contentHash = "abc",
-                )
-              },
-          ),
-      )
-
-    var capturedWireMap: Map<String, Any?>? = null
-    val recordingValidator: (InstallPlanWireMap) -> Unit = { capturedWireMap = it }
-    val result = InstallPlanPolicy.validateInstallPlanSnapshot(plan, recordingValidator)
-    assertEquals(InstallPolicyValidationStatus.VALID, result.status)
-    assertEquals("planned", capturedWireMap?.get("status"))
-
-    val loudFailValidator: (InstallPlanWireMap) -> Unit = {
-      throw InvalidInstallPlanSchemaError(
-        fieldPath = "mcp_registration.runtime_mcp_bin",
-        reason = "must be a non-empty string when register is true.",
-      )
-    }
-    val error =
-      assertFailsWith<InvalidInstallPlanSchemaError> {
-        InstallPlanPolicy.validateInstallPlanSnapshot(plan, loudFailValidator)
-      }
-    assertContains(error.message.orEmpty(), "mcp_registration.runtime_mcp_bin")
   }
 
   @Test

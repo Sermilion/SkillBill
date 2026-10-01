@@ -1,7 +1,6 @@
 plugins {
   id("skillbill.jvm-library")
   id("skillbill.quality")
-  `java-test-fixtures`
 }
 
 dependencies {

@@ -75,13 +75,6 @@ fun buildInstallPlanWireMap(plan: InstallPlan): InstallPlanWireMap =
 
 fun InstallPlan.toInstallPlanContract(): InstallPlanContract = InstallPlanContract.wrap(buildInstallPlanWireMap(this))
 
-fun validateInstallPlanWireSnapshot(
-  plan: InstallPlan,
-  validate: (InstallPlanWireMap) -> Unit,
-) {
-  validate(buildInstallPlanWireMap(plan))
-}
-
 private fun agentTargetWireMap(target: InstallAgentTarget): Map<String, Any?> =
   linkedMapOf(
     InstallPlanPayloadKeys.AGENT to target.agent.id,

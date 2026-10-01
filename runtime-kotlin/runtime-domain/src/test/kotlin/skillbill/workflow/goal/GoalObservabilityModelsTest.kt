@@ -25,6 +25,7 @@ import skillbill.workflow.model.goalreview.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalProgressEventKind
 import skillbill.workflow.model.goalreview.GoalProgressOutcome
 import skillbill.workflow.model.goalreview.goalObservabilityEventFromArtifact
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -87,15 +88,16 @@ class GoalObservabilityModelsTest {
       GoalObservabilityArtifacts.patchForProgressEvent(
         GoalObservabilityProgressInput(
           artifacts =
-            mapOf(
-              "goal_continuation" to mapOf("issue_key" to "SKILL-372", "subtask_id" to 1),
-              "progress_event" to mapOf("timestamp" to "2026-06-01T00:00:00Z", "sequence" to 2.7),
+            FeatureTaskRuntimeWorkflowArtifactMap.from(
+              mapOf(
+                "goal_continuation" to mapOf("issue_key" to "SKILL-372", "subtask_id" to 1),
+                "progress_event" to mapOf("timestamp" to "2026-06-01T00:00:00Z", "sequence" to 2.7),
+              ),
             ),
           workflowId = "wf-372",
           workflowStatus = "running",
           currentStepId = "implement",
         ),
-        { _, _ -> },
       )
     }
   }
@@ -107,16 +109,17 @@ class GoalObservabilityModelsTest {
       GoalObservabilityArtifacts.patchForProgressEvent(
         GoalObservabilityProgressInput(
           artifacts =
-            first +
-              mapOf(
-                "goal_continuation" to mapOf("issue_key" to "SKILL-378", "subtask_id" to 1),
-                "progress_event" to mapOf("timestamp" to "2026-06-01T00:01:00Z", "sequence" to 0),
-              ),
+            FeatureTaskRuntimeWorkflowArtifactMap.from(
+              first +
+                mapOf(
+                  "goal_continuation" to mapOf("issue_key" to "SKILL-378", "subtask_id" to 1),
+                  "progress_event" to mapOf("timestamp" to "2026-06-01T00:01:00Z", "sequence" to 0),
+                ),
+            ),
           workflowId = "wf-378",
           workflowStatus = "running",
           currentStepId = "implement",
         ),
-        { _, _ -> },
       ).let(::asArtifacts)
     val third = runtimeEventPatch(second, "2026-06-01T00:02:00Z")
 
@@ -134,7 +137,7 @@ class GoalObservabilityModelsTest {
     asArtifacts(
       GoalObservabilityArtifacts.patchForRuntimeEvent(
         GoalObservabilityRuntimeEventInput(
-          artifacts = artifacts,
+          artifacts = FeatureTaskRuntimeWorkflowArtifactMap.from(artifacts),
           request =
             GoalRunnerObservabilityRecordRequest(
               workflowId = "wf-378",
@@ -147,7 +150,6 @@ class GoalObservabilityModelsTest {
               timestamp = timestamp,
             ),
         ),
-        { _, _ -> },
       ),
     )
 

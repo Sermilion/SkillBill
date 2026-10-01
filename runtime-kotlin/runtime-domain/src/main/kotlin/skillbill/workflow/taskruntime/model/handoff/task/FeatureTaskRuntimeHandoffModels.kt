@@ -142,7 +142,7 @@ data class NormalizedFeatureTaskRuntimePhaseOutput(
   val canonicalJson: String
     get() = JsonCodec.mapToJsonString(historicalRecord ?: recordView())
 
-  fun envelopePayload(): Any = recordView()
+  internal fun envelopePayload(): Any = recordView()
 
   private fun recordView(): Map<String, Any?> {
     val record = linkedMapOf<String, Any?>()

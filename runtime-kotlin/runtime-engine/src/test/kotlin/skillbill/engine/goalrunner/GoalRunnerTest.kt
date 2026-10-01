@@ -182,6 +182,7 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Files
 import java.nio.file.Path
@@ -4202,10 +4203,9 @@ class GoalRunnerProgressEventEmitterTest {
       GoalObservabilityArtifacts.patchForRuntimeEvent(
         input =
           GoalObservabilityRuntimeEventInput(
-            artifacts = emptyMap<String, Any?>(),
+            artifacts = FeatureTaskRuntimeWorkflowArtifactMap.from(emptyMap<String, Any?>()),
             request = observabilityOutcomes.observabilityRecords.single(),
           ),
-        validator = { _, _ -> },
       ).let {
           patch ->
         (patch as Map<*, *>)[DurableWorkflowArtifactFamily.GOAL_OBSERVABILITY_LATEST_EVENT.label()]

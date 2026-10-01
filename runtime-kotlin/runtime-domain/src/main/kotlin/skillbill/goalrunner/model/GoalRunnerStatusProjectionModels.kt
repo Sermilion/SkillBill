@@ -9,6 +9,7 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalreview.GoalObservabilityDiffStat
 import skillbill.workflow.model.goalreview.GoalObservabilityEvent
 import skillbill.workflow.model.goalreview.GoalObservabilitySelectedDiffHunks
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 
@@ -115,7 +116,8 @@ data class GoalRunnerSubtaskValidationEvidence(
   val gateExecutionEvidence: FeatureTaskRuntimeValidationGateExecutionEvidence? = null,
   val integrityProblem: String? = null,
 ) {
-  fun toStatusWire(): Any = toStatusMap()
+  fun toStatusWire(): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(toStatusMap())
 
   internal fun toStatusMap(): Map<String, Any?> =
     linkedMapOf(

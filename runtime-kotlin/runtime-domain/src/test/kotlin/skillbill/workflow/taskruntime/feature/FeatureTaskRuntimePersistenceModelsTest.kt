@@ -27,6 +27,7 @@ import skillbill.workflow.decomposition.runtime.decompositionManifestProjectionF
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.runtime.goalParentArtifactProjection
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY
 import skillbill.workflow.model.goalreview.appendBoundedHistoryBySequence
@@ -40,6 +41,7 @@ import skillbill.workflow.taskruntime.artifact.resolvedBranch
 import skillbill.workflow.taskruntime.artifact.reviewGeneration
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL_ARTIFACT_KEY
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationFieldAdoption
@@ -277,18 +279,25 @@ class FeatureTaskRuntimePersistenceModelsTest {
     val projected =
       goalParentArtifactProjection(
         existing =
-          linkedMapOf(
-            "plan" to mapOf("mode" to "decompose"),
-            "goal_review_policy" to mapOf("code_review_mode" to "inline"),
-            "goal_out_of_band_acceptances" to listOf(mapOf("subtask_id" to 1)),
+          DurableWorkflowArtifacts.fromMap(
+            linkedMapOf(
+              "plan" to mapOf("mode" to "decompose"),
+              "goal_review_policy" to mapOf("code_review_mode" to "inline"),
+              "goal_out_of_band_acceptances" to listOf(mapOf("subtask_id" to 1)),
+            ),
           ),
-        encodedManifest = linkedMapOf("issue_key" to "SKILL-372", "status" to "in_progress"),
+        encodedManifest =
+          FeatureTaskRuntimeWorkflowArtifactMap.from(
+            linkedMapOf("issue_key" to "SKILL-372", "status" to "in_progress"),
+          ),
       )
 
     assertEquals(
-      linkedMapOf(
-        "plan" to mapOf("mode" to "decompose"),
-        "decomposition_runtime" to linkedMapOf("issue_key" to "SKILL-372", "status" to "in_progress"),
+      WorkflowArtifactPatch.from(
+        linkedMapOf(
+          "plan" to mapOf("mode" to "decompose"),
+          "decomposition_runtime" to linkedMapOf("issue_key" to "SKILL-372", "status" to "in_progress"),
+        ),
       ),
       projected,
     )

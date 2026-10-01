@@ -6,6 +6,7 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePersistenceSchemaEr
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.decodeDeliveredProjectionRecordFromArtifact
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phaseartifacts.decodeStrictKeyedArtifactMap
@@ -16,7 +17,7 @@ internal fun phaseBriefingsFrom(
   validateEnvelope: (Map<String, Any?>) -> Unit = {},
 ): Map<String, FeatureTaskRuntimePhaseLaunchBriefing> =
   decodeStrictKeyedArtifactMap(
-    artifacts,
+    FeatureTaskRuntimeWorkflowArtifactMap.from(artifacts),
     DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_BRIEFINGS.label(),
     ignoreEntry = { it in PhaseSlot.AUDIT.steps },
   ) { _, briefingMap ->
@@ -49,7 +50,7 @@ internal fun deliveredProjectionHistoryFrom(
   validatePersistenceRecord: (Map<String, Any?>) -> Unit = {},
 ): Map<String, FeatureTaskRuntimeDeliveredProjectionRecord> =
   decodeStrictKeyedArtifactMap(
-    artifacts,
+    FeatureTaskRuntimeWorkflowArtifactMap.from(artifacts),
     DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DELIVERED_PROJECTIONS.label(),
     ignoreEntry = {
       it in PhaseSlot.AUDIT.steps || it.split('|').getOrNull(1) in PhaseSlot.AUDIT.steps

@@ -11,9 +11,11 @@ import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.runtime.goalParentArtifactProjection
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 internal class GoalParentProjectionWriter(
   private val engine: WorkflowEngine,
@@ -21,13 +23,15 @@ internal class GoalParentProjectionWriter(
 ) {
   fun artifacts(
     manifest: DecompositionManifest,
-    existing: Map<String, Any?> = emptyMap(),
-  ): Map<String, Any?> =
+    existing: DurableWorkflowArtifacts = DurableWorkflowArtifacts.EMPTY,
+  ): WorkflowArtifactPatch =
     goalParentArtifactProjection(
       existing,
-      validator.encodeManifestWireMap(
-        manifest,
-        DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label(),
+      FeatureTaskRuntimeWorkflowArtifactMap.from(
+        validator.encodeManifestWireMap(
+          manifest,
+          DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label(),
+        ),
       ),
     )
 
@@ -46,7 +50,7 @@ internal class GoalParentProjectionWriter(
           workflowStatus = existing.workflowStatus,
           currentStepId = existing.currentStepId,
           stepUpdates = null,
-          artifactsPatch = WorkflowArtifactPatch.from(artifacts(manifest, existing.artifacts)),
+          artifactsPatch = artifacts(manifest, existing.artifacts),
           sessionId = existing.sessionId,
           replaceArtifacts = true,
         ),

@@ -5,9 +5,6 @@ import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_HANDOFF_CONTRACT_VERSION
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactValidation
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FEATURE_TASK_RUNTIME_FORBIDDEN_PROJECTION_FIELD_NAMES
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeCompactReferenceKind
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionBudget
@@ -108,15 +105,7 @@ data class PhaseHandoffProjectionDeclaration(
     }
 
   companion object {
-    internal fun fromArtifactMap(
-      raw: Map<String, Any?>,
-      foundationValidator: FeatureTaskRuntimeWireArtifactValidation,
-    ): PhaseHandoffProjectionDeclaration {
-      foundationValidator(
-        FeatureTaskRuntimeWireArtifactKind.HANDOFF_DECLARATION,
-        FeatureTaskRuntimeWorkflowArtifactMap.from(raw),
-        "phase-handoff-declaration",
-      )
+    internal fun fromArtifactMap(raw: Map<String, Any?>): PhaseHandoffProjectionDeclaration {
       val allowed =
         setOf(
           SharedPayloadKeys.CONTRACT_VERSION, "consumer_phase_id", "projection_name", "source", "projection_contract",

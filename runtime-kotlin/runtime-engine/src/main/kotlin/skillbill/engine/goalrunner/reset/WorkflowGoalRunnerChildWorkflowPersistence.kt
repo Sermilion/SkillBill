@@ -212,14 +212,12 @@ internal class WorkflowGoalRunnerChildWorkflowPersistence(
           currentStepId = existingParent.currentStepId,
           stepUpdates = null,
           artifactsPatch =
-            WorkflowArtifactPatch.from(
-              parentProjection.artifacts(
-                mergeConcurrentGoalProgress(
-                  existingParent.decompositionRuntime() ?: state.manifest,
-                  state.manifest,
-                ),
-                existingParent.artifacts,
+            parentProjection.artifacts(
+              mergeConcurrentGoalProgress(
+                existingParent.decompositionRuntime() ?: state.manifest,
+                state.manifest,
               ),
+              existingParent.artifacts,
             ),
           sessionId = existingParent.sessionId.orEmpty(),
           replaceArtifacts = true,

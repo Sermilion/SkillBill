@@ -9,7 +9,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
-import skillbill.goalrunner.goalReviewArtifacts
+import skillbill.goalrunner.goalSubtaskReviewArtifacts
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
@@ -271,7 +271,7 @@ internal class WorkflowGoalRunnerReviewBridge(
   override fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState? =
     database.read { unitOfWork ->
       val record = taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId) ?: return@read null
-      goalReviewArtifacts(record.artifacts)?.state
+      record.artifacts.goalSubtaskReviewArtifacts()?.state
     }
 
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> =
@@ -279,7 +279,7 @@ internal class WorkflowGoalRunnerReviewBridge(
       val record = taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId) ?: return@read emptyList()
       val artifacts = record.artifacts
       if (!DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.contains(artifacts)) return@read emptyList()
-      val review = goalReviewArtifacts(artifacts) ?: return@read emptyList()
+      val review = artifacts.goalSubtaskReviewArtifacts() ?: return@read emptyList()
       validatedGoalReviewPasses(
         review,
         ::goalReviewEmissionEnvelope,
@@ -295,7 +295,7 @@ internal class WorkflowGoalRunnerReviewBridge(
     database.transaction { unitOfWork ->
       val record = taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId) ?: return@transaction false
       val artifacts = record.artifacts
-      val review = goalReviewArtifacts(artifacts) ?: return@transaction false
+      val review = artifacts.goalSubtaskReviewArtifacts() ?: return@transaction false
       val state = review.state
       validatedGoalReviewPasses(
         review,

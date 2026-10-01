@@ -8,6 +8,7 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeRepairReceiptError
 import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 data class GoalSubtaskReviewRevision(
   val commitFocusedAccounting: GoalSubtaskCommitFocusedAccounting? = null,
@@ -209,7 +210,8 @@ data class GoalSubtaskReviewState(
   fun acknowledgeSummariesThrough(passNumber: Int): GoalSubtaskReviewState =
     copy(emittedPassCount = passNumber.coerceIn(emittedPassCount, completedPassCount))
 
-  fun toPersistenceWire(): Any = toArtifactMap()
+  fun toPersistenceWire(): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
   internal fun toArtifactMap(): Map<String, Any?> =
     linkedMapOf<String, Any?>(

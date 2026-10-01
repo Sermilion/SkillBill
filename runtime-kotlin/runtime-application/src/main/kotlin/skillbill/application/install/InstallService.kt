@@ -13,6 +13,7 @@ import skillbill.install.model.PlatformPackSelection
 import skillbill.install.model.PlatformPackSelectionMode
 import skillbill.install.model.ReconciliationPlan
 import skillbill.install.model.SharedInstallSelection
+import skillbill.install.model.buildInstallPlanWireMap
 import skillbill.install.policy.InstallPlanPolicy
 import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.policy.selectedPlatformSlugs
@@ -151,7 +152,7 @@ class InstallService(
   }
 
   fun validateInstallPlanWire(plan: InstallPlan) {
-    InstallPlanPolicy.validateInstallPlanSnapshot(plan, installPlanWireValidator::validate)
+    installPlanWireValidator.validate(buildInstallPlanWireMap(plan))
   }
 
   fun discoverPlatformPackSlugs(request: InstallPlanRequest): Set<String> =

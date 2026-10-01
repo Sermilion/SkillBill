@@ -9,6 +9,7 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceS
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.decodeValidationEvidenceFromArtifact
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
 
@@ -17,10 +18,10 @@ internal object RuntimeGateRecordIntegrity {
     normalized: NormalizedFeatureTaskRuntimePhaseOutput,
     phaseId: String,
   ) {
-    val envelope = JsonCodec.anyToStringAnyMap(normalized.envelopePayload())
+    val envelope = normalized.envelopeWireMap()
     val produced =
       envelope
-        ?.takeIf { it[SharedPayloadKeys.STATUS] == WorkflowStepStatus.COMPLETED.wireValue }
+        .takeIf { it[SharedPayloadKeys.STATUS] == WorkflowStepStatus.COMPLETED.wireValue }
         ?.let { JsonCodec.anyToStringAnyMap(it[SharedPayloadKeys.PRODUCED_OUTPUTS]) }
         ?: return
     try {

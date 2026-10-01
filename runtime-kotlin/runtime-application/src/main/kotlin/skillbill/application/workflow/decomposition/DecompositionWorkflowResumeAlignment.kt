@@ -22,7 +22,6 @@ import skillbill.workflow.decomposition.runtime.goalParentArtifactProjection
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
-import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowContinueDecisionOverrides
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepState
@@ -31,6 +30,7 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 internal fun WorkflowEngine.continueExistingWorkflow(
   family: WorkflowFamily,
@@ -196,9 +196,9 @@ fun WorkflowEngine.persistParentDecompositionRuntime(
         currentStepId = parentRecord.currentStepId,
         stepUpdates = null,
         artifactsPatch =
-          WorkflowArtifactPatch.from(
-            goalParentArtifactProjection(
-              parentRecord.artifacts,
+          goalParentArtifactProjection(
+            parentRecord.artifacts,
+            FeatureTaskRuntimeWorkflowArtifactMap.from(
               validator.encodeManifestWireMap(
                 manifest,
                 DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label(),

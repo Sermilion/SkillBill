@@ -12,6 +12,7 @@ import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 
@@ -97,8 +98,10 @@ data class FeatureTaskRuntimeGoalContinuationArtifact(
       }
     }
 
-  fun toWorkflowArtifactPatch(): Map<String, Any?> =
-    mapOf(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to toArtifactMap())
+  fun toWorkflowArtifactPatch(): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(
+      mapOf(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to toArtifactMap()),
+    )
 
   companion object {
     internal fun fromArtifactMap(raw: Map<String, Any?>): FeatureTaskRuntimeGoalContinuationArtifact {

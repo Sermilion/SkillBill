@@ -52,7 +52,8 @@ class RuntimeRawMapArchitectureTest {
     assertTrue(
       violations.isEmpty(),
       "Public application/domain/port declarations must not use raw Map<String, Any?> " +
-        "shapes. Contain maps in private or adapter-only serializers, or replace them with typed models.\n" +
+        "shapes or be typed exactly Any. Contain maps in private or adapter-only serializers, " +
+        "or replace them with typed models.\n" +
         "Violations:\n" + violations.joinToString(separator = "\n"),
     )
   }
@@ -79,6 +80,37 @@ class RuntimeRawMapArchitectureTest {
         violations.single().contains("payload") &&
         violations.single().contains(sourceRoot.toString()),
       "The inner-layer scanner must report the public raw-map declaration it read from the fixture root.",
+    )
+  }
+
+  @Test
+  fun `inner-layer raw-map scanner rejects synthetic public Any-typed declarations in domain main source`() {
+    val root = Files.createTempDirectory("exact-any-fixture")
+    val sourceRoot = root.resolve("runtime-domain/src/main/kotlin")
+    Files.createDirectories(sourceRoot.resolve("skillbill/workflow/fixture"))
+    Files.writeString(
+      sourceRoot.resolve("skillbill/workflow/fixture/SyntheticAnyLeak.kt"),
+      """
+      class SyntheticAnyLeak {
+        val artifacts: Any
+        private val hidden: Any
+        fun wire(): Any = Unit
+        internal fun internalWire(): Any = Unit
+        fun nullable(): Any? = null
+        fun decode(raw: Any): Int = 0
+      }
+      """.trimIndent(),
+    )
+    val violations = rawMapViolationsUnder(sourceRoot)
+    assertTrue(
+      violations.all { it.contains("SyntheticAnyLeak.kt") },
+      "The exact-Any rule must report declarations read from the fixture file.",
+    )
+    val violatingNames = violations.map { it.substringAfter("public `").substringBefore('`') }
+    assertEquals(
+      listOf("artifacts", "wire"),
+      violatingNames.sorted(),
+      "Only public declarations typed exactly Any may be reported.",
     )
   }
 

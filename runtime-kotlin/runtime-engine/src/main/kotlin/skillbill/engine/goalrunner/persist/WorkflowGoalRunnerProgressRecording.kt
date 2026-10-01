@@ -46,6 +46,26 @@ import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalCo
 
 private fun nextSequence(highest: Int?): Int = highest?.let { it + 1 } ?: 0
 
+private fun validateGoalObservabilityPatch(
+  validator: FeatureTaskRuntimeWireArtifactValidator,
+  patch: FeatureTaskRuntimeWorkflowArtifactMap,
+) {
+  val latestEvent = DurableWorkflowArtifactFamily.GOAL_OBSERVABILITY_LATEST_EVENT
+  validator.validate(
+    FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT,
+    FeatureTaskRuntimeWorkflowArtifactMap.from(latestEvent.value(patch)),
+    latestEvent.label(),
+  )
+  val runHistory = DurableWorkflowArtifactFamily.GOAL_OBSERVABILITY_RUN_HISTORY
+  (runHistory.value(patch) as List<*>).forEachIndexed { index, item ->
+    validator.validate(
+      FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(item),
+      "${runHistory.label()}[$index]",
+    )
+  }
+}
+
 private class SequencedHistoryArtifact(
   val latestFamily: DurableWorkflowArtifactFamily?,
   val historyFamily: DurableWorkflowArtifactFamily,
@@ -121,17 +141,11 @@ internal class WorkflowGoalRunnerProgressRecording(
         GoalObservabilityArtifacts.patchForRuntimeEvent(
           input =
             GoalObservabilityRuntimeEventInput(
-              artifacts = artifacts,
+              artifacts = FeatureTaskRuntimeWorkflowArtifactMap.from(artifacts),
               request = request,
             ),
-          validator = { event, sourceLabel ->
-            goalObservabilityEventValidator.validate(
-              FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT,
-              FeatureTaskRuntimeWorkflowArtifactMap.from(event),
-              sourceLabel,
-            )
-          },
         )
+      validateGoalObservabilityPatch(goalObservabilityEventValidator, observabilityPatch)
       val updated =
         engine.updateRecord(
           family.definition,
@@ -140,7 +154,7 @@ internal class WorkflowGoalRunnerProgressRecording(
             workflowStatus = record.workflowStatus,
             currentStepId = record.currentStepId,
             stepUpdates = null,
-            artifactsPatch = JsonCodec.anyToStringAnyMap(observabilityPatch)?.let(WorkflowArtifactPatch::from),
+            artifactsPatch = WorkflowArtifactPatch.from(observabilityPatch),
             sessionId = record.sessionId.orEmpty(),
           ),
         )
