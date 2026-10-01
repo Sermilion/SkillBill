@@ -84,7 +84,7 @@ Every module edge is pinned in `RuntimeModuleCatalog.moduleEdgeExpectations`.
 
 | Module | Holds | Never holds |
 | --- | --- | --- |
-| runtime-contracts | Declarations read by two or more production modules or exposed by a port signature: contract DTOs, shared `*Keys`, contract versions, `JsonCodec`, the error bases that adapters classify by | I/O, single-owner DTOs, keys or errors, adapter vocabulary (CLI, MCP, SQLite, HTTP names) |
+| runtime-contracts | Declarations read by two or more production modules or exposed by a port signature: contract DTOs, shared `*Keys`, contract versions, `JsonCodec`, `SkillBillRuntimeException` and the failure codes that adapters classify by | I/O, single-owner DTOs, keys or errors, adapter vocabulary (CLI, MCP, SQLite, HTTP names) |
 | runtime-domain | Pure models, aggregates, and their invariants and transitions | `java.nio`, `skillbill.ports`, serialization, I/O, validator injection |
 | runtime-ports | Purpose-built interfaces and their DTOs | Behavior, top-level objects, default bodies that stand in for an implementation, vendor protocol |
 | runtime-application | Use cases outside the run loop, coordinated through ports | A second composition root, dependency bags, engine-only code, vendor protocol |
@@ -101,8 +101,8 @@ Check: Guard (`RuntimeGradleModuleLayeringTest`, `RuntimeCoreCompositionOnlyTest
 
 A declaration lives in the one module that reads it. It moves to a shared module only
 when two or more production modules read it, or a port signature exposes it. This
-applies to errors too: an error base type that another module catches may be shared,
-but the leaf errors one module throws and catches live in that module. Pure rules
+applies to failure codes too: a `RuntimeFailureCode` enum lives with the owner of its
+vocabulary, and only `SkillBillRuntimeException` is shared by every module. Pure rules
 about a domain aggregate live in runtime-domain, beside the aggregate, not as free
 functions in application, engine, or an adapter.
 
@@ -174,14 +174,39 @@ Canonical identifiers (issue keys, repository identity) have one derivation func
 Check: Guard (`WireVocabularyArchitectureTest` over the seams in
 `WireVocabularyGovernedSeamInventory`) plus review outside governed seams.
 
-### A7. Failures are typed and never silent
+### A7. Few exceptions, results for expected outcomes, never silent
 
-Errors at durable and external seams are typed. No broad catch converts a failure into
-absence, an empty result, or a default. `CancellationException` always propagates.
-Every fallback or degradation emits a record through `RuntimeDiagnostics`, as
-`docs/observability-policy.md` requires.
+An exception means a case the runtime does not expect, and throwing one is a
+deliberate act to end execution. Anything the runtime does expect is returned to the
+caller as a value. Every failure belongs to one of three tiers:
 
-Check: Guard (`TypedParseBoundaryArchitectureTest`) plus review.
+| Tier | Meaning | Mechanism | Caught where |
+| --- | --- | --- | --- |
+| 1. Defect | A broken invariant that only a code change can cause | `require`, `check`, `requireNotNull`, `error()` | Only by the top-level crash handlers |
+| 2. Expected outcome | Absent, refused, or conflicting results, or invalid input the runtime anticipates | A sealed result, a nullable, or an existing outcome type, returned by the function that knows | Nowhere; the caller branches on the value |
+| 3. Anticipated failure that ends the run | Corrupt durable state, malformed contract input, or I/O failure, where the only option is to stop and tell the operator | `SkillBillRuntimeException(code, message, cause)`, where `code` is an entry of an owner-declared `RuntimeFailureCode` enum | At the CLI and MCP edges, and at a boundary that degrades, which checks `code` |
+
+- A new custom `Throwable` subclass has to earn its place. It is allowed only for a
+  failure that crosses a boundary the runtime does not own and cannot be tier 3. Its
+  reason goes in a dated `runtime-kotlin/agent/decisions.md` entry.
+- A new contract adds an entry to its owner's code enum, not a new exception class.
+- Do not throw to report an absent, refused, or conflicting outcome.
+- Do not catch `IllegalArgumentException` or `IllegalStateException` to steer
+  control flow. Only the top-level arms in the CLI and MCP catch them.
+- Do not put error codes in `IllegalStateException`. An edge that catches it to read
+  a code also catches real bugs and reports them as user errors.
+- Do not branch on exception message text.
+- Untrusted input is parsed into a result or a tier 3 failure, never into `error()`
+  or `require`.
+- No broad catch turns a failure into absence, an empty result, or a default.
+  `CancellationException` always propagates. Every fallback or degradation emits a
+  record through `RuntimeDiagnostics`, as `docs/observability-policy.md` requires.
+
+Check: Guard (`TypedParseBoundaryArchitectureTest`,
+`FailureCodeTotalityArchitectureTest`; SKILL-398 adds a two-sided custom-throwable
+baseline, so a new declaration fails the build) plus review.
+Recurred as: SKILL-398 found 231 custom throwables in main, 62% never caught by type,
+while both edges discard the type and print only the message.
 
 ### A8. Ambient effects are injected
 
@@ -313,7 +338,7 @@ or a rule ID and location.
 - [ ] A4: new ports are purpose-built, with no vendor protocol, default body, or null object.
 - [ ] A5: no new forwarder, alias, unearned interface, or test-only production code, and fixes deleted rather than moved.
 - [ ] A6: no restated key, token, or identifier derivation.
-- [ ] A7: no broad catch, silent default, or swallowed cancellation, and every fallback emits a record.
+- [ ] A7: no new custom throwable without a decision entry, no expected outcome thrown, no `IllegalArgumentException` or `IllegalStateException` caught for control flow, no branch on message text, no broad catch, silent default, or swallowed cancellation, and every fallback emits a record.
 - [ ] A8: no direct time, environment, property, or process read.
 - [ ] A9 and A10: no new cycle, stutter, or fragment package, and tests sit beside their code.
 - [ ] A11 and A12: new declarations are as narrow as their consumers allow, and inner layers expose no raw map or `Any`.
@@ -332,6 +357,7 @@ the largest recurring classes from section 1 to mechanical checks.
 | A10 | Test-package mirroring is guarded for runtime-core only | SKILL-389 adds runtime-core; the 2026-09-25 decision rejected a general guard and needs revisiting with this evidence |
 | A12 | `Any` erasure evades the raw-map scan | SKILL-397 |
 | A4 | The ports declaration guard misses repository-driving functions | SKILL-393 |
+| A7 | Nothing stops a new custom throwable, and control-flow catches of `IllegalArgumentException` or `IllegalStateException` are found only by review | SKILL-398 adds the two-sided custom-throwable baseline; the catch rule stays review-only |
 | G2 | Not every filtered scan asserts a non-empty file set | One shared helper in `ArchitectureScanSupport` that each scan calls |
 | A2 | Ownership has no check | A consumer-count report on `runtime-contracts` and `runtime-ports` additions, run as part of review |
 | A5 | Forwarders and unearned interfaces have no check | Review-only; P3 and P4 carry the weight |
