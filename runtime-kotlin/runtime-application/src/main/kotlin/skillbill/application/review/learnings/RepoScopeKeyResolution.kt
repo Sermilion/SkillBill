@@ -5,7 +5,7 @@ import skillbill.ports.repository.RepositoryOriginScopeKeyPort
 import skillbill.ports.repository.model.OriginScopeKey
 import java.nio.file.Path
 
-fun RepositoryOriginScopeKeyPort.repoScopeKeyOrNull(
+internal fun RepositoryOriginScopeKeyPort.repoScopeKeyOrNull(
   repoRoot: Path,
   diagnostics: RuntimeDiagnostics,
   degradationWarning: (String) -> String,

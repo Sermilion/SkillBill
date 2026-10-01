@@ -3,13 +3,13 @@ package skillbill.application.workflow.service
 import skillbill.application.workflow.model.WorkflowFamilyKind
 import skillbill.workflow.model.WorkflowStatus
 
-const val DEFAULT_LIST_LIMIT: Int = 20
-const val MAX_ABANDONMENT_REASON_LENGTH: Int = 1000
-const val FEATURE_TASK_RUNTIME_OPERATOR_ABANDONMENT_ARTIFACT_KEY: String = "operator_abandonment"
-const val FEATURE_TASK_RUNTIME_IDENTITY_REPAIR_ARTIFACT_KEY: String = "operator_identity_repair"
-const val WORKFLOW_ID_SUFFIX_LENGTH: Int = 4
-val FEATURE_TASK_FAMILY_KINDS = setOf(WorkflowFamilyKind.TASK_RUNTIME)
-val FEATURE_TASK_TERMINAL_STATUSES: Set<WorkflowStatus> = WorkflowStatus.terminalStatuses
-const val INCOMPLETE_FEATURE_TASK_IDENTITY_ERROR =
+internal const val DEFAULT_LIST_LIMIT: Int = 20
+internal const val MAX_ABANDONMENT_REASON_LENGTH: Int = 1000
+internal const val FEATURE_TASK_RUNTIME_OPERATOR_ABANDONMENT_ARTIFACT_KEY: String = "operator_abandonment"
+internal const val FEATURE_TASK_RUNTIME_IDENTITY_REPAIR_ARTIFACT_KEY: String = "operator_identity_repair"
+internal const val WORKFLOW_ID_SUFFIX_LENGTH: Int = 4
+internal val FEATURE_TASK_FAMILY_KINDS = setOf(WorkflowFamilyKind.TASK_RUNTIME)
+internal val FEATURE_TASK_TERMINAL_STATUSES: Set<WorkflowStatus> = WorkflowStatus.terminalStatuses
+internal const val INCOMPLETE_FEATURE_TASK_IDENTITY_ERROR =
   "Feature-task workflows must be opened through openFeatureTask with complete immutable execution identity."
-const val SUFFIX_CHARS: String = "abcdefghijklmnopqrstuvwxyz0123456789"
+internal const val SUFFIX_CHARS: String = "abcdefghijklmnopqrstuvwxyz0123456789"

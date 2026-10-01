@@ -641,13 +641,7 @@ internal data class RuntimeHarnessConfig(
   val codeReviewMode: CodeReviewExecutionMode = CodeReviewExecutionMode.DEFAULT,
   val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort =
     DERIVING_SHARED_EVIDENCE_RESOLVER,
-  val diffResolver: DiffResolverPort =
-    object : DiffResolverPortDefaults() {
-      override fun runProcess(
-        args: List<String>,
-        workDir: Path,
-      ): String? = null
-    },
+  val diffResolver: DiffResolverPort = object : DiffResolverPortDefaults() {},
   val validationGateRunner: ValidationGateRunner? = null,
   val gateRepoLocalConfig: RepoLocalConfigPort = defaultRepoLocalConfigPort(),
   val validationGatePlatformManifests: List<PlatformManifest> = listOf(kotlinPackWithValidationGate()),
@@ -678,13 +672,7 @@ private data class RuntimePhaseGatesDeps(
     AcceptingFeatureTaskRuntimeWireArtifactValidator,
   val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort =
     DERIVING_SHARED_EVIDENCE_RESOLVER,
-  val diffResolver: DiffResolverPort =
-    object : DiffResolverPortDefaults() {
-      override fun runProcess(
-        args: List<String>,
-        workDir: Path,
-      ): String? = null
-    },
+  val diffResolver: DiffResolverPort = object : DiffResolverPortDefaults() {},
   val recorder: FeatureTaskRuntimePhaseRecorder,
   val validationGateRunnerOverride: ValidationGateRunner? = null,
   val gateRepoLocalConfig: RepoLocalConfigPort = defaultRepoLocalConfigPort(),

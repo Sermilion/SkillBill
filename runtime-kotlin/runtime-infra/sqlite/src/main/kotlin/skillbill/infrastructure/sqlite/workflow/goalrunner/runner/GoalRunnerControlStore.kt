@@ -10,8 +10,10 @@ import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import java.sql.Connection
 
-internal fun goalRunnerControlSchemaError(reason: String): Nothing =
-  throw InvalidWorkflowStateSchemaError("Goal runner control state: $reason")
+internal fun goalRunnerControlSchemaError(
+  reason: String,
+  cause: Throwable? = null,
+): Nothing = throw InvalidWorkflowStateSchemaError("Goal runner control state: $reason", cause)
 
 internal class GoalRunnerControlStore(
   private val connection: Connection,

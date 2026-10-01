@@ -38,6 +38,10 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.diff.DiffResolverPortDefaults
+import skillbill.ports.diff.model.ReviewCommitMetadata
+import skillbill.ports.diff.model.ReviewDiffQuery
+import skillbill.ports.diff.model.ReviewIndexEntry
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.persistence.UnitOfWork
@@ -119,7 +123,7 @@ class ReviewRecorder {
   val parentLaunches: MutableList<GoalRunnerSubtaskLaunchRequest> =
     Collections.synchronizedList(mutableListOf())
   val rubricResolutions: MutableList<String> = Collections.synchronizedList(mutableListOf())
-  val diffCommands: MutableList<List<String>> = Collections.synchronizedList(mutableListOf())
+  val diffQueries: MutableList<ReviewDiffQuery> = Collections.synchronizedList(mutableListOf())
   val savedAccounting: MutableList<ReviewAccountingRecord> =
     Collections.synchronizedList(mutableListOf())
 
@@ -318,33 +322,48 @@ private object AcceptingReviewContextEnvelopeValidator : ReviewContextEnvelopeVa
 private fun recordingDiffResolver(
   config: ReviewHarnessConfig,
   recorder: ReviewRecorder,
-) = object : DiffResolverPort {
+) = object : DiffResolverPortDefaults() {
   override fun reviewWorktreeFileIdentities(
     root: Path,
     paths: List<String>,
   ): Map<String, ReviewCheckpointFileIdentity> = emptyMap()
 
-  override fun readDiff(
-    path: Path,
-    maxBytes: Long,
-  ): String? = null
+  override fun resolveCommit(
+    repoRoot: Path,
+    revision: String,
+  ): String = revision
 
-  override fun runProcess(
-    args: List<String>,
-    workDir: Path,
-  ): String? {
-    recorder.diffCommands += args
-    return when (args.getOrNull(1)) {
-      "rev-parse" -> args.last().removeSuffix("^{commit}")
-      "rev-list" -> config.commits.joinToString("\n") { it.sha }
-      "show" ->
-        config.commits.single { it.sha == args.last() }.let { commit ->
-          "${parentOf(config.commits, commit)}\n${commit.subject}"
-        }
-      else ->
+  override fun currentBranchName(repoRoot: Path): String = "HEAD"
+
+  override fun firstParentCommits(
+    repoRoot: Path,
+    base: String,
+    head: String,
+  ): List<String> = config.commits.map { it.sha }
+
+  override fun commitMetadata(
+    repoRoot: Path,
+    sha: String,
+  ): ReviewCommitMetadata =
+    config.commits.single { it.sha == sha }.let { commit ->
+      ReviewCommitMetadata(listOf(parentOf(config.commits, commit)), commit.subject)
+    }
+
+  override fun indexEntries(repoRoot: Path): List<ReviewIndexEntry> = emptyList()
+
+  override fun untrackedPaths(repoRoot: Path): List<String> = emptyList()
+
+  override fun diff(
+    repoRoot: Path,
+    query: ReviewDiffQuery,
+  ): String {
+    recorder.diffQueries += query
+    return when (query) {
+      is ReviewDiffQuery.CommitRange ->
         config.commits.firstOrNull {
-          it.sha == args.getOrNull(3) && parentOf(config.commits, it) == args.getOrNull(2)
+          it.sha == query.head && parentOf(config.commits, it) == query.base
         }?.diff ?: config.diff
+      else -> config.diff
     }
   }
 }

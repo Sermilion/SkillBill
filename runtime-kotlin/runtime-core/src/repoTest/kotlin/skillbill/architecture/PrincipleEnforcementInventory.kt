@@ -349,12 +349,31 @@ object PrincipleEnforcementInventory {
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:sqlite")}/src/main/kotlin/" +
-            "skillbill/infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStore.kt",
+            "skillbill/infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreDecodeState.kt",
+        functionNames = setOf("decodeControlState"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:sqlite")}/src/main/kotlin/" +
+            "skillbill/infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreDecodePolicies.kt",
         functionNames =
           setOf(
-            "decodeControlState",
             "decodeReviewPolicy",
             "decodeAcceptances",
+            "decodeAcceptanceEntry",
+            "decodeReviewPolicyAddonEntry",
+            "requireReviewPolicyAddonField",
+            "requireAcceptanceInt",
+            "requireAcceptanceString",
+            "parseAcceptanceList",
+          ),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:sqlite")}/src/main/kotlin/" +
+            "skillbill/infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreDecodeValues.kt",
+        functionNames =
+          setOf(
             "decodeExecutionLease",
             "legacyPausedAt",
             "booleanOrDefault",
@@ -363,6 +382,33 @@ object PrincipleEnforcementInventory {
             "toPositiveLong",
             "toPositiveIntOrNull",
             "nonNegativeLongOrDefault",
+            "exactPositiveSubtaskIdOrNull",
+          ),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-application/src/main/kotlin/skillbill/application/workflow/service/" +
+            "LegacyGoalRunnerControlMigration.kt",
+        functionNames =
+          setOf(
+            "reviewPolicyFromLegacyArtifacts",
+            "outOfBandAcceptancesFromLegacyArtifacts",
+            "decodeGoalAgentAddonSelection",
+            "decodeGoalAgentAddonSelectionEntry",
+            "requiredAddonField",
+          ),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:sqlite")}/src/main/kotlin/" +
+            "skillbill/infrastructure/sqlite/workflow/goalrunner/runner/LegacyGoalRunnerControlLedgerMigration.kt",
+        functionNames =
+          setOf(
+            "reviewPolicyFromLegacyArtifacts",
+            "outOfBandAcceptancesFromLegacyArtifacts",
+            "decodeLegacyAgentAddonSelection",
+            "decodeLegacyAgentAddonSelectionEntry",
+            "requiredLegacyAddonField",
           ),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
@@ -534,13 +580,13 @@ object PrincipleEnforcementInventory {
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/goalreview/" +
             "GoalSubtaskReviewFindingArtifacts.kt",
-        functionNames =
-          setOf(
-            "fromArtifactMap",
-            "decodeWire",
-            "decodeContinuationOnlyWire",
-            "decodeContinuationDirect",
-          ),
+        functionNames = setOf("fromArtifactMap"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
+            "task/runtime/goal/GoalSubtaskReviewArtifactDecoder.kt",
+        functionNames = setOf("decodeWire", "decodeContinuationOnlyWire", "decodeContinuationDirect"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
@@ -571,21 +617,15 @@ object PrincipleEnforcementInventory {
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/engine/" +
-            "AttemptLedgerWorkflowDecoding.kt",
-        functionNames = setOf("decodeWorkflowSteps", "parseWorkflowStepsArray", "decodeWorkflowStepAt"),
+          "runtime-kotlin/runtime-ports/src/main/kotlin/skillbill/ports/workflow/model/" +
+            "WorkflowRecordMapping.kt",
+        functionNames = setOf("decodeSteps", "decodeStep", "decodeObject", "parseJson"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/engine/" +
             "WorkflowEngineSnapshotCodec.kt",
         functionNames = setOf("snapshotViewFrom", "mergeStepUpdates"),
-      ),
-      ArchitectureScanSupport.ParseBoundarySite(
-        relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/engine/" +
-            "WorkflowEngineSnapshotCodec.kt",
-        functionNames = setOf("decodeSteps", "decodeObject"),
       ),
     )
 

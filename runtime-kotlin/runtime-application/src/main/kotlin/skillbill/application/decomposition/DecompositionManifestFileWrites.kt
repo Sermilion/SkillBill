@@ -58,7 +58,7 @@ internal fun loadValidatedDecompositionManifestOrNull(
     null
   }
 
-fun validateDecompositionManifestYaml(
+private fun validateDecompositionManifestYaml(
   path: Path,
   fileStore: DecompositionManifestStore,
   validator: DecompositionManifestValidator,

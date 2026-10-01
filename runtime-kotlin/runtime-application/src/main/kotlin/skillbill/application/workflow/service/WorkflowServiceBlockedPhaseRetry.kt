@@ -253,7 +253,7 @@ private fun blockedPhaseRetryInput(
         listOf(
           mapOf(
             SharedPayloadKeys.STEP_ID to request.phaseId,
-            SharedPayloadKeys.STATUS to "pending",
+            SharedPayloadKeys.STATUS to WorkflowStepStatus.PENDING.wireValue,
             "attempt_count" to 0,
           ),
         ),

@@ -28,6 +28,7 @@ import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepState
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
+import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 
@@ -139,7 +140,7 @@ fun WorkflowEngine.alignSubtaskResumeStep(
               listOf(
                 mapOf(
                   SharedPayloadKeys.STEP_ID to step.stepId,
-                  SharedPayloadKeys.STATUS to "completed",
+                  SharedPayloadKeys.STATUS to WorkflowStepStatus.COMPLETED.wireValue,
                   "attempt_count" to step.attemptCount,
                 ),
               ),
@@ -220,13 +221,13 @@ internal fun DecompositionManifest.withStartedSubtask(
   branch: String,
 ): DecompositionManifest =
   copy(
-    status = "in_progress",
+    status = DecompositionStatus.IN_PROGRESS.wireValue,
     currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = subtaskId, action = "resume"),
     subtasks =
       subtasks.map { subtask ->
         if (subtask.id == subtaskId) {
           subtask.copy(
-            status = "in_progress",
+            status = DecompositionStatus.IN_PROGRESS.wireValue,
             workflowId = workflowId,
             branch = branch.takeIf(String::isNotBlank) ?: subtask.branch,
             lastResumableStep = "preplan",

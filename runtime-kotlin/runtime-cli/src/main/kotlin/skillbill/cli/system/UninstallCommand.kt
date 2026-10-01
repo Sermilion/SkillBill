@@ -95,6 +95,34 @@ class UninstallCommand(
 private val GOAL_CONTINUATION_ENV = FeatureTaskRuntimeGoalContinuationLaunchTokens.GOAL_CONTINUATION_ENV
 private const val GOAL_CONTINUATION_REFUSAL_EXIT_CODE = 64
 
+private fun UninstallPlan.confirmationText(): String =
+  buildString {
+    appendLine("This will uninstall Skill Bill from:")
+    appendLine("- ${agentTargets.size} agent target directories")
+    appendLine("- ${mcpAgents.size} MCP configurations")
+    appendLine("- $stateRoot")
+    append("Continue? [y/N] ")
+  }
+
+private fun UninstallPlan.toText(status: String): String =
+  buildString {
+    appendLine("uninstall_status: $status")
+    appendLine("state_root: $stateRoot")
+    appendLine("agent_targets: ${agentTargets.size}")
+    appendLine("skill_names: ${skillNames.size}")
+  }
+
+private fun UninstallResult.toText(): String =
+  buildString {
+    appendLine("uninstall_status: $status")
+    appendLine("removed: ${removed.size}")
+    appendLine("skipped: ${skipped.size}")
+    if (warnings.isNotEmpty()) {
+      appendLine("warnings:")
+      warnings.forEach { warning -> appendLine("- $warning") }
+    }
+  }
+
 private fun UninstallPlan.toPayload(
   status: String,
   removed: List<String>,

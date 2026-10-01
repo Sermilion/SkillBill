@@ -21,6 +21,8 @@ import skillbill.error.shellcontent.ReviewHunkEvidenceLocatorMissingError
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.diff.model.ReviewDiffQuery
+import skillbill.ports.diff.model.ReviewIndexEntry
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
@@ -220,16 +222,28 @@ class ParallelCodeReviewRunnerPlanning(
       ),
     )
 
-  fun currentHeadBranchName(repoRoot: Path): String =
-    diffResolver.runProcess(
-      listOf("git", "rev-parse", "--abbrev-ref", "HEAD"),
-      repoRoot,
-    )?.trim().orEmpty()
+  fun currentHeadBranchName(repoRoot: Path): String = diffResolver.currentBranchName(repoRoot).orEmpty()
 
-  internal fun runProcess(
-    args: List<String>,
-    workDir: Path,
-  ): String? = diffResolver.runProcess(args, workDir)
+  internal fun resolveCommit(
+    repoRoot: Path,
+    revision: String,
+  ): String? = diffResolver.resolveCommit(repoRoot, revision)
+
+  internal fun mergeBase(
+    repoRoot: Path,
+    revision: String,
+  ): String? = diffResolver.mergeBase(repoRoot, revision)
+
+  internal fun pullRequestBaseCommit(repoRoot: Path): String? = diffResolver.pullRequestBaseCommit(repoRoot)
+
+  internal fun indexEntries(repoRoot: Path): List<ReviewIndexEntry>? = diffResolver.indexEntries(repoRoot)
+
+  internal fun untrackedPaths(repoRoot: Path): List<String>? = diffResolver.untrackedPaths(repoRoot)
+
+  internal fun diff(
+    repoRoot: Path,
+    query: ReviewDiffQuery,
+  ): String? = diffResolver.diff(repoRoot, query)
 
   internal fun readDiff(
     path: Path,

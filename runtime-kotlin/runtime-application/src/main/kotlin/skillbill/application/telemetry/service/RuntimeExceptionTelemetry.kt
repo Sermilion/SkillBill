@@ -4,7 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 
-const val REDACTED_ERROR_MESSAGE = "[redacted]"
+internal const val REDACTED_ERROR_MESSAGE = "[redacted]"
 
 private const val MAX_STACK_FRAMES = 12
 private const val MAX_MESSAGE_LENGTH = 512

@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
@@ -17,6 +18,7 @@ import skillbill.ports.telemetry.model.TelemetryOutboxRecord
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import java.nio.file.Files
+import java.nio.file.Path
 import java.sql.DriverManager
 import java.sql.SQLException
 import java.util.concurrent.CountDownLatch
@@ -1619,6 +1621,52 @@ class DatabaseMigrationsReviewAttributionTest {
       },
     )
   }
+
+  @Test
+  fun `legacy goal runner migration rejects a fractional acceptance identity and persists nothing`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-legacy-goal-controls-invalid").resolve("metrics.db")
+    seedLegacyGoalRunnerControlsMigrationFixture(
+      dbPath,
+      acceptances = listOf(VALID_LEGACY_GOAL_ACCEPTANCE + ("subtask_id" to 2.5)),
+    )
+    val artifactsBefore = legacyGoalParentArtifactsJson(dbPath)
+
+    assertFailsWith<InvalidWorkflowStateSchemaError> {
+      DatabaseRuntime.establishSchemaReadiness(dbPath)
+    }
+
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      assertEquals(
+        0,
+        scalarInt(
+          connection,
+          """
+          SELECT COUNT(*) FROM goal_runner_controls
+          WHERE parent_workflow_id = 'wftr-legacy-goal-parent'
+            AND (review_policy_json IS NOT NULL OR out_of_band_acceptances_json IS NOT NULL)
+          """.trimIndent(),
+        ),
+        "A rejected legacy acceptance must not leave a review policy or acceptance control row behind.",
+      )
+      assertEquals(artifactsBefore, legacyGoalParentArtifactsJson(dbPath))
+      assertEquals(
+        0,
+        scalarInt(
+          connection,
+          "SELECT COUNT(*) FROM schema_migrations WHERE name = 'migrate-legacy-goal-runner-controls'",
+        ),
+        "The failed migration must not be recorded as applied.",
+      )
+    }
+  }
+
+  private fun legacyGoalParentArtifactsJson(dbPath: Path): String? =
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      scalarString(
+        connection,
+        "SELECT artifacts_json FROM feature_task_workflows WHERE workflow_id = 'wftr-legacy-goal-parent'",
+      )
+    }
 
   @Test
   fun `establishment stamps user_version to the highest ledger migration version`() {

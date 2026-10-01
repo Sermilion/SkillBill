@@ -174,20 +174,17 @@ object ArchitectureScanSupport {
     return violations.sorted()
   }
 
-  fun parseBoundaryViolations(sites: List<ParseBoundarySite>): List<String> {
-    val violations = mutableListOf<String>()
-    sites.forEach { site ->
-      val sourceFile = runtimeRoot.resolve(site.relativePath)
-      val source = sourceFile.readText()
-      extractFunctionBodies(source, site.functionNames).forEach { (functionName, body) ->
-        forbiddenParseBoundaryReporter(body).forEach { reporter ->
-          violations += "${site.relativePath}::$functionName reports malformed external input via $reporter; " +
-            "use a typed contract failure instead."
+  fun parseBoundaryViolations(sites: List<ParseBoundarySite>): List<String> =
+    sites
+      .flatMap { site ->
+        val source = runCatching { runtimeRoot.resolve(site.relativePath).readText() }.getOrNull()
+        if (source == null) {
+          site.functionNames.map { functionName -> notLocatedViolation(site.relativePath, functionName) }
+        } else {
+          parseBoundaryViolationsInSource(source, site)
         }
       }
-    }
-    return violations.sorted()
-  }
+      .sorted()
 
   fun conventionReapplicationViolations(
     moduleBuildFiles: List<Path>,
@@ -320,28 +317,50 @@ object ArchitectureScanSupport {
   ): Map<String, String> {
     val bodies = linkedMapOf<String, String>()
     var braceDepth = 0
+    var parenDepth = 0
     var captureStartDepth = -1
+    var captureIndent = 0
     var capturingName: String? = null
+    var bodyForm = FunctionBodyForm.UNDECIDED
     val capture = StringBuilder()
+    val finishCapture = { name: String ->
+      bodies[name] = bodies[name].orEmpty() + capture.toString()
+      capturingName = null
+      bodyForm = FunctionBodyForm.UNDECIDED
+      captureStartDepth = -1
+      parenDepth = 0
+      capture.clear()
+    }
     source.lineSequence().forEach { rawLine ->
       val line = rawLine.withoutCommentText().text
+      capturingName?.let { name ->
+        val endsExpressionBody =
+          braceDepth <= captureStartDepth &&
+            parenDepth == 0 &&
+            (rawLine.isBlank() || (line.isNotBlank() && rawLine.indentWidth() <= captureIndent))
+        if (endsExpressionBody) finishCapture(name)
+      }
       if (capturingName == null) {
         val match = FUNCTION_PATTERN.find(line)
         if (match != null && match.groupValues[1] in functionNames) {
           capturingName = match.groupValues[1]
           captureStartDepth = braceDepth
+          captureIndent = rawLine.indentWidth()
+          parenDepth = 0
           capture.clear()
         }
       }
-      if (capturingName != null) {
+      val active = capturingName
+      if (active != null) {
         capture.appendLine(rawLine)
+        if (bodyForm == FunctionBodyForm.UNDECIDED) bodyForm = line.bodyFormFrom(parenDepth)
         braceDepth += line.count { character -> character == '{' }
         braceDepth -= line.count { character -> character == '}' }
-        if (braceDepth <= captureStartDepth && line.contains('}')) {
-          bodies[capturingName] = capture.toString()
-          capturingName = null
-          captureStartDepth = -1
-          capture.clear()
+        parenDepth += line.count { character -> character == '(' }
+        parenDepth -= line.count { character -> character == ')' }
+        if (parenDepth < 0) parenDepth = 0
+        if (bodyForm != FunctionBodyForm.EXPRESSION && braceDepth <= captureStartDepth && line.contains('}')) {
+          finishCapture(active)
         }
       } else {
         braceDepth += line.count { character -> character == '{' }
@@ -349,19 +368,50 @@ object ArchitectureScanSupport {
         if (braceDepth < 0) braceDepth = 0
       }
     }
+    capturingName?.let(finishCapture)
     return bodies
   }
+
+  private enum class FunctionBodyForm { UNDECIDED, BLOCK, EXPRESSION }
+
+  private fun String.bodyFormFrom(startParenDepth: Int): FunctionBodyForm {
+    var depth = startParenDepth
+    forEachIndexed { index, character ->
+      val next = getOrNull(index + 1)
+      when {
+        character == '(' -> depth++
+        character == ')' -> depth = (depth - 1).coerceAtLeast(0)
+        depth == 0 && character == '{' -> return FunctionBodyForm.BLOCK
+        depth == 0 && character == '=' && getOrNull(index - 1) !in ASSIGNMENT_NEIGHBORS &&
+          next != '=' && next != '>' -> return FunctionBodyForm.EXPRESSION
+      }
+    }
+    return FunctionBodyForm.UNDECIDED
+  }
+
+  private val ASSIGNMENT_NEIGHBORS = setOf('=', '!', '<', '>')
+
+  private fun String.indentWidth(): Int = takeWhile { character -> character == ' ' || character == '\t' }.length
+
+  private fun notLocatedViolation(
+    relativePath: String,
+    functionName: String,
+  ): String = "$relativePath::$functionName is selected but could not be located or inspected"
 
   fun parseBoundaryViolationsInSource(
     source: String,
     site: ParseBoundarySite,
   ): List<String> {
     val violations = mutableListOf<String>()
-    extractFunctionBodies(source, site.functionNames).forEach { (functionName, body) ->
+    val bodies = extractFunctionBodies(source, site.functionNames)
+    bodies.forEach { (functionName, body) ->
       forbiddenParseBoundaryReporter(body).forEach { reporter ->
         violations += "${site.relativePath}::$functionName reports malformed external input via $reporter; " +
           "use a typed contract failure instead."
       }
+    }
+    (site.functionNames - bodies.keys).forEach { functionName ->
+      violations += notLocatedViolation(site.relativePath, functionName)
     }
     return violations.sorted()
   }
@@ -530,7 +580,11 @@ object ArchitectureScanSupport {
         """infix|suspend|override|lateinit|const|annotation|inner|companion|external|tailrec|expect|actual|""" +
         """fun)\s+)*(?:class|object|interface|fun|val|var)\s+(.*)$""",
     )
-  private val FUNCTION_PATTERN = Regex("""\bfun\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(""")
+  private val FUNCTION_PATTERN =
+    Regex(
+      """\bfun\s+(?:<[^()]*?>\s*)?(?:[A-Za-z_][A-Za-z0-9_.]*(?:<[^()]*>)?\??\.)?""" +
+        """([A-Za-z_][A-Za-z0-9_]*)\s*\(""",
+    )
   private val ABSTRACT_PROPERTY_PATTERN =
     Regex(
       """^\s*(?:(?:@[A-Za-z_][A-Za-z0-9_.]*(?:\([^)\n]*\))?|public|internal|protected)\s+)*""" +

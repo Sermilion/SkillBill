@@ -18,6 +18,7 @@ import skillbill.application.review.snapshot.diffForPaths
 import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.parallelCodeReviewRunnerOf
 import skillbill.application.review.snapshot.recordingLearnings
+import skillbill.application.review.snapshot.reviewFileSystemDiffResolver
 import skillbill.application.review.snapshot.reviewHarness
 import skillbill.application.review.snapshot.simulateGovernedEvidenceReads
 import skillbill.application.review.snapshot.sparseReviewPack
@@ -41,6 +42,8 @@ import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.diff.DiffResolverPortDefaults
+import skillbill.ports.diff.model.ReviewDiffQuery
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.persistence.UnitOfWork
@@ -101,7 +104,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeDiagn
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRejectionMeasurement
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
-import java.io.IOException
 import java.lang.reflect.Proxy
 import java.nio.file.Files
 import java.nio.file.Path
@@ -277,7 +279,7 @@ class ParallelCodeReviewRunnerTest {
   fun `STAGED scope maps diff command to git diff --cached`() {
     val resolver =
       RecordingDiffResolver(
-        responses = mapOf(listOf("git", "rev-parse", "--verify", "HEAD^{commit}") to "head-sha\n"),
+        commits = mapOf("HEAD" to "head-sha"),
         default = diffFor("A.kt"),
       )
     val launcher = ParallelSubtaskLauncher()
@@ -285,19 +287,16 @@ class ParallelCodeReviewRunnerTest {
 
     runner.run(baseRequest(agent1Id = "claude", scope = ParallelReviewScope.STAGED))
 
-    assertContains(resolver.calls, listOf("git", "diff", "--cached"))
+    assertContains(resolver.calls, "diff ${ReviewDiffQuery.Staged}")
   }
 
   @Test
   fun `BRANCH scope resolves merge-base then diffs the canonical base against the canonical head`() {
     val resolver =
       RecordingDiffResolver(
-        responses =
-          mapOf(
-            listOf("git", "rev-parse", "--verify", "HEAD^{commit}") to "head-sha\n",
-            listOf("git", "merge-base", "HEAD", "main") to "base-sha\n",
-            listOf("git", "rev-list", "--first-parent", "--reverse", "base-sha..head-sha") to "",
-          ),
+        commits = mapOf("HEAD" to "head-sha"),
+        mergeBases = mapOf("main" to "base-sha"),
+        firstParent = mapOf("base-sha..head-sha" to emptyList()),
         default = diffFor("A.kt"),
       )
     val launcher = ParallelSubtaskLauncher()
@@ -307,21 +306,18 @@ class ParallelCodeReviewRunnerTest {
       baseRequest(agent1Id = "claude", scope = ParallelReviewScope.BRANCH).detectingRevisions(),
     )
 
-    assertContains(resolver.calls, listOf("git", "merge-base", "HEAD", "main"))
-    assertContains(resolver.calls, listOf("git", "diff", "base-sha", "head-sha"))
+    assertContains(resolver.calls, "mergeBase main")
+    assertContains(resolver.calls, "diff ${ReviewDiffQuery.CommitRange("base-sha", "head-sha")}")
   }
 
   @Test
   fun `PR scope resolves the pull request base and enumerates its commit range`() {
     val resolver =
       RecordingDiffResolver(
-        responses =
-          mapOf(
-            listOf("git", "rev-parse", "--verify", "HEAD^{commit}") to "head-sha\n",
-            listOf("gh", "pr", "view", "--json", "baseRefOid", "--jq", ".baseRefOid") to "pr-base-oid\n",
-            listOf("git", "merge-base", "HEAD", "pr-base-oid") to "base-sha\n",
-            listOf("git", "rev-list", "--first-parent", "--reverse", "base-sha..head-sha") to "",
-          ),
+        commits = mapOf("HEAD" to "head-sha"),
+        pullRequestBase = "pr-base-oid",
+        mergeBases = mapOf("pr-base-oid" to "base-sha"),
+        firstParent = mapOf("base-sha..head-sha" to emptyList()),
         default = diffFor("A.kt"),
       )
     val runner = runner(ParallelSubtaskLauncher(), diffResolver = resolver)
@@ -330,11 +326,27 @@ class ParallelCodeReviewRunnerTest {
       baseRequest(agent1Id = "claude", scope = ParallelReviewScope.PR).detectingRevisions(),
     )
 
-    assertContains(resolver.calls, listOf("gh", "pr", "view", "--json", "baseRefOid", "--jq", ".baseRefOid"))
-    assertContains(
-      resolver.calls,
-      listOf("git", "rev-list", "--first-parent", "--reverse", "base-sha..head-sha"),
-    )
+    assertContains(resolver.calls, PULL_REQUEST_BASE_CALL)
+    assertContains(resolver.calls, "mergeBase pr-base-oid")
+    assertContains(resolver.calls, "firstParentCommits base-sha..head-sha")
+  }
+
+  @Test
+  fun `WORKTREE_FROM_BASE scope fails when an untracked file diff is unavailable`() {
+    val resolver =
+      RecordingDiffResolver(
+        untracked = listOf("new.kt"),
+        diffs = mapOf(ReviewDiffQuery.UntrackedFile("new.kt") to null),
+        default = diffFor("A.kt"),
+      )
+    val launcher = ParallelSubtaskLauncher()
+    val runner = runner(launcher, diffResolver = resolver)
+
+    assertFailsWith<DiffResolutionException> {
+      runner.run(baseRequest(agent1Id = "claude", scope = ParallelReviewScope.WORKTREE_FROM_BASE))
+    }
+
+    assertTrue(launcher.requests.isEmpty())
   }
 
   @Test
@@ -748,7 +760,7 @@ class ParallelCodeReviewSuppliedDiffTest {
 
     runner.run(baseRequest(scope = ParallelReviewScope.BRANCH).copy(suppliedDiff = exactDiff))
 
-    assertEquals(listOf(HEAD_BRANCH_QUERY), resolver.calls)
+    assertEquals(listOf(CURRENT_BRANCH_CALL), resolver.calls)
     assertEquals(1, launcher.requests.size)
     launcher.requests.forEach { request ->
       val prompt = request.skillRunRequest.promptOverride.orEmpty()
@@ -773,7 +785,7 @@ class ParallelCodeReviewSuppliedDiffTest {
 
     val result = runner.run(baseRequest(scope = ParallelReviewScope.BRANCH).copy(suppliedDiff = ""))
 
-    assertEquals(listOf(HEAD_BRANCH_QUERY), resolver.calls)
+    assertEquals(listOf(CURRENT_BRANCH_CALL), resolver.calls)
     assertTrue(launcher.requests.isEmpty())
     assertTrue(result.mergeResult.findings.isEmpty())
   }
@@ -798,7 +810,7 @@ class ParallelCodeReviewSuppliedDiffTest {
     val database = RecordingReviewDatabase()
     val resolver =
       RecordingDiffResolver(
-        responses = mapOf(HEAD_BRANCH_QUERY to "feat/SKILL-191-runtime\n"),
+        branchName = "feat/SKILL-191-runtime",
         default = "unexpected branch diff",
       )
     val runner =
@@ -816,7 +828,7 @@ class ParallelCodeReviewSuppliedDiffTest {
       baseRequest(scope = ParallelReviewScope.BRANCH, repoRoot = repo).copy(suppliedDiff = exactDiff),
     )
 
-    assertEquals(listOf(HEAD_BRANCH_QUERY), resolver.calls)
+    assertEquals(listOf(CURRENT_BRANCH_CALL), resolver.calls)
     assertEquals(".feature-specs/SKILL-191-runtime/spec.md", database.specProjection?.specPath)
     assertEquals(null, database.specProjection?.absenceReason)
   }
@@ -1296,7 +1308,7 @@ class ParallelCodeReviewRunnerFailureTest {
 
 internal data class RunnerFixtureConfig(
   val catalogGateway: ScaffoldCatalogGateway = stubCatalogGateway(),
-  val diffResolver: DiffResolverPort = RealProcessDiffResolver(),
+  val diffResolver: DiffResolverPort = reviewFileSystemDiffResolver(),
   val rubricResolver: ReviewRubricResolver =
     ReviewRubricResolver {
       ResolvedReviewRubric("parallel-code-review", "governed generic rubric")
@@ -1317,7 +1329,7 @@ internal data class RunnerFixtureConfig(
 internal fun runner(
   launcher: GoalRunnerSubtaskLauncher,
   catalogGateway: ScaffoldCatalogGateway = stubCatalogGateway(),
-  diffResolver: DiffResolverPort = RealProcessDiffResolver(),
+  diffResolver: DiffResolverPort = reviewFileSystemDiffResolver(),
   rubricResolver: ReviewRubricResolver =
     ReviewRubricResolver {
       ResolvedReviewRubric("parallel-code-review", "governed generic rubric")
@@ -1574,7 +1586,6 @@ private const val TEST_SPECIALIST_CONTRACT: String =
     "- [F-001] <Severity> | <Confidence> | <file:line> | <description>"
 
 private val runnerRequestSequence = AtomicInteger()
-private val HEAD_BRANCH_QUERY = listOf("git", "rev-parse", "--abbrev-ref", "HEAD")
 
 internal fun baseRequest(
   agent1Id: String = "claude",
@@ -1736,61 +1747,73 @@ private class ParallelSubtaskLauncher(
 }
 
 internal class RecordingDiffResolver(
-  private val responses: Map<List<String>, String?> = emptyMap(),
+  private val commits: Map<String, String?> = emptyMap(),
+  private val mergeBases: Map<String, String?> = emptyMap(),
+  private val pullRequestBase: String? = null,
+  private val branchName: String? = null,
+  private val firstParent: Map<String, List<String>?> = emptyMap(),
+  private val untracked: List<String>? = emptyList(),
+  private val diffs: Map<ReviewDiffQuery, String?> = emptyMap(),
   private val default: String? = null,
-) : DiffResolverPort {
-  val calls: MutableList<List<String>> = mutableListOf()
+) : DiffResolverPortDefaults() {
+  val calls: MutableList<String> = mutableListOf()
 
-  override fun runProcess(
-    args: List<String>,
-    workDir: Path,
+  override fun resolveCommit(
+    repoRoot: Path,
+    revision: String,
   ): String? {
-    calls += args
-    return if (responses.containsKey(args)) responses[args] else default
+    calls += "resolveCommit $revision"
+    return if (commits.containsKey(revision)) commits[revision] else revision
+  }
+
+  override fun mergeBase(
+    repoRoot: Path,
+    revision: String,
+  ): String? {
+    calls += "mergeBase $revision"
+    return mergeBases[revision]
+  }
+
+  override fun pullRequestBaseCommit(repoRoot: Path): String? {
+    calls += PULL_REQUEST_BASE_CALL
+    return pullRequestBase
+  }
+
+  override fun currentBranchName(repoRoot: Path): String? {
+    calls += CURRENT_BRANCH_CALL
+    return branchName
+  }
+
+  override fun firstParentCommits(
+    repoRoot: Path,
+    base: String,
+    head: String,
+  ): List<String>? {
+    calls += "firstParentCommits $base..$head"
+    return if (firstParent.containsKey("$base..$head")) firstParent["$base..$head"] else emptyList()
+  }
+
+  override fun untrackedPaths(repoRoot: Path): List<String>? {
+    calls += "untrackedPaths"
+    return untracked
+  }
+
+  override fun diff(
+    repoRoot: Path,
+    query: ReviewDiffQuery,
+  ): String? {
+    calls += "diff $query"
+    return if (diffs.containsKey(query)) diffs[query] else default
   }
 
   override fun reviewWorktreeFileIdentities(
     root: Path,
     paths: List<String>,
   ) = emptyMap<String, ReviewCheckpointFileIdentity>()
-
-  override fun readDiff(
-    path: Path,
-    maxBytes: Long,
-  ): String? = null
 }
 
-private class RealProcessDiffResolver : DiffResolverPort {
-  override fun runProcess(
-    args: List<String>,
-    workDir: Path,
-  ): String? =
-    try {
-      val process =
-        ProcessBuilder(args)
-          .directory(workDir.toFile())
-          .redirectErrorStream(true)
-          .start()
-      val output = process.inputStream.bufferedReader().readText()
-      val exitCode = process.waitFor()
-      if (exitCode == 0) output else null
-    } catch (_: IOException) {
-      null
-    } catch (_: InterruptedException) {
-      Thread.currentThread().interrupt()
-      null
-    }
-
-  override fun reviewWorktreeFileIdentities(
-    root: Path,
-    paths: List<String>,
-  ) = emptyMap<String, ReviewCheckpointFileIdentity>()
-
-  override fun readDiff(
-    path: Path,
-    maxBytes: Long,
-  ): String? = null
-}
+private const val CURRENT_BRANCH_CALL = "currentBranchName"
+private const val PULL_REQUEST_BASE_CALL = "pullRequestBaseCommit"
 
 internal fun stubCatalogGateway(manifests: List<PlatformManifest> = emptyList()): ScaffoldCatalogGateway =
   object : ScaffoldCatalogGateway {

@@ -3,6 +3,9 @@ package skillbill.application.reviewevidence
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.diff.DiffResolverPortDefaults
+import skillbill.ports.diff.model.ReviewCommitMetadata
+import skillbill.ports.diff.model.ReviewDiffQuery
 import skillbill.ports.review.model.ReviewCheckpointFileIdentity
 import skillbill.ports.taskruntime.DERIVING_SHARED_EVIDENCE_RESOLVER
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceDeriver
@@ -34,27 +37,42 @@ class SharedReviewEvidenceResolutionTest {
     +$line
     """.trimIndent()
 
-  private class FakeGit(private val responses: Map<String, String?>) : DiffResolverPort {
+  private class FakeGit(
+    private val commits: Map<String, List<String>> = emptyMap(),
+    private val metadata: Map<String, ReviewCommitMetadata> = emptyMap(),
+    private val diffs: Map<ReviewDiffQuery, String> = emptyMap(),
+  ) : DiffResolverPortDefaults() {
     val invoked: MutableList<String> = mutableListOf()
 
-    override fun runProcess(
-      args: List<String>,
-      workDir: Path,
+    override fun firstParentCommits(
+      repoRoot: Path,
+      base: String,
+      head: String,
+    ): List<String>? {
+      invoked += "firstParentCommits $base..$head"
+      return commits["$base..$head"]
+    }
+
+    override fun commitMetadata(
+      repoRoot: Path,
+      sha: String,
+    ): ReviewCommitMetadata? {
+      invoked += "commitMetadata $sha"
+      return metadata[sha]
+    }
+
+    override fun diff(
+      repoRoot: Path,
+      query: ReviewDiffQuery,
     ): String? {
-      val key = args.joinToString(" ")
-      invoked += key
-      return responses[key]
+      invoked += "diff $query"
+      return diffs[query]
     }
 
     override fun reviewWorktreeFileIdentities(
       root: Path,
       paths: List<String>,
     ) = emptyMap<String, ReviewCheckpointFileIdentity>()
-
-    override fun readDiff(
-      path: Path,
-      maxBytes: Long,
-    ): String? = null
   }
 
   private class InMemoryStore(
@@ -96,18 +114,12 @@ class SharedReviewEvidenceResolutionTest {
     shas: List<String>,
     parents: Map<String, String>,
     diffs: Map<String, String>,
-  ): FakeGit {
-    val responses =
-      mutableMapOf<String, String?>(
-        "git rev-list --first-parent --reverse base..head" to shas.joinToString("\n"),
-      )
-    shas.forEach { sha ->
-      val parent = parents.getValue(sha)
-      responses["git show -s --format=%P%n%s $sha"] = "$parent\nsubject $sha"
-      responses["git diff $parent $sha"] = diffs.getValue(sha)
-    }
-    return FakeGit(responses)
-  }
+  ): FakeGit =
+    FakeGit(
+      commits = mapOf("base..head" to shas),
+      metadata = shas.associateWith { sha -> ReviewCommitMetadata(listOf(parents.getValue(sha)), "subject $sha") },
+      diffs = shas.associate { sha -> ReviewDiffQuery.CommitRange(parents.getValue(sha), sha) to diffs.getValue(sha) },
+    )
 
   private fun twoCommitGit(): Pair<FakeGit, String> {
     val diffs = mapOf("c1" to diffFor("src/c1.kt", "one"), "head" to diffFor("src/head.kt", "two"))
@@ -186,7 +198,7 @@ class SharedReviewEvidenceResolutionTest {
 
     cases.forEach { (scope, supplied, expected) ->
       val store = InMemoryStore()
-      val git = FakeGit(mapOf("git rev-list --first-parent --reverse base..head" to ""))
+      val git = FakeGit(commits = mapOf("base..head" to emptyList()))
       val query = queryOf(scope = scope, supplied = supplied, workflowId = scope.name)
       val first = resolve(store, git, aggregate, query)
       val reloaded = resolve(store, git, aggregate, query)
@@ -220,7 +232,7 @@ class SharedReviewEvidenceResolutionTest {
   @Test fun `only an immutable commit range is checkpoint-keyed`() {
     val store = InMemoryStore()
     val aggregate = diffFor("src/A.kt", "alpha")
-    val noGit = FakeGit(mapOf("git rev-list --first-parent --reverse base..head" to ""))
+    val noGit = FakeGit(commits = mapOf("base..head" to emptyList()))
 
     resolve(store, noGit, aggregate, queryOf(scope = ParallelReviewScope.BRANCH))
     resolve(store, noGit, aggregate, queryOf(scope = ParallelReviewScope.PR))
@@ -235,7 +247,7 @@ class SharedReviewEvidenceResolutionTest {
 
   @Test fun `a supplied diff review derives in line rather than reusing a range-keyed artifact`() {
     val store = InMemoryStore()
-    val noGit = FakeGit(mapOf("git rev-list --first-parent --reverse base..head" to ""))
+    val noGit = FakeGit(commits = mapOf("base..head" to emptyList()))
     val first = diffFor("src/A.kt", "alpha")
     val second = diffFor("src/B.kt", "beta")
 
@@ -255,7 +267,7 @@ class SharedReviewEvidenceResolutionTest {
     val (git, aggregate) = twoCommitGit()
     resolve(store, git, aggregate)
 
-    val otherGit = FakeGit(mapOf("git rev-list --first-parent --reverse base..other-head" to ""))
+    val otherGit = FakeGit(commits = mapOf("base..other-head" to emptyList()))
     val otherRange =
       SharedReviewEvidenceResolution(store, otherGit).resolve(
         SharedReviewEvidenceQuery(
