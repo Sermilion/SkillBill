@@ -1,6 +1,6 @@
 package skillbill.engine.goalrunner.execution.support
 
-import skillbill.ports.goalrunner.runner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 
 internal sealed interface GoalRunnerChildProgressRead {
   data object Absent : GoalRunnerChildProgressRead

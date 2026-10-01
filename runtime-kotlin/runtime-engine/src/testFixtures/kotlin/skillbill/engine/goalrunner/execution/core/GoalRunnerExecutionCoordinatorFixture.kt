@@ -1,6 +1,6 @@
 package skillbill.engine.goalrunner.execution.core
 
-import skillbill.ports.goalrunner.runner.model.GoalRunnerChildExecutionPlanAdmission
+import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 
 val DIRECT_GOAL_RUNNER_EXECUTION_COORDINATOR: GoalRunnerExecutionCoordinator =
   object : GoalRunnerExecutionCoordinator {

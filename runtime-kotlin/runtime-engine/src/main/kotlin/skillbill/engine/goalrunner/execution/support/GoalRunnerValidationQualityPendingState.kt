@@ -1,7 +1,7 @@
 package skillbill.engine.goalrunner.execution.support
 
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.goalrunner.model.GoalRunnerControlState
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
 
 class GoalRunnerValidationQualityPendingState(
   private val manifestStore: GoalRunnerManifestStore,

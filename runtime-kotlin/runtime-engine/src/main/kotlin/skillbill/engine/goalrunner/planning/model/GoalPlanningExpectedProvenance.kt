@@ -1,7 +1,7 @@
 package skillbill.engine.goalrunner.planning.model
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.ports.goalrunner.runner.model.GoalChildPlanningHydrationRequest
+import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
 
 internal fun expectedProvenance(request: GoalChildPlanningHydrationRequest): Map<String, Any?> =
   mapOf(

@@ -14,8 +14,8 @@ import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStr
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy.PlanResumeRules
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateResumeRules
 import skillbill.engine.featuretask.slot.qualitygate.gateCurrentExecution
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection

@@ -2,8 +2,8 @@ package skillbill.engine.featuretask.slot.qualitygate
 
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.core.attemptPhaseExecution
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 internal val QUALITY_GATE_STEP_POLICY: PhaseStepPolicy =

@@ -1,6 +1,6 @@
 package skillbill.engine.goalrunner.persist
 
-import skillbill.ports.goalrunner.runner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.engine.recovery.DurableChildRecoveryClass as RecoveryDurableChildClass
 import skillbill.engine.recovery.classifyDurableChild as recoveryClassifyDurableChild

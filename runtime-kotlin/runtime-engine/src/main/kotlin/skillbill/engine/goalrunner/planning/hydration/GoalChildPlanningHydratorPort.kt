@@ -1,9 +1,9 @@
-package skillbill.ports.goalrunner.persistence
+package skillbill.engine.goalrunner.planning.hydration
 
+import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
+import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationResult
+import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
-import skillbill.ports.goalrunner.persistence.model.GoalChildPlanningHydrationResult
-import skillbill.ports.goalrunner.runner.model.GoalChildPlanningHydrationRequest
-import skillbill.ports.goalrunner.runner.model.GoalRunnerChildWorkflowSetup
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 
 interface GoalChildPlanningHydratorPort {

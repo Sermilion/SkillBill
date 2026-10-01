@@ -1,8 +1,8 @@
 package skillbill.engine.goalrunner.persist
 
+import skillbill.engine.goalrunner.model.CrashReconcileExpiredWorkerRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
-import skillbill.ports.goalrunner.persistence.model.CrashReconcileExpiredWorkerRequest
 import skillbill.ports.taskruntime.model.isConfirmedDead
 import java.time.Clock
 

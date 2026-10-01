@@ -4,6 +4,8 @@ import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
 import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
 import skillbill.engine.goalrunner.model.GoalRunnerPauseResult
 import skillbill.engine.goalrunner.model.GoalRunnerPauseStatus
+import skillbill.engine.goalrunner.model.GoalRunnerRepairResult
+import skillbill.engine.goalrunner.model.GoalRunnerRepairStatus
 import skillbill.engine.goalrunner.model.GoalRunnerReplanResult
 import skillbill.engine.goalrunner.model.GoalRunnerResetResult
 import skillbill.engine.goalrunner.model.GoalRunnerResumeStatus
@@ -12,8 +14,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerStopVerbResult
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.goalrunner.model.GoalRunnerStopReason
-import skillbill.ports.goalrunner.persistence.model.GoalRunnerRepairResult
-import skillbill.ports.goalrunner.persistence.model.GoalRunnerRepairStatus
 
 internal const val GOAL_EXIT_COMPLETE: Int = 0
 internal const val GOAL_EXIT_FAILED: Int = 1

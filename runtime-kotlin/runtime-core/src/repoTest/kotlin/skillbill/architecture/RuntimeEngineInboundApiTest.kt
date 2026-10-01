@@ -149,6 +149,10 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.goalrunner.model.GoalRunnerPauseStatus",
         "skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest",
         "skillbill.engine.goalrunner.model.GoalRunnerPurgeResult",
+        "skillbill.engine.goalrunner.model.GoalRunnerAppliedRepair",
+        "skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosis",
+        "skillbill.engine.goalrunner.model.GoalRunnerWedgeFinding",
+        "skillbill.engine.goalrunner.model.GoalRunnerResetSubtaskSnapshot",
         "skillbill.engine.goalrunner.model.GoalRunnerRepairRequest",
         "skillbill.engine.goalrunner.model.GoalRunnerRepairResult",
         "skillbill.engine.goalrunner.model.GoalRunnerRepairStatus",
@@ -172,8 +176,6 @@ class RuntimeEngineInboundApiTest {
         "skillbill.engine.work.IdeStatusService",
         "skillbill.engine.work.model.IdeStatusRequest",
         "skillbill.engine.work.model.IdeStatusResult",
-        "skillbill.engine.work.model.IdeStatusSnapshot",
-        "skillbill.engine.work.model.IdeStatusProblemCode",
         "skillbill.engine.operation.updatecheck.updateCheckContract",
       )
   }

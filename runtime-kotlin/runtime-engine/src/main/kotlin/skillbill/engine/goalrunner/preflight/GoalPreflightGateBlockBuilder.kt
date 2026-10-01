@@ -5,6 +5,7 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.specSource
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalPreflightAgentAddon
 import skillbill.engine.goalrunner.model.GoalPreflightDependency
 import skillbill.engine.goalrunner.model.GoalPreflightGateBlock
@@ -21,7 +22,6 @@ import skillbill.model.toPath
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
 import skillbill.ports.agentaddon.model.ExternalAgentAddonSourceConfigRequest
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.DecompositionManifest

@@ -4,9 +4,7 @@ import skillbill.contracts.workflow.identity.status.GOAL_PLANNING_WAVE_CAP
 import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.idestatus.model.AgentActivityLabel
-import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.WorkflowStatus
-import java.nio.file.Path
 import java.time.Instant
 
 enum class IdeStatusWorkflowFamily(val wireValue: String) {
@@ -88,18 +86,6 @@ enum class IdeStatusProblemCode(val wireValue: String) {
   INCOMPATIBLE_RECORD("incompatible_record"),
   INVALID_REPOSITORY_INPUT("invalid_repository_input"),
   SCHEMA_INCOMPATIBLE("schema_incompatible"),
-}
-
-enum class IdeStatusSelectionTier {
-  ACTIVE,
-  PAUSED,
-  BLOCKED,
-  FAILED,
-  RECENTLY_TERMINAL,
-  IDLE,
-  ;
-
-  val rank: Int get() = ordinal
 }
 
 data class IdeStatusStep(
@@ -197,27 +183,6 @@ data class IdeStatusProblem(
   }
 }
 
-data class IdeStatusCandidate(
-  val workflowId: String,
-  val workflowFamily: IdeStatusWorkflowFamily,
-  val issueKey: String?,
-  val currentState: String,
-  val lifecycleState: IdeStatusLifecycleState,
-  val selectionTier: IdeStatusSelectionTier,
-  val updatedAt: Instant,
-  val startedAt: Instant?,
-  val routeScope: FeatureTaskRouteScope? = null,
-  val isGoalAuthoritative: Boolean = workflowFamily == IdeStatusWorkflowFamily.FEATURE_GOAL,
-)
-
-sealed class IdeStatusRepositoryResolution {
-  data class Ok(val identity: String, val repoRoot: Path) : IdeStatusRepositoryResolution()
-
-  data class Invalid(val message: String) : IdeStatusRepositoryResolution()
-
-  data class Missing(val message: String) : IdeStatusRepositoryResolution()
-}
-
 data class IdeStatusSnapshot(
   val repositoryIdentity: String,
   val lifecycleState: IdeStatusLifecycleState,
@@ -252,17 +217,3 @@ data class IdeStatusSnapshot(
     }
   }
 }
-
-data class IdeStatusRequest(
-  val repoRoot: String,
-  val observedAt: Instant? = null,
-) {
-  init {
-    require(repoRoot.isNotBlank()) { "repoRoot is required." }
-  }
-}
-
-data class IdeStatusResult(
-  val snapshot: IdeStatusSnapshot,
-  val exitCode: Int,
-)

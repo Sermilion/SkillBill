@@ -1,6 +1,6 @@
 package skillbill.engine.recovery
 
-import skillbill.ports.goalrunner.runner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.WorkflowStatus
 

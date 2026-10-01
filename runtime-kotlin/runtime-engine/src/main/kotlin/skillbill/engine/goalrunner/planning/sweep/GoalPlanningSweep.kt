@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.planning.context.GoalPlanningSharedContextPacket
 import skillbill.engine.goalrunner.planning.context.gatherSharedContext
@@ -24,7 +25,6 @@ import skillbill.engine.goalrunner.planning.state.GoalPlanningRunProgress
 import skillbill.engine.goalrunner.planning.state.GoalPlanningRunScope
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 
 fun interface GoalPlanningSweep {

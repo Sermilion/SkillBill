@@ -47,15 +47,6 @@ data class GoalSubtaskPlanCheckpoint(
   val contractVersion: String = GOAL_PLANNING_PREPARATION_CONTRACT_VERSION,
 )
 
-data class GoalPlanningPreparationProgress(
-  val sharedPreplanPrepared: Boolean,
-  val preparedPlanCount: Int,
-  val expectedPlanCount: Int,
-  val missingSubtaskIds: List<Int>,
-) {
-  val firstMissingSubtaskId: Int? get() = missingSubtaskIds.firstOrNull()
-}
-
 data class GovernedGoalSubtaskDescriptor(
   val subtaskId: Int,
   val manifestOrder: Int,

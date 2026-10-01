@@ -6,6 +6,7 @@ import skillbill.application.decomposition.parentSpecPath
 import skillbill.engine.decomposition.encodeDecompositionManifestYaml
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneGoalPurgeCheckpointRefs
 import skillbill.engine.goalrunner.goalRepositoryIdentity
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.resetManifest
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeResult
@@ -16,7 +17,6 @@ import skillbill.engine.goalrunner.status.resolveChildExecutionLiveness
 import skillbill.engine.goalrunner.status.resolveParentExecutionLiveness
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator

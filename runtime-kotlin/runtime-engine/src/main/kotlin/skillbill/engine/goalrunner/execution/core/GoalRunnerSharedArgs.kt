@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.execution.core
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchDiagnostics
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchReconciliation
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
@@ -17,7 +18,6 @@ import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 

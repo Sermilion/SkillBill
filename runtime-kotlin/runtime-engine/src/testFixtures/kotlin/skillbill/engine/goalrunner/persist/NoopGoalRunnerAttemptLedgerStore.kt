@@ -1,4 +1,4 @@
-package skillbill.ports.goalrunner.runner
+package skillbill.engine.goalrunner.persist
 
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 

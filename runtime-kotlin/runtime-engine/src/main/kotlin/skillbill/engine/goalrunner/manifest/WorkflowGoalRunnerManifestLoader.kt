@@ -4,9 +4,9 @@ import skillbill.application.workflow.decomposition.requireRuntimeModeForEngineW
 import skillbill.application.workflow.persist.generateWorkflowId
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.GoalParentProjectionWriter
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator

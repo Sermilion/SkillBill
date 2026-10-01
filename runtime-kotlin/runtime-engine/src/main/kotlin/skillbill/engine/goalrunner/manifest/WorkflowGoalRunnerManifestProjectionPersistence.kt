@@ -2,12 +2,12 @@ package skillbill.engine.goalrunner.manifest
 
 import skillbill.application.workflow.decomposition.requireRuntimeModeForEngineWrite
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.status.reconcileControlStateForManifest
 import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.decomposition.DecompositionManifestProjectionWriter
 import skillbill.ports.goalrunner.GoalParentProjectionWriter
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore

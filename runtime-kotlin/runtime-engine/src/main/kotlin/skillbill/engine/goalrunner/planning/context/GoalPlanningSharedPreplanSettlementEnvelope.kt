@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.planning.context
 import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.outcome.resolvedGovernedPath
@@ -12,7 +13,6 @@ import skillbill.engine.goalrunner.planning.remedies.goalPlanningIncompatiblePro
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningRemedySubtaskId
 import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 
 internal fun DefaultGoalPlanningSweep.freshPlanningPacket(
   shared: GoalPlanningSharedContext,

@@ -1,4 +1,4 @@
-package skillbill.ports.goalrunner.persistence.model
+package skillbill.engine.goalrunner.model
 
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.workflow.decomposition.model.DecompositionSubtask
