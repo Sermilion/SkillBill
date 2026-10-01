@@ -1,9 +1,9 @@
 package skillbill.infrastructure.sqlite.telemetry.goal
 
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.core.ops.sqliteDiagnostics
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.listJson
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.toSqlInt
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.telemetry.model.GoalFinishedRecord
 import skillbill.telemetry.model.GoalIssueFinishedRecord
 import skillbill.telemetry.model.GoalStartedRecord
@@ -234,11 +234,12 @@ internal fun recordGoalIssueSegmentEnd(
 internal fun saveGoalIssueFinished(
   connection: Connection,
   record: GoalIssueFinishedRecord,
+  diagnostics: RuntimeDiagnostics,
 ): GoalIssueFinishedSaveOutcome {
   if (!goalIssueProgressExists(connection, record.parentWorkflowId, record.issueKey)) {
     val recovered = recoverGoalIssueProgress(connection, record)
     if (!recovered.persisted) {
-      connection.sqliteDiagnostics().warning(
+      diagnostics.warning(
         "skillbill sqlite: suppressed goal_issue_finished for ${record.parentWorkflowId}/${record.issueKey}; " +
           "reason=${recovered.suppressionReason}",
         null,

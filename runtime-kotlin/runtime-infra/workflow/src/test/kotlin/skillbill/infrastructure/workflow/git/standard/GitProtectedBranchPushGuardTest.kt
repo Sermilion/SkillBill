@@ -1,6 +1,6 @@
 package skillbill.infrastructure.workflow.git.standard
 
-import skillbill.infrastructure.workflow.git.workflow.git
+import skillbill.infrastructure.workflow.git.git
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import java.nio.file.Files
 import java.nio.file.Path

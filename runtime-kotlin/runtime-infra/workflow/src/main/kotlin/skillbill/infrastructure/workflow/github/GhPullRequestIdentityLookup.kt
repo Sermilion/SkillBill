@@ -1,4 +1,4 @@
-package skillbill.infrastructure.workflow.git.goal
+package skillbill.infrastructure.workflow.github
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper

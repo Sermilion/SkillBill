@@ -1,4 +1,4 @@
-package skillbill.infrastructure.workflow.git.workflow
+package skillbill.infrastructure.workflow.git
 
 import java.nio.file.Path
 

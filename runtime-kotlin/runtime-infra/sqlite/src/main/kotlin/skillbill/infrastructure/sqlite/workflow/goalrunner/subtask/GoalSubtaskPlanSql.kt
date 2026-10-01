@@ -20,6 +20,7 @@ import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.requirePosit
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.requirePositiveSubtaskId
 import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.translateSqlFailure
 import skillbill.infrastructure.sqlite.workflow.goalrunner.shared.GoalSharedPreplanSql
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
@@ -31,10 +32,11 @@ import java.sql.ResultSet
 internal class GoalSubtaskPlanSql(
   private val connection: Connection,
   private val sharedPreplan: GoalSharedPreplanSql,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   fun checkpointSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) {
     requireNormalizedSubtaskPlan(checkpoint)
-    connection.inNestedWriteTransaction {
+    connection.inNestedWriteTransaction(diagnostics) {
       requireGoverningSharedPreplan(checkpoint)
       val inserted = connection.insertSubtaskPlanRow(checkpoint)
       val stored = findSubtaskPlan(checkpoint.identity, checkpoint.subtaskId, checkpoint.governedSubSpecPath)
@@ -44,7 +46,7 @@ internal class GoalSubtaskPlanSql(
 
   fun replaceSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) {
     requireNormalizedSubtaskPlan(checkpoint)
-    connection.inNestedWriteTransaction {
+    connection.inNestedWriteTransaction(diagnostics) {
       requireGoverningSharedPreplan(checkpoint)
       connection.prepareStatement(
         "DELETE FROM goal_subtask_plans WHERE parent_goal_workflow_id = ? AND subtask_id = ?",

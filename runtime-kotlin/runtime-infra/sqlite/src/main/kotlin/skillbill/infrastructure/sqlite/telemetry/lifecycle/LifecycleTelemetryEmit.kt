@@ -4,9 +4,9 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.core.ops.sqliteDiagnostics
 import skillbill.infrastructure.sqlite.telemetry.outbox.TelemetryOutboxStore
 import skillbill.infrastructure.sqlite.telemetry.redaction.telemetryRedactionSalt
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.review.model.ReviewStageDegradationMeasurement
 import java.sql.Connection
 
@@ -28,6 +28,7 @@ internal fun emitFeatureTaskRuntimeFinished(
   runtimeVersion: String,
   sessionId: String,
   level: String,
+  diagnostics: RuntimeDiagnostics,
 ) {
   val row = lifecycleRow(connection, "feature_task_runtime_sessions", sessionId) ?: return
   emitOnce(
@@ -38,7 +39,7 @@ internal fun emitFeatureTaskRuntimeFinished(
       row,
       level,
       telemetryRedactionSalt(connection),
-      connection.sqliteDiagnostics(),
+      diagnostics,
     )
   }
 }
@@ -60,12 +61,13 @@ internal fun emitQualityCheckFinished(
   runtimeVersion: String,
   sessionId: String,
   level: String,
+  diagnostics: RuntimeDiagnostics,
 ) {
   val row = lifecycleRow(connection, "quality_check_sessions", sessionId) ?: return
   emitOnce(
     LifecycleEmitRequest(connection, runtimeVersion, row, "quality_check_sessions", "finished_event_emitted_at"),
     TelemetryOutboxEvent.QUALITY_CHECK_FINISHED,
-  ) { qualityCheckFinishedPayload(row, level, connection.sqliteDiagnostics()) }
+  ) { qualityCheckFinishedPayload(row, level, diagnostics) }
 }
 
 internal fun emitFeatureVerifyStarted(
@@ -86,12 +88,13 @@ internal fun emitFeatureVerifyFinished(
   runtimeVersion: String,
   sessionId: String,
   level: String,
+  diagnostics: RuntimeDiagnostics,
 ) {
   val row = lifecycleRow(connection, "feature_verify_sessions", sessionId) ?: return
   emitOnce(
     LifecycleEmitRequest(connection, runtimeVersion, row, "feature_verify_sessions", "finished_event_emitted_at"),
     TelemetryOutboxEvent.FEATURE_VERIFY_FINISHED,
-  ) { featureVerifyFinishedPayload(row, level, connection.sqliteDiagnostics()) }
+  ) { featureVerifyFinishedPayload(row, level, diagnostics) }
 }
 
 internal fun enqueueTelemetry(

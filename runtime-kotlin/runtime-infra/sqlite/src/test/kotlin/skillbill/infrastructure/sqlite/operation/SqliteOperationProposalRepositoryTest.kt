@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite.operation
 
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
+import skillbill.infrastructure.sqlite.ensureDatabase
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.ports.operation.model.OperationAnchors
 import skillbill.ports.operation.model.OperationProposal

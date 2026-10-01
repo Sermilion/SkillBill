@@ -1,9 +1,7 @@
-package skillbill.infrastructure.skills.file
+package skillbill.infrastructure.skills.externaladdon
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.ExternalAddonConfigError
-import skillbill.infrastructure.host.readTelemetryConfigFile
-import skillbill.infrastructure.host.resolveTelemetryConfigPath
 import skillbill.install.model.ExternalAgentAddonSource
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
 import skillbill.ports.agentaddon.model.ExternalAgentAddonSourceConfigRequest
@@ -18,22 +16,10 @@ class FileExternalAgentAddonSourceConfigStore : ExternalAgentAddonSourceConfigPo
   override fun readExternalAgentAddonSources(
     request: ExternalAgentAddonSourceConfigRequest,
   ): ExternalAgentAddonSourceConfigResult {
-    val configPath = resolveTelemetryConfigPath(request.environment, request.userHome)
-    if (!Files.exists(configPath)) return ExternalAgentAddonSourceConfigResult()
-    val payload =
-      try {
-        readTelemetryConfigFile(configPath)?.payload
-      } catch (error: IllegalArgumentException) {
-        throw ExternalAddonConfigError(error.message.orEmpty(), error)
-      } ?: return ExternalAgentAddonSourceConfigResult()
-
-    val raw = payload[CONFIG_KEY] ?: return ExternalAgentAddonSourceConfigResult()
-    if (raw !is List<*>) {
-      throw ExternalAddonConfigError(
-        "External addon config at '$configPath': '$CONFIG_KEY' must be a list of source entries.",
-      )
-    }
-    val sources = raw.mapIndexedNotNull { index, entry -> parseEntry(configPath, request.userHome, index, entry) }
+    val (configPath, entries) =
+      readExternalAddonSourceEntries(request.environment, request.userHome, "must be a list of source entries.")
+        ?: return ExternalAgentAddonSourceConfigResult()
+    val sources = entries.mapIndexedNotNull { index, entry -> parseEntry(configPath, request.userHome, index, entry) }
     return ExternalAgentAddonSourceConfigResult(sources)
   }
 
@@ -68,24 +54,6 @@ class FileExternalAgentAddonSourceConfigStore : ExternalAgentAddonSourceConfigPo
       )
     }
     return ExternalAgentAddonSource(resolvedPath.toFileLocation())
-  }
-
-  private fun resolveSourcePath(
-    userHome: Path,
-    rawPath: String,
-  ): Path {
-    val expanded =
-      when {
-        rawPath == "~" -> userHome.toString()
-        rawPath.startsWith("~/") -> userHome.resolve(rawPath.removePrefix("~/")).toString()
-        else -> rawPath
-      }
-    val candidate = Path.of(expanded)
-    return if (candidate.isAbsolute) {
-      candidate.normalize()
-    } else {
-      Path.of(System.getProperty("user.dir")).resolve(candidate).normalize()
-    }
   }
 
   private companion object {

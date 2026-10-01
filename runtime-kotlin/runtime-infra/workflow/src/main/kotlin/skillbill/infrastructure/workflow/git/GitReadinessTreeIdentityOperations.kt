@@ -1,4 +1,4 @@
-package skillbill.infrastructure.workflow.git.workflow
+package skillbill.infrastructure.workflow.git
 
 import skillbill.infrastructure.host.jvm.requirePathContainedIn
 import skillbill.infrastructure.workflow.process.runGitCommand

@@ -26,7 +26,7 @@ import skillbill.engine.operation.core.SupersededOperationTokenError
 import skillbill.engine.operation.core.UnknownOperationTokenError
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager

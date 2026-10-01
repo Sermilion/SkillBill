@@ -19,7 +19,7 @@ import skillbill.engine.operation.verify.VerifyDelegatedReviewer
 import skillbill.engine.operation.verify.VerifyOperation
 import skillbill.engine.operation.verify.VerifyTelemetry
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
-import skillbill.infrastructure.workflow.git.github.GhPullRequestReviewThreads
+import skillbill.infrastructure.workflow.github.GhPullRequestReviewThreads
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.operation.OperationProposalRepository

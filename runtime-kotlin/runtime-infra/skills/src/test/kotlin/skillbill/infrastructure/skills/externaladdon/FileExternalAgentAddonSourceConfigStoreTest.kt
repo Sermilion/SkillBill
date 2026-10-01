@@ -1,4 +1,4 @@
-package skillbill.infrastructure.skills.file
+package skillbill.infrastructure.skills.externaladdon
 
 import skillbill.contracts.JsonCodec
 import skillbill.error.core.ExternalAddonConfigError

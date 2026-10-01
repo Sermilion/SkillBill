@@ -14,6 +14,7 @@ import skillbill.infrastructure.sqlite.review.stage.toReviewSummary
 import skillbill.infrastructure.sqlite.review.stage.updateFindingLaneAttribution
 import skillbill.infrastructure.sqlite.review.stats.ReviewStatsRuntime
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.model.ReviewAccountingRecord
 import skillbill.review.model.ImportedFinding
 import skillbill.review.model.ImportedReview
@@ -51,6 +52,7 @@ internal fun loadReviewAccounting(
   connection: Connection,
   reviewId: String,
   runtimeVersion: String,
+  diagnostics: RuntimeDiagnostics,
 ): ReviewAccountingRecord? =
   connection.prepareStatement(
     "SELECT packet_digest, bounded_payload_json FROM review_accounting WHERE review_id = ?",
@@ -67,11 +69,11 @@ internal fun loadReviewAccounting(
         declaredVersion != REVIEW_CONTEXT_CONTRACT_VERSION &&
         declaredVersion != LEGACY_REVIEW_CONTEXT_CONTRACT_VERSION
       ) {
-        quarantineReviewAccounting(connection, runtimeVersion, reviewId, declaredVersion)
+        quarantineReviewAccounting(connection, runtimeVersion, diagnostics, reviewId, declaredVersion)
         return@use null
       }
       if (payloadCarriesLegacyEvidenceUnreviewableSegment(payload)) {
-        quarantineReviewAccounting(connection, runtimeVersion, reviewId, declaredVersion)
+        quarantineReviewAccounting(connection, runtimeVersion, diagnostics, reviewId, declaredVersion)
         return@use null
       }
       ReviewAccountingRecord(
@@ -89,10 +91,11 @@ private const val LEGACY_REVIEW_CONTEXT_CONTRACT_VERSION: String = "2.1"
 private fun quarantineReviewAccounting(
   connection: Connection,
   runtimeVersion: String,
+  diagnostics: RuntimeDiagnostics,
   reviewId: String,
   declaredVersion: String?,
 ) {
-  LifecycleTelemetryStore(connection, runtimeVersion).reviewStageDegradation(
+  LifecycleTelemetryStore(connection, runtimeVersion, diagnostics).reviewStageDegradation(
     ReviewStageDegradationMeasurement(
       reviewRunId = reviewId,
       seam = ACCOUNTING_LOAD_SEAM,

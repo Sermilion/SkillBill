@@ -5,6 +5,8 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.infrastructure.sqlite.SAMPLE_REVIEW
 import skillbill.infrastructure.sqlite.SQLiteReviewRunCompletenessRepository
+import skillbill.infrastructure.sqlite.SqliteTestDiagnostics
+import skillbill.infrastructure.sqlite.apply
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.review.accounting.persistImportedReview
 import skillbill.infrastructure.sqlite.review.stats.ReviewFinishedPayloadBuildRequest
@@ -350,7 +352,7 @@ class ReviewStageTelemetryTest {
     reviewRunId: String,
   ) {
     val repository = SQLiteReviewRunCompletenessRepository(connection, Clock.systemUTC())
-    val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+    val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
     ReviewStageDegradationSelection.select(
       ReviewStageDegradationSelectionRequest(
         reviewRunId = reviewRunId,

@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite.workflow.featuretask
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.workflow.FeatureTaskRuntimeWorkerRepository
@@ -9,10 +10,11 @@ import java.sql.Connection
 
 internal class FeatureTaskRuntimeWorkerStore(
   private val connection: Connection,
+  private val diagnostics: RuntimeDiagnostics,
   private val transactionActive: Boolean = false,
 ) : FeatureTaskRuntimeWorkerRepository {
   override fun getFeatureTaskRuntimeWorkerOwnership(workflowId: String): FeatureTaskRuntimeWorkerOwnership? =
-    connection.featureTaskRuntimeWorkerOwnership(workflowId)
+    connection.featureTaskRuntimeWorkerOwnership(workflowId, diagnostics)
 
   override fun acquireFeatureTaskRuntimeWorker(
     ownership: FeatureTaskRuntimeWorkerOwnership,
@@ -21,7 +23,7 @@ internal class FeatureTaskRuntimeWorkerStore(
     if (transactionActive) {
       acquireInTransaction(ownership, expectedUpdatedAt)
     } else {
-      connection.inNestedWriteTransaction { acquireInTransaction(ownership, expectedUpdatedAt) }
+      connection.inNestedWriteTransaction(diagnostics) { acquireInTransaction(ownership, expectedUpdatedAt) }
     }
 
   private fun acquireInTransaction(
@@ -181,7 +183,7 @@ internal class FeatureTaskRuntimeWorkerStore(
         buildList {
           while (rows.next()) {
             val workflowId = rows.getString(SharedPayloadKeys.WORKFLOW_ID)
-            val ownership = connection.featureTaskRuntimeWorkerOwnership(workflowId) ?: continue
+            val ownership = connection.featureTaskRuntimeWorkerOwnership(workflowId, diagnostics) ?: continue
             add(
               FeatureTaskRuntimeCrashReconciliationCandidate(
                 ownership = ownership,

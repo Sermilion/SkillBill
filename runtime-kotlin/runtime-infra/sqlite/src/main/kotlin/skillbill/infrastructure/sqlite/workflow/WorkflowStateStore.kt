@@ -6,6 +6,7 @@ import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureTaskRuntimeWo
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureTaskWorkflowRowStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureVerifyWorkflowStateStore
 import skillbill.infrastructure.sqlite.workflow.goalrunner.child.GoalChildWorkflowStore
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.FeatureTaskExecutionLookupRepository
 import skillbill.ports.workflow.FeatureTaskRuntimeWorkerRepository
 import skillbill.ports.workflow.FeatureTaskWorkflowStateRepository
@@ -38,10 +39,11 @@ internal class WorkflowStateStore private constructor(
     connection: Connection,
     clock: Clock,
     workflowSnapshotValidator: WorkflowSnapshotValidator,
+    diagnostics: RuntimeDiagnostics,
     transactionActive: Boolean = false,
   ) : this(
     connection,
-    FeatureTaskWorkflowStateStore(connection, clock, workflowSnapshotValidator, transactionActive),
+    FeatureTaskWorkflowStateStore(connection, clock, workflowSnapshotValidator, diagnostics, transactionActive),
     FeatureVerifyWorkflowStateStore(connection, clock, workflowSnapshotValidator),
   )
 
@@ -124,11 +126,12 @@ internal class FeatureTaskWorkflowStateStore(
   connection: Connection,
   clock: Clock,
   workflowSnapshotValidator: WorkflowSnapshotValidator,
+  diagnostics: RuntimeDiagnostics,
   transactionActive: Boolean = false,
 ) : FeatureTaskWorkflowStateRepository,
   FeatureTaskExecutionLookupRepository by FeatureTaskExecutionLookupStore(connection),
   GoalChildWorkflowStateRepository by GoalChildWorkflowStore(connection),
-  FeatureTaskRuntimeWorkerRepository by FeatureTaskRuntimeWorkerStore(connection, transactionActive) {
+  FeatureTaskRuntimeWorkerRepository by FeatureTaskRuntimeWorkerStore(connection, diagnostics, transactionActive) {
   private val rows = FeatureTaskWorkflowRowStore(connection, clock, workflowSnapshotValidator)
 
   override fun terminalizeLegacyProseFeatureTaskWorkflow(row: WorkflowStateRecord) =

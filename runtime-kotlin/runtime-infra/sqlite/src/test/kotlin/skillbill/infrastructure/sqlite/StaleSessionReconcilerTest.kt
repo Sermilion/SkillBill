@@ -26,7 +26,7 @@ class StaleSessionReconcilerTest {
     val dbPath = Files.createTempDirectory("duplicate-lifecycle-finish").resolve("metrics.db")
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       seedStaleLifecycleSessions(connection)
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
 
       repeat(2) {
         store.featureTaskRuntimeFinished(featureTaskRuntimeFinishedRecord("ftr-stale"), level = "full")
@@ -162,7 +162,7 @@ class StaleSessionReconcilerTest {
       seedStaleLifecycleSessions(connection)
       reconcileStaleTelemetrySessions(connection, Clock.systemUTC(), level = "full")
 
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       store.featureTaskRuntimeFinished(featureTaskRuntimeFinishedRecord("ftr-stale"), level = "full")
       store.featureVerifyFinished(featureVerifyFinishedRecord("fvs-stale"), level = "full")
       store.qualityCheckFinished(qualityCheckFinishedRecord("qcs-stale"), level = "full")

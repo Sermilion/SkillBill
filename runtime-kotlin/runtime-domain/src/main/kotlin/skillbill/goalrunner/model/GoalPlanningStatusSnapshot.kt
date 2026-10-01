@@ -1,11 +1,8 @@
-package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
+package skillbill.goalrunner.model
 
 import skillbill.contracts.workflow.identity.status.GOAL_PLANNING_WAVE_CAP
-import skillbill.goalrunner.model.GoalPlanningStatusReasons
-import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
-import skillbill.goalrunner.model.GoalPlanningStatusState
 
-internal fun planningStatusSnapshot(
+fun planningStatusSnapshot(
   orderedSubtaskIds: List<Int>,
   plannedIds: List<Int>,
   shared: Boolean,

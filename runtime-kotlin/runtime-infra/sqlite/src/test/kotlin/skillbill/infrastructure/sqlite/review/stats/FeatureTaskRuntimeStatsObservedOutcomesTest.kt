@@ -1,5 +1,6 @@
 package skillbill.infrastructure.sqlite.review.stats
 
+import skillbill.infrastructure.sqlite.SqliteTestDiagnostics
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -13,6 +14,7 @@ class FeatureTaskRuntimeStatsObservedOutcomesTest {
           finishedRow("ftr-2", "completed"),
           finishedRow("ftr-3", STALE_COMPLETION_STATUS),
         ),
+        SqliteTestDiagnostics,
       )
 
     assertEquals(3, stats.finishedRuns)
@@ -28,6 +30,7 @@ class FeatureTaskRuntimeStatsObservedOutcomesTest {
     val stats =
       buildFeatureTaskRuntimeStats(
         listOf(finishedRow("ftr-1", "blocked"), mapOf("session_id" to "ftr-2", "feature_size" to "SMALL")),
+        SqliteTestDiagnostics,
       )
 
     assertEquals(1, stats.inProgressRuns)

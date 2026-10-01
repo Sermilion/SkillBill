@@ -117,7 +117,7 @@ private fun boundedTransactionFailureDetail(failure: Throwable): String {
 }
 
 internal inline fun <T> Connection.inNestedWriteTransaction(
-  diagnostics: RuntimeDiagnostics = InternalSqliteDiagnostics,
+  diagnostics: RuntimeDiagnostics,
   block: Connection.() -> T,
 ): T =
   inDatabaseTransaction(

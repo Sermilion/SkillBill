@@ -1,4 +1,4 @@
-package skillbill.infrastructure.workflow.git.goal
+package skillbill.infrastructure.workflow.github
 
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import java.nio.file.Path

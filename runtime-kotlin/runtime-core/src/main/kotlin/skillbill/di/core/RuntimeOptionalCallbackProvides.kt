@@ -4,10 +4,10 @@ import skillbill.infrastructure.host.process.InstallerProcessAdapter
 import skillbill.infrastructure.http.HttpInstallerScriptFetchAdapter
 import skillbill.infrastructure.launcher.agentrun.FileSystemAgentRunLauncher
 import skillbill.infrastructure.launcher.agentrun.PathExecutableLookup
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.infrastructure.workflow.git.goal.FileSystemPullRequestTemplateFiles
-import skillbill.infrastructure.workflow.git.goal.GhGoalPullRequestPort
-import skillbill.infrastructure.workflow.git.goal.GhPullRequestIdentityLookup
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.github.GhGoalPullRequestPort
+import skillbill.infrastructure.workflow.github.GhPullRequestIdentityLookup
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.goalrunner.runner.GoalPullRequestPort

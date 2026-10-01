@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationStatus
@@ -8,10 +9,11 @@ import java.sql.Connection
 
 internal class GoalPlanningPreparationRecordSql(
   private val connection: Connection,
+  private val diagnostics: RuntimeDiagnostics,
 ) {
   fun markPrepared(record: GoalPlanningPreparationRecord) {
     requirePreparedEnvelope(record)
-    connection.inNestedWriteTransaction {
+    connection.inNestedWriteTransaction(diagnostics) {
       if (connection.upsertPreparedRow(record)) return@inNestedWriteTransaction
       val stored =
         connection.selectStoredRecoveryIdentity(record.parentGoalWorkflowId, record.subtaskId)

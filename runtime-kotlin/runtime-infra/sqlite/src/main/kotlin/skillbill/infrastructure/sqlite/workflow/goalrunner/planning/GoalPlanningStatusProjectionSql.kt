@@ -2,8 +2,10 @@ package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
 import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
+import skillbill.goalrunner.model.planningStatusSnapshot
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.workflow.goalrunner.shared.INVALIDATED_SHARED_PREPLAN_PAYLOAD
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import java.sql.Connection
 
 internal class GoalPlanningStatusProjectionSql(
@@ -77,7 +79,7 @@ internal class GoalPlanningStatusProjectionSql(
       statement.bindAll(parentGoalWorkflowId)
       statement.executeQuery().use { result ->
         result.next() &&
-          result.getString(1) == "prepared" &&
+          result.getString(1) == GoalPlanningPreparationState.PREPARED.wireValue &&
           result.getString(2) != INVALIDATED_SHARED_PREPLAN_PAYLOAD
       }
     }
@@ -91,7 +93,7 @@ internal class GoalPlanningStatusProjectionSql(
       statement.executeQuery().use { result ->
         buildList {
           while (result.next()) {
-            if (result.getString("preparation_status") != "prepared") {
+            if (result.getString("preparation_status") != GoalPlanningPreparationState.PREPARED.wireValue) {
               throw InvalidGoalPlanningPreparationSchemaError(
                 parentGoalWorkflowId,
                 "preparation_status",

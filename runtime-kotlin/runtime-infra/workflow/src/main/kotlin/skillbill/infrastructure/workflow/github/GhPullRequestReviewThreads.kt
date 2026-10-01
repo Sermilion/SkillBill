@@ -1,11 +1,8 @@
-package skillbill.infrastructure.workflow.git.github
+package skillbill.infrastructure.workflow.github
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import me.tatarka.inject.annotations.Inject
-import skillbill.infrastructure.workflow.git.goal.GhCommandRunner
-import skillbill.infrastructure.workflow.git.goal.ProcessGhCommandRunner
-import skillbill.infrastructure.workflow.git.goal.describeFailure
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.review.pullrequest.model.ReviewPullRequestResolution

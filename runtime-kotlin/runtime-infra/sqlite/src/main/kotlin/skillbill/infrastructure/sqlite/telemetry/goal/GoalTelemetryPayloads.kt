@@ -4,7 +4,6 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.error.core.ShellContentContractException
-import skillbill.infrastructure.sqlite.core.ops.InternalSqliteDiagnostics
 import skillbill.infrastructure.sqlite.core.ops.degradedValuePreview
 import skillbill.infrastructure.sqlite.core.ops.recordDegradedValue
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.booleanFromInt
@@ -97,7 +96,7 @@ internal fun goalIssueFinishedPayload(
   row: Map<String, Any?>,
   level: String,
   salt: String,
-  diagnostics: RuntimeDiagnostics = InternalSqliteDiagnostics,
+  diagnostics: RuntimeDiagnostics,
 ): Map<String, Any?> {
   val firstStartedAt = row.stringOrEmpty(GoalTelemetryPayloadKeys.FIRST_STARTED_AT)
   val finishedAt = row.stringOrEmpty(GoalTelemetryPayloadKeys.FINISHED_AT)
@@ -122,7 +121,7 @@ internal fun goalSubtaskFinishedPayload(
   row: Map<String, Any?>,
   level: String,
   salt: String,
-  diagnostics: RuntimeDiagnostics = InternalSqliteDiagnostics,
+  diagnostics: RuntimeDiagnostics,
 ): Map<String, Any?> =
   linkedMapOf<String, Any?>(
     SharedPayloadKeys.WORKFLOW_ID to row.redactedWorkflowId("workflow_id", level, salt),

@@ -5,8 +5,6 @@ import skillbill.error.core.DatabaseAccessOperation
 import skillbill.error.core.DatabaseBusyError
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionBeginMode
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionSpec
-import skillbill.infrastructure.sqlite.core.ops.attachSqliteDiagnostics
-import skillbill.infrastructure.sqlite.core.ops.detachSqliteDiagnostics
 import skillbill.infrastructure.sqlite.core.ops.inDatabaseTransaction
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.OpenDatabase
@@ -46,44 +44,34 @@ class SQLiteDatabaseSessionFactory(
 
   override fun <T> read(block: (UnitOfWork) -> T): T =
     DatabaseRuntime.openReadDbAt(resolveDbPath(), diagnostics).use { openDb ->
-      openDb.connection.attachSqliteDiagnostics(diagnostics)
-      try {
-        runCatching {
-          openDb.connection.inDatabaseTransaction(
-            DatabaseTransactionSpec(
-              dbPath = openDb.dbPath,
-              beginMode = DatabaseTransactionBeginMode.DEFERRED,
-              operation = DatabaseAccessOperation.READ,
-              diagnostics = diagnostics,
-            ),
-          ) {
-            block(unitOfWork(openDb, transactionActive = true))
-          }
-        }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
-      } finally {
-        openDb.connection.detachSqliteDiagnostics()
-      }
+      runCatching {
+        openDb.connection.inDatabaseTransaction(
+          DatabaseTransactionSpec(
+            dbPath = openDb.dbPath,
+            beginMode = DatabaseTransactionBeginMode.DEFERRED,
+            operation = DatabaseAccessOperation.READ,
+            diagnostics = diagnostics,
+          ),
+        ) {
+          block(unitOfWork(openDb, transactionActive = true))
+        }
+      }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
     }
 
   override fun <T> readIfPresent(block: (UnitOfWork) -> T): T? =
     DatabaseRuntime.openReadDbIfPresentAt(resolveDbPath())?.use { openDb ->
-      openDb.connection.attachSqliteDiagnostics(diagnostics)
-      try {
-        runCatching {
-          openDb.connection.inDatabaseTransaction(
-            DatabaseTransactionSpec(
-              dbPath = openDb.dbPath,
-              beginMode = DatabaseTransactionBeginMode.DEFERRED,
-              operation = DatabaseAccessOperation.READ,
-              diagnostics = diagnostics,
-            ),
-          ) {
-            block(unitOfWork(openDb, transactionActive = true))
-          }
-        }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
-      } finally {
-        openDb.connection.detachSqliteDiagnostics()
-      }
+      runCatching {
+        openDb.connection.inDatabaseTransaction(
+          DatabaseTransactionSpec(
+            dbPath = openDb.dbPath,
+            beginMode = DatabaseTransactionBeginMode.DEFERRED,
+            operation = DatabaseAccessOperation.READ,
+            diagnostics = diagnostics,
+          ),
+        ) {
+          block(unitOfWork(openDb, transactionActive = true))
+        }
+      }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
     }
 
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T {
@@ -129,14 +117,7 @@ class SQLiteDatabaseSessionFactory(
   private fun <T> withWriteDatabase(block: (OpenDatabase) -> T): T {
     val dbPath = resolveDbPath()
     DatabaseRuntime.ensureWriteReady(dbPath, diagnostics)
-    return DatabaseRuntime.openWriteDbAt(dbPath).use { openDb ->
-      openDb.connection.attachSqliteDiagnostics(diagnostics)
-      try {
-        block(openDb)
-      } finally {
-        openDb.connection.detachSqliteDiagnostics()
-      }
-    }
+    return DatabaseRuntime.openWriteDbAt(dbPath).use(block)
   }
 }
 

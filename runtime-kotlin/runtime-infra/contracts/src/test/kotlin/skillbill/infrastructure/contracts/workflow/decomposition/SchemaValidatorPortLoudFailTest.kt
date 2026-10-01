@@ -1,9 +1,5 @@
 package skillbill.infrastructure.contracts.workflow.decomposition
 
-import skillbill.application.decomposition.baseBranch
-import skillbill.application.decomposition.encodeValidatedDecompositionManifestYaml
-import skillbill.application.decomposition.executionModel
-import skillbill.application.decomposition.parentSpecPath
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
@@ -18,9 +14,11 @@ import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionDependency
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.model.DecompositionManifestValidationResult
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import skillbill.workflow.decomposition.model.DecompositionStackBranch
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.decomposition.model.requireAccepted
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFailsWith
@@ -232,10 +230,15 @@ private fun encodeDecompositionManifestYaml(
   validator: DecompositionManifestValidator,
   fileStore: DecompositionManifestStore,
   sourceLabel: String = "<in-memory>",
-): String =
-  skillbill.application.decomposition.encodeValidatedDecompositionManifestYaml(
-    manifest,
-    validator,
-    fileStore,
-    sourceLabel,
-  ).yamlText
+): String {
+  val wireMap = validator.encodeManifestWireMap(manifest, sourceLabel)
+  val yamlText = fileStore.encodeManifestYaml(wireMap)
+  return when (val result = validator.validateYamlTextResult(yamlText, sourceLabel)) {
+    is DecompositionManifestValidationResult.AcceptedUnchanged -> result.yamlText
+    is DecompositionManifestValidationResult.AcceptedAfterRepair -> result.yamlText
+    is DecompositionManifestValidationResult.Rejected -> {
+      result.requireAccepted(sourceLabel)
+      error("Unreachable rejected decomposition manifest result.")
+    }
+  }
+}

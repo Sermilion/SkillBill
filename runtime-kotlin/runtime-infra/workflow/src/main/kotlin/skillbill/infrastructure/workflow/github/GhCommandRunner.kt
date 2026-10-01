@@ -1,4 +1,4 @@
-package skillbill.infrastructure.workflow.git.goal
+package skillbill.infrastructure.workflow.github
 
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.process.BoundedExternalProcessOutput

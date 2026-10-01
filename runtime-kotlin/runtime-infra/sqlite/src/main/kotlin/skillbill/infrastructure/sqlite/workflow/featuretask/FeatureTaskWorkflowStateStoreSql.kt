@@ -5,8 +5,8 @@ import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_WORKER_OW
 import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.core.ops.sqliteDiagnostics
 import skillbill.infrastructure.sqlite.workflow.MINIMUM_OWNER_TOKEN_LENGTH
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
@@ -56,12 +56,14 @@ internal fun PreparedStatement.bindOwnership(
   return values.size + 1
 }
 
-internal fun Connection.featureTaskRuntimeWorkerOwnership(workflowId: String): FeatureTaskRuntimeWorkerOwnership? =
+internal fun Connection.featureTaskRuntimeWorkerOwnership(
+  workflowId: String,
+  diagnostics: RuntimeDiagnostics,
+): FeatureTaskRuntimeWorkerOwnership? =
   prepareStatement("SELECT * FROM feature_task_runtime_worker_leases WHERE workflow_id = ?").use { statement ->
     statement.bindAll(workflowId)
     statement.executeQuery().use { row ->
       if (!row.next()) return null
-      val diagnostics = sqliteDiagnostics()
       val heartbeatAt = row.requiredWorkerOwnershipString(workflowId, "heartbeat_at")
       val expiresAt = row.requiredWorkerOwnershipString(workflowId, "expires_at")
       parseWorkerLeaseInstant(workflowId, "heartbeat_at", heartbeatAt, diagnostics)

@@ -11,6 +11,7 @@ import skillbill.infrastructure.sqlite.review.stage.resolveTelemetryState
 import skillbill.infrastructure.sqlite.review.stage.reviewAlreadyEmittedForSession
 import skillbill.infrastructure.sqlite.review.stage.reviewFinishedPayload
 import skillbill.infrastructure.sqlite.review.stage.stageMetricsByResolvedTier
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.model.ReviewRepositoryStatsSnapshot
 import skillbill.review.model.FeatureTaskRuntimeWorkflowStats
 import skillbill.review.model.FeatureVerifyWorkflowStats
@@ -52,11 +53,16 @@ internal object ReviewStatsRuntime {
     )
   }
 
-  fun featureVerifyStats(connection: Connection): FeatureVerifyWorkflowStats =
-    buildFeatureVerifyStats(loadRows(connection, "feature_verify_sessions"))
+  fun featureVerifyStats(
+    connection: Connection,
+    diagnostics: RuntimeDiagnostics,
+  ): FeatureVerifyWorkflowStats = buildFeatureVerifyStats(loadRows(connection, "feature_verify_sessions"), diagnostics)
 
-  fun featureTaskRuntimeStats(connection: Connection): FeatureTaskRuntimeWorkflowStats =
-    buildFeatureTaskRuntimeStats(loadRows(connection, "feature_task_runtime_sessions"))
+  fun featureTaskRuntimeStats(
+    connection: Connection,
+    diagnostics: RuntimeDiagnostics,
+  ): FeatureTaskRuntimeWorkflowStats =
+    buildFeatureTaskRuntimeStats(loadRows(connection, "feature_task_runtime_sessions"), diagnostics)
 
   fun goalStats(connection: Connection): GoalWorkflowStats =
     buildGoalStats(

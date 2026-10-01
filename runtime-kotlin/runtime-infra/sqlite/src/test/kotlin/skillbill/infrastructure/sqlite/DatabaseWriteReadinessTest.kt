@@ -7,6 +7,7 @@ import skillbill.error.core.DatabaseAccessOperation
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigration
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.schema.DatabaseIdentity
+import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.DatabaseWriteReadinessGate
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
@@ -24,12 +25,23 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
+private class CountingReadinessGate(private val onEstablish: () -> Unit) {
+  private val gate = DatabaseWriteReadinessGate()
+
+  fun ensureReady(dbPath: Path) {
+    gate.ensureReady(dbPath) {
+      onEstablish()
+      DatabaseRuntime.establishSchemaReadiness(dbPath.toAbsolutePath().normalize())
+    }
+  }
+}
+
 @Execution(ExecutionMode.SAME_THREAD)
 class DatabaseWriteReadinessTest {
   @Test
   fun `warm readiness cache avoids duplicate schema establishment work`() {
     var executions = 0
-    val gate = DatabaseWriteReadinessGate { executions += 1 }
+    val gate = CountingReadinessGate { executions += 1 }
     val tempDir = Files.createTempDirectory("skillbill-write-readiness-gate-warm")
     val dbPath = tempDir.resolve("metrics.db")
     gate.ensureReady(dbPath)
@@ -71,7 +83,7 @@ class DatabaseWriteReadinessTest {
   @Test
   fun `truncating database file at the same path forces schema re-establishment`() {
     var executions = 0
-    val gate = DatabaseWriteReadinessGate { executions += 1 }
+    val gate = CountingReadinessGate { executions += 1 }
     val tempDir = Files.createTempDirectory("skillbill-write-readiness-truncate")
     val dbPath = tempDir.resolve("metrics.db")
     gate.ensureReady(dbPath)
@@ -84,7 +96,7 @@ class DatabaseWriteReadinessTest {
   @Test
   fun `appending a migration changes identity and re-establishes readiness once`() {
     var executions = 0
-    val gate = DatabaseWriteReadinessGate { executions += 1 }
+    val gate = CountingReadinessGate { executions += 1 }
     val tempDir = Files.createTempDirectory("skillbill-write-readiness-version")
     val dbPath = tempDir.resolve("metrics.db")
     gate.ensureReady(dbPath)
@@ -99,6 +111,7 @@ class DatabaseWriteReadinessTest {
     DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
       DatabaseMigrations.apply(
         connection,
+        SqliteTestDiagnostics,
         migrationSet = DatabaseMigrations.migrations + appendedMigration,
       )
     }
@@ -116,7 +129,7 @@ class DatabaseWriteReadinessTest {
     val tempDir = Files.createTempDirectory("skillbill-write-readiness-concurrent")
     val dbPath = tempDir.resolve("metrics.db")
     var executions = 0
-    val gate = DatabaseWriteReadinessGate { executions += 1 }
+    val gate = CountingReadinessGate { executions += 1 }
     val ready = CountDownLatch(1)
     val executor = Executors.newFixedThreadPool(2)
     val failures = mutableListOf<Throwable>()
@@ -143,7 +156,7 @@ class DatabaseWriteReadinessTest {
     val dbPath = tempDir.resolve("metrics.db")
     Files.writeString(dbPath, "not-a-sqlite-database")
     var establishments = 0
-    val gate = DatabaseWriteReadinessGate { establishments += 1 }
+    val gate = CountingReadinessGate { establishments += 1 }
 
     val error =
       assertFailsWith<DatabaseAccessError> {

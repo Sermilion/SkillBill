@@ -3,8 +3,11 @@ package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
 import skillbill.goalrunner.model.GoalPlanningStatusState
+import skillbill.infrastructure.sqlite.GoalPlanningPreparationStore
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
+import skillbill.infrastructure.sqlite.ensureDatabase
+import skillbill.infrastructure.sqlite.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.workflow.goalrunner.shared.INVALIDATED_SHARED_PREPLAN_PAYLOAD
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationProvenance

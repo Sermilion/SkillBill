@@ -1,10 +1,12 @@
 package skillbill.infrastructure.sqlite.telemetry.redaction
 
 import skillbill.contracts.JsonCodec
+import skillbill.infrastructure.sqlite.SqliteTestDiagnostics
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
+import skillbill.infrastructure.sqlite.ensureDatabase
+import skillbill.infrastructure.sqlite.reconcileStaleTelemetrySessions
 import skillbill.infrastructure.sqlite.telemetry.StaleSessionReconciliationPolicy
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
-import skillbill.infrastructure.sqlite.telemetry.reconcileStaleTelemetrySessions
 import skillbill.telemetry.model.FeatureTaskRuntimeStartedRecord
 import skillbill.telemetry.model.GoalFinishedRecord
 import skillbill.telemetry.model.GoalIssueFinishedRecord
@@ -123,7 +125,7 @@ class TelemetryAnonymousRedactionTest {
   fun `correlation ids derived from the issue key are redacted at anonymous and raw at full`() {
     listOf("anonymous", "full").forEach { level ->
       withConnection { connection ->
-        val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+        val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
         store.goalSubtaskFinished(
           GoalSubtaskFinishedRecord(
             issueKey = ISSUE_KEY,
@@ -170,7 +172,7 @@ class TelemetryAnonymousRedactionTest {
     connection: Connection,
     level: String,
   ) {
-    val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+    val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
     store.goalStarted(startedRecord("wf-1", parentWorkflowId = "parent-1"), level)
     store.goalSubtaskFinished(
       GoalSubtaskFinishedRecord(

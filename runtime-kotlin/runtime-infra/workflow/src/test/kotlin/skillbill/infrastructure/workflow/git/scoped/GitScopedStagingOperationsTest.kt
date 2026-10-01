@@ -1,6 +1,6 @@
 package skillbill.infrastructure.workflow.git.scoped
 
-import skillbill.infrastructure.workflow.git.workflow.git
+import skillbill.infrastructure.workflow.git.git
 import skillbill.infrastructure.workflow.process.runGitCommand
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshotResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
