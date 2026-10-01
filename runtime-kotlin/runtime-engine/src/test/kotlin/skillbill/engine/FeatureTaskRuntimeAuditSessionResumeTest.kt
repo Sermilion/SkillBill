@@ -36,20 +36,20 @@ class FeatureTaskRuntimeAuditSessionResumeTest {
     val first = runnerHarness(config)
     assertIs<FeatureTaskRuntimeRunReport.Blocked>(first.runner.run(first.request()))
     val blockedRecord = requireNotNull(first.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit"))
-    assertContains(requireNotNull(blockedRecord.outputArtifact), "latest gap 2")
+    assertContains(requireNotNull(blockedRecord.outputArtifact), "latest gap 4")
     reopen(first, "audit")
 
     val resumed = runnerHarness(config, repository = first.repository)
     val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(resumed.runner.run(resumed.request()))
 
-    assertContains(blocked.blockedReason, "resolved none of the prior criteria")
-    assertEquals(4, audits)
-    assertEquals(2, repairs)
+    assertContains(blocked.blockedReason, "did not shrink")
+    assertEquals(6, audits)
+    assertEquals(4, repairs)
     val lastRepair =
       launcher.requests
         .map { requireNotNull(it.skillRunRequest.promptOverride) }
         .last { phaseIdFromPrompt(it) == "audit_implement_fix" }
-    assertContains(lastRepair, "latest gap 3")
+    assertContains(lastRepair, "latest gap 5")
     assertNull(resumed.recorder.loadOperatorBlockRetry(WORKFLOW_ID))
     assertTrue("review" !in resumed.launchOrder())
   }
@@ -112,7 +112,7 @@ class FeatureTaskRuntimeAuditSessionResumeTest {
     val launcher =
       RuntimeRecordingLauncher { request ->
         if (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride)) == "audit") {
-          facts(auditRemainingAcOutput(if (++audits > 2) "AC-099: invented criterion" else "AC-001: gap"))
+          facts(auditRemainingAcOutput(if (++audits > 4) "AC-099: invented criterion" else "AC-001: gap"))
         } else {
           facts(defaultPhaseOutput(request))
         }
@@ -127,7 +127,7 @@ class FeatureTaskRuntimeAuditSessionResumeTest {
     val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(resumed.runner.run(resumed.request()))
 
     assertEquals("audit", blocked.lastIncompletePhase)
-    assertEquals(3, audits)
+    assertEquals(5, audits)
     assertEquals(listOf("audit"), resumed.launchedPromptPhaseOrder().drop(beforeResume))
     assertContains(blocked.blockedReason, "AC-099")
     assertTrue("audit_implement_fix" !in resumed.launchedPromptPhaseOrder().drop(beforeResume))

@@ -197,7 +197,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
     """"summary":"$value","failure_disposition":"$disposition","produced_outputs":{"value":"$value"}}"""
 
   @Test
-  fun `audit blocks when an unresolved repair recheck does not shrink`() {
+  fun `audit blocks when an unresolved repair recheck stays unshrunk past the cap`() {
     var auditLaunches = 0
     var repairLaunches = 0
     val warnings = mutableListOf<String>()
@@ -266,11 +266,11 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
         ),
       )
     assertIs<FeatureTaskRuntimeRunReport.Blocked>(report, report.toString())
-    assertEquals(2, auditLaunches)
-    assertEquals(1, repairLaunches)
+    assertEquals(4, auditLaunches)
+    assertEquals(3, repairLaunches)
     assertEquals(0, warnings.count { "audit_repair" in it && "warning threshold" in it })
     assertEquals(
-      listOf("audit", "audit_implement_fix", "audit"),
+      listOf("audit", "audit_implement_fix", "audit", "audit_implement_fix", "audit", "audit_implement_fix", "audit"),
       harness.launchedPromptPhaseOrder().filter {
         it == "audit" || it == "audit_implement_fix"
       },
@@ -323,7 +323,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
   }
 
   @Test
-  fun `audit blocks when the remaining criterion list grows after repair`() {
+  fun `audit blocks when the grown remaining criterion list stays unshrunk past the cap`() {
     var auditLaunches = 0
     var repairLaunches = 0
     val launcher =
@@ -355,9 +355,9 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
 
     val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
 
-    assertContains(report.toString(), "resolved none of the prior criteria")
-    assertEquals(2, auditLaunches)
-    assertEquals(1, repairLaunches)
+    assertContains(report.toString(), "did not shrink")
+    assertEquals(4, auditLaunches)
+    assertEquals(3, repairLaunches)
     assertTrue("review" !in harness.launchOrder())
   }
 

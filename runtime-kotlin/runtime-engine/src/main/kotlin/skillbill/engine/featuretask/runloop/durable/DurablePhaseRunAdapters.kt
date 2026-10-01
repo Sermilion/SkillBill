@@ -46,6 +46,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeShare
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FeatureTaskRuntimeCheckpointIdentity
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttempt
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
@@ -179,6 +180,9 @@ internal class DurablePhaseRunRecords(
 
   override fun appendLedgerEntry(request: FeatureTaskRuntimePhaseLedgerRequest): Boolean =
     recorder.appendLedgerEntry(request)
+
+  override fun loadPhaseLedger(workflowId: String): List<FeatureTaskRuntimePhaseLedgerEntry>? =
+    recorder.loadPhaseLedger(workflowId)
 
   override fun appendQuarantineEntry(
     workflowId: String,

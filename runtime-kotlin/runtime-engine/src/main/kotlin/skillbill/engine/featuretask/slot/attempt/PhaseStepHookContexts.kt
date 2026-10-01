@@ -47,6 +47,12 @@ internal interface PhaseStepOutputContext : PhaseAttemptEnvironment {
 internal interface PhaseAuditOutputContext : PhaseStepOutputContext {
   val operatorReopened: Boolean
 
+  /** Recorded audit rounds whose remaining list did not shrink after repair. */
+  val nonShrinkingRounds: Int
+
+  /** Records that the accepted audit round in [capture] did not shrink its remaining list. */
+  fun recordNonShrinkingRound(capture: ValidatedOutputCapture)
+
   fun settleAuditRound(
     capture: ValidatedOutputCapture,
     attested: NormalizedFeatureTaskRuntimePhaseOutput,

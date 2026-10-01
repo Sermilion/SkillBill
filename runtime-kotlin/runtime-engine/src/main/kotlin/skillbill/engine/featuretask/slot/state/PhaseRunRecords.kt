@@ -23,6 +23,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeShare
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FeatureTaskRuntimeCheckpointIdentity
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttempt
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
@@ -103,6 +104,9 @@ internal interface PhaseStepRecords {
 
   /** The step records of [workflowId], keyed by step id. */
   fun loadPhaseRecords(workflowId: String): Map<String, FeatureTaskRuntimePhaseRecord>?
+
+  /** The ledger entries of [workflowId]. */
+  fun loadPhaseLedger(workflowId: String): List<FeatureTaskRuntimePhaseLedgerEntry>?
 }
 
 /** The review pass, finding ledger, verification checkpoint, and review-generation records of one run. */

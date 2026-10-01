@@ -3,6 +3,8 @@ package skillbill.engine.featuretask.runloop.attempt
 import skillbill.engine.featuretask.runloop.checkpoint.RuntimeCommitUpstreamHeadRecovery
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
+import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
+import skillbill.engine.featuretask.runloop.observability.continuation
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.planning.PlanDecompositionStop
 import skillbill.engine.featuretask.runloop.state.repositoryObservations
@@ -113,6 +115,25 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
     PhaseAuditOutputContext {
     override val operatorReopened: Boolean
       get() = FeatureTaskRuntimeRunLoopPhaseBlocking.operatorReopenedPhase(remediation.session, acceptedRun.phaseId)
+
+    override val nonShrinkingRounds: Int
+      get() =
+        remediation.recorder.loadPhaseLedger(request.workflowId).orEmpty().count { entry ->
+          entry.phaseId == acceptedRun.phaseId &&
+            FeatureTaskRuntimeContinuationKind.fromLedgerDetail(entry.blockedReason) ==
+            FeatureTaskRuntimeContinuationKind.AUDIT_NON_SHRINKING_ROUND
+        }
+
+    override fun recordNonShrinkingRound(capture: ValidatedOutputCapture) {
+      check(capture.run === acceptedRun)
+      remediation.observability.continuation(
+        acceptedRun.phaseId,
+        acceptedRun.resolvedAgent.resolvedAgentId,
+        capture.iteration,
+        nonShrinkingRounds + 1,
+        FeatureTaskRuntimeContinuationKind.AUDIT_NON_SHRINKING_ROUND,
+      )
+    }
 
     override fun settleAuditRound(
       capture: ValidatedOutputCapture,

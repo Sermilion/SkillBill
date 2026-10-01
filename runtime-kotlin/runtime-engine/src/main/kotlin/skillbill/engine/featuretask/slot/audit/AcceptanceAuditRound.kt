@@ -71,13 +71,27 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
     val repaired =
       context.progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX).hasPriorRecord ||
         context.progress.loop(FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_REPAIR_LOOP_ID).iteration > 0
-    return AcceptanceAuditProgress.rejectionReason(
-      criteria = context.request.runInvariants.acceptanceCriteria,
-      text = finalResponse.orEmpty(),
-      priorText = auditProseValue(priorOutput),
-      repaired = repaired,
-      operatorReopened = context.operatorReopened,
-    )
+    val outcome =
+      AcceptanceAuditProgress.outcome(
+        AcceptanceAuditProgressInput(
+          criteria = context.request.runInvariants.acceptanceCriteria,
+          text = finalResponse.orEmpty(),
+          priorText = auditProseValue(priorOutput),
+          repaired = repaired,
+          operatorReopened = context.operatorReopened,
+          nonShrinkingRounds = context.nonShrinkingRounds,
+        ),
+      )
+    return when (outcome) {
+      AcceptanceAuditProgressOutcome.Advance -> null
+      AcceptanceAuditProgressOutcome.NonShrinking -> {
+        if ((outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() == WorkflowStepStatus.COMPLETED) {
+          context.recordNonShrinkingRound(capture)
+        }
+        null
+      }
+      is AcceptanceAuditProgressOutcome.Rejected -> outcome.reason
+    }
   }
 
   override fun acceptedOutput(

@@ -149,11 +149,11 @@ Decision: `commit_push` skips the agent launch. The runtime stages every dirty n
 Reason: A subject string is not worth a structured agent turn. Double JSON at a non-retrying gate stranded finished subtasks.
 Revisit when: commit subjects need human-authored outcome text that the manifest subtask name cannot carry.
 
-## [2026-10-01] Audit repair progress means resolving a prior criterion
-Context: SKILL-388 blocked after one repair because audit reported AC-006 where it had reported AC-007. The repair fixed AC-007 and the fresh full audit found a different gap, yet equal counts read as no progress.
-Decision: After repair, audit blocks only when the current remaining list still contains every criterion from the prior list. Resolving at least one prior criterion is progress, even when the fresh audit reports new criteria alongside it.
-Reason: Each audit reinspects every criterion, so a new finding is fresh evidence, not a stalled repair. A stall is the same criteria staying open.
-Revisit when: runs oscillate between disjoint criterion sets; the `audit_repair` edge has no per-edge cap and only warns after three rounds.
+## [2026-10-01] Audit repair allows two non-shrinking rounds
+Context: SKILL-388 blocked after one repair because audit reported AC-006 where it had reported AC-007. The repair fixed AC-007 and the fresh full audit found a different gap, yet the equal count read as a stall.
+Decision: A remaining list that shrinks after repair always relaunches repair. An unchanged, replaced, or grown list relaunches repair at most twice per subtask workflow; the third such round blocks. Each allowed non-shrinking round appends an `audit_non_shrinking_round` continuation to the phase ledger, and the cap counts those entries, so it survives process restarts and an operator audit retry does not reset it.
+Reason: Each audit reinspects every criterion, so one non-shrinking round can be fresh evidence rather than a stalled repair. The `audit_repair` edge has no per-edge cap, so the bounded budget keeps the loop finite once shrinking stops.
+Revisit when: the `audit_repair` edge gains a declared per-edge cap, or in-memory phase runs start running audit (their records keep no ledger, so the cap would never fire).
 
 ## [2026-09-17] Audit repair cycles stay in one session and remaining text carries a reason
 Context: Auditors inspected once, emitted remaining ACs with no why, and the runtime relaunched. Three runtime relaunches would recreate the remaining-criteria storm.

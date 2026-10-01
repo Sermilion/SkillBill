@@ -15,13 +15,14 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeAuditProgressRegressionTest {
   @Test
-  fun `a replacement criterion relaunches repair and blocks once it stays unresolved`() {
+  fun `replaced and grown lists relaunch repair until two non-shrinking rounds then block`() {
+    val rounds = listOf("AC-001 remains", "AC-002 remains", "AC-002 remains; AC-003 remains", "AC-003 remains")
     var audits = 0
     var repairs = 0
     val launcher =
       RuntimeRecordingLauncher { request ->
         when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
-          "audit" -> facts(auditRemainingAcOutput(if (++audits == 1) "AC-001 remains" else "AC-002 remains"))
+          "audit" -> facts(auditRemainingAcOutput(rounds.getOrElse(audits++) { "AC-004 remains" }))
           "audit_implement_fix" -> {
             repairs += 1
             facts(defaultPhaseOutput(request))
@@ -38,15 +39,20 @@ class FeatureTaskRuntimeAuditProgressRegressionTest {
         ),
       )
     val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
-    assertContains(report.blockedReason, "resolved none of the prior criteria")
-    assertContains(report.blockedReason, "AC-002")
-    assertEquals(3, audits)
-    assertEquals(2, repairs)
+    assertContains(report.blockedReason, "did not shrink")
+    assertContains(report.blockedReason, "AC-004")
+    assertEquals(5, audits)
+    assertEquals(4, repairs)
+    val markers =
+      harness.recorder.loadPhaseLedger(WORKFLOW_ID).orEmpty().count {
+        it.phaseId == "audit" && it.blockedReason == "continuation:audit_non_shrinking_round"
+      }
+    assertEquals(2, markers)
     assertTrue("review" !in harness.launchOrder())
   }
 
   @Test
-  fun `unresolved prior criteria block despite source labels and historical JSON`() {
+  fun `unchanged lists block after two non-shrinking rounds despite source labels and historical JSON`() {
     val cases =
       listOf(
         "AC-001 / S3-AC2: missing behavior" to "S3-AC2: same gap with different words",
@@ -82,9 +88,9 @@ class FeatureTaskRuntimeAuditProgressRegressionTest {
           ),
         )
       val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
-      assertContains(report.blockedReason, "resolved none of the prior criteria")
-      assertEquals(2, audits)
-      assertEquals(1, repairs)
+      assertContains(report.blockedReason, "did not shrink")
+      assertEquals(4, audits)
+      assertEquals(3, repairs)
       assertTrue("review" !in harness.launchOrder())
       val record = requireNotNull(harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit"))
       assertEquals(FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION, record.failureDisposition)
@@ -172,9 +178,9 @@ class FeatureTaskRuntimeAuditProgressRegressionTest {
       assertEquals("audit", blocked.lastIncompletePhase)
       assertContains(blocked.blockedReason, "1 remaining production criteria")
       assertContains(blocked.blockedReason, "AC-001")
-      assertContains(blocked.blockedReason, "resolved none of the prior criteria")
+      assertContains(blocked.blockedReason, "did not shrink")
     }
-    assertEquals(if (missingBaseline) 1 else 2, audits)
+    assertEquals(if (missingBaseline) 1 else 4, audits)
     val newAttempt =
       requireNotNull(
         restarted.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit_implement_fix"),
