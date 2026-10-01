@@ -42,7 +42,7 @@ class FeatureTaskRuntimeAuditSessionResumeTest {
     val resumed = runnerHarness(config, repository = first.repository)
     val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(resumed.runner.run(resumed.request()))
 
-    assertContains(blocked.blockedReason, "did not shrink")
+    assertContains(blocked.blockedReason, "resolved none of the prior criteria")
     assertEquals(4, audits)
     assertEquals(2, repairs)
     val lastRepair =

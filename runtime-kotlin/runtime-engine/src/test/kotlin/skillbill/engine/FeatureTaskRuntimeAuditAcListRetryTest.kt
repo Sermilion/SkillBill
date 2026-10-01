@@ -355,7 +355,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
 
     val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
 
-    assertContains(report.toString(), "did not shrink")
+    assertContains(report.toString(), "resolved none of the prior criteria")
     assertEquals(2, auditLaunches)
     assertEquals(1, repairLaunches)
     assertTrue("review" !in harness.launchOrder())

@@ -149,6 +149,12 @@ Decision: `commit_push` skips the agent launch. The runtime stages every dirty n
 Reason: A subject string is not worth a structured agent turn. Double JSON at a non-retrying gate stranded finished subtasks.
 Revisit when: commit subjects need human-authored outcome text that the manifest subtask name cannot carry.
 
+## [2026-10-01] Audit repair progress means resolving a prior criterion
+Context: SKILL-388 blocked after one repair because audit reported AC-006 where it had reported AC-007. The repair fixed AC-007 and the fresh full audit found a different gap, yet equal counts read as no progress.
+Decision: After repair, audit blocks only when the current remaining list still contains every criterion from the prior list. Resolving at least one prior criterion is progress, even when the fresh audit reports new criteria alongside it.
+Reason: Each audit reinspects every criterion, so a new finding is fresh evidence, not a stalled repair. A stall is the same criteria staying open.
+Revisit when: runs oscillate between disjoint criterion sets; the `audit_repair` edge has no per-edge cap and only warns after three rounds.
+
 ## [2026-09-17] Audit repair cycles stay in one session and remaining text carries a reason
 Context: Auditors inspected once, emitted remaining ACs with no why, and the runtime relaunched. Three runtime relaunches would recreate the remaining-criteria storm.
 Decision: The audit briefing asks for up to three repair cycles inside the same agent session. Remaining-criteria text that is not `[]` includes a reason per leftover criterion. That briefing is runtime-owned and identical for every dominant platform pack; packs do not author remaining-criteria settlement. The runtime still treats any non-empty remaining text as unstructured prose: no schema on that list, one outer remaining-criteria retry, then block when the text is unchanged.

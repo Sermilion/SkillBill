@@ -15,10 +15,40 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeAuditProgressRegressionTest {
   @Test
-  fun `equal counts block despite replacements source labels and historical JSON`() {
+  fun `a replacement criterion relaunches repair and blocks once it stays unresolved`() {
+    var audits = 0
+    var repairs = 0
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
+          "audit" -> facts(auditRemainingAcOutput(if (++audits == 1) "AC-001 remains" else "AC-002 remains"))
+          "audit_implement_fix" -> {
+            repairs += 1
+            facts(defaultPhaseOutput(request))
+          }
+          else -> facts(defaultPhaseOutput(request))
+        }
+      }
+    val harness =
+      runnerHarness(
+        RuntimeHarnessConfig(
+          acceptanceCriteria = CRITERIA,
+          launcher = launcher,
+          validator = realFeatureTaskRuntimePhaseOutputValidator,
+        ),
+      )
+    val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
+    assertContains(report.blockedReason, "resolved none of the prior criteria")
+    assertContains(report.blockedReason, "AC-002")
+    assertEquals(3, audits)
+    assertEquals(2, repairs)
+    assertTrue("review" !in harness.launchOrder())
+  }
+
+  @Test
+  fun `unresolved prior criteria block despite source labels and historical JSON`() {
     val cases =
       listOf(
-        "AC-001 remains" to "AC-002 remains",
         "AC-001 / S3-AC2: missing behavior" to "S3-AC2: same gap with different words",
         """[{"criterion_id":"AC-001"},{"criterion_id":"AC-002"},{"criterion_id":"AC-003"}]""" to
           """Remaining production acceptance criteria:
@@ -52,7 +82,7 @@ class FeatureTaskRuntimeAuditProgressRegressionTest {
           ),
         )
       val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
-      assertContains(report.blockedReason, "did not shrink")
+      assertContains(report.blockedReason, "resolved none of the prior criteria")
       assertEquals(2, audits)
       assertEquals(1, repairs)
       assertTrue("review" !in harness.launchOrder())
@@ -142,7 +172,7 @@ class FeatureTaskRuntimeAuditProgressRegressionTest {
       assertEquals("audit", blocked.lastIncompletePhase)
       assertContains(blocked.blockedReason, "1 remaining production criteria")
       assertContains(blocked.blockedReason, "AC-001")
-      assertContains(blocked.blockedReason, "did not shrink")
+      assertContains(blocked.blockedReason, "resolved none of the prior criteria")
     }
     assertEquals(if (missingBaseline) 1 else 2, audits)
     val newAttempt =

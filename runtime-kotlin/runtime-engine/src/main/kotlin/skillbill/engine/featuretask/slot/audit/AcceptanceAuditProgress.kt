@@ -37,11 +37,11 @@ internal object AcceptanceAuditProgress {
       return "Audit comparison baseline is unusable: ${prior.reason}"
     }
     prior as AcceptanceAuditRemainingCriteria.Known
-    return if (current.identities.size >= prior.identities.size) {
+    return if (current.identities.containsAll(prior.identities)) {
       "Audit reported ${current.identities.size} remaining production criteria after repair " +
         "(${current.identities.sorted().joinToString(", ")}) against ${prior.identities.size} before it " +
-        "(${prior.identities.sorted().joinToString(", ")}). The remaining list did not shrink, so the run blocks " +
-        "for operator intervention instead of relaunching another repair."
+        "(${prior.identities.sorted().joinToString(", ")}). The repair resolved none of the prior criteria, " +
+        "so the run blocks for operator intervention instead of relaunching another repair."
     } else {
       null
     }
