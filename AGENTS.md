@@ -115,6 +115,8 @@ comments. `CommentAndInterfaceKdocArchitectureTest` enforces this alongside
 
 ## Coding Conventions
 
+**Required reading.** Before planning, designing, changing, or reviewing anything under `runtime-kotlin`, read [Runtime Architecture Guidelines](docs/architecture-guidelines.md). It sets the rules that regressed in earlier refactor rounds (A1–A12), the enforcement contract for architecture guards (G1–G7), and the change process (P1–P8): acceptance criteria state end states, fixes delete instead of moving, landed specs are verified, and guards, baselines, and exemptions only tighten. Every runtime-kotlin review runs its section 5 checklist and cites rule IDs.
+
 Before designing, changing, or reviewing `runtime-kotlin`, read and apply [Design Principles](runtime-kotlin/ARCHITECTURE.md#design-principles). That section owns requirements for dependency direction, state and resource ownership, persistence, contract enforcement, simplicity, and test value. Its enforcement status distinguishes mechanically checked rules, each paired with its proving test in `PrincipleEnforcementInventory.enforceableRules`, from the requirements that stay review-only. Existing violations do not authorize new ones.
 
 Follow [Code Principles](docs/code-principles.md) for Kotlin patterns, package clustering, imports, file-size limits, and architecture guards. Mechanical enforcement lives under `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/` (`CommentAndInterfaceKdocArchitectureTest`, `InlineFqnArchitectureTest`, `ProductionFileLineCeilingArchitectureTest`, `PrincipleEnforcementInventory`, and siblings).
