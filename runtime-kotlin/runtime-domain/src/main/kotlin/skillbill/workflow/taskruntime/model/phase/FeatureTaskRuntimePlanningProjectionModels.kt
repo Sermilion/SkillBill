@@ -11,10 +11,6 @@ import java.security.MessageDigest
 object FeatureTaskRuntimePlanningProjectionContract {
   const val SHARED_REVIEW_EVIDENCE_ID: String = "feature_task_runtime.shared_review_evidence"
   val VERSION: String = FEATURE_TASK_RUNTIME_PLANNING_PROJECTIONS_CONTRACT_VERSION
-
-  private val producedProjectionKindsByPhaseId: Map<String, String> = emptyMap()
-
-  fun producedProjectionKindFor(phaseId: String): String? = producedProjectionKindsByPhaseId[phaseId]
 }
 
 internal const val FEATURE_TASK_RUNTIME_PROJECTION_LIST_MAX_COUNT: Int = 128

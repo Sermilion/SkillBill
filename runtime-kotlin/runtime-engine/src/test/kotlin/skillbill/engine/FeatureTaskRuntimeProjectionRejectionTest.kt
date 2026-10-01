@@ -41,7 +41,7 @@ class FeatureTaskRuntimeProjectionRejectionTest {
 
     val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(report)
     assertEquals("audit", blocked.lastIncompletePhase)
-    assertContains(blocked.blockedReason, "produced_outputs.value is required")
+    assertContains(blocked.blockedReason, "must contain non-blank prose for phase handoff")
     assertTrue(harness.launchedPromptPhaseOrder().none { it == "audit" })
     val record = requireNotNull(harness.recorder.loadPhaseRecords(WORKFLOW_ID).orEmpty()["audit"])
     assertEquals("needs_user_action", record.failureDisposition?.wireValue)

@@ -1,0 +1,27 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-387"
+feature_name: "prose-phase-output-and-spec-handoff"
+parent_spec_path: ".feature-specs/SKILL-387-prose-phase-output-and-spec-handoff/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "base/SKILL-380-phase-slot-strategies"
+feature_branch: "feat/SKILL-387-prose-phase-output-and-spec-handoff"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "shared prose output and persisted spec handoff"
+  spec_path: ".feature-specs/SKILL-387-prose-phase-output-and-spec-handoff/spec_subtask_1_shared-prose-output-and-persisted-spec-handoff.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260930-204026-hbcu"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []

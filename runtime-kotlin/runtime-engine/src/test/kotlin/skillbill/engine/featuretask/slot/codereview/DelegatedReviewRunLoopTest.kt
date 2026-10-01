@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slot.codereview
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.application.review.verification.ReviewClaimVerificationRunner
 import skillbill.engine.BranchSetupTestConfig
 import skillbill.engine.REVIEW_FIX_BLOCKER_FINDING_ID
@@ -96,7 +95,6 @@ class DelegatedReviewRunLoopTest {
       val harness =
         telemetryRunnerHarness(
           launcher = launcher,
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
           runtimeConfig =
             RuntimeHarnessConfig(
               branchSetup = BranchSetupTestConfig(gitOperations = git),
@@ -150,8 +148,11 @@ class DelegatedReviewRunLoopTest {
         "audit" -> facts(auditSatisfiedOutput())
         "verify_findings" -> {
           verifyLaunches += 1
-          val verified = if (verifyLaunches == 1) listOf(REVIEW_FIX_BLOCKER_FINDING_ID) else emptyList()
-          facts(verifyFindingsOutput(verified))
+          if (verifyLaunches == 1) {
+            facts(verifiedFindingProse())
+          } else {
+            facts(verifyFindingsOutput(emptyList()))
+          }
         }
         "implement_fix" -> {
           lanes.fixed = true
@@ -163,6 +164,12 @@ class DelegatedReviewRunLoopTest {
       }
     }
   }
+
+  private fun verifiedFindingProse(): String =
+    verifyFindingsOutput(listOf(REVIEW_FIX_BLOCKER_FINDING_ID)).replace(
+      "\"produced_outputs\": {",
+      "\"produced_outputs\": {\"value\": \"Verified $REVIEW_FIX_BLOCKER_FINDING_ID: $DELEGATED_FINDING_MESSAGE\", ",
+    )
 
   private fun promptFor(
     launcher: RuntimeRecordingLauncher,

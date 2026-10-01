@@ -6,7 +6,6 @@ import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntim
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeImplementationAttemptSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimePersistenceSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimePhaseHandoffSchemaValidator
-import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimePlanningProjectionSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeProjectionMeasurementSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeQuarantineSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator
@@ -28,8 +27,6 @@ class FeatureTaskRuntimeWireArtifactValidator : FeatureTaskRuntimeWireArtifactVa
     when (kind) {
       FeatureTaskRuntimeWireArtifactKind.QUARANTINE_RECORD ->
         FeatureTaskRuntimeQuarantineSchemaValidator.validate(wireMap, sourceLabel)
-      FeatureTaskRuntimeWireArtifactKind.PLANNING_PROJECTION ->
-        FeatureTaskRuntimePlanningProjectionSchemaValidator.validate(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_ATTEMPT ->
         FeatureTaskRuntimeImplementationAttemptSchemaValidator.validate(wireMap, sourceLabel)
       FeatureTaskRuntimeWireArtifactKind.BUILD_RECEIPT ->

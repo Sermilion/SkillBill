@@ -1,6 +1,5 @@
 package skillbill.engine
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -52,7 +51,6 @@ class FeatureTaskRuntimeStatelessAuditBoundaryTest {
             repoRoot = root,
             acceptanceCriteria = CRITERIA,
             launcher = launcher,
-            validator = realFeatureTaskRuntimePhaseOutputValidator,
           ),
         )
 
@@ -114,7 +112,6 @@ class FeatureTaskRuntimeStatelessAuditBoundaryTest {
             repoRoot = root,
             acceptanceCriteria = CRITERIA,
             launcher = launcher,
-            validator = realFeatureTaskRuntimePhaseOutputValidator,
           ),
         )
       val interrupted = harness.runner.run(harness.request())
@@ -145,7 +142,7 @@ class FeatureTaskRuntimeStatelessAuditBoundaryTest {
       }
     val harness =
       runnerHarness(
-        RuntimeHarnessConfig(launcher = launcher, validator = realFeatureTaskRuntimePhaseOutputValidator),
+        RuntimeHarnessConfig(launcher = launcher),
       )
     val result = harness.runner.run(harness.request())
     assertIs<FeatureTaskRuntimeRunReport.Blocked>(result)

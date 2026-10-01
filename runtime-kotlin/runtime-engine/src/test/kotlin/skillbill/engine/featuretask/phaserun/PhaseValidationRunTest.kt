@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.phaserun
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.contracts.JsonCodec
 import skillbill.engine.RuntimeHarnessConfig
 import skillbill.engine.RuntimeRecordingLauncher
@@ -151,6 +150,33 @@ class PhaseValidationRunTest {
       launcher.requests.mapNotNull {
         it.skillRunRequest.promptOverride?.let(::phaseIdFromPrompt)
       },
+    )
+    database.assertNoDurableWorkflowState()
+    branchSetup.gitOperations.assertNoCommitOrCheckpointRef(headBefore)
+  }
+
+  @Test
+  fun `a formatting failure is repaired by one launch and validation completes without a second launch`() {
+    val gateRequests = mutableListOf<ValidationGateRunRequest>()
+    val launcher = launcher { validJsonOutput(PHASE_VALIDATE) }
+    val formatting =
+      ValidationGateRunResult(
+        exitCode = 1,
+        durationMs = 1,
+        outcome = ValidationGateRunOutcome.FAILED,
+        cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE,
+        executedWorkUnits = 1,
+        executedCheckIdentities = emptyList(),
+        findings = listOf(ValidationGateFinding("engine", "spotlessKotlinCheck", "needs formatting", "src/Foo.kt")),
+      )
+
+    val result = entry(launcher, gateRequests, listOf(formatting)).run(validationRequest())
+
+    assertIs<PhaseRunResult.Completed>(result, result.toString())
+    assertEquals(1, launcher.requests.size)
+    assertEquals(
+      listOf(ValidationGateCacheMode.CACHE_ELIGIBLE, ValidationGateCacheMode.FORCED_FULL),
+      gateRequests.map { it.cacheMode },
     )
     database.assertNoDurableWorkflowState()
     branchSetup.gitOperations.assertNoCommitOrCheckpointRef(headBefore)
@@ -345,7 +371,6 @@ class PhaseValidationRunTest {
               },
             repoRoot = repoRoot,
             launcher = launcher,
-            validator = realFeatureTaskRuntimePhaseOutputValidator,
             validationGatePlatformManifests = manifests,
             gateRepoLocalConfig = repoLocalConfig("./tools/gradlew"),
             validationGateRunner =

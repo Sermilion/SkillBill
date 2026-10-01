@@ -8,6 +8,8 @@ internal sealed interface AcceptanceAuditRemainingCriteria {
     val identities: Set<String>,
   ) : AcceptanceAuditRemainingCriteria
 
+  data object Complete : AcceptanceAuditRemainingCriteria
+
   data class Unusable(
     val reason: String,
   ) : AcceptanceAuditRemainingCriteria
@@ -15,7 +17,35 @@ internal sealed interface AcceptanceAuditRemainingCriteria {
 
 internal object AcceptanceAuditRemainingCriteriaParser {
   private val findingStart = Regex("""^(?:[-*]\s+|\d+[.)]\s+)?[`*]*(?:S\d+-)?AC-?\d+""", RegexOption.IGNORE_CASE)
-  private val label = Regex("""(?:S\d+-)?AC-?\d+(?=$|[.,:\s/`*])""", RegexOption.IGNORE_CASE)
+  private val label = Regex("""(?<![\w-])(?:S\d+-)?AC-?\d+(?!\w)""", RegexOption.IGNORE_CASE)
+  private val emptyList = Regex("""\[\s*]""")
+  private val listItem = Regex("""^[-*]\s+|^\d+[.)]\s+""")
+  private val segmentBreak = Regex("""(?<=[.!?])\s+|\n""")
+  private val negatedGap =
+    Regex(
+      """\b(?:no|zero|without)\s+(?:(?:remaining|open|further|unmet|production|missing)\s+)*""" +
+        """(?:gaps?|criteria|criterion|requirements?|behaviou?r|findings?)\b""" +
+        """(?:\s+(?:remain(?:s|ing)?|open|missing|unmet))?""" +
+        """|\bnothing\s+(?:remains|is\s+missing|is\s+open)\b""",
+      RegexOption.IGNORE_CASE,
+    )
+  private val openCue =
+    Regex(
+      """\b(?:not|missing|remains?|remaining|gaps?|unmet|open|lacks?|absent|incomplete|unimplemented|except|""" +
+        """but|however|still|yet|fails?|broken)\b""",
+      RegexOption.IGNORE_CASE,
+    )
+  private val metCue =
+    Regex(
+      """\b(?:satisfied|met|implemented|resolved|complete|completed|present|done|covered|fulfilled)\b""",
+      RegexOption.IGNORE_CASE,
+    )
+  private val allMet =
+    Regex(
+      """\b(?:all|every|each)\b[^.]*\b(?:criteria|criterion|requirements?)\b[^.]*""" +
+        """\b(?:met|satisfied|implemented|complete|completed|resolved|fulfilled|covered)\b""",
+      RegexOption.IGNORE_CASE,
+    )
   private val resolved =
     Regex("""^(?:is |was |has been )?(?:already )?(?:satisfied|resolved|closed)\b""", RegexOption.IGNORE_CASE)
 
@@ -31,7 +61,11 @@ internal object AcceptanceAuditRemainingCriteriaParser {
         .removePrefix("```")
         .removeSuffix("```")
         .trim()
-    return if (value.startsWith("[")) parseJson(value, catalog) else parseProse(value, catalog)
+    return when {
+      emptyList.matches(value) -> AcceptanceAuditRemainingCriteria.Complete
+      value.startsWith("[") -> parseJson(value, catalog)
+      else -> parseProse(value, catalog)
+    }
   }
 
   private fun parseJson(
@@ -46,10 +80,9 @@ internal object AcceptanceAuditRemainingCriteriaParser {
       }
     val identities = linkedSetOf<String>()
     for (entry in entries) {
-      when (val parsed = parseJsonEntry(entry, catalog)) {
-        is AcceptanceAuditRemainingCriteria.Known -> identities += parsed.identities
-        is AcceptanceAuditRemainingCriteria.Unusable -> return parsed
-      }
+      val parsed = parseJsonEntry(entry, catalog)
+      if (parsed !is AcceptanceAuditRemainingCriteria.Known) return parsed
+      identities += parsed.identities
     }
     return knownNonempty(identities)
   }
@@ -65,10 +98,9 @@ internal object AcceptanceAuditRemainingCriteriaParser {
         )
     val identities = linkedSetOf<String>()
     for (reference in references) {
-      when (val parsed = parseReference(reference, catalog)) {
-        is AcceptanceAuditRemainingCriteria.Known -> identities += parsed.identities
-        is AcceptanceAuditRemainingCriteria.Unusable -> return parsed
-      }
+      val parsed = parseReference(reference, catalog)
+      if (parsed !is AcceptanceAuditRemainingCriteria.Known) return parsed
+      identities += parsed.identities
     }
     return if (identities.size == 1) {
       AcceptanceAuditRemainingCriteria.Known(identities)
@@ -104,32 +136,80 @@ internal object AcceptanceAuditRemainingCriteriaParser {
         .minOfOrNull { it.takeWhile(Char::isWhitespace).length } ?: 0
     for (line in lines) {
       val trimmed = line.trim()
-      val summary =
-        !trimmed.startsWith("-") &&
-          !trimmed.startsWith("*") &&
-          trimmed.contains("no remaining production gap", ignoreCase = true)
-      if (summary) {
-        label.findAll(trimmed).forEach { reference ->
-          val identity =
-            catalog.resolve(reference.value)
-              ?: return AcceptanceAuditRemainingCriteria.Unusable("Unknown criterion in satisfied summary.")
-          satisfied += identity
+      val rejection =
+        when {
+          isSatisfiedSummary(trimmed) -> collectSatisfied(trimmed, catalog, satisfied)
+          findingStart.containsMatchIn(trimmed) -> collectFinding(trimmed, catalog, identities)
+          listItem.containsMatchIn(trimmed) && line.takeWhile(Char::isWhitespace).length <= findingIndent ->
+            AcceptanceAuditRemainingCriteria.Unusable("A remaining finding has no accepted criterion identity.")
+          else -> null
         }
-      } else if (findingStart.containsMatchIn(trimmed)) {
-        when (val parsed = parseReference(trimmed, catalog)) {
-          is AcceptanceAuditRemainingCriteria.Known -> identities += parsed.identities
-          is AcceptanceAuditRemainingCriteria.Unusable -> return parsed
-        }
-      } else if (Regex("""^[-*]\s+|^\d+[.)]\s+""").containsMatchIn(trimmed) &&
-        line.takeWhile(Char::isWhitespace).length <= findingIndent
-      ) {
-        return AcceptanceAuditRemainingCriteria.Unusable("A remaining finding has no accepted criterion identity.")
+      if (rejection != null) return rejection
+    }
+    return when {
+      identities.any(satisfied::contains) ->
+        AcceptanceAuditRemainingCriteria.Unusable("Audit declares a criterion both open and satisfied.")
+      identities.isEmpty() -> parseNarrative(value, catalog)
+      else -> AcceptanceAuditRemainingCriteria.Known(identities.toSet())
+    }
+  }
+
+  private fun isSatisfiedSummary(trimmed: String): Boolean =
+    !trimmed.startsWith("-") &&
+      !trimmed.startsWith("*") &&
+      trimmed.contains("no remaining production gap", ignoreCase = true)
+
+  private fun collectSatisfied(
+    trimmed: String,
+    catalog: AcceptanceAuditCatalog.Known,
+    satisfied: MutableSet<String>,
+  ): AcceptanceAuditRemainingCriteria? {
+    for (reference in label.findAll(trimmed)) {
+      satisfied += catalog.resolve(reference.value)
+        ?: return AcceptanceAuditRemainingCriteria.Unusable("Unknown criterion in satisfied summary.")
+    }
+    return null
+  }
+
+  private fun collectFinding(
+    trimmed: String,
+    catalog: AcceptanceAuditCatalog.Known,
+    identities: MutableSet<String>,
+  ): AcceptanceAuditRemainingCriteria? {
+    val parsed = parseReference(trimmed, catalog)
+    if (parsed !is AcceptanceAuditRemainingCriteria.Known) return parsed
+    identities += parsed.identities
+    return null
+  }
+
+  private fun parseNarrative(
+    value: String,
+    catalog: AcceptanceAuditCatalog.Known,
+  ): AcceptanceAuditRemainingCriteria {
+    val identities = linkedSetOf<String>()
+    var completionStated = false
+    for (segment in value.split(segmentBreak).filter(String::isNotBlank)) {
+      val settled = negatedGap.replace(segment, "satisfied")
+      val declaresMet = metCue.containsMatchIn(settled) && !openCue.containsMatchIn(settled)
+      if (declaresMet && (allMet.containsMatchIn(settled) || negatedGap.containsMatchIn(segment))) {
+        completionStated = true
+      }
+      for (reference in label.findAll(segment)) {
+        val identity =
+          catalog.resolve(reference.value)
+            ?: return AcceptanceAuditRemainingCriteria.Unusable(
+              "Unknown remaining criterion ${reference.value.take(AcceptanceAuditCatalog.DIAGNOSTIC_LABEL_LIMIT)}.",
+            )
+        if (!declaresMet) identities += identity
       }
     }
-    return if (identities.any(satisfied::contains)) {
-      AcceptanceAuditRemainingCriteria.Unusable("Audit declares a criterion both open and satisfied.")
-    } else {
-      knownNonempty(identities)
+    return when {
+      identities.isNotEmpty() -> AcceptanceAuditRemainingCriteria.Known(identities.toSet())
+      completionStated -> AcceptanceAuditRemainingCriteria.Complete
+      else ->
+        AcceptanceAuditRemainingCriteria.Unusable(
+          "The audit report names no remaining criterion and does not clearly state that none remain.",
+        )
     }
   }
 

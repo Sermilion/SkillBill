@@ -114,7 +114,6 @@ internal fun FeatureTaskRuntimeRunner.createExecutePreparedRunState(
     initialRecords = recorder.loadPhaseRecords(runRequest.workflowId).orEmpty(),
     transitions = executionPlan.traversal,
     durableInitialLedger = recorder.loadPhaseLedger(runRequest.workflowId).orEmpty(),
-    outputValidator = outputValidator,
     initialReviewGeneration = recorder.reconcileReviewGeneration(runRequest.workflowId),
     stepVerdictRule = slotStepVerdictRule(strategies, executionPlan, diagnostics),
     resumeRulesFn = strategies.resumeRules(executionPlan),

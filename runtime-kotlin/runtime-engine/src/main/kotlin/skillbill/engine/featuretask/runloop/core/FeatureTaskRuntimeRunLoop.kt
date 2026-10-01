@@ -22,7 +22,6 @@ import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
@@ -47,8 +46,6 @@ internal data class FeatureTaskRuntimeRunLoopContext(
   override val goalContinuationRecorder: PhaseRunGoal get() = runState.goal
   override val phaseSettlementService: PhaseRunSettlements get() = runState.settlements
   override val checkpoints: PhaseRunCheckpoints get() = runState.checkpoints
-  override val outputValidator: FeatureTaskRuntimePhaseOutputValidator
-    get() = runState.collaborators.outputValidator
   override val diagnostics: RuntimeDiagnostics get() = runState.collaborators.diagnostics
   override val clock get() = runState.collaborators.clock
   override val specSource: SpecSource get() = runState.specSource

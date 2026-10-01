@@ -17,6 +17,27 @@ This file records architectural and implementation decisions that span the
 `runtime-kotlin/` boundary. Each entry is dated and explains the trade-off,
 not the implementation detail.
 
+## [2026-10-01] SKILL-387: use one prose content boundary with runtime-owned decisions
+Context: Agent phases had competing response envelopes, strict schema gates, and formatting relaunches even though the domain already provided PhaseOutput with value and optional prompt.
+Decision: Route agent content through PhaseOutput; keep process capture, terminal disposition, durable metadata, and semantic ledgers in their existing runtime owners. Interpret prose only in the phase owners that already decide review, finding, audit, or validation outcomes.
+Reason: One content path accepts ordinary prose without weakening accepted-step authority or terminal precedence, and removes a duplicate response contract without inventing a new DTO or completion interface.
+Alternatives considered: Retain strict response schemas or add a replacement completion contract (rejected: both preserve the wrapper failure that discarded usable work and create another authority).
+Revisit when: A future phase needs authoritative content that cannot be carried by PhaseOutput.value and its existing semantic owner.
+
+## [2026-10-01] SKILL-387: make the governed spec artifact the planning handoff
+Context: Plan responses duplicated executable details, while goal planning could checkpoint a subtask hash before the persisted spec had been revalidated after authorship.
+Decision: Standalone plan authors only its authorized local bundle and returns the canonical parent-spec path; goal planning writes its assigned subtask spec, validates readiness, recomputes its post-write hash, and checkpoints that artifact before hydration. Implementation rereads the selected spec.
+Reason: The existing artifact writer, readiness checks, and checkpoint become one authority, preventing wrong, partial, escaped, or stale-hash plans without a second planning tree or parent replacement.
+Alternatives considered: Carry executable plan text in the response or overwrite the parent spec (rejected: either creates competing authority or destroys sibling/subtask provenance).
+Revisit when: Governed planning artifacts or their checkpoint owner change.
+
+## [2026-10-01] SKILL-387: bound legacy extraction to persistence and recovery
+Context: Fresh prose must bypass legacy response validation while durable historical envelopes and pending plans still need compatibility handling.
+Decision: Extract supported historical content only at persistence/recovery boundaries; preserve accepted identity, attempts, completed effects, and terminal precedence, while routing unsupported records and unready legacy plans through existing typed recovery without conversion or replay.
+Reason: This keeps compatibility observable and bounded without making old wire shapes gate fresh content or manufacturing new artifact authority from response text.
+Alternatives considered: Blanket version bumps or automatic JSON-to-spec conversion (rejected: they either strand compatible history or silently create authority and replay risk).
+Revisit when: Historical rows are migrated to a new authoritative format under an explicit schema and compatibility policy.
+
 ## [2026-09-29] Store execution semantics in the workflow creation transaction, SKILL-384
 Context: New standalone workflows and goal children need the same semantic authority before launch, including children with imported planning state.
 Decision: Store exactly one governed execution-plan descriptor in the workflow's database artifacts within its creation transaction. Pass validated resolved data through creation inputs, keep registry dependencies in the engine, and retain FeatureTaskExecutionIdentity for repository and spec lookup. Reject later descriptor replacement or removal.
@@ -75,6 +96,7 @@ Decision: Preplan, plan, and implement briefings again pin workflow_id and attem
 Reason: The runtime needs a branch signal, not a hand-authored envelope, and the one-attempt budget (2026-08-20) assumes programmatic repair catches serialisation slips. A missing root field beside a real `value` loses no producer content.
 Alternatives considered: Raising the output-gate budget (rejected 2026-09-02: a relaunch repeats the whole phase); inferring status only in the envelope walker (rejected: the synthesizer already owns prose-phase recovery).
 Revisit when: settlement tools become unavailable to child agents, or a later phase gate needs structure that `value` cannot carry.
+Superseded by: SKILL-387: use one prose content boundary with runtime-owned decisions (2026-10-01)
 
 ## [2026-09-25] Boundary memory entries are capped at 4096 bytes; verification truncates oversized bodies
 Context: A SKILL-374 goal child crashed in verify_findings because one selected decisions.md entry exceeded the verification `max_body_bytes` (4096). The per-body cap loud-failed with `GoalVerificationBoundaryCapExceededError`, which the resolved-bodies prompt path did not catch, so the child exited 1 without a durable block. The repo also held 15 entries above the cap, and 38 legacy `## <date> — <title>` headings that the parser folded into the preceding dated entry (one "entry" measured 68 KB).

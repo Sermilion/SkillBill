@@ -14,9 +14,9 @@ import skillbill.engine.goalrunner.planning.model.GoalPlanningLaunch
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseProduction
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProduceAttemptArgs
-import skillbill.engine.goalrunner.planning.model.GoalPlanningProducePhaseArgs
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
+import skillbill.engine.goalrunner.planning.outcome.proseRecordPayload
 import skillbill.engine.goalrunner.planning.outcome.resolvedGovernedPath
 import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
@@ -52,32 +52,31 @@ internal fun produceSharedPreplanCheckpoint(
     val runInvariants = sweep.invariantsSource.read(shared.parentSpecPath)
     val preplanProduction =
       sweep.producePhase(
-        GoalPlanningProducePhaseArgs(
-          attempt =
-            GoalPlanningProduceAttemptArgs(
-              phase =
-                GoalPlanningPhaseContext(
-                  shared = shared,
-                  request = request,
-                  subtask = null,
-                  runInvariants = runInvariants,
-                  phaseId = GoalPlanningSweepConstants.PHASE_PREPLAN,
-                  launch = launch,
-                ),
-              recordedOutputs = emptyList(),
+        GoalPlanningProduceAttemptArgs(
+          phase =
+            GoalPlanningPhaseContext(
+              shared = shared,
+              request = request,
+              subtask = null,
+              runInvariants = runInvariants,
+              phaseId = GoalPlanningSweepConstants.PHASE_PREPLAN,
+              launch = launch,
             ),
-          finalizePayload = { raw -> enrichPreplan(raw, shared.planningPacket) },
+          recordedOutputs = emptyList(),
         ),
       )
     if (preplanProduction is GoalPlanningPhaseProduction.Stopped) error(preplanProduction.outcome.blockedReason)
     val captured = preplanProduction as GoalPlanningPhaseProduction.Captured
-    val preplanPayload = captured.payload
+    val preplanPayload =
+      enrichPreplan(
+        proseRecordPayload(GoalPlanningSweepConstants.PHASE_PREPLAN, captured.payload),
+        shared.planningPacket,
+      )
     SharedGoalPreplanCheckpoint(
       identity = GoalPlanningIdentity(shared.parentWorkflowId, shared.normalizedIssueKey, shared.repositoryIdentity),
       provenance = provenance,
       payloadSha256 = sha256HexUtf8(preplanPayload),
       preplanPayload = preplanPayload,
-      repairEvidence = captured.repairEvidence,
     )
   }
 

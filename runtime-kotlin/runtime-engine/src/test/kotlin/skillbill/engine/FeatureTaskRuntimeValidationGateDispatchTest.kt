@@ -1,6 +1,5 @@
 package skillbill.engine
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
@@ -63,8 +62,8 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
   }
 
   @Test
-  fun `unparseable results cannot advance beyond validate`() {
-    val harness = validationHarness("finished")
+  fun `blank results cannot advance beyond validate`() {
+    val harness = validationHarness("")
 
     val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
 
@@ -149,6 +148,109 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
     assertFalse("write_history" in harness.launchedPromptPhaseOrder())
   }
 
+  @Test
+  fun `a stdout object with only status summary and value is admitted verbatim without a correction launch`() {
+    val stdout = """{"status":"completed","summary":"Project checks passed.","value":"Checks ran clean."}"""
+    val harness = validationHarness(stdout)
+
+    val report = harness.runner.run(harness.request())
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(report, report.toString())
+    assertEquals(stdout, admittedValue(harness, "validate"))
+    assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "validate" })
+    assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "write_history" })
+    assertEquals(
+      1,
+      harness.launcher.requests.count { "Phase: validate" in it.skillRunRequest.promptOverride.orEmpty() },
+    )
+  }
+
+  @Test
+  fun `plain prose stdout is admitted as the phase value and advances the run`() {
+    listOf("preplan", "implement", "validate").forEach { phaseId ->
+      val prose = "I finished $phaseId. Nothing was deferred, and no structured receipt is attached."
+      val harness = runnerHarness(proseConfig(phaseId, prose))
+
+      val report = harness.runner.run(harness.request())
+
+      assertIs<FeatureTaskRuntimeRunReport.Completed>(report, "$phaseId: $report")
+      assertEquals(prose, admittedValue(harness, phaseId), phaseId)
+      assertEquals(1, harness.launchedPromptPhaseOrder().count { it == phaseId }, phaseId)
+    }
+  }
+
+  @Test
+  fun `zero-exit prose never overrides a terminal disposition`() {
+    val proseStdout = "Everything passed, honestly."
+    val blocked = blockedValidateOutput("The check cannot run here.", null)
+    val cases: Map<String, AgentRunLaunchOutcome> =
+      mapOf(
+        "explicit block" to facts(blocked),
+        "failure" to proseFacts(AgentRunTermination.Exited(1), proseStdout),
+        "cancellation" to proseFacts(AgentRunTermination.Interrupted, proseStdout),
+        "timeout" to proseFacts(AgentRunTermination.TimedOut, proseStdout),
+        "launch failure" to proseFacts(AgentRunTermination.SpawnFailed, proseStdout),
+        "capture failure" to proseFacts(AgentRunTermination.Exited(0), proseStdout, stdoutTruncated = true),
+      )
+    cases.forEach { (label, outcome) ->
+      val harness = validationHarness { outcome }
+
+      val report = harness.runner.run(harness.request())
+
+      assertFalse(report is FeatureTaskRuntimeRunReport.Completed, "$label: $report")
+      val records = harness.recorder.loadPhaseRecords(WORKFLOW_ID).orEmpty()
+      assertFalse(records["validate"]?.status == WorkflowStepStatus.COMPLETED, "$label: ${records["validate"]}")
+      assertFalse("write_history" in harness.launchedPromptPhaseOrder(), label)
+      assertNull(records["commit_push"], label)
+    }
+  }
+
+  private fun proseFacts(
+    termination: AgentRunTermination,
+    stdout: String,
+    stdoutTruncated: Boolean = false,
+  ): AgentRunLaunchOutcome =
+    agentRunLaunchFacts(
+      agent = SupportedAgent.CLAUDE,
+      termination = termination,
+      stdout = stdout,
+      stderr = "",
+      stdoutTruncated = stdoutTruncated,
+    )
+
+  private fun admittedValue(
+    harness: RunnerHarness,
+    phaseId: String,
+  ): String? {
+    val record = assertNotNull(harness.recorder.loadPhaseRecords(WORKFLOW_ID)?.get(phaseId))
+    val envelope =
+      JsonCodec.parseObjectOrNull(assertNotNull(record.outputArtifact))
+        ?.let(JsonCodec::jsonElementToValue)
+        ?.let(JsonCodec::anyToStringAnyMap)
+    return JsonCodec.anyToStringAnyMap(envelope?.get("produced_outputs"))?.get("value") as? String
+  }
+
+  private fun proseConfig(
+    phaseId: String,
+    prose: String,
+  ): RuntimeHarnessConfig =
+    RuntimeHarnessConfig(
+      validationGatePlatformManifests = listOf(kotlinPackWithValidationGate()),
+      validationGateRunner =
+        object : ValidationGateRunner {
+          override fun run(request: ValidationGateRunRequest): ValidationGateRunResult =
+            error("Runtime must not rerun the phase check: ${request.argv}")
+        },
+      launcher =
+        RuntimeRecordingLauncher { request ->
+          when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
+            phaseId -> facts(prose)
+            "audit" -> facts(auditSatisfiedOutput())
+            else -> facts(defaultPhaseOutput(request))
+          }
+        },
+    )
+
   private fun blockedValidateOutput(
     remaining: String,
     verdict: String?,
@@ -175,7 +277,6 @@ class FeatureTaskRuntimeValidationGateDispatchTest {
             override fun run(request: ValidationGateRunRequest): ValidationGateRunResult =
               error("Runtime must not rerun the phase check: ${request.argv}")
           },
-        validator = realFeatureTaskRuntimePhaseOutputValidator,
         launcher =
           RuntimeRecordingLauncher { request ->
             when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {

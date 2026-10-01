@@ -3,11 +3,11 @@ package skillbill.engine.goalrunner.planning.hydration
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.persist.durationMillis
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
+import skillbill.engine.goalplanning.readStoredPlanningRecord
 import skillbill.engine.goalrunner.planning.model.GoalChildPlanningHydration
 import skillbill.engine.goalrunner.planning.model.expectedProvenance
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRecoveryKind
 import skillbill.engine.goalrunner.planning.recovery.classifyGoalPlanningRecovery
-import skillbill.engine.planningprojection.requireValidPlanningProjection
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
@@ -16,23 +16,19 @@ import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.goalrunner.runner.model.GoalChildPlanningHydrationRequest
 import skillbill.ports.goalrunner.runner.model.GoalRunnerChildWorkflowSetup
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
-import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.artifact.envelopeWireMap
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalPlanningImport
-import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseExecutionOrigin
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
-import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
 import java.time.Clock
 
 private data class PreparedGoalPlanning(
@@ -41,11 +37,9 @@ private data class PreparedGoalPlanning(
 )
 
 class GoalChildPlanningHydrator(
-  phaseOutputValidator: FeatureTaskRuntimePhaseOutputValidator,
-  planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidator,
   private val clock: Clock,
 ) {
-  private val payloadValidator = PreparedPlanningPayloadValidator(phaseOutputValidator, planningProjectionValidator)
+  private val payloadValidator = PreparedPlanningPayloadValidator()
   private val importMatcher = GoalChildPlanningImportMatcher(payloadValidator)
 
   fun hydrate(
@@ -55,21 +49,19 @@ class GoalChildPlanningHydrator(
   ): GoalChildPlanningHydration {
     val prepared = loadRequiredPreparation(unitOfWork, setup, request)
     requireMatchingPreparation(setup, request, prepared)
-    val preplan =
-      payloadValidator.requireValid(
-        "preplan",
-        prepared.shared.preplanPayload,
-        prepared.shared.payloadSha256,
-        setup.workflowId,
-      )
-    val plan =
-      payloadValidator.requireValid(
-        "plan",
-        prepared.plan.planPayload,
-        prepared.plan.payloadSha256,
-        setup.workflowId,
-      )
-    return createHydration(request, prepared, preplan, plan)
+    payloadValidator.requireValid(
+      "preplan",
+      prepared.shared.preplanPayload,
+      prepared.shared.payloadSha256,
+      setup.workflowId,
+    )
+    payloadValidator.requireValid(
+      "plan",
+      prepared.plan.planPayload,
+      prepared.plan.payloadSha256,
+      setup.workflowId,
+    )
+    return createHydration(request, prepared)
   }
 
   fun requireMatchingImport(
@@ -138,14 +130,12 @@ class GoalChildPlanningHydrator(
   private fun createHydration(
     request: GoalChildPlanningHydrationRequest,
     prepared: PreparedGoalPlanning,
-    preplan: AcceptedFeatureTaskRuntimePhaseOutput,
-    plan: AcceptedFeatureTaskRuntimePhaseOutput,
   ): GoalChildPlanningHydration {
     val importedAt = clock.instant().toString()
     val records =
       createImportedRecords(
-        preplan.forPlanningImport(prepared.shared.preplanPayload, prepared.shared.repairEvidence),
-        plan.forPlanningImport(prepared.plan.planPayload, prepared.plan.repairEvidence),
+        ImportedPlanningPhase(prepared.shared.preplanPayload, prepared.shared.repairEvidence),
+        ImportedPlanningPhase(prepared.plan.planPayload, prepared.plan.repairEvidence),
         importedAt,
       )
     return GoalChildPlanningHydration(
@@ -162,37 +152,23 @@ class GoalChildPlanningHydrator(
     )
   }
 
-  private fun AcceptedFeatureTaskRuntimePhaseOutput.forPlanningImport(
-    storedPayload: String,
-    storedEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
-  ): AcceptedFeatureTaskRuntimePhaseOutput =
-    copy(
-      normalizedOutput =
-        if (repairEvidence == null) {
-          normalizedOutput.copy(canonicalJson = storedPayload)
-        } else {
-          normalizedOutput
-        },
-      repairEvidence = repairEvidence ?: storedEvidence,
-    )
-
   private fun createImportedRecords(
-    preplan: AcceptedFeatureTaskRuntimePhaseOutput,
-    plan: AcceptedFeatureTaskRuntimePhaseOutput,
+    preplan: ImportedPlanningPhase,
+    plan: ImportedPlanningPhase,
     importedAt: String,
   ): Map<String, Map<String, Any?>> =
     linkedMapOf(
       "preplan" to
         importedRecord(
           "preplan",
-          preplan.normalizedOutput.canonicalJson,
+          preplan.storedPayload,
           preplan.repairEvidence,
           importedAt,
         ).asWorkflowArtifactEntry().let(::workflowArtifactEntryMap),
       "plan" to
         importedRecord(
           "plan",
-          plan.normalizedOutput.canonicalJson,
+          plan.storedPayload,
           plan.repairEvidence,
           importedAt,
         ).asWorkflowArtifactEntry().let(::workflowArtifactEntryMap),
@@ -233,48 +209,29 @@ class GoalChildPlanningHydrator(
     ).asWorkflowArtifactEntry().let(::workflowArtifactEntryMap)
 }
 
-private class PreparedPlanningPayloadValidator(
-  private val phaseOutputValidator: FeatureTaskRuntimePhaseOutputValidator,
-  private val planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidator,
-) {
+private data class ImportedPlanningPhase(
+  val storedPayload: String,
+  val repairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
+)
+
+private class PreparedPlanningPayloadValidator {
   fun requireValid(
     phaseId: String,
     payload: String,
     expectedDigest: String,
     workflowId: String,
-  ): AcceptedFeatureTaskRuntimePhaseOutput {
-    val originalDigest = sha256HexUtf8(payload)
-    if (originalDigest != expectedDigest) {
+  ): NormalizedFeatureTaskRuntimePhaseOutput {
+    if (sha256HexUtf8(payload) != expectedDigest) {
       invalidPlanningPreparation(workflowId, "$phaseId.payload_sha256", "payload digest differs")
     }
-    val accepted = phaseOutputValidator.validatePhaseOutput(payload, phaseId).requireAcceptedOutput(phaseId)
-    val repairEvidence = accepted.repairEvidence
-    if (repairEvidence != null && repairEvidence.originalDigest != originalDigest) {
-      invalidPlanningPreparation(
-        workflowId,
-        "$phaseId.repair_evidence.original_digest",
-        "repair evidence does not describe the stored payload bytes",
+    val stored = readStoredPlanningRecord(payload, phaseId, workflowId)
+    if (stored.output.value.isBlank()) {
+      throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+        sourceLabel = "$workflowId:$phaseId",
+        reason = "produced_outputs.value must contain non-blank prose.",
       )
     }
-    val decoded = accepted.normalizedOutput.envelopeWireMap()
-    if (
-      decoded[SharedPayloadKeys.PHASE_ID] != phaseId ||
-      decoded[SharedPayloadKeys.STATUS].workflowStepStatus() != WorkflowStepStatus.COMPLETED
-    ) {
-      invalidPlanningPreparation(
-        workflowId,
-        "$phaseId.payload",
-        "imported phase output must match its phase and be completed",
-      )
-    }
-    requireValidPlanningProjection(
-      envelope = decoded,
-      phaseId = phaseId,
-      sourceLabel = workflowId,
-      planningProjectionValidator = planningProjectionValidator,
-      fieldPath = "$phaseId.payload",
-    )
-    return accepted
+    return stored
   }
 }
 

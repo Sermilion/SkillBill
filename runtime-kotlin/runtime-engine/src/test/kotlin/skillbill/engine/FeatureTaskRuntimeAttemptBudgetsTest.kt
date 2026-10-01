@@ -1,5 +1,6 @@
 package skillbill.engine
 
+import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepeatedUnresolvedBlockReason
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -12,7 +13,6 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
   @Test
   fun `default output-gate retries cap at one and process-failure stays at three`() {
     assertEquals(1, FeatureTaskRuntimeAttemptBudgets.MAX_OUTPUT_GATE_RETRY_ATTEMPTS)
-    assertEquals(1, FeatureTaskRuntimeAttemptBudgets.MAX_FORMAT_RETRY_ATTEMPTS)
     assertEquals(3, FeatureTaskRuntimeAttemptBudgets.MAX_PROCESS_FAILURE_ATTEMPTS)
   }
 
@@ -48,7 +48,6 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
     val phase = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE
     val policy = productionPolicy(phase)
     assertContains(requireNotNull(FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(phase, policy, 1)), "cap=1")
-    assertEquals(false, policy.relaunchOnInvalidOutput)
     assertEquals(true, policy.singleAgentSession)
   }
 
@@ -95,7 +94,7 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
 
     assertEquals(
       null,
-      FeatureTaskRuntimeAttemptBudgets.unresolvedFindingBlockReason(
+      featureTaskRuntimeRepeatedUnresolvedBlockReason(
         phase,
         unresolved = setOf("F-001"),
         priorUnresolved = emptySet(),
@@ -104,7 +103,7 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
     )
     assertEquals(
       null,
-      FeatureTaskRuntimeAttemptBudgets.unresolvedFindingBlockReason(
+      featureTaskRuntimeRepeatedUnresolvedBlockReason(
         phase,
         unresolved = setOf("F-002"),
         priorUnresolved = setOf("F-001"),
@@ -114,7 +113,7 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
 
     val repeated =
       requireNotNull(
-        FeatureTaskRuntimeAttemptBudgets.unresolvedFindingBlockReason(
+        featureTaskRuntimeRepeatedUnresolvedBlockReason(
           phase,
           unresolved = setOf("F-001", "F-003"),
           priorUnresolved = setOf("F-001"),
@@ -143,7 +142,7 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
     assertTrue(
       FeatureTaskRuntimeAttemptBudgets.outputGateRejectionExhaustsBudget(
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
-        RELAUNCHING_POLICY.copy(relaunchOnInvalidOutput = false, singleAgentSession = true),
+        RELAUNCHING_POLICY.copy(singleAgentSession = true),
         priorOutputGateFailures = 0,
       ),
       "a single-agent-session phase blocks on its first rejection, so that rejection spent the budget",
@@ -154,7 +153,6 @@ class FeatureTaskRuntimeAttemptBudgetsTest {
     val RELAUNCHING_POLICY =
       PhaseStepPolicy(
         mutating = false,
-        relaunchOnInvalidOutput = true,
         singleAgentSession = false,
         readOnlyIdle = false,
         fileMutating = true,

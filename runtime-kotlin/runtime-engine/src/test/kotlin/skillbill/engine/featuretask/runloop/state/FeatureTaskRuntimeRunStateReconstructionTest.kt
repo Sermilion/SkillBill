@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.runloop.state
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.application.testHarnessClock
 import skillbill.engine.IMPLEMENT_OUTPUT
 import skillbill.engine.NoopWorkflowSnapshotValidator
@@ -10,7 +9,6 @@ import skillbill.engine.RuntimeHarnessConfig
 import skillbill.engine.WORKFLOW_ID
 import skillbill.engine.auditGapsFoundOutput
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
-import skillbill.engine.featuretask.lifecycle.core.AlwaysValidValidator
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
@@ -34,6 +32,7 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -48,6 +47,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private val RESUME_RULES = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)::resumeRules
+private val CANONICAL_IMPLEMENT_PAYLOAD =
+  NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(validJsonOutput("implement"), "implement").canonicalJson
 
 class FeatureTaskRuntimeRunStateReconstructionTest {
   @Test
@@ -84,7 +85,6 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
           FeatureTaskRuntimeRunState(
             initialRecords = mapOf("validate" to validation, "write_history" to history),
             transitions = FeatureTaskRuntimeTransitionDeclaration(listOf("validate", "write_history")),
-            outputValidator = realFeatureTaskRuntimePhaseOutputValidator,
             resumeRulesFn = RESUME_RULES,
           )
         val valid = status == "completed"
@@ -101,7 +101,6 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
-        outputValidator = AlwaysValidValidator,
         resumeRulesFn = RESUME_RULES,
       )
     val output =
@@ -125,7 +124,6 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
-        outputValidator = AlwaysValidValidator,
         resumeRulesFn = RESUME_RULES,
       )
 
@@ -158,14 +156,12 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
       FeatureTaskRuntimeRunState(
         initialRecords = durableRecords,
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
-        outputValidator = AlwaysValidValidator,
         resumeRulesFn = RESUME_RULES,
       )
     val resumed =
       FeatureTaskRuntimeRunState(
         initialRecords = durableRecords,
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
-        outputValidator = AlwaysValidValidator,
         resumeRulesFn = RESUME_RULES,
       )
 
@@ -185,14 +181,13 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
         transitions = transitions,
-        outputValidator = AlwaysValidValidator,
         resumeRulesFn = RESUME_RULES,
       )
     val output =
       FeatureTaskRuntimePhaseOutput(
         phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
         iteration = 1,
-        payload = "{}",
+        payload = CANONICAL_IMPLEMENT_PAYLOAD,
       )
     live.recordEdgeIteration(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID, 2)
     live.recordCompleted(output)
@@ -226,7 +221,6 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
               edgeIteration = 2,
             ),
           ),
-        outputValidator = AlwaysValidValidator,
         resumeRulesFn = RESUME_RULES,
       )
 
@@ -257,7 +251,7 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
       FeatureTaskRuntimePhaseOutput(
         phaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
         iteration = 1,
-        payload = "{}",
+        payload = CANONICAL_IMPLEMENT_PAYLOAD,
       )
     assertTrue(
       recorder.recordCompletedPhase(
@@ -279,7 +273,6 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
       FeatureTaskRuntimeRunState(
         initialRecords = emptyMap(),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
-        outputValidator = AlwaysValidValidator,
         resumeRulesFn = RESUME_RULES,
       ).also {
         it.recordEdgeIteration(FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID, 2)
@@ -290,7 +283,6 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
         initialRecords = recorder.loadPhaseRecords(workflowId).orEmpty(),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
         durableInitialLedger = recorder.loadPhaseLedger(workflowId).orEmpty(),
-        outputValidator = AlwaysValidValidator,
         resumeRulesFn = RESUME_RULES,
       )
 
@@ -429,7 +421,6 @@ class FeatureTaskRuntimeRunStateReconstructionTest {
       FeatureTaskRuntimeRunState(
         initialRecords = harness.recorder.loadPhaseRecords(WORKFLOW_ID).orEmpty(),
         transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions,
-        outputValidator = AlwaysValidValidator,
         resumeRulesFn = RESUME_RULES,
       )
     assertNull(state.phase("audit").blockedReason)

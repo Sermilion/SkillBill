@@ -64,7 +64,7 @@ class FeatureTaskRuntimeVerifyFindingsBodyDeliveryTest {
     harness.seedPhase("plan", "completed", 1, INVOKED_AGENT, validJsonOutput("plan"))
     harness.seedPhase("implement", "completed", 1, INVOKED_AGENT, IMPLEMENT_OUTPUT)
     harness.seedPhase("simplify", "completed", 1, INVOKED_AGENT, SIMPLIFY_OUTPUT)
-    harness.seedPhase("audit", "completed", 1, INVOKED_AGENT, auditSatisfiedOutput())
+    harness.seedPhase("audit", "completed", 1, INVOKED_AGENT, settledAuditSatisfiedRecord())
     harness.seedReviewPhase("completed", 1, reviewFindingWithLocation(findingPath), 1)
     harnessPendingVerifyFindingIds = listOf(REVIEW_FIX_BLOCKER_FINDING_ID)
 
@@ -106,7 +106,7 @@ class FeatureTaskRuntimeVerifyFindingsBodyDeliveryTest {
     harness.seedPhase("plan", "completed", 1, INVOKED_AGENT, validJsonOutput("plan"))
     harness.seedPhase("implement", "completed", 1, INVOKED_AGENT, IMPLEMENT_OUTPUT)
     harness.seedPhase("simplify", "completed", 1, INVOKED_AGENT, SIMPLIFY_OUTPUT)
-    harness.seedPhase("audit", "completed", 1, INVOKED_AGENT, auditSatisfiedOutput())
+    harness.seedPhase("audit", "completed", 1, INVOKED_AGENT, settledAuditSatisfiedRecord())
     harness.seedReviewPhase("completed", 1, reviewFindingWithLocation(findingPath), 1)
     harnessPendingVerifyFindingIds = listOf(REVIEW_FIX_BLOCKER_FINDING_ID)
 
@@ -133,6 +133,7 @@ private fun reviewFindingWithLocation(locationPath: String): String =
     "status": "completed",
     "summary": "Review produced a validated output.",
     "produced_outputs": {
+      "value": "$REVIEW_FIX_BLOCKER_FINDING_ID [blocker] $locationPath:1 $REVIEW_BLOCKER_MESSAGE",
       "findings": [{
         "severity": "blocker",
         "finding_id": "$REVIEW_FIX_BLOCKER_FINDING_ID",

@@ -9,7 +9,6 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 internal val QUALITY_GATE_STEP_POLICY: PhaseStepPolicy =
   PhaseStepPolicy(
     mutating = false,
-    relaunchOnInvalidOutput = true,
     singleAgentSession = false,
     readOnlyIdle = false,
     fileMutating = true,

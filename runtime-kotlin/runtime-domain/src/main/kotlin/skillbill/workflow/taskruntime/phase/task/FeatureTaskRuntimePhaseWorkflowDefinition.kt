@@ -56,6 +56,8 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
 
   val definition: WorkflowDefinition = FeatureTaskRuntimePhaseWorkflowGraph.definition
 
+  val agentSettledPhaseIds: Set<String> = definition.stepIds.toSet() - PHASE_COMMIT_PUSH
+
   const val UPSTREAM_PHASE_RECEIPT_CONTRACT_ID: String = "feature_task_runtime.upstream_phase_receipt"
 
   const val UPSTREAM_PHASE_RECEIPT_CONTRACT_VERSION: String = "0.1"

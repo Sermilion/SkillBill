@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.runloop.state
 
-import skillbill.engine.featuretask.lifecycle.core.AlwaysValidValidator
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
@@ -68,7 +67,6 @@ class RunLoopObservationIsolationTest {
     FeatureTaskRuntimeRunState(
       initialRecords = emptyMap(),
       transitions = FeatureTaskRuntimeTransitionDeclaration(listOf("implement", "audit")),
-      outputValidator = AlwaysValidValidator,
       resumeRulesFn = { PhaseResumeRules.None },
     )
 }

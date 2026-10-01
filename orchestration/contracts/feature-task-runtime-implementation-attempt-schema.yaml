@@ -130,7 +130,7 @@ $defs:
         description: Runtime-minted ISO-8601 instant; never an agent-reported time.
       value:
         $ref: "#/$defs/stuffedProse"
-        description: The stuffed produced_outputs.value segment from this attempt.
+        description: The prose value segment from this attempt.
       prompt:
         $ref: "#/$defs/stuffedProse"
-        description: Optional produced_outputs.prompt when the producer emitted one.
+        description: Optional prompt when the producer emitted one.

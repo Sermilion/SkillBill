@@ -1,8 +1,7 @@
 package skillbill.engine
 
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_REPAIR_RECEIPT_CONTRACT_VERSION
-import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeRepairReceiptValid
-import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeParseRepairReceipt
+import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptFromProse
+import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -13,7 +12,6 @@ import kotlin.test.assertContains
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 private const val HEADING = "## Project authoring discipline (discover before write)"
@@ -33,21 +31,13 @@ class FeatureTaskRuntimeProjectAuthoringDisciplinePromptTest {
   }
 
   @Test
-  fun `continuation and corrective composition keep the discipline`() {
+  fun `continuation composition keeps the discipline`() {
     val continued =
       composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor("implement")) {
         copy(implementationContinuation = promptComposerImplementationContinuation())
       }
-    val corrected =
-      composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor("audit_implement_fix")) {
-        copy(
-          priorSchemaFailure = "verdict: must be a top-level string",
-          correctiveRepairContext = promptComposerCorrectiveContext("{}"),
-        )
-      }
 
     assertSubstantiveDiscipline(continued, "implement continuation")
-    assertSubstantiveDiscipline(corrected, "audit_implement_fix correction")
   }
 
   @Test
@@ -111,27 +101,17 @@ class FeatureTaskRuntimeProjectAuthoringDisciplinePromptTest {
   }
 
   @Test
-  fun `implement_fix receipt parsing ignores summary deferral notes and synthesizes nothing`() {
-    val produced =
-      mapOf(
-        "repair_receipt" to
-          mapOf(
-            "contract_version" to FEATURE_TASK_RUNTIME_REPAIR_RECEIPT_CONTRACT_VERSION,
-            "entries" to
-              listOf(
-                mapOf(
-                  "finding_id" to "F-001",
-                  "outcome" to "addressed",
-                  "text" to "deferred: fmt-tool not installed; owner implement_fix",
-                ),
-              ),
-          ),
-        "summary" to "deferred: lint command not run, config ambiguous; F-009 remains",
+  fun `implement_fix report parsing ignores deferral notes and synthesizes nothing`() {
+    val carried = listOf(GoalSubtaskReviewCompactFinding("major", "Policy", "stale comment", "F-001"))
+
+    val receipt =
+      featureTaskRuntimeRepairReceiptFromProse(
+        "F-001 is fixed.\ndeferred: lint command not run, config ambiguous; F-009 remains",
+        carried,
+        "a".repeat(40),
+        1,
       )
 
-    val parsed = featureTaskRuntimeParseRepairReceipt(produced, "a".repeat(40), 1)
-
-    val receipt = assertIs<FeatureTaskRuntimeRepairReceiptValid>(parsed).receipt
     assertEquals(listOf("F-001"), receipt.entries.map { it.findingId })
   }
 

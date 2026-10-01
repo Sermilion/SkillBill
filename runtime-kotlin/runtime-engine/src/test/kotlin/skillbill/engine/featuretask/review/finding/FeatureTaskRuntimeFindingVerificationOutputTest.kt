@@ -1,9 +1,6 @@
 package skillbill.engine.featuretask.review.finding
 
 import skillbill.engine.disposition
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCensusCoverageTestSupport.assertVerifyCoverageContains
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCensusCoverageTestSupport.parseVerifyDispositions
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCensusCoverageTestSupport.verifyDisposition
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeFindingVerificationRecordError
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -12,7 +9,6 @@ import skillbill.workflow.taskruntime.artifact.decodeFindingVerificationDisposit
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDispositionVerdict
-import skillbill.workflow.taskruntime.model.validation.validateDispositionCoverage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -109,8 +105,8 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
   }
 
   @Test
-  fun `verify_findings without wire verdict loud-fails`() {
-    assertFailsWith<IllegalArgumentException> {
+  fun `verify_findings without wire verdict derives the verdict from its dispositions`() {
+    val verdict =
       FeatureTaskRuntimeOutputVerification.verdictFor(
         mapOf(
           "produced_outputs" to
@@ -126,36 +122,18 @@ class FeatureTaskRuntimeFindingVerificationOutputTest {
         ).toWorkflowArtifactMap(),
         FeatureTaskRuntimeOutputVerification.findingVerificationVerdictRule,
       )
-    }
+
+    assertEquals(FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED, verdict)
   }
 
   @Test
-  fun `validateDispositionCoverage rejects duplicate finding ids`() {
-    val dispositions =
-      parseVerifyDispositions(
-        listOf(
-          verifyDisposition("F-001", "verified"),
-          verifyDisposition("F-001", "rejected"),
-        ),
+  fun `verify_findings without wire verdict or dispositions loud-fails`() {
+    assertFailsWith<IllegalArgumentException> {
+      FeatureTaskRuntimeOutputVerification.verdictFor(
+        mapOf("produced_outputs" to mapOf("value" to "Checked the findings.")).toWorkflowArtifactMap(),
+        FeatureTaskRuntimeOutputVerification.findingVerificationVerdictRule,
       )
-    assertVerifyCoverageContains(dispositions, setOf("F-001", "F-002"), "duplicate finding_id: F-001.")
-  }
-
-  @Test
-  fun `validateDispositionCoverage accepts empty review and empty dispositions`() {
-    assertNull(validateDispositionCoverage(emptyList(), emptySet()))
-  }
-
-  @Test
-  fun `validateDispositionCoverage rejects foreign disposition when review findings are empty`() {
-    val dispositions = parseVerifyDispositions(listOf(verifyDisposition("F-001")))
-    assertVerifyCoverageContains(dispositions, emptySet(), "absent from the preceding review pass: F-001")
-  }
-
-  @Test
-  fun `finding verification disposition coverage rejects omitted review findings`() {
-    val dispositions = parseVerifyDispositions(listOf(verifyDisposition("F-001")))
-    assertVerifyCoverageContains(dispositions, setOf("F-001", "F-002"), "omitted finding_id: F-002")
+    }
   }
 
   @Test

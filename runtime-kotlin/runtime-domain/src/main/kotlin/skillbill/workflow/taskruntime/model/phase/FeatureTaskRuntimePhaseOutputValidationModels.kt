@@ -1,18 +1,12 @@
 package skillbill.workflow.taskruntime.model.phase
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_CONTRACT_VERSION
-import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
-import skillbill.error.shellcontent.FeatureTaskRuntimePhaseOutputStructuralRepair
-import skillbill.error.shellcontent.FeatureTaskRuntimePhaseOutputStructuralRepairSource
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.review.context.model.execution.SHA256_HEX
 import skillbill.workflow.model.persistence.artifact.DurableArtifactMapReader
 import skillbill.workflow.model.persistence.artifact.toStringKeyedArtifactMap
-import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
-internal const val FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION: String =
-  FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_CONTRACT_VERSION
+internal const val FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION: String = "0.1"
 
 enum class FeatureTaskRuntimePhaseOutputFormat(val wireValue: String) {
   JSON("json"),
@@ -181,81 +175,3 @@ private fun requireRepairEvidenceLocation(raw: Map<String, Any?>): Map<String, A
   }
   return converted
 }
-
-sealed interface FeatureTaskRuntimePhaseOutputValidationResult {
-  val contractVersion: String
-    get() = FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION
-  val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput?
-
-  data class AcceptedUnchanged(
-    override val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
-  ) : FeatureTaskRuntimePhaseOutputValidationResult
-
-  data class AcceptedAfterRepair(
-    override val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
-    val evidence: FeatureTaskRuntimePhaseOutputRepairEvidence,
-  ) : FeatureTaskRuntimePhaseOutputValidationResult
-
-  data class Rejected(
-    val code: FeatureTaskRuntimePhaseOutputFailureCode,
-    val reason: String,
-    val diagnosticReason: String = reason,
-    val payloadFreeReason: String? = reason,
-    val sourceLocation: FeatureTaskRuntimePhaseOutputSourceLocation? = null,
-    val structuralRepairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence? = null,
-  ) : FeatureTaskRuntimePhaseOutputValidationResult {
-    override val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput? = null
-  }
-}
-
-data class AcceptedFeatureTaskRuntimePhaseOutput(
-  val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
-  val repairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
-)
-
-fun FeatureTaskRuntimePhaseOutputValidationResult.requireAcceptedOutput(
-  sourceLabel: String,
-): AcceptedFeatureTaskRuntimePhaseOutput =
-  when (this) {
-    is FeatureTaskRuntimePhaseOutputValidationResult.AcceptedUnchanged ->
-      AcceptedFeatureTaskRuntimePhaseOutput(normalizedOutput, null)
-    is FeatureTaskRuntimePhaseOutputValidationResult.AcceptedAfterRepair ->
-      AcceptedFeatureTaskRuntimePhaseOutput(normalizedOutput, evidence)
-    is FeatureTaskRuntimePhaseOutputValidationResult.Rejected -> {
-      requireAccepted(sourceLabel)
-      error("Rejected phase-output validation unexpectedly returned an accepted payload.")
-    }
-  }
-
-fun FeatureTaskRuntimePhaseOutputValidationResult.requireAccepted(
-  sourceLabel: String,
-): NormalizedFeatureTaskRuntimePhaseOutput =
-  when (this) {
-    is FeatureTaskRuntimePhaseOutputValidationResult.AcceptedUnchanged -> normalizedOutput
-    is FeatureTaskRuntimePhaseOutputValidationResult.AcceptedAfterRepair -> normalizedOutput
-    is FeatureTaskRuntimePhaseOutputValidationResult.Rejected -> {
-      val evidence = structuralRepairEvidence
-      throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
-        sourceLabel = sourceLabel,
-        reason = diagnosticReason,
-        payloadFreeReason = payloadFreeReason,
-        failureCode = code.wireValue,
-        structuralRepair =
-          evidence?.let {
-            FeatureTaskRuntimePhaseOutputStructuralRepair(
-              originalDigest = it.originalDigest,
-              repairedDigest = it.repairedDigest,
-              format = it.format.wireValue,
-              operation = it.operation.wireValue,
-              source =
-                FeatureTaskRuntimePhaseOutputStructuralRepairSource(
-                  label = it.sourceLocation.sourceLabel,
-                  offset = it.sourceLocation.offset,
-                  line = it.sourceLocation.line,
-                  column = it.sourceLocation.column,
-                ),
-            )
-          },
-      )
-    }
-  }

@@ -12,22 +12,18 @@ class AgentPhaseModelsTest {
         input = "review prose",
         requestedAction = "verify claims",
       )
-    val output = AgentPhaseOutput(output = "verified prose")
     val phaseOutput = PhaseOutput(value = "preplan prose", prompt = "optional directive")
 
     assertEquals("review prose", input.input)
     assertEquals("verify claims", input.requestedAction)
-    assertEquals("verified prose", output.output)
     assertEquals("preplan prose", phaseOutput.value)
     assertEquals("optional directive", phaseOutput.prompt)
     assertEquals(String::class.java, AgentPhaseInput::class.java.getDeclaredField("input").type)
     assertEquals(String::class.java, AgentPhaseInput::class.java.getDeclaredField("requestedAction").type)
-    assertEquals(String::class.java, AgentPhaseOutput::class.java.getDeclaredField("output").type)
     assertEquals(String::class.java, PhaseOutput::class.java.getDeclaredField("value").type)
     assertFalse(
       (
         AgentPhaseInput::class.java.declaredFields +
-          AgentPhaseOutput::class.java.declaredFields +
           PhaseOutput::class.java.declaredFields
       )
         .any { it.name in setOf("repoRoot", "agentId", "evidenceBroker", "budget", "budgets") },

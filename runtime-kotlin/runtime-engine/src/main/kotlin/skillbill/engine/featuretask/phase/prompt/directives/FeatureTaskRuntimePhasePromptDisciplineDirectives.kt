@@ -12,8 +12,8 @@ fun mutatingPhaseIdempotencyDirective(mutating: Boolean): String {
     that is already applied as a no-op and NEVER blindly re-apply it (no duplicated edits, appended
     blocks, or re-created files). This phase may be re-entered or resumed after a crash, so it must
     be safe to run again: reconciling to target, not re-applying from scratch. Before finishing,
-    verify every changed file is at its intended state and report that reconciled end-state in
-    produced_outputs (see the reconciliation report in the required output below).
+    verify every changed file is at its intended state and describe that reconciled end-state in
+    your final prose.
     """.trimIndent()
 }
 

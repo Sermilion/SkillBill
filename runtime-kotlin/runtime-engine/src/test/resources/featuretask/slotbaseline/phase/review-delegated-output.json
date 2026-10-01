@@ -147,21 +147,9 @@
         "contract_version": "0.7",
         "phase_id": "implement_fix",
         "produced_outputs": {
-            "reconciled_state": {
-                "evidence": "Fixture tree at target state.",
-                "reconciled": true
-            },
-            "repair_receipt": {
-                "contract_version": "0.3",
-                "entries": [
-                    {
-                        "finding_id": "F-001",
-                        "outcome": "addressed"
-                    }
-                ]
-            }
+            "value": "{\"repair_receipt\":{\"contract_version\":\"0.3\",\"entries\":[{\"finding_id\":\"F-001\",\"outcome\":\"addressed\"}]},\"reconciled_state\":{\"reconciled\":true,\"evidence\":\"Fixture tree at target state.\"}}"
         },
         "status": "completed",
-        "summary": "Phase produced a validated output."
+        "summary": "{\"repair_receipt\":{\"contract_version\":\"0.3\",\"entries\":[{\"finding_id\":\"F-001\",\"outcome\":\"addressed\"}]},\"reconciled_state\":{\"reconciled\":true,\"evidence\":\"Fixture tree at target state.\"}}"
     }
 }

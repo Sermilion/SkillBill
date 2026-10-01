@@ -41,7 +41,6 @@ internal fun payloadFreeSemanticGateConstraint(
   >,
 ): String? =
   when (rule) {
-    "mutating-reconciliation" -> detail.takeUnless { it.isBlank() }
     "repair-receipt" -> detail.takeUnless { it.isBlank() }
     "validation-result" -> {
       val produced = JsonCodec.anyToStringAnyMap(rejectedOutput[SharedPayloadKeys.PRODUCED_OUTPUTS])

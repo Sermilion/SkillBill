@@ -1,7 +1,6 @@
 
 package skillbill.engine
 
-import skillbill.application.realPlanningProjectionValidator
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
@@ -9,11 +8,13 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionEr
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffAssemblyRequest
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReviewEvidenceReference
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
@@ -174,7 +175,7 @@ class FeatureTaskRuntimePlanningProjectionEdgeTest {
           ),
         )
       }
-    assertContains(error.message.orEmpty(), "produced_outputs.value is required")
+    assertContains(error.message.orEmpty(), "non-blank prose")
   }
 
   @Test
@@ -471,14 +472,23 @@ class FeatureTaskRuntimePlanningProjectionEdgeTest {
           repositoryCheckpoint = fixture.checkpoint,
         ),
       ),
-      planningProjectionValidator = realPlanningProjectionValidator,
       scope = FeatureTaskRuntimeBriefingScope(sharedReviewEvidence = fixture.sharedReviewEvidence),
     )
 
   private fun phaseOutput(
     phaseId: String,
     payload: String,
-  ) = FeatureTaskRuntimePhaseOutput(phaseId = phaseId, iteration = 1, payload = payload)
+  ) = FeatureTaskRuntimePhaseOutput(
+    phaseId = phaseId,
+    iteration = 1,
+    payload = payload,
+    normalizedOutput =
+      NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(
+        FeatureTaskRuntimeWorkflowArtifactMap.from(
+          JsonCodec.jsonElementToValue(requireNotNull(JsonCodec.parseObjectOrNull(payload))),
+        ),
+      ),
+  )
 
   private fun runInvariants() =
     FeatureTaskRuntimeRunInvariants(

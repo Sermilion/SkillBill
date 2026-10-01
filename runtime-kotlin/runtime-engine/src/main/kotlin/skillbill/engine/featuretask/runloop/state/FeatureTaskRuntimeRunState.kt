@@ -8,20 +8,20 @@ import skillbill.engine.featuretask.runloop.observability.paused
 import skillbill.engine.featuretask.runner.BRANCH_SETUP_AGENT_ID
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
+import skillbill.engine.featuretask.validation.RuntimeGateRecordIntegrity
 import skillbill.engine.goalrunner.status.completed
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
-import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewFinding
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
@@ -29,7 +29,6 @@ internal class FeatureTaskRuntimeRunState(
   initialRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
   transitions: FeatureTaskRuntimeTransitionDeclaration,
   private val durableInitialLedger: List<FeatureTaskRuntimePhaseLedgerEntry> = emptyList(),
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   initialReviewGeneration: Int = 0,
   private val stepVerdictRule: (String) -> FeatureTaskRuntimeStepVerdictRule? = { null },
   private val resumeRulesFn: (String) -> PhaseResumeRules,
@@ -54,7 +53,6 @@ internal class FeatureTaskRuntimeRunState(
     source.durableInitialRecords,
     source.transitions,
     source.durableInitialLedger,
-    source.outputValidator,
     source.reviewGeneration,
     source.stepVerdictRule,
     source.resumeRulesFn,
@@ -209,9 +207,11 @@ internal class FeatureTaskRuntimeRunState(
   override fun validatedRecordToOutput(record: FeatureTaskRuntimePhaseRecord): FeatureTaskRuntimePhaseOutput? {
     if (resumeRules(record.phaseId).withholdsDurableOutput(record)) return null
     return record.outputArtifact?.let { artifact ->
-      val accepted =
+      val normalized =
         try {
-          outputValidator.validatePhaseOutput(artifact, record.phaseId).requireAcceptedOutput(record.phaseId)
+          NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(artifact, record.phaseId).also {
+            RuntimeGateRecordIntegrity.requireIntact(it, record.phaseId)
+          }
         } catch (error: InvalidFeatureTaskRuntimePhaseOutputSchemaError) {
           if (record.status.workflowStepStatus() == WorkflowStepStatus.COMPLETED) throw error
           return@let null
@@ -219,9 +219,9 @@ internal class FeatureTaskRuntimeRunState(
       FeatureTaskRuntimePhaseOutput(
         phaseId = record.phaseId,
         iteration = record.attemptCount,
-        payload = accepted.normalizedOutput.canonicalJson,
-        normalizedOutput = accepted.normalizedOutput,
-        repairEvidence = record.repairEvidence ?: accepted.repairEvidence,
+        payload = normalized.canonicalJson,
+        normalizedOutput = normalized,
+        repairEvidence = record.repairEvidence,
       )
     }
   }
@@ -510,10 +510,8 @@ internal class FeatureTaskRuntimeRunState(
       parsedOutputsByPayloadStorage.getOrPut(payload) {
         val envelope =
           output.normalizedOutput?.envelopePayload()
-            ?: outputValidator
-              .validatePhaseOutput(payload, sourceLabel = output.phaseId)
-              .requireAcceptedOutput(output.phaseId)
-              .normalizedOutput
+            ?: NormalizedFeatureTaskRuntimePhaseOutput
+              .fromEnvelopeText(payload, output.phaseId)
               .envelopePayload()
         requireNotNull(detachedJsonValue(envelope)).toWorkflowArtifactMap()
       }

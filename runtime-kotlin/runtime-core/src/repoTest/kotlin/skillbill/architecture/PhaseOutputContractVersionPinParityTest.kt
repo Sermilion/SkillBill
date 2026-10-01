@@ -38,7 +38,6 @@ class PhaseOutputContractVersionPinParityTest {
 
   private fun discoveredPins(): Map<String, String> =
     buildMap {
-      firstGroup(read(PHASE_OUTPUT_SCHEMA), PHASE_OUTPUT_SCHEMA_CONST)?.let { put(PIN_PHASE_OUTPUT_SCHEMA, it) }
       firstGroup(read(GOAL_PLANNING_SCHEMA), GOAL_PLANNING_CONST)?.let { put(PIN_GOAL_PLANNING_SCHEMA, it) }
       val sqlChecks = SQL_CHECK.findAll(read(SCHEMA_STATEMENTS)).map { newestVersion(it.groupValues[1]) }.toList()
       if (sqlChecks.size == EXPECTED_SQL_CHECK_COUNT) {
@@ -68,7 +67,6 @@ class PhaseOutputContractVersionPinParityTest {
     version.split('.').fold(0L) { acc, part -> acc * VERSION_PART_RADIX + part.toLong() }
 
   private companion object {
-    const val PHASE_OUTPUT_SCHEMA = "orchestration/contracts/feature-task-runtime-phase-output-schema.yaml"
     const val GOAL_PLANNING_SCHEMA = "orchestration/contracts/goal-planning-preparation-schema.yaml"
     const val SCHEMA_STATEMENTS =
       "runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/core/schema/" +
@@ -77,7 +75,6 @@ class PhaseOutputContractVersionPinParityTest {
       "runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/" +
         "DatabaseMigrationEntries.kt"
 
-    const val PIN_PHASE_OUTPUT_SCHEMA = "phase-output schema properties.contract_version.const"
     const val PIN_GOAL_PLANNING_SCHEMA = "goal-planning preparation phase_output_contract_version const"
     const val PIN_SQL_CHECK_PREFIX = "goal-planning SQL phase_output_contract_version check #"
     const val PIN_LATEST_MIGRATION = "latest allow-goal-planning-phase-output migration"
@@ -86,15 +83,12 @@ class PhaseOutputContractVersionPinParityTest {
 
     val EXPECTED_PIN_NAMES: Set<String> =
       setOf(
-        PIN_PHASE_OUTPUT_SCHEMA,
         PIN_GOAL_PLANNING_SCHEMA,
         "${PIN_SQL_CHECK_PREFIX}1",
         "${PIN_SQL_CHECK_PREFIX}2",
         PIN_LATEST_MIGRATION,
       )
 
-    val PHASE_OUTPUT_SCHEMA_CONST =
-      Regex("(?m)^properties:\\s*\\n  contract_version:\\s*\\n(?:    .*\\n)*?    const: \"([^\"]+)\"")
     val GOAL_PLANNING_CONST = Regex("phase_output_contract_version: \\{ type: string, const: \"([^\"]+)\" }")
     val SQL_CHECK = Regex("CHECK \\(phase_output_contract_version IN \\(([^)]*)\\)\\)")
     val QUOTED_VERSION = Regex("'([0-9]+\\.[0-9]+)'")

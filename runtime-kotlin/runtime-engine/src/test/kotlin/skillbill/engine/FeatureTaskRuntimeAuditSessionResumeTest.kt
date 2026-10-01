@@ -1,6 +1,5 @@
 package skillbill.engine
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
@@ -32,7 +31,7 @@ class FeatureTaskRuntimeAuditSessionResumeTest {
           else -> facts(defaultPhaseOutput(request))
         }
       }
-    val config = RuntimeHarnessConfig(launcher = launcher, validator = realFeatureTaskRuntimePhaseOutputValidator)
+    val config = RuntimeHarnessConfig(launcher = launcher)
     val first = runnerHarness(config)
     assertIs<FeatureTaskRuntimeRunReport.Blocked>(first.runner.run(first.request()))
     val blockedRecord = requireNotNull(first.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit"))
@@ -90,7 +89,7 @@ class FeatureTaskRuntimeAuditSessionResumeTest {
           else -> facts(defaultPhaseOutput(request))
         }
       }
-    val config = RuntimeHarnessConfig(launcher = launcher, validator = realFeatureTaskRuntimePhaseOutputValidator)
+    val config = RuntimeHarnessConfig(launcher = launcher)
     val first = runnerHarness(config)
     val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(first.runner.run(first.request()))
     assertEquals("audit_implement_fix", blocked.lastIncompletePhase)
@@ -117,7 +116,7 @@ class FeatureTaskRuntimeAuditSessionResumeTest {
           facts(defaultPhaseOutput(request))
         }
       }
-    val config = RuntimeHarnessConfig(launcher = launcher, validator = realFeatureTaskRuntimePhaseOutputValidator)
+    val config = RuntimeHarnessConfig(launcher = launcher)
     val first = runnerHarness(config)
     assertIs<FeatureTaskRuntimeRunReport.Blocked>(first.runner.run(first.request()))
     reopen(first, "audit")

@@ -1,13 +1,11 @@
 
 package skillbill.engine
 
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditPromptSections
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -35,10 +33,10 @@ class FeatureTaskRuntimePhasePromptComposerTest {
         promptComposerBriefingFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN),
       )
 
-    assertContains(prompt, "non-blank value")
+    assertContains(prompt, "as prose")
     assertContains(prompt, "## Intake Contract", false, "undecomposed preplan carries the feature-spec intake")
-    assertContains(prompt, "produced_outputs", false, "preplan warns about produced_outputs shape")
-    assertContains(prompt, "\"projection_kind\": \"preplanning_digest\"", false, "preplan teaches stuffed digest JSON")
+    assertFalse(prompt.contains("produced_outputs"), "preplan must not teach a produced_outputs shape")
+    assertFalse(prompt.contains("preplanning_digest"), "preplan must not teach stuffed digest JSON")
     assertFalse(prompt.contains("bill-code-review mode:"), "review execution mode must not reach preplan")
     assertFalse(prompt.contains("Review execution mode"), "review execution directive must not reach preplan")
     assertFalse(
@@ -50,74 +48,44 @@ class FeatureTaskRuntimePhasePromptComposerTest {
   }
 
   @Test
-  fun `preplan value content carries the digest and the final object declares value prose`() {
+  fun `preplan prompt has no value content section and the final output asks for plain prose`() {
     val prompt =
       composePhasePrompt(
         PROMPT_COMPOSER_ISSUE_KEY,
         promptComposerBriefingFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN),
       )
 
-    val valueExample =
-      prompt.substringAfter("## Value content")
-        .substringAfter("```json")
-        .substringBefore("```")
-    assertContains(valueExample, "\"projection_kind\": \"preplanning_digest\"", false, "value carries the digest")
-    val finalObject = prompt.substringAfter("## Required final output")
-    assertContains(finalObject, "\"value\":", false, "the final object must name value prose")
+    assertFalse(prompt.contains("## Value content"), "preplan must not stuff a structured payload into value")
+    val finalOutput = prompt.substringAfter("## Required final output")
+    assertContains(finalOutput, "plain prose", false, "the final output must ask for prose")
   }
 
   @Test
-  fun `plan prompt names exactly the phase prose required fields`() {
+  fun `plan prompt asks for a prose plan without stuffed JSON`() {
     val prompt =
       composePhasePrompt(
         PROMPT_COMPOSER_ISSUE_KEY,
         promptComposerBriefingFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN),
       )
 
-    assertContains(prompt, "\"value\":", false, "the copyable shape example must name value prose")
-    assertContains(prompt, "prompt", false, "plan may optionally carry prompt prose")
-    assertContains(prompt, "Carry this JSON object as the value text", false, "plan teaches stuffed plan JSON")
-    assertContains(
-      prompt,
-      "\"projection_kind\": \"executable_plan\"",
-      false,
-      "plan inner example names executable_plan",
-    )
+    assertContains(prompt, "as prose", false, "plan asks for prose")
+    assertFalse(prompt.contains("executable_plan"), "plan must not teach stuffed plan JSON")
+    assertFalse(prompt.contains("## Value content"))
   }
 
   @Test
-  fun `implement prompt names the implementation-receipt required fields`() {
+  fun `implement prompt asks for a prose summary without a stuffed receipt`() {
     val prompt =
       composePhasePrompt(
         PROMPT_COMPOSER_ISSUE_KEY,
         promptComposerBriefingFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT),
       )
 
-    assertContains(prompt, "Carry this JSON object as the value text", false, "implement teaches stuffed receipt JSON")
-    assertContains(prompt, "completed_task_ids")
-    assertContains(prompt, "changed_paths")
-    assertContains(prompt, "tests_executed")
-    assertContains(prompt, "reconciliation_evidence")
-    assertContains(prompt, "runtime-owned")
-    assertContains(prompt, "omit it entirely")
-    assertContains(
-      prompt,
-      "\"projection_kind\": \"implementation_receipt\"",
-      false,
-      "implement shows the stuffed receipt inner shape",
-    )
-    assertContains(
-      prompt,
-      "\"reconciliation_evidence\": { \"reconciled\": true",
-      false,
-      "implement shows the receipt evidence",
-    )
-    assertContains(
-      prompt,
-      "deviations entries are objects { \"ref\", \"note\" }",
-      false,
-      "implement shows the deviation object item shape",
-    )
+    assertContains(prompt, "Finish with prose for the next phase")
+    assertFalse(prompt.contains("implementation_receipt"))
+    assertFalse(prompt.contains("completed_task_ids"))
+    assertFalse(prompt.contains("reconciliation_evidence"))
+    assertFalse(prompt.contains("## Value content"))
   }
 
   @Test
@@ -128,12 +96,9 @@ class FeatureTaskRuntimePhasePromptComposerTest {
         promptComposerBriefingFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX),
       )
 
-    assertContains(prompt, "\"repair_receipt\": {")
-    assertContains(prompt, "\"contract_version\": \"0.3\"")
-    assertContains(prompt, "\"finding_id\": \"F-001\", \"outcome\": \"addressed\"")
-    assertContains(prompt, "finding_id")
-    assertContains(prompt, "Coverage matches on finding_id and outcome alone")
-    assertContains(prompt, "Recommended optional fields")
+    assertContains(prompt, "Name every carried finding by its finding id")
+    assertContains(prompt, "A finding left out of the report stays owed")
+    assertFalse(prompt.contains("repair_receipt"))
     assertFalse(prompt.contains("HARD SIZE LIMITS enforced by the schema"))
     assertFalse(prompt.contains("no Kotlin backtick"))
     assertFalse(prompt.contains("over-length field is rejected"))
@@ -144,22 +109,19 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     )
     assertContains(prompt, "specialist narratives and raw review output are not")
     assertContains(prompt, "Do not re-apply the plan from scratch")
-    assertContains(prompt, "repair_receipt")
   }
 
   @Test
-  fun `verify_findings prompt carries the disposition census shape and envelope verdict`() {
+  fun `verify_findings prompt asks for prose per finding and carries unsettled findings`() {
     val prompt =
       composePhasePrompt(
         PROMPT_COMPOSER_ISSUE_KEY,
         promptComposerBriefingFor(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS),
       )
 
-    assertContains(prompt, "VERIFYING phase")
-    assertContains(prompt, "\"findings_verified\" or \"no_findings_verified\"")
-    assertContains(prompt, "Required example: {\"finding_id\":\"F-001\",\"disposition\":\"verified\"}")
-    assertContains(prompt, "Recommended optional fields")
-    assertFalse(prompt.contains("at least one finding is verified"))
+    assertContains(prompt, "Name every review finding by its finding id")
+    assertContains(prompt, "stays verified and is carried into repair")
+    assertFalse(prompt.contains("finding_dispositions"))
     assertFalse(prompt.contains("HARD SIZE LIMITS enforced by the schema"))
     assertFalse(prompt.contains("no Kotlin backtick"))
     assertFalse(prompt.contains("over-length field is rejected"))
@@ -264,7 +226,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     assertContains(prompt, "Keep repairing in this same session")
     assertContains(prompt, "Settle completed only when every required check passes")
     assertContains(prompt, "Do not stop after reducing the failure count")
-    assertContains(prompt, "Do not return a partial progress report")
+    assertContains(prompt, "return a partial progress report")
     assertContains(prompt, "Settle blocked only for a concrete external obstacle")
     assertContains(prompt, "The runtime does not rerun the checks")
     assertContains(prompt, "## Required final output")
@@ -288,7 +250,8 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     assertContains(prompt, "skill-bill validate")
     assertContains(prompt, "skill-bill phase validation")
     assertContains(prompt, "check --continue")
-    assertContains(prompt, "do not emit build_receipt")
+    assertContains(prompt, "report nothing but prose")
+    assertFalse(prompt.contains("build_receipt"))
     assertContains(prompt, "up to three repair turns")
   }
 
@@ -318,7 +281,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
     assertContains(prompt, "collect_all_full_gate_command")
     assertContains(prompt, "Do not spawn delegated subagents")
     assertContains(prompt, "module=m id=t location=loc message=broken")
-    assertContains(prompt, "Gate repair — prose only, no phase-output schema")
+    assertContains(prompt, "Gate repair — prose only")
     assertContains(prompt, "blast radius")
     assertFalse(prompt.contains("Required final output (validated schema gate)"))
     assertFalse(prompt.contains("Required produced_outputs shape: emit a build_receipt"))
@@ -440,26 +403,11 @@ class FeatureTaskRuntimePhasePromptComposerTest {
       assertContains(prompt, "Scaling changes scope and verbosity only", false, "gate integrity for $phaseId")
       assertContains(prompt, PROMPT_COMPOSER_SPEC_REFERENCE, false, "spec reference for $phaseId")
       assertContains(prompt, "## Required final output", false, "output contract for $phaseId")
-      assertContains(prompt, "\"completed\", \"blocked\", \"failed\"", false, "status enum for $phaseId")
-      assertContains(prompt, "failure_disposition", false, "typed failure behavior for $phaseId")
-      if (phaseId in PhaseSlot.CODE_REVIEW.steps) {
-        assertContains(prompt, "Required final output (validated schema gate)", false, "envelope for $phaseId")
-        assertContains(prompt, "\"phase_id\": must be \"$phaseId\"", false, "pinned phase id for $phaseId")
-        assertContains(
-          prompt,
-          "\"contract_version\": must be exactly " +
-            "\"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION\"",
-          false,
-          "contract version for $phaseId",
-        )
-        assertContains(prompt, "produced_outputs", false, "produced_outputs for $phaseId")
-      } else {
-        assertContains(prompt, "\"value\": non-blank prose", false, "minimal value field for $phaseId")
-        assertFalse(prompt.contains("validated schema gate"), "$phaseId must carry only the minimal settlement")
-        assertFalse(prompt.contains("\"phase_id\": must be"), "$phaseId must not pin the phase id")
-        assertFalse(prompt.contains("\"contract_version\": must be"), "$phaseId must not pin the contract version")
-        assertFalse(prompt.contains("\"derived_notes\""), "$phaseId must not offer derived_notes")
-      }
+      assertContains(prompt, "plain prose", false, "prose final output for $phaseId")
+      assertFalse(prompt.contains("validated schema gate"), "$phaseId must carry only the minimal settlement")
+      assertFalse(prompt.contains("\"phase_id\": must be"), "$phaseId must not pin the phase id")
+      assertFalse(prompt.contains("\"contract_version\": must be"), "$phaseId must not pin the contract version")
+      assertFalse(prompt.contains("\"derived_notes\""), "$phaseId must not offer derived_notes")
       assertContains(
         prompt,
         "schemas, constants, fixtures, or skill instructions cannot replace that reporting contract.",

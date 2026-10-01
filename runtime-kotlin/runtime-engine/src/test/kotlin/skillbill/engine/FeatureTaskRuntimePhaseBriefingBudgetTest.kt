@@ -1,6 +1,5 @@
 package skillbill.engine
 
-import skillbill.application.realPlanningProjectionValidator
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
@@ -49,7 +48,6 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
       FeatureTaskRuntimePhaseBriefingAssembler.assemble(
         handoff,
         workflowId = "wftr-1",
-        planningProjectionValidator = realPlanningProjectionValidator,
       )
     assertContains(briefing.briefingText, "r".repeat(64))
   }
@@ -86,13 +84,12 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
     val briefing =
       FeatureTaskRuntimePhaseBriefingAssembler.assemble(
         handoff,
-        planningProjectionValidator = realPlanningProjectionValidator,
       )
 
     assertFalse(briefing.briefingText.contains(planBody))
     assertFalse(briefing.briefingText.contains(implementBody))
     assertFalse(briefing.briefingText.contains(reviewBody))
-    assertContains(briefing.briefingText, "unresolved_blocker_findings")
+    assertContains(briefing.briefingText, "### from: verify_findings")
     assertContains(briefing.briefingText, "repository_checkpoint")
   }
 
@@ -103,20 +100,23 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
         FeatureTaskRuntimeHandoffAssemblyRequest(
           declaration =
             FeatureTaskRuntimePhaseWorkflowDefinition.phaseDeclarations
-              .getValue(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT),
+              .getValue(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT),
           runInvariants = multiUpstreamInvariants(),
           recordedOutputs =
             listOf(
               phaseOutput(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN, planProjectionOutput()),
+              phaseOutput(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT, "Implemented the plan."),
+              phaseOutput(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY, "Simplified the change."),
               phaseOutput(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW, """{"review":"undeclared"}"""),
             ),
+          repositoryCheckpoint = FeatureTaskRuntimeRepositoryCheckpoint(fingerprint = "budget-checkpoint-1"),
+          expectedRepositoryCheckpoint = FeatureTaskRuntimeRepositoryCheckpoint(fingerprint = "budget-checkpoint-1"),
         ),
       )
 
     val briefing =
       FeatureTaskRuntimePhaseBriefingAssembler.assemble(
         handoff,
-        planningProjectionValidator = realPlanningProjectionValidator,
       )
 
     assertTrue(briefing.briefingText.contains("Fixture plan prose for downstream implement and audit."))
@@ -144,7 +144,6 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
       FeatureTaskRuntimePhaseBriefingAssembler.assemble(
         handoff,
         workflowId = "wftr-1",
-        planningProjectionValidator = realPlanningProjectionValidator,
       )
     assertContains(briefing.briefingText, "AC-huge:")
     assertContains(briefing.briefingText, "x".repeat(64))
@@ -170,7 +169,6 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
           upstreamOutputs = FeatureTaskRuntimeResolvedUpstreamOutputs(emptyMap()),
           derivedContextKeys = emptyList(),
         ),
-        planningProjectionValidator = realPlanningProjectionValidator,
         scope =
           FeatureTaskRuntimeBriefingScope(
             invariantFields = strategies.strategyFor(phaseId, facts).briefingInvariantFields(phaseId),
@@ -226,7 +224,6 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
     val briefing =
       FeatureTaskRuntimePhaseBriefingAssembler.assemble(
         handoff,
-        planningProjectionValidator = realPlanningProjectionValidator,
       )
     val serialized = JsonCodec.mapToJsonString(briefing.briefingArtifactWireMap())
 
@@ -284,7 +281,6 @@ class FeatureTaskRuntimePhaseBriefingBudgetTest {
         FeatureTaskRuntimePhaseBriefingAssembler.assemble(
           handoff,
           scope = FeatureTaskRuntimeBriefingScope(sharedReviewEvidence = evidence(hunksPerFile)),
-          planningProjectionValidator = realPlanningProjectionValidator,
         )
       assertFalse(briefing.briefingText.contains("@@"), "diff hunk bodies must not reach the briefing")
       assertFalse(briefing.briefingText.contains("+val "), "diff bytes must not reach the briefing")

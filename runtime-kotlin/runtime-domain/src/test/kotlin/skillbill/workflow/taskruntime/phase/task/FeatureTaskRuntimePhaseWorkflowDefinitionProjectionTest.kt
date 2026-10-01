@@ -60,7 +60,7 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionProjectionTest {
         .declaredFieldNames
 
     assertEquals(
-      listOf("unresolved_blocker_findings", "repository_checkpoint"),
+      listOf("value", "repository_checkpoint"),
       fields(def.PHASE_IMPLEMENT_FIX, "review_repair_request"),
     )
     assertEquals(

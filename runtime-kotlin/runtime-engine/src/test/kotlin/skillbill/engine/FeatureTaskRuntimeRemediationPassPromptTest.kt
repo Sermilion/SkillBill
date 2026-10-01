@@ -1,7 +1,6 @@
 
 package skillbill.engine
 
-import skillbill.application.realPlanningProjectionValidator
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
@@ -96,10 +95,10 @@ class FeatureTaskRuntimeRemediationPassPromptTest {
   }
 
   @Test
-  fun `pass two orders one evidenced disposition per prior Blocker finding id`() {
+  fun `implement_fix asks for a prose report naming each carried finding`() {
     val prompt = implementFixPrompt()
 
-    assertContains(prompt, "produced_outputs.repair_receipt")
+    assertContains(prompt, "Name every carried finding by its finding id")
     assertFalse(
       prompt.contains("blocker_dispositions"),
       "implement_fix emits repair receipts; review dispositions stay on verify_findings.",
@@ -152,15 +151,8 @@ class FeatureTaskRuntimeRemediationPassPromptTest {
                     touched.first()
                   }:1","message":"must fix"}]}}""",
               ),
-              verifyFindingsPhaseOutput(listOf("F-001")).copy(
-                payload =
-                  verifyFindingsOutput(listOf("F-001")).replace(
-                    """"location":"Foo.kt:1"""",
-                    """"location":"${touched.first()}:1"""",
-                  ).replace(
-                    """"message":"Foo.kt leaks a connection in the error path"""",
-                    """"message":"must fix"""",
-                  ),
+              verifyFindingsPhaseOutput(listOf("F-001")).withRawPayload(
+                payload = "F-001 stands: must fix at ${touched.first()}:1.",
               ),
             ),
           repositoryCheckpoint = checkpoint,
@@ -168,10 +160,7 @@ class FeatureTaskRuntimeRemediationPassPromptTest {
         ),
       )
     val briefing =
-      FeatureTaskRuntimePhaseBriefingAssembler.assemble(
-        handoff,
-        planningProjectionValidator = realPlanningProjectionValidator,
-      )
+      FeatureTaskRuntimePhaseBriefingAssembler.assemble(handoff)
     val prompt =
       composePhasePrompt(
         issueKey = "SKILL-142",
@@ -211,7 +200,7 @@ class FeatureTaskRuntimeRemediationPassPromptTest {
                   """{"finding_id":"F-BLOCKER","severity":"Blocker","location":"A.kt:1","message":"must fix"},""" +
                   """{"finding_id":"F-MINOR","severity":"Minor","location":"B.kt:2","message":"polish naming"}]}}""",
               ),
-              verifyFindingsPhaseOutput(listOf("F-BLOCKER", "F-MINOR")).copy(
+              verifyFindingsPhaseOutput(listOf("F-BLOCKER", "F-MINOR")).withRawPayload(
                 payload =
                   """
                   {"produced_outputs":{"finding_dispositions":[
@@ -228,10 +217,7 @@ class FeatureTaskRuntimeRemediationPassPromptTest {
         ),
       )
     val briefing =
-      FeatureTaskRuntimePhaseBriefingAssembler.assemble(
-        handoff,
-        planningProjectionValidator = realPlanningProjectionValidator,
-      )
+      FeatureTaskRuntimePhaseBriefingAssembler.assemble(handoff)
     val prompt =
       composePhasePrompt(
         issueKey = "SKILL-178",
@@ -289,10 +275,7 @@ class FeatureTaskRuntimeRemediationPassPromptTest {
         ),
       )
     val briefing =
-      FeatureTaskRuntimePhaseBriefingAssembler.assemble(
-        handoff,
-        planningProjectionValidator = realPlanningProjectionValidator,
-      )
+      FeatureTaskRuntimePhaseBriefingAssembler.assemble(handoff)
     return composePhasePrompt(
       issueKey = "SKILL-142",
       briefing = briefing,
@@ -351,5 +334,4 @@ private fun reviewBriefing() =
         repositoryCheckpoint = FeatureTaskRuntimeRepositoryCheckpoint(fingerprint = "fixture-checkpoint-1"),
       ),
     ),
-    planningProjectionValidator = realPlanningProjectionValidator,
   )

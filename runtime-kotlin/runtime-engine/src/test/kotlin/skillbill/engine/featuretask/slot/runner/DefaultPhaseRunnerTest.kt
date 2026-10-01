@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.slot.runner
 import skillbill.engine.featuretask.slot.PhaseStepFacts
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
@@ -16,7 +17,7 @@ import kotlin.test.fail
 
 class DefaultPhaseRunnerTest {
   @Test
-  fun `a step outside the domain phase set reads its minimal final object`() {
+  fun `a step captures its stdout as process output without reading an envelope from it`() {
     val stdout =
       """
       Tried to publish the release notes.
@@ -26,10 +27,8 @@ class DefaultPhaseRunnerTest {
 
     val output = runner.run(input("release_notes"), PrepareOnlyPhaseRunState)
 
-    assertEquals("blocked", output.status)
-    assertEquals("Release notes need an approved changelog.", output.value)
-    assertEquals("needs_changelog", output.verdict)
-    assertEquals("operator_action", output.failureDisposition)
+    assertEquals(stdout, output.stdout.text)
+    assertEquals(PhaseSettledEnvelopeRead.None, output.settledEnvelope)
   }
 
   private fun launcher(stdout: String) =
@@ -55,7 +54,7 @@ class DefaultPhaseRunnerTest {
           observeLaunch = false,
           briefingText = "",
         ),
-      policy = PhaseStepPolicy(false, false, false, false, false, false),
+      policy = PhaseStepPolicy(false, false, false, false, false),
     )
 }
 

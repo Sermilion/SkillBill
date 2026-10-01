@@ -60,7 +60,7 @@ internal class InMemoryPhaseRunState(
     get() = progress.transitions
   override val attemptLoop: PhaseStepAttempts = PhaseAttemptLoop
   override val collaborators: PhaseAttemptCollaborators =
-    PhaseAttemptCollaborators(entry.outputValidator, entry.clock, entry.diagnostics)
+    PhaseAttemptCollaborators(entry.clock, entry.diagnostics)
   override val phaseGates: FeatureTaskRuntimePhaseGates = entry.phaseGates
 
   var reviewResult: ParallelCodeReviewResult? = null

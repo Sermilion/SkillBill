@@ -1,15 +1,12 @@
 package skillbill.engine.featuretask.slot.qualitygate.packbuild
 
+import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.JsonCodec
-import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseStepHooks
-import skillbill.engine.featuretask.validation.PackGateOutputKeys
 import skillbill.engine.featuretask.validation.repairSegmentOutput
-import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
@@ -33,31 +30,12 @@ internal object PackBuildStepHooks : PhaseStepHooks {
     run: PhaseRun,
     iteration: Int,
     outputText: String,
-  ): FeatureTaskRuntimePhaseOutput {
-    val produced =
-      looseOutputEnvelope(outputText)?.let { JsonCodec.anyToStringAnyMap(it[SharedPayloadKeys.PRODUCED_OUTPUTS]) }
-    val captured =
-      buildMap {
-        produced?.get(SharedPayloadKeys.VALUE)?.let { put(SharedPayloadKeys.VALUE, it) }
-        produced?.get(PackGateOutputKeys.VALIDATION_REPAIR_PLAN)?.let {
-          put(PackGateOutputKeys.VALIDATION_REPAIR_PLAN, it)
-        }
-      }
-    return FeatureTaskRuntimePhaseOutput(
+  ): FeatureTaskRuntimePhaseOutput =
+    FeatureTaskRuntimePhaseOutput(
       phaseId = run.phaseId,
       iteration = iteration,
-      payload =
-        JsonCodec.mapToJsonString(
-          mapOf(
-            SharedPayloadKeys.CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-            SharedPayloadKeys.PHASE_ID to run.phaseId,
-            SharedPayloadKeys.STATUS to WorkflowStepStatus.COMPLETED.wireValue,
-            SharedPayloadKeys.SUMMARY to "Gate triage segment.",
-            SharedPayloadKeys.PRODUCED_OUTPUTS to captured,
-          ),
-        ),
+      output = PhaseOutput(value = outputText.trim()),
     )
-  }
 
   private fun runtimeOwnedGateTurn(run: PhaseRun): Boolean =
     !run.agentRunValidateFallback &&

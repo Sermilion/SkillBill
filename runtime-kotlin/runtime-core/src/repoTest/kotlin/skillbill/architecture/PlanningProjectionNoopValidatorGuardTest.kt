@@ -30,16 +30,6 @@ class PlanningProjectionNoopValidatorGuardTest {
       "FeatureTaskRuntimeRunnerTestSupport.kt" to
         "Shared run-loop harness default; runner-behavior tests do not assert schema-projection " +
         "enforcement (covered by the RealValidator* integration suites).",
-      "GoalPlanningSweepTest.kt" to
-        "Goal-planning sweep behavior; planning-projection enforcement is incidental to the sweep.",
-      "VerdictAwareRegisterAndConsumersTest.kt" to
-        "Typed Kotlin projection rules for the review-repair request; SKILL-233 made the previously " +
-        "implicit constructor default explicit.",
-      "FeatureTaskRuntimeHandoffProjectionValidatorTestSupport.kt" to
-        "runtime-domain test fixture; the domain test source set cannot reach the infra-fs validator.",
-      "FeatureTaskRuntimeSharedReviewEvidenceProjectionTest.kt" to
-        "runtime-domain projection shape assertions; the domain test source set cannot reach the " +
-        "infra-fs validator.",
       "FeatureTaskRuntimeBuildGateProgressStoreIsolationTest.kt" to "test fixture",
       "FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest.kt" to "test fixture",
       "FeatureTaskRuntimeDiagnosticDegradationTest.kt" to "test fixture",
@@ -47,7 +37,6 @@ class PlanningProjectionNoopValidatorGuardTest {
       "FeatureTaskRuntimeFindingVerificationDurableDecodeTest.kt" to "test fixture",
       "FeatureTaskRuntimeRunStateReconstructionTest.kt" to "test fixture",
       "GoalPlanningRefreshLivenessTest.kt" to "test fixture",
-      "GoalPlanningSweepTest.kt" to "test fixture",
       "GoalRunnerRepairTest.kt" to "test fixture",
       "GoalRunnerTest.kt" to "test fixture",
       "IdeStatusServiceTestSupport.kt" to "test fixture",

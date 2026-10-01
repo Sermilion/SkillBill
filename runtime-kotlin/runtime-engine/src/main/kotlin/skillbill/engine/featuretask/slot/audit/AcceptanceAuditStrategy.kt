@@ -25,7 +25,6 @@ class AcceptanceAuditStrategy : PhaseStrategyStatusProjection() {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to
         PhaseStepPolicy(
           mutating = true,
-          relaunchOnInvalidOutput = true,
           singleAgentSession = false,
           readOnlyIdle = false,
           fileMutating = true,
@@ -35,7 +34,6 @@ class AcceptanceAuditStrategy : PhaseStrategyStatusProjection() {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to
         PhaseStepPolicy(
           mutating = false,
-          relaunchOnInvalidOutput = false,
           singleAgentSession = true,
           readOnlyIdle = true,
           fileMutating = false,

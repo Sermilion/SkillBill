@@ -2,7 +2,7 @@ package skillbill.cli
 
 import skillbill.cli.core.CliRuntime
 import skillbill.contracts.JsonCodec
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.DECOMPOSITION_MANIFEST_CONTRACT_VERSION
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
@@ -34,7 +34,7 @@ class CliPhasePlanRuntimeTest {
 
   @Test
   fun `phase plan writes a spec bundle that goal preflight accepts with no workflow or session rows`() {
-    val launcher = PhasePlanLauncher()
+    val launcher = PhasePlanLauncher(tempDir)
 
     val plan =
       CliRuntime.run(
@@ -103,7 +103,9 @@ class CliPhasePlanRuntimeTest {
       }
     }
 
-  private class PhasePlanLauncher : AgentRunLauncher {
+  private class PhasePlanLauncher(
+    private val repoRoot: Path,
+  ) : AgentRunLauncher {
     val phaseIds = mutableListOf<String>()
 
     override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome {
@@ -112,58 +114,77 @@ class CliPhasePlanRuntimeTest {
           "phase plan launched a prompt with no phase header"
         }
       phaseIds += phaseId
-      val stdout = if (phaseId == "plan") DECOMPOSE_PLAN_OUTPUT else phasePlanningPayload(phaseId)
+      val stdout = if (phaseId == "plan") authorBundle() else phasePlanningPayload(phaseId)
       return agentRunLaunchFacts(agent = SupportedAgent.CODEX, stdout = stdout, stderr = "")
     }
+
+    private fun authorBundle(): String {
+      val bundle = repoRoot.resolve(BUNDLE_DIRECTORY)
+      Files.createDirectories(bundle)
+      Files.writeString(bundle.resolve("spec.md"), specText("Parent", "The split work completes."))
+      SUBTASK_FILES.forEach { (id, fileName) ->
+        Files.writeString(bundle.resolve(fileName), specText("Subtask $id", "Subtask $id works."))
+      }
+      Files.writeString(bundle.resolve("decomposition-manifest.yaml"), MANIFEST_YAML)
+      return "Split the work into two ordered subtasks."
+    }
+
+    private fun specText(
+      title: String,
+      criterion: String,
+    ): String = "# $title\n\n## Acceptance Criteria\n\n1. $criterion\n"
   }
 
   private companion object {
     const val ISSUE_KEY = "SKILL-904"
     val PHASE_LINE = Regex("""Phase: (\w+) \(""")
-    val DECOMPOSE_PLAN_OUTPUT =
+    const val BUNDLE_DIRECTORY = ".feature-specs/$ISSUE_KEY-phase-plan"
+    val SUBTASK_FILES = mapOf(1 to "spec_subtask_1_first-part.md", 2 to "spec_subtask_2_second-part.md")
+    val MANIFEST_YAML =
       """
-      {
-        "contract_version": "$FEATURE_TASK_RUNTIME_CONTRACT_VERSION",
-        "phase_id": "plan",
-        "status": "completed",
-        "summary": "The work splits into ordered subtasks.",
-        "produced_outputs": {
-          "value": "Split the work into two ordered subtasks.",
-          "decomposition_package": {
-            "mode": "decompose",
-            "reason": "The work splits into ordered subtasks.",
-            "feature_name": "phase plan",
-            "parent_spec_overview": "Split the work into two ordered subtasks.",
-            "validation_strategy": "bill-code-check",
-            "base_branch": "main",
-            "feature_branch": "feat/$ISSUE_KEY-phase-plan",
-            "subtasks": [
-              {
-                "id": 1,
-                "name": "first part",
-                "scope": "Deliver the first part.",
-                "acceptance_criteria": ["The first part works."],
-                "non_goals": [],
-                "dependency_notes": "First subtask.",
-                "validation_strategy": "unit tests",
-                "next_path": "Work subtask 2 next.",
-                "depends_on": []
-              },
-              {
-                "id": 2,
-                "name": "second part",
-                "scope": "Deliver the second part.",
-                "acceptance_criteria": ["The second part works."],
-                "non_goals": [],
-                "dependency_notes": "Depends on subtask 1.",
-                "validation_strategy": "unit tests",
-                "next_path": "Return to the goal.",
-                "depends_on": [1]
-              }
-            ]
-          }
-        }
-      }
-      """.trimIndent()
+      ---
+      contract_version: "$DECOMPOSITION_MANIFEST_CONTRACT_VERSION"
+      issue_key: "$ISSUE_KEY"
+      feature_name: "phase-plan"
+      parent_spec_path: "$BUNDLE_DIRECTORY/spec.md"
+      status: "pending"
+      execution_model: "same_branch_commit_per_subtask"
+      base_branch: "main"
+      feature_branch: "feat/$ISSUE_KEY-phase-plan"
+      stack_branches: []
+      current_subtask_intent:
+        subtask_id: 1
+        action: "start"
+      subtasks:
+      - id: 1
+        name: "first part"
+        spec_path: "$BUNDLE_DIRECTORY/spec_subtask_1_first-part.md"
+        status: "pending"
+        branch: null
+        commit_sha: null
+        workflow_id: null
+        blocked_reason: null
+        last_resumable_step: null
+        linear_issue_id: null
+        finalizing_agent_id: null
+        participating_agent_ids: []
+        dependencies: []
+      - id: 2
+        name: "second part"
+        spec_path: "$BUNDLE_DIRECTORY/spec_subtask_2_second-part.md"
+        status: "pending"
+        branch: null
+        commit_sha: null
+        workflow_id: null
+        blocked_reason: null
+        last_resumable_step: null
+        linear_issue_id: null
+        finalizing_agent_id: null
+        participating_agent_ids: []
+        dependencies:
+        - subtask_id: 1
+          optional: false
+          skipped: false
+      """.trimIndent() + "\n"
   }
 }

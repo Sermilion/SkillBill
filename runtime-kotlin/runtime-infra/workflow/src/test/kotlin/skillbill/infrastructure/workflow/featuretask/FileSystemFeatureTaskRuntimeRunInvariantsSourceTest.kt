@@ -3,6 +3,7 @@ package skillbill.infrastructure.workflow.featuretask
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -220,8 +221,92 @@ class FileSystemFeatureTaskRuntimeRunInvariantsSourceTest {
     assertEquals(listOf("First criterion.", "Second criterion."), invariants.acceptanceCriteria)
   }
 
+  @Test
+  fun `launch admission reads the ready selected spec and refuses every unusable artifact`() {
+    val ready = SelectedSpecFixture()
+    assertEquals(listOf("Selected criterion."), ready.read().acceptanceCriteria)
+    assertEquals(ready.spec.toString(), ready.read().specReference)
+
+    val refusals: Map<String, () -> SelectedSpecFixture> =
+      mapOf(
+        "missing" to { SelectedSpecFixture().also { Files.delete(it.spec) } },
+        "escaped" to { SelectedSpecFixture(linkSpecOutside = true) },
+        "symlink-escaped directory" to { SelectedSpecFixture(linkBundleOutside = true) },
+        "wrong-subtask" to { SelectedSpecFixture(manifestedSpecName = "spec_subtask_2_other.md") },
+        "partial" to { SelectedSpecFixture().also { Files.createFile(it.spec.resolveSibling(PENDING_MARKER)) } },
+        "acceptance-free" to { SelectedSpecFixture(specText = "# Subtask\n\n## Scope\nNo criteria.\n") },
+      )
+    refusals.forEach { (case, build) ->
+      val fixture = build()
+      assertFailsWith<IllegalArgumentException>("case '$case' must refuse launch") { fixture.read() }
+    }
+  }
+
+  private class SelectedSpecFixture(
+    specText: String = "# Subtask\n\n## Acceptance Criteria\n1. Selected criterion.\n",
+    manifestedSpecName: String = SPEC_NAME,
+    linkSpecOutside: Boolean = false,
+    linkBundleOutside: Boolean = false,
+  ) {
+    private val root: Path = Files.createTempDirectory("feature-task-runtime-selected-spec")
+    private val outside: Path = Files.createDirectories(root.resolve("outside"))
+    private val bundle: Path =
+      Files.createDirectories(root.resolve(".feature-specs")).let { specs ->
+        if (linkBundleOutside) {
+          Files.writeString(outside.resolve(SPEC_NAME), specText)
+          Files.writeString(outside.resolve(MANIFEST_NAME), manifest(manifestedSpecName))
+          Files.createSymbolicLink(specs.resolve("SKILL-1-bundle"), outside)
+        } else {
+          Files.createDirectories(specs.resolve("SKILL-1-bundle"))
+        }
+      }
+    val spec: Path = bundle.resolve(SPEC_NAME)
+
+    init {
+      if (linkSpecOutside) {
+        Files.writeString(outside.resolve("elsewhere.md"), specText)
+        Files.createSymbolicLink(spec, outside.resolve("elsewhere.md"))
+      } else if (!linkBundleOutside) {
+        Files.writeString(spec, specText)
+      }
+      if (!linkBundleOutside) {
+        Files.writeString(bundle.resolve(MANIFEST_NAME), manifest(manifestedSpecName))
+      }
+    }
+
+    fun read() = FileSystemFeatureTaskRuntimeRunInvariantsSource().read(spec)
+
+    private fun manifest(specName: String) =
+      """
+      contract_version: "0.5"
+      issue_key: "SKILL-1"
+      feature_name: "bundle"
+      parent_spec_path: ".feature-specs/SKILL-1-bundle/spec.md"
+      status: "in_progress"
+      execution_model: "same_branch_commit_per_subtask"
+      base_branch: "main"
+      feature_branch: "feat/SKILL-1-bundle"
+      stack_branches: []
+      current_subtask_intent:
+        subtask_id: 1
+        action: "resume"
+      subtasks:
+      - id: 1
+        name: "selected"
+        spec_path: ".feature-specs/SKILL-1-bundle/$specName"
+        status: "pending"
+        dependencies: []
+      """.trimIndent()
+  }
+
   private fun writeSpec(text: String) =
     Files.createTempDirectory("feature-task-runtime-invariants").resolve("spec.md").also { path ->
       Files.writeString(path, text)
     }
+
+  private companion object {
+    const val SPEC_NAME = "spec_subtask_1_selected.md"
+    const val MANIFEST_NAME = "decomposition-manifest.yaml"
+    const val PENDING_MARKER = ".decomposition-manifest-bundle-abc.commit"
+  }
 }

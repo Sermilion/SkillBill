@@ -1,7 +1,7 @@
 package skillbill.application.review.verification
 
 import skillbill.agent.model.AgentPhaseInput
-import skillbill.agent.model.AgentPhaseOutput
+import skillbill.agent.model.PhaseOutput
 import skillbill.application.review.model.ReviewClaimVerificationOutcome
 import skillbill.application.review.model.ReviewClaimVerificationRunRequest
 import skillbill.application.review.model.ReviewDelegatedStageLaunch
@@ -158,22 +158,22 @@ class ReviewClaimVerificationRunner(
       val classified =
         ReviewStageDegradationSelection.workerFailureReason(reason)
           ?: ReviewStageDegradationReason.WORKER_LAUNCH_OR_RETURN_FAILED
-      return nonSuccessOutcome(classified, reason, AgentPhaseOutput(facts.stdout))
+      return nonSuccessOutcome(classified, reason, PhaseOutput(value = facts.stdout))
     }
     if (facts.stdout.isBlank()) {
       return nonSuccessOutcome(
         ReviewStageDegradationReason.WORKER_OUTPUT_UNUSABLE,
         "the verification worker returned without publishing a verification result",
-        AgentPhaseOutput(facts.stdout),
+        PhaseOutput(value = facts.stdout),
       )
     }
-    return ReviewClaimVerificationOutcome(verdicts = emptyList(), output = AgentPhaseOutput(facts.stdout))
+    return ReviewClaimVerificationOutcome(verdicts = emptyList(), output = PhaseOutput(value = facts.stdout))
   }
 
   private fun nonSuccessOutcome(
     reason: ReviewStageDegradationReason,
     detail: String,
-    output: AgentPhaseOutput? = null,
+    output: PhaseOutput? = null,
   ): ReviewClaimVerificationOutcome =
     ReviewClaimVerificationOutcome(
       verdicts = emptyList(),
@@ -291,8 +291,8 @@ class ReviewClaimVerificationRunner(
       )
       appendLine("Delta: ${launch.packet.baseRevision}..${launch.packet.headRevision}")
       appendLine(
-        "Return free-form verification prose describing confirmed, refuted, or unresolved. " +
-          "An optional claim_verdict and citations as [{path, line}] may enrich the result.",
+        "Return free-form verification prose stating exactly one of confirmed, refuted, or unresolved. " +
+          "Name each supporting location as path:line.",
       )
       appendLine("A refuted verdict must cite the file:line construct that makes the code safe.")
       appendLine("Do not change the finding text, severity, or location.")
@@ -358,8 +358,13 @@ internal fun citedRegionOf(finding: ParallelReviewMergedFinding): ReviewCitedReg
   return runCatching { ReviewCitedRegion(path, line, line) }.getOrNull()
 }
 
+private val VERDICT_WORD = Regex("""\b(confirmed|refuted|unresolved)\b""")
+private val NEGATED_REFUTATION = Regex("""\b(?:not|never|cannot be|can't be|un)\s*refuted\b""")
+private val PROSE_CITATION = Regex("""([A-Za-z0-9_./-]*[A-Za-z0-9_-]\.[A-Za-z0-9]+):(\d+)""")
+
 internal fun parseWorkerResult(stdout: String): ReviewClaimWorkerResult? {
-  val payload = parseJsonObject(stdout) ?: return null
+  if (stdout.isBlank()) return null
+  val payload = parseJsonObject(stdout) ?: return parseProseWorkerResult(stdout)
   val finding = JsonCodec.anyToStringAnyMap(payload["finding"])
   val decodedCitations = ReviewFindingFieldCodec.decodeCitations(payload[ReviewFindingPayloadKeys.CITATIONS])
   return ReviewClaimWorkerResult(
@@ -371,6 +376,17 @@ internal fun parseWorkerResult(stdout: String): ReviewClaimWorkerResult? {
     location = (finding?.get("location") as? String) ?: payload["location"] as? String,
     description = (finding?.get("description") as? String) ?: payload["description"] as? String,
   )
+}
+
+private fun parseProseWorkerResult(prose: String): ReviewClaimWorkerResult {
+  val lowered = prose.lowercase()
+  val verdicts = VERDICT_WORD.findAll(lowered).map { it.value }.toMutableSet()
+  if (NEGATED_REFUTATION.containsMatchIn(lowered)) verdicts += "unresolved"
+  val citations =
+    PROSE_CITATION.findAll(prose).mapNotNull { match ->
+      runCatching { ReviewFindingCitation(match.groupValues[1], match.groupValues[2].toInt()) }.getOrNull()
+    }.distinct().toList()
+  return ReviewClaimWorkerResult(claimVerdict = verdicts.singleOrNull(), citations = citations)
 }
 
 internal fun parseJsonObject(stdout: String): Map<String, Any?>? {

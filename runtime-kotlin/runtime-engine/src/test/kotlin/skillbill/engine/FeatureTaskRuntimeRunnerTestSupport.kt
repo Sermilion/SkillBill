@@ -22,10 +22,8 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupRunner
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
-import skillbill.engine.featuretask.lifecycle.core.AlwaysValidValidator
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimePhaseOutputTestValidator
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeProbeWriters
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionEntry
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
@@ -70,9 +68,14 @@ import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.error.core.RejectedOutputDiagnosticError
 import skillbill.error.core.RejectedOutputDiagnosticError.Absent
 import skillbill.error.core.RejectedOutputDiagnosticError.Conflict
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.featurespec.model.FeatureSpecPreparationDecision
+import skillbill.featurespec.model.FeatureSpecPreparationMode
+import skillbill.featurespec.model.FeatureSpecSubtaskPreparation
+import skillbill.featurespec.model.FeatureSpecWriteRequest
+import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
+import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
 import skillbill.infrastructure.workflow.github.GitHubPullRequestCheckDiscovery
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningBoundaryBodyResolver
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningContextDiscovery
@@ -112,7 +115,6 @@ import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.taskruntime.DERIVING_SHARED_EVIDENCE_RESOLVER
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSpecStatusWriter
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -170,19 +172,12 @@ import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
-import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputFormat
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairOperation
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputSourceLocation
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputValidationResult
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode.CACHE_ELIGIBLE
@@ -634,8 +629,6 @@ internal data class RuntimeHarnessConfig(
   val goalContinuation: FeatureTaskRuntimeGoalContinuationContext? = null,
   val eventSink: FeatureTaskRuntimeRunEventSink? = null,
   val acceptanceCriteria: List<String> = listOf("AC-1", "AC-2"),
-  val planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidator =
-    AcceptingFeatureTaskRuntimeWireArtifactValidator,
   val buildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator =
     AcceptingFeatureTaskRuntimeWireArtifactValidator,
   val codeReviewMode: CodeReviewExecutionMode = CodeReviewExecutionMode.DEFAULT,
@@ -648,7 +641,6 @@ internal data class RuntimeHarnessConfig(
   val reviewRunner: PhaseRunner? = ApprovingReviewPhaseRunner,
   val launcher: RuntimeRecordingLauncher? = null,
   val agentAssignment: FeatureTaskRuntimeAgentAssignment? = null,
-  val validator: FeatureTaskRuntimePhaseOutputValidator? = null,
   val diagnostics: RuntimeDiagnostics? = null,
   val pullRequestIdentityLookup: PullRequestIdentityLookup = UnavailablePullRequestIdentityLookup,
   val delegatedReviewRunner: ParallelCodeReviewRunner? = null,
@@ -666,8 +658,6 @@ private data class RuntimePhaseGatesDeps(
   val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
   val gitOperations: WorkflowGitOperations = NoopWorkflowGitOperations,
   val specGate: FeatureTaskRuntimeSpecGate = testSpecGate(),
-  val planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidator =
-    AcceptingFeatureTaskRuntimeWireArtifactValidator,
   val buildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator =
     AcceptingFeatureTaskRuntimeWireArtifactValidator,
   val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort =
@@ -716,7 +706,6 @@ private fun validationGateBoundaries(
   validationGateRunner: ValidationGateRunner,
 ): FeatureTaskRuntimePhaseGateValidationBoundaries =
   FeatureTaskRuntimePhaseGateValidationBoundaries(
-    planningProjectionValidator = deps.planningProjectionValidator,
     buildReceiptValidator = deps.buildReceiptValidator,
     validationGateResolver = validationGateResolver,
     validationGateRunner = validationGateRunner,
@@ -836,7 +825,6 @@ internal data class RunnerHarnessSupervision(
 
 internal data class RunnerHarnessCore(
   val launcher: RuntimeRecordingLauncher = defaultPhaseAwareLauncher(),
-  val validator: FeatureTaskRuntimePhaseOutputValidator = AlwaysValidValidator,
   val agentAssignment: FeatureTaskRuntimeAgentAssignment = FeatureTaskRuntimeAgentAssignment(),
 )
 
@@ -908,7 +896,6 @@ internal fun runnerHarness(
   supervision: RunnerHarnessSupervision = RunnerHarnessSupervision(),
 ): RunnerHarness {
   val launcher = runtimeConfig.launcher ?: core.launcher
-  val validator = runtimeConfig.validator ?: core.validator
   val agentAssignment = runtimeConfig.agentAssignment ?: core.agentAssignment
   val resolvedSupervision = resolvedHarnessSupervision(runtimeConfig, supervision)
   harnessPendingVerifyFindingIds = emptyList()
@@ -924,7 +911,6 @@ internal fun runnerHarness(
         recorder = workflow.recorder,
         goalContinuationRecorder = workflow.goalContinuationRecorder,
         runInvariantsStore = workflow.runInvariantsStore,
-        validator = validator,
         runtimeConfig = runtimeConfig,
         database = database,
         crashSupervisor = resolvedSupervision.crashSupervisor,
@@ -957,7 +943,6 @@ private data class HarnessRunnerDeps(
   val recorder: FeatureTaskRuntimePhaseRecorder,
   val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
   val runInvariantsStore: FeatureTaskRuntimeRunInvariantsStore,
-  val validator: FeatureTaskRuntimePhaseOutputValidator,
   val runtimeConfig: RuntimeHarnessConfig,
   val database: RuntimeFakeDatabaseSessionFactory,
   val crashSupervisor: FeatureTaskRuntimeWorkerSupervisor,
@@ -965,6 +950,7 @@ private data class HarnessRunnerDeps(
   val specScratchStore: RecordingSpecScratchStore,
   val specStatusWriter: RecordingSpecStatusWriter,
   val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
+  val settlement: FeatureTaskPhaseSettlementService = harnessPhaseSettlement().also { launcher.settlement = it },
 )
 
 private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
@@ -985,7 +971,6 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
       ),
     recorder = deps.recorder,
     goalContinuationRecorder = deps.goalContinuationRecorder,
-    outputValidator = deps.validator,
     phaseGates =
       runtimePhaseGates(
         RuntimePhaseGatesDeps(
@@ -994,7 +979,6 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
           lifecycleTelemetry = disabledRuntimeLifecycleTelemetry(deps.database),
           gitOperations = deps.runtimeConfig.branchSetup.gitOperations,
           specGate = testSpecGate(deps.specScratchStore, deps.specStatusWriter),
-          planningProjectionValidator = deps.runtimeConfig.planningProjectionValidator,
           buildReceiptValidator = deps.runtimeConfig.buildReceiptValidator,
           sharedEvidenceResolver = deps.runtimeConfig.sharedEvidenceResolver,
           diffResolver = deps.runtimeConfig.diffResolver,
@@ -1010,7 +994,7 @@ private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
         executionEntry = runnerExecutionEntry(deps.database, deps.runtimeConfig),
         runInvariantsStore = deps.runInvariantsStore,
       ),
-    phaseSettlementService = harnessPhaseSettlement(),
+    phaseSettlementService = deps.settlement,
     diagnostics = deps.diagnostics,
     clock = testHarnessClock,
     probeWriters =
@@ -1073,18 +1057,15 @@ internal fun telemetryRunnerHarness(runtimeConfig: RuntimeHarnessConfig): Teleme
     launcher =
       runtimeConfig.launcher
         ?: RuntimeRecordingLauncher { request -> facts(defaultPhaseOutput(request)) },
-    validator = runtimeConfig.validator ?: AlwaysValidValidator,
     runtimeConfig = runtimeConfig,
   )
 
 internal fun telemetryRunnerHarness(
   launcher: RuntimeRecordingLauncher = RuntimeRecordingLauncher { request -> facts(defaultPhaseOutput(request)) },
-  validator: FeatureTaskRuntimePhaseOutputValidator = AlwaysValidValidator,
   runtimeConfig: RuntimeHarnessConfig = RuntimeHarnessConfig(),
   databaseFactory: (() -> DatabaseSessionFactory)? = null,
 ): TelemetryRunnerHarness {
   val effectiveLauncher = runtimeConfig.launcher ?: launcher
-  val effectiveValidator = runtimeConfig.validator ?: validator
   seedHarnessSpecIntentProjection(runtimeConfig.repoRoot, runtimeConfig.branchSetup.specReference)
   val repository = InMemoryRuntimeWorkflowRepository()
   val lifecycle = RecordingLifecycleTelemetryRepository()
@@ -1093,7 +1074,6 @@ internal fun telemetryRunnerHarness(
   val runner =
     telemetryHarnessRunner(
       launcher = effectiveLauncher,
-      validator = effectiveValidator,
       runtimeConfig = runtimeConfig,
       database = database,
       workflow = workflow,
@@ -1109,7 +1089,6 @@ internal fun telemetryRunnerHarness(
 
 private fun telemetryHarnessRunner(
   launcher: RuntimeRecordingLauncher,
-  validator: FeatureTaskRuntimePhaseOutputValidator,
   runtimeConfig: RuntimeHarnessConfig,
   database: DatabaseSessionFactory,
   workflow: RunnerHarnessWorkflow,
@@ -1131,7 +1110,6 @@ private fun telemetryHarnessRunner(
       ),
     recorder = workflow.recorder,
     goalContinuationRecorder = workflow.goalContinuationRecorder,
-    outputValidator = validator,
     phaseGates =
       telemetryRunnerPhaseGates(
         runtimeConfig,
@@ -1145,7 +1123,7 @@ private fun telemetryHarnessRunner(
         executionEntry = runnerExecutionEntry(database, runtimeConfig),
         runInvariantsStore = workflow.runInvariantsStore,
       ),
-    phaseSettlementService = harnessPhaseSettlement(),
+    phaseSettlementService = harnessPhaseSettlement().also { launcher.settlement = it },
     diagnostics = NoopRuntimeDiagnostics,
     clock = testHarnessClock,
     probeWriters = telemetryRunnerProbeWriters(database),
@@ -1286,6 +1264,7 @@ private fun testDecompositionPlanner(): FeatureTaskRuntimeDecompositionPlanner =
         fileStore = TestDecompositionManifestStore,
         decompositionManifestWriter = testDecompositionManifestWriter,
       ),
+    specPathResolver = FileSystemFeatureSpecPathResolver(),
   )
 
 internal fun facts(stdout: String): AgentRunLaunchOutcome =
@@ -1599,137 +1578,58 @@ internal fun goalContinuationHarness(
     core = RunnerHarnessCore(launcher = launcher, agentAssignment = phasePerAgentAssignment()),
   )
 
-internal val DECOMPOSE_PLAN_OUTPUT: String =
-  """
-  {
-    "contract_version": "0.3",
-    "phase_id": "plan",
-    "status": "completed",
-    "summary": "Plan needs ordered subtasks.",
-    "produced_outputs": {
-      "decomposition_package": {
-        "mode": "decompose",
-        "reason": "Plan needs ordered subtasks.",
-        "feature_name": "runtime decomposition parity",
-        "parent_spec_overview": "Split the runtime work into ordered subtasks.",
-        "validation_strategy": "bill-code-check",
-        "base_branch": "main",
-        "feature_branch": "feat/SKILL-65-runtime-decomposition-parity",
-        "subtasks": [
-          {
-            "id": 1,
-            "name": "domain contracts",
-            "scope": "Add typed plan outcome detection.",
-            "acceptance_criteria": ["Detect decompose mode."],
-            "non_goals": [],
-            "dependency_notes": "First subtask.",
-            "validation_strategy": "unit tests",
-            "next_path": "Work subtask 2 next.",
-            "depends_on": []
-          },
-          {
-            "id": 2,
-            "name": "runtime stop",
-            "scope": "Stop after writing decomposition.",
-            "acceptance_criteria": ["Do not advance to implement."],
-            "non_goals": [],
-            "dependency_notes": "Depends on subtask 1.",
-            "validation_strategy": "unit tests",
-            "next_path": "Return to the parent workflow.",
-            "depends_on": [1]
-          }
-        ]
-      }
-    }
-  }
-  """.trimIndent()
-internal val MALFORMED_DECOMPOSE_PLAN_OUTPUT: String =
-  """
-  {
-    "contract_version": "0.3",
-    "phase_id": "plan",
-    "status": "completed",
-    "summary": "Plan needs ordered subtasks.",
-    "produced_outputs": {
-      "decomposition_package": {
-        "mode": "decompose",
-        "reason": "Plan needs ordered subtasks.",
-        "feature_name": "runtime decomposition parity",
-        "parent_spec_overview": "Split the runtime work into ordered subtasks.",
-        "validation_strategy": "bill-code-check",
-        "base_branch": "main",
-        "feature_branch": "feat/SKILL-65-runtime-decomposition-parity",
-        "subtasks": [
-          {
-            "id": 1,
-            "name": "domain contracts",
-            "scope": "Add typed plan outcome detection.",
-            "acceptance_criteria": ["Detect decompose mode."],
-            "non_goals": [],
-            "dependency_notes": "First subtask.",
-            "validation_strategy": "unit tests",
-            "next_path": "Work subtask 2 next.",
-            "depends_on": []
-          },
-          {
-            "id": 2,
-            "scope": "Stop after writing decomposition.",
-            "acceptance_criteria": ["Do not advance to implement."],
-            "non_goals": [],
-            "dependency_notes": "Depends on subtask 1.",
-            "validation_strategy": "unit tests",
-            "next_path": "Return to the parent workflow.",
-            "depends_on": [1]
-          }
-        ]
-      }
-    }
-  }
-  """.trimIndent()
-internal val WRITER_INVALID_DECOMPOSE_PLAN_OUTPUT: String =
-  """
-  {
-    "contract_version": "0.3",
-    "phase_id": "plan",
-    "status": "completed",
-    "summary": "Plan needs ordered subtasks.",
-    "produced_outputs": {
-      "decomposition_package": {
-        "mode": "decompose",
-        "reason": "Plan needs ordered subtasks.",
-        "feature_name": "runtime decomposition parity",
-        "parent_spec_overview": "Split the runtime work into ordered subtasks.",
-        "validation_strategy": "bill-code-check",
-        "base_branch": "main",
-        "feature_branch": "feat/SKILL-65-runtime-decomposition-parity",
-        "subtasks": [
-          {
-            "id": 2,
-            "name": "runtime stop",
-            "scope": "Stop after writing decomposition.",
-            "acceptance_criteria": ["Do not advance to implement."],
-            "non_goals": [],
-            "dependency_notes": "Listed first but ids descend.",
-            "validation_strategy": "unit tests",
-            "next_path": "Return to the parent workflow.",
-            "depends_on": []
-          },
-          {
-            "id": 1,
-            "name": "domain contracts",
-            "scope": "Add typed plan outcome detection.",
-            "acceptance_criteria": ["Detect decompose mode."],
-            "non_goals": [],
-            "dependency_notes": "Listed second; out of ascending order.",
-            "validation_strategy": "unit tests",
-            "next_path": "Work subtask 2 next.",
-            "depends_on": []
-          }
-        ]
-      }
-    }
-  }
-  """.trimIndent()
+internal const val PLAN_BUNDLE_PROSE: String = "Authored the ordered spec bundle."
+
+internal fun writePlanBundle(
+  repoRoot: Path,
+  issueKey: String,
+): FeatureSpecWriteResult =
+  FeatureSpecPreparationWriter(
+    decompositionManifestValidator = testDecompositionManifestValidator,
+    fileStore = TestDecompositionManifestStore,
+    decompositionManifestWriter = testDecompositionManifestWriter,
+  ).write(
+    repoRoot = repoRoot,
+    request =
+      FeatureSpecWriteRequest(
+        decision =
+          FeatureSpecPreparationDecision(
+            issueKey = issueKey,
+            intendedOutcome = "Split the runtime work into ordered subtasks.",
+            acceptanceCriteria = listOf("Plan authors a governed spec bundle."),
+            constraints = listOf("Runtime decompose planning stop."),
+            nonGoals = emptyList(),
+            mode = FeatureSpecPreparationMode.DECOMPOSED,
+          ),
+        featureName = "runtime decomposition parity",
+        parentSpecOverview = "Split the runtime work into ordered subtasks.",
+        validationStrategy = "bill-code-check",
+        subtasks =
+          listOf(
+            FeatureSpecSubtaskPreparation(
+              id = 1,
+              name = "domain contracts",
+              scope = "Add typed plan outcome detection.",
+              acceptanceCriteria = listOf("Detect decompose mode."),
+              nonGoals = emptyList(),
+              dependencyNotes = "First subtask.",
+              validationStrategy = "unit tests",
+              nextPath = "Work subtask 2 next.",
+            ),
+            FeatureSpecSubtaskPreparation(
+              id = 2,
+              name = "runtime stop",
+              scope = "Stop after authoring the bundle.",
+              acceptanceCriteria = listOf("Do not advance to implement."),
+              nonGoals = emptyList(),
+              dependencyNotes = "Depends on subtask 1.",
+              validationStrategy = "unit tests",
+              nextPath = "Return to the parent workflow.",
+              dependsOn = listOf(1),
+            ),
+          ),
+      ),
+  )
 
 internal fun spawnFailedFacts(): AgentRunLaunchOutcome =
   agentRunLaunchFacts(
@@ -1744,91 +1644,11 @@ internal class RuntimeRecordingLauncher(
 ) : GoalRunnerSubtaskLauncher {
   val requests = mutableListOf<GoalRunnerSubtaskLaunchRequest>()
 
+  var settlement: FeatureTaskPhaseSettlementService? = null
+
   override fun launch(request: GoalRunnerSubtaskLaunchRequest): AgentRunLaunchOutcome {
     requests += request
-    return handler(request)
-  }
-}
-
-internal class ThrowingValidator(private val failPhases: Set<String>) : FeatureTaskRuntimePhaseOutputTestValidator() {
-  override fun validatePhaseOutputText(
-    phaseOutputText: String,
-    sourceLabel: String,
-  ) {
-    if (sourceLabel in failPhases) {
-      throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(sourceLabel, "rejected by fake validator")
-    }
-  }
-}
-
-internal object RepairingImplementOutputValidator : FeatureTaskRuntimePhaseOutputTestValidator() {
-  override fun validatePhaseOutputText(
-    phaseOutputText: String,
-    sourceLabel: String,
-  ) = Unit
-
-  override fun validatePhaseOutput(
-    phaseOutputText: String,
-    sourceLabel: String,
-  ): FeatureTaskRuntimePhaseOutputValidationResult {
-    if (sourceLabel != "implement") return AlwaysValidValidator.validatePhaseOutput(phaseOutputText, sourceLabel)
-    val canonical = validJsonOutput(sourceLabel)
-    return FeatureTaskRuntimePhaseOutputValidationResult.AcceptedAfterRepair(
-      normalizedOutput =
-        NormalizedFeatureTaskRuntimePhaseOutput(
-          canonicalJson = canonical,
-          envelope = normalizePhaseOutput(canonical, sourceLabel).envelopeWireMap(),
-        ),
-      evidence =
-        FeatureTaskRuntimePhaseOutputRepairEvidence(
-          format = FeatureTaskRuntimePhaseOutputFormat.JSON,
-          originalDigest = "a".repeat(64),
-          repairedDigest = "b".repeat(64),
-          operation = FeatureTaskRuntimePhaseOutputRepairOperation.ADD_MISSING_CLOSING_DELIMITER,
-          sourceLocation = FeatureTaskRuntimePhaseOutputSourceLocation(sourceLabel, 0, 1, 1),
-        ),
-    )
-  }
-}
-
-internal object CanonicalWrapperTestValidator : FeatureTaskRuntimePhaseOutputTestValidator() {
-  private val fencedBlock = Regex("```[ \\t]*[A-Za-z0-9_-]*\\r?\\n(.*?)```", RegexOption.DOT_MATCHES_ALL)
-
-  override fun validatePhaseOutputText(
-    phaseOutputText: String,
-    sourceLabel: String,
-  ) {
-    parseAndValidate(phaseOutputText, sourceLabel)
-  }
-
-  override fun normalizePhaseOutput(
-    phaseOutputText: String,
-    sourceLabel: String,
-  ): NormalizedFeatureTaskRuntimePhaseOutput {
-    val envelope = parseAndValidate(phaseOutputText, sourceLabel)
-    return NormalizedFeatureTaskRuntimePhaseOutput(
-      canonicalJson = JsonCodec.mapToJsonString(envelope),
-      envelope = envelope,
-    )
-  }
-
-  private fun parseAndValidate(
-    phaseOutputText: String,
-    sourceLabel: String,
-  ): Map<String, Any?> {
-    val trimmed = phaseOutputText.trim()
-    val candidate =
-      fencedBlock.findAll(trimmed).lastOrNull()?.groupValues?.get(1)?.trim()
-        ?: trimmed.substring(trimmed.indexOf('{'), trimmed.lastIndexOf('}') + 1)
-    val envelope =
-      JsonCodec.parseObjectOrNull(candidate)
-        ?.let(JsonCodec::jsonElementToValue)
-        ?.let(JsonCodec::anyToStringAnyMap)
-        ?: throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(sourceLabel, "test output is not an object")
-    if (envelope["phase_id"] != sourceLabel) {
-      throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(sourceLabel, "phase_id does not match")
-    }
-    return envelope
+    return settleScriptedEnvelope(handler(request), request.skillRunRequest.promptOverride, settlement)
   }
 }
 

@@ -7,7 +7,6 @@ import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
-import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.runloop.attempt.remediationCoupling
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistArgs
@@ -27,9 +26,7 @@ import skillbill.engine.featuretask.runloop.core.resolveReviewPassNumber
 import skillbill.engine.featuretask.runloop.core.withDisposition
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.observability.blocked
-import skillbill.engine.featuretask.runloop.observability.fixLoopIteration
 import skillbill.engine.featuretask.runloop.observability.paused
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeNonOutputAttempt
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
@@ -547,58 +544,6 @@ object FeatureTaskRuntimeRunLoopPhaseBlocking {
       ?.repositoryCheckpointFingerprint
 
   internal fun settleSemanticFailure(
-    recorder: PhaseRunRecords,
-    observability: FeatureTaskRuntimeRunObservability,
-    context: FixLoopBranchContext,
-  ): PhaseOutcome? {
-    val run = context.run
-    val attempt = context.attempt
-    val loop = context.loop
-    val observability = context.observability
-    val agentId = context.agentId
-    if (!run.policy.relaunchOnInvalidOutput) {
-      return blockNonRetryableSemanticFailure(
-        recorder,
-        context,
-      )
-    }
-    loop.outputGateFailures += 1
-    val budgetBlock =
-      FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(run.phaseId, run.policy, loop.outputGateFailures)
-    budgetBlock?.let { capReason ->
-      return blockInPhase(
-        context.progress,
-        context.loopTransitions,
-        recorder,
-        PhaseBlockRequest(
-          run = run,
-          attemptCount = loop.iteration,
-          reason = withSchemaGateDetail(capReason, requireNotNull(attempt.retryableOperatorReason)),
-          observability = observability,
-          payload =
-            BlockAndPersistPayload(
-              fileManifest = attempt.fileManifest,
-              rejectedOutput = attempt.rejectedOutput,
-            ),
-          failureDisposition = FeatureTaskRuntimeFailureDisposition.INVALID_OUTPUT,
-        ),
-      )
-    }
-    val failedIteration = loop.semanticIteration
-    loop.iteration += 1
-    loop.semanticIteration += 1
-    loop.priorCorrection =
-      attempt.semanticRetryReason?.let { retryReason ->
-        PriorAttemptCorrection.schemaGate(
-          retryReason,
-          correctiveRepairContext = attempt.correctiveRepairContext,
-        )
-      }
-    observability.fixLoopIteration(run.phaseId, agentId, loop.iteration, failedIteration)
-    return null
-  }
-
-  private fun blockNonRetryableSemanticFailure(
     recorder: PhaseRunRecords,
     context: FixLoopBranchContext,
   ): PhaseOutcome {

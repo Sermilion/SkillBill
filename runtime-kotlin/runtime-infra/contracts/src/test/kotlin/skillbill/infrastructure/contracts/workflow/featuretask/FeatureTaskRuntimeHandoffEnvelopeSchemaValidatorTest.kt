@@ -21,8 +21,6 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
       mapOf(
         FeatureTaskRuntimeWireArtifactKind.QUARANTINE_RECORD to
           "InvalidFeatureTaskRuntimeQuarantineSchemaError",
-        FeatureTaskRuntimeWireArtifactKind.PLANNING_PROJECTION to
-          "InvalidFeatureTaskRuntimePlanningProjectionSchemaError",
         FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_ATTEMPT to
           "InvalidFeatureTaskRuntimeImplementationAttemptSchemaError",
         FeatureTaskRuntimeWireArtifactKind.BUILD_RECEIPT to

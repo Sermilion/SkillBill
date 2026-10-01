@@ -9,22 +9,17 @@ import skillbill.engine.featuretask.runloop.core.PhaseStateRequestAttachments
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
-import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeCorrectiveRepairContext
 
 object FeatureTaskRuntimeRunLoopOutputPersistence {
   internal fun schemaInvalidAttempt(
     operatorReason: String,
     fileManifest: FeatureTaskRuntimePhaseFileManifest,
-    malformedOutput: Boolean = false,
     retryReason: String = operatorReason,
-    correctiveRepairContext: FeatureTaskRuntimeCorrectiveRepairContext? = null,
   ): AttemptResult =
     AttemptResult.schemaInvalid(
       operatorReason = operatorReason,
       fileManifest = fileManifest,
-      malformedOutput = malformedOutput,
       retryReason = retryReason,
-      correctiveRepairContext = correctiveRepairContext,
     )
 
   internal fun persistPhase(

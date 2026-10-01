@@ -1,9 +1,8 @@
 package skillbill.workflow.taskruntime.handoff
 
+import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
-import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeMeasuredFactKeys
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
@@ -14,11 +13,11 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHando
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionValue
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.REPOSITORY_CHECKPOINT_FIELD
-import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
-import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDispositionVerdict
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal object FeatureTaskRuntimeHandoffProjectionValueBuilder {
+  private const val DIRECTIVE_FIELD: String = "directive"
+
   private val phaseProjectionContractIds: Set<String> =
     setOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.REVIEW_CLEARANCE,
@@ -44,68 +43,59 @@ internal object FeatureTaskRuntimeHandoffProjectionValueBuilder {
     output: FeatureTaskRuntimePhaseOutput,
   ): List<FeatureTaskRuntimeHandoffProjectionField>? {
     if (declaration.projectionContractId !in phaseProjectionContractIds) return null
-    val envelope =
-      output.normalizedOutput?.envelope
-        ?: JsonCodec.parseObjectOrNull(output.payload)?.let { JsonCodec.jsonElementToValue(it) }
-          ?.let(JsonCodec::anyToStringAnyMap)
-        ?: rejectFeatureTaskRuntimeHandoffProjection(
-          inputs,
-          declaration,
-          FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD,
-          "validated producer output could not be decoded as an object.",
-        )
-    val produced = JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty()
-    val runtimeOwned = runtimeOwnedPhaseProjectionValues(inputs, declaration, produced)
+    val values = proseValues(inputs, declaration, output.output) + runtimeOwnedValues(inputs, declaration, output)
     return declaration.declaredFieldNames.mapNotNull { name ->
-      val value =
-        runtimeOwned[name] ?: when {
-          name == SharedPayloadKeys.VERDICT -> envelope[name]
-          else -> resolveDeclaredPhaseField(produced, name)
-        }
-      value?.let {
+      values[name]?.let {
         FeatureTaskRuntimeHandoffProjectionField(name, projectionValue(name, it, inputs, declaration))
       }
     }
   }
 
-  private fun runtimeOwnedPhaseProjectionValues(
+  private fun proseValues(
     inputs: FeatureTaskRuntimeHandoffProjectionInputs,
     declaration: PhaseHandoffProjectionDeclaration,
-    produced: Map<String, Any?>,
+    output: PhaseOutput,
+  ): Map<String, Any?> {
+    val isProse =
+      declaration.projectionContractId == FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.PHASE_PROSE
+    if (isProse && output.value.isBlank()) {
+      rejectFeatureTaskRuntimeHandoffProjection(
+        inputs,
+        declaration,
+        FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD,
+        "upstream phase output must contain non-blank prose for phase handoff.",
+      )
+    }
+    return mapOf(
+      SharedPayloadKeys.VALUE to output.value.takeIf(String::isNotBlank),
+      DIRECTIVE_FIELD to output.prompt?.takeIf(String::isNotBlank),
+    )
+  }
+
+  private fun runtimeOwnedValues(
+    inputs: FeatureTaskRuntimeHandoffProjectionInputs,
+    declaration: PhaseHandoffProjectionDeclaration,
+    output: FeatureTaskRuntimePhaseOutput,
   ): Map<String, Any?> =
     when (declaration.projectionContractId) {
-      FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.REVIEW_REPAIR_REQUEST ->
-        mapOf(
-          "unresolved_blocker_findings" to verifiedFindingsProjection(inputs, produced),
-          REPOSITORY_CHECKPOINT_FIELD to checkpointFingerprint(inputs),
-        )
-      FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.FINDINGS_VERIFICATION_INPUT ->
-        mapOf(
-          ReviewVerificationSignalKeys.REVIEW_FINDINGS to reviewFindingsForVerificationProjection(produced),
-          REPOSITORY_CHECKPOINT_FIELD to checkpointFingerprint(inputs),
-        )
-      FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.FINDINGS_VERIFICATION_DISPOSITIONS ->
-        mapOf(
-          ReviewVerificationSignalKeys.FINDINGS_VERIFICATION_DISPOSITIONS to
-            produced[ReviewVerificationSignalKeys.FINDINGS_VERIFICATION_DISPOSITIONS],
-          REPOSITORY_CHECKPOINT_FIELD to checkpointFingerprint(inputs),
-        )
+      FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.REVIEW_REPAIR_REQUEST,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.FINDINGS_VERIFICATION_INPUT,
+      FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.FINDINGS_VERIFICATION_DISPOSITIONS,
+      -> mapOf(REPOSITORY_CHECKPOINT_FIELD to checkpointFingerprint(inputs))
       FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.CHANGE_RECEIPT ->
         mapOf(
           "changed_paths" to inputs.resolvedCheckpoint?.workingTreeOwnedPaths.orEmpty(),
-          "tests_added" to (produced["tests_added"] as? List<*>).orEmpty().filterIsInstance<String>(),
-          "tests_updated" to (produced["tests_updated"] as? List<*>).orEmpty().filterIsInstance<String>(),
-          "deviations" to (produced["deviations"] as? List<*>).orEmpty().filterIsInstance<String>(),
           REPOSITORY_CHECKPOINT_FIELD to checkpointFingerprint(inputs),
         )
-      FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.PHASE_PROSE ->
-        phaseProseProjectionValues(inputs, declaration, produced)
       FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.HISTORY_RECEIPT ->
-        measuredHistoryFacts(produced)
+        measuredHistoryFacts(output)
       else -> FeatureTaskRuntimeHandoffProjectionFinalization.finalizationProjectionValues(inputs, declaration)
     }.filterValues { it != null }
 
-  private fun measuredHistoryFacts(produced: Map<String, Any?>): Map<String, Any?> {
+  private fun measuredHistoryFacts(output: FeatureTaskRuntimePhaseOutput): Map<String, Any?> {
+    val produced =
+      JsonCodec.anyToStringAnyMap(output.normalizedOutput?.runtimeRecord?.get(SharedPayloadKeys.PRODUCED_OUTPUTS))
+        .orEmpty()
     val measured = JsonCodec.anyToStringAnyMap(produced[FeatureTaskRuntimeMeasuredFactKeys.MEASURED_FACTS]).orEmpty()
     return listOf(
       FeatureTaskRuntimeMeasuredFactKeys.CHANGED_PATHS,
@@ -118,122 +108,6 @@ internal object FeatureTaskRuntimeHandoffProjectionValueBuilder {
     inputs.resolvedCheckpoint?.let {
       mapOf(ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT_FINGERPRINT to it.fingerprint)
     }
-
-  private fun phaseProseProjectionValues(
-    inputs: FeatureTaskRuntimeHandoffProjectionInputs,
-    declaration: PhaseHandoffProjectionDeclaration,
-    produced: Map<String, Any?>,
-  ): Map<String, Any?> {
-    val value =
-      resolveDeclaredPhaseField(produced, SharedPayloadKeys.VALUE)
-        ?: rejectFeatureTaskRuntimeHandoffProjection(
-          inputs,
-          declaration,
-          FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD,
-          "produced_outputs.value is required for phase prose handoff.",
-        )
-    val valueText = value.toString()
-    if (valueText.isBlank()) {
-      rejectFeatureTaskRuntimeHandoffProjection(
-        inputs,
-        declaration,
-        FeatureTaskRuntimeHandoffProjectionFailureKind.MALFORMED_FIELD,
-        "produced_outputs.value must contain non-blank prose for phase handoff.",
-      )
-    }
-    val fields = linkedMapOf<String, Any?>(SharedPayloadKeys.VALUE to valueText)
-    resolveDeclaredPhaseField(produced, SharedPayloadKeys.PROMPT)
-      ?.toString()
-      ?.takeIf(String::isNotBlank)
-      ?.let { fields["directive"] = it }
-    return fields
-  }
-
-  private fun verifiedFindingsProjection(
-    inputs: FeatureTaskRuntimeHandoffProjectionInputs,
-    produced: Map<String, Any?>,
-  ): List<Map<String, Any?>> {
-    val reviewProduced =
-      inputs.resolvedUpstream.outputsByPhaseId[
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
-      ]?.let(FeatureTaskRuntimeHandoffProjectionFinalization::genericProducedOutputs).orEmpty()
-    val reviewFindingsById =
-      reviewFindingsForVerificationProjection(reviewProduced)
-        .associateBy { it[ReviewFindingPayloadKeys.FINDING_ID]?.toString().orEmpty() }
-    return FeatureTaskRuntimeFindingVerificationDisposition.parseList(
-      produced[ReviewVerificationSignalKeys.FINDINGS_VERIFICATION_DISPOSITIONS],
-      "produced_outputs.finding_dispositions",
-    )
-      .filter { it.disposition == FeatureTaskRuntimeFindingVerificationDispositionVerdict.VERIFIED }
-      .map { disposition ->
-        val review = reviewFindingsById[disposition.findingId]
-        val severity =
-          (review?.get("severity") as? String)
-            ?.trim()
-            ?.lowercase()
-            ?.takeIf(String::isNotBlank)
-            ?: "blocker"
-        mapOf(
-          ReviewFindingPayloadKeys.FINDING_ID to disposition.findingId,
-          "severity" to severity,
-          "location" to (review?.get("location") ?: "repository"),
-          "expected_outcome" to (
-            review?.get("message")?.toString()?.takeIf(String::isNotBlank)
-              ?: disposition.reason
-              ?: "Verified finding."
-          ),
-          "criterion_refs" to emptyList<String>(),
-          "task_refs" to emptyList<String>(),
-        )
-      }
-  }
-
-  private fun reviewFindingsForVerificationProjection(produced: Map<String, Any?>): List<Map<String, Any?>> =
-    (produced[ReviewVerificationSignalKeys.REVIEW_FINDINGS] as? List<*>).orEmpty()
-      .mapNotNull(JsonCodec::anyToStringAnyMap)
-      .map { finding ->
-        val severity = (finding["severity"] as? String)?.takeIf(String::isNotBlank) ?: "blocker"
-        mapOf(
-          ReviewFindingPayloadKeys.FINDING_ID to (
-            finding[ReviewFindingPayloadKeys.FINDING_ID]
-              ?: finding[ReviewFindingPayloadKeys.F_NUMBER]
-              ?: finding[DecompositionPlanningPayloadKeys.ID]
-          ),
-          "severity" to severity,
-          "location" to (
-            finding["location"] ?: finding[ReviewFindingPayloadKeys.REPOSITORY_PATH] ?: finding["path"] ?: "repository"
-          ),
-          "message" to (
-            finding["message"] ?: finding["description"] ?: finding["expected_outcome"] ?: "Review finding."
-          ),
-          ReviewFindingPayloadKeys.ISSUE_CATEGORY to (
-            finding[ReviewFindingPayloadKeys.ISSUE_CATEGORY] ?: finding["category"] ?: "other"
-          ),
-          ReviewFindingPayloadKeys.CLAIM_VERDICT to finding[ReviewFindingPayloadKeys.CLAIM_VERDICT],
-          ReviewFindingPayloadKeys.SCOPE_DISPOSITION to finding[ReviewFindingPayloadKeys.SCOPE_DISPOSITION],
-        ).filterValues { it != null }
-      }
-
-  private fun resolveDeclaredPhaseField(
-    produced: Map<String, Any?>,
-    name: String,
-  ): Any? {
-    produced[name]?.let { return it }
-    val resultContainers =
-      listOf(
-        "audit_result",
-        "review_result",
-        "validation_result",
-        "build_receipt",
-        "commit_push_result",
-      )
-    val nested =
-      resultContainers.firstNotNullOfOrNull { container ->
-        JsonCodec.anyToStringAnyMap(produced[container])?.get(name)
-      }
-    if (nested != null) return nested
-    return null
-  }
 
   private fun projectionValue(
     name: String,

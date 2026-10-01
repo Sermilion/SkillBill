@@ -1,10 +1,7 @@
 package skillbill.engine.goalrunner.planning.outcome
 
-import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.agentoutput.stderrExcerpt
 import skillbill.engine.goalrunner.planning.model.GoalPlanningEmptyTurnEvidence
-import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseProduction
-import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.model.GoalRunnerLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -32,44 +29,12 @@ fun exhaustedCause(
       }
   }
 
-fun exhaustedDeclineReason(
-  production: GoalPlanningPhaseProduction.RetryableDecline,
-  declines: Int,
-): String =
-  "${production.reason} Relaunched $declines times under a retryable disposition " +
-    "without a different outcome; the decline is not transient."
-
-fun malformedReason(
-  phaseId: String,
-  error: Throwable,
-): String =
-  "Goal planning '$phaseId' output failed the schema gate and could not be prepared: ${error.message.orEmpty()}"
-
 fun unexpectedPlanningFailureReason(
   phaseId: String,
   error: Throwable,
 ): String =
   "Goal planning '$phaseId' failed before its output could be checkpointed: " +
     "${error::class.simpleName ?: "Throwable"}: ${error.message.orEmpty()}"
-
-fun unsuccessfulStatusReason(
-  phaseId: String,
-  payload: Map<String, Any?>,
-): String {
-  val status = payload[SharedPayloadKeys.STATUS] ?: "missing"
-  val disposition =
-    (payload[SharedPayloadKeys.FAILURE_DISPOSITION] as? String)
-      ?.let { " disposition '$it'" }
-      .orEmpty()
-  val summary =
-    (payload[SharedPayloadKeys.SUMMARY] as? String)
-      ?.trim()
-      ?.takeIf { it.isNotEmpty() }
-      ?.let { " Agent reported: ${it.take(GoalPlanningSweepConstants.PLANNING_STOP_DETAIL_MAX_CHARS)}" }
-      .orEmpty()
-  return "Goal planning '$phaseId' stopped with status '$status'$disposition; " +
-    "its output was not checkpointed.$summary"
-}
 
 fun emptyTurnReason(
   phaseId: String,

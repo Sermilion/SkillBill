@@ -1,7 +1,6 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCensusCoverageTestSupport.assertRepairOmits
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeRepairReceiptError
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairOutcome
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceiptEntry
@@ -9,67 +8,76 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import skillbill.workflow.model.goalreview.omittedCarriedFindings
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeRepairReceiptParserTest {
   private val sha = "b".repeat(40)
-  private val otherSha = "c".repeat(40)
+
+  private val carried =
+    listOf(
+      GoalSubtaskReviewCompactFinding("blocker", "Type", "unsafe mutation at the seam", "F-001"),
+      GoalSubtaskReviewCompactFinding("major", "Policy", "stale comment is already gone", "F-002"),
+    )
 
   @Test
-  fun `the runtime stamps the remediation base and round over whatever the producer sent`() {
-    val parsed =
-      assertNotNull(
-        featureTaskRuntimeParseRepairReceiptOrNull(
-          mapOf(
-            "repair_receipt" to
-              mapOf(
-                "contract_version" to "0.3",
-                "round_number" to 1,
-                "pre_fix_checkpoint_sha" to otherSha,
-                "entries" to
-                  listOf(
-                    mapOf(
-                      "finding_id" to "F-001",
-                      "outcome" to "addressed",
-                    ),
-                  ),
-              ),
-          ),
-          remediationBaseSha = sha,
-          roundNumber = 3,
-        ),
-      )
-    assertEquals(sha, parsed.preFixCheckpointSha)
-    assertEquals(3, parsed.roundNumber)
+  fun `the runtime stamps the remediation base and round on a receipt read from prose`() {
+    val receipt =
+      featureTaskRuntimeRepairReceiptFromProse("F-001 was fixed at the seam. F-002 was fixed too.", carried, sha, 3)
+
+    assertEquals(sha, receipt.preFixCheckpointSha)
+    assertEquals(3, receipt.roundNumber)
+    assertTrue(receipt.omittedCarriedFindings(carried).isEmpty())
   }
 
   @Test
-  fun `a receipt that omits the runtime-owned anchor fields is accepted`() {
-    val parsed =
-      assertNotNull(
-        featureTaskRuntimeParseRepairReceiptOrNull(
-          mapOf(
-            "repair_receipt" to
-              mapOf(
-                "contract_version" to "0.3",
-                "entries" to
-                  listOf(
-                    mapOf(
-                      "finding_id" to "F-001",
-                      "outcome" to "addressed",
-                    ),
-                  ),
-              ),
-          ),
-          remediationBaseSha = sha,
-          roundNumber = 2,
-        ),
+  fun `a finding the prose report never names stays owed`() {
+    val receipt = featureTaskRuntimeRepairReceiptFromProse("F-001 was fixed at the seam.", carried, sha, 1)
+
+    assertEquals(listOf("F-002"), receipt.omittedCarriedFindings(carried).map { it.findingId })
+  }
+
+  @Test
+  fun `an empty prose report leaves every carried finding owed`() {
+    val receipt = featureTaskRuntimeRepairReceiptFromProse("", carried, sha, 1)
+
+    assertEquals(carried, receipt.omittedCarriedFindings(carried))
+  }
+
+  @Test
+  fun `a finding reported still open is read as unresolved rather than addressed`() {
+    val receipt =
+      featureTaskRuntimeRepairReceiptFromProse(
+        "F-001 is fixed.\nF-002 is still open after my attempt; the gate cannot see the pass ids.",
+        carried,
+        sha,
+        1,
       )
-    assertEquals(sha, parsed.preFixCheckpointSha)
-    assertEquals(2, parsed.roundNumber)
+
+    assertEquals(setOf("F-002"), assertNotNull(featureTaskRuntimeUnresolvedFindings(receipt)).refs)
+  }
+
+  @Test
+  fun `a finding reported as needing no edit records the reason`() {
+    val receipt =
+      featureTaskRuntimeRepairReceiptFromProse(
+        "F-001 fixed. F-002 needs no edit required because the comment is already gone.",
+        carried,
+        sha,
+        1,
+      )
+
+    val entry = receipt.entries.single { it.findingId == "F-002" }
+    assertEquals(FeatureTaskRuntimeRepairOutcome.NO_EDIT_REQUIRED, entry.outcome)
+    assertNotNull(entry.noEditReason)
+  }
+
+  @Test
+  fun `a finding id that only prefixes another id is not a mention`() {
+    val receipt = featureTaskRuntimeRepairReceiptFromProse("F-0011 was fixed.", carried, sha, 1)
+
+    assertEquals(carried, receipt.omittedCarriedFindings(carried))
   }
 
   @Test
@@ -107,7 +115,7 @@ class FeatureTaskRuntimeRepairReceiptParserTest {
 
     assertEquals(listOf(leftover), omitted)
     val reason = featureTaskRuntimeOmittedFindingsRetryReason(omitted)
-    assertTrue(reason.contains("attempted_unresolved"))
+    assertTrue(reason.contains("F-002"))
     assertTrue(!reason.contains(leftover.text))
   }
 
@@ -160,26 +168,6 @@ class FeatureTaskRuntimeRepairReceiptParserTest {
         ),
       )
     assertTrue(receipt.omittedCarriedFindings(listOf(locationBearing)).isEmpty())
-  }
-
-  @Test
-  fun `parse of an absent receipt key is a no-op`() {
-    assertNull(featureTaskRuntimeParseRepairReceiptOrNull(emptyMap(), sha, 1))
-  }
-
-  @Test
-  fun `parse of a malformed receipt object throws a payload-free typed error`() {
-    val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeRepairReceiptError> {
-        featureTaskRuntimeParseRepairReceiptOrNull(mapOf("repair_receipt" to "not-an-object"), sha, 1)
-      }
-    assertEquals("repair_receipt must be an object.", error.payloadFreeReason)
-  }
-
-  @Test
-  fun `a rejection detail names the offending receipt field as a json pointer`() {
-    val detail = featureTaskRuntimeRepairReceiptRejectionDetail("repair_receipt.entries[0].text", "must be one line.")
-    assertEquals("[repair-receipt] /repair_receipt/entries/0/text: must be one line.", detail)
   }
 
   private fun receiptFor(vararg entries: FeatureTaskRuntimeRepairReceiptEntry) =

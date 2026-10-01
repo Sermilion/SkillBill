@@ -3,7 +3,6 @@ package skillbill.engine.goalrunner.execution.core
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.idestatus.AgentActivityStampWriter
-import skillbill.application.realPlanningProjectionValidator
 import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
 import skillbill.application.telemetry.lifecycle.noopGoalLifecycleTelemetryEmitter
 import skillbill.engine.ExecutionPlanAdmissionFixture
@@ -52,9 +51,7 @@ import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.review.repository.ReviewRepository
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
-import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
@@ -316,12 +313,10 @@ internal fun testDefaultGoalPlanningSweep(
 internal data class GoalPlanningSweepPortsParams(
   val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
   val checkpoint: GoalPlanningPreparationCheckpoint,
-  val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
   val subtaskLauncher: GoalRunnerSubtaskLauncher,
   val invariantsSource: FeatureTaskRuntimeRunInvariantsSource,
   val manifestFileStore: DecompositionManifestStore,
   val contextDiscovery: GoalPlanningContextDiscovery,
-  val planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidator = realPlanningProjectionValidator,
   val planningAttemptRecorder: GoalPlanningAttemptRecorder = NO_GOAL_PLANNING_ATTEMPT_RECORDER,
   val manifestStore: GoalRunnerManifestStore = TestNoopGoalPlanningManifestStore,
   val planningRejectionRecorder: GoalPlanningRejectionRecorder = NO_GOAL_PLANNING_REJECTION_RECORDER,
@@ -342,11 +337,9 @@ internal fun testGoalPlanningSweepPorts(params: GoalPlanningSweepPortsParams): D
   testDefaultGoalPlanningSweep(
     GoalPlanningSweepCheckpointBoundaries(
       checkpoint = params.checkpoint,
-      outputValidator = params.outputValidator,
       invariantsSource = params.invariantsSource,
       manifestFileStore = params.manifestFileStore,
       contextDiscovery = params.contextDiscovery,
-      planningProjectionValidator = params.planningProjectionValidator,
     ),
     GoalPlanningSweepLaunchBoundaries(
       manifestStore = params.manifestStore,

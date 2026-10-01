@@ -707,7 +707,8 @@ internal fun planningProjectionOutputs(phaseId: String): String? =
   }
 
 internal fun subtaskSpecText(id: Int): String =
-  "---\nstatus: Pending\n---\n\n# Subtask $id\n\n## Acceptance Criteria\n\n1. Subtask $id delivers its part.\n"
+  "---\nstatus: Pending\n---\n\n# Subtask $id\n\n## Acceptance Criteria\n\n1. Subtask $id delivers its part.\n\n" +
+    "## Implementation Details\n\nPlanned implementation details for subtask $id.\n"
 
 internal object NoopGoalTestAgentRunLauncher : AgentRunLauncher {
   override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome = error("Unexpected launch")

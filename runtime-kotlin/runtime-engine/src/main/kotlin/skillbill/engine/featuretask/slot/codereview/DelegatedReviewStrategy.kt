@@ -95,7 +95,6 @@ internal class DelegatedReviewPass(
   override val policy =
     PhaseStepPolicy(
       mutating = false,
-      relaunchOnInvalidOutput = true,
       singleAgentSession = false,
       readOnlyIdle = true,
       fileMutating = false,

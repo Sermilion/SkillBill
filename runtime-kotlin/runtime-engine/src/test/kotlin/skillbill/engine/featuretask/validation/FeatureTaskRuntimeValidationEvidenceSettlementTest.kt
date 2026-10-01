@@ -5,7 +5,6 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
-import skillbill.engine.envelope
 import skillbill.engine.featuretask.runloop.state.validationEvidenceFromEnvelope
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -26,6 +25,24 @@ class FeatureTaskRuntimeValidationEvidenceSettlementTest {
         validateEnvelope(
           command = "./gradlew check",
           exitCode = 1,
+        ),
+      )
+    val evidence =
+      requireNotNull(
+        validationEvidenceFromEnvelope(envelope, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE),
+      )
+    assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+      evidence.requireSuccessfulCommand("./gradlew check", FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE)
+    }
+  }
+
+  @Test
+  fun `prose passed status cannot satisfy validate settlement when the required command is absent from evidence`() {
+    val envelope =
+      topLevelValidateEnvelope(
+        validateEnvelope(
+          command = "./gradlew compileKotlin",
+          exitCode = 0,
         ),
       )
     val evidence =

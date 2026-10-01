@@ -1,12 +1,12 @@
 package skillbill.engine.goalrunner.planning.outcome
 
+import skillbill.engine.goalplanning.readStoredPlanningRecord
 import skillbill.engine.goalrunner.execution.core.ProduceMissingPlansArgs
 import skillbill.engine.goalrunner.planning.attempt.producePhase
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLaunch
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseProduction
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProduceAttemptArgs
-import skillbill.engine.goalrunner.planning.model.GoalPlanningProducePhaseArgs
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
@@ -20,6 +20,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import java.nio.file.Path
 
 internal fun DefaultGoalPlanningSweep.producePlan(
   args: ProduceMissingPlansArgs,
@@ -29,52 +30,70 @@ internal fun DefaultGoalPlanningSweep.producePlan(
 ): GoalPlanningSweepOutcome.Stopped? {
   val shared = args.shared
   val request = args.request
-  val provenance = args.provenance
   val preplanPayload = args.sharedCheckpoint.preplanPayload
   val resolvedSpecPath =
     resolvedSubSpecPath(shared.repoRoot, subtask.specPath, repositoryEnclosingRootPort)
       ?: return stopped(shared, subtask.id, unresolvedSpecReason(subtask), GoalPlanningSweepConstants.PHASE_PLAN)
-  val runInvariants =
-    runCatching { invariantsSource.read(resolvedSpecPath) }.getOrElse { error ->
+  val (runInvariants, snapshot) =
+    runCatching {
+      invariantsSource.read(resolvedSpecPath) to snapshotSubSpecs(shared, subtask, resolvedSpecPath)
+    }.getOrElse { error ->
       return stopped(shared, subtask.id, invariantReadReason(subtask, error), GoalPlanningSweepConstants.PHASE_PLAN)
     }
+  val preplanPhaseId = GoalPlanningSweepConstants.PHASE_PREPLAN
+  val preplanOutput =
+    FeatureTaskRuntimePhaseOutput(
+      preplanPhaseId,
+      1,
+      preplanPayload,
+      readStoredPlanningRecord(preplanPayload, preplanPhaseId, shared.parentWorkflowId),
+    )
   val planProduction =
     producePhase(
-      GoalPlanningProducePhaseArgs(
-        attempt =
-          GoalPlanningProduceAttemptArgs(
-            phase =
-              GoalPlanningPhaseContext(
-                shared = shared,
-                request = request,
-                subtask = subtask,
-                runInvariants = runInvariants,
-                phaseId = GoalPlanningSweepConstants.PHASE_PLAN,
-                launch = launch,
-                outputSink = request.outputSink,
-              ),
-            recordedOutputs =
-              listOf(
-                FeatureTaskRuntimePhaseOutput(GoalPlanningSweepConstants.PHASE_PREPLAN, 1, preplanPayload),
-              ),
-            resolvedBodies = GoalPlanningResolvedBoundaryBodies(),
+      GoalPlanningProduceAttemptArgs(
+        phase =
+          GoalPlanningPhaseContext(
+            shared = shared,
+            request = request,
+            subtask = subtask,
+            runInvariants = runInvariants,
+            phaseId = GoalPlanningSweepConstants.PHASE_PLAN,
+            launch = launch,
+            outputSink = request.outputSink,
           ),
+        recordedOutputs = listOf(preplanOutput),
+        resolvedBodies = GoalPlanningResolvedBoundaryBodies(),
       ),
     )
   if (planProduction is GoalPlanningPhaseProduction.Stopped) return planProduction.outcome
   val captured = planProduction as GoalPlanningPhaseProduction.Captured
-  val planPayload = captured.payload
+  return checkpointProducedPlan(args, subtask, descriptor, resolvedSpecPath to snapshot, captured.payload)
+}
+
+private fun DefaultGoalPlanningSweep.checkpointProducedPlan(
+  args: ProduceMissingPlansArgs,
+  subtask: DecompositionSubtask,
+  descriptor: GovernedGoalSubtaskDescriptor,
+  launchedSpec: Pair<Path, GoalPlanningSubSpecSnapshot>,
+  capturedPayload: String,
+): GoalPlanningSweepOutcome.Stopped? {
+  val shared = args.shared
+  val (launchedSpecPath, snapshot) = launchedSpec
+  val persistedSpec =
+    admitPersistedSubSpec(shared, subtask, launchedSpecPath, snapshot, args.startedPlanIds).getOrElse { error ->
+      return stopped(shared, subtask.id, error.message.orEmpty(), GoalPlanningSweepConstants.PHASE_PLAN)
+    }
+  val planPayload = proseRecordPayload(GoalPlanningSweepConstants.PHASE_PLAN, capturedPayload)
   val record =
     GoalSubtaskPlanCheckpoint(
       identity = GoalPlanningIdentity(shared.parentWorkflowId, shared.normalizedIssueKey, shared.repositoryIdentity),
       subtaskId = subtask.id,
       manifestOrder = descriptor.manifestOrder,
       governedSubSpecPath = descriptor.governedSubSpecPath,
-      subSpecHash = descriptor.subSpecHash,
-      provenance = provenance,
+      subSpecHash = sha256HexUtf8(persistedSpec),
+      provenance = args.provenance,
       payloadSha256 = sha256HexUtf8(planPayload),
       planPayload = planPayload,
-      repairEvidence = captured.repairEvidence,
     )
   return runCatching { checkpoint.recheckpointSubtaskPlan(record) }.fold(
     onSuccess = { null },

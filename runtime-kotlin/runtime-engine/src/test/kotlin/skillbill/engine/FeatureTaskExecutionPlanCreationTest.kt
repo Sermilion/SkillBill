@@ -14,7 +14,6 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
-import skillbill.engine.featuretask.lifecycle.core.AlwaysValidValidator
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
@@ -528,11 +527,7 @@ class FeatureTaskExecutionPlanCreationTest {
     private val persistence =
       WorkflowGoalRunnerChildWorkflowPersistence(
         engine,
-        GoalChildPlanningHydratorPortAdapter(
-          AlwaysValidValidator,
-          AcceptingFeatureTaskRuntimeWireArtifactValidator,
-          testHarnessClock,
-        ),
+        GoalChildPlanningHydratorPortAdapter(testHarnessClock),
         GoalParentProjectionWriter(engine, testDecompositionManifestValidator),
         execution.admission,
         testHarnessClock,
@@ -543,11 +538,7 @@ class FeatureTaskExecutionPlanCreationTest {
         database, testWorkflowSnapshotValidator, testDecompositionManifestValidator,
         UnavailableDecompositionManifestStore, testHarnessClock, testDecompositionManifestWriter,
         testRepositoryRoot,
-        GoalChildPlanningHydratorPortAdapter(
-          AlwaysValidValidator,
-          AcceptingFeatureTaskRuntimeWireArtifactValidator,
-          testHarnessClock,
-        ),
+        GoalChildPlanningHydratorPortAdapter(testHarnessClock),
         executionPlanCompatibility = execution.compatibility,
       )
 

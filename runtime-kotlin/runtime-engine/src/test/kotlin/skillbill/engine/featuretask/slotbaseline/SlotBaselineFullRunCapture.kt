@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slotbaseline
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.application.seedHarnessSpecIntentProjection
 import skillbill.engine.BranchSetupTestConfig
 import skillbill.engine.RuntimeHarnessConfig
@@ -107,14 +106,12 @@ internal object SlotBaselineFullRunCapture {
               override fun run(request: ValidationGateRunRequest) =
                 passed().copy(command = request.argv.joinToString(" "))
             },
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
           launcher = phaseLauncher,
           reviewRunner = DefaultPhaseRunner(reviewLauncher, git),
         )
       val harness =
         telemetryRunnerHarness(
           launcher = phaseLauncher,
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
           runtimeConfig = config,
           databaseFactory = { sqliteDatabase(databaseHome) },
         )

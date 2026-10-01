@@ -1,7 +1,5 @@
 package skillbill.engine.goalrunner.planning.attempt
 
-import skillbill.contracts.JsonCodec
-import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
 import skillbill.engine.goalrunner.execution.core.EmptyOrStoppedArgs
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseProduction
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProduceAttemptArgs
@@ -13,23 +11,8 @@ import skillbill.engine.goalrunner.planning.outcome.stdoutFor
 import skillbill.engine.goalrunner.planning.outcome.stopped
 import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
-import skillbill.engine.planningprojection.producerProjectionGateReason
 import skillbill.error.goalrunner.GoalRunnerLaunchAuthorizationDeniedException
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePlanningProjectionSchemaError
-
-fun DefaultGoalPlanningSweep.projectionGateReason(
-  payload: String,
-  phaseId: String,
-): String? {
-  val envelope =
-    JsonCodec.parseObjectOrNull(payload)
-      ?.let(JsonCodec::jsonElementToValue)
-      ?.let(JsonCodec::anyToStringAnyMap)
-      ?: return "Goal planning '$phaseId' payload is not a JSON object."
-  return producerProjectionGateReason(phaseId, envelope, planningProjectionValidator)
-    ?.let(::boundedSchemaGateDetail)
-}
 
 internal fun DefaultGoalPlanningSweep.produceAttemptAfterPauseCheck(
   args: GoalPlanningProduceAttemptArgs,
@@ -39,9 +22,7 @@ internal fun DefaultGoalPlanningSweep.produceAttemptAfterPauseCheck(
 ): GoalPlanningPhaseProduction {
   val prompt =
     runCatching { composePlanningPrompt(args) }.getOrElse { error ->
-      if (error !is InvalidFeatureTaskRuntimePlanningProjectionSchemaError &&
-        error !is InvalidFeatureTaskRuntimeHandoffProjectionError
-      ) {
+      if (error !is InvalidFeatureTaskRuntimeHandoffProjectionError) {
         throw error
       }
       return GoalPlanningPhaseProduction.Stopped(
@@ -70,5 +51,5 @@ internal fun DefaultGoalPlanningSweep.produceAttemptAfterPauseCheck(
         durationMs = durationMs,
       ),
     )
-  return validatePlanningAttemptOutput(stdout, shared, currentSubtaskId, phaseId, launchedAgentId(outcome))
+  return GoalPlanningPhaseProduction.Captured(stdout, launchedAgentId(outcome))
 }

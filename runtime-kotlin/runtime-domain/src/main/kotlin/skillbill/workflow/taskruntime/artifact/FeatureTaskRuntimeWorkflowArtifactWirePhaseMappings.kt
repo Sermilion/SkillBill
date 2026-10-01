@@ -1,7 +1,6 @@
 package skillbill.workflow.taskruntime.artifact
 
 import skillbill.contracts.JsonCodec
-import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeDiagnosticSignal
 import skillbill.workflow.taskruntime.model.audit.featureTaskRuntimeDiagnosticSignalsFromWire
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactValidation
@@ -15,7 +14,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeShare
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.toArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
-import skillbill.workflow.taskruntime.model.phase.featureTaskRuntimeDecomposePlanOutcomeOrNull
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 
 fun FeatureTaskRuntimeFindingVerificationDisposition.asWorkflowArtifactEntry(): Any = toArtifactMap()
@@ -63,13 +61,6 @@ internal fun decodePhaseHandoffProjectionDeclarationFromArtifact(
 
 fun NormalizedFeatureTaskRuntimePhaseOutput.envelopeWireMap(): FeatureTaskRuntimeWorkflowArtifactMap =
   FeatureTaskRuntimeWorkflowArtifactMap.from(envelopePayload())
-
-fun decomposePlanOutcomeFromPhaseOutput(
-  phaseOutput: Any?,
-  specSource: SpecSource,
-) = JsonCodec.anyToStringAnyMap(phaseOutput)?.let {
-  featureTaskRuntimeDecomposePlanOutcomeOrNull(it, specSource)
-}
 
 fun FeatureTaskRuntimeProjectionMeasurement.asTelemetryPayload(): Any = toTelemetryMap()
 

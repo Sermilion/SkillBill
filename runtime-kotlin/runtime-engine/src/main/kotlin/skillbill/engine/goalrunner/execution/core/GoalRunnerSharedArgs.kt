@@ -142,6 +142,7 @@ internal data class ProduceMissingPlansArgs(
   val provenance: GoalPlanningContractProvenance,
   val sharedCheckpoint: SharedGoalPreplanCheckpoint,
   val activeSubtasks: List<DecompositionSubtask>,
+  val startedPlanIds: Set<Int> = emptySet(),
 )
 
 internal data class EmptyOrStoppedArgs(

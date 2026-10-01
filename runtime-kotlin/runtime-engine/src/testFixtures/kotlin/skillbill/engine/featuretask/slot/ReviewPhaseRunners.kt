@@ -24,11 +24,6 @@ fun scriptedReviewPhaseRunner(stdout: () -> String): PhaseRunner =
 fun reviewStepOutput(stdout: String): PhaseStepOutput {
   val bytes = stdout.toByteArray()
   return PhaseStepOutput(
-    status = "",
-    value = stdout,
-    summary = null,
-    verdict = null,
-    failureDisposition = null,
     stdout =
       PhaseStepStdout(
         text = stdout,

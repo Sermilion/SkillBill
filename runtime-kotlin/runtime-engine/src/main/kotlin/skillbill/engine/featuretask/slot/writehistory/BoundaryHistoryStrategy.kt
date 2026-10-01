@@ -27,7 +27,6 @@ class BoundaryHistoryStrategy : PhaseStrategy() {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY to
         PhaseStepPolicy(
           mutating = false,
-          relaunchOnInvalidOutput = false,
           singleAgentSession = false,
           readOnlyIdle = false,
           fileMutating = true,

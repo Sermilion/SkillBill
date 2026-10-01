@@ -7,7 +7,6 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAg
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
-import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
@@ -75,7 +74,6 @@ internal data class PhaseAttemptLoopCarryForward(
 
 internal class PhaseAttemptLoopState(
   var iteration: Int,
-  var malformedAttemptCount: Int,
   var outputGateFailures: Int,
   var semanticIteration: Int,
   var continuationSegmentCount: Int,
@@ -165,22 +163,6 @@ internal data class RecordRejectedOutputArgs(
   val exhaustedFixLoop: Boolean? = null,
 )
 
-internal data class CorrectiveRepairRejectionDetail(
-  val rule: String,
-  val path: String,
-  val payloadFreeConstraint: String,
-  val acceptedAfterStructuralRepair: Boolean = false,
-  val structuralRepairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence? = null,
-)
-
-internal data class CorrectiveRepairRejectionArgs(
-  val run: PhaseRun,
-  val iteration: Int,
-  val captured: CapturedPhaseOutput,
-  val diagnosticWrite: FeatureTaskRuntimeRejectedOutputWrite,
-  val rejection: CorrectiveRepairRejectionDetail,
-)
-
 internal data class SettledOutputContext(
   val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
   val repairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
@@ -200,7 +182,6 @@ internal class SettleValidatedOutput(
   val request get() = settlementContext.request
   val progress get() = settlementContext.progress
   val recorder get() = settlementContext.recorder
-  val outputValidator get() = settlementContext.outputValidator
   val phaseGates get() = settlementContext.phaseGates
   val clock get() = settlementContext.clock
   val diagnostics get() = settlementContext.diagnostics

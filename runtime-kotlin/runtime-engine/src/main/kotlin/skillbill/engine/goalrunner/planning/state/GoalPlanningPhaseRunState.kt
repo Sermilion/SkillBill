@@ -126,7 +126,6 @@ private class GoalPlanningUnitRunState(
     FeatureTaskRuntimeRunState(
       initialRecords = emptyMap(),
       transitions = parent.transitions,
-      outputValidator = parent.progress.outputValidator,
       resumeRulesFn = parent.progress.resumeRules,
     )
   override val session = FeatureTaskRuntimeRunLoopSession(operatorBlockRetry = null, initialPendingReentry = null)

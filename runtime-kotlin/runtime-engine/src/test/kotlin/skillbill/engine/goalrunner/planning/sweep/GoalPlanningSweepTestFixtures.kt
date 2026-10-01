@@ -52,10 +52,10 @@ internal class CountingManifestFileStore : DecompositionManifestStore {
   override fun readText(path: Path): String {
     check(path.fileName.toString() !in removedFileNames) { "missing scratch spec at ${path.fileName}" }
     readPaths += path.toString()
-    return if (path.fileName.toString() == "decomposition-manifest.yaml") {
-      decompositionManifest
-    } else {
-      specContents[path.fileName.toString()] ?: "content-${path.fileName}"
+    val fileName = path.fileName.toString()
+    return when {
+      fileName == "decomposition-manifest.yaml" -> decompositionManifest
+      else -> specContents[fileName] ?: defaultSpec(fileName)
     }
   }
 
@@ -72,6 +72,8 @@ internal class CountingManifestFileStore : DecompositionManifestStore {
 
   override fun listDirectChildDirectories(directory: Path): List<Path> = emptyList()
 
+  override fun listTree(directory: Path): List<Path> = emptyList()
+
   override fun deleteIfExists(target: Path): Unit =
     error("CountingManifestFileStore is read-only in goal planning sweep tests.")
 
@@ -87,6 +89,8 @@ internal class CountingManifestFileStore : DecompositionManifestStore {
 
   override fun encodeManifestYaml(wireMap: DecompositionManifestWireMap): String =
     error("CountingManifestFileStore is read-only in goal planning sweep tests.")
+
+  fun specText(fileName: String): String = specContents[fileName] ?: defaultSpec(fileName)
 
   fun countContaining(fragment: String): Int = readPaths.count { path -> fragment in path }
 
@@ -105,6 +109,16 @@ internal class CountingManifestFileStore : DecompositionManifestStore {
     specContents[fileName] = content
   }
 }
+
+internal fun readySubSpec(fileName: String): String =
+  "# $fileName\n\n## Acceptance Criteria\n- The sweep produces a plan for this sub-spec.\n\n" +
+    "## Implementation Details\nPlanned implementation details for $fileName.\n"
+
+internal fun legacySubSpec(fileName: String): String =
+  "# $fileName\n\n## Acceptance Criteria\n- The sweep produces a plan for this sub-spec.\n"
+
+private fun defaultSpec(fileName: String): String =
+  if (fileName.startsWith("spec_subtask_")) readySubSpec(fileName) else "content-$fileName"
 
 internal class FakeInvariantsSource : FeatureTaskRuntimeRunInvariantsSource {
   override fun read(specPath: Path): FeatureTaskRuntimeRunInvariants =

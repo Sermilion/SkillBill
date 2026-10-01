@@ -15,10 +15,10 @@
             "contract_version": "0.7",
             "phase_id": "plan",
             "produced_outputs": {
-                "value": "Fixture plan prose for downstream implement and audit."
+                "value": "{\"contract_version\":\"0.7\",\"phase_id\":\"plan\",\"status\":\"completed\",\"summary\":\"s\",\"produced_outputs\":{\"value\":\"Fixture plan prose for downstream implement and audit.\"}}"
             },
             "status": "completed",
-            "summary": "s"
+            "summary": "{\"contract_version\":\"0.7\",\"phase_id\":\"plan\",\"status\":\"completed\",\"summary\":\"s\",\"produced_outputs\":{\"value\":\"Fixture plan prose for downstream implement and audit.\"}}"
         },
         "planning_contract_id": "https://skill-bill.dev/contracts/goal-planning-preparation-schema.yaml",
         "planning_contract_version": "0.2",
@@ -44,10 +44,10 @@
             "contract_version": "0.7",
             "phase_id": "plan",
             "produced_outputs": {
-                "value": "Fixture plan prose for downstream implement and audit."
+                "value": "{\"contract_version\":\"0.7\",\"phase_id\":\"plan\",\"status\":\"completed\",\"summary\":\"s\",\"produced_outputs\":{\"value\":\"Fixture plan prose for downstream implement and audit.\"}}"
             },
             "status": "completed",
-            "summary": "s"
+            "summary": "{\"contract_version\":\"0.7\",\"phase_id\":\"plan\",\"status\":\"completed\",\"summary\":\"s\",\"produced_outputs\":{\"value\":\"Fixture plan prose for downstream implement and audit.\"}}"
         },
         "planning_contract_id": "https://skill-bill.dev/contracts/goal-planning-preparation-schema.yaml",
         "planning_contract_version": "0.2",

@@ -1,6 +1,5 @@
 package skillbill.engine
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
@@ -38,7 +37,6 @@ class FeatureTaskRuntimeGateRecoveryTest {
                   repoRoot = repo,
                   branchSetup = branch,
                   launcher = launcher,
-                  validator = realFeatureTaskRuntimePhaseOutputValidator,
                 ),
               )
             val payload = rejectedGate(phase, corruption)

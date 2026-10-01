@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.lifecycle.subtask
 
-import skillbill.engine.envelope
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMetadata
 import skillbill.engine.featuretask.lifecycle.continuation.commitShaFromPhasePayload

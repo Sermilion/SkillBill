@@ -1,6 +1,5 @@
 package skillbill.engine
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -35,7 +34,6 @@ class FeatureTaskRuntimeAuditProgressRegressionTest {
         RuntimeHarnessConfig(
           acceptanceCriteria = CRITERIA,
           launcher = launcher,
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
         ),
       )
     val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
@@ -84,7 +82,6 @@ class FeatureTaskRuntimeAuditProgressRegressionTest {
           RuntimeHarnessConfig(
             acceptanceCriteria = CRITERIA,
             launcher = launcher,
-            validator = realFeatureTaskRuntimePhaseOutputValidator,
           ),
         )
       val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
@@ -110,7 +107,7 @@ class FeatureTaskRuntimeAuditProgressRegressionTest {
           facts(if (phase == "audit") auditRemainingAcOutput(text) else defaultPhaseOutput(request))
         }
       val harness =
-        runnerHarness(RuntimeHarnessConfig(launcher = launcher, validator = realFeatureTaskRuntimePhaseOutputValidator))
+        runnerHarness(RuntimeHarnessConfig(launcher = launcher))
       val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
       assertEquals("audit", report.lastIncompletePhase)
       assertTrue("audit_implement_fix" !in harness.launchedPromptPhaseOrder())
@@ -149,7 +146,6 @@ class FeatureTaskRuntimeAuditProgressRegressionTest {
       RuntimeHarnessConfig(
         acceptanceCriteria = CRITERIA,
         launcher = launcher,
-        validator = realFeatureTaskRuntimePhaseOutputValidator,
       )
     val first = runnerHarness(config)
     val interrupted = assertIs<FeatureTaskRuntimeRunReport.Blocked>(first.runner.run(first.request()))

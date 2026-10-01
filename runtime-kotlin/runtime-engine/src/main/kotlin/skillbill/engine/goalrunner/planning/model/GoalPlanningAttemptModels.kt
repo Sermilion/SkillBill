@@ -46,14 +46,8 @@ internal data class GoalPlanningPhaseContext(
 internal data class GoalPlanningProduceAttemptArgs(
   val phase: GoalPlanningPhaseContext,
   val recordedOutputs: List<FeatureTaskRuntimePhaseOutput>,
-  val priorSchemaFailure: String? = null,
   val attempt: Int = 1,
   val resolvedBodies: GoalPlanningResolvedBoundaryBodies = GoalPlanningResolvedBoundaryBodies(),
-)
-
-internal data class GoalPlanningProducePhaseArgs(
-  val attempt: GoalPlanningProduceAttemptArgs,
-  val finalizePayload: (String) -> String = { it },
 )
 
 internal data class GoalPlanningAttemptRecordArgs(

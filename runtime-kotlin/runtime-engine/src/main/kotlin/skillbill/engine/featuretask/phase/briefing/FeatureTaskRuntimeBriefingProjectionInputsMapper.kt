@@ -20,7 +20,6 @@ fun briefingProjectionInputs(
     branchIdentity = inputs.handoff.branchIdentity,
     baseBranch = inputs.handoff.baseBranch,
     workflowId = inputs.workflowId,
-    planningProjectionValidator = inputs.planningProjectionValidator::validate,
     addonContentBySlug = inputs.addonContentBySlug,
     validationDepth = inputs.handoff.validationDepth,
     unselectedStepIds = inputs.handoff.unselectedStepIds,

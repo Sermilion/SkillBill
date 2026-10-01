@@ -26,7 +26,6 @@ class ImplementThenSimplifyStrategy : PhaseStrategy() {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to
         PhaseStepPolicy(
           mutating = true,
-          relaunchOnInvalidOutput = true,
           singleAgentSession = false,
           readOnlyIdle = false,
           fileMutating = true,
@@ -36,7 +35,6 @@ class ImplementThenSimplifyStrategy : PhaseStrategy() {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to
         PhaseStepPolicy(
           mutating = true,
-          relaunchOnInvalidOutput = true,
           singleAgentSession = true,
           readOnlyIdle = false,
           fileMutating = true,

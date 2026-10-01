@@ -74,7 +74,7 @@ import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 
@@ -354,7 +354,6 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
     return PhaseReviewExecutionContext(
       environment.phaseGates.gitOperations.repositoryObservations(),
-      environment.outputValidator,
       environment.clock,
     )
   }
@@ -400,10 +399,10 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
 
   override fun completeCarriedForwardReview(
     iteration: Int,
-    output: AcceptedFeatureTaskRuntimePhaseOutput,
+    output: NormalizedFeatureTaskRuntimePhaseOutput,
   ): String? {
     requireActiveReviewBinding()
-    val normalizedOutput = output.normalizedOutput
+    val normalizedOutput = output
     val phaseState =
       FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
         environment.request,
@@ -412,7 +411,7 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
         PhaseStateRequestArgs(
           write = PhaseStateWriteArgs(run, iteration, STATUS_COMPLETED, true, normalizedOutput.canonicalJson),
           extras =
-            PhaseStateRequestAttachments(normalizedOutput = normalizedOutput, repairEvidence = output.repairEvidence),
+            PhaseStateRequestAttachments(normalizedOutput = normalizedOutput, repairEvidence = null),
         ),
       )
     val prefix = "Carried-forward goal review could not atomically persist its canonical result."
@@ -426,7 +425,7 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
             iteration,
             normalizedOutput.canonicalJson,
             normalizedOutput,
-            output.repairEvidence,
+            null,
           ),
       )
     }.fold(
@@ -567,7 +566,7 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
   override fun completeReview(
     iteration: Int,
     outputText: String,
-    output: AcceptedFeatureTaskRuntimePhaseOutput,
+    output: NormalizedFeatureTaskRuntimePhaseOutput,
     fileManifest: PhaseStepFileManifest,
   ): String? {
     requireActiveReviewBinding()
@@ -586,7 +585,7 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     val blocked =
       with(FeatureTaskRuntimeRunLoopReviewCompletion) {
         if (isGoalReviewRun(run, environment.settlementCoupling().progress)) {
-          persistence.persistGoalReviewCompletion(args, output.normalizedOutput, output.repairEvidence)
+          persistence.persistGoalReviewCompletion(args, output, null)
         } else {
           persistence.persistStandaloneReviewCompletion(args, outputText, output)
         }
@@ -598,7 +597,7 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     attemptCount: Int,
     reason: String,
     disposition: FeatureTaskRuntimeFailureDisposition,
-    carriedOutput: AcceptedFeatureTaskRuntimePhaseOutput?,
+    carriedOutput: NormalizedFeatureTaskRuntimePhaseOutput?,
   ) {
     requireActiveReviewBinding()
     val coupling = environment.settlementCoupling()
@@ -618,9 +617,9 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
         payload =
           carriedOutput?.let {
             BlockAndPersistPayload(
-              normalizedOutput = it.normalizedOutput,
-              outputArtifact = it.normalizedOutput.canonicalJson,
-              repairEvidence = it.repairEvidence,
+              normalizedOutput = it,
+              outputArtifact = it.canonicalJson,
+              repairEvidence = null,
             )
           } ?: BlockAndPersistPayload(),
       ),
@@ -705,14 +704,14 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     ) != null
   }
 
-  override fun settleCarriedForwardReview(output: AcceptedFeatureTaskRuntimePhaseOutput) {
+  override fun settleCarriedForwardReview(output: NormalizedFeatureTaskRuntimePhaseOutput) {
     requireActiveReviewBinding()
     val phaseId = run.phaseId
     if (environment.progress.phase(phaseId).completed) {
       return
     }
     val reentry = environment.session.activeReentry
-    val normalizedOutput = output.normalizedOutput
+    val normalizedOutput = output
     val iteration = environment.progress.phase(phaseId).nextIteration
     val priorRecord = environment.progress.phase(phaseId).record
     val inMemoryOutput =
@@ -721,7 +720,7 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
         iteration,
         normalizedOutput.canonicalJson,
         normalizedOutput,
-        output.repairEvidence,
+        null,
       )
     val phaseState =
       FeatureTaskRuntimePhaseStateRequest(
@@ -733,7 +732,7 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
         finished = true,
         outputArtifact = normalizedOutput.canonicalJson,
         normalizedOutput = normalizedOutput,
-        repairEvidence = output.repairEvidence,
+        repairEvidence = null,
         loopId = reentry?.loopId,
         edgeIteration = reentry?.edgeIteration,
       )

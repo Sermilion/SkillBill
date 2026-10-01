@@ -32,7 +32,6 @@ import skillbill.engine.featuretask.runloop.core.withDisposition
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.observability.continuation
-import skillbill.engine.featuretask.runloop.observability.fixLoopIteration
 import skillbill.engine.featuretask.runloop.output.payloadFreeRejectionReason
 import skillbill.engine.featuretask.runloop.output.rejectionPath
 import skillbill.engine.featuretask.runloop.output.retryRejectionReason
@@ -41,8 +40,6 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudge
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
-import skillbill.engine.featuretask.runner.nonRetryingPhaseSchemaBlockReason
-import skillbill.engine.featuretask.runner.withSchemaGateDetail
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -138,111 +135,18 @@ object PhaseAttemptContinuations {
     return null
   }
 
-  internal fun settleMalformedOutput(
-    recorder: PhaseRunRecords,
-    context: FixLoopBranchContext,
-  ): PhaseOutcome? {
-    val run = context.run
-    val attempt = context.attempt
-    val loop = context.loop
-    val observability = context.observability
-    val agentId = context.agentId
-    if (run.policy.singleAgentSession) {
-      return blockSingleAgentMalformedOutput(
-        recorder,
-        context,
-      )
-    }
-    loop.outputGateFailures += 1
-    loop.malformedAttemptCount += 1
-    val formatBlock =
-      FeatureTaskRuntimeAttemptBudgets.outputGateBlockReason(
-        run.phaseId,
-        run.policy,
-        loop.outputGateFailures,
-      )
-    if (formatBlock == null) {
-      loop.iteration += 1
-      loop.priorCorrection =
-        PriorAttemptCorrection.schemaGate(
-          requireNotNull(attempt.schemaInvalidRetryReason),
-          correctiveRepairContext = attempt.correctiveRepairContext,
-        )
-      observability.fixLoopIteration(run.phaseId, agentId, loop.iteration, loop.malformedAttemptCount)
-      return null
-    }
-    return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-      context.progress,
-      context.loopTransitions,
-      recorder,
-      PhaseBlockRequest(
-        run = run,
-        attemptCount = loop.iteration,
-        reason = withSchemaGateDetail(formatBlock, requireNotNull(attempt.schemaInvalidOperatorReason)),
-        observability = observability,
-        payload =
-          BlockAndPersistPayload(
-            fileManifest = attempt.fileManifest,
-            rejectedOutput = attempt.rejectedOutput,
-          ),
-        failureDisposition = FeatureTaskRuntimeFailureDisposition.INVALID_OUTPUT,
-      ),
-    )
-  }
-
-  private fun blockSingleAgentMalformedOutput(
-    recorder: PhaseRunRecords,
-    context: FixLoopBranchContext,
-  ): PhaseOutcome {
-    val attempt = context.attempt
-    return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-      context.progress,
-      context.loopTransitions,
-      recorder,
-      PhaseBlockRequest(
-        run = context.run,
-        attemptCount = context.loop.iteration,
-        reason =
-          withSchemaGateDetail(
-            nonRetryingPhaseSchemaBlockReason(context.run.phaseId),
-            requireNotNull(attempt.schemaInvalidOperatorReason),
-          ),
-        observability = context.observability,
-        payload =
-          BlockAndPersistPayload(
-            fileManifest = attempt.fileManifest,
-            rejectedOutput = attempt.rejectedOutput,
-          ),
-        failureDisposition = FeatureTaskRuntimeFailureDisposition.INVALID_OUTPUT,
-      ),
-    )
-  }
-
   internal fun settleRetryableTerminal(
     recorder: PhaseRunRecords,
     context: FixLoopBranchContext,
+    terminal: AttemptResult.RetryableTerminal,
   ): PhaseOutcome? {
     val run = context.run
-    val attempt = context.attempt
     val loop = context.loop
-    val observability = context.observability
-    val agentId = context.agentId
-    if (!run.policy.relaunchOnInvalidOutput) {
-      return blockNonRelaunchableTerminal(recorder, context)
-    }
-    val continuationOutput = attempt.retryableTerminalOutput
     val reportPersisted =
-      continuationOutput == null || recordIncompleteAttempt(recorder, run, loop.iteration, attempt)
+      terminal.continuationOutput == null ||
+        recordIncompleteAttempt(recorder, run, loop.iteration, context.attempt)
     val exhausted = loop.semanticIteration >= FeatureTaskRuntimeAttemptBudgets.MAX_PROCESS_FAILURE_ATTEMPTS
     if (!reportPersisted || exhausted) {
-      val reason =
-        if (!reportPersisted) {
-          "Phase '${run.phaseId}' could not durably save its retryable repair report; " +
-            "continuing would lose work evidence."
-        } else {
-          "Phase '${run.phaseId}' exhausted its retryable-failure budget after ${loop.semanticIteration} attempts. " +
-            requireNotNull(attempt.retryableOperatorReason)
-        }
       return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
         context.progress,
         context.loopTransitions,
@@ -250,32 +154,29 @@ object PhaseAttemptContinuations {
         PhaseBlockRequest(
           run = run,
           attemptCount = loop.iteration,
-          reason = reason,
-          observability = observability,
-          payload =
-            BlockAndPersistPayload(
-              fileManifest = attempt.fileManifest,
-              normalizedOutput = continuationOutput,
-            ),
-          failureDisposition =
+          reason =
             if (reportPersisted) {
-              requireNotNull(
-                attempt.retryableTerminalDisposition,
-              )
+              "Phase '${run.phaseId}' exhausted its retryable-failure budget after " +
+                "${loop.semanticIteration} attempts. ${terminal.operatorReason}"
             } else {
-              FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE
+              "Phase '${run.phaseId}' could not durably save its retryable repair report; " +
+                "continuing would lose work evidence."
             },
+          observability = context.observability,
+          payload =
+            BlockAndPersistPayload(fileManifest = terminal.fileManifest, normalizedOutput = terminal.normalizedOutput),
+          failureDisposition =
+            if (reportPersisted) terminal.failureDisposition else FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
         ),
       )
     }
     val failedIteration = loop.semanticIteration
     loop.iteration += 1
     loop.semanticIteration += 1
-    loop.priorCorrection =
-      PriorAttemptCorrection.retryableTerminal(requireNotNull(attempt.retryableTerminalRetryReason))
-    observability.continuation(
+    loop.priorCorrection = PriorAttemptCorrection.retryableTerminal(terminal.operatorReason)
+    context.observability.continuation(
       run.phaseId,
-      agentId,
+      context.agentId,
       loop.iteration,
       failedIteration,
       FeatureTaskRuntimeContinuationKind.PROCESS_RETRY,
@@ -283,35 +184,14 @@ object PhaseAttemptContinuations {
     return null
   }
 
-  private fun blockNonRelaunchableTerminal(
-    recorder: PhaseRunRecords,
-    context: FixLoopBranchContext,
-  ): PhaseOutcome =
-    FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-      context.progress,
-      context.loopTransitions,
-      recorder,
-      PhaseBlockRequest(
-        run = context.run,
-        attemptCount = context.loop.iteration,
-        reason = requireNotNull(context.attempt.retryableOperatorReason),
-        observability = context.observability,
-        payload =
-          BlockAndPersistPayload(
-            fileManifest = context.attempt.fileManifest,
-            normalizedOutput = context.attempt.retryableTerminalOutput,
-          ),
-        failureDisposition = requireNotNull(context.attempt.retryableTerminalDisposition),
-      ),
-    )
-
   internal fun recordIncompleteAttempt(
     recorder: PhaseRunRecords,
     run: PhaseRun,
     iteration: Int,
     attempt: AttemptResult,
   ): Boolean {
-    val normalized = attempt.incompleteWorkOutput ?: attempt.retryableTerminalOutput ?: return false
+    val terminal = attempt.retryableTerminal
+    val normalized = attempt.incompleteWorkOutput ?: terminal?.continuationOutput ?: return false
     return recorder.recordIncompleteImplementationAttempt(
       FeatureTaskRuntimePhaseStateRequest(
         workflowId = run.request.workflowId,
@@ -321,7 +201,7 @@ object PhaseAttemptContinuations {
         resolvedAgentId = run.resolvedAgent.resolvedAgentId,
         finished = false,
         normalizedOutput = normalized,
-        failureDisposition = attempt.retryableTerminalDisposition,
+        failureDisposition = terminal?.failureDisposition,
         loopId = run.reentry?.loopId,
         edgeIteration = run.reentry?.edgeIteration,
         mutating = run.policy.mutating,

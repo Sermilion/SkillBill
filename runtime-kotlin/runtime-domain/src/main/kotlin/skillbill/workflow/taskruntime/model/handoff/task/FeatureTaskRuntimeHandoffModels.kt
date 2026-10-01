@@ -1,13 +1,20 @@
 package skillbill.workflow.taskruntime.model.handoff.task
 
+import skillbill.agent.model.PhaseOutput
 import skillbill.agentaddon.model.AgentAddonSelection
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
+import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.review.context.model.launch.CodeReviewExecutionMode
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedger
+import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.MAX_ACCEPTANCE_CRITERION_ORDINAL
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
@@ -88,14 +95,31 @@ data class FeatureTaskRuntimeCeremonyScaling(
 data class FeatureTaskRuntimePhaseOutput(
   val phaseId: String,
   val iteration: Int,
-  val payload: String,
+  val output: PhaseOutput,
   val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput? = null,
   val repairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence? = null,
 ) {
+  constructor(
+    phaseId: String,
+    iteration: Int,
+    payload: String,
+    normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput? = null,
+    repairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence? = null,
+  ) : this(
+    phaseId,
+    iteration,
+    normalizedOutput?.output ?: PhaseOutput(value = payload),
+    normalizedOutput,
+    repairEvidence,
+  )
+
   init {
     require(phaseId.isNotBlank()) { "FeatureTaskRuntimePhaseOutput.phaseId must be non-blank." }
     require(iteration >= 1) { "FeatureTaskRuntimePhaseOutput.iteration must be >= 1, was $iteration." }
   }
+
+  val payload: String
+    get() = normalizedOutput?.canonicalJson ?: output.value
 }
 
 data class FeatureTaskRuntimeResolvedUpstreamOutputs(
@@ -103,10 +127,110 @@ data class FeatureTaskRuntimeResolvedUpstreamOutputs(
 )
 
 data class NormalizedFeatureTaskRuntimePhaseOutput(
-  val canonicalJson: String,
-  internal val envelope: Map<String, Any?>,
+  val phaseId: String,
+  val status: String,
+  val summary: String,
+  val output: PhaseOutput,
+  val verdict: String? = null,
+  val failureDisposition: String? = null,
+  internal val runtimeRecord: Map<String, Any?> = emptyMap(),
+  internal val historicalRecord: Map<String, Any?>? = null,
 ) {
-  fun envelopePayload(): Any = envelope
+  internal val envelope: Map<String, Any?>
+    get() = recordView()
+
+  val canonicalJson: String
+    get() = JsonCodec.mapToJsonString(historicalRecord ?: recordView())
+
+  fun envelopePayload(): Any = recordView()
+
+  private fun recordView(): Map<String, Any?> {
+    val record = linkedMapOf<String, Any?>()
+    record[SharedPayloadKeys.CONTRACT_VERSION] =
+      runtimeRecord[SharedPayloadKeys.CONTRACT_VERSION] ?: FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+    record[SharedPayloadKeys.PHASE_ID] = phaseId
+    if (status.isNotEmpty()) record[SharedPayloadKeys.STATUS] = status
+    if (summary.isNotEmpty()) record[SharedPayloadKeys.SUMMARY] = summary
+    record[SharedPayloadKeys.PRODUCED_OUTPUTS] = producedOutputsView()
+    verdict?.let { record[SharedPayloadKeys.VERDICT] = it }
+    failureDisposition?.let { record[SharedPayloadKeys.FAILURE_DISPOSITION] = it }
+    runtimeRecord.forEach { (key, value) ->
+      if (key != SharedPayloadKeys.CONTRACT_VERSION && key != SharedPayloadKeys.PRODUCED_OUTPUTS) record[key] = value
+    }
+    return record
+  }
+
+  private fun producedOutputsView(): Any? {
+    val stored = runtimeRecord[SharedPayloadKeys.PRODUCED_OUTPUTS]
+    if (stored != null && stored !is Map<*, *>) return stored
+    val produced = linkedMapOf<String, Any?>()
+    if (output.value.isNotEmpty()) produced[SharedPayloadKeys.VALUE] = output.value
+    output.prompt?.takeIf(String::isNotBlank)?.let { produced[SharedPayloadKeys.PROMPT] = it }
+    stored?.forEach { (key, value) -> produced.putIfAbsent(key.toString(), value) }
+    return produced
+  }
+
+  companion object {
+    private val CORE_KEYS: Set<String> =
+      setOf(
+        SharedPayloadKeys.PHASE_ID,
+        SharedPayloadKeys.STATUS,
+        SharedPayloadKeys.SUMMARY,
+        SharedPayloadKeys.VERDICT,
+        SharedPayloadKeys.FAILURE_DISPOSITION,
+      )
+
+    fun fromEnvelopeText(
+      text: String,
+      sourceLabel: String,
+    ): NormalizedFeatureTaskRuntimePhaseOutput {
+      val record =
+        JsonCodec
+          .parseObjectOrNull(text)
+          ?.let(JsonCodec::jsonElementToValue)
+          ?.let(JsonCodec::anyToStringAnyMap)
+          ?: throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+            sourceLabel = sourceLabel,
+            reason = "must be a JSON object.",
+          )
+      unsupportedHistoricalShape(record)?.let { reason ->
+        throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(sourceLabel = sourceLabel, reason = reason)
+      }
+      return fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(record))
+    }
+
+    private fun unsupportedHistoricalShape(record: Map<String, Any?>): String? {
+      val produced = record[SharedPayloadKeys.PRODUCED_OUTPUTS]
+      val value = (produced as? Map<*, *>)?.get(SharedPayloadKeys.VALUE)
+      val prompt = (produced as? Map<*, *>)?.get(SharedPayloadKeys.PROMPT)
+      return when {
+        produced == null -> null
+        produced !is Map<*, *> -> "produced_outputs must be an object in a supported record."
+        value != null && value !is String -> "produced_outputs.value must be a string in a supported record."
+        prompt != null && prompt !is String -> "produced_outputs.prompt must be a string in a supported record."
+        else -> null
+      }
+    }
+
+    fun fromRecordMap(record: FeatureTaskRuntimeWorkflowArtifactMap): NormalizedFeatureTaskRuntimePhaseOutput {
+      val produced = (record[SharedPayloadKeys.PRODUCED_OUTPUTS] as? Map<*, *>)?.mapKeys { it.key.toString() }
+      val remainder = LinkedHashMap(record.filterKeys { it !in CORE_KEYS })
+      if (produced != null) {
+        remainder[SharedPayloadKeys.PRODUCED_OUTPUTS] =
+          produced.filterKeys { it != SharedPayloadKeys.VALUE && it != SharedPayloadKeys.PROMPT }
+      }
+      return NormalizedFeatureTaskRuntimePhaseOutput(
+        phaseId = record[SharedPayloadKeys.PHASE_ID]?.toString().orEmpty(),
+        status = record[SharedPayloadKeys.STATUS]?.toString().orEmpty(),
+        summary = record[SharedPayloadKeys.SUMMARY]?.toString().orEmpty(),
+        output = durableArtifactMapReader(record).historicalPhaseOutput(),
+        verdict = record[SharedPayloadKeys.VERDICT]?.toString(),
+        failureDisposition = record[SharedPayloadKeys.FAILURE_DISPOSITION]?.toString(),
+        runtimeRecord = remainder,
+        historicalRecord = record,
+      )
+    }
+  }
 }
 
 data class FeatureTaskRuntimePhaseHandoff(

@@ -8,9 +8,21 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimePhasePromptComposerSettlementTest {
   @Test
-  fun `settling non-review steps with a settlement target are told to settle through the MCP tools`() {
+  fun `settling steps with a settlement target are told to settle through the MCP tools`() {
     val target = FeatureTaskRuntimePhaseSettlementTarget(workflowId = "wftr-20260904-210526-r3x0", attempt = 2)
-    listOf("preplan", "plan", "implement", "simplify", "audit", "validate", "write_history", "pr").forEach { phaseId ->
+    listOf(
+      "preplan",
+      "plan",
+      "implement",
+      "simplify",
+      "audit",
+      "review",
+      "verify_findings",
+      "implement_fix",
+      "validate",
+      "write_history",
+      "pr",
+    ).forEach { phaseId ->
       val prompt =
         composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(phaseId)) {
           copy(phaseSettlement = target)
@@ -26,25 +38,6 @@ class FeatureTaskRuntimePhasePromptComposerSettlementTest {
       assertTrue(
         prompt.indexOf("## Required final output (durable settlement)") < prompt.indexOf(FALLBACK_HEADING),
         "settlement precedes the fallback final object for $phaseId",
-      )
-    }
-  }
-
-  @Test
-  fun `review steps keep the printed envelope contract even with a settlement target`() {
-    val target = FeatureTaskRuntimePhaseSettlementTarget(workflowId = "wftr-20260904-210526-r3x0", attempt = 1)
-    listOf("review", "verify_findings", "implement_fix").forEach { phaseId ->
-      val prompt =
-        composePhasePrompt(PROMPT_COMPOSER_ISSUE_KEY, promptComposerBriefingFor(phaseId)) {
-          copy(phaseSettlement = target)
-        }
-
-      assertFalse(prompt.contains("durable settlement"), "no settlement directive for $phaseId")
-      assertContains(
-        prompt,
-        "## Required final output (validated schema gate)",
-        false,
-        "required envelope for $phaseId",
       )
     }
   }
@@ -71,7 +64,7 @@ class FeatureTaskRuntimePhasePromptComposerSettlementTest {
     assertFalse(prompt.contains(FALLBACK_HEADING))
     assertFalse(prompt.contains("validated schema gate"))
     assertContains(prompt, "## Required final output\n")
-    assertContains(prompt, "\"value\": non-blank prose")
+    assertContains(prompt, "plain prose")
   }
 
   private companion object {

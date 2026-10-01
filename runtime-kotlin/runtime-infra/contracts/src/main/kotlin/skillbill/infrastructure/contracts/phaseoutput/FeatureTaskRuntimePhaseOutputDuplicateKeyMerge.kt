@@ -10,10 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
-import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputFormat
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairOperation
 import kotlin.coroutines.cancellation.CancellationException
 
 internal data class DuplicateKeyMerge(
@@ -27,49 +24,6 @@ internal object DuplicateKeyMergeParser {
   private val jsonFactory = JsonFactory()
   private val yamlFactory = YAMLFactory()
   private val jsonMapper = ObjectMapper()
-
-  fun repair(
-    text: String,
-    sourceLabel: String,
-    sourceOffset: Int = 0,
-    sourceText: String = text,
-  ): FeatureTaskRuntimePhaseOutputStructuralRepairDecision? {
-    val trimmed = text.trimStart()
-    if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return null
-    return StrictPhaseOutputParser.formatsFor(text).firstNotNullOfOrNull { format ->
-      acceptedMerge(text, format, sourceLabel, sourceOffset, sourceText)
-    }
-  }
-
-  private fun acceptedMerge(
-    text: String,
-    format: FeatureTaskRuntimePhaseOutputFormat,
-    sourceLabel: String,
-    sourceOffset: Int,
-    sourceText: String,
-  ): FeatureTaskRuntimePhaseOutputStructuralRepairDecision? {
-    if (
-      format == FeatureTaskRuntimePhaseOutputFormat.YAML &&
-      !StructuralRepairSyntax.isConservativeYamlFlow(text)
-    ) {
-      return null
-    }
-    val merged = merge(text, format)?.takeIf { it.node.isObject } ?: return null
-    val evidence =
-      FeatureTaskRuntimePhaseOutputRepairEvidence(
-        format = merged.format,
-        originalDigest = StructuralRepairSyntax.sha256Hex(text),
-        repairedDigest = StructuralRepairSyntax.sha256Hex(merged.repairedText),
-        operation = FeatureTaskRuntimePhaseOutputRepairOperation.DEDUPLICATE_KEYS,
-        sourceLocation =
-          StructuralRepairSyntax.sourceLocation(
-            sourceLabel,
-            sourceText,
-            sourceOffset + merged.firstDuplicateOffset,
-          ),
-      )
-    return StructuralRepairDecisions.accepted(merged.repairedText, merged.node, evidence)
-  }
 
   fun merge(
     text: String,

@@ -59,10 +59,10 @@
                     "repository_identity": "repo-root-realpath-v1:__NORMALIZED_REPO_ROOT__",
                     "validation_guidance": "Run focused Gradle checks."
                 },
-                "value": "Fixture preplan prose for downstream plan."
+                "value": "{\"contract_version\":\"0.7\",\"phase_id\":\"preplan\",\"status\":\"completed\",\"summary\":\"s\",\"produced_outputs\":{\"value\":\"Fixture preplan prose for downstream plan.\"}}"
             },
             "status": "completed",
-            "summary": "s"
+            "summary": "{\"contract_version\":\"0.7\",\"phase_id\":\"preplan\",\"status\":\"completed\",\"summary\":\"s\",\"produced_outputs\":{\"value\":\"Fixture preplan prose for downstream plan.\"}}"
         },
         "repair_evidence_json": null,
         "repository_identity": "repo-root-realpath-v1:__NORMALIZED_REPO_ROOT__"
