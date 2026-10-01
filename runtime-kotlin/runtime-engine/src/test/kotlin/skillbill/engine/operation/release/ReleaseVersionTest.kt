@@ -1,6 +1,6 @@
 package skillbill.engine.operation.release
 
-import skillbill.error.operation.MissingReleaseBumpError
+import skillbill.engine.operation.core.MissingReleaseBumpError
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals

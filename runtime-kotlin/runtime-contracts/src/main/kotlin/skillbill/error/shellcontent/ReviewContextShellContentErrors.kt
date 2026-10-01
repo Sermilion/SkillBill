@@ -31,13 +31,13 @@ class InvalidReviewContextSchemaError(
     cause,
   )
 
-const val REVIEW_HUNK_EVIDENCE_LOCATOR_MISSING: String = "review_hunk_evidence_locator_missing"
+private const val REVIEW_HUNK_EVIDENCE_LOCATOR_MISSING: String = "review_hunk_evidence_locator_missing"
 
-const val REVIEW_HUNK_EVIDENCE_LOCATOR_UNREADABLE: String = "review_hunk_evidence_locator_unreadable"
+private const val REVIEW_HUNK_EVIDENCE_LOCATOR_UNREADABLE: String = "review_hunk_evidence_locator_unreadable"
 
 const val REVIEW_HUNK_EVIDENCE_INTEGRITY: String = "review_hunk_evidence_integrity"
 
-const val REVIEW_LEARNING_RULE_TEXT_TOO_LONG: String = "review_learning_rule_text_too_long"
+private const val REVIEW_LEARNING_RULE_TEXT_TOO_LONG: String = "review_learning_rule_text_too_long"
 
 class ReviewLearningRuleTextTooLongError(
   val learningId: String,
@@ -48,7 +48,7 @@ class ReviewLearningRuleTextTooLongError(
       "over the bounded projection limit of $maxChars; refusing to truncate.",
   )
 
-const val REVIEW_LEARNING_TITLE_TOO_LONG: String = "review_learning_title_too_long"
+private const val REVIEW_LEARNING_TITLE_TOO_LONG: String = "review_learning_title_too_long"
 
 class ReviewLearningTitleTooLongError(
   val learningId: String,

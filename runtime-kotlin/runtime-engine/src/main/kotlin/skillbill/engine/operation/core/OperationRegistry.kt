@@ -1,8 +1,5 @@
 package skillbill.engine.operation.core
 
-import skillbill.error.operation.DuplicateOperationIdError
-import skillbill.error.operation.UnknownOperationIdError
-
 class OperationRegistry(
   operations: List<Operation>,
 ) {

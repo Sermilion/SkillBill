@@ -33,7 +33,7 @@ What stays unchanged, with reasons, is listed in the investigation. In short: th
 
 ## Acceptance Criteria
 
-1. No file under `runtime-kotlin/runtime-contracts/src` declares `InvalidMcpToolArgumentError`. runtime-mcp main declares it once, `internal`, in `skillbill.mcp.shared`, with the same constructor parameters, base class and message template.
+1. No file under `../../../runtime-kotlin/runtime-contracts/src` declares `InvalidMcpToolArgumentError`. runtime-mcp main declares it once, `internal`, in `skillbill.mcp.shared`, with the same constructor parameters, base class and message template.
 2. runtime-mcp `McpLearningsSkippedContract` writes `applied_learnings` through `NO_APPLIED_LEARNINGS`. `InvalidFeatureTaskRuntimePhaseOutputSchemaError` defaults `failureCode` to `FeatureTaskRuntimePhaseOutputFailureCode.SCHEMA_INVALID.wireValue`. Both emitted values are unchanged.
 3. `FailureWireCodeContract.kt` declares no `Array<E>.failureWireByValue` overload. The `EnumEntries` overload is unchanged.
 4. The six declarations listed in investigation F-005 are `private`, with unchanged values. `UpdateCheckPayloadKeys` and `WorkflowContinueSessionSummaryPayloadKeys` stay public.
@@ -47,7 +47,7 @@ What stays unchanged, with reasons, is listed in the investigation. In short: th
 - No new module, framework, port, dependency bag, architecture-test class or scanner extension.
 - No baseline growth and no `RuntimeModuleCatalog` edge change.
 - Class names, member names, message templates and wire values are unchanged; only packages, modules and visibility change.
-- Follow `runtime-kotlin/ARCHITECTURE.md` Design Principles and `docs/code-principles.md`: no `//` comments, KDoc only on interfaces, no inline FQNs, package sibling limits.
+- Follow `../../../runtime-kotlin/ARCHITECTURE.md` Design Principles and `docs/code-principles.md`: no `//` comments, KDoc only on interfaces, no inline FQNs, package sibling limits.
 
 ## Non-Goals
 
@@ -94,7 +94,7 @@ This order keeps rebases small. SKILL-390 goes last because it touches the most 
 ## References
 
 - `investigation.md` (this bundle)
-- `../done/SKILL-374-runtime-contracts-shared-kernel/`
+- `../SKILL-374-runtime-contracts-shared-kernel`
 - `runtime-kotlin/runtime-contracts/**`, `runtime-kotlin/runtime-engine/src/{main,test}/kotlin/skillbill/engine/operation/**`, `runtime-kotlin/runtime-mcp/src/main/kotlin/skillbill/mcp/{shared,core,review}/**`, `runtime-kotlin/runtime-infra/contracts/src/repoTest/**`
 
 ## Next Path

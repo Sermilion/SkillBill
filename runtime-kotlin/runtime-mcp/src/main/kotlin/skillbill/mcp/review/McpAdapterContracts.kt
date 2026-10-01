@@ -3,6 +3,7 @@ package skillbill.mcp.review
 import skillbill.contracts.JsonPayloadContract
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.learning.LearningPayloadKeys
+import skillbill.contracts.learning.NO_APPLIED_LEARNINGS
 import skillbill.contracts.review.ReviewFinishedTelemetryPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.system.UpdateCheckPayloadKeys
@@ -41,7 +42,7 @@ internal data class McpLearningsSkippedContract(
     linkedMapOf(
       SharedPayloadKeys.STATUS to "skipped",
       UpdateCheckPayloadKeys.REASON to reason,
-      LearningPayloadKeys.APPLIED_LEARNINGS to "none",
+      LearningPayloadKeys.APPLIED_LEARNINGS to NO_APPLIED_LEARNINGS,
       LearningPayloadKeys.LEARNINGS to emptyList<Any>(),
     )
 }

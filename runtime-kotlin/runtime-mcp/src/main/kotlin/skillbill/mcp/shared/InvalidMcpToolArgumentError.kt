@@ -1,6 +1,8 @@
-package skillbill.error.core
+package skillbill.mcp.shared
 
-class InvalidMcpToolArgumentError(
+import skillbill.error.core.ShellContentContractException
+
+internal class InvalidMcpToolArgumentError(
   val toolName: String,
   val argumentKey: String,
   val detail: String,

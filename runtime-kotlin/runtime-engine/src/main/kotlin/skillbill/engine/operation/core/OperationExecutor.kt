@@ -1,8 +1,6 @@
 package skillbill.engine.operation.core
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.operation.OperationConfirmationUnsupportedError
-import skillbill.error.operation.OperationRefusalError
 import java.nio.file.Path
 import java.util.UUID
 

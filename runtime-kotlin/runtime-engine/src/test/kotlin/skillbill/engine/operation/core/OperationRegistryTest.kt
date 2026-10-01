@@ -1,7 +1,5 @@
 package skillbill.engine.operation.core
 
-import skillbill.error.operation.DuplicateOperationIdError
-import skillbill.error.operation.UnknownOperationIdError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith

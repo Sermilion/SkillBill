@@ -27,7 +27,7 @@ data class LearningEntryDto(
     )
 }
 
-data class LearningSummaryWire(
+private data class LearningSummaryWire(
   val reference: String,
   val scope: String,
   val title: String,

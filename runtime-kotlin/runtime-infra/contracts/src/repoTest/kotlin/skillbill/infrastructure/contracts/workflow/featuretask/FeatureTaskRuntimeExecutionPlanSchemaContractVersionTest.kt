@@ -1,4 +1,4 @@
-package skillbill.contracts.workflow.featuretask
+package skillbill.infrastructure.contracts.workflow.featuretask
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper

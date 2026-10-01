@@ -3,9 +3,9 @@ package skillbill.mcp.core
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
-import skillbill.error.core.InvalidMcpToolArgumentError
 import skillbill.error.core.ShellContentContractException
 import skillbill.error.learning.InvalidLearningSourceError
+import skillbill.mcp.shared.InvalidMcpToolArgumentError
 import skillbill.mcp.shared.McpComponent
 import skillbill.mcp.shared.McpToolArguments
 import skillbill.mcp.shared.McpToolPayloadKeys

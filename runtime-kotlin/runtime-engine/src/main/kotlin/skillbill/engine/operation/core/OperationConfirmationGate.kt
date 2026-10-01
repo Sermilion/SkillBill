@@ -1,13 +1,6 @@
 package skillbill.engine.operation.core
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.operation.ConsumedOperationTokenError
-import skillbill.error.operation.ForeignOperationTokenError
-import skillbill.error.operation.MovedOperationAnchorsError
-import skillbill.error.operation.OperationAnchorUnreadableError
-import skillbill.error.operation.OperationRefusalError
-import skillbill.error.operation.SupersededOperationTokenError
-import skillbill.error.operation.UnknownOperationTokenError
 import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.operation.model.OperationAnchors
 import skillbill.ports.operation.model.OperationProposal
