@@ -48,6 +48,7 @@ internal object AcceptanceAuditRemainingCriteriaParser {
     )
   private val resolved =
     Regex("""^(?:is |was |has been )?(?:already )?(?:satisfied|resolved|closed)\b""", RegexOption.IGNORE_CASE)
+  private val testOnlyCriterion = Regex("""\b(?:is|are)\s+test-only\b""", RegexOption.IGNORE_CASE)
 
   fun parse(
     text: String,
@@ -149,22 +150,28 @@ internal object AcceptanceAuditRemainingCriteriaParser {
     return when {
       identities.any(satisfied::contains) ->
         AcceptanceAuditRemainingCriteria.Unusable("Audit declares a criterion both open and satisfied.")
-      identities.isEmpty() -> parseNarrative(value, catalog)
+      identities.isEmpty() -> parseNarrative(value, catalog, satisfied)
       else -> AcceptanceAuditRemainingCriteria.Known(identities.toSet())
     }
   }
 
-  private fun isSatisfiedSummary(trimmed: String): Boolean =
-    !trimmed.startsWith("-") &&
-      !trimmed.startsWith("*") &&
-      trimmed.contains("no remaining production gap", ignoreCase = true)
+  private fun isSatisfiedSummary(trimmed: String): Boolean {
+    if (listItem.containsMatchIn(trimmed)) return false
+    val statement = trimmed.split(segmentBreak).first()
+    return statement.contains("no remaining production gap", ignoreCase = true) ||
+      (
+        findingStart.containsMatchIn(statement) &&
+          !openCue.containsMatchIn(statement) &&
+          (metCue.containsMatchIn(statement) || testOnlyCriterion.containsMatchIn(statement))
+      )
+  }
 
   private fun collectSatisfied(
     trimmed: String,
     catalog: AcceptanceAuditCatalog.Known,
     satisfied: MutableSet<String>,
   ): AcceptanceAuditRemainingCriteria? {
-    for (reference in label.findAll(trimmed)) {
+    for (reference in label.findAll(trimmed.split(segmentBreak).first())) {
       satisfied += catalog.resolve(reference.value)
         ?: return AcceptanceAuditRemainingCriteria.Unusable("Unknown criterion in satisfied summary.")
     }
@@ -185,6 +192,7 @@ internal object AcceptanceAuditRemainingCriteriaParser {
   private fun parseNarrative(
     value: String,
     catalog: AcceptanceAuditCatalog.Known,
+    satisfied: Set<String>,
   ): AcceptanceAuditRemainingCriteria {
     val identities = linkedSetOf<String>()
     var completionStated = false
@@ -200,10 +208,12 @@ internal object AcceptanceAuditRemainingCriteriaParser {
             ?: return AcceptanceAuditRemainingCriteria.Unusable(
               "Unknown remaining criterion ${reference.value.take(AcceptanceAuditCatalog.DIAGNOSTIC_LABEL_LIMIT)}.",
             )
-        if (!declaresMet) identities += identity
+        if (!declaresMet && isRemainingReference(identity, satisfied, settled)) identities += identity
       }
     }
     return when {
+      identities.any(satisfied::contains) ->
+        AcceptanceAuditRemainingCriteria.Unusable("Audit declares a criterion both open and satisfied.")
       identities.isNotEmpty() -> AcceptanceAuditRemainingCriteria.Known(identities.toSet())
       completionStated -> AcceptanceAuditRemainingCriteria.Complete
       else ->
@@ -212,6 +222,12 @@ internal object AcceptanceAuditRemainingCriteriaParser {
         )
     }
   }
+
+  private fun isRemainingReference(
+    identity: String,
+    satisfied: Set<String>,
+    segment: String,
+  ): Boolean = identity !in satisfied || openCue.containsMatchIn(segment)
 
   private fun parseReference(
     reference: String,

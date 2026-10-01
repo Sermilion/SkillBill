@@ -115,6 +115,32 @@ class AcceptanceAuditProgressParsingTest {
   }
 
   @Test
+  fun `SKILL-389 completed audit rationale advances past audit`() {
+    val criteria = (1..8).map { "AC-$it. Required behavior $it" }
+    val report = checkNotNull(javaClass.getResource("/featuretask/audit/skill-389-completed-audit.txt")).readText()
+
+    assertTrue(AcceptanceAuditProgress.declaresComplete(criteria, report))
+    assertEquals(null, AcceptanceAuditProgress.rejectionReason(criteria, report, "- AC-002: gap", true, false))
+  }
+
+  @Test
+  fun `satisfied rationale preserves remaining gaps and rejects conflicting status`() {
+    val catalog = assertIs<AcceptanceAuditCatalog.Known>(AcceptanceAuditCatalog.create(CRITERIA))
+    val report = "AC-001 is satisfied. Its implementation meets the requirement.\nAC-002: export wiring is missing."
+
+    val parsed =
+      assertIs<AcceptanceAuditRemainingCriteria.Known>(AcceptanceAuditRemainingCriteriaParser.parse(report, catalog))
+    assertEquals(setOf("AC-002"), parsed.identities)
+    listOf(
+      "AC-001 is satisfied.\n- AC-001: wiring is missing.",
+      "No production criteria remain.\nAC-001 is satisfied.\nCriterion AC-001 is still missing its export wiring.",
+      "No production criteria remain.\n- AC-001: resolved",
+    ).forEach {
+      assertIs<AcceptanceAuditRemainingCriteria.Unusable>(AcceptanceAuditRemainingCriteriaParser.parse(it, catalog), it)
+    }
+  }
+
+  @Test
   fun `prose naming the same or a larger set after repair blocks as stalled`() {
     val before = "Criteria AC1 and AC2 are still open because of missing production behavior."
     listOf(
