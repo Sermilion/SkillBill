@@ -281,6 +281,7 @@ internal fun ideStatusService(
     branchSource = CheckedOutBranchSource(::fixtureCheckedOutBranch),
     clock = ideStatusClock,
     repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+    manifestStore = manifestStore,
   )
 }
 

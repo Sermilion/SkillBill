@@ -210,6 +210,7 @@ private class SnapshotFixture(
       branchSource = CheckedOutBranchSource { "feat/SKILL-999-snapshot" },
       clock = Clock.fixed(observedAt, ZoneOffset.UTC),
       repositoryEnclosingRootPort = CanonicalRepositoryRoot,
+      manifestStore = component.goalRunnerManifestStore,
     )
   }
 }

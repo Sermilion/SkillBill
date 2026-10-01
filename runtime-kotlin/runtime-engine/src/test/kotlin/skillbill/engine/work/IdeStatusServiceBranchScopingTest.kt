@@ -1,6 +1,7 @@
 package skillbill.engine.work
 
 import skillbill.engine.goalrunner.manifest
+import skillbill.engine.goalrunner.status.liveLease
 import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.engine.work.model.IdeStatusFreshness
 import skillbill.engine.work.model.IdeStatusLifecycleState
@@ -29,6 +30,78 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
 class IdeStatusServiceBranchScopingTest {
+  @Test
+  fun `goal preplanning and planning stay visible on a custom base branch before any child launches`() {
+    val baseBranch = "base/SKILL-380-phase-slot-strategies"
+    val fixture = gitRepoFixture("ide-status-planning-custom-base", branch = baseBranch)
+    val identity = testGoalRepositoryIdentity(fixture)
+    val initial = goalManifestState(fixture, identity, childWorkflowId = "")
+    val state =
+      initial.copy(
+        manifest =
+          initial.manifest.copy(
+            baseBranch = baseBranch,
+            currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 1, action = "start"),
+            subtasks =
+              initial.manifest.subtasks.map {
+                it.copy(
+                  status = "pending",
+                  workflowId = null,
+                  lastResumableStep = null,
+                )
+              },
+          ),
+      )
+    listOf(
+      GoalPlanningStatusState.NOT_STARTED,
+      GoalPlanningStatusState.PREPLANNED,
+      GoalPlanningStatusState.PARTIALLY_PLANNED,
+    ).forEach { planningState ->
+      val planning =
+        planningSnapshot(planningState)
+          .copy(
+            sharedPreplanPrepared = planningState != GoalPlanningStatusState.NOT_STARTED,
+            plannedSubtaskCount = if (planningState == GoalPlanningStatusState.PARTIALLY_PLANNED) 1 else 0,
+            currentPlanningSubtaskId = 1,
+          )
+      val result =
+        ideStatusService(
+          goalOnlyDatabase(),
+          manifestStore = StubGoalManifestStore(state, planning = planning, lease = liveLease()),
+        ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+
+      assertEquals(IdeStatusLifecycleState.ACTIVE, result.snapshot.lifecycleState, planningState.wireValue)
+      assertEquals("goal-1", result.snapshot.workflowId)
+      assertEquals("planning", result.snapshot.currentStep.id)
+      assertEquals(planningState, result.snapshot.planning?.state)
+      assertEquals(planning.sharedPreplanPrepared, result.snapshot.planning?.sharedPreplanPrepared)
+      assertNull(result.snapshot.currentPhaseExecution)
+    }
+  }
+
+  @Test
+  fun `base branch planning visibility does not expose unrelated or already prepared goals`() {
+    val baseBranch = "base/SKILL-380-phase-slot-strategies"
+    listOf(
+      baseBranch to GoalPlanningStatusState.PREPARED,
+      "feat/OTHER-9-unrelated" to GoalPlanningStatusState.PARTIALLY_PLANNED,
+    ).forEachIndexed { index, (branch, planningState) ->
+      val fixture = gitRepoFixture("ide-status-planning-scope-$index", branch = branch)
+      val identity = testGoalRepositoryIdentity(fixture)
+      val initial = goalManifestState(fixture, identity, childWorkflowId = "")
+      val state = initial.copy(manifest = initial.manifest.copy(baseBranch = baseBranch))
+      val result =
+        ideStatusService(
+          goalOnlyDatabase(),
+          manifestStore =
+            StubGoalManifestStore(state, planning = planningSnapshot(planningState), lease = liveLease()),
+        ).status(IdeStatusRequest(repoRoot = fixture.toString(), observedAt = ideStatusObservedAt))
+
+      assertEquals(IdeStatusProblemCode.NO_MATCHING_WORK, result.snapshot.problem?.code)
+      assertNull(result.snapshot.workflowId)
+    }
+  }
+
   @Test
   fun `goal mid-planning keeps planning and omits current_phase_execution`() {
     val fixture = gitRepoFixture("ide-status-planning-no-execution")

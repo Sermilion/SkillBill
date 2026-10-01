@@ -1,17 +1,21 @@
 package skillbill.engine.work
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.decomposition.baseBranch
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetup
 import skillbill.engine.goalrunner.execution.support.protectedBranchName
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.work.model.IdeStatusCandidate
+import skillbill.engine.work.model.IdeStatusLifecycleState
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
 import skillbill.engine.work.model.IdeStatusSnapshot
 import skillbill.engine.work.model.IdeStatusWorkflowFamily
 import skillbill.error.shellcontent.InvalidWorkListRowError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.ports.db.DatabaseSessionFactory
+import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
 import skillbill.ports.idestatus.IdeStatusValidator
 import skillbill.ports.idestatus.model.IdeStatusRepositoryResolution
 import skillbill.ports.persistence.UnitOfWork
@@ -19,8 +23,10 @@ import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.system.CheckedOutBranchSource
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
+import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
 import java.time.Clock
 
@@ -32,6 +38,7 @@ class IdeStatusService(
   private val branchSource: CheckedOutBranchSource,
   private val clock: Clock,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val manifestStore: GoalRunnerManifestStore,
 ) {
   fun status(request: IdeStatusRequest): IdeStatusResult {
     val observedAt = request.observedAt ?: clock.instant()
@@ -52,7 +59,7 @@ class IdeStatusService(
     val currentBranch = branchSource.checkedOutBranch(repoRoot)
     return try {
       database.read { unitOfWork ->
-        val candidates = scopeToBranch(collectCandidates(unitOfWork, repositoryIdentity), currentBranch)
+        val candidates = scopeToBranch(collectCandidates(unitOfWork, repositoryIdentity), currentBranch, repoRoot)
         val selected =
           IdeStatusSelectionPolicy.select(candidates, observedAt)
             ?: return@read emit(IdeStatusProblemSnapshots.noMatchingWork(repositoryIdentity, observedAt, currentBranch))
@@ -93,12 +100,35 @@ class IdeStatusService(
   private fun scopeToBranch(
     candidates: List<IdeStatusCandidate>,
     branch: String?,
+    repoRoot: Path,
   ): List<IdeStatusCandidate> {
     if (branch == null) return candidates
     if (FeatureTaskRuntimeBranchSetup.protectedBranchName(branch) != null) return candidates
     return candidates.filter { candidate ->
-      candidate.issueKey?.let { IdeStatusBranchScope.branchReferencesIssueKey(branch, it) } == true
+      candidate.issueKey?.let { IdeStatusBranchScope.branchReferencesIssueKey(branch, it) } == true ||
+        isPlanningOnBaseBranch(candidate, branch, repoRoot)
     }
+  }
+
+  private fun isPlanningOnBaseBranch(
+    candidate: IdeStatusCandidate,
+    branch: String,
+    repoRoot: Path,
+  ): Boolean {
+    if (candidate.workflowFamily != IdeStatusWorkflowFamily.FEATURE_GOAL ||
+      candidate.lifecycleState == IdeStatusLifecycleState.TERMINAL
+    ) {
+      return false
+    }
+    val issueKey = candidate.issueKey ?: return false
+    val state = manifestStore.readByIssueKey(issueKey, repoRoot) ?: return false
+    if (state.parentWorkflowId != candidate.workflowId || state.manifest.baseBranch != branch) return false
+    val planning =
+      manifestStore.planningStatus(
+        state.parentWorkflowId,
+        state.manifest.subtasks.filter { it.status.decompositionStatus() != DecompositionStatus.SKIPPED }.map { it.id },
+      ) ?: return false
+    return planning.state != GoalPlanningStatusState.PREPARED
   }
 
   private fun collectCandidates(
