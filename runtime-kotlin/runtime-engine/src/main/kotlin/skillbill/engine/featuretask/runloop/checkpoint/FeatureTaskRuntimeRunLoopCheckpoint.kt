@@ -31,6 +31,7 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnap
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.error.core.failureCodeLabel
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshot
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
@@ -383,7 +384,7 @@ object FeatureTaskRuntimeRunLoopCheckpoint {
             valueExpected = "checkpoint identities for rollback",
             cause =
               "loadCheckpointIdentities failed: " +
-                error.message.orEmpty().ifBlank { error::class.simpleName.orEmpty() },
+                error.message.orEmpty().ifBlank { error.failureCodeLabel() ?: error::class.simpleName.orEmpty() },
           )
           emptyList()
         },

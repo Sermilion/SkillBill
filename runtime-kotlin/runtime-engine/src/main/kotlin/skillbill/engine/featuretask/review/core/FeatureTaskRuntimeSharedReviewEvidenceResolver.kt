@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.review.core
 
-import skillbill.application.reviewevidence.model.DiffResolutionException
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.ports.diff.DiffResolverPort
@@ -33,19 +32,10 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolver(
   ): FeatureTaskRuntimeSharedReviewEvidenceResolved? {
     if (workflowId.isNullOrBlank() || checkpoint == null) return null
     val resolution =
-      try {
-        sharedEvidenceResolver.resolve(
-          FeatureTaskRuntimeSharedEvidenceRequest(repoRoot, workflowId, checkpoint),
-        ) { requested -> derive(repoRoot, requested) }
-      } catch (error: DiffResolutionException) {
-        log.log(
-          Level.WARNING,
-          "seam=shared_review_evidence_derive value_used=no_evidence value_expected=derived_evidence " +
-            "workflow_id=$workflowId consumer_phase_id=$consumerPhaseId cause=${error.message}",
-          error,
-        )
-        return null
-      }
+      sharedEvidenceResolver.resolve(
+        FeatureTaskRuntimeSharedEvidenceRequest(repoRoot, workflowId, checkpoint),
+      ) { requested -> derive(repoRoot, requested, workflowId, consumerPhaseId) }
+        ?: return null
     val storePath = resolution.storePath?.takeIf(String::isNotBlank) ?: return null
     val reference = FeatureTaskRuntimeSharedReviewEvidenceReference.of(storePath, resolution.artifact)
     return FeatureTaskRuntimeSharedReviewEvidenceResolved(
@@ -65,7 +55,9 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolver(
   private fun derive(
     repoRoot: Path,
     checkpoint: FeatureTaskRuntimeRepositoryCheckpoint,
-  ): FeatureTaskRuntimeSharedEvidenceDerivation {
+    workflowId: String,
+    consumerPhaseId: String,
+  ): FeatureTaskRuntimeSharedEvidenceDerivation? {
     val base = checkpoint.baseRef?.takeIf(String::isNotBlank)
     val head = checkpoint.headRef?.takeIf(String::isNotBlank) ?: "HEAD"
     val ownedPaths = checkpoint.workingTreeOwnedPaths.filter(String::isNotBlank)
@@ -77,7 +69,7 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolver(
       }
     val diff =
       diffResolver.diff(repoRoot, query)
-        ?: throw DiffResolutionException("Could not read the shared review evidence diff for $query.")
+        ?: return recordUnreadableDiff(workflowId, consumerPhaseId, query)
     val evidence =
       try {
         ReviewDiffEvidence.parse(diff)
@@ -98,6 +90,20 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolver(
         },
       diffPayload = diff,
     )
+  }
+
+  private fun recordUnreadableDiff(
+    workflowId: String,
+    consumerPhaseId: String,
+    query: ReviewDiffQuery,
+  ): Nothing? {
+    log.log(
+      Level.WARNING,
+      "seam=shared_review_evidence_derive value_used=no_evidence value_expected=derived_evidence " +
+        "workflow_id=$workflowId consumer_phase_id=$consumerPhaseId " +
+        "cause=Could not read the shared review evidence diff for $query.",
+    )
+    return null
   }
 
   private fun recordParseDegradation(error: IllegalArgumentException) {

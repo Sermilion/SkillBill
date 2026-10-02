@@ -9,7 +9,9 @@ import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import java.nio.file.Path
 
 @Inject
@@ -41,7 +43,8 @@ class InstallApplyExternalAddonsCommand(
     val result =
       try {
         service.applyOverlay(resolvedPlatformPacks, inputs.userHome, inputs.environment)
-      } catch (error: ShellContentContractException) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isShellContentContractFailure())
         state.completeText(
           "${error.message}\n",
           mapOf(SharedPayloadKeys.STATUS to "failed", "error" to error.message.orEmpty()),

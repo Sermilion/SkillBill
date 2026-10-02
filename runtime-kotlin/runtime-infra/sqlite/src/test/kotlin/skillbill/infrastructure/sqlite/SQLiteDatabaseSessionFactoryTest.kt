@@ -1,7 +1,10 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.error.core.DatabaseAccessError
+import org.sqlite.SQLiteErrorCode
+import org.sqlite.SQLiteException
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.DatabaseFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
@@ -26,13 +29,13 @@ import kotlin.test.assertTrue
 
 class SQLiteDatabaseSessionFactoryTest {
   @Test
-  fun `transaction maps write SQLException to DatabaseAccessError`() {
+  fun `transaction maps write SQLException to ACCESS database failure`() {
     val tempDir = Files.createTempDirectory("skillbill-write-sql")
     val dbPath = tempDir.resolve("metrics.db")
     val database = boundDatabase(tempDir, dbPath)
 
     val error =
-      assertFailsWith<DatabaseAccessError> {
+      assertFailsWith<SkillBillRuntimeException> {
         database.transaction { unitOfWork ->
           val connection =
             unitOfWork::class.java.getDeclaredField("connection").apply { isAccessible = true }
@@ -42,7 +45,8 @@ class SQLiteDatabaseSessionFactoryTest {
           }
         }
       }
-    assertEquals(DatabaseAccessOperation.WRITE, error.operation)
+    assertEquals(DatabaseFailureCode.ACCESS, error.code)
+    assertTrue(error.message.orEmpty().startsWith("Database ${DatabaseAccessOperation.WRITE.wireValue} failed for '"))
   }
 
   @Test
@@ -54,7 +58,12 @@ class SQLiteDatabaseSessionFactoryTest {
     val result =
       database.selfManagedWrite {
         busyCalls += 1
-        if (busyCalls == 1) throw SQLException("[SQLITE_BUSY] The database file is locked (database is locked)")
+        if (busyCalls == 1) {
+          throw SQLiteException(
+            "[SQLITE_BUSY] The database file is locked (database is locked)",
+            SQLiteErrorCode.SQLITE_BUSY,
+          )
+        }
         "written"
       }
 
@@ -80,7 +89,7 @@ class SQLiteDatabaseSessionFactoryTest {
     val workflowId = "wftr-repository-rollback"
 
     val error =
-      assertFailsWith<DatabaseAccessError> {
+      assertFailsWith<SkillBillRuntimeException> {
         database.transaction { unitOfWork ->
           unitOfWork.workflowStates.saveFeatureTaskWorkflow(workflowRecord(workflowId), RUNTIME)
           val connection =
@@ -93,7 +102,8 @@ class SQLiteDatabaseSessionFactoryTest {
         }
       }
 
-    assertEquals(DatabaseAccessOperation.WRITE, error.operation)
+    assertEquals(DatabaseFailureCode.ACCESS, error.code)
+    assertTrue(error.message.orEmpty().startsWith("Database ${DatabaseAccessOperation.WRITE.wireValue} failed for '"))
     assertEquals(
       null,
       database.read { it.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME)?.workflowStatus },
@@ -175,9 +185,11 @@ class SQLiteDatabaseSessionFactoryTest {
     val dbPath = Files.createFile(tempDir.resolve("metrics.db"))
     val database = boundDatabase(tempDir, dbPath)
 
-    assertFailsWith<DatabaseAccessError> {
-      database.readIfPresent { Unit }
-    }
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        database.readIfPresent { Unit }
+      }
+    assertEquals(DatabaseFailureCode.ACCESS, failure.code)
   }
 
   @Test

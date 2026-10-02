@@ -9,4 +9,9 @@ enum class ParallelReviewScope {
   WORKTREE_FROM_BASE,
 }
 
-class DiffResolutionException(message: String) : RuntimeException(message)
+/** A diff or revision lookup that either produced its value or names why the evidence could not be read. */
+sealed interface DiffResolution<out T> {
+  data class Resolved<T>(val value: T) : DiffResolution<T>
+
+  data class Unresolved(val message: String) : DiffResolution<Nothing>
+}

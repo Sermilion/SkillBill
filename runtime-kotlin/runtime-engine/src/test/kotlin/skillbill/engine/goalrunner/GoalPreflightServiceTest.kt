@@ -21,7 +21,8 @@ import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
 import skillbill.engine.goalrunner.model.GoalPreflightRequest
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.preflight.GoalPreflightService
-import skillbill.error.shellcontent.InvalidAgentAddonSelectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
@@ -254,13 +255,15 @@ class GoalPreflightServiceTest {
   fun `requested add-ons cannot bypass an empty durable selection on goal resume`() {
     val root = Files.createTempDirectory("goal-preflight-addon-mismatch")
 
-    assertFailsWith<InvalidAgentAddonSelectionError> {
-      service(
-        database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
-        manifestState = GoalRunnerManifestState("parent-1", "/fake/metrics.db", manifest()),
-        persistedReviewPolicy = GoalRunnerReviewPolicy(CodeReviewExecutionMode.DEFAULT),
-      ).preflight(request(root, addons = listOf("new-addon")))
-    }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        service(
+          database = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),
+          manifestState = GoalRunnerManifestState("parent-1", "/fake/metrics.db", manifest()),
+          persistedReviewPolicy = GoalRunnerReviewPolicy(CodeReviewExecutionMode.DEFAULT),
+        ).preflight(request(root, addons = listOf("new-addon")))
+      }
+    assertEquals(AgentAddonFailureCode.INVALID_SELECTION, error.code)
   }
 
   @Test

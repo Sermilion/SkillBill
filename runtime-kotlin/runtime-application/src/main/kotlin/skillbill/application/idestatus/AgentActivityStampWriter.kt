@@ -3,6 +3,7 @@ package skillbill.application.idestatus
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.getOrElseUnlessCooperative
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
+import skillbill.error.core.failureCodeLabel
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.idestatus.model.AgentActivityStamp
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
@@ -121,7 +122,7 @@ class AgentActivityStampWriter(
     val error = outcome.exceptionOrNull()
     if (error != null) {
       val cause =
-        (error.message?.takeIf(String::isNotBlank) ?: error::class.simpleName.orEmpty())
+        (error.message?.takeIf(String::isNotBlank) ?: error.failureCodeLabel() ?: error::class.simpleName.orEmpty())
           .take(MAX_DIAGNOSTIC_CAUSE_LENGTH)
       runCatching {
         diagnostics.warning(

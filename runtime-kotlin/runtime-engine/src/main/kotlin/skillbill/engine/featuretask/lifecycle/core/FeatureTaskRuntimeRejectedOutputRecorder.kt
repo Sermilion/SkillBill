@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.lifecycle.core
 
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRecording
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProducerOutputRead
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
@@ -8,7 +9,10 @@ import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutpu
 import skillbill.engine.featuretask.model.review.RejectedOutputDiagnosticDegradeRequest
 import skillbill.engine.featuretask.model.review.RejectedOutputDiagnosticPersistRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
-import skillbill.error.core.RejectedOutputDiagnosticError
+import skillbill.error.core.RejectedOutputDiagnosticFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rejectedOutputDiagnosticConflictMessage
+import skillbill.error.core.rejectedOutputDiagnosticInvalidRequestMessage
 import skillbill.error.shellcontent.InvalidProducerOutputEvidenceSchemaError
 import skillbill.error.shellcontent.InvalidRejectedOutputDiagnosticSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
@@ -30,21 +34,31 @@ import skillbill.workflow.taskruntime.model.handoff.task.featureTaskRuntimeRejec
 import skillbill.workflow.taskruntime.model.handoff.task.featureTaskRuntimeRejectionViolationClassOf
 import java.time.Clock
 
-private fun RejectedOutputDiagnosticError.degradableFailureClass(): FeatureTaskRuntimeDiagnosticFailureClass? =
-  when (this) {
-    is RejectedOutputDiagnosticError.Conflict -> FeatureTaskRuntimeDiagnosticFailureClass.CONFLICT
-    is RejectedOutputDiagnosticError.Permission -> FeatureTaskRuntimeDiagnosticFailureClass.PERMISSION
-    is RejectedOutputDiagnosticError.Corrupt -> FeatureTaskRuntimeDiagnosticFailureClass.CORRUPT
-    is RejectedOutputDiagnosticError.Persistence,
-    is RejectedOutputDiagnosticError.Retrieval,
-    is RejectedOutputDiagnosticError.Expired,
-    is RejectedOutputDiagnosticError.Oversized,
-    is RejectedOutputDiagnosticError.Absent,
+private fun SkillBillRuntimeException.degradableFailureClass(): FeatureTaskRuntimeDiagnosticFailureClass? =
+  when (code as? RejectedOutputDiagnosticFailureCode) {
+    RejectedOutputDiagnosticFailureCode.CONFLICT -> FeatureTaskRuntimeDiagnosticFailureClass.CONFLICT
+    RejectedOutputDiagnosticFailureCode.PERMISSION -> FeatureTaskRuntimeDiagnosticFailureClass.PERMISSION
+    RejectedOutputDiagnosticFailureCode.CORRUPT -> FeatureTaskRuntimeDiagnosticFailureClass.CORRUPT
+    RejectedOutputDiagnosticFailureCode.PERSISTENCE,
+    RejectedOutputDiagnosticFailureCode.RETRIEVAL,
     -> FeatureTaskRuntimeDiagnosticFailureClass.PERSISTENCE
-    is RejectedOutputDiagnosticError.InvalidRequest,
-    is RejectedOutputDiagnosticError.InvalidConfiguration,
+    RejectedOutputDiagnosticFailureCode.INVALID_REQUEST,
+    RejectedOutputDiagnosticFailureCode.INVALID_CONFIGURATION,
+    null,
     -> null
   }
+
+private fun conflictFailure(identity: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    RejectedOutputDiagnosticFailureCode.CONFLICT,
+    rejectedOutputDiagnosticConflictMessage(identity),
+  )
+
+private fun invalidRequestFailure(reason: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    RejectedOutputDiagnosticFailureCode.INVALID_REQUEST,
+    rejectedOutputDiagnosticInvalidRequestMessage(reason),
+  )
 
 internal class FeatureTaskRuntimeRejectedOutputRecorder(
   private val database: DatabaseSessionFactory,
@@ -95,7 +109,11 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
           database.transaction { unitOfWork ->
             val service = diagnosticService(unitOfWork)
             service.retainProducerOutput(evidence)
-            service.record(request)
+            when (val recording = service.record(request)) {
+              is RejectedOutputDiagnosticRecording.Recorded -> Unit
+              is RejectedOutputDiagnosticRecording.Conflict -> throw conflictFailure(recording.identity)
+              is RejectedOutputDiagnosticRecording.InvalidRequest -> throw invalidRequestFailure(recording.reason)
+            }
             recordRejectionMeasurement(unitOfWork, request)
           }
         }
@@ -184,12 +202,12 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
       } else {
         FeatureTaskRuntimeProducerOutputRead.Found(evidence)
       }
-    } catch (error: RejectedOutputDiagnosticError) {
-      unreadable(error.degradableFailureClass() ?: throw error)
     } catch (_: InvalidProducerOutputEvidenceSchemaError) {
       unreadable(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
     } catch (_: InvalidRejectedOutputDiagnosticSchemaError) {
       unreadable(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
+    } catch (error: SkillBillRuntimeException) {
+      unreadable(error.degradableFailureClass() ?: throw error)
     }
   }
 
@@ -214,12 +232,12 @@ internal class FeatureTaskRuntimeRejectedOutputRecorder(
     }
     return try {
       DiagnosticWriteOutcome.Written(block())
-    } catch (error: RejectedOutputDiagnosticError) {
-      degrade(error.degradableFailureClass() ?: throw error)
     } catch (_: InvalidProducerOutputEvidenceSchemaError) {
       degrade(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
     } catch (_: InvalidRejectedOutputDiagnosticSchemaError) {
       degrade(FeatureTaskRuntimeDiagnosticFailureClass.SCHEMA)
+    } catch (error: SkillBillRuntimeException) {
+      degrade(error.degradableFailureClass() ?: throw error)
     }
   }
 

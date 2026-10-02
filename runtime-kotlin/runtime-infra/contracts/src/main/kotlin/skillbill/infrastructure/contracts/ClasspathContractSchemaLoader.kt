@@ -9,6 +9,9 @@ import com.networknt.schema.JsonSchemaFactory
 import com.networknt.schema.SpecVersion
 import com.networknt.schema.ValidationMessage
 import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
@@ -45,7 +48,7 @@ data class SchemaIdentityRequest(
   val classpathResource: String,
   val expectedSchemaId: String,
   val expectedContractVersion: String,
-  val identityFailure: (String) -> ShellContentContractException,
+  val identityFailure: (String) -> SkillBillRuntimeException,
   val contractVersionPath: List<String> = listOf("properties", "contract_version", "const"),
   val contractVersionMatches: ((JsonNode, String) -> Boolean)? = null,
 )
@@ -96,7 +99,8 @@ object ClasspathContractSchemaLoader {
       node
     } catch (cancellation: CancellationException) {
       rethrow(cancellation)
-    } catch (error: ShellContentContractException) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isShellContentContractFailure())
       rethrow(error)
     } catch (error: IOException) {
       throw request.processingFailure(error)
@@ -112,7 +116,7 @@ object ClasspathContractSchemaLoader {
   fun compiledSchemaFromYamlNode(
     cacheKey: String,
     yamlNode: JsonNode,
-    processingFailure: (Throwable) -> ShellContentContractException,
+    processingFailure: (Throwable) -> SkillBillRuntimeException,
   ): JsonSchema =
     compiledSchemas.computeIfAbsent(cacheKey) {
       try {
@@ -157,7 +161,8 @@ object ClasspathContractSchemaLoader {
       return jsonSchemaFactory.getSchema(objectMapper.writeValueAsString(yamlNode), LOCALE_STABLE_SCHEMA_CONFIG)
     } catch (cancellation: CancellationException) {
       rethrow(cancellation)
-    } catch (error: ShellContentContractException) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isShellContentContractFailure())
       request.loadFailureLogger(error)
       rethrow(error)
     } catch (error: JsonProcessingException) {

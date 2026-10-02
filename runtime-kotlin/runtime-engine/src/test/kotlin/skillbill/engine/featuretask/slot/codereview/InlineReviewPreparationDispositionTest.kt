@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.slot.codereview
 
-import skillbill.error.core.DatabaseBusyError
+import skillbill.error.core.databaseBusy
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -11,7 +11,7 @@ private const val BUSY_MESSAGE = "[SQLITE_BUSY] The database file is locked (dat
 class InlineReviewPreparationDispositionTest {
   @Test
   fun `a typed busy failure is retryable and keeps its persisted block reason text`() {
-    val error = DatabaseBusyError(IllegalStateException(BUSY_MESSAGE))
+    val error = databaseBusy(IllegalStateException(BUSY_MESSAGE))
 
     assertEquals(
       FeatureTaskRuntimeFailureDisposition.RETRYABLE,
@@ -34,7 +34,7 @@ class InlineReviewPreparationDispositionTest {
 
   @Test
   fun `a busy failure wrapped deeper in the cause chain stays retryable`() {
-    val error = RuntimeException("review reservation failed", DatabaseBusyError(IllegalStateException(BUSY_MESSAGE)))
+    val error = RuntimeException("review reservation failed", databaseBusy(IllegalStateException(BUSY_MESSAGE)))
 
     assertEquals(
       FeatureTaskRuntimeFailureDisposition.RETRYABLE,

@@ -4,10 +4,10 @@ import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.application.decomposition.specSource
+import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.planning.attempt.producePhase
@@ -26,7 +26,6 @@ import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.text.sha256HexUtf8
 import java.nio.file.Path
-import java.util.concurrent.CancellationException
 
 internal fun produceSharedPreplan(
   sweep: DefaultGoalPlanningSweep,
@@ -34,11 +33,13 @@ internal fun produceSharedPreplan(
   request: GoalRunnerRunRequest,
   provenance: GoalPlanningContractProvenance,
   launch: GoalPlanningLaunch,
-): Result<SharedGoalPreplanCheckpoint> =
-  produceSharedPreplanCheckpoint(sweep, shared, request, provenance, launch).mapCatching { produced ->
-    produced.also { sweep.checkpoint.recheckpointSharedPreplan(it) }
+): Result<SharedPreplanProduction> =
+  produceSharedPreplanCheckpoint(sweep, shared, request, provenance, launch).mapCatching { production ->
+    production.also {
+      if (it is SharedPreplanProduction.Produced) sweep.checkpoint.recheckpointSharedPreplan(it.checkpoint)
+    }
   }.onFailure { error ->
-    if (error is RequiredPhaseWriteRejected || error is CancellationException) throw error
+    error.rethrowIfCooperativeCancellationOrInterruption()
   }
 
 internal fun produceSharedPreplanCheckpoint(
@@ -47,7 +48,7 @@ internal fun produceSharedPreplanCheckpoint(
   request: GoalRunnerRunRequest,
   provenance: GoalPlanningContractProvenance,
   launch: GoalPlanningLaunch,
-): Result<SharedGoalPreplanCheckpoint> =
+): Result<SharedPreplanProduction> =
   runCatching {
     val runInvariants = sweep.invariantsSource.read(shared.parentSpecPath)
     val preplanProduction =
@@ -65,20 +66,34 @@ internal fun produceSharedPreplanCheckpoint(
           recordedOutputs = emptyList(),
         ),
       )
-    if (preplanProduction is GoalPlanningPhaseProduction.Stopped) error(preplanProduction.outcome.blockedReason)
-    val captured = preplanProduction as GoalPlanningPhaseProduction.Captured
-    val preplanPayload =
-      enrichPreplan(
-        proseRecordPayload(GoalPlanningSweepConstants.PHASE_PREPLAN, captured.payload),
-        shared.planningPacket,
-      )
+    when (preplanProduction) {
+      is GoalPlanningPhaseProduction.Stopped -> SharedPreplanProduction.Stopped(preplanProduction.outcome)
+      is GoalPlanningPhaseProduction.RequiredWriteRejected ->
+        SharedPreplanProduction.RequiredWriteRejected(preplanProduction.rejection)
+      else ->
+        producedSharedPreplan(shared, provenance, preplanProduction as GoalPlanningPhaseProduction.Captured)
+    }
+  }
+
+private fun producedSharedPreplan(
+  shared: GoalPlanningSharedContext,
+  provenance: GoalPlanningContractProvenance,
+  captured: GoalPlanningPhaseProduction.Captured,
+): SharedPreplanProduction.Produced {
+  val preplanPayload =
+    enrichPreplan(
+      proseRecordPayload(GoalPlanningSweepConstants.PHASE_PREPLAN, captured.payload),
+      shared.planningPacket,
+    )
+  return SharedPreplanProduction.Produced(
     SharedGoalPreplanCheckpoint(
       identity = GoalPlanningIdentity(shared.parentWorkflowId, shared.normalizedIssueKey, shared.repositoryIdentity),
       provenance = provenance,
       payloadSha256 = sha256HexUtf8(preplanPayload),
       preplanPayload = preplanPayload,
-    )
-  }
+    ),
+  )
+}
 
 fun enrichPreplan(
   payload: String,

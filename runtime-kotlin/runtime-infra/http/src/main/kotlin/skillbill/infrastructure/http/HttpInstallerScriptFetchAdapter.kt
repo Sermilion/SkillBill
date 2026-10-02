@@ -1,6 +1,9 @@
 package skillbill.infrastructure.http
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.core.TelemetryProxyRequestFailureError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.TelemetryHttpFailureCode
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.core.rethrowUnless
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.process.InstallerScriptFetchPort
 import skillbill.ports.process.model.InstallerScriptFetchRequest
@@ -53,7 +56,8 @@ class HttpInstallerScriptFetchAdapter(
       throw interrupted
     } catch (error: IOException) {
       result = InstallerScriptFetchResult.Failed(errorMessage(error))
-    } catch (error: TelemetryProxyRequestFailureError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == TelemetryHttpFailureCode.PROXY_REQUEST_FAILED)
       result = InstallerScriptFetchResult.Failed(errorMessage(error))
     } finally {
       if (result !is InstallerScriptFetchResult.Ready) {
@@ -116,7 +120,7 @@ class HttpInstallerScriptFetchAdapter(
   }
 
   private fun errorMessage(error: Exception): String =
-    error.message.orEmpty().ifBlank { error::class.simpleName.orEmpty() }
+    error.message.orEmpty().ifBlank { error.failureCodeLabel() ?: error::class.simpleName.orEmpty() }
 
   private companion object {
     const val STAGING_DIRECTORY_PREFIX: String = "skill-bill-update-"

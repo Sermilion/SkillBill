@@ -4,6 +4,8 @@ import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.review.governed.stubGovernedReviewEvidenceEndpointBinder
 import skillbill.application.review.learnings.ReviewLearningsResolver
 import skillbill.application.review.model.ParallelCodeReviewRequest
+import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.application.review.model.ReviewPrelaunchExpansion
 import skillbill.application.review.parallel.planning.ParallelCodeReviewRunnerPlanning
 import skillbill.application.review.parallel.planning.ParallelCodeReviewRunnerRubricPlanning
@@ -184,6 +186,12 @@ data class ReviewHarnessConfig(
   val learnings: List<LearningRecord> = emptyList(),
   val originScopeKeyPort: RepositoryOriginScopeKeyPort = HARNESS_ORIGIN_UNAVAILABLE,
 )
+
+fun ParallelCodeReviewRunner.reviewed(request: ParallelCodeReviewRequest): ParallelCodeReviewResult =
+  when (val outcome = run(request)) {
+    is ParallelCodeReviewRunOutcome.Reviewed -> outcome.result
+    is ParallelCodeReviewRunOutcome.PlanningFailed -> error("planning failed: ${outcome.failure.message}")
+  }
 
 fun reviewHarness(
   config: ReviewHarnessConfig,

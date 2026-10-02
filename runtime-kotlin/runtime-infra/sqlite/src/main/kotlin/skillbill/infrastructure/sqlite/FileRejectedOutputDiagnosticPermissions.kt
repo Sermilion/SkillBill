@@ -1,6 +1,8 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.error.core.RejectedOutputDiagnosticError
+import skillbill.error.core.RejectedOutputDiagnosticFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rejectedOutputDiagnosticPersistenceMessage
 import skillbill.infrastructure.sqlite.core.schema.databasePath
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -44,7 +46,11 @@ internal class FileRejectedOutputDiagnosticPermissions(
         )
       }
     } catch (error: IOException) {
-      throw RejectedOutputDiagnosticError.Persistence("apply-restrictive-permissions", error)
+      throw SkillBillRuntimeException(
+        RejectedOutputDiagnosticFailureCode.PERSISTENCE,
+        rejectedOutputDiagnosticPersistenceMessage("apply-restrictive-permissions"),
+        error,
+      )
     }
   }
 }

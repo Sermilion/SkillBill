@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.substanceaudit
 
+import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
@@ -79,7 +80,8 @@ internal fun retainManifestsWithReadableDeclaredContent(
       declaredContentPaths(pack).mapNotNull { path ->
         runCatching { Files.readString(path) }.exceptionOrNull()?.let { error ->
           val source = path.toAbsolutePath().normalize().relativeTo(root).toString()
-          "$source: declared authored content is missing or unreadable (${error::class.simpleName}: ${error.message})"
+          val errorName = error.failureCodeLabel() ?: error::class.simpleName
+          "$source: declared authored content is missing or unreadable ($errorName: ${error.message})"
         }
       }.also(errors::addAll).isEmpty()
     }

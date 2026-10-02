@@ -13,13 +13,15 @@ internal object RepoValidationRuntimeReleasePolicy {
         "(?:\\+(?<build>[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$",
     )
 
-  fun parseReleaseRef(rawValue: String): ReleaseRefMetadata {
+  private const val MALFORMED_RELEASE_TAG_MESSAGE =
+    "Release tag must match canonical vMAJOR.MINOR.PATCH with optional SemVer prerelease/build metadata."
+
+  fun parseReleaseRef(rawValue: String): ReleaseRefMetadata =
+    parseReleaseRefOrNull(rawValue) ?: throw IllegalArgumentException(MALFORMED_RELEASE_TAG_MESSAGE)
+
+  fun parseReleaseRefOrNull(rawValue: String): ReleaseRefMetadata? {
     val candidate = rawValue.trim().removePrefix("refs/tags/")
-    val match =
-      semverTagPattern.matchEntire(candidate)
-        ?: throw IllegalArgumentException(
-          "Release tag must match canonical vMAJOR.MINOR.PATCH with optional SemVer prerelease/build metadata.",
-        )
+    val match = semverTagPattern.matchEntire(candidate) ?: return null
     return ReleaseRefMetadata(
       tag = candidate,
       version = candidate.removePrefix("v"),
@@ -36,15 +38,21 @@ internal object RepoValidationRuntimeReleasePolicy {
     repoRoot: Path,
     rawValue: String,
     forcePrerelease: Boolean = false,
-  ): ReleaseRefMetadata {
-    val parsed = parseReleaseRef(rawValue)
-    if (forcePrerelease && !parsed.prerelease) {
-      throw ReleaseLicensePolicyError(
+  ): ReleaseRefValidationResult {
+    val parsed =
+      parseReleaseRefOrNull(rawValue)
+        ?: return ReleaseRefValidationResult.Rejected(MALFORMED_RELEASE_TAG_MESSAGE)
+    val rejection =
+      if (forcePrerelease && !parsed.prerelease) {
         "Manual staging references must carry a SemVer prerelease identifier; " +
-          "stable tags cannot be forced into staging.",
-      )
+          "stable tags cannot be forced into staging."
+      } else {
+        releaseLicensePolicyViolation(repoRoot.toAbsolutePath().normalize(), parsed)
+      }
+    return if (rejection == null) {
+      ReleaseRefValidationResult.Valid(parsed)
+    } else {
+      ReleaseRefValidationResult.Rejected(rejection)
     }
-    validateReleaseLicensePolicy(repoRoot.toAbsolutePath().normalize(), parsed)
-    return parsed
   }
 }

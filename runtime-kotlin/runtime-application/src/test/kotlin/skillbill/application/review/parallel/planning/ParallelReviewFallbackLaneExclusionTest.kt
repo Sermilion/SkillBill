@@ -7,6 +7,7 @@ import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.reviewHarness
 import skillbill.application.review.snapshot.reviewLayer
 import skillbill.application.review.snapshot.reviewPack
+import skillbill.application.review.snapshot.reviewed
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.plan.ReviewCrossRootLaneReconciliation
 import skillbill.review.plan.ReviewLaunchPlanPolicy
@@ -131,7 +132,7 @@ class ParallelReviewFallbackLaneExclusionTest {
   ): ReviewRecorder {
     val recorder = ReviewRecorder()
     reviewHarness(ReviewHarnessConfig(manifests = packs, diff = diff), recorder)
-      .run(
+      .reviewed(
         harnessRequest(
           reviewRunId = "fallback-lane-exclusion",
           codeReviewMode = CodeReviewExecutionMode.DELEGATED,

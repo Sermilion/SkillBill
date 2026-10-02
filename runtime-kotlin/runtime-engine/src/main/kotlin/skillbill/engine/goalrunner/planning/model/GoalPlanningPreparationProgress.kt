@@ -8,3 +8,13 @@ data class GoalPlanningPreparationProgress(
 ) {
   val firstMissingSubtaskId: Int? get() = missingSubtaskIds.firstOrNull()
 }
+
+sealed interface GoalPlanningRecoveryProgress {
+  data class Ready(val progress: GoalPlanningPreparationProgress) : GoalPlanningRecoveryProgress
+
+  data class IncompletePlan(
+    val parentGoalWorkflowId: String,
+    val subtaskId: Int,
+    val reason: String,
+  ) : GoalPlanningRecoveryProgress
+}

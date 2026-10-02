@@ -1,0 +1,92 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-398"
+feature_name: "runtime-exception-reduction"
+parent_spec_path: ".feature-specs/SKILL-398-runtime-exception-reduction/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "base/SKILL-380-phase-slot-strategies"
+feature_branch: "feat/SKILL-398-runtime-exception-reduction"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "failure-policy-and-throwable-baseline"
+  spec_path: ".feature-specs/SKILL-398-runtime-exception-reduction/spec_subtask_1_failure-policy-and-throwable-baseline.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261002-062336-v5ya"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 2
+  name: "operation-diagnostic-and-phase-write-results"
+  spec_path: ".feature-specs/SKILL-398-runtime-exception-reduction/spec_subtask_2_operation-diagnostic-and-phase-write-results.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261002-065907-7yyq"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 3
+  name: "local-control-flow-results"
+  spec_path: ".feature-specs/SKILL-398-runtime-exception-reduction/spec_subtask_3_local-control-flow-results.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261002-072157-5nad"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 4
+  name: "collapse-shell-content-errors"
+  spec_path: ".feature-specs/SKILL-398-runtime-exception-reduction/spec_subtask_4_collapse-shell-content-errors.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261002-104004-hav2"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 5
+  name: "collapse-remaining-errors"
+  spec_path: ".feature-specs/SKILL-398-runtime-exception-reduction/spec_subtask_5_collapse-remaining-errors.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261002-140256-p356"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 6
+  name: "no-control-flow-on-defect-exceptions"
+  spec_path: ".feature-specs/SKILL-398-runtime-exception-reduction/spec_subtask_6_no-control-flow-on-defect-exceptions.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261002-151307-h39u"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []

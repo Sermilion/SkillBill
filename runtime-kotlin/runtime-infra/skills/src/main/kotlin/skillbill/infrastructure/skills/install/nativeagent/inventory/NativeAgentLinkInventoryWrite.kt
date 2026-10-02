@@ -3,7 +3,9 @@ package skillbill.infrastructure.skills.install.nativeagent.inventory
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.nativeagent.NATIVE_AGENT_LINK_INVENTORY_CONTRACT_VERSION
 import skillbill.error.core.InvalidNativeAgentLinkInventoryWriteError
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
 import java.io.IOException
 import java.nio.file.Files
@@ -51,7 +53,8 @@ internal object NativeAgentLinkInventoryWrite {
       atomicMoveReplacing(temporary, request.path)
     } catch (error: CancellationException) {
       throw error
-    } catch (error: ShellContentContractException) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isShellContentContractFailure())
       initiatingFailure = error
     } catch (error: IOException) {
       initiatingFailure = writeError(request.path, error.message.orEmpty(), error)

@@ -11,7 +11,6 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.contracts.workflow.payload.WorktreeEditJournalPayloadKeys
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
-import skillbill.error.core.DatabaseAccessError
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerAcceptedSubtask
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
@@ -185,13 +184,13 @@ internal fun GoalRunnerStatusProjection?.toBoundedGoalStatusCliMap(issueKey: Str
 
 internal fun databaseUnavailableGoalStatusCliMap(
   issueKey: String,
-  error: DatabaseAccessError,
+  reason: String,
 ): Map<String, Any?> =
   linkedMapOf(
     SharedPayloadKeys.STATUS to GOAL_STATUS_DATABASE_UNAVAILABLE,
     SharedPayloadKeys.ISSUE_KEY to singleLineBounded(issueKey),
     "resumable_state" to GOAL_STATUS_DATABASE_UNAVAILABLE,
-    "reason" to singleLineBounded(error.condition),
+    "reason" to singleLineBounded(reason),
   )
 
 internal fun GoalRunnerStatusProjection.monitorResumableState(): String =

@@ -1,13 +1,20 @@
 package skillbill.application.diagnostics
 
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticConfig
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRawRead
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRecording
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
-import skillbill.error.core.RejectedOutputDiagnosticError
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticSelection
+import skillbill.error.core.RejectedOutputDiagnosticFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rejectedOutputDiagnosticConflictMessage
 import skillbill.error.shellcontent.InvalidRejectedOutputDiagnosticSchemaError
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRead
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRecord
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import skillbill.ports.diagnostics.model.RejectedOutputLifecycle
@@ -18,6 +25,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 
 class RejectedOutputDiagnosticServiceTest {
@@ -30,12 +38,13 @@ class RejectedOutputDiagnosticServiceTest {
     val bytes = byteArrayOf(0, 13, 10, -1, 42)
     val request = request(bytes)
 
-    val first = service.record(request)
-    val second = service.record(request)
+    val first = service.recorded(request)
+    val second = service.recorded(request)
 
     assertEquals(first.identity, second.identity)
     assertEquals(bytes.size.toLong(), first.byteSize)
-    assertContentEquals(bytes, service.readRaw(first.identity))
+    val raw = assertIs<RejectedOutputDiagnosticRawRead.Payload>(service.readRaw(first.identity))
+    assertContentEquals(bytes, raw.bytes)
     assertEquals(1, repository.records.size)
   }
 
@@ -43,8 +52,8 @@ class RejectedOutputDiagnosticServiceTest {
   fun `different attempts have distinct stable identities`() {
     val service = service(MemoryRepository())
     assertNotEquals(
-      service.record(request(byteArrayOf(1))).identity,
-      service.record(request(byteArrayOf(1), 2)).identity,
+      service.recorded(request(byteArrayOf(1))).identity,
+      service.recorded(request(byteArrayOf(1), 2)).identity,
     )
   }
 
@@ -53,8 +62,8 @@ class RejectedOutputDiagnosticServiceTest {
     val repository = MemoryRepository()
     val service = service(repository)
 
-    val first = service.record(request(byteArrayOf(1)).copy(repairTurn = 1))
-    val second = service.record(request(byteArrayOf(2)).copy(repairTurn = 2))
+    val first = service.recorded(request(byteArrayOf(1)).copy(repairTurn = 1))
+    val second = service.recorded(request(byteArrayOf(2)).copy(repairTurn = 2))
 
     assertNotEquals(first.identity, second.identity)
     assertEquals(2, repository.records.size)
@@ -76,17 +85,17 @@ class RejectedOutputDiagnosticServiceTest {
   @Test
   fun `ceiling stores tombstone and read reports oversized`() {
     val service = service(MemoryRepository(), maximumPayloadBytes = 1)
-    val metadata = service.record(request(byteArrayOf(1, 2)))
+    val metadata = service.recorded(request(byteArrayOf(1, 2)))
 
     assertEquals(RejectedOutputLifecycle.OVERSIZED, metadata.lifecycle)
-    assertFailsWith<RejectedOutputDiagnosticError.Oversized> { service.readRaw(metadata.identity) }
+    assertIs<RejectedOutputDiagnosticRawRead.Oversized>(service.readRaw(metadata.identity))
   }
 
   @Test
   fun `truncated capture stores deterministic full stream oversized evidence`() {
     val service = service(MemoryRepository())
     val metadata =
-      service.record(
+      service.recorded(
         request(byteArrayOf(1)).copy(
           observedByteSize = 1_048_577,
           observedSha256 = "a".repeat(64),
@@ -102,7 +111,7 @@ class RejectedOutputDiagnosticServiceTest {
   @Test
   fun `record executes configured retention before inserting new evidence`() {
     val repository = MemoryRepository()
-    service(repository).record(request(byteArrayOf(1)))
+    service(repository).recorded(request(byteArrayOf(1)))
 
     assertEquals(1, repository.expiryCalls)
   }
@@ -111,14 +120,14 @@ class RejectedOutputDiagnosticServiceTest {
   fun `re-recording an expired attempt is an idempotent tombstone lookup`() {
     val repository = MemoryRepository()
     val service = service(repository)
-    val first = service.record(request(byteArrayOf(1, 2)))
+    val first = service.recorded(request(byteArrayOf(1, 2)))
     repository.records[first.identity] =
       repository.records.getValue(first.identity).copy(
         metadata = first.copy(lifecycle = RejectedOutputLifecycle.EXPIRED),
         payload = null,
       )
 
-    val replay = service.record(request(byteArrayOf(1, 2)))
+    val replay = service.recorded(request(byteArrayOf(1, 2)))
 
     assertEquals(RejectedOutputLifecycle.EXPIRED, replay.lifecycle)
     assertEquals(1, repository.records.size)
@@ -150,20 +159,21 @@ class RejectedOutputDiagnosticServiceTest {
   fun `corrupt payload fails without returning content`() {
     val repository = MemoryRepository()
     val service = service(repository)
-    val metadata = service.record(request(byteArrayOf(1, 2)))
+    val metadata = service.recorded(request(byteArrayOf(1, 2)))
     repository.records[metadata.identity] =
       repository.records.getValue(
         metadata.identity,
       ).copy(payload = byteArrayOf(9))
 
-    assertFailsWith<RejectedOutputDiagnosticError.Corrupt> { service.readRaw(metadata.identity) }
+    val failure = assertFailsWith<SkillBillRuntimeException> { service.readRaw(metadata.identity) }
+    assertEquals(RejectedOutputDiagnosticFailureCode.CORRUPT, failure.code)
   }
 
   @Test
   fun `record and read seams reject metadata outside the canonical schema with typed error`() {
     val repository = MemoryRepository()
     val service = service(repository)
-    val metadata = service.record(request(byteArrayOf(1, 2)))
+    val metadata = service.recorded(request(byteArrayOf(1, 2)))
     repository.records[metadata.identity] =
       repository.records.getValue(metadata.identity).copy(
         metadata = metadata.copy(sha256 = "not-a-digest"),
@@ -174,16 +184,21 @@ class RejectedOutputDiagnosticServiceTest {
 
   @Test
   fun `invalid request and configuration failures are typed`() {
-    assertFailsWith<RejectedOutputDiagnosticError.InvalidConfiguration> {
-      RejectedOutputDiagnosticConfig(maximumPayloadBytes = -1)
-    }
-    assertFailsWith<RejectedOutputDiagnosticError.InvalidRequest> {
-      service(MemoryRepository()).record(request(byteArrayOf(1)).copy(workflowId = ""))
-    }
-    assertFailsWith<RejectedOutputDiagnosticError.InvalidRequest> {
-      service(MemoryRepository()).inspect(RejectedOutputDiagnosticSelector(""))
-    }
+    val configurationFailure =
+      assertFailsWith<SkillBillRuntimeException> {
+        RejectedOutputDiagnosticConfig(maximumPayloadBytes = -1)
+      }
+    assertEquals(RejectedOutputDiagnosticFailureCode.INVALID_CONFIGURATION, configurationFailure.code)
+    assertIs<RejectedOutputDiagnosticRecording.InvalidRequest>(
+      service(MemoryRepository()).record(request(byteArrayOf(1)).copy(workflowId = "")),
+    )
+    assertIs<RejectedOutputDiagnosticSelection.InvalidRequest>(
+      service(MemoryRepository()).inspect(RejectedOutputDiagnosticSelector("")),
+    )
   }
+
+  private fun RejectedOutputDiagnosticService.recorded(request: RejectedOutputDiagnosticRequest) =
+    assertIs<RejectedOutputDiagnosticRecording.Recorded>(record(request)).metadata
 
   private fun service(
     repository: MemoryRepository,
@@ -223,8 +238,8 @@ private class MemoryRepository : RejectedOutputDiagnosticRepository {
   var expiryCalls: Int = 0
   var producerOutputs: Int = 0
 
-  override fun insert(record: RejectedOutputDiagnosticRecord): RejectedOutputDiagnosticRecord =
-    records.getOrPut(record.metadata.identity) { record }
+  override fun insert(record: RejectedOutputDiagnosticRecord): RejectedOutputDiagnosticInsert =
+    RejectedOutputDiagnosticInsert.Inserted(records.getOrPut(record.metadata.identity) { record })
 
   override fun select(selector: RejectedOutputDiagnosticSelector): List<RejectedOutputDiagnostic> =
     records.values.map { it.metadata }.filter {
@@ -233,8 +248,8 @@ private class MemoryRepository : RejectedOutputDiagnosticRepository {
         (selector.attempt == null || it.attempt == selector.attempt)
     }
 
-  override fun read(identity: String): RejectedOutputDiagnosticRecord =
-    records[identity] ?: throw RejectedOutputDiagnosticError.Absent(identity)
+  override fun read(identity: String): RejectedOutputDiagnosticRead =
+    records[identity]?.let(RejectedOutputDiagnosticRead::Found) ?: RejectedOutputDiagnosticRead.Absent(identity)
 
   override fun markExpired(before: Instant): Int {
     expiryCalls += 1
@@ -259,9 +274,12 @@ private class MemoryRepository : RejectedOutputDiagnosticRepository {
     producerEvidence.putIfAbsent(key, evidence)
     val retained = producerEvidence.getValue(key)
     if (retained.sha256 != evidence.sha256 || retained.byteSize != evidence.byteSize) {
-      throw RejectedOutputDiagnosticError.Conflict(
-        "${evidence.workflowId}:${evidence.phaseId}:${evidence.generation}:${evidence.attempt}:" +
-          "${evidence.repairTurn}:${evidence.agentId}",
+      throw SkillBillRuntimeException(
+        RejectedOutputDiagnosticFailureCode.CONFLICT,
+        rejectedOutputDiagnosticConflictMessage(
+          "${evidence.workflowId}:${evidence.phaseId}:${evidence.generation}:${evidence.attempt}:" +
+            "${evidence.repairTurn}:${evidence.agentId}",
+        ),
       )
     }
   }

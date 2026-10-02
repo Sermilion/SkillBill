@@ -70,9 +70,8 @@ private fun causeIndicatesContractVersionHardReset(cause: Throwable?): Boolean {
         ) {
           return true
         }
-      else -> {
-        if (reasonIndicatesContractVersionHardReset(current.message.orEmpty())) return true
-      }
+      is IncompatibleGoalPlanningPreparationRecoveryError ->
+        if (reasonIndicatesContractVersionHardReset(current.reason)) return true
     }
     current = current.cause
   }

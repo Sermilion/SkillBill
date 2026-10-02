@@ -11,12 +11,10 @@ object RuntimeOwnedReviewMode {
       CodeReviewExecutionMode.INLINE,
     )
 
-  fun parse(value: String): CodeReviewExecutionMode =
-    allowed.firstOrNull { it.wireValue == value }
-      ?: throw IllegalArgumentException(
-        "Unknown code-review execution mode '$value'. Allowed: " +
-          "${allowed.joinToString { it.wireValue }}.",
-      )
+  fun parse(value: String): CodeReviewExecutionMode? = allowed.firstOrNull { it.wireValue == value }
+
+  fun unknownModeMessage(value: String): String =
+    "Unknown code-review execution mode '$value'. Allowed: ${allowed.joinToString { it.wireValue }}."
 
   fun execute(mode: CodeReviewExecutionMode): CodeReviewExecutionMode =
     if (mode == CodeReviewExecutionMode.DELEGATED) {

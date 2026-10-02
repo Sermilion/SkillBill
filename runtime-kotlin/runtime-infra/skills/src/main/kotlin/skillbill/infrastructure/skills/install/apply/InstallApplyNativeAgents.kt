@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.apply
 
+import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.skills.install.nativeagent.link.InstallNativeAgentOperations
 import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkOutcome
 import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkOverrides
@@ -148,7 +149,7 @@ private fun failedNativeAgentOutcome(
       agent = installer.agent,
       path = symlinkError?.linkPath?.toFileLocation(),
       guidance = symlinkError?.guidance,
-      causeClass = error::class.qualifiedName,
+      causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
     )
   return NativeAgentApplyOutcome(
     provider = installer.provider,

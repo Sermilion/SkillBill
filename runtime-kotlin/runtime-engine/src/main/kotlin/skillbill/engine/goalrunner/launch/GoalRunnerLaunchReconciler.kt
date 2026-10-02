@@ -31,6 +31,7 @@ import skillbill.goalrunner.model.GoalRunnerLivenessState
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
@@ -312,4 +313,5 @@ internal fun AgentRunLaunchOutcome.toGoalRunnerLaunchFacts(): GoalRunnerLaunchFa
           },
       )
     is UnsupportedAgentRunLaunch -> GoalRunnerLaunchFacts(spawnFailed = true)
+    is AgentRunLaunchDenied -> error("A denied launch is paused before launch reconciliation and has no launch facts.")
   }

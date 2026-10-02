@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.planning.remedies
 
+import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningProvenanceRecoverability
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRecoveryKind
 import skillbill.engine.goalrunner.planning.recovery.classifyGoalPlanningRecovery
@@ -66,9 +67,38 @@ fun goalPlanningPreparationStateReadStopReason(
   val recovery =
     error as? IncompatibleGoalPlanningPreparationRecoveryError
       ?: return "Goal planning preparation state could not be read: ${error.message.orEmpty()}"
-  val remedySubtaskId = subtaskId?.takeIf { it > 0 } ?: recovery.subtaskId.takeIf { it > 0 }
-  val kind = classifyGoalPlanningRecovery(recovery)
-  return "Goal planning preparation state could not be read: ${recovery.reason}. " +
+  return preparationStateReadStopReason(
+    recovery.reason,
+    recovery.subtaskId,
+    issueKey,
+    subtaskId,
+    classifyGoalPlanningRecovery(recovery),
+  )
+}
+
+fun goalPlanningPreparationStateReadStopReason(
+  reason: String,
+  recordedSubtaskId: Int,
+  issueKey: String,
+  subtaskId: Int?,
+): String =
+  preparationStateReadStopReason(
+    reason,
+    recordedSubtaskId,
+    issueKey,
+    subtaskId,
+    classifyGoalPlanningRecovery(reason),
+  )
+
+private fun preparationStateReadStopReason(
+  reason: String,
+  recordedSubtaskId: Int,
+  issueKey: String,
+  subtaskId: Int?,
+  kind: GoalPlanningRecoveryKind,
+): String {
+  val remedySubtaskId = subtaskId?.takeIf { it > 0 } ?: recordedSubtaskId.takeIf { it > 0 }
+  return "Goal planning preparation state could not be read: $reason. " +
     recoverySuffix(issueKey, remedySubtaskId, kind)
 }
 
@@ -84,8 +114,10 @@ internal fun statusRecoverabilityOrRefuse(
   classify: () -> GoalPlanningProvenanceRecoverability,
 ): GoalPlanningProvenanceRecoverability =
   runCatching(classify).getOrElse { error ->
+    error.rethrowIfCooperativeCancellationOrInterruption()
     GoalPlanningProvenanceRecoverability.Irrecoverable(
-      classifyGoalPlanningRecovery(error.message.orEmpty(), error),
+      (error as? IncompatibleGoalPlanningPreparationRecoveryError)?.let(::classifyGoalPlanningRecovery)
+        ?: classifyGoalPlanningRecovery("", error),
     )
   }
 

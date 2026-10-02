@@ -33,8 +33,8 @@ import skillbill.engine.featuretask.slot.state.PhaseQualityGateStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunState
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.engine.satisfiedAuditLauncher
 import skillbill.engine.telemetryRunnerHarness
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -60,7 +60,7 @@ class RequiredPhasePersistenceTest {
   fun rejectedStartPreventsOrdinaryAuditReviewGateAndCommitEffects() {
     listOf("preplan", "implement", "audit", "review", "validate", "build", "commit_push").forEach { phase ->
       withCapturedContext { context, launcherCount, gateCount, assertNoGitEffects ->
-        val rejection = RequiredPhaseWriteRejected(RequiredPhaseWriteKind.START, WORKFLOW_ID, phase, 1)
+        val rejection = RequiredPhaseWrite.Rejected(RequiredPhaseWriteKind.START, WORKFLOW_ID, phase, 1)
         val records = rejectingRecords(context.recorder, rejection)
         val strategy =
           when (phase) {
@@ -92,7 +92,7 @@ class RequiredPhasePersistenceTest {
   @Test
   fun rejectedBriefingPreventsLaunchAndRecordsItsOwnReason() {
     withCapturedContext { context, launcherCount, gateCount, assertNoGitEffects ->
-      val rejection = RequiredPhaseWriteRejected(RequiredPhaseWriteKind.BRIEFING, WORKFLOW_ID, "preplan", 1)
+      val rejection = RequiredPhaseWrite.Rejected(RequiredPhaseWriteKind.BRIEFING, WORKFLOW_ID, "preplan", 1)
       val intercepted = context.withRecords(rejectingRecords(context.recorder, rejection))
       val run = phaseRun(intercepted, "preplan")
 
@@ -116,7 +116,7 @@ class RequiredPhasePersistenceTest {
   fun rejectedReviewBriefingBlocksBeforeReviewLaunch() {
     withCapturedContext { context, launcherCount, gateCount, assertNoGitEffects ->
       val branch = requireNotNull(context.recorder.loadResolvedBranch(WORKFLOW_ID))
-      val rejection = RequiredPhaseWriteRejected(RequiredPhaseWriteKind.BRIEFING, WORKFLOW_ID, "review", 1)
+      val rejection = RequiredPhaseWrite.Rejected(RequiredPhaseWriteKind.BRIEFING, WORKFLOW_ID, "review", 1)
       val records =
         object : PhaseRunRecords by rejectingRecords(context.recorder, rejection) {
           override fun loadResolvedBranch(workflowId: String) = branch.copy(reviewBaseSha = "0".repeat(40))
@@ -139,14 +139,18 @@ class RequiredPhasePersistenceTest {
   @Test
   fun secondaryTerminalAndDiagnosticFailuresDoNotReplaceTheAttributedRejection() {
     withCapturedContext { context, launcherCount, _, assertNoGitEffects ->
-      val rejection = RequiredPhaseWriteRejected(RequiredPhaseWriteKind.START, WORKFLOW_ID, "preplan", 1)
+      val rejection = RequiredPhaseWrite.Rejected(RequiredPhaseWriteKind.START, WORKFLOW_ID, "preplan", 1)
       val secondary = IllegalStateException("terminal storage unavailable")
+      val warnedCauses = mutableListOf<Throwable?>()
       val diagnostics =
         object : RuntimeDiagnostics {
           override fun warning(
             message: String,
             error: Throwable?,
-          ) = error("diagnostics unavailable")
+          ) {
+            warnedCauses += error
+            error("diagnostics unavailable")
+          }
 
           override fun error(
             message: String,
@@ -160,7 +164,7 @@ class RequiredPhasePersistenceTest {
       val outcome = intercepted.runState.strategyFor("preplan").runStep(run, intercepted.runState.step(run))
 
       assertEquals(rejection.message, outcome.blockedReason)
-      assertTrue(rejection.suppressed.any { it === secondary })
+      assertTrue(warnedCauses.any { it === secondary })
       assertEquals(0, launcherCount())
       assertNoGitEffects()
     }
@@ -172,7 +176,8 @@ class RequiredPhasePersistenceTest {
       withCapturedContext { context, launcherCount, gateCount, assertNoGitEffects ->
         val records =
           object : PhaseRunRecords by context.recorder {
-            override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest) = throw failure
+            override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
+              throw failure
           }
         val intercepted = context.withRecords(records)
         val run = phaseRun(intercepted, "preplan")
@@ -194,7 +199,7 @@ class RequiredPhasePersistenceTest {
   fun terminalPersistenceKeepsTheRejectedChildAttemptInsteadOfTheOuterIteration() {
     withCapturedContext { context, launcherCount, _, _ ->
       val run = phaseRun(context, "preplan")
-      val rejection = RequiredPhaseWriteRejected(RequiredPhaseWriteKind.BRIEFING, WORKFLOW_ID, "preplan", 7)
+      val rejection = RequiredPhaseWrite.Rejected(RequiredPhaseWriteKind.BRIEFING, WORKFLOW_ID, "preplan", 7)
 
       val scope =
         PhaseAttemptScope(
@@ -218,7 +223,7 @@ class RequiredPhasePersistenceTest {
   @Test
   fun cancellationDuringTerminalPersistenceStillPropagatesAfterRejection() {
     withCapturedContext { context, launcherCount, _, assertNoGitEffects ->
-      val rejection = RequiredPhaseWriteRejected(RequiredPhaseWriteKind.START, WORKFLOW_ID, "preplan", 1)
+      val rejection = RequiredPhaseWrite.Rejected(RequiredPhaseWriteKind.START, WORKFLOW_ID, "preplan", 1)
       val cancellation = CancellationException("cancelled while persisting rejection")
       val intercepted = context.withRecords(rejectingRecords(context.recorder, rejection, cancellation))
       val run = phaseRun(intercepted, "preplan")
@@ -229,7 +234,6 @@ class RequiredPhasePersistenceTest {
         }
 
       assertSame(cancellation, thrown)
-      assertTrue(rejection.suppressed.any { it === cancellation })
       assertEquals(0, launcherCount())
       assertNoGitEffects()
     }
@@ -249,9 +253,9 @@ class RequiredPhasePersistenceTest {
       var starts = 0
       val records =
         object : PhaseRunRecords by context.recorder {
-          override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest) {
+          override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite {
             starts++
-            context.recorder.recordRequiredPhaseStart(request)
+            return context.recorder.recordRequiredPhaseStart(request)
           }
 
           override fun recordPhaseBriefing(
@@ -259,7 +263,7 @@ class RequiredPhasePersistenceTest {
             briefing: FeatureTaskRuntimePhaseLaunchBriefing,
             sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
             attempt: Int,
-          ): Unit = error("Audit must not persist a durable briefing")
+          ): RequiredPhaseWrite = error("Audit must not persist a durable briefing")
         }
       val intercepted = context.withRecords(records)
       val run = phaseRun(intercepted, "audit")
@@ -305,13 +309,13 @@ class RequiredPhasePersistenceTest {
 
   private fun rejectingRecords(
     delegate: PhaseRunRecords,
-    rejection: RequiredPhaseWriteRejected,
+    rejection: RequiredPhaseWrite.Rejected,
     terminalFailure: Throwable? = null,
   ): PhaseRunRecords =
     object : PhaseRunRecords by delegate {
-      override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest) {
-        if (rejection.writeKind == RequiredPhaseWriteKind.START) throw rejection
-        delegate.recordRequiredPhaseStart(request)
+      override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite {
+        if (rejection.writeKind == RequiredPhaseWriteKind.START) return rejection
+        return delegate.recordRequiredPhaseStart(request)
       }
 
       override fun recordPhaseBriefing(
@@ -319,10 +323,10 @@ class RequiredPhasePersistenceTest {
         briefing: FeatureTaskRuntimePhaseLaunchBriefing,
         sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
         attempt: Int,
-      ) {
+      ): RequiredPhaseWrite {
         assertEquals(rejection.phaseId, briefing.phaseId)
         assertEquals(rejection.attempt, attempt)
-        throw rejection
+        return rejection
       }
 
       override fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean {

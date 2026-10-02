@@ -13,6 +13,7 @@ import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutpu
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecordFor
 import skillbill.engine.featuretask.runloop.state.REVIEW_INVALIDATION_AGENT_ID
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
@@ -86,8 +87,9 @@ internal class InMemoryPhaseRunRecords(
     return true
   }
 
-  override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest) {
+  override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite {
     recordPhaseState(request)
+    return RequiredPhaseWrite.Acknowledged
   }
 
   override fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean = recordPhaseState(request)
@@ -173,7 +175,7 @@ internal class InMemoryPhaseRunRecords(
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
     attempt: Int,
-  ) = Unit
+  ): RequiredPhaseWrite = RequiredPhaseWrite.Acknowledged
 
   override fun recordProjectionRejection(
     workflowId: String,

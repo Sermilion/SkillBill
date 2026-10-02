@@ -8,6 +8,7 @@ import skillbill.cli.model.CliExecutionResult
 import skillbill.cli.model.CliRunInputs
 import skillbill.cli.system.UninstallCommand
 import skillbill.install.model.McpMutationResult
+import skillbill.install.model.McpRegistrationOutcome
 import skillbill.ports.install.agent.InstallAgentTargetPort
 import skillbill.ports.install.agent.model.ClaudeConfigRootsRequest
 import skillbill.ports.install.agent.model.ClaudeConfigRootsResult
@@ -170,6 +171,8 @@ private object SucceedingMcpRegistrationPort : InstallMcpRegistrationPort {
 
   override fun unregisterMcp(request: InstallMcpUnregistrationRequest): InstallMcpRegistrationResult =
     InstallMcpRegistrationResult(
-      McpMutationResult(agent = request.agent, configPath = ABSENT_PATH.toFileLocation(), changed = false),
+      McpRegistrationOutcome.Applied(
+        McpMutationResult(agent = request.agent, configPath = ABSENT_PATH.toFileLocation(), changed = false),
+      ),
     )
 }

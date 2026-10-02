@@ -9,6 +9,7 @@ import skillbill.application.review.snapshot.diffForPaths
 import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.reviewHarness
 import skillbill.application.review.snapshot.reviewPack
+import skillbill.application.review.snapshot.reviewed
 import skillbill.application.runner
 import skillbill.goalrunner.terminalStatus
 import skillbill.install.model.SupportedAgent
@@ -48,7 +49,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
           evidenceBrokerFactory = ReviewEvidenceBrokerFactory { error("broker construction failed") },
         ),
         recorder,
-      ).run(
+      ).reviewed(
         harnessRequest(
           reviewRunId = "rvw-195-unbound",
           codeReviewMode = CodeReviewExecutionMode.DELEGATED,
@@ -85,7 +86,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
           parentLaunch = { error("a governed review must not launch when its evidence endpoint is unbound") },
         ),
         recorder,
-      ).run(
+      ).reviewed(
         harnessRequest(
           reviewRunId = "rvw-195-endpoint-unbound",
           codeReviewMode = CodeReviewExecutionMode.DELEGATED,
@@ -112,7 +113,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
         simulateEvidenceReads = false,
       ),
       recorder,
-    ).run(
+    ).reviewed(
       harnessRequest(
         reviewRunId = "rvw-195-unexercised",
         codeReviewMode = CodeReviewExecutionMode.DELEGATED,
@@ -150,7 +151,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
             },
         ),
         recorder,
-      ).run(
+      ).reviewed(
         harnessRequest(
           reviewRunId = "rvw-195-zero-byte",
           codeReviewMode = CodeReviewExecutionMode.DELEGATED,
@@ -179,7 +180,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
           response = { RecordedWorkerResponse(stdout = rejectedLocation) },
         ),
         recorder,
-      ).run(
+      ).reviewed(
         harnessRequest(
           reviewRunId = "rvw-195-rejected",
           codeReviewMode = CodeReviewExecutionMode.DELEGATED,
@@ -235,7 +236,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
           response = { RecordedWorkerResponse(termination = AgentRunTermination.SpawnFailed, processStarted = false) },
         ),
         ReviewRecorder(),
-      ).run(
+      ).reviewed(
         harnessRequest(
           reviewRunId = "rvw-195-unavailable-cli",
           codeReviewMode = CodeReviewExecutionMode.DELEGATED,
@@ -263,7 +264,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
           },
         ),
         recorder,
-      ).run(
+      ).reviewed(
         harnessRequest(
           reviewRunId = "rvw-195-unsupported",
           codeReviewMode = CodeReviewExecutionMode.DELEGATED,
@@ -301,7 +302,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
             },
         ),
         recorder,
-      ).run(
+      ).reviewed(
         harnessRequest(
           reviewRunId = "rvw-195-mixed-lanes",
           codeReviewMode = CodeReviewExecutionMode.DELEGATED,
@@ -329,7 +330,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
           response = { RecordedWorkerResponse(stdout = "No issues noted.\nverdict: approved") },
         ),
         recorder,
-      ).run(
+      ).reviewed(
         harnessRequest(
           reviewRunId = "rvw-198-unread-clean",
           codeReviewMode = CodeReviewExecutionMode.DELEGATED,
@@ -368,7 +369,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
           },
       ),
       recorder,
-    ).run(
+    ).reviewed(
       harnessRequest(
         reviewRunId = "rvw-198-inline-union",
         codeReviewMode = CodeReviewExecutionMode.DELEGATED,
@@ -423,7 +424,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
           },
       ),
       recorder,
-    ).run(
+    ).reviewed(
       harnessRequest(
         reviewRunId = "rvw-201-parent-derived-budget",
         codeReviewMode = CodeReviewExecutionMode.DELEGATED,
@@ -451,7 +452,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
           evidenceBrokerFactory = brokerDenyingUnit("src/B.kt"),
         ),
         recorder,
-      ).run(
+      ).reviewed(
         harnessRequest(
           reviewRunId = "rvw-201-broker-refusal",
           codeReviewMode = CodeReviewExecutionMode.DELEGATED,
@@ -479,7 +480,7 @@ class ParallelCodeReviewEvidenceBoundaryTest {
           diff = diffForPaths("src/Repo.kt"),
         ),
         recorder,
-      ).run(
+      ).reviewed(
         harnessRequest(
           reviewRunId = "rvw-201-broker-clean",
           codeReviewMode = CodeReviewExecutionMode.DELEGATED,

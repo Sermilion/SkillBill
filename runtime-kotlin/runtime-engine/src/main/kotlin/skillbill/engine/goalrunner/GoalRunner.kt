@@ -2,7 +2,7 @@ package skillbill.engine.goalrunner
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goalrunner.execution.core.DriveGoalLoopArgs
-import skillbill.engine.goalrunner.execution.core.GoalRunnerExecutionAlreadyRunningException
+import skillbill.engine.goalrunner.execution.core.GoalRunnerOwnedRun
 import skillbill.engine.goalrunner.execution.core.GoalRunnerPauseBoundary
 import skillbill.engine.goalrunner.execution.core.GoalRunnerPerRunLoopAssembler
 import skillbill.engine.goalrunner.execution.core.GoalRunnerRunBoundaries
@@ -60,38 +60,45 @@ class GoalRunner(
         ?: intakePreparation.prepare(request)
         ?: return unknownGoal(request.issueKey)
     val childAdmission = runPreparation.existingChildExecutionPlanAdmission(loadedState, request)
-    return try {
-      val execute = {
-        val state = reconcileStateBeforeRun(loadedState)
-        when (val preparation = runPreparation.prepareRun(state, request)) {
-          is GoalRunPreparation.PreparationBlocked -> preparation.report
-          is GoalRunPreparation.Prepared -> runPrepared(preparation)
-        }
+    val execute = {
+      val state = reconcileStateBeforeRun(loadedState)
+      when (val preparation = runPreparation.prepareRun(state, request)) {
+        is GoalRunPreparation.PreparationBlocked -> preparation.report
+        is GoalRunPreparation.Prepared -> runPrepared(preparation)
       }
+    }
+    val owned =
       if (childAdmission == null) {
         executionCoordinator.runOwned(loadedState.parentWorkflowId, execute)
       } else {
         executionCoordinator.runOwnedWithChildAdmission(loadedState.parentWorkflowId, childAdmission, execute)
       }
-    } catch (alreadyRunning: GoalRunnerExecutionAlreadyRunningException) {
-      stopped(
-        StoppedReportArgs(
-          issueKey = loadedState.manifest.issueKey,
-          attempted = emptyList(),
-          subtaskId = loadedState.manifest.currentSubtaskIntent.subtaskId,
-          reason = GoalRunnerStopReason.BLOCKED,
-          blockedReason = alreadyRunning.message.orEmpty(),
-          workflowId = loadedState.manifest.workflowIdFor(loadedState.manifest.currentSubtaskIntent.subtaskId),
-          lastResumableStep =
-            loadedState.manifest.subtasks
-              .firstOrNull { it.id == loadedState.manifest.currentSubtaskIntent.subtaskId }
-              ?.lastResumableStep
-              .orEmpty()
-              .ifBlank { "plan" },
-        ),
-      )
+    return when (owned) {
+      is GoalRunnerOwnedRun.Completed -> owned.value
+      is GoalRunnerOwnedRun.AlreadyRunning -> alreadyRunningReport(loadedState, owned.reason)
     }
   }
+
+  private fun alreadyRunningReport(
+    loadedState: GoalRunnerManifestState,
+    reason: String,
+  ): GoalRunnerRunReport =
+    stopped(
+      StoppedReportArgs(
+        issueKey = loadedState.manifest.issueKey,
+        attempted = emptyList(),
+        subtaskId = loadedState.manifest.currentSubtaskIntent.subtaskId,
+        reason = GoalRunnerStopReason.BLOCKED,
+        blockedReason = reason,
+        workflowId = loadedState.manifest.workflowIdFor(loadedState.manifest.currentSubtaskIntent.subtaskId),
+        lastResumableStep =
+          loadedState.manifest.subtasks
+            .firstOrNull { it.id == loadedState.manifest.currentSubtaskIntent.subtaskId }
+            ?.lastResumableStep
+            .orEmpty()
+            .ifBlank { "plan" },
+      ),
+    )
 
   private fun reconcileStateBeforeRun(state: GoalRunnerManifestState): GoalRunnerManifestState {
     val reconciled =

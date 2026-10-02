@@ -1,6 +1,5 @@
 package skillbill.di.core
 
-import skillbill.error.core.UnresolvedRemoteTransportPortError
 import skillbill.infrastructure.http.JdkHttpRequester
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.model.EnvironmentContext
@@ -47,8 +46,8 @@ class AbsentOptionalPortResolutionTest {
   }
 
   @Test
-  fun `an unresolved transport context raises a typed error`() {
-    assertFailsWith<UnresolvedRemoteTransportPortError> {
+  fun `an unresolved transport context fails as a composition defect`() {
+    assertFailsWith<IllegalStateException> {
       RuntimeComponent::class.create(
         RuntimeContext(
           environment = EnvironmentContext(),

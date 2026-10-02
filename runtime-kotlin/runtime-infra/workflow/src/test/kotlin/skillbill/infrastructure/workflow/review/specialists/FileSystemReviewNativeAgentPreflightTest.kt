@@ -280,12 +280,12 @@ class FileSystemReviewNativeAgentPreflightTest {
   ) : InstallMcpRegistrationPort {
     override fun registerMcp(request: InstallMcpRegistrationRequest): InstallMcpRegistrationResult =
       InstallMcpRegistrationResult(
-        mutation = McpRegistrationOperations.register(request.agent, request.runtimeMcpBin, request.home, environment),
+        outcome = McpRegistrationOperations.register(request.agent, request.runtimeMcpBin, request.home, environment),
       )
 
     override fun unregisterMcp(request: InstallMcpUnregistrationRequest): InstallMcpRegistrationResult =
       InstallMcpRegistrationResult(
-        mutation = McpRegistrationOperations.unregister(request.agent, request.home, environment),
+        outcome = McpRegistrationOperations.unregister(request.agent, request.home, environment),
       )
   }
 

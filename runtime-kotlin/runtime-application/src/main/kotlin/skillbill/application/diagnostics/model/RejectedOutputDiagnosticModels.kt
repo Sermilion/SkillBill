@@ -1,7 +1,9 @@
 package skillbill.application.diagnostics.model
 
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
-import skillbill.error.core.RejectedOutputDiagnosticError
+import skillbill.error.core.RejectedOutputDiagnosticFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rejectedOutputDiagnosticInvalidConfigurationMessage
 import java.time.Duration
 
 private const val DEFAULT_MAXIMUM_PAYLOAD_BYTES: Long = 1_048_576
@@ -13,10 +15,16 @@ data class RejectedOutputDiagnosticConfig(
 ) {
   init {
     if (maximumPayloadBytes < 0) {
-      throw RejectedOutputDiagnosticError.InvalidConfiguration("maximumPayloadBytes must be non-negative")
+      throw SkillBillRuntimeException(
+        RejectedOutputDiagnosticFailureCode.INVALID_CONFIGURATION,
+        rejectedOutputDiagnosticInvalidConfigurationMessage("maximumPayloadBytes must be non-negative"),
+      )
     }
     if (retention.isNegative) {
-      throw RejectedOutputDiagnosticError.InvalidConfiguration("retention must be non-negative")
+      throw SkillBillRuntimeException(
+        RejectedOutputDiagnosticFailureCode.INVALID_CONFIGURATION,
+        rejectedOutputDiagnosticInvalidConfigurationMessage("retention must be non-negative"),
+      )
     }
   }
 }

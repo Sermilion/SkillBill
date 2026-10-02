@@ -2,6 +2,7 @@ package skillbill.application.telemetry.service
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
+import skillbill.error.core.failureCodeLabel
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 
 internal const val REDACTED_ERROR_MESSAGE = "[redacted]"
@@ -20,7 +21,7 @@ fun enqueueRuntimeException(
   val payload =
     mapOf(
       "workflow_phase" to workflowPhase,
-      "error_type" to (error.javaClass.name.substringAfterLast('.')),
+      "error_type" to (error.failureCodeLabel() ?: error.javaClass.name.substringAfterLast('.')),
       "error_message" to if (unredacted) error.message.orEmpty().take(MAX_MESSAGE_LENGTH) else REDACTED_ERROR_MESSAGE,
       "stack_trace" to redactedStackTrace(error, unredacted),
     )

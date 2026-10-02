@@ -3,14 +3,29 @@ package skillbill.application.runtimepersistence
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 
-class RuntimeOwnedFactUnavailable(
-  message: String,
-  cause: Throwable? = null,
-) : SkillBillRuntimeException(message, cause)
+fun runtimeOwnedFactUnavailable(
+  code: RuntimeOwnedPersistenceFailureCode,
+  seam: String,
+  expected: String,
+  cause: Exception,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    code,
+    "Runtime-owned persistence fact '$expected' could not be established at $seam: ${causeOf(cause)}",
+    cause,
+  )
+
+private fun causeOf(error: Exception): String =
+  error.message?.takeIf(String::isNotBlank) ?: error.failureCodeLabel() ?: error::class.simpleName.orEmpty()
+
+private fun Throwable.isOwnedFactUnavailable(): Boolean =
+  (this as? SkillBillRuntimeException)?.code == RuntimeOwnedPersistenceFailureCode.REVIEW_FACT_UNAVAILABLE
 
 @Inject
 class RuntimeOwnedPersistenceBoundary(
@@ -72,7 +87,7 @@ class RuntimeOwnedPersistenceBoundary(
     val outcome = runCatching(block)
     val error = outcome.exceptionOrNull() ?: return outcome.getOrThrow()
     error.rethrowIfCooperativeCancellationOrInterruption()
-    if (error is Exception && error !is RuntimeOwnedFactUnavailable) {
+    if (error is Exception && !error.isOwnedFactUnavailable()) {
       return onFailure(error)
     }
     throw error
@@ -84,12 +99,8 @@ class RuntimeOwnedPersistenceBoundary(
     used: String,
     error: Exception,
   ): Nothing {
-    val cause = causeOf(error)
     recordFailure(seam, expected, used, error)
-    throw RuntimeOwnedFactUnavailable(
-      "Runtime-owned persistence fact '$expected' could not be established at $seam: $cause",
-      error,
-    )
+    throw runtimeOwnedFactUnavailable(RuntimeOwnedPersistenceFailureCode.REVIEW_FACT_UNAVAILABLE, seam, expected, error)
   }
 
   private fun recordFailure(
@@ -105,7 +116,4 @@ class RuntimeOwnedPersistenceBoundary(
       )
     }
   }
-
-  private fun causeOf(error: Exception): String =
-    error.message?.takeIf(String::isNotBlank) ?: error::class.simpleName.orEmpty()
 }

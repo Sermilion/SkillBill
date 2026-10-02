@@ -2,7 +2,9 @@ package skillbill.engine.featuretask.validation
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 import skillbill.review.plan.ReviewFallbackResolver
 import skillbill.review.plan.ReviewStackRouting
@@ -41,7 +43,8 @@ class ValidationGateResolver(
     val manifests =
       try {
         installedCatalog.manifests()
-      } catch (e: ShellContentContractException) {
+      } catch (e: SkillBillRuntimeException) {
+        e.rethrowUnless(e.isShellContentContractFailure())
         return ValidationGateResolution.Incompatible(
           "Installed platform pack discovery failed: ${e.message ?: e.javaClass.simpleName}. " +
             "Repair the installed platform packs before running validation.",

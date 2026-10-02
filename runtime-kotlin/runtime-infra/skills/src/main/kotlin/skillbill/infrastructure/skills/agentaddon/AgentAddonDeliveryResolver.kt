@@ -2,8 +2,8 @@ package skillbill.infrastructure.skills.agentaddon
 
 import skillbill.agentaddon.model.AgentAddonCatalogueEntry
 import skillbill.agentaddon.model.AgentAddonConsumer
-import skillbill.error.shellcontent.AgentAddonPointerCollisionError
-import skillbill.error.shellcontent.InvalidAgentAddonDeliveryTargetError
+import skillbill.error.shellcontent.agentAddonPointerCollision
+import skillbill.error.shellcontent.invalidAgentAddonDeliveryTarget
 import skillbill.model.toPath
 import java.io.File
 import java.nio.charset.StandardCharsets
@@ -38,7 +38,7 @@ class AgentAddonDeliveryResolver {
           val content = validateTarget(canonicalRoot, declaration.slug, declaration.contentPath.toPath())
           val name = "agent-addon-${declaration.slug}.md"
           if (canonicalRoot.relativize(content).toString().replace(File.separatorChar, '/') == name) {
-            throw InvalidAgentAddonDeliveryTargetError(
+            throw invalidAgentAddonDeliveryTarget(
               declaration.slug,
               content.toString(),
               "self-reference is forbidden",
@@ -58,7 +58,7 @@ class AgentAddonDeliveryResolver {
           )
         }
     pointers.groupBy { portableFileName(it.name) }.values.firstOrNull { it.size > 1 }?.let {
-      throw AgentAddonPointerCollisionError(it.first().name)
+      throw agentAddonPointerCollision(it.first().name)
     }
     return pointers
   }
@@ -98,7 +98,7 @@ class AgentAddonDeliveryResolver {
     path: Path,
     reason: String,
   ) {
-    if (!valid) throw InvalidAgentAddonDeliveryTargetError(slug, path.toString(), reason)
+    if (!valid) throw invalidAgentAddonDeliveryTarget(slug, path.toString(), reason)
   }
 
   private fun relative(

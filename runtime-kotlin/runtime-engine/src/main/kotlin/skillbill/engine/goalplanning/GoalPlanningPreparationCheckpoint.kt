@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPreparationProgress
+import skillbill.engine.goalrunner.planning.model.GoalPlanningRecoveryProgress
 import skillbill.engine.goalrunner.planning.model.expectedProvenance
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
@@ -113,14 +114,10 @@ class GoalPlanningPreparationCheckpoint(
     identity: GoalPlanningIdentity,
     subtaskId: Int,
     governedSubSpecPath: String,
-    expectedDescriptor: GovernedGoalSubtaskDescriptor? = null,
   ): GoalSubtaskPlanCheckpoint? =
     database.read {
       it.goalPlanningPreparations.findSubtaskPlan(identity, subtaskId, governedSubSpecPath)
-    }?.let { plan ->
-      expectedDescriptor?.let { requireRecoverablePlan(identity, plan, it) }
-      plan.takeIf { gate.subtaskPlanRejection(plan) == null }
-    }
+    }?.takeIf { plan -> gate.subtaskPlanRejection(plan) == null }
 
   private fun requireRecoverablePlan(
     identity: GoalPlanningIdentity,
@@ -133,7 +130,7 @@ class GoalPlanningPreparationCheckpoint(
           "stored manifest order differs from the authoritative decomposition manifest"
         plan.subSpecHash != expectedDescriptor.subSpecHash ->
           "stored governed sub-spec hash differs from the current governed sub-spec"
-        else -> nonCompletedPlanPayloadReason(plan.planPayload)
+        else -> null
       } ?: return
     throw IncompatibleGoalPlanningPreparationRecoveryError(identity.parentGoalWorkflowId, plan.subtaskId, divergence)
   }
@@ -153,33 +150,63 @@ class GoalPlanningPreparationCheckpoint(
     identity: GoalPlanningIdentity,
     orderedDescriptors: List<GovernedGoalSubtaskDescriptor>,
     expectedProvenance: GoalPlanningContractProvenance,
-  ): GoalPlanningPreparationProgress {
+  ): GoalPlanningRecoveryProgress {
     val sharedPrepared = findSharedPreplan(identity) != null
-    val prepared =
-      orderedDescriptors.mapNotNull { descriptor ->
-        findSubtaskPlan(
-          identity,
-          descriptor.subtaskId,
-          descriptor.governedSubSpecPath,
-          descriptor,
-        )?.also { plan ->
-          if (plan.provenance != expectedProvenance) {
-            throw IncompatibleGoalPlanningPreparationRecoveryError(
-              identity.parentGoalWorkflowId,
-              descriptor.subtaskId,
-              "stored plan provenance differs from the governing shared preplan",
-            )
-          }
-        }
+    val prepared = mutableListOf<GoalSubtaskPlanCheckpoint>()
+    orderedDescriptors.forEach { descriptor ->
+      when (val read = readPlanForRecovery(identity, descriptor, expectedProvenance)) {
+        is PlanRecoveryRead.Incomplete ->
+          return GoalPlanningRecoveryProgress.IncompletePlan(
+            identity.parentGoalWorkflowId,
+            read.subtaskId,
+            read.reason,
+          )
+        is PlanRecoveryRead.Prepared -> prepared += read.plan
+        PlanRecoveryRead.Absent -> Unit
       }
+    }
     val preparedIds = prepared.mapTo(mutableSetOf()) { it.subtaskId }
-    return GoalPlanningPreparationProgress(
-      sharedPreplanPrepared = sharedPrepared,
-      preparedPlanCount = prepared.size,
-      expectedPlanCount = orderedDescriptors.size,
-      missingSubtaskIds = orderedDescriptors.filterNot { it.subtaskId in preparedIds }.map { it.subtaskId },
+    return GoalPlanningRecoveryProgress.Ready(
+      GoalPlanningPreparationProgress(
+        sharedPreplanPrepared = sharedPrepared,
+        preparedPlanCount = prepared.size,
+        expectedPlanCount = orderedDescriptors.size,
+        missingSubtaskIds = orderedDescriptors.filterNot { it.subtaskId in preparedIds }.map { it.subtaskId },
+      ),
     )
   }
+
+  private fun readPlanForRecovery(
+    identity: GoalPlanningIdentity,
+    descriptor: GovernedGoalSubtaskDescriptor,
+    expectedProvenance: GoalPlanningContractProvenance,
+  ): PlanRecoveryRead {
+    val plan =
+      database.read {
+        it.goalPlanningPreparations.findSubtaskPlan(identity, descriptor.subtaskId, descriptor.governedSubSpecPath)
+      } ?: return PlanRecoveryRead.Absent
+    requireRecoverablePlan(identity, plan, descriptor)
+    val incompleteReason = nonCompletedPlanPayloadReason(plan.planPayload)
+    return when {
+      incompleteReason != null -> PlanRecoveryRead.Incomplete(plan.subtaskId, incompleteReason)
+      gate.subtaskPlanRejection(plan) != null -> PlanRecoveryRead.Absent
+      plan.provenance != expectedProvenance ->
+        throw IncompatibleGoalPlanningPreparationRecoveryError(
+          identity.parentGoalWorkflowId,
+          descriptor.subtaskId,
+          "stored plan provenance differs from the governing shared preplan",
+        )
+      else -> PlanRecoveryRead.Prepared(plan)
+    }
+  }
+}
+
+private sealed interface PlanRecoveryRead {
+  data object Absent : PlanRecoveryRead
+
+  data class Prepared(val plan: GoalSubtaskPlanCheckpoint) : PlanRecoveryRead
+
+  data class Incomplete(val subtaskId: Int, val reason: String) : PlanRecoveryRead
 }
 
 class GoalPlanningSharedPreplanRefresh(

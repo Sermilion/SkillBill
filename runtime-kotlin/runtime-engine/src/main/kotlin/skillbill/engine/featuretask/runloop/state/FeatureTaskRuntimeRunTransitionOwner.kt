@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.runloop.core.PendingReentry
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunState
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -172,9 +173,12 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
   fun acknowledgeRequiredPhaseStart(
     recorder: PhaseRunRecords,
     phaseState: FeatureTaskRuntimePhaseStateRequest,
-  ) {
-    recorder.recordRequiredPhaseStart(phaseState)
-    reserveReviewPassAfterPhaseState(phaseState.reviewPassNumber)
+  ): RequiredPhaseWrite {
+    val write = recorder.recordRequiredPhaseStart(phaseState)
+    if (write is RequiredPhaseWrite.Acknowledged) {
+      reserveReviewPassAfterPhaseState(phaseState.reviewPassNumber)
+    }
+    return write
   }
 
   fun applyPersistedPhaseCompletion(

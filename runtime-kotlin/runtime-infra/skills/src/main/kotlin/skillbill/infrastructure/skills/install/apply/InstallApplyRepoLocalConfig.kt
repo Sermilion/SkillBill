@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.install.apply
 
 import skillbill.config.model.RepoLocalConfigKey
+import skillbill.error.core.failureCodeLabel
 import skillbill.install.model.InstallApplyIssue
 import skillbill.install.model.InstallApplyIssueKind
 import skillbill.install.model.InstallPlan
@@ -31,7 +32,7 @@ private inline fun scaffoldStep(
       InstallApplyIssue(
         kind = kind,
         message = error.message.orEmpty(),
-        causeClass = error::class.qualifiedName,
+        causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
       ),
     )
   }

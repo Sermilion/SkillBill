@@ -1,8 +1,9 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.JsonCodec
+import skillbill.error.core.GoalTelemetryRowFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
-import skillbill.infrastructure.sqlite.review.core.InvalidGoalTelemetryRowError
 import skillbill.infrastructure.sqlite.review.stats.ReviewStatsRuntime
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
 import skillbill.infrastructure.sqlite.telemetry.outbox.TelemetryOutboxStore
@@ -232,9 +233,11 @@ class GoalTelemetryStoreTest {
         """.trimIndent(),
       ).use { it.executeUpdate() }
 
-      assertFailsWith<InvalidGoalTelemetryRowError> {
-        ReviewStatsRuntime.goalStats(connection)
-      }
+      val error =
+        assertFailsWith<SkillBillRuntimeException> {
+          ReviewStatsRuntime.goalStats(connection)
+        }
+      assertEquals(GoalTelemetryRowFailureCode.MALFORMED, error.code)
     }
   }
 

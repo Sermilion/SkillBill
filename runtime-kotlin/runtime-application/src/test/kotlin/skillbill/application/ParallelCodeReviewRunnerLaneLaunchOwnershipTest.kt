@@ -1,6 +1,7 @@
 package skillbill.application
 
 import skillbill.application.review.governed.stubGovernedReviewEvidenceEndpointBinder
+import skillbill.application.review.snapshot.reviewed
 import skillbill.application.review.snapshot.simulateGovernedEvidenceReads
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.install.model.SupportedAgent
@@ -46,7 +47,7 @@ class ParallelCodeReviewRunnerLaneLaunchOwnershipTest {
       )
 
     val result =
-      runner.run(
+      runner.reviewed(
         baseRequest(agent1Id = "cursor", scope = ParallelReviewScope.STAGED)
           .copy(codeReviewMode = CodeReviewExecutionMode.DELEGATED),
       )
@@ -174,7 +175,7 @@ private fun assertLaunchOwnershipCase(case: LaunchOwnershipCase) {
       ),
     )
   val run = {
-    runner.run(
+    runner.reviewed(
       baseRequest(agent1Id = "cursor", scope = ParallelReviewScope.STAGED)
         .copy(codeReviewMode = CodeReviewExecutionMode.DELEGATED),
     )

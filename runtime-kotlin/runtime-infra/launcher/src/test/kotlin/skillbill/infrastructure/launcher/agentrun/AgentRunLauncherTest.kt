@@ -211,7 +211,7 @@ class HeadlessAgentRunAdapterTest {
       )
     val adapters = headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE)
 
-    val outcome = requireNotNull(adapters[SupportedAgent.CURSOR]).launch(skillRunRequest())
+    val outcome = requireNotNull(adapters[SupportedAgent.CURSOR]).launchFacts(skillRunRequest())
 
     assertEquals(AgentRunTermination.Interrupted, outcome.termination)
     assertEquals("interrupted", outcome.stderr)

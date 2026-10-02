@@ -17,6 +17,7 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.model.CliRunInputs
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowIfDatabaseFailure
 import skillbill.install.model.InstallAgentSelection
 import skillbill.install.model.InstallAgentSelectionMode
 import skillbill.install.model.InstallPlanRequest
@@ -211,6 +212,7 @@ class InstallReplayLastSelectionCommand(
       }
       state.completeText(selection.toReplayText(), emptyMap())
     } catch (error: SkillBillRuntimeException) {
+      error.rethrowIfDatabaseFailure()
       state.completeText("${error.message.orEmpty()}\n", emptyMap(), exitCode = 1)
     } catch (error: IllegalArgumentException) {
       state.completeText("${error.message.orEmpty()}\n", emptyMap(), exitCode = 1)

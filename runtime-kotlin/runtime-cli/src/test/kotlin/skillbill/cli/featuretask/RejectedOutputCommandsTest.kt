@@ -1,11 +1,15 @@
 package skillbill.cli.featuretask
 
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRawRead
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRecording
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
-import skillbill.error.core.RejectedOutputDiagnosticError
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticSelection
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRead
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRecord
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import java.time.Clock
@@ -13,6 +17,7 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class RejectedOutputCommandsTest {
@@ -21,10 +26,11 @@ class RejectedOutputCommandsTest {
     val repository = CliDiagnosticRepository()
     val service = RejectedOutputDiagnosticService(repository, { }, { }, clock = Clock.systemUTC())
     val raw = byteArrayOf(0, -1, 10, 13, 0, 42)
-    val metadata = service.record(request(raw))
+    val metadata = assertIs<RejectedOutputDiagnosticRecording.Recorded>(service.record(request(raw))).metadata
 
     assertTrue(metadata.byteSize == raw.size.toLong())
-    assertContentEquals(raw, service.readRaw(metadata.identity))
+    val payload = assertIs<RejectedOutputDiagnosticRawRead.Payload>(service.readRaw(metadata.identity))
+    assertContentEquals(raw, payload.bytes)
   }
 
   @Test
@@ -34,8 +40,8 @@ class RejectedOutputCommandsTest {
     service.record(request(byteArrayOf(1), attempt = 1))
     service.record(request(byteArrayOf(2), attempt = 2))
 
-    val matches = service.inspect(RejectedOutputDiagnosticSelector("workflow-1"))
-    assertEquals(2, matches.size)
+    val selection = service.inspect(RejectedOutputDiagnosticSelector("workflow-1"))
+    assertEquals(2, assertIs<RejectedOutputDiagnosticSelection.Selected>(selection).diagnostics.size)
   }
 
   private fun request(
@@ -57,8 +63,8 @@ class RejectedOutputCommandsTest {
 private class CliDiagnosticRepository : RejectedOutputDiagnosticRepository {
   private val records = linkedMapOf<String, RejectedOutputDiagnosticRecord>()
 
-  override fun insert(record: RejectedOutputDiagnosticRecord): RejectedOutputDiagnosticRecord =
-    records.getOrPut(record.metadata.identity) { record }
+  override fun insert(record: RejectedOutputDiagnosticRecord): RejectedOutputDiagnosticInsert =
+    RejectedOutputDiagnosticInsert.Inserted(records.getOrPut(record.metadata.identity) { record })
 
   override fun select(selector: RejectedOutputDiagnosticSelector): List<RejectedOutputDiagnostic> =
     records.values.map { it.metadata }.filter {
@@ -67,8 +73,8 @@ private class CliDiagnosticRepository : RejectedOutputDiagnosticRepository {
         (selector.attempt == null || it.attempt == selector.attempt)
     }
 
-  override fun read(identity: String): RejectedOutputDiagnosticRecord =
-    records[identity] ?: throw RejectedOutputDiagnosticError.Absent(identity)
+  override fun read(identity: String): RejectedOutputDiagnosticRead =
+    records[identity]?.let(RejectedOutputDiagnosticRead::Found) ?: RejectedOutputDiagnosticRead.Absent(identity)
 
   override fun markExpired(before: Instant): Int = 0
 

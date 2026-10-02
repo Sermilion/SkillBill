@@ -6,7 +6,6 @@ import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.agentaddon.model.HydratedAgentAddonSelectionEntry
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
-import skillbill.error.shellcontent.InvalidAgentAddonSelectionError
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.install.model.SupportedAgent
 import skillbill.model.toPath
@@ -28,7 +27,7 @@ class AgentAddonSelectionResolver(
   ): HydratedAgentAddonSelection {
     validateRequestedSlugs(requestedSlugs)
     if (requestedSlugs.isNotEmpty() && receivingAgentIds.isEmpty()) {
-      throw InvalidAgentAddonSelectionError(
+      invalidAgentAddonSelection(
         "A non-empty agent add-on selection requires at least one receiving agent.",
       )
     }
@@ -39,7 +38,7 @@ class AgentAddonSelectionResolver(
       requestedSlugs.map { slug ->
         val declaration =
           catalogue[slug]
-            ?: throw InvalidAgentAddonSelectionError("Unknown agent add-on '$slug'.")
+            ?: invalidAgentAddonSelection("Unknown agent add-on '$slug'.")
         validateCompatibility(slug, declaration.consumers, declaration.agents, consumer, receivingAgents)
         hydrate(
           slug = slug,
@@ -89,10 +88,10 @@ class AgentAddonSelectionResolver(
 
   private fun validateRequestedSlugs(slugs: List<String>) {
     val malformed = slugs.firstOrNull { !it.matches(Regex("[a-z0-9]+(?:-[a-z0-9]+)*")) }
-    if (malformed != null) throw InvalidAgentAddonSelectionError("Malformed agent add-on slug '$malformed'.")
+    if (malformed != null) invalidAgentAddonSelection("Malformed agent add-on slug '$malformed'.")
     val duplicate = slugs.groupingBy { it }.eachCount().entries.firstOrNull { it.value > 1 }?.key
     if (duplicate != null) {
-      throw InvalidAgentAddonSelectionError(
+      invalidAgentAddonSelection(
         "Agent add-on '$duplicate' was selected more than once.",
       )
     }
@@ -104,7 +103,7 @@ class AgentAddonSelectionResolver(
         id,
       ).wireValue
     }.getOrElse {
-      throw InvalidAgentAddonSelectionError("Unknown receiving agent '$id'.")
+      invalidAgentAddonSelection("Unknown receiving agent '$id'.")
     }
 
   private fun validateCompatibility(
@@ -115,13 +114,13 @@ class AgentAddonSelectionResolver(
     receivingAgents: List<String>,
   ) {
     if (consumer !in consumers) {
-      throw InvalidAgentAddonSelectionError(
+      invalidAgentAddonSelection(
         "Agent add-on '$slug' does not support consumer '${consumer.id}'.",
       )
     }
     val incompatible = receivingAgents.firstOrNull { it !in agents }
     if (incompatible != null) {
-      throw InvalidAgentAddonSelectionError(
+      invalidAgentAddonSelection(
         "Agent add-on '$slug' is incompatible with receiving agent '$incompatible'.",
       )
     }
@@ -133,5 +132,5 @@ class AgentAddonSelectionResolver(
   ): List<String> = (values[key] as? List<*>)?.map { it as? String ?: invalidField(key) } ?: invalidField(key)
 
   private fun invalidField(key: String): Nothing =
-    throw InvalidAgentAddonSelectionError("Selected agent add-on manifest field '$key' is malformed.")
+    invalidAgentAddonSelection("Selected agent add-on manifest field '$key' is malformed.")
 }

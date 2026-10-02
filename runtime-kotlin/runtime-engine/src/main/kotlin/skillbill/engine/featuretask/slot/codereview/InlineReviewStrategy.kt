@@ -2,6 +2,7 @@ package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.agentaddon.model.AgentAddonPromptFormatter
 import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.application.review.model.ParallelReviewLaneStatus
 import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.engine.featuretask.model.review.ReviewTarget
@@ -110,7 +111,7 @@ internal object InlineReviewPass : CodeReviewPass {
     reviewRunId: String,
     runner: PhaseRunner,
     state: PhaseReviewStepBinding,
-  ): ParallelCodeReviewResult {
+  ): ParallelCodeReviewRunOutcome {
     val directive =
       InlineReviewDirective.compose(
         target = run.reviewTarget,
@@ -120,8 +121,10 @@ internal object InlineReviewPass : CodeReviewPass {
         agentAddonsSection = AgentAddonPromptFormatter.format(run.request.agentAddonSelection),
       )
     val output = runner.run(reviewStepInput(run, directive), state.launchState)
-    return InlineReviewResultDecoder.decode(run.resolvedAgent.resolvedAgentId, output)
-      .copy(reviewSessionId = run.request.reviewInvocation?.reviewSessionId)
+    return ParallelCodeReviewRunOutcome.Reviewed(
+      InlineReviewResultDecoder.decode(run.resolvedAgent.resolvedAgentId, output)
+        .copy(reviewSessionId = run.request.reviewInvocation?.reviewSessionId),
+    )
   }
 }
 

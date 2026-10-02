@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
@@ -193,6 +194,7 @@ class DefaultPhaseRunner(
           "Feature-task-runtime phase '$step' could not launch an agent: ${outcome.reason}",
           outcome.reason,
         )
+      is AgentRunLaunchDenied -> null
       is AgentRunLaunchFacts ->
         providerLimitSignal(outcome)
           ?.let { PhaseLaunchFailure(PhaseLaunchFailureKind.PROVIDER_LIMIT, providerLimitPauseReason(step, it)) }

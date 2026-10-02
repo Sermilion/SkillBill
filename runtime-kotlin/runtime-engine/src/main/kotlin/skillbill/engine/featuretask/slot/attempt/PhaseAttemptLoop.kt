@@ -11,7 +11,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimePhaseStartReentry
 import skillbill.engine.featuretask.runloop.observability.featureTaskRuntimeStartContinuationKind
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.time.Clock
 
@@ -55,10 +55,9 @@ internal object PhaseAttemptSteps {
       FeatureTaskRuntimeRunLoopPhaseBlocking
         .durableContinuationSegmentCount(recorder, run)
     val nonOutputAttempts = FeatureTaskRuntimeRunLoopPhaseBlocking.durableNonOutputAttempts(progressState, run)
-    try {
-      PhaseAttemptOnce.persistRequiredStart(this, run, iteration)
-    } catch (rejection: RequiredPhaseWriteRejected) {
-      return PhaseAttemptOnce.blockRequiredWriteRejection(this, run, rejection)
+    when (val start = PhaseAttemptOnce.persistRequiredStart(this, run, iteration)) {
+      is RequiredPhaseWrite.Acknowledged -> Unit
+      is RequiredPhaseWrite.Rejected -> return PhaseAttemptOnce.blockRequiredWriteRejection(this, run, start)
     }
     val operatorReopened = FeatureTaskRuntimeRunLoopPhaseBlocking.operatorReopenedPhase(session, run.phaseId)
     val crashResumed = progress.phase(run.phaseId).resumedFromPriorProcess

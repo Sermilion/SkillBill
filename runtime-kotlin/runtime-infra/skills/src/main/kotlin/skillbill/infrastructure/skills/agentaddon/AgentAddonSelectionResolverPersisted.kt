@@ -4,8 +4,8 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.agentaddon.model.HydratedAgentAddonSelectionEntry
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
-import skillbill.error.shellcontent.AgentAddonSelectionDriftError
-import skillbill.error.shellcontent.InvalidAgentAddonSelectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.install.model.SupportedAgent
 import java.nio.file.Files
@@ -53,7 +53,11 @@ private fun hydratePersistedAgentAddonEntry(
   }
   val bytes = Files.readAllBytes(contentPath)
   if (persistedAgentAddonSha256(bytes) != recorded.contentSha256) {
-    throw AgentAddonSelectionDriftError(recorded.slug, recorded.sourceIdentity)
+    throw SkillBillRuntimeException(
+      AgentAddonFailureCode.SELECTION_DRIFT,
+      "Selected agent add-on '${recorded.slug}' changed at '${recorded.sourceIdentity}'; " +
+        "start a new run to accept the new content.",
+    )
   }
   return HydratedAgentAddonSelectionEntry(
     persisted = recorded,
@@ -64,6 +68,7 @@ private fun hydratePersistedAgentAddonEntry(
   )
 }
 
-internal fun invalidAgentAddonSelection(message: String): Nothing = throw InvalidAgentAddonSelectionError(message)
+internal fun invalidAgentAddonSelection(message: String): Nothing =
+  throw SkillBillRuntimeException(AgentAddonFailureCode.INVALID_SELECTION, message)
 
 internal fun persistedAgentAddonSha256(bytes: ByteArray): String = sha256Hex(bytes)

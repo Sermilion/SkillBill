@@ -1,5 +1,6 @@
 package skillbill.application.reviewevidence
 
+import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.ports.diff.DiffResolverPort
@@ -19,6 +20,7 @@ import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvide
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -85,11 +87,11 @@ class SharedReviewEvidenceResolutionTest {
     override fun resolve(
       request: FeatureTaskRuntimeSharedEvidenceRequest,
       deriver: FeatureTaskRuntimeSharedEvidenceDeriver,
-    ): FeatureTaskRuntimeSharedEvidenceResolution {
+    ): FeatureTaskRuntimeSharedEvidenceResolution? {
       val fingerprint = request.checkpoint.fingerprint
       stored[fingerprint]?.let { return it }
       derivations++
-      val derivation = deriver.derive(request.checkpoint)
+      val derivation = deriver.derive(request.checkpoint) ?: return null
       val payload = if (corruptPayload) "corrupted cache entry" else derivation.diffPayload
       val resolution =
         FeatureTaskRuntimeSharedEvidenceResolution(
@@ -139,10 +141,21 @@ class SharedReviewEvidenceResolutionTest {
     aggregate: String,
     query: SharedReviewEvidenceQuery = queryOf(),
     aggregateReads: MutableList<String>? = null,
-  ) = SharedReviewEvidenceResolution(store, git).resolve(query) {
-    aggregateReads?.add("aggregate")
-    aggregate
-  }
+  ): SharedReviewEvidenceRecord =
+    assertIs<DiffResolution.Resolved<SharedReviewEvidenceRecord>>(
+      SharedReviewEvidenceResolution(store, git).resolve(query) {
+        aggregateReads?.add("aggregate")
+        DiffResolution.Resolved(aggregate)
+      },
+    ).value
+
+  private fun projectResolved(
+    record: SharedReviewEvidenceCommits,
+    aggregate: ReviewDiffEvidence,
+  ): ResolvedCommitSequence =
+    assertIs<DiffResolution.Resolved<ResolvedCommitSequence>>(
+      SharedReviewEvidenceProjection.project(record, aggregate),
+    ).value
 
   @Test fun `a fingerprint hit serves the stored evidence with zero repository traversal`() {
     val store = InMemoryStore()
@@ -168,13 +181,13 @@ class SharedReviewEvidenceResolutionTest {
     val parsed = ReviewDiffEvidence.parse(aggregate)
 
     val inLine =
-      SharedReviewEvidenceProjection.project(
+      projectResolved(
         resolve(DERIVING_SHARED_EVIDENCE_RESOLVER, git, aggregate).sequence,
         parsed,
       )
     resolve(store, twoCommitGit().first, aggregate)
     val fromStore =
-      SharedReviewEvidenceProjection.project(
+      projectResolved(
         resolve(store, twoCommitGit().first, aggregate).sequence,
         parsed,
       )
@@ -203,14 +216,14 @@ class SharedReviewEvidenceResolutionTest {
       val first = resolve(store, git, aggregate, query)
       val reloaded = resolve(store, git, aggregate, query)
 
-      val projected = SharedReviewEvidenceProjection.project(reloaded.sequence, parsed)
+      val projected = projectResolved(reloaded.sequence, parsed)
       val unit = projected.units.single()
       assertEquals(expected, unit.source, scope.name)
       assertTrue(unit.commitSha.startsWith(REVIEW_SYNTHETIC_COMMIT_PREFIX), unit.commitSha)
       assertTrue(unit.parentSha.startsWith(REVIEW_SYNTHETIC_COMMIT_PREFIX), unit.parentSha)
       assertEquals(0, unit.orderIndex)
       assertEquals(
-        SharedReviewEvidenceProjection.project(first.sequence, parsed).coverageFact.degradedReason,
+        projectResolved(first.sequence, parsed).coverageFact.degradedReason,
         projected.coverageFact.degradedReason,
       )
     }
@@ -224,7 +237,7 @@ class SharedReviewEvidenceResolutionTest {
 
     val record = resolve(store, fallback, aggregate)
 
-    val projected = SharedReviewEvidenceProjection.project(record.sequence, ReviewDiffEvidence.parse(aggregate))
+    val projected = projectResolved(record.sequence, ReviewDiffEvidence.parse(aggregate))
     assertTrue(fallback.invoked.isNotEmpty(), "a corrupt cache entry must re-derive")
     assertEquals(2, projected.units.size)
   }
@@ -269,15 +282,17 @@ class SharedReviewEvidenceResolutionTest {
 
     val otherGit = FakeGit(commits = mapOf("base..other-head" to emptyList()))
     val otherRange =
-      SharedReviewEvidenceResolution(store, otherGit).resolve(
-        SharedReviewEvidenceQuery(
-          repoRoot = repoRoot,
-          workflowId = "wf-1",
-          scope = ParallelReviewScope.BRANCH,
-          range = ReviewCommitRange("base", "other-head"),
-          suppliedDiff = false,
-        ),
-      ) { aggregate }
+      assertIs<DiffResolution.Resolved<SharedReviewEvidenceRecord>>(
+        SharedReviewEvidenceResolution(store, otherGit).resolve(
+          SharedReviewEvidenceQuery(
+            repoRoot = repoRoot,
+            workflowId = "wf-1",
+            scope = ParallelReviewScope.BRANCH,
+            range = ReviewCommitRange("base", "other-head"),
+            suppliedDiff = false,
+          ),
+        ) { DiffResolution.Resolved(aggregate) },
+      ).value
 
     assertEquals(2, store.derivations)
     assertNotEquals("head", otherRange.sequence.headRevision)

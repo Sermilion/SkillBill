@@ -12,6 +12,7 @@ import skillbill.application.review.verification.parseCitationsWithDiagnostics
 import skillbill.application.review.verification.parseJsonObject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.ReviewFindingPayloadKeys
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
@@ -228,6 +229,7 @@ class ReviewSpecAdjudicationRunner(
             rejectionReason = "unsupported agent: ${outcome.reason}",
           ),
         )
+      is AgentRunLaunchDenied -> error("Review adjudication never launches with a spawn authorization.")
       is AgentRunLaunchFacts -> fromLaunchFacts(job, outcome, recordedAt)
     }
   }

@@ -1,5 +1,6 @@
 package skillbill.cli.goal.run
 
+import com.github.ajalt.clikt.core.UsageError
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.multiple
@@ -14,7 +15,6 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.formatOption
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
-import skillbill.cli.kernel.cli.usageError
 import skillbill.cli.kernel.payload.toFeatureTaskContinuationCliMap
 import skillbill.cli.kernel.payload.toGoalContinuationCliMap
 import skillbill.cli.model.CliRunInputs
@@ -31,6 +31,8 @@ import skillbill.engine.goalrunner.planning.model.GoalPlanningLog
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLogAttempt
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLogRequest
 import skillbill.engine.goalrunner.preflight.GoalPreflightService
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.goalrunner.model.UnaddressedFindingsLedger
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedger
 import skillbill.workflow.taskruntime.artifact.projectionWireMap
@@ -89,11 +91,7 @@ class GoalPreflightCommand(
 
 internal fun parseCodeReviewMode(raw: String?) =
   raw?.let { value ->
-    try {
-      RuntimeOwnedReviewMode.parse(value)
-    } catch (error: IllegalArgumentException) {
-      usageError(error)
-    }
+    RuntimeOwnedReviewMode.parse(value) ?: throw UsageError(RuntimeOwnedReviewMode.unknownModeMessage(value))
   }
 
 internal fun GoalPreflightResult.toGoalPreflightCliMap(): Map<String, Any?> =
@@ -255,14 +253,20 @@ class GoalFindingsCommand(
   private val issueKey by option("--issue-key", help = "Parent issue key.").required()
 
   override fun run() {
-    val ledger = ledgerService.ledger(issueKey)
-    val repairLedgers = ledgerService.repairLedgersByWorkflow(issueKey)
-    val verificationDispositions = ledgerService.verificationDispositions(issueKey)
+    val ledger = ledgerService.ledger(issueKey) ?: throw ledgerAbsent()
+    val repairLedgers = ledgerService.repairLedgersByWorkflow(issueKey) ?: throw ledgerAbsent()
+    val verificationDispositions = ledgerService.verificationDispositions(issueKey) ?: throw ledgerAbsent()
     state.completeText(
       findingsText(ledger, repairLedgers, verificationDispositions),
       findingsPayload(ledger, repairLedgers, verificationDispositions),
     )
   }
+
+  private fun ledgerAbsent(): SkillBillRuntimeException =
+    SkillBillRuntimeException(
+      GovernedReviewFailureCode.UNADDRESSED_FINDINGS_LEDGER_ABSENT,
+      "No goal exists for issue key '$issueKey'.",
+    )
 
   private fun findingsPayload(
     ledger: UnaddressedFindingsLedger,

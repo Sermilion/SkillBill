@@ -3,6 +3,7 @@ package skillbill.cli.scaffold.payload
 import kotlinx.serialization.json.JsonObject
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.install.ExternalAddonOverlayService
+import skillbill.application.scaffold.SCAFFOLD_PAYLOAD_NOT_OBJECT_MESSAGE
 import skillbill.application.scaffold.decodeScaffoldPayloadObject
 import skillbill.application.scaffold.model.ScaffoldInvocationArgs
 import skillbill.application.scaffold.runScaffoldInvocation
@@ -13,6 +14,7 @@ import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowIfDatabaseFailure
 import skillbill.ports.scaffold.ScaffoldGateway
 import skillbill.ports.scaffold.model.ScaffoldRenderResult
 import java.nio.file.Path
@@ -52,13 +54,12 @@ class NativeScaffoldPayloadRun(
       } catch (error: SkillBillRuntimeException) {
         return state.completeScaffoldError(error.message.orEmpty(), options.format)
       }
-    val payloadObject =
-      try {
-        decodeScaffoldPayloadObject(payloadText)
-      } catch (error: IllegalArgumentException) {
-        return state.completeScaffoldError(error.message.orEmpty(), options.format)
-      }
-    runPayload(payloadObject, options)
+    val payloadObject = decodeScaffoldPayloadObject(payloadText)
+    if (payloadObject == null) {
+      state.completeScaffoldError(SCAFFOLD_PAYLOAD_NOT_OBJECT_MESSAGE, options.format)
+    } else {
+      runPayload(payloadObject, options)
+    }
   }
 
   internal fun createAndFill(
@@ -109,6 +110,7 @@ class NativeScaffoldPayloadRun(
           ),
         )
       } catch (error: SkillBillRuntimeException) {
+        error.rethrowIfDatabaseFailure()
         return state.completeScaffoldError(error.message.orEmpty(), options.format)
       }
     val result = outcome.scaffoldResult
@@ -154,6 +156,7 @@ internal fun CliRunState.completeAuthoring(
     val payload = block()
     complete(payload, format, successExitCode(payload))
   } catch (error: SkillBillRuntimeException) {
+    error.rethrowIfDatabaseFailure()
     completeScaffoldError(error.message.orEmpty(), format)
   } catch (error: IllegalArgumentException) {
     completeScaffoldError(error.message.orEmpty(), format)

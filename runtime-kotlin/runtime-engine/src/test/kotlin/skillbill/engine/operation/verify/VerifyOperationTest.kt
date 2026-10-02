@@ -1,6 +1,5 @@
 package skillbill.engine.operation.verify
 
-import skillbill.engine.operation.core.MissingOperationIntakeError
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
@@ -247,7 +246,7 @@ class VerifyOperationTest {
   @Test
   fun `verify with neither free text nor spec is a usage error that opens no workflow`() {
     VerifyOperationHarness().use { harness ->
-      assertFailsWith<MissingOperationIntakeError> { harness.invoke(OperationArguments(target = harness.range)) }
+      assertIs<OperationOutcome.Usage>(harness.invoke(OperationArguments(target = harness.range)))
 
       assertEquals(0, harness.rowCount("feature_verify_workflows"))
     }

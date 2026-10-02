@@ -1,17 +1,18 @@
 package skillbill.error.featuretask
 
 import skillbill.error.core.FailureWireCode
+import skillbill.error.core.RuntimeFailureCode
 
 enum class FeatureTaskRuntimePhaseOutputFailureKind(
   override val wireValue: String,
-) : FailureWireCode {
+) : FailureWireCode, RuntimeFailureCode {
   MALFORMED("malformed"),
   SCHEMA_INVALID("schema_invalid"),
 }
 
 enum class FeatureTaskRuntimeHandoffProjectionFailureKind(
   override val wireValue: String,
-) : FailureWireCode {
+) : FailureWireCode, RuntimeFailureCode {
   MISSING_REQUIRED_SOURCE("missing_required_source"),
   MALFORMED_FIELD("malformed_field"),
   UNSUPPORTED_CONTRACT_VERSION("unsupported_contract_version"),

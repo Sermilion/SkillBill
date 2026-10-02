@@ -1,7 +1,8 @@
 package skillbill.engine.goalrunner.planning.context
 
+import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.model.RefreshStaleSharedPreplanArgs
@@ -20,7 +21,6 @@ import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
 import skillbill.goalrunner.planning.cascadeEligiblePlanSubtaskIds
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
-import java.util.concurrent.CancellationException
 
 internal sealed class SharedPreplanSettlement {
   class Ready(
@@ -30,58 +30,88 @@ internal sealed class SharedPreplanSettlement {
   ) : SharedPreplanSettlement()
 
   class Halt(val outcome: GoalPlanningSweepOutcome.Stopped) : SharedPreplanSettlement()
+
+  class RequiredWriteRejected(val rejection: RequiredPhaseWrite.Rejected) : SharedPreplanSettlement()
 }
 
-internal data class RefreshedSharedPreplan(
-  val provenance: GoalPlanningContractProvenance,
-  val checkpoint: SharedGoalPreplanCheckpoint,
-)
+/** The result of refreshing a stale shared preplan: the refreshed checkpoint, a stop, or a rejected required write. */
+internal sealed interface SharedPreplanRefresh {
+  data class Refreshed(
+    val provenance: GoalPlanningContractProvenance,
+    val checkpoint: SharedGoalPreplanCheckpoint,
+  ) : SharedPreplanRefresh
 
-class RefreshRefused(val reason: String) : RuntimeException(reason)
+  data class Stopped(val outcome: GoalPlanningSweepOutcome.Stopped) : SharedPreplanRefresh
+
+  data class RequiredWriteRejected(val rejection: RequiredPhaseWrite.Rejected) : SharedPreplanRefresh
+
+  /** The refresh was refused; [reason] is the operator-facing text the halted sweep reports. */
+  data class Refused(val reason: String) : SharedPreplanRefresh
+}
 
 internal fun DefaultGoalPlanningSweep.settleSharedPreplan(args: SharedPreplanSettlementArgs): SharedPreplanSettlement {
-  var working = args.shared
-  val (provenance, sharedCheckpoint) =
-    when (
-      val recoverability = classifyRecoverability(args.existingShared, args.currentProvenance, working)
-    ) {
-      is GoalPlanningProvenanceRecoverability.Irrecoverable ->
-        return SharedPreplanSettlement.Halt(incompatibleProvenance(working, recoverability.recoveryKind))
-      is GoalPlanningProvenanceRecoverability.Reuse -> {
-        val settled =
-          args.existingShared
-            ?: produceSharedPreplan(this, working, args.request, recoverability.provenance, args.launch)
-              .getOrElse { error ->
-                return SharedPreplanSettlement.Halt(
-                  stopped(working, 0, error.message.orEmpty(), GoalPlanningSweepConstants.PHASE_PREPLAN),
-                )
-              }
-        recoverability.provenance to settled
-      }
-      is GoalPlanningProvenanceRecoverability.StaleValid -> {
-        return settleStaleValidSharedPreplan(
-          StaleSharedPreplanSettlementArgs(
-            existingShared = requireNotNull(args.existingShared),
-            currentProvenance = args.currentProvenance,
-            shared = working,
-            state = args.state,
-            request = args.request,
-            identity = args.identity,
-            refreshedThisPrepare = false,
-            launch = args.launch,
-          ),
-        )
-      }
-    }
-  return SharedPreplanSettlement.Ready(provenance, sharedCheckpoint, working)
+  val working = args.shared
+  return when (
+    val recoverability = classifyRecoverability(args.existingShared, args.currentProvenance, working)
+  ) {
+    is GoalPlanningProvenanceRecoverability.Irrecoverable ->
+      SharedPreplanSettlement.Halt(incompatibleProvenance(working, recoverability.recoveryKind))
+    is GoalPlanningProvenanceRecoverability.Reuse ->
+      args.existingShared
+        ?.let { existing -> SharedPreplanSettlement.Ready(recoverability.provenance, existing, working) }
+        ?: settleProducedSharedPreplan(args, recoverability.provenance)
+    is GoalPlanningProvenanceRecoverability.StaleValid ->
+      settleStaleValidSharedPreplan(
+        StaleSharedPreplanSettlementArgs(
+          existingShared = requireNotNull(args.existingShared),
+          currentProvenance = args.currentProvenance,
+          shared = working,
+          state = args.state,
+          request = args.request,
+          identity = args.identity,
+          refreshedThisPrepare = false,
+          launch = args.launch,
+        ),
+      )
+  }
 }
+
+private fun DefaultGoalPlanningSweep.settleProducedSharedPreplan(
+  args: SharedPreplanSettlementArgs,
+  provenance: GoalPlanningContractProvenance,
+): SharedPreplanSettlement {
+  val working = args.shared
+  val production =
+    produceSharedPreplan(this, working, args.request, provenance, args.launch).getOrElse { error ->
+      return SharedPreplanSettlement.Halt(
+        stopped(working, 0, error.message.orEmpty(), GoalPlanningSweepConstants.PHASE_PREPLAN),
+      )
+    }
+  return when (production) {
+    is SharedPreplanProduction.Produced -> SharedPreplanSettlement.Ready(provenance, production.checkpoint, working)
+    is SharedPreplanProduction.Stopped -> SharedPreplanSettlement.Halt(production.outcome)
+    is SharedPreplanProduction.RequiredWriteRejected ->
+      SharedPreplanSettlement.RequiredWriteRejected(production.rejection)
+  }
+}
+
+private inline fun SharedPreplanRefresh.settle(
+  working: GoalPlanningSharedContext,
+  onRefreshed: (SharedPreplanRefresh.Refreshed) -> SharedPreplanSettlement,
+): SharedPreplanSettlement =
+  when (this) {
+    is SharedPreplanRefresh.Refreshed -> onRefreshed(this)
+    is SharedPreplanRefresh.Stopped -> SharedPreplanSettlement.Halt(outcome)
+    is SharedPreplanRefresh.RequiredWriteRejected -> SharedPreplanSettlement.RequiredWriteRejected(rejection)
+    is SharedPreplanRefresh.Refused ->
+      SharedPreplanSettlement.Halt(stopped(working, 0, reason, GoalPlanningSweepConstants.PHASE_PREPLAN))
+  }
 
 internal fun DefaultGoalPlanningSweep.settleStaleValidSharedPreplan(
   args: StaleSharedPreplanSettlementArgs,
 ): SharedPreplanSettlement {
-  var working = args.shared
-  var alreadyRefreshed = args.refreshedThisPrepare
-  val first =
+  val working = args.shared
+  val refresh =
     refreshStaleSharedPreplan(
       RefreshStaleSharedPreplanArgs(
         existing = args.existingShared,
@@ -89,26 +119,26 @@ internal fun DefaultGoalPlanningSweep.settleStaleValidSharedPreplan(
         state = args.state,
         request = args.request,
         currentProvenance = args.currentProvenance,
-        refreshedThisPrepare = alreadyRefreshed,
+        refreshedThisPrepare = args.refreshedThisPrepare,
         launch = args.launch,
       ),
     ).getOrElse { error ->
       return SharedPreplanSettlement.Halt(refreshHaltOutcome(working, error))
     }
-  alreadyRefreshed = true
-  when (val loaded = loadSharedPreplanAfterRefresh(args, first)) {
-    is SharedPreplanAfterRefresh.Halt -> return SharedPreplanSettlement.Halt(loaded.outcome)
-    is SharedPreplanAfterRefresh.Ready -> {
-      val afterPacket = planningPacketFrom(loaded.checkpoint) ?: working.planningPacket
-      working = working.copy(planningPacket = afterPacket)
-      return reclassifyAfterStaleRefresh(
-        StaleRefreshReclassifyArgs(
-          settlement = args,
-          working = working,
-          afterRefresh = loaded.checkpoint,
-          alreadyRefreshed = alreadyRefreshed,
-        ),
-      )
+  return refresh.settle(working) { first ->
+    when (val loaded = loadSharedPreplanAfterRefresh(args, first)) {
+      is SharedPreplanAfterRefresh.Halt -> SharedPreplanSettlement.Halt(loaded.outcome)
+      is SharedPreplanAfterRefresh.Ready -> {
+        val afterPacket = planningPacketFrom(loaded.checkpoint) ?: working.planningPacket
+        reclassifyAfterStaleRefresh(
+          StaleRefreshReclassifyArgs(
+            settlement = args,
+            working = working.copy(planningPacket = afterPacket),
+            afterRefresh = loaded.checkpoint,
+            alreadyRefreshed = true,
+          ),
+        )
+      }
     }
   }
 }
@@ -117,10 +147,7 @@ private fun DefaultGoalPlanningSweep.refreshHaltOutcome(
   working: GoalPlanningSharedContext,
   error: Throwable,
 ): GoalPlanningSweepOutcome.Stopped =
-  when (error) {
-    is RefreshRefused -> stopped(working, 0, error.reason, GoalPlanningSweepConstants.PHASE_PREPLAN)
-    else -> stopped(working, 0, error.message.orEmpty(), GoalPlanningSweepConstants.PHASE_PREPLAN)
-  }
+  stopped(working, 0, error.message.orEmpty(), GoalPlanningSweepConstants.PHASE_PREPLAN)
 
 private sealed interface SharedPreplanAfterRefresh {
   class Ready(val checkpoint: SharedGoalPreplanCheckpoint) : SharedPreplanAfterRefresh
@@ -130,7 +157,7 @@ private sealed interface SharedPreplanAfterRefresh {
 
 private fun DefaultGoalPlanningSweep.loadSharedPreplanAfterRefresh(
   args: StaleSharedPreplanSettlementArgs,
-  first: RefreshedSharedPreplan,
+  first: SharedPreplanRefresh.Refreshed,
 ): SharedPreplanAfterRefresh {
   val afterRefresh =
     runCatching {
@@ -177,7 +204,9 @@ private fun DefaultGoalPlanningSweep.reclassifyAfterStaleRefresh(
           launch = args.settlement.launch,
         ),
       ).fold(
-        onSuccess = { SharedPreplanSettlement.Ready(it.provenance, it.checkpoint, working) },
+        onSuccess = { refreshed ->
+          refreshed.settle(working) { SharedPreplanSettlement.Ready(it.provenance, it.checkpoint, working) }
+        },
         onFailure = { error -> SharedPreplanSettlement.Halt(refreshHaltOutcome(working, error)) },
       )
     }
@@ -216,7 +245,7 @@ internal fun DefaultGoalPlanningSweep.classifyRecoverability(
 
 internal fun DefaultGoalPlanningSweep.refreshStaleSharedPreplan(
   args: RefreshStaleSharedPreplanArgs,
-): Result<RefreshedSharedPreplan> =
+): Result<SharedPreplanRefresh> =
   runCatching {
     val existing = args.existing
     val shared = args.shared
@@ -224,15 +253,23 @@ internal fun DefaultGoalPlanningSweep.refreshStaleSharedPreplan(
     val request = args.request
     val currentProvenance = args.currentProvenance
     if (args.refreshedThisPrepare) {
-      return@runCatching RefreshedSharedPreplan(existing.provenance, existing)
+      return@runCatching SharedPreplanRefresh.Refreshed(existing.provenance, existing)
     }
     refuseRefreshReason(shared.issueKey, refreshLiveness.resolve(state))?.let { reason ->
-      throw RefreshRefused(reason)
+      return@runCatching SharedPreplanRefresh.Refused(reason)
     }
     val refreshShared = shared.copy(planningPacket = freshPlanningPacket(shared, state))
     val produced =
-      produceSharedPreplanCheckpoint(this, refreshShared, request, currentProvenance, args.launch)
-        .getOrElse { throw it }
+      when (
+        val production =
+          produceSharedPreplanCheckpoint(this, refreshShared, request, currentProvenance, args.launch)
+            .getOrElse { throw it }
+      ) {
+        is SharedPreplanProduction.Produced -> production.checkpoint
+        is SharedPreplanProduction.Stopped -> return@runCatching SharedPreplanRefresh.Stopped(production.outcome)
+        is SharedPreplanProduction.RequiredWriteRejected ->
+          return@runCatching SharedPreplanRefresh.RequiredWriteRejected(production.rejection)
+      }
     val savedValueHash = preplanProseValueHash(existing.preplanPayload)
     val newValueHash = preplanProseValueHash(produced.preplanPayload)
     val savedPromptHash = preplanProsePromptHash(existing.preplanPayload)
@@ -244,7 +281,7 @@ internal fun DefaultGoalPlanningSweep.refreshStaleSharedPreplan(
         provenance = currentProvenance,
       )
       val advanced = existing.copy(provenance = currentProvenance)
-      RefreshedSharedPreplan(currentProvenance, advanced)
+      SharedPreplanRefresh.Refreshed(currentProvenance, advanced)
     } else {
       val cascadeIds =
         cascadeEligiblePlanSubtaskIds(
@@ -260,8 +297,8 @@ internal fun DefaultGoalPlanningSweep.refreshStaleSharedPreplan(
           expectedPayloadSha256 = existing.payloadSha256,
           cascadePlanSubtaskIds = cascadeIds,
         )
-      RefreshedSharedPreplan(currentProvenance, replaced)
+      SharedPreplanRefresh.Refreshed(currentProvenance, replaced)
     }
   }.onFailure { error ->
-    if (error is RequiredPhaseWriteRejected || error is CancellationException) throw error
+    error.rethrowIfCooperativeCancellationOrInterruption()
   }

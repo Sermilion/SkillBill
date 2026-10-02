@@ -13,7 +13,9 @@ class RecordingReviewEvidenceStore {
     }
   val resolver =
     FeatureTaskRuntimeSharedEvidenceResolverPort { request, deriver ->
-      val resolution = DERIVING_SHARED_EVIDENCE_RESOLVER.resolve(request, deriver)
+      val resolution =
+        DERIVING_SHARED_EVIDENCE_RESOLVER.resolve(request, deriver)
+          ?: return@FeatureTaskRuntimeSharedEvidenceResolverPort null
       val address = "recording-review-evidence/${request.checkpoint.fingerprint}"
       payloads[address] = resolution.diffPayload
       resolution.copy(storePath = address)

@@ -62,6 +62,13 @@ class GoalPlanningRecoveryClassificationTest {
   }
 
   @Test
+  fun `an untyped cause echoing hard reset remedy text classifies as scoped replan`() {
+    val cause = IllegalStateException("Disk write failed; an earlier note said to hard reset the goal.")
+
+    assertEquals(GoalPlanningRecoveryKind.SCOPED_REPLAN, classifyGoalPlanningRecovery("", cause))
+  }
+
+  @Test
   fun `preparation schema phase output provenance failure classifies as hard reset via cause`() {
     val cause =
       InvalidGoalPlanningPreparationSchemaError(

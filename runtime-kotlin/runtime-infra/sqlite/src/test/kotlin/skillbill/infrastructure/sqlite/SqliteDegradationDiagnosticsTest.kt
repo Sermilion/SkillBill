@@ -1,7 +1,8 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.error.core.DatabaseAccessError
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.DatabaseFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.UnresolvedEnvironmentContextFieldError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError
 import skillbill.infrastructure.sqlite.core.schema.DatabaseIdentity
@@ -44,15 +45,16 @@ class SqliteDegradationDiagnosticsTest {
   }
 
   @Test
-  fun `readUserVersion raises read DatabaseAccessError when pragma fails`() {
+  fun `readUserVersion raises read ACCESS database failure when pragma fails`() {
     val dbPath = Files.createTempFile("skillbill-user-version", ".db")
     Files.writeString(dbPath, "not-a-sqlite-database")
 
     val error =
-      assertFailsWith<DatabaseAccessError> {
+      assertFailsWith<SkillBillRuntimeException> {
         DatabaseIdentity.readUserVersion(dbPath)
       }
-    assertEquals(DatabaseAccessOperation.READ, error.operation)
+    assertEquals(DatabaseFailureCode.ACCESS, error.code)
+    assertTrue(error.message.orEmpty().startsWith("Database ${DatabaseAccessOperation.READ.wireValue} failed for '"))
   }
 
   @Test

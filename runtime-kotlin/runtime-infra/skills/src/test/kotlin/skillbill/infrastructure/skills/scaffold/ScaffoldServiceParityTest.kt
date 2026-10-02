@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.scaffold
 
-import skillbill.error.shellcontent.InvalidAgentAddonSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.error.shellcontent.InvalidScaffoldPayloadError
 import skillbill.error.shellcontent.MissingRequiredSectionError
 import skillbill.error.shellcontent.RetiredScaffoldKindError
@@ -786,19 +787,21 @@ class ScaffoldAuthoringParityTest {
       seedBaseSkill(repo, "skill-bill")
       val before = snapshotTree(repo)
 
-      assertFailsWith<InvalidAgentAddonSchemaError> {
-        scaffold(
-          payload(
-            repo,
-            "agent-addon",
-            "slug" to "../escaped",
-            "description" to "Review helper",
-            "agent_ids" to listOf("codex"),
-            "consumers" to listOf("skill-bill"),
-          ),
-        )
-      }
+      val error =
+        assertFailsWith<SkillBillRuntimeException> {
+          scaffold(
+            payload(
+              repo,
+              "agent-addon",
+              "slug" to "../escaped",
+              "description" to "Review helper",
+              "agent_ids" to listOf("codex"),
+              "consumers" to listOf("skill-bill"),
+            ),
+          )
+        }
 
+      assertEquals(AgentAddonFailureCode.INVALID_SCHEMA, error.code)
       assertEquals(before, snapshotTree(repo))
       assertFalse(Files.exists(repo.parent.resolve("escaped")))
     }

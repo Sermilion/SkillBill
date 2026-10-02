@@ -4,5 +4,6 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceDerivat
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 
 fun interface FeatureTaskRuntimeSharedEvidenceDeriver {
-  fun derive(checkpoint: FeatureTaskRuntimeRepositoryCheckpoint): FeatureTaskRuntimeSharedEvidenceDerivation
+  /** Returns null when the evidence cannot be derived; the resolver then persists nothing. */
+  fun derive(checkpoint: FeatureTaskRuntimeRepositoryCheckpoint): FeatureTaskRuntimeSharedEvidenceDerivation?
 }

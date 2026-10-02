@@ -13,13 +13,13 @@ import java.nio.file.Path
  * Wire ids: `update-check` and `release` (SKILL-382 subtask 1). Subtasks 2-4 add the checklist, `pr-review-fix`,
  * and `verify` operations to the same registry.
  *
- * A pre failure throws an `OperationRefusalError` (reported as blocked, nothing changed) or an
- * `OperationUsageError` (reported as a usage error).
+ * [pre] returns an [OperationRefusal]. A blocked refusal is reported as blocked with nothing changed; a usage refusal
+ * is reported as a usage error. `null` means proceed.
  */
 interface Operation {
   val id: String
 
-  fun pre(context: OperationContext) = Unit
+  fun pre(context: OperationContext): OperationRefusal? = null
 
   fun run(context: OperationContext): OperationRunResult
 
@@ -35,21 +35,28 @@ interface Operation {
  */
 interface ConfirmableOperation : Operation {
   /** Operation-owned anchors as they stand now; confirm refuses a proposal once any of them moved. */
-  fun currentAnchors(context: OperationContext): Map<String, String>
+  fun currentAnchors(context: OperationContext): CurrentOperationAnchors
 
   /**
-   * Checks the confirm invocation against the stored proposal before the token is consumed; throws a usage or
-   * refusal error to reject it with the token still valid.
+   * Checks the confirm invocation against the stored proposal before the token is consumed; returns a refusal to
+   * reject it with the token still valid.
    */
   fun admit(
     context: OperationContext,
     proposal: ConfirmedOperationProposal,
-  ) = Unit
+  ): OperationRefusal? = null
 
   fun execute(
     context: OperationContext,
     proposal: ConfirmedOperationProposal,
   ): OperationOutcome
+}
+
+/** The operation-owned anchors read for a confirm check, or the refusal that explains why they could not be read. */
+sealed interface CurrentOperationAnchors {
+  data class Read(val values: Map<String, String>) : CurrentOperationAnchors
+
+  data class Unreadable(val refusal: OperationOutcome.Blocked) : CurrentOperationAnchors
 }
 
 /**

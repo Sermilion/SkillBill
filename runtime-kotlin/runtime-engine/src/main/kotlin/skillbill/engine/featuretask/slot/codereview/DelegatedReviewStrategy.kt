@@ -1,8 +1,10 @@
 package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.agentaddon.model.AgentAddonPromptFormatter
+import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.application.review.model.ParallelReviewLaneStatus
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.reviewevidence.model.ParallelReviewScope
@@ -27,6 +29,7 @@ import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
@@ -114,32 +117,43 @@ internal class DelegatedReviewPass(
     reviewRunId: String,
     runner: PhaseRunner,
     state: PhaseReviewStepBinding,
-  ): ParallelCodeReviewResult {
+  ): ParallelCodeReviewRunOutcome {
     val agentId = run.resolvedAgent.resolvedAgentId
     var reviewed: ParallelCodeReviewResult? = null
+    var planningFailure: ParallelCodeReviewPlanningFailure? = null
     val session =
       PhaseStepSession { launch ->
-        val result = reviewRunner.run(request(run, input, reviewRunId, state, launch.skillRunRequest))
-        reviewed = result
-        val stdout = result.mergeResult.formattedOutput
-        AgentRunLaunchFacts(
-          agent = SupportedAgent.fromWire(agentId),
-          termination = AgentRunTermination.Exited(0),
-          stdout = stdout,
-          stderr = "",
-          stdoutByteSize = stdout.encodeToByteArray().size.toLong(),
-          stdoutSha256 = "",
-        )
+        when (val outcome = reviewRunner.run(request(run, input, reviewRunId, state, launch.skillRunRequest))) {
+          is ParallelCodeReviewRunOutcome.PlanningFailed -> {
+            planningFailure = outcome.failure
+            UnsupportedAgentRunLaunch(SupportedAgent.fromWire(agentId), outcome.failure.message)
+          }
+          is ParallelCodeReviewRunOutcome.Reviewed -> {
+            reviewed = outcome.result
+            val stdout = outcome.result.mergeResult.formattedOutput
+            AgentRunLaunchFacts(
+              agent = SupportedAgent.fromWire(agentId),
+              termination = AgentRunTermination.Exited(0),
+              stdout = stdout,
+              stderr = "",
+              stdoutByteSize = stdout.encodeToByteArray().size.toLong(),
+              stdoutSha256 = "",
+            )
+          }
+        }
       }
     val output = runner.run(reviewStepInput(run, directive), state.launchState, session)
-    return reviewed ?: ParallelCodeReviewResult(
-      mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = ""),
-      lane1 =
-        ParallelReviewLaneStatus(
-          agentId = agentId,
-          success = false,
-          failureReason = output.launchFailure?.reason ?: "delegated review session did not run",
-        ),
+    planningFailure?.let { return ParallelCodeReviewRunOutcome.PlanningFailed(it) }
+    return ParallelCodeReviewRunOutcome.Reviewed(
+      reviewed ?: ParallelCodeReviewResult(
+        mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = ""),
+        lane1 =
+          ParallelReviewLaneStatus(
+            agentId = agentId,
+            success = false,
+            failureReason = output.launchFailure?.reason ?: "delegated review session did not run",
+          ),
+      ),
     )
   }
 

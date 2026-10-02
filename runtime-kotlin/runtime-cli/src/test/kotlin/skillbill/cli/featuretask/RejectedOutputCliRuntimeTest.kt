@@ -1,6 +1,7 @@
 package skillbill.cli.featuretask
 
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRecording
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliRuntimeContext
@@ -10,10 +11,12 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 
 class RejectedOutputCliRuntimeTest {
   @Test
@@ -143,6 +146,49 @@ class RejectedOutputCliRuntimeTest {
     )
   }
 
+  @Test
+  fun `rejected-output raw retrieval of an expired diagnostic reports it as expired`() {
+    val home = Files.createTempDirectory("skillbill-rejected-expired")
+    val db = home.resolve("metrics.db")
+    val recorded = recordDiagnostics(home, db, "wf-expired", reason = "invalid", repairTurns = listOf(0)).single()
+    sqliteDatabaseSessionFactory(userHome = home, dbPathOverride = db.toString(), environment = emptyMap())
+      .transaction { unitOfWork ->
+        unitOfWork.rejectedOutputDiagnostics.markExpired(Instant.now().plus(Duration.ofDays(1)))
+      }
+
+    val result =
+      CliRuntime.run(
+        listOf(
+          "--db",
+          db.toString(),
+          "feature-task",
+          "rejected-output",
+          "--workflow",
+          "wf-expired",
+          "--raw-output",
+        ),
+        CliRuntimeContext(userHome = home, environment = emptyMap()),
+      )
+
+    assertEquals(1, result.exitCode)
+    assertEquals("Rejected output diagnostic '${recorded.identity}' has expired.", result.stderr)
+  }
+
+  @Test
+  fun `rejected-output with no matching diagnostic reports the workflow as absent`() {
+    val home = Files.createTempDirectory("skillbill-rejected-absent")
+    val db = home.resolve("metrics.db")
+
+    val result =
+      CliRuntime.run(
+        listOf("--db", db.toString(), "feature-task", "rejected-output", "--workflow", "wf-none"),
+        CliRuntimeContext(userHome = home, environment = emptyMap()),
+      )
+
+    assertEquals(1, result.exitCode)
+    assertEquals("Rejected output diagnostic 'wf-none' is absent.", result.stderr)
+  }
+
   private fun recordDiagnostics(
     home: Path,
     db: Path,
@@ -161,20 +207,22 @@ class RejectedOutputCliRuntimeTest {
           clock = Clock.tick(Clock.systemUTC(), Duration.ofSeconds(1)),
         )
       repairTurns.map { repairTurn ->
-        service.record(
-          RejectedOutputDiagnosticRequest(
-            workflowId = workflowId,
-            phaseId = "implement",
-            attempt = 1,
-            rule = "schema",
-            path = "$.status",
-            reason = reason,
-            agentId = "codex",
-            model = "gpt",
-            rawResponse = byteArrayOf(1, 2, 3, 4, 5),
-            repairTurn = repairTurn,
-          ),
-        )
+        val recording =
+          service.record(
+            RejectedOutputDiagnosticRequest(
+              workflowId = workflowId,
+              phaseId = "implement",
+              attempt = 1,
+              rule = "schema",
+              path = "$.status",
+              reason = reason,
+              agentId = "codex",
+              model = "gpt",
+              rawResponse = byteArrayOf(1, 2, 3, 4, 5),
+              repairTurn = repairTurn,
+            ),
+          )
+        assertIs<RejectedOutputDiagnosticRecording.Recorded>(recording).metadata
       }
     }
   }

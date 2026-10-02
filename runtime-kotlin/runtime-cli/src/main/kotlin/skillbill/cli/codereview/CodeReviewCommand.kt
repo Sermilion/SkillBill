@@ -13,10 +13,7 @@ import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelReviewLaneStatus
 import skillbill.application.review.model.ReviewPrelaunchExpansion
-import skillbill.application.review.model.StackDetectionException
-import skillbill.application.review.model.UsageValidationException
 import skillbill.application.review.service.RequestedReviewMode
-import skillbill.application.reviewevidence.model.DiffResolutionException
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
 import skillbill.cli.kernel.cli.CliRunState
@@ -32,8 +29,10 @@ import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.ReviewAggregationIntegrityError
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.workflow.model.goalreview.toReviewAccountingBoundedJson
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
@@ -260,13 +259,8 @@ private fun runPhaseReview(
 ): PhaseRunResult? =
   try {
     entry.run(request)
-  } catch (error: UsageValidationException) {
-    usageError(error)
-  } catch (error: DiffResolutionException) {
-    usageError(error)
-  } catch (error: StackDetectionException) {
-    usageError(error)
-  } catch (error: ShellContentContractException) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isShellContentContractFailure())
     usageError(error)
   } catch (error: ReviewAggregationIntegrityError) {
     state.completeText(error.message.orEmpty(), emptyMap(), exitCode = 1)

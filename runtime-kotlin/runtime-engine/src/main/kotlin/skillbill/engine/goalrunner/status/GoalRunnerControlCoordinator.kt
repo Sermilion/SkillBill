@@ -7,13 +7,13 @@ import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchAuthorization
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerPausePersistenceResult
-import skillbill.error.goalrunner.GoalRunnerLaunchAuthorizationDeniedException
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_REQUEST
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.goalrunner.model.pauseAtOperatorBoundary
 import skillbill.goalrunner.model.targetReached
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
+import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -212,15 +212,16 @@ internal fun GoalRunnerControlCoordinator.spawnAuthorization(
   state: GoalRunnerManifestState,
 ): AgentRunSpawnAuthorization =
   object : AgentRunSpawnAuthorization {
-    override fun <T> withAuthorization(spawn: () -> T): T =
+    override fun <T> withAuthorization(spawn: () -> T): AgentRunSpawnAuthorizationResult<T> =
       database.transaction { unitOfWork ->
         val parent = requireParent(unitOfWork, state.parentWorkflowId)
         val controls = unitOfWork.goalRunnerControls.controlState(parent.workflowId)
         val manifest = parent.decompositionRuntime() ?: state.manifest
         if (controls.requiresPauseBoundary(manifest)) {
-          throw GoalRunnerLaunchAuthorizationDeniedException(controls.pauseReason)
+          AgentRunSpawnAuthorizationResult.Denied(controls.pauseReason)
+        } else {
+          AgentRunSpawnAuthorizationResult.Authorized(spawn())
         }
-        spawn()
       }
   }
 
@@ -246,7 +247,7 @@ internal fun GoalRunnerControlCoordinator.planningSpawnAuthorization(
   parentWorkflowId: String,
 ): AgentRunSpawnAuthorization =
   object : AgentRunSpawnAuthorization {
-    override fun <T> withAuthorization(spawn: () -> T): T =
+    override fun <T> withAuthorization(spawn: () -> T): AgentRunSpawnAuthorizationResult<T> =
       database.transaction { unitOfWork ->
         val parent = requireParent(unitOfWork, parentWorkflowId)
         val controls = unitOfWork.goalRunnerControls.controlState(parent.workflowId)
@@ -254,9 +255,10 @@ internal fun GoalRunnerControlCoordinator.planningSpawnAuthorization(
           parent.decompositionRuntime()
             ?: error("Goal parent '$parentWorkflowId' has no decomposition manifest.")
         if (controls.requiresPauseBoundary(manifest)) {
-          throw GoalRunnerLaunchAuthorizationDeniedException(controls.pauseReason)
+          AgentRunSpawnAuthorizationResult.Denied(controls.pauseReason)
+        } else {
+          AgentRunSpawnAuthorizationResult.Authorized(spawn())
         }
-        spawn()
       }
   }
 

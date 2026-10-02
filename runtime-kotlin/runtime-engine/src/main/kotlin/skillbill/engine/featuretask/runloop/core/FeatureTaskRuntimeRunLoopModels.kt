@@ -18,6 +18,7 @@ import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -267,6 +268,10 @@ internal data class LaunchMeasurementContextReady(
 
 internal data class LaunchPreparationRejected(
   val result: LaunchResult,
+) : LaunchPreparation
+
+internal data class LaunchRequiredWriteRejected(
+  val rejection: RequiredPhaseWrite.Rejected,
 ) : LaunchPreparation
 
 internal data class PhaseRun(

@@ -18,6 +18,19 @@ class FeatureTaskRuntimePhaseOutputStructuralRepairTest {
   private fun inspect(text: String) = FeatureTaskRuntimePhaseOutputStructuralRepair.inspectWholeDocument(text, "plan")
 
   @Test
+  fun `malformed YAML whose snippet mentions a duplicate key is classified malformed`() {
+    val failure =
+      assertIs<StrictParse.Failure>(
+        StrictPhaseOutputParser.parseStrict(
+          "summary: [duplicate key\nstatus: completed\n",
+          FeatureTaskRuntimePhaseOutputFormat.YAML,
+        ),
+      )
+
+    assertEquals(FeatureTaskRuntimePhaseOutputFailureCode.MALFORMED, failure.code)
+  }
+
+  @Test
   fun `valid JSON is accepted unchanged and is not rewritten`() {
     val accepted = assertIs<FeatureTaskRuntimePhaseOutputStructuralRepairDecision.Accepted>(inspect(validJson))
 

@@ -36,18 +36,21 @@ internal interface PhaseReviewPassState {
   /** The review run id the durable record holds for [passNumber], if any. */
   fun recordedReviewRunId(passNumber: Int): String?
 
-  /** Records the review step as running for [iteration] with [reviewRunId]. */
+  /** Records the review step as running for [iteration] with [reviewRunId]; a rejected required write is returned. */
   fun startReview(
     iteration: Int,
     reviewRunId: String,
-  )
+  ): RequiredPhaseWrite
 
-  /** Records the review briefing for [input] and the resolved review tier ahead of the launch. */
+  /**
+   * Records the review briefing for [input] and the resolved review tier ahead of the launch, returning the
+   * rejection if the required briefing write did not apply.
+   */
   fun prepareReviewBriefing(
     iteration: Int,
     prompt: PhaseStepPromptSource,
     input: GoalSubtaskReviewInput,
-  )
+  ): RequiredPhaseWrite
 
   /** Records the review launch start for [iteration]. */
   fun reviewLaunched(iteration: Int)

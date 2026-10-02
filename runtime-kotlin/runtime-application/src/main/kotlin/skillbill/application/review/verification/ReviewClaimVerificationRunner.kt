@@ -10,6 +10,7 @@ import skillbill.application.review.packet.toVerificationLaunchEnvelope
 import skillbill.application.review.preparation.ReviewPreparationService
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.ReviewFindingPayloadKeys
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.SkillRunRequest
@@ -149,6 +150,7 @@ class ReviewClaimVerificationRunner(
           ReviewStageDegradationReason.WORKER_LAUNCH_OR_RETURN_FAILED,
           "unsupported agent: ${outcome.reason}",
         )
+      is AgentRunLaunchDenied -> error("Review claim verification never launches with a spawn authorization.")
       is AgentRunLaunchFacts -> proseVerificationOutcome(outcome)
     }
   }
@@ -242,6 +244,7 @@ class ReviewClaimVerificationRunner(
         VerificationFindingOutcome(
           unresolved(input.finding, input.recordedAt, "unsupported agent: ${outcome.reason}"),
         )
+      is AgentRunLaunchDenied -> error("Review claim verification never launches with a spawn authorization.")
       is AgentRunLaunchFacts -> fromLaunchFacts(input.finding, outcome, input.recordedAt)
     }
   }

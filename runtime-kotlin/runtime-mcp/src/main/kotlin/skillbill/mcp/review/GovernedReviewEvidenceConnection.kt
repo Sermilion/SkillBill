@@ -2,7 +2,8 @@ package skillbill.mcp.review
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.GovernedReviewEvidenceContracts
-import skillbill.error.shellcontent.GovernedReviewEvidenceTransportError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.mcp.shared.McpProtocolFramer
 import java.io.BufferedReader
 import java.io.BufferedWriter
@@ -46,7 +47,8 @@ internal class GovernedReviewEvidenceConnection(
       )
       writer.flush()
       reader.readReviewEvidenceFrame()
-        ?: throw GovernedReviewEvidenceTransportError(
+        ?: throw SkillBillRuntimeException(
+          GovernedReviewFailureCode.EVIDENCE_TRANSPORT,
           "Governed review evidence endpoint refused this launch's token.",
         )
       return GovernedReviewEvidenceConnection(connection, reader, writer)
@@ -58,12 +60,14 @@ private fun openSocketChannel(socketPath: Path): SocketChannel =
   try {
     SocketChannel.open(UnixDomainSocketAddress.of(socketPath))
   } catch (error: IOException) {
-    throw GovernedReviewEvidenceTransportError(
+    throw SkillBillRuntimeException(
+      GovernedReviewFailureCode.EVIDENCE_TRANSPORT,
       "Governed review evidence endpoint at '$socketPath' is unreachable.",
       error,
     )
   } catch (error: UnsupportedOperationException) {
-    throw GovernedReviewEvidenceTransportError(
+    throw SkillBillRuntimeException(
+      GovernedReviewFailureCode.EVIDENCE_TRANSPORT,
       "This platform cannot reach the governed review evidence endpoint at '$socketPath'.",
       error,
     )
@@ -91,7 +95,12 @@ private fun BufferedReader.readReviewEvidenceFrame(
         else -> UTF8_THREE_BYTE_WIDTH
       }
     previousHighSurrogate = next.toChar().isHighSurrogate()
-    if (bytes > maxBytes) throw GovernedReviewEvidenceTransportError("Governed evidence frame exceeds its byte limit.")
+    if (bytes > maxBytes) {
+      throw SkillBillRuntimeException(
+        GovernedReviewFailureCode.EVIDENCE_TRANSPORT,
+        "Governed evidence frame exceeds its byte limit.",
+      )
+    }
     frame.append(next.toChar())
   }
 }

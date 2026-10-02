@@ -17,8 +17,8 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunState
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.engine.featuretask.validation.repoLocalConfig
 import skillbill.engine.kotlinPackWithValidationGate
 import skillbill.engine.phaseIdFromPrompt
@@ -267,7 +267,7 @@ class PhaseValidationRunTest {
         executedCheckIdentities = emptyList(),
         findings = listOf(ValidationGateFinding("engine", "compile", "broken", "Foo.kt")),
       )
-    var original: RequiredPhaseWriteRejected? = null
+    var original: RequiredPhaseWrite.Rejected? = null
     var terminalWrites = 0
     val loop =
       object : FeatureTaskRuntimeRunLoopEntry() {
@@ -283,11 +283,11 @@ class PhaseValidationRunTest {
                 briefing: FeatureTaskRuntimePhaseLaunchBriefing,
                 sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
                 attempt: Int,
-              ) {
+              ): RequiredPhaseWrite {
                 val rejection =
-                  RequiredPhaseWriteRejected(RequiredPhaseWriteKind.BRIEFING, workflowId, briefing.phaseId, attempt)
+                  RequiredPhaseWrite.Rejected(RequiredPhaseWriteKind.BRIEFING, workflowId, briefing.phaseId, attempt)
                 original = rejection
-                throw rejection
+                return rejection
               }
 
               override fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean {

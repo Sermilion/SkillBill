@@ -7,11 +7,11 @@ val DIRECT_GOAL_RUNNER_EXECUTION_COORDINATOR: GoalRunnerExecutionCoordinator =
     override fun <T> runOwned(
       parentWorkflowId: String,
       block: () -> T,
-    ): T = block()
+    ): GoalRunnerOwnedRun<T> = GoalRunnerOwnedRun.Completed(block())
 
     override fun <T> runOwnedWithChildAdmission(
       parentWorkflowId: String,
       childAdmission: GoalRunnerChildExecutionPlanAdmission,
       block: () -> T,
-    ): T = block()
+    ): GoalRunnerOwnedRun<T> = GoalRunnerOwnedRun.Completed(block())
   }

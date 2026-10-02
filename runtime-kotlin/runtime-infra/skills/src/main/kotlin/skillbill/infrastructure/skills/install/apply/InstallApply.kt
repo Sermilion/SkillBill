@@ -1,4 +1,5 @@
 package skillbill.infrastructure.skills.install.apply
+import skillbill.error.core.failureCodeLabel
 import skillbill.error.shellcontent.SkillContentIdentityMismatchError
 import skillbill.infrastructure.skills.install.plan.discoverPlatformManifests
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
@@ -221,7 +222,7 @@ private fun failedStagingOutcome(
       message = error.message.orEmpty(),
       skillName = skillName,
       path = sourceDir.toFileLocation(),
-      causeClass = error::class.qualifiedName,
+      causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
     )
   return InstallSkillStagingOutcome(
     status = InstallSkillStagingStatus.FAILED,

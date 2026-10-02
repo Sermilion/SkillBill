@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.planning.outcome
 
 import skillbill.engine.agentoutput.stderrExcerpt
 import skillbill.engine.goalrunner.planning.model.GoalPlanningEmptyTurnEvidence
+import skillbill.error.core.failureCodeLabel
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.model.GoalRunnerLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -34,20 +35,12 @@ fun unexpectedPlanningFailureReason(
   error: Throwable,
 ): String =
   "Goal planning '$phaseId' failed before its output could be checkpointed: " +
-    "${error::class.simpleName ?: "Throwable"}: ${error.message.orEmpty()}"
+    "${error.failureCodeLabel() ?: error::class.simpleName ?: "Throwable"}: ${error.message.orEmpty()}"
 
 fun emptyTurnReason(
   phaseId: String,
   evidence: GoalPlanningEmptyTurnEvidence,
 ): String = "Goal planning '$phaseId' agent turn exited cleanly and returned no output. ${evidence.summary()}"
 
-fun recoverySubtaskId(error: Throwable): Int {
-  val recoveryError = error as? IncompatibleGoalPlanningPreparationRecoveryError
-  if (
-    recoveryError != null &&
-    error.message?.contains("must be completed with non-empty produced_outputs") == true
-  ) {
-    return 0
-  }
-  return recoveryError?.subtaskId ?: 0
-}
+fun recoverySubtaskId(error: Throwable): Int =
+  (error as? IncompatibleGoalPlanningPreparationRecoveryError)?.subtaskId ?: 0

@@ -13,8 +13,8 @@ class TypedParseBoundaryArchitectureTest {
     assertEquals(
       emptyList(),
       violations,
-      "Named parse boundaries must surface malformed external input through typed contract failures, not error," +
-        "require, or bare throw.",
+      "Named parse boundaries must surface malformed external input through a result or a " +
+        "SkillBillRuntimeException code, not error, require, or bare throw.",
     )
   }
 
@@ -38,7 +38,8 @@ class TypedParseBoundaryArchitectureTest {
       )
     assertEquals(
       listOf(
-        "Synthetic.kt::decodeBad reports malformed external input via error(); use a typed contract failure instead.",
+        "Synthetic.kt::decodeBad reports malformed external input via error(); " +
+          "use a result or a SkillBillRuntimeException code instead.",
       ),
       violations,
       "Regression if a named parse boundary can report malformed external input via error, require, or bare throw.",
@@ -87,7 +88,8 @@ class TypedParseBoundaryArchitectureTest {
       )
     assertEquals(
       listOf(
-        "Synthetic.kt::decodeBad reports malformed external input via error(); use a typed contract failure instead.",
+        "Synthetic.kt::decodeBad reports malformed external input via error(); " +
+          "use a result or a SkillBillRuntimeException code instead.",
       ),
       violations,
       "Regression if an extension expression body escapes the scan or absorbs the following function.",

@@ -1,6 +1,6 @@
 package skillbill.ports.install.mcp.model
 
-import skillbill.install.model.McpMutationResult
+import skillbill.install.model.McpRegistrationOutcome
 import java.nio.file.Path
 
 data class InstallMcpRegistrationRequest(
@@ -15,5 +15,5 @@ data class InstallMcpUnregistrationRequest(
 )
 
 data class InstallMcpRegistrationResult(
-  val mutation: McpMutationResult,
+  val outcome: McpRegistrationOutcome,
 )

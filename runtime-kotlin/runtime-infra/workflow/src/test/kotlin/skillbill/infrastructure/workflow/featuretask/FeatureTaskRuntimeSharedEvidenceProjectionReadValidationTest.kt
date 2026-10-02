@@ -18,9 +18,9 @@ class FeatureTaskRuntimeSharedEvidenceProjectionReadValidationTest {
 
   @Test
   fun `a well-formed stored projection passes validation on read and reuses`() {
-    store.resolve(request("fp-valid"), CountingDeriver())
+    store.resolved(request("fp-valid"), CountingDeriver())
 
-    val reused = store.resolve(request("fp-valid"), ThrowingDeriver)
+    val reused = store.resolved(request("fp-valid"), ThrowingDeriver)
 
     assertEquals("fp-valid", reused.artifact.fingerprint)
     assertEquals(FeatureTaskRuntimeSharedEvidenceResolveOutcome.REUSE, reused.outcome)
@@ -28,7 +28,7 @@ class FeatureTaskRuntimeSharedEvidenceProjectionReadValidationTest {
 
   @Test
   fun `a schema-invalid stored payload degrades to re-derivation rather than failing the run`() {
-    store.resolve(request("fp-invalid"), CountingDeriver())
+    store.resolved(request("fp-invalid"), CountingDeriver())
     val envelope =
       artifactDir(request("fp-invalid"))
         .resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.ENVELOPE_FILE_NAME)
@@ -48,7 +48,7 @@ class FeatureTaskRuntimeSharedEvidenceProjectionReadValidationTest {
     )
     val deriver = CountingDeriver()
 
-    val resolution = store.resolve(request("fp-invalid"), deriver)
+    val resolution = store.resolved(request("fp-invalid"), deriver)
 
     assertEquals(1, deriver.invocations)
     assertEquals("fp-invalid", resolution.artifact.fingerprint)
@@ -57,7 +57,7 @@ class FeatureTaskRuntimeSharedEvidenceProjectionReadValidationTest {
 
   @Test
   fun `a fingerprint that contradicts the addressed location loud-fails and names both fingerprints`() {
-    store.resolve(request("fp-addressed"), CountingDeriver())
+    store.resolved(request("fp-addressed"), CountingDeriver())
     val envelope =
       artifactDir(request("fp-addressed"))
         .resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.ENVELOPE_FILE_NAME)
@@ -65,7 +65,7 @@ class FeatureTaskRuntimeSharedEvidenceProjectionReadValidationTest {
 
     val error =
       assertFailsWith<FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError> {
-        store.resolve(request("fp-addressed"), ThrowingDeriver)
+        store.resolved(request("fp-addressed"), ThrowingDeriver)
       }
 
     assertTrue(error.message!!.contains("fp-addressed"), error.message)
@@ -74,10 +74,10 @@ class FeatureTaskRuntimeSharedEvidenceProjectionReadValidationTest {
 
   @Test
   fun `a miss after a sibling fingerprint is a checkpoint-change re-derivation`() {
-    store.resolve(request("fp-old"), CountingDeriver())
+    store.resolved(request("fp-old"), CountingDeriver())
     val deriver = CountingDeriver()
 
-    val resolution = store.resolve(request("fp-new"), deriver)
+    val resolution = store.resolved(request("fp-new"), deriver)
 
     assertEquals(1, deriver.invocations)
     assertEquals(FeatureTaskRuntimeSharedEvidenceResolveOutcome.CHECKPOINT_CHANGE_REDERIVATION, resolution.outcome)

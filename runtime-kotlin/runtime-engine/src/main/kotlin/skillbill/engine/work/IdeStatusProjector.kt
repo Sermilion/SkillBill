@@ -11,7 +11,9 @@ import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
 import skillbill.engine.work.model.IdeStatusCandidate
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
@@ -222,7 +224,8 @@ class IdeStatusProjector(
         featureTaskRuntimeStatusService.status(
           FeatureTaskRuntimeStatusRequest(workflowId = workflowId),
         )
-      } catch (error: ShellContentContractException) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isShellContentContractFailure())
         RuntimeDiagnosticsBestEffortWarning.record(diagnostics, degraded, error)
         null
       } catch (error: IOException) {

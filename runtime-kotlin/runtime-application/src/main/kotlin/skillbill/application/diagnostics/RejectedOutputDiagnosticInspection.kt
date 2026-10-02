@@ -1,10 +1,11 @@
 package skillbill.application.diagnostics
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.diagnostics.model.RejectedOutputDiagnosticAmbiguousSelectorError
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticDeletion
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticInspectionResult
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticMetadata
-import skillbill.error.core.RejectedOutputDiagnosticError
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRawRead
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticSelection
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
@@ -24,19 +25,37 @@ class RejectedOutputDiagnosticInspection(
   ): RejectedOutputDiagnosticInspectionResult =
     database.selfManagedWrite { unitOfWork ->
       val service = unitOfWork.diagnosticService()
-      val matches = service.inspect(selector)
-      if (matches.isEmpty()) throw RejectedOutputDiagnosticError.Absent(selector.workflowId)
-      if (rawOutput) {
-        if (matches.size != 1) throw RejectedOutputDiagnosticAmbiguousSelectorError(matches.size)
-        RejectedOutputDiagnosticInspectionResult.RawBytes(service.readRaw(matches.single().identity))
-      } else {
-        RejectedOutputDiagnosticInspectionResult.Metadata(matches.map { it.toMetadata() })
+      when (val selection = service.inspect(selector)) {
+        is RejectedOutputDiagnosticSelection.InvalidRequest ->
+          RejectedOutputDiagnosticInspectionResult.InvalidRequest(selection.reason)
+        is RejectedOutputDiagnosticSelection.Selected ->
+          inspectSelected(service, selector, selection.diagnostics, rawOutput)
       }
     }
 
-  fun cleanup(selector: RejectedOutputDiagnosticSelector): Int =
+  fun cleanup(selector: RejectedOutputDiagnosticSelector): RejectedOutputDiagnosticDeletion =
     database.transaction { unitOfWork ->
       unitOfWork.diagnosticService().delete(selector)
+    }
+
+  private fun inspectSelected(
+    service: RejectedOutputDiagnosticService,
+    selector: RejectedOutputDiagnosticSelector,
+    matches: List<RejectedOutputDiagnostic>,
+    rawOutput: Boolean,
+  ): RejectedOutputDiagnosticInspectionResult =
+    when {
+      matches.isEmpty() -> RejectedOutputDiagnosticInspectionResult.Absent(selector.workflowId)
+      !rawOutput -> RejectedOutputDiagnosticInspectionResult.Metadata(matches.map { it.toMetadata() })
+      matches.size != 1 -> RejectedOutputDiagnosticInspectionResult.AmbiguousSelector(matches.size)
+      else ->
+        when (val raw = service.readRaw(matches.single().identity)) {
+          is RejectedOutputDiagnosticRawRead.Payload -> RejectedOutputDiagnosticInspectionResult.RawBytes(raw.bytes)
+          is RejectedOutputDiagnosticRawRead.Absent -> RejectedOutputDiagnosticInspectionResult.Absent(raw.identity)
+          is RejectedOutputDiagnosticRawRead.Expired -> RejectedOutputDiagnosticInspectionResult.Expired(raw.identity)
+          is RejectedOutputDiagnosticRawRead.Oversized ->
+            RejectedOutputDiagnosticInspectionResult.Oversized(raw.identity)
+        }
     }
 
   private fun UnitOfWork.diagnosticService(): RejectedOutputDiagnosticService =

@@ -2,6 +2,7 @@ package skillbill.infrastructure.launcher.process.launch
 
 import skillbill.infrastructure.launcher.process.support.launcherSha256Hex
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
+import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
@@ -58,6 +59,7 @@ data class AgentRunProcessResult(
   val stdoutByteSize: Long = stdoutBytes.size.toLong(),
   val stdoutSha256: String = launcherSha256Hex(stdoutBytes),
   val outputCaptureIncomplete: Boolean = false,
+  val spawnDenied: AgentRunSpawnAuthorizationResult.Denied? = null,
 )
 
 interface AgentRunProcessRunner {

@@ -1,9 +1,6 @@
 package skillbill.infrastructure.http
-import skillbill.error.core.InvalidTelemetryTransportOutcomeError
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.core.TelemetryProxyInvalidResponseError
-import skillbill.error.core.TelemetryProxyRequestFailureError
-import skillbill.error.core.TelemetryRelayUrlUnconfiguredError
+import skillbill.error.core.TelemetryHttpFailureCode
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.repository.toFileLocation
@@ -25,12 +22,12 @@ class HttpTelemetryTypedErrorsTest {
     val settings = settingsWithProxy("https://telemetry.example.dev/ingest")
 
     val error =
-      assertFailsWith<TelemetryProxyRequestFailureError> {
+      assertFailsWith<SkillBillRuntimeException> {
         client(requester).fetchProxyCapabilities(settings)
       }
 
-    assertTrue(SkillBillRuntimeException::class.java.isInstance(error))
-    assertEquals(500, error.statusCode)
+    assertEquals(TelemetryHttpFailureCode.PROXY_REQUEST_FAILED, error.code)
+    assertTrue(error.message.orEmpty().contains("with HTTP 500: "), error.message.orEmpty())
   }
 
   @Test
@@ -39,12 +36,12 @@ class HttpTelemetryTypedErrorsTest {
     val settings = settingsWithProxy("https://telemetry.example.dev/ingest")
 
     val error =
-      assertFailsWith<TelemetryProxyInvalidResponseError> {
+      assertFailsWith<SkillBillRuntimeException> {
         client(requester).fetchProxyCapabilities(settings)
       }
 
-    assertTrue(SkillBillRuntimeException::class.java.isInstance(error))
-    assertTrue(error.detail.contains("invalid JSON"))
+    assertEquals(TelemetryHttpFailureCode.PROXY_INVALID_RESPONSE, error.code)
+    assertTrue(error.message.orEmpty().contains("invalid JSON"))
   }
 
   @Test
@@ -53,12 +50,12 @@ class HttpTelemetryTypedErrorsTest {
     val settings = settingsWithProxy("https://telemetry.example.dev/ingest")
 
     val error =
-      assertFailsWith<TelemetryProxyInvalidResponseError> {
+      assertFailsWith<SkillBillRuntimeException> {
         client(requester).fetchProxyCapabilities(settings)
       }
 
-    assertTrue(SkillBillRuntimeException::class.java.isInstance(error))
-    assertTrue(error.detail.contains("non-object"))
+    assertEquals(TelemetryHttpFailureCode.PROXY_INVALID_RESPONSE, error.code)
+    assertTrue(error.message.orEmpty().contains("non-object"))
   }
 
   @Test
@@ -67,12 +64,12 @@ class HttpTelemetryTypedErrorsTest {
     val settings = settingsWithProxy("https://telemetry.example.dev/ingest")
 
     val error =
-      assertFailsWith<TelemetryProxyInvalidResponseError> {
+      assertFailsWith<SkillBillRuntimeException> {
         client(requester).fetchProxyCapabilities(settings)
       }
 
-    assertTrue(SkillBillRuntimeException::class.java.isInstance(error))
-    assertEquals("empty response body", error.detail)
+    assertEquals(TelemetryHttpFailureCode.PROXY_INVALID_RESPONSE, error.code)
+    assertTrue(error.message.orEmpty().endsWith(": empty response body"), error.message.orEmpty())
   }
 
   @Test
@@ -80,12 +77,12 @@ class HttpTelemetryTypedErrorsTest {
     val settings = settingsWithProxy("")
 
     val error =
-      assertFailsWith<TelemetryRelayUrlUnconfiguredError> {
+      assertFailsWith<SkillBillRuntimeException> {
         client(RemoteTransportPort { _, _, _, _ -> RemoteTransportResponse(200, "{}") })
           .fetchProxyCapabilities(settings)
       }
 
-    assertTrue(SkillBillRuntimeException::class.java.isInstance(error))
+    assertEquals(TelemetryHttpFailureCode.RELAY_URL_UNCONFIGURED, error.code)
   }
 
   @Test
@@ -101,7 +98,7 @@ class HttpTelemetryTypedErrorsTest {
     val settings = settingsWithProxy("https://telemetry.example.dev/ingest")
 
     val error =
-      assertFailsWith<TelemetryProxyRequestFailureError> {
+      assertFailsWith<SkillBillRuntimeException> {
         client(requester).fetchRemoteStats(
           settings = settings,
           request =
@@ -113,22 +110,22 @@ class HttpTelemetryTypedErrorsTest {
         )
       }
 
-    assertTrue(SkillBillRuntimeException::class.java.isInstance(error))
-    assertEquals(503, error.statusCode)
+    assertEquals(TelemetryHttpFailureCode.PROXY_REQUEST_FAILED, error.code)
+    assertTrue(error.message.orEmpty().contains("with HTTP 503: "), error.message.orEmpty())
   }
 
   @Test
-  fun `sendBatch with out-of-range status raises InvalidTelemetryTransportOutcomeError`() {
+  fun `sendBatch with out-of-range status raises the invalid transport outcome failure`() {
     val requester = RemoteTransportPort { _, _, _, _ -> RemoteTransportResponse(statusCode = 99, body = "") }
     val settings = settingsWithProxy("https://telemetry.example.dev/ingest")
 
     val error =
-      assertFailsWith<InvalidTelemetryTransportOutcomeError> {
+      assertFailsWith<SkillBillRuntimeException> {
         client(requester).sendBatch(settings, emptyList())
       }
 
-    assertTrue(SkillBillRuntimeException::class.java.isInstance(error))
-    assertEquals(99, error.statusCode)
+    assertEquals(TelemetryHttpFailureCode.INVALID_TRANSPORT_OUTCOME, error.code)
+    assertEquals("Telemetry transport returned 99, which is not a valid HTTP status code.", error.message)
   }
 }
 

@@ -1,9 +1,12 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.error.core.RejectedOutputDiagnosticError
+import skillbill.error.core.RejectedOutputDiagnosticFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRead
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRecord
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import skillbill.ports.diagnostics.model.RejectedOutputLifecycle
@@ -15,6 +18,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 
 class SqliteRejectedOutputDiagnosticRepositoryTest {
   @Test
@@ -27,9 +31,27 @@ class SqliteRejectedOutputDiagnosticRepositoryTest {
 
       repository.insert(record)
 
-      assertContentEquals(payload, repository.read(record.metadata.identity).payload)
-      assertEquals(record.metadata, repository.read(record.metadata.identity).metadata)
+      assertContentEquals(payload, found(repository, record.metadata.identity).payload)
+      assertEquals(record.metadata, found(repository, record.metadata.identity).metadata)
       assertEquals(listOf(record.metadata), repository.select(RejectedOutputDiagnosticSelector("workflow-1")))
+    }
+  }
+
+  @Test
+  fun `read returns absent for an unknown identity and expired with its record for an expired row`() {
+    withRepository("rejected-output-read-lifecycle") { repository ->
+      val record = record(byteArrayOf(1, 2))
+      assertEquals(
+        RejectedOutputDiagnosticRead.Absent(record.metadata.identity),
+        repository.read(record.metadata.identity),
+      )
+      repository.insert(record)
+
+      repository.markExpired(Instant.parse("2026-07-29T10:00:00Z"))
+
+      val expired = assertIs<RejectedOutputDiagnosticRead.Expired>(repository.read(record.metadata.identity))
+      assertEquals(RejectedOutputLifecycle.EXPIRED, expired.record.metadata.lifecycle)
+      assertEquals(null, expired.record.payload)
     }
   }
 
@@ -41,10 +63,11 @@ class SqliteRejectedOutputDiagnosticRepositoryTest {
       val record = record(byteArrayOf(1))
       repository.insert(record)
 
-      assertFailsWith<RejectedOutputDiagnosticError.Conflict> {
-        repository.insert(record.copy(payload = byteArrayOf(2)))
-      }
-      assertContentEquals(byteArrayOf(1), repository.read(record.metadata.identity).payload)
+      assertEquals(
+        RejectedOutputDiagnosticInsert.Conflict(record.metadata.identity),
+        repository.insert(record.copy(payload = byteArrayOf(2))),
+      )
+      assertContentEquals(byteArrayOf(1), found(repository, record.metadata.identity).payload)
     }
   }
 
@@ -69,10 +92,11 @@ class SqliteRejectedOutputDiagnosticRepositoryTest {
       repository.retainProducerOutput(evidence(byteArrayOf(1)))
 
       val failure =
-        assertFailsWith<RejectedOutputDiagnosticError.Conflict> {
+        assertFailsWith<SkillBillRuntimeException> {
           repository.retainProducerOutput(evidence(byteArrayOf(2)))
         }
 
+      assertEquals(RejectedOutputDiagnosticFailureCode.CONFLICT, failure.code)
       assertContains(failure.message.orEmpty(), "workflow-1:review:0:1:0:codex")
       assertContentEquals(
         byteArrayOf(1),
@@ -158,10 +182,11 @@ class SqliteRejectedOutputDiagnosticRepositoryTest {
       repository.retainProducerOutput(evidence(byteArrayOf(1), phaseId = "validate", repairTurn = 2))
 
       val failure =
-        assertFailsWith<RejectedOutputDiagnosticError.Conflict> {
+        assertFailsWith<SkillBillRuntimeException> {
           repository.retainProducerOutput(evidence(byteArrayOf(2), phaseId = "validate", repairTurn = 2))
         }
 
+      assertEquals(RejectedOutputDiagnosticFailureCode.CONFLICT, failure.code)
       assertContains(failure.message.orEmpty(), "workflow-1:validate:0:1:2:codex")
     }
   }
@@ -187,6 +212,11 @@ class SqliteRejectedOutputDiagnosticRepositoryTest {
       )
     }
   }
+
+  private fun found(
+    repository: SqliteRejectedOutputDiagnosticRepository,
+    identity: String,
+  ): RejectedOutputDiagnosticRecord = assertIs<RejectedOutputDiagnosticRead.Found>(repository.read(identity)).record
 
   private fun withRepository(
     label: String,

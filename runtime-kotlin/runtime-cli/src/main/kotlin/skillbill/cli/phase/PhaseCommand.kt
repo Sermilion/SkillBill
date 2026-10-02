@@ -20,8 +20,10 @@ import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.skeleton.PhaseIntakeRequirement
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -92,7 +94,8 @@ internal fun runPhase(
     run()
   } catch (error: UnknownPhaseReviewTargetError) {
     usageError(error)
-  } catch (error: ShellContentContractException) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isShellContentContractFailure())
     state.completeText(error.message.orEmpty(), emptyMap(), exitCode = 1)
     null
   }

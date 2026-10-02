@@ -6,7 +6,8 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
-import skillbill.error.shellcontent.InvalidAgentAddonSelectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
@@ -110,7 +111,8 @@ private fun requiredAcceptanceString(
 private fun addonSelectionError(
   message: String,
   cause: Throwable? = null,
-): Nothing = throw InvalidAgentAddonSelectionError("Goal review policy $message", cause)
+): Nothing =
+  throw SkillBillRuntimeException(AgentAddonFailureCode.INVALID_SELECTION, "Goal review policy $message", cause)
 
 private fun decodeGoalAgentAddonSelection(raw: Any?): AgentAddonSelection {
   val values = raw ?: return AgentAddonSelection()

@@ -19,7 +19,10 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.MAX_ISSUE_KEY_LENGTH
 import skillbill.contracts.issuekey.isWellFormedIssueKey
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
-import skillbill.error.core.DatabaseAccessError
+import skillbill.error.core.DatabaseFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.databaseAccessCondition
+import skillbill.error.core.rethrowUnless
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.ports.repository.RepositoryEnclosingRootPort
@@ -86,11 +89,13 @@ class GoalStatusCommand(
     val projection =
       try {
         goalRunnerStatusService.status(inputs.goalStatusRequest(options, repositoryEnclosingRootPort))
-      } catch (error: DatabaseAccessError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code == DatabaseFailureCode.ACCESS)
         if (!options.monitorOnly) throw error
-        val payload = databaseUnavailableGoalStatusCliMap(issueKey, error)
+        val reason = databaseAccessCondition(error)
+        val payload = databaseUnavailableGoalStatusCliMap(issueKey, reason)
         state.completeText(
-          goalMonitorStatusText(issueKey, projection = null, databaseUnavailableReason = error.condition),
+          goalMonitorStatusText(issueKey, projection = null, databaseUnavailableReason = reason),
           payload,
           exitCode = goalStatusExitCode(projection = null, databaseUnavailable = true),
         )

@@ -12,7 +12,9 @@ import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.openTestWorkflow
-import skillbill.error.core.RejectedOutputDiagnosticError
+import skillbill.error.core.RejectedOutputDiagnosticFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rejectedOutputDiagnosticPersistenceMessage
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -128,7 +130,11 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
   fun `a failing producer-output read is Unreadable persistence rather than Absent`() {
     val lifecycle = RecordingLifecycleTelemetryRepository()
     val database = database(lifecycle)
-    database.producerOutputReadError = RejectedOutputDiagnosticError.Persistence("read-producer-output")
+    database.producerOutputReadError =
+      SkillBillRuntimeException(
+        RejectedOutputDiagnosticFailureCode.PERSISTENCE,
+        rejectedOutputDiagnosticPersistenceMessage("read-producer-output"),
+      )
     val recorder = recorder(database)
     recorder.openTestWorkflow(WORKFLOW_ID, "session-1")
 
@@ -159,6 +165,19 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
     assertEquals(FeatureTaskRuntimeDiagnosticFailureClass.CONFLICT, degraded.failureClass)
     assertEquals(1, database.rejectedDiagnostics().size)
     assertEquals(committedIdentity, database.rejectedDiagnostics().single().metadata.identity)
+
+    val newGeneration =
+      recorder.recordRejectedOutput(
+        rejection("divergent-bytes".encodeToByteArray(), repairTurn = 1),
+        producerGeneration = 1,
+      )
+    val degradedAtNewGeneration = assertIs<FeatureTaskRuntimeRejectedOutputWrite.Degraded>(newGeneration)
+    assertEquals(FeatureTaskRuntimeDiagnosticFailureClass.CONFLICT, degradedAtNewGeneration.failureClass)
+    assertEquals(1, database.rejectedDiagnostics().size)
+    assertTrue(
+      database.retainedProducerEvidence().none { it.generation == 1 },
+      "producer evidence retained before the diagnostic conflict must roll back with the transaction",
+    )
   }
 
   @Test
@@ -167,9 +186,11 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
     val recorder = recorder(database)
     recorder.openTestWorkflow(WORKFLOW_ID, "session-1")
 
-    assertFailsWith<RejectedOutputDiagnosticError.InvalidRequest> {
-      recorder.recordRejectedOutput(rejection(byteArrayOf(1), repairTurn = 1).copy(agentId = ""))
-    }
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        recorder.recordRejectedOutput(rejection(byteArrayOf(1), repairTurn = 1).copy(agentId = ""))
+      }
+    assertEquals(RejectedOutputDiagnosticFailureCode.INVALID_REQUEST, failure.code)
     assertTrue(recorder.loadDiagnosticSignals(WORKFLOW_ID).isEmpty())
   }
 

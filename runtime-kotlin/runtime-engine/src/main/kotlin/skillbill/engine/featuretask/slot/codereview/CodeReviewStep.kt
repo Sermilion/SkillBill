@@ -1,11 +1,9 @@
 package skillbill.engine.featuretask.slot.codereview
 
+import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewResult
-import skillbill.application.review.model.StackDetectionException
-import skillbill.application.review.model.UsageValidationException
-import skillbill.application.reviewevidence.model.DiffResolutionException
+import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.engine.featuretask.model.review.ReviewTarget
-import skillbill.engine.featuretask.persist.RuntimeOwnedFactUnavailable
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -17,7 +15,10 @@ import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.state.PhaseReviewExecutionContext
 import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.error.shellcontent.InvalidReviewContextSchemaError
 import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
@@ -25,7 +26,6 @@ import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
-import skillbill.review.context.model.accounting.ReviewContextBudgetExceededException
 import skillbill.workflow.model.goalreview.GoalSubtaskBlockerDisposition
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -45,12 +45,8 @@ internal class CodeReviewStep(
     prompt: PhaseStepPromptSource,
   ): PhaseOutcome {
     val iteration = state.nextStepIteration()
-    return try {
-      state.startReviewStep(requestedRun, iteration)
-        ?: runAfterStart(requestedRun, context, state, prompt)
-    } catch (rejection: RequiredPhaseWriteRejected) {
-      state.blockRequiredReviewWrite(rejection)
-    }
+    return state.startReviewStep(requestedRun, iteration)
+      ?: runAfterStart(requestedRun, context, state, prompt)
   }
 
   private fun runAfterStart(
@@ -72,6 +68,16 @@ internal class CodeReviewStep(
         is InlineReviewPrepared.Ready -> prepared.input
         is InlineReviewPrepared.Settled -> return prepared.outcome
       }
+    return startReviewPass(run, context, state, prompt, input)
+  }
+
+  private fun startReviewPass(
+    run: PhaseRun,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
+    prompt: PhaseStepPromptSource,
+    input: GoalSubtaskReviewInput,
+  ): PhaseOutcome {
     val iteration = state.nextStepIteration()
     val passNumber = state.reviewPassNumber
     val resolution =
@@ -82,11 +88,15 @@ internal class CodeReviewStep(
           ?.reviewRunId
           ?.takeIf { passNumber == 1 }
         ?: InlineReviewEnvelope.mintReviewRunId(context.clock)
-    state.startReview(iteration, reviewRunId)
+    (state.startReview(iteration, reviewRunId) as? RequiredPhaseWrite.Rejected)?.let {
+      return state.blockRequiredReviewWrite(it)
+    }
     val fingerprint =
       repositoryFingerprint(run, context)
         ?: return PhaseOutcome.blocked("Runtime-owned review could not resolve a repository checkpoint fingerprint.")
-    state.prepareReviewBriefing(iteration, prompt, input)
+    (state.prepareReviewBriefing(iteration, prompt, input) as? RequiredPhaseWrite.Rejected)?.let {
+      return state.blockRequiredReviewWrite(it)
+    }
     state.reviewLaunched(iteration)
     val pass =
       ReviewPassRun(
@@ -174,7 +184,10 @@ internal class CodeReviewStep(
   ): ReviewPassLaunch {
     val outcome = runCatching { reviewPass.review(run, input, reviewRunId, runner, state) }
     outcome.exceptionOrNull()?.let { error -> return launchFailure(error) ?: throw error }
-    return ReviewPassLaunch.Reviewed(outcome.getOrThrow())
+    return when (val review = outcome.getOrThrow()) {
+      is ParallelCodeReviewRunOutcome.Reviewed -> ReviewPassLaunch.Reviewed(review.result)
+      is ParallelCodeReviewRunOutcome.PlanningFailed -> planningFailureLaunch(review.failure)
+    }
   }
 
   private fun settle(
@@ -360,7 +373,7 @@ private sealed interface PhaseReviewRun {
   ) : PhaseReviewRun
 }
 
-private sealed interface ReviewPassLaunch {
+internal sealed interface ReviewPassLaunch {
   data class Reviewed(
     val result: ParallelCodeReviewResult,
   ) : ReviewPassLaunch
@@ -378,28 +391,33 @@ internal fun failedLaneReason(result: ParallelCodeReviewResult): String? {
   return "Feature-task-runtime phase 'review' $detail"
 }
 
+internal fun planningFailureLaunch(failure: ParallelCodeReviewPlanningFailure): ReviewPassLaunch.Failed =
+  when (failure) {
+    is ParallelCodeReviewPlanningFailure.DiffUnresolved ->
+      ReviewPassLaunch.Failed("Runtime-owned review could not resolve the child-owned diff: ${failure.message}")
+    is ParallelCodeReviewPlanningFailure.UsageInvalid, is ParallelCodeReviewPlanningFailure.StackUndetected ->
+      ReviewPassLaunch.Failed(
+        "Runtime-owned review failed: ${failure.message}",
+        FeatureTaskRuntimeFailureDisposition.RETRYABLE,
+      )
+  }
+
 private fun launchFailure(error: Throwable): ReviewPassLaunch.Failed? {
   val message = error.message.orEmpty()
-  return when (error) {
-    is CancellationException, is RequiredPhaseWriteRejected -> null
-    is DiffResolutionException ->
-      ReviewPassLaunch.Failed("Runtime-owned review could not resolve the child-owned diff: $message")
-    is UsageValidationException, is StackDetectionException ->
-      ReviewPassLaunch.Failed("Runtime-owned review failed: $message", FeatureTaskRuntimeFailureDisposition.RETRYABLE)
-    is ReviewContextBudgetExceededException ->
-      ReviewPassLaunch.Failed("Runtime-owned review exceeded a review-context budget: $message")
-    is UnreadableSpecIntentProjectionError ->
+  return when {
+    error is CancellationException -> null
+    error is UnreadableSpecIntentProjectionError ->
       ReviewPassLaunch.Failed("Runtime-owned review could not read the spec intent projection: $message")
-    is InvalidReviewContextSchemaError ->
+    error is InvalidReviewContextSchemaError ->
       ReviewPassLaunch.Failed("Runtime-owned review produced an invalid review-context envelope: $message")
-    is RuntimeOwnedFactUnavailable ->
+    error is SkillBillRuntimeException && error.code == RuntimeOwnedPersistenceFailureCode.FACT_UNAVAILABLE ->
       ReviewPassLaunch.Failed(
         "Runtime-owned review could not establish a required persistence fact: $message",
         FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
       )
-    is Exception ->
+    error is Exception ->
       ReviewPassLaunch.Failed(
-        "Runtime-owned review failed: ${error::class.simpleName}: $message",
+        "Runtime-owned review failed: ${error.failureCodeLabel() ?: error::class.simpleName}: $message",
         FeatureTaskRuntimeFailureDisposition.RETRYABLE,
       )
     else -> null

@@ -6,7 +6,8 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
-import skillbill.error.shellcontent.InvalidAgentAddonSelectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.infrastructure.sqlite.core.ops.recordMigrationNormalization
 import skillbill.infrastructure.sqlite.workflow.toFeatureTaskWorkflowStateRecord
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -142,7 +143,8 @@ private fun requiredLegacyAcceptanceString(
 private fun legacyAddonSelectionError(
   message: String,
   cause: Throwable? = null,
-): Nothing = throw InvalidAgentAddonSelectionError("Goal review policy $message", cause)
+): Nothing =
+  throw SkillBillRuntimeException(AgentAddonFailureCode.INVALID_SELECTION, "Goal review policy $message", cause)
 
 private fun decodeLegacyAgentAddonSelection(raw: Any?): AgentAddonSelection {
   val values = raw ?: return AgentAddonSelection()

@@ -13,6 +13,7 @@ import skillbill.engine.goalrunner.execution.support.isFeatureSpecPath
 import skillbill.engine.goalrunner.execution.support.parseGitPorcelainPaths
 import skillbill.engine.goalrunner.execution.support.protectedBranchName
 import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
+import skillbill.engine.goalrunner.findings.resolveUnaddressedFindingsLedger
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
@@ -24,8 +25,6 @@ import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySignal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
-import skillbill.error.shellcontent.InvalidUnaddressedFindingsLedgerSchemaError
-import skillbill.error.shellcontent.UnaddressedFindingsLedgerAbsentError
 import skillbill.goalrunner.model.GoalPullRequestStatus
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerRunReport
@@ -366,13 +365,5 @@ internal fun GoalRunnerFinalization.deleteGoalSpecScratchOnSuccess(
     }
 }
 
-internal fun GoalRunnerFinalization.resolveFindingsLedger(issueKey: String): UnaddressedFindingsLedger? {
-  val service = unaddressedFindingsLedgerService ?: return null
-  return try {
-    service.ledger(issueKey)
-  } catch (_: UnaddressedFindingsLedgerAbsentError) {
-    UnaddressedFindingsLedger(issueKey, emptyList())
-  } catch (_: InvalidUnaddressedFindingsLedgerSchemaError) {
-    null
-  }
-}
+internal fun GoalRunnerFinalization.resolveFindingsLedger(issueKey: String): UnaddressedFindingsLedger? =
+  resolveUnaddressedFindingsLedger(unaddressedFindingsLedgerService, issueKey)

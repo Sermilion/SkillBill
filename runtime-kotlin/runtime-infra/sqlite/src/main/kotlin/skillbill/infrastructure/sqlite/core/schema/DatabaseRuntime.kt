@@ -1,8 +1,9 @@
 package skillbill.infrastructure.sqlite.core.schema
 
 import org.sqlite.SQLiteConfig
-import skillbill.error.core.DatabaseAccessError
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.databaseAccessFailure
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.nio.file.Files
@@ -119,7 +120,7 @@ internal object DatabaseRuntime {
   fun openReadDbIfPresentAt(dbPath: Path): OpenDatabase? {
     if (!Files.exists(dbPath)) return null
     if (isSchemaless(dbPath)) {
-      throw DatabaseAccessError(
+      throw databaseAccessFailure(
         dbPath = dbPath.toAbsolutePath().normalize().toString(),
         operation = DatabaseAccessOperation.READ,
         condition = "database schema is missing",
@@ -211,9 +212,10 @@ internal fun databaseAccessError(
   dbPath: Path,
   operation: DatabaseAccessOperation,
   error: SQLException,
-): DatabaseAccessError =
-  DatabaseAccessError(
+): SkillBillRuntimeException =
+  databaseAccessFailure(
     dbPath = dbPath.toAbsolutePath().normalize().toString(),
     operation = operation,
     condition = "sqlite result code ${error.errorCode}: ${error.message.orEmpty()}",
+    cause = error,
   )

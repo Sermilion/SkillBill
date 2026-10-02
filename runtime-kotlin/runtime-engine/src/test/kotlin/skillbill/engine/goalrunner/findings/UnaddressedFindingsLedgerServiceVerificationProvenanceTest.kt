@@ -16,6 +16,7 @@ import skillbill.workflow.model.WorkflowStatus
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 private val FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_DISPOSITIONS_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_DISPOSITIONS.label()
@@ -61,7 +62,7 @@ class UnaddressedFindingsLedgerServiceVerificationProvenanceTest {
     )
     val service = UnaddressedFindingsLedgerService(database, NoopRuntimeDiagnostics)
 
-    val dispositions = service.verificationDispositions("SKILL-202")
+    val dispositions = assertNotNull(service.verificationDispositions("SKILL-202"))
 
     assertEquals(1, dispositions.size)
     assertEquals("F-001", dispositions.single().findingId)

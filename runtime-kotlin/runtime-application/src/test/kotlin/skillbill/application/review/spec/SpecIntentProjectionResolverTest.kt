@@ -67,7 +67,7 @@ class SpecIntentProjectionResolverTest {
         - Stay on the experimental path only when explicitly requested.
         """.trimIndent(),
       )
-    val projection = extractor().extract(repo, spec, ReviewContextBudgetPolicy.DEFAULT, explicit = true)
+    val projection = extractProjection(repo, spec)
     assertEquals("SKILL-650 runtime spec", projection.intendedOutcome)
     assertEquals(
       listOf(
@@ -102,7 +102,7 @@ class SpecIntentProjectionResolverTest {
         - Stage two.
         """.trimIndent(),
       )
-    val projection = extractor().extract(repo, spec, ReviewContextBudgetPolicy.DEFAULT, explicit = true)
+    val projection = extractProjection(repo, spec)
     assertEquals("Ship the resolver.", projection.intendedOutcome)
     assertEquals(listOf("First criterion.", "Second criterion."), projection.acceptanceCriteria)
     assertEquals(listOf("Stay contract-first."), projection.constraints)
@@ -133,7 +133,7 @@ class SpecIntentProjectionResolverTest {
         - Changing phase ordering.
         """.trimIndent(),
       )
-    val projection = extractor().extract(repo, spec, ReviewContextBudgetPolicy.DEFAULT, explicit = true)
+    val projection = extractProjection(repo, spec)
     assertEquals(
       "Make the feature-task review phase delegate to the same driver.",
       projection.intendedOutcome,
@@ -262,12 +262,7 @@ class SpecIntentProjectionResolverTest {
     val repo = tempRepo()
     val spec = writeSpec(repo, "spec.md", governedSpec("Outcome", "A criterion."))
     val projection =
-      extractor().extract(
-        repo,
-        spec,
-        ReviewContextBudgetPolicy.DEFAULT.copy(maxSpecIntentProjectionBytes = 32),
-        explicit = true,
-      )
+      extractProjection(repo, spec, ReviewContextBudgetPolicy.DEFAULT.copy(maxSpecIntentProjectionBytes = 32))
     assertTrue(specIntentProjectionUtf8Bytes(projection) > 32)
     assertEquals(32, projection.declaredByteBudget)
   }
@@ -330,6 +325,20 @@ class SpecIntentProjectionResolverTest {
     assertEquals(".feature-specs/SKILL-191-runtime/spec_subtask_2.md", projection.provenance.specPath)
     assertEquals(null, projection.surroundingContext)
     assertTrue(resolved.degradations.any { it.reason == "parent_spec_unavailable" && it.rung == "manifest" })
+  }
+
+  @Test
+  fun `a missing owning sub-spec records no_spec_found at the manifest rung with its path`() {
+    val repo = featureRepo(includeGlob = true, includeManifest = true)
+    Files.delete(repo.resolve(".feature-specs/SKILL-191-runtime/spec_subtask_2.md"))
+    val resolved =
+      resolver().resolve(
+        SpecIntentProjectionResolveRequest(repoRoot = repo.toFileLocation(), branchName = "feat/SKILL-191-runtime"),
+      )
+    val projection = assertIs<SpecIntentResolution.Resolved>(resolved).projection
+    assertEquals(".feature-specs/SKILL-191-runtime/spec.md", projection.provenance.specPath)
+    val record = resolved.degradations.single { it.reason == "no_spec_found" && it.rung == "manifest" }
+    assertTrue(record.resolvedPath.orEmpty().endsWith(".feature-specs/SKILL-191-runtime/spec_subtask_2.md"))
   }
 
   @Test
@@ -429,6 +438,16 @@ class SpecIntentProjectionResolverTest {
     assertEquals(emptyList(), launch.assignment.criteriaReferences)
   }
 }
+
+private fun extractProjection(
+  repo: Path,
+  spec: Path,
+  budget: ReviewContextBudgetPolicy = ReviewContextBudgetPolicy.DEFAULT,
+): SpecIntentProjection =
+  when (val read = extractor().extract(repo, spec, budget)) {
+    is SpecIntentSourceRead.Read -> read.value
+    is SpecIntentSourceRead.Unavailable -> error("Expected a readable spec but it was ${read.reason}: ${read.specPath}")
+  }
 
 private fun extractor() =
   SpecIntentProjectionExtractor(

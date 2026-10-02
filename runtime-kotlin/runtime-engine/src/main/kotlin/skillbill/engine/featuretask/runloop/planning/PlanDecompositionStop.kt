@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseAttemptTraversalRuntimeCon
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowIfDatabaseFailure
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
@@ -87,6 +88,7 @@ internal object PlanDecompositionStop {
       )
       null
     } catch (error: SkillBillRuntimeException) {
+      error.rethrowIfDatabaseFailure()
       notReadyReason(error.message)
     } catch (error: IOException) {
       notReadyReason(error.message)
@@ -209,6 +211,7 @@ internal class FeatureTaskRuntimePlanningStopper(
         terminal.toRunReport(request, completedPhaseIds, resolvedBranch),
       )
     } catch (error: SkillBillRuntimeException) {
+      error.rethrowIfDatabaseFailure()
       FeatureTaskRuntimePlanningStopDecision.Blocked(PlanDecompositionStop.notReadyReason(error.message))
     } catch (error: IOException) {
       FeatureTaskRuntimePlanningStopDecision.Blocked(PlanDecompositionStop.notReadyReason(error.message))

@@ -1,6 +1,6 @@
 package skillbill.engine.goalrunner.planning.attempt
 
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
+import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseProduction
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProduceAttemptArgs
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
@@ -10,7 +10,6 @@ import skillbill.engine.goalrunner.planning.outcome.unexpectedPlanningFailureRea
 import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.time.model.RuntimeWaitResult
-import java.util.concurrent.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.ZERO
 
@@ -32,7 +31,7 @@ internal fun DefaultGoalPlanningSweep.produceAttemptOrStop(
   runCatching {
     produceAttempt(args)
   }.getOrElse { error ->
-    if (error is RequiredPhaseWriteRejected || error is CancellationException) throw error
+    error.rethrowIfCooperativeCancellationOrInterruption()
     val phase = args.phase
     GoalPlanningPhaseProduction.Stopped(
       stopped(

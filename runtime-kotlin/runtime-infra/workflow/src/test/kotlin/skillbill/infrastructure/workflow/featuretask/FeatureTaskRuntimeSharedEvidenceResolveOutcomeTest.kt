@@ -3,6 +3,7 @@ package skillbill.infrastructure.workflow.featuretask
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceDeriver
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceDerivation
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceRequest
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceResolution
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvidenceFileEntry
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvidenceHunkEntry
@@ -21,7 +22,7 @@ class FeatureTaskRuntimeSharedEvidenceResolveOutcomeTest {
   fun `absent artifact derives exactly once and returns the derivation`() {
     val deriver = CountingDeriver()
 
-    val resolution = store.resolve(request("fp-absent"), deriver)
+    val resolution = store.resolved(request("fp-absent"), deriver)
 
     assertEquals(1, deriver.invocations)
     assertEquals("fp-absent", resolution.artifact.fingerprint)
@@ -31,19 +32,19 @@ class FeatureTaskRuntimeSharedEvidenceResolveOutcomeTest {
 
   @Test
   fun `fingerprint hit serves the stored artifact with zero repository traversal`() {
-    store.resolve(request("fp-hit"), CountingDeriver())
+    store.resolved(request("fp-hit"), CountingDeriver())
 
-    val artifact = store.resolve(request("fp-hit"), ThrowingDeriver).artifact
+    val artifact = store.resolved(request("fp-hit"), ThrowingDeriver).artifact
 
     assertEquals("fp-hit", artifact.fingerprint)
   }
 
   @Test
   fun `a different fingerprint re-derives rather than serving the stored artifact`() {
-    store.resolve(request("fp-old"), CountingDeriver(baseRef = "old-base"))
+    store.resolved(request("fp-old"), CountingDeriver(baseRef = "old-base"))
     val deriver = CountingDeriver(baseRef = "new-base")
 
-    val artifact = store.resolve(request("fp-new"), deriver).artifact
+    val artifact = store.resolved(request("fp-new"), deriver).artifact
 
     assertEquals(1, deriver.invocations)
     assertEquals("fp-new", artifact.fingerprint)
@@ -52,14 +53,14 @@ class FeatureTaskRuntimeSharedEvidenceResolveOutcomeTest {
 
   @Test
   fun `a corrupt payload re-derives without failing the run`() {
-    store.resolve(request("fp-corrupt"), CountingDeriver())
+    store.resolved(request("fp-corrupt"), CountingDeriver())
     val payload =
       artifactDir(request("fp-corrupt"))
         .resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.PAYLOAD_FILE_NAME)
     Files.writeString(payload, "")
     val deriver = CountingDeriver()
 
-    val artifact = store.resolve(request("fp-corrupt"), deriver).artifact
+    val artifact = store.resolved(request("fp-corrupt"), deriver).artifact
 
     assertEquals(1, deriver.invocations)
     assertEquals("fp-corrupt", artifact.fingerprint)
@@ -67,14 +68,14 @@ class FeatureTaskRuntimeSharedEvidenceResolveOutcomeTest {
 
   @Test
   fun `an unparseable envelope re-derives without failing the run`() {
-    store.resolve(request("fp-unparseable"), CountingDeriver())
+    store.resolved(request("fp-unparseable"), CountingDeriver())
     val envelope =
       artifactDir(request("fp-unparseable"))
         .resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.ENVELOPE_FILE_NAME)
     Files.writeString(envelope, "{\"fingerprint\": ")
     val deriver = CountingDeriver()
 
-    val artifact = store.resolve(request("fp-unparseable"), deriver).artifact
+    val artifact = store.resolved(request("fp-unparseable"), deriver).artifact
 
     assertEquals(1, deriver.invocations)
     assertTrue(Files.isRegularFile(envelope))
@@ -103,6 +104,12 @@ internal class CountingDeriver(private val baseRef: String? = "main") : FeatureT
     )
   }
 }
+
+internal fun FileSystemFeatureTaskRuntimeSharedEvidenceStore.resolved(
+  request: FeatureTaskRuntimeSharedEvidenceRequest,
+  deriver: FeatureTaskRuntimeSharedEvidenceDeriver,
+): FeatureTaskRuntimeSharedEvidenceResolution =
+  checkNotNull(resolve(request, deriver)) { "the deriver in this test always derives" }
 
 internal object ThrowingDeriver : FeatureTaskRuntimeSharedEvidenceDeriver {
   override fun derive(checkpoint: FeatureTaskRuntimeRepositoryCheckpoint): FeatureTaskRuntimeSharedEvidenceDerivation =

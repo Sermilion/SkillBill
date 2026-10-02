@@ -16,6 +16,7 @@ import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistArgs
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
+import skillbill.engine.featuretask.runloop.core.LaunchRequiredWriteRejected
 import skillbill.engine.featuretask.runloop.core.PersistPhaseArgs
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -65,7 +66,7 @@ import skillbill.engine.featuretask.slot.state.PhaseReviewFindingObservations
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
@@ -213,14 +214,14 @@ private open class FeatureTaskRuntimeRunLoopPlanningAgentStepBinding(
   override fun recordPlanningBriefing(
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     attempt: Int,
-  ) {
+  ): RequiredPhaseWrite {
     bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
     check(
       environment.runLoopBinding.selectedOwnerOf(acceptedPhaseId)?.executionBindingKind(acceptedPhaseId) ==
         PhaseExecutionBindingKind.PLANNING,
     )
     check(briefing.phaseId == acceptedPhaseId)
-    environment.recorder.recordPhaseBriefing(workflowId, briefing, null, attempt)
+    return environment.recorder.recordPhaseBriefing(workflowId, briefing, null, attempt)
   }
 }
 
@@ -337,15 +338,13 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
   ): PhaseOutcome? {
     bindingCoordinator.requireActiveStepBinding(this.run, fanOutUnitId)
     check(run === this.run)
-    return try {
-      PhaseAttemptOnce.persistRequiredStart(environment, run, iteration)
-      null
-    } catch (rejection: RequiredPhaseWriteRejected) {
-      blockRequiredReviewWrite(rejection)
+    return when (val start = PhaseAttemptOnce.persistRequiredStart(environment, run, iteration)) {
+      is RequiredPhaseWrite.Acknowledged -> null
+      is RequiredPhaseWrite.Rejected -> blockRequiredReviewWrite(start)
     }
   }
 
-  override fun blockRequiredReviewWrite(rejection: RequiredPhaseWriteRejected): PhaseOutcome {
+  override fun blockRequiredReviewWrite(rejection: RequiredPhaseWrite.Rejected): PhaseOutcome {
     bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
     return PhaseAttemptOnce.blockRequiredWriteRejection(environment, run, rejection)
   }
@@ -462,9 +461,9 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
   override fun startReview(
     iteration: Int,
     reviewRunId: String,
-  ) {
+  ): RequiredPhaseWrite {
     requireActiveReviewBinding()
-    FeatureTaskRuntimeRunLoopOutputPersistence.persistPhase(
+    return FeatureTaskRuntimeRunLoopOutputPersistence.persistPhase(
       environment,
       environment.goalContinuationRecorder,
       PersistPhaseArgs(
@@ -478,15 +477,17 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     iteration: Int,
     prompt: PhaseStepPromptSource,
     input: GoalSubtaskReviewInput,
-  ) {
+  ): RequiredPhaseWrite {
     requireActiveReviewBinding()
-    environment.prepareLaunchForCapture(
-      run.copy(goalReviewInput = input),
-      iteration,
-      null,
-      prompt,
-      this,
-    )
+    val preparation =
+      environment.prepareLaunchForCapture(
+        run.copy(goalReviewInput = input),
+        iteration,
+        null,
+        prompt,
+        this,
+      )
+    return (preparation as? LaunchRequiredWriteRejected)?.rejection ?: RequiredPhaseWrite.Acknowledged
   }
 
   override fun reviewLaunched(iteration: Int) {

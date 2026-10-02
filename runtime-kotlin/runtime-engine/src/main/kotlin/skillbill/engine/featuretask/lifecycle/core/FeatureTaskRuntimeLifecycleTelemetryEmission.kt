@@ -10,6 +10,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFinishedTelemet
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRegenerationTelemetry
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.review.core.auditGapIterationCount
+import skillbill.error.core.failureCodeLabel
 import skillbill.workflow.decomposition.runtime.normalizedBlockedReason
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
@@ -90,8 +91,9 @@ internal fun emitFeatureTaskRuntimeFinishedError(
 }
 
 private fun Throwable.terminalFailureClass(): String =
-  (this::class.simpleName ?: "Throwable")
-    .let { name -> if (name.endsWith("Exception") || name.endsWith("Error")) name else "$name exception" }
+  failureCodeLabel()
+    ?: (this::class.simpleName ?: "Throwable")
+      .let { name -> if (name.endsWith("Exception") || name.endsWith("Error")) name else "$name exception" }
 
 internal data class ResolvedFeatureTaskRuntimeTelemetryPayload(
   val tokenBreakdownJson: String?,

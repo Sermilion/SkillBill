@@ -81,6 +81,21 @@ class CliGoalStatusDatabaseFailureTest {
   }
 
   @Test
+  fun `goal findings for an unknown issue key exits 1 with the absent-goal message on stderr`() {
+    val fixture = goalFixture(subtaskCount = 1)
+
+    val result =
+      CliRuntime.run(
+        listOf("--db", fixture.dbPath.toString(), "goal", "findings", "--issue-key", "SKILL-902"),
+        fixture.context(launcher = UnusedStatusAgentRunLauncher),
+      )
+
+    assertEquals(1, result.exitCode, result.stderr)
+    assertEquals("", result.stdout)
+    assertEquals("No goal exists for issue key 'SKILL-902'.", result.stderr.trim())
+  }
+
+  @Test
   fun `an unrelated typed failure still propagates past the cli boundary`() {
     val fixture = goalFixture(subtaskCount = 1)
     val missingSource = fixture.tempDir.resolve("absent-skill")

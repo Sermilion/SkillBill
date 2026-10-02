@@ -1,6 +1,8 @@
 package skillbill.infrastructure.skills.agentaddon
 
-import skillbill.error.shellcontent.InvalidAgentAddonSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
+import skillbill.error.shellcontent.invalidAgentAddonSchema
 
 internal inline fun <T> sourceOperation(
   sourceLabel: String,
@@ -15,16 +17,16 @@ private fun Throwable.asSourceSchemaError(
   sourceLabel: String,
   fallbackReason: String,
 ): Throwable =
-  when (this) {
-    is InvalidAgentAddonSchemaError -> this
-    is Exception -> InvalidAgentAddonSchemaError(sourceLabel, message ?: fallbackReason, this)
+  when {
+    (this as? SkillBillRuntimeException)?.code == AgentAddonFailureCode.INVALID_SCHEMA -> this
+    this is Exception -> invalidAgentAddonSchema(sourceLabel, message ?: fallbackReason, this)
     else -> this
   }
 
 internal fun invalid(
   sourceLabel: String,
   reason: String,
-): Nothing = throw InvalidAgentAddonSchemaError(sourceLabel, reason)
+): Nothing = throw invalidAgentAddonSchema(sourceLabel, reason)
 
 internal fun Map<String, Any?>.string(
   key: String,

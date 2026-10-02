@@ -17,6 +17,8 @@ import skillbill.engine.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
+import skillbill.engine.goalrunner.execution.core.GoalRunnerExecutionCoordinator
+import skillbill.engine.goalrunner.execution.core.GoalRunnerOwnedRun
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.SubtaskLaunchRequestArgs
@@ -36,6 +38,7 @@ import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
+import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
 import skillbill.engine.goalrunner.model.GoalRunnerEventSink
@@ -67,7 +70,6 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilitySubject
 import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
 import skillbill.engine.openTestWorkflow
 import skillbill.engine.ownership
-import skillbill.error.goalrunner.GoalRunnerLaunchAuthorizationDeniedException
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.model.ExecutionLiveness
@@ -99,10 +101,12 @@ import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.sqliteDatabaseSessionFactory
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
+import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -1684,6 +1688,39 @@ class GoalRunnerPauseLaunchBoundaryTest {
     assertFalse(store.controlState.pauseRequested)
     assertFalse(store.controlState.paused)
     assertEquals(null, store.controlState.pauseReason)
+  }
+
+  @Test
+  fun `an already-running execution lease reports a blocked stop without entering the goal body`() {
+    val store = InMemoryGoalManifestStore(manifest = manifest(subtaskCount = 1))
+    val launcher = RecordingSubtaskLauncher { launchFacts() }
+    val reason = "Goal parent 'parent' cannot start: another goal runner process is live"
+    val alreadyRunning =
+      object : GoalRunnerExecutionCoordinator {
+        override fun <T> runOwned(
+          parentWorkflowId: String,
+          block: () -> T,
+        ): GoalRunnerOwnedRun<T> = GoalRunnerOwnedRun.AlreadyRunning(reason)
+
+        override fun <T> runOwnedWithChildAdmission(
+          parentWorkflowId: String,
+          childAdmission: GoalRunnerChildExecutionPlanAdmission,
+          block: () -> T,
+        ): GoalRunnerOwnedRun<T> = GoalRunnerOwnedRun.AlreadyRunning(reason)
+      }
+    val runner =
+      testGoalRunner(
+        goalRunnerDeps(store, launcher, RecordingOutcomeStore(), RecordingPullRequestPort())
+          .copy(executionCoordinator = alreadyRunning),
+      )
+
+    val report = runner.run(runRequest())
+
+    val stop = assertIs<GoalRunnerRunReport.Stopped>(report).stop
+    assertEquals(GoalRunnerStopReason.BLOCKED, stop.reason)
+    assertEquals(reason, stop.blockedReason)
+    assertEquals("plan", stop.lastResumableStep)
+    assertTrue(launcher.requests.isEmpty())
   }
 
   private fun runRequest(): GoalRunnerRunRequest =
@@ -3714,12 +3751,12 @@ internal class InMemoryGoalManifestStore(
   ): GoalRunnerLaunchAuthorization {
     val spawnAuthorization =
       object : AgentRunSpawnAuthorization {
-        override fun <T> withAuthorization(spawn: () -> T): T {
+        override fun <T> withAuthorization(spawn: () -> T): AgentRunSpawnAuthorizationResult<T> {
           beforeLaunchAuthorization?.invoke(subtaskId)
           if (controlState.requiresPauseBoundary(state.manifest)) {
-            throw GoalRunnerLaunchAuthorizationDeniedException(controlState.pauseReason)
+            return AgentRunSpawnAuthorizationResult.Denied(controlState.pauseReason)
           }
-          return spawn()
+          return AgentRunSpawnAuthorizationResult.Authorized(spawn())
         }
       }
     return GoalRunnerLaunchAuthorization(
@@ -4819,7 +4856,12 @@ internal class RecordingSubtaskLauncher(
       requests += request
       result(request)
     }
-    return request.skillRunRequest.spawnAuthorization?.withAuthorization(launch) ?: launch()
+    return when (val authorized = request.skillRunRequest.spawnAuthorization?.withAuthorization(launch)) {
+      null -> launch()
+      is AgentRunSpawnAuthorizationResult.Authorized -> authorized.value
+      is AgentRunSpawnAuthorizationResult.Denied ->
+        AgentRunLaunchDenied(SupportedAgent.CLAUDE, authorized.pauseReason)
+    }
   }
 }
 

@@ -1,5 +1,16 @@
 # featuretask runtime boundary history
 
+## [2026-10-02] SKILL-398 subtask 2 - Operation, diagnostic and phase-write results as values
+Areas: runtime-engine (operation, featuretask slot/runloop/phaserun, goalrunner planning), runtime-contracts, runtime-ports, runtime-application diagnostics, runtime-infra sqlite, runtime-cli, runtime-core throwable baseline
+- Operations return a sealed OperationRefusal (Blocked, Usage) instead of throwing OperationErrors; the executor has no catch and the CLI maps Usage to a UsageError. Refusal text is unchanged. reusable
+- Rejected-output diagnostics use a failure-code enum plus port and application result types; coded exceptions remain only inside the recorder transaction so rollback still fires.
+- Required phase writes return RequiredPhaseWrite (Acknowledged, Rejected); attempt sites branch exhaustively and share one block helper. Launch and goal-planning results gained RequiredWriteRejected variants. reusable
+- Goal planning now propagates InterruptedException; see decisions.md.
+- Deleted classes' rows were removed from custom-throwable-baseline.txt.
+- Limits: build, tests, detekt and spotless were unrun at implement; the fake DB transaction now snapshots and rolls back diagnostic and evidence maps, which can affect other tests.
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented (self-reported, unverified)
+
 ## [2026-09-30] SKILL-385 subtask 1 - Apply project authoring discipline across implementation and repair prompts
 Areas: runtime-engine featuretask (phase/prompt/compose, phase/prompt/directives, slot/implementation, slot/audit, slot/codereview, slot/qualitygate, agent), runtime-engine tests and slotbaseline fixtures
 - One strategy-supplied project-authoring guidance owner now reaches implement, simplify, audit_implement_fix, implement_fix and inline review's direct launch. Verify_findings and other read-only phases receive none. reusable

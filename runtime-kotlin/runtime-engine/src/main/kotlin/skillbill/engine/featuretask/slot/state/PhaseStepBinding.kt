@@ -72,7 +72,7 @@ internal interface PhasePlanningBriefingBinding : PhaseAcceptedStepExecution {
   fun recordPlanningBriefing(
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     attempt: Int,
-  )
+  ): RequiredPhaseWrite
 }
 
 /** Goal planning fan-out runs units through its owner. */
@@ -121,7 +121,7 @@ internal interface PhaseReviewStepBinding :
     iteration: Int,
   ): PhaseOutcome?
 
-  fun blockRequiredReviewWrite(rejection: RequiredPhaseWriteRejected): PhaseOutcome
+  fun blockRequiredReviewWrite(rejection: RequiredPhaseWrite.Rejected): PhaseOutcome
 }
 
 /** verify_findings reads and writes only the finding-verification ledger for its step. */

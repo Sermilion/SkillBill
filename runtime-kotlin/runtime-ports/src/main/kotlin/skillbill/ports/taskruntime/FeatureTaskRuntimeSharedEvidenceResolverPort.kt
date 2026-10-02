@@ -7,5 +7,5 @@ fun interface FeatureTaskRuntimeSharedEvidenceResolverPort {
   fun resolve(
     request: FeatureTaskRuntimeSharedEvidenceRequest,
     deriver: FeatureTaskRuntimeSharedEvidenceDeriver,
-  ): FeatureTaskRuntimeSharedEvidenceResolution
+  ): FeatureTaskRuntimeSharedEvidenceResolution?
 }

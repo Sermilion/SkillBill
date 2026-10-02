@@ -1,3 +1,56 @@
+## [2026-10-02] SKILL-398 subtask 6 — defect exceptions stop driving control flow at parse edges
+Areas: runtime-kotlin/runtime-{domain,ports,application,cli,core}, runtime-infra/skills
+- Four domain validators (execution mode, repository-relative path, validation depth, persisted instant) now fail with plain require/check defects; RuntimeOwnedReviewMode.parse and the scaffold payload-object decoder return null for bad input and callers branch on the value. reusable
+- Release-ref validation is a sealed port result (ReleaseRefValidation) instead of a custom ReleaseLicensePolicyError; the CLI maps malformed tags to the canonical message. Throwable class and its baseline row deleted.
+- CLI review-mode, goal-run and repo-validation sites render the typed failure directly; no catch of IllegalArgumentException remains at those sites.
+- Tests added through existing harnesses: delegated review mode rejected, non-object scaffold payload rejected, malformed release tag message.
+- Validate repairs: database access failure keeps its SQLite cause for typed BUSY detection; shared-preplan Stopped outcomes stay PAUSED not BLOCKED; throwable-baseline scanner treats interfaces as nesting parents; two shell-content error files renamed for detekt.
+- Limits: remaining IAE/ISE catch sites (scaffold payload run, wizard, install, agent addon parsing) belong to SKILL-401.
+Feature flag: N/A
+Acceptance criteria: implemented per spec; validate passed (check --continue, skill-bill validate)
+
+## [2026-10-02] SKILL-398 subtask 5 — persistence and transport failures collapse to coded failures
+Areas: runtime-kotlin/runtime-{contracts,application,engine,cli,mcp,core}, runtime-infra/{sqlite,http}, ARCHITECTURE.md
+- Database access/busy, telemetry HTTP, goal-telemetry-row and runtime-owned persistence failures (9 classes) are now coded SkillBillRuntimeException via factories in runtime-contracts and runtime-application; baseline rows removed. reusable
+- rethrowIfDatabaseFailure() guards catches a database failure could newly reach (planning stop, install replay, scaffold payload run); readers match codes through rethrowUnless.
+- McpToolDispatcher keeps no-capture classification in one private predicate; unresolved remote transport port is now a plain error() composition defect.
+- Telemetry request is split into execute and body-check steps so proxy capability detection reads the status as a value.
+- Limits: authored without compile or test runs; planning-stop database-propagation test not yet written; remaining shell-content and error areas move to SKILL-399 and SKILL-400, so the legacy bases stay.
+Feature flag: N/A
+Acceptance criteria: implemented per reduced-scope spec; validate confirms
+
+## [2026-10-02] SKILL-398 subtask 4 — AgentAddon and GovernedReview shell-content errors collapse to coded failures
+Areas: runtime-kotlin/runtime-{contracts,application,cli,engine,mcp,domain,core}, runtime-infra/{skills,launcher,contracts,sqlite,http,workflow}, docs/telemetry-privacy.md
+- The 10 AgentAddon and GovernedReview ShellContentContractException subclasses are deleted; both files keep only a failure-code enum plus message functions, and every throw site raises one coded SkillBillRuntimeException. reusable
+- New SkillBillRuntimeException.rethrowUnless(handled) and Throwable.failureCodeLabel() ("CodeEnum.ENTRY", null for uncoded or legacy codes) in runtime-contracts; ~40 class-name renders (telemetry error_type, diagnostics, install causeClass) use the label with the old expression as fallback. reusable
+- isShellContentContractFailure() is a transitional predicate (the old class plus the codes of converted areas); catch sites use it so coded failures stay handled like the old subclasses. Each later area conversion adds its code enum; it goes away when the base class retires.
+- Tests assert the coded exception and code instead of class types; one MCP test pins that AgentAddon coded failures stay no-capture while other coded failures are captured with the label. 10 baseline rows removed.
+- Limits: the other seven shell-content areas move to SKILL-399; CodeReviewCommand's aggregation-integrity catch is still dead; authored without compile or test runs, so validate checks import order, line width and detekt.
+Feature flag: N/A
+Acceptance criteria: implemented per reduced-scope spec; validate confirms
+
+## [2026-10-02] SKILL-398 subtask 3 — local control-flow exceptions become results
+Areas: runtime-kotlin/runtime-{engine,application,cli,domain,ports,contracts,core}, runtime-infra/{launcher,skills,sqlite,contracts,workflow}
+- Custom throwables used only for local control flow were replaced by sealed results: runner already-running, launch-authorization denial, shared-preplan refresh refusal, missing unaddressed-findings ledger, spec-intent source read, parallel-review planning failures, lane-register parse, MCP registration outcome, skill-removal refusal. reusable
+- Callers branch on the value; absent-ledger CLI path throws one coded SkillBillRuntimeException (new governed-review failure code) with the old message.
+- Config model parsers validate then build; duplicate-key detection uses Jackson features and typed exceptions, not message matching; SQLite-busy detection walks causes by result code; recovery classification no longer reads Throwable.message.
+- custom-throwable-baseline.txt rows for every deleted class were removed; only two documented legacy wire strings still name old classes (profile-failure cause class, skill-removal refusal name).
+- Behaviour change: a delegated-verify planning failure now fails the code-review step with its message instead of escaping to the CLI edge.
+- Limits: authored without compile or test runs; some paths lack direct tests (carried-forward review settle, config parsers, assigned-child launch denial).
+Feature flag: N/A
+Acceptance criteria: implemented per spec; validate confirms
+
+## [2026-10-02] SKILL-398 subtask 1 — failure policy and throwable baseline
+Areas: runtime-kotlin/runtime-contracts (error/core, error/featuretask), runtime-domain decomposition model, runtime-core repoTest architecture guards, docs/code-principles.md, AGENTS.md, ARCHITECTURE.md
+- SkillBillRuntimeException now carries a RuntimeFailureCode; a secondary constructor keeps legacy callers on LegacyFailureCode.UNCLASSIFIED until later subtasks convert them. reusable
+- Four existing failure enums (phase-output code and kind, handoff-projection kind, decomposition-manifest validation code) implement RuntimeFailureCode.
+- New architecture scan lists every custom throwable in production main across modules (comments and literals stripped, nesting tracked, supertypes resolved transitively) and diffs it against custom-throwable-baseline.txt; the recorder regenerates the baseline. reusable
+- Parse-boundary guard messages now say "a result or a SkillBillRuntimeException code"; scan logic untouched.
+- Docs: Failure Contracts in code-principles.md rewritten as three tiers with an earns-its-place rule; AGENTS.md and ARCHITECTURE.md name the single failure type and code enums.
+- Limits: no exception class removed or converted yet (subtasks 2-6); authored without compile or test runs, so validate must sanity-check the baseline, the scan heuristics (simple-name fallback, Exception/Error suffix) and formatting.
+Feature flag: N/A
+Acceptance criteria: implemented per spec; build and validate confirm
+
 ## [2026-10-01] SKILL-397 subtask 3 — domain package graph repair
 Areas: runtime-kotlin/runtime-{domain,application,engine,cli,core,ports}, runtime-kotlin/runtime-infra/*, ARCHITECTURE.md
 - runtime-domain package graph is acyclic: the cycle baseline file is empty and stays empty; test packages and directories now mirror main packages.

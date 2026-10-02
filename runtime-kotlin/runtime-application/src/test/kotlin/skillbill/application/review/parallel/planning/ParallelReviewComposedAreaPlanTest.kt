@@ -8,6 +8,7 @@ import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.reviewHarness
 import skillbill.application.review.snapshot.reviewLayer
 import skillbill.application.review.snapshot.reviewPack
+import skillbill.application.review.snapshot.reviewed
 import skillbill.review.plan.ReviewLaunchPlanPolicy
 import skillbill.scaffold.model.PlatformManifest
 import kotlin.test.Test
@@ -95,7 +96,7 @@ class ParallelReviewComposedAreaPlanTest {
   ): ReviewRecorder {
     val recorder = ReviewRecorder()
     reviewHarness(ReviewHarnessConfig(manifests = packs, diff = diff), recorder)
-      .run(harnessRequest(reviewRunId = "composed-area-plan"))
+      .reviewed(harnessRequest(reviewRunId = "composed-area-plan"))
     return recorder
   }
 }

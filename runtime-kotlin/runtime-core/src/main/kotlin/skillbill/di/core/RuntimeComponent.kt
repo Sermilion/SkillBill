@@ -58,7 +58,6 @@ import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.work.IdeStatusService
-import skillbill.error.core.UnresolvedRemoteTransportPortError
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
@@ -126,7 +125,8 @@ abstract class RuntimeComponent(
 
   @Provides
   fun remoteTransportPort(ctx: TransportContext): RemoteTransportPort =
-    ctx.requester ?: throw UnresolvedRemoteTransportPortError()
+    ctx.requester
+      ?: error("RemoteTransportPort is unresolved; provide it from the composition root after bootstrap resolution.")
 
   @Provides
   fun workflowOpsContext(ctx: RuntimeContext): WorkflowOpsContext = ctx.workflowOps

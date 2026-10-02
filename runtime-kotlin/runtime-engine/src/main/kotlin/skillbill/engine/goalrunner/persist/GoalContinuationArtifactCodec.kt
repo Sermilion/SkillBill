@@ -1,11 +1,11 @@
 package skillbill.engine.goalrunner.persist
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -24,14 +24,10 @@ fun taskRuntimeRecordOrNull(
   workflowStates: WorkflowStateRepository,
   workflowId: String,
 ): WorkflowStateSnapshot? =
-  try {
+  if (workflowStates.getFeatureTaskWorkflow(workflowId)?.mode == FeatureTaskWorkflowMode.RUNTIME) {
     workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-  } catch (error: InvalidWorkflowStateSchemaError) {
-    if (error.message.orEmpty().contains("mode='")) {
-      null
-    } else {
-      throw error
-    }
+  } else {
+    null
   }
 
 fun featureTaskRecordForLegacyControls(

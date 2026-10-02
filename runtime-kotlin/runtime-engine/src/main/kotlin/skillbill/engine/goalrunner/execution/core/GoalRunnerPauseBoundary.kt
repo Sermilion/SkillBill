@@ -8,7 +8,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.status.stopped
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import kotlin.coroutines.cancellation.CancellationException
@@ -22,13 +22,13 @@ class GoalRunnerProgressReader(
       .fold(
         onSuccess = { it },
         onFailure = { error ->
-          when (error) {
-            is CancellationException -> throw error
-            is InterruptedException -> {
+          when {
+            error is CancellationException -> throw error
+            error is InterruptedException -> {
               Thread.currentThread().interrupt()
               throw error
             }
-            is ShellContentContractException -> throw error
+            error.isShellContentContractFailure() -> throw error
             else -> {
               val exception = error as? Exception ?: throw error
               GoalRunnerChildProgressRead.Failed(exception)

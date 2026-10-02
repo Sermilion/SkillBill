@@ -2,6 +2,7 @@ package skillbill.application.scaffold
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
 import skillbill.ports.skillremove.SkillRemoveFileSystem
 import skillbill.skillremove.SkillBillRollbackException
 import skillbill.skillremove.TargetValidation
@@ -10,7 +11,7 @@ import skillbill.skillremove.model.SkillRemovalRefusalReason
 import skillbill.skillremove.model.SkillRemovalRequest
 import skillbill.skillremove.model.SkillRemovalResult
 import skillbill.skillremove.model.SkillRemovalTarget
-import skillbill.skillremove.refuseSkillRemoval
+import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -18,9 +19,8 @@ import kotlin.coroutines.cancellation.CancellationException
 class SkillRemove(
   private val fileSystem: SkillRemoveFileSystem,
 ) {
-  fun previewRemoval(request: SkillRemovalRequest): SkillRemovalResult.Preview {
-    TargetValidation.validateOrRefuse(request)
-    enforceRefusalPolicy(request)
+  fun previewRemoval(request: SkillRemovalRequest): SkillRemovalResult {
+    refusalFor(request)?.let { return it }
     val cascadedSkillNames = computeCascadedSkillNames(request)
     val preview =
       SkillRemovalPreview(
@@ -36,8 +36,13 @@ class SkillRemove(
 
   fun executeRemoval(request: SkillRemovalRequest): SkillRemovalResult =
     tryExecute {
-      TargetValidation.validateOrRefuse(request)
-      enforceRefusalPolicy(request)
+      refusalFor(request)?.let { refused ->
+        return@tryExecute SkillRemovalResult.Failed(
+          exceptionName = REFUSAL_EXCEPTION_NAME,
+          exceptionMessage = refused.message,
+          rollbackComplete = true,
+        )
+      }
       val cascadedSkillNames = computeCascadedSkillNames(request)
       val preview =
         SkillRemovalPreview(
@@ -59,38 +64,47 @@ class SkillRemove(
       )
     }
 
-  private fun enforceRefusalPolicy(request: SkillRemovalRequest) {
+  private fun refusalFor(request: SkillRemovalRequest): SkillRemovalResult.Refused? =
+    TargetValidation.refusal(request) ?: enforceRefusalPolicy(request)
+
+  private fun enforceRefusalPolicy(request: SkillRemovalRequest): SkillRemovalResult.Refused? {
     val repoRoot = Paths.get(request.repoRootAbsolutePath).toAbsolutePath().normalize()
-    val target = request.target
-    val billSharedSkillRoot = repoRoot.resolve("skills/$BILL_SHARED_NAME").normalize()
-    when (target) {
-      is SkillRemovalTarget.HorizontalSkill -> {
-        val candidate = repoRoot.resolve("skills/${target.skillName}").normalize()
-        if (candidate.startsWith(billSharedSkillRoot)) {
-          refuseSkillRemoval(
-            SkillRemovalRefusalReason.BILL_SHARED_PROTECTED,
-            "Removal of '$BILL_SHARED_NAME' is not allowed — it is a built-in shared surface.",
-          )
-        }
-        val protectedShipped = target.skillName.startsWith(SkillRemovalTarget.HORIZONTAL_PRODUCT_PREFIX)
-        if (!target.allowShipped && protectedShipped) {
-          refuseSkillRemoval(
-            SkillRemovalRefusalReason.SHIPPED_REQUIRES_ALLOW_SHIPPED,
-            "Refusing to remove shipped surface '${target.skillName}' without --allow-shipped.",
-          )
-        }
-      }
-      is SkillRemovalTarget.PlatformPack -> {
+    return when (val target = request.target) {
+      is SkillRemovalTarget.HorizontalSkill -> horizontalSkillRefusal(repoRoot, target)
+      is SkillRemovalTarget.PlatformPack ->
         if (target.platform == BILL_SHARED_NAME) {
-          refuseSkillRemoval(
+          SkillRemovalResult.Refused(
             SkillRemovalRefusalReason.BILL_SHARED_PROTECTED,
             "Removal of platform pack '$BILL_SHARED_NAME' is not allowed — it is a built-in shared surface.",
           )
+        } else {
+          null
         }
-      }
       is SkillRemovalTarget.AddOn,
       is SkillRemovalTarget.ExternalAddOn,
-      -> Unit
+      -> null
+    }
+  }
+
+  private fun horizontalSkillRefusal(
+    repoRoot: Path,
+    target: SkillRemovalTarget.HorizontalSkill,
+  ): SkillRemovalResult.Refused? {
+    val billSharedSkillRoot = repoRoot.resolve("skills/$BILL_SHARED_NAME").normalize()
+    val candidate = repoRoot.resolve("skills/${target.skillName}").normalize()
+    val protectedShipped = target.skillName.startsWith(SkillRemovalTarget.HORIZONTAL_PRODUCT_PREFIX)
+    return when {
+      candidate.startsWith(billSharedSkillRoot) ->
+        SkillRemovalResult.Refused(
+          SkillRemovalRefusalReason.BILL_SHARED_PROTECTED,
+          "Removal of '$BILL_SHARED_NAME' is not allowed — it is a built-in shared surface.",
+        )
+      !target.allowShipped && protectedShipped ->
+        SkillRemovalResult.Refused(
+          SkillRemovalRefusalReason.SHIPPED_REQUIRES_ALLOW_SHIPPED,
+          "Refusing to remove shipped surface '${target.skillName}' without --allow-shipped.",
+        )
+      else -> null
     }
   }
 
@@ -133,12 +147,14 @@ class SkillRemove(
     rollbackComplete: Boolean,
   ): SkillRemovalResult.Failed =
     SkillRemovalResult.Failed(
-      exceptionName = error::class.simpleName.orEmpty().ifBlank { "Exception" },
+      exceptionName = error.failureCodeLabel() ?: error::class.simpleName.orEmpty().ifBlank { "Exception" },
       exceptionMessage = error.message.orEmpty(),
       rollbackComplete = rollbackComplete,
     )
 
   companion object {
     const val BILL_SHARED_NAME: String = ".bill-shared"
+
+    private const val REFUSAL_EXCEPTION_NAME: String = "SkillRemovalRefusedException"
   }
 }

@@ -1,5 +1,6 @@
 package skillbill.application.telemetry.sync
 
+import skillbill.error.core.failureCodeLabel
 import skillbill.ports.concurrency.InterruptSignalPort
 import skillbill.ports.telemetry.model.TELEMETRY_DELIVERY_ATTEMPT_BUDGET
 import skillbill.ports.telemetry.model.TelemetryOutboxClaimRequest
@@ -207,7 +208,7 @@ private fun attemptDelivery(
 }
 
 internal fun failureDetail(error: Exception): String =
-  error.message.orEmpty().ifBlank { error::class.simpleName.orEmpty() }
+  error.message.orEmpty().ifBlank { error.failureCodeLabel() ?: error::class.simpleName.orEmpty() }
 
 private fun rejectedMessage(detail: String): String {
   val suffix = detail.ifBlank { "the receiver returned no reason" }
