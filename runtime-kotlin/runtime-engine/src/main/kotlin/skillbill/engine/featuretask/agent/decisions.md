@@ -229,6 +229,8 @@ Decision: Resolve remaining finding identities through the saved acceptance crit
 
 Reason: SKILL-384 repeated capability gaps while changing descriptions and label forms. The previous parser counted standalone S3 labels as one text item and allowed equal counts with different IDs. A suffix completion check also accepted a refusal ending in the marker text. Require the marker as a complete final content line and retain the independent fresh audit after repair.
 
+Superseded by: Audit repair allows two non-shrinking rounds, 2026-10-01. Audit reports findings while the runtime owns repair admission, 2026-10-02.
+
 ## [2026-09-29] Unfinished audit repairs block and resume with saved work
 
 Context: SKILL-384 launched eight more repair agents after partial final responses. The incomplete-work branch ignored the step's single-session policy. It saved reports but the audit-repair prompt omitted them. A no-progress audit block also retained the older accepted report instead of the latest valid findings.
@@ -250,3 +252,15 @@ Decision: Validation keeps repairing in its original agent session until every r
 Reason: A formatting recovery cannot measure repair progress. Tests, static analysis, formatting and outdated fixtures are work for the validation agent. The existing phase record, process limits and explicit operator retry own termination and recovery.
 
 Revisit when: The agent launcher supports a governed continuation inside an existing live session.
+
+## [2026-10-02] Audit reports findings while the runtime owns repair admission
+
+Context: SKILL-398's audit blocked after AC-005 remained open following a partial repair. Its prompt required decreasing criterion counts even though the runtime already allowed two non-shrinking rounds. The agent's blocked output bypassed that runtime allowance.
+
+Decision: A finished audit inspection reports completed status and the current production gaps, including repeated or larger remaining lists. The runtime alone applies progress comparison and durable retry limits. The audit agent reports blocked status only when missing or unreadable criteria or an external dependency prevents inspection. Previous reports' retry decisions do not override the current runtime policy.
+
+A completed inspection with open criteria routes to repair. Review admission still requires the existing completion parser to establish that no production criteria remain. Audit stays read-only, repair completion requires its existing marker, and runtime failures retain their existing terminal handling.
+
+Reason: A criterion can require repairs at several consumers before its count decreases. Agent instructions must not replace the runtime's bounded repair policy with a second stopping rule. The existing ledger and progress owner continue to enforce the limit without new durable state.
+
+Evidence: Historical session blocks and local telemetry include SKILL-384's one-edge cap and growing criterion list, SKILL-389's satisfied rationale rejected as an open finding, SKILL-352's repeated remaining text, schema-invalid audit output, lost durable recovery authority, and checkpoint refusal before review. The change retains progress, parsing, recovery, checkpoint and process-failure enforcement. Existing audit regression tests exercise those boundaries, including captured SKILL-389 and SKILL-393 reports.

@@ -181,6 +181,17 @@ class FeatureTaskRuntimePhasePromptComposerTest {
   }
 
   @Test
+  fun `audit reports completed inspection while runtime owns repair admission`() {
+    val prompt = composePromptForPhase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
+
+    assertContains(prompt, "Report status completed when inspection finishes")
+    assertContains(prompt, "The runtime owns repair retries and progress limits")
+    assertContains(prompt, "A completed inspection with open criteria routes to audit_implement_fix")
+    assertFalse(prompt.contains("Another automatic repair requires fewer open criterion IDs"))
+    assertFalse(prompt.contains("equal or larger counts block for operator intervention"))
+  }
+
+  @Test
   fun `audit with gate-proof AC stays inspection-only`() {
     val criteria = listOf("detekt reports zero LongMethod issues under maxIssues 0")
     val prompt =

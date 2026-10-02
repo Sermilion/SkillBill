@@ -21,7 +21,13 @@ internal object AcceptanceAuditPromptSections {
       "files or repair gaps. Do not spawn subagents or invoke repair skills. Report remaining acceptance " +
       "criteria with criterion identifiers, concrete missing production behavior, and relevant production " +
       "paths. The runtime passes those findings to audit_implement_fix using the configured implementation " +
-      "model. After repairs, re-check the entire in-scope criterion list from the beginning, including previously " +
+      "model. Report status completed when inspection finishes, including when production criteria remain " +
+      "open. The runtime owns repair retries and progress limits. Do not block because finding IDs or counts " +
+      "repeat or grow, or because a previous report claimed another repair was prohibited. Report the current " +
+      "production gaps and let the runtime apply its durable repair policy. " +
+      "A completed inspection with open criteria routes to audit_implement_fix. Downstream review requires " +
+      "a report that no production criteria remain. " +
+      "After repairs, re-check the entire in-scope criterion list from the beginning, including previously " +
       "satisfied criteria, applying the same test exclusion. When all required production behavior is " +
       "implemented, including when only test requirements remain, report that no production criteria remain " +
       "with only the line \"${AcceptanceAuditRemainingCriteriaParser.COMPLETION_LINE}\" " +
@@ -49,7 +55,8 @@ internal object AcceptanceAuditPromptSections {
           "Original spec labels are accepted aliases. For capability " +
           "gaps, identify the actual consumer, helper or cast path, and reachable forbidden operation. A cast " +
           "inside an authorized review consumer alone does not prove a non-review access path. " +
-          "Another automatic repair requires fewer open criterion IDs than before repair; equal or larger " +
-          "counts block for operator intervention, even when the IDs or descriptions changed.",
+          "Report the current findings even when their criterion IDs, count or descriptions repeat. " +
+          "The runtime decides whether another repair is allowed. Reserve blocked status for a missing or " +
+          "unreadable criterion list or an external dependency that prevents inspection.",
     )
 }
