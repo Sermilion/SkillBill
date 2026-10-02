@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.slot.codereview.InlineReviewEnvelope
 import skillbill.engine.featuretask.slot.codereview.InlineReviewResultDecoder
 import skillbill.engine.featuretask.slot.codereview.delegatedReviewRequest
 import skillbill.engine.operation.core.OperationContext
+import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.core.OperationStepResult
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -65,8 +66,17 @@ internal class VerifyCodeReviewStep(
     val settled =
       when (val step = context.steps.runReadOnly(context, stepName, directive, priorValues, session)) {
         is OperationStepResult.Failed -> return VerifyCodeReviewOutcome.Failed(step.reason)
+        is OperationStepResult.Refused -> return VerifyCodeReviewOutcome.Refused(step.refusal)
         is OperationStepResult.Settled -> step
       }
+    return reviewOutcome(agentId, delegated, settled)
+  }
+
+  private fun reviewOutcome(
+    agentId: String,
+    delegated: ParallelCodeReviewResult?,
+    settled: OperationStepResult.Settled,
+  ): VerifyCodeReviewOutcome {
     val reviewed =
       delegated
         ?: settled.output?.let { output -> InlineReviewResultDecoder.decode(agentId, output) }
@@ -120,4 +130,6 @@ internal sealed interface VerifyCodeReviewOutcome {
   data class Reviewed(val review: VerifyCodeReview) : VerifyCodeReviewOutcome
 
   data class Failed(val reason: String) : VerifyCodeReviewOutcome
+
+  data class Refused(val refusal: OperationOutcome.Blocked) : VerifyCodeReviewOutcome
 }

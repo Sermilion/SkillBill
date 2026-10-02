@@ -2,6 +2,8 @@ package skillbill.engine.goalrunner.planning
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticSelection
+import skillbill.application.getOrElseUnlessCooperative
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.attempt.diagnosticPhaseId
@@ -70,7 +72,13 @@ class GoalPlanningLogService(
           .inspect(RejectedOutputDiagnosticSelector(workflowId = parentWorkflowId))
       }
     }
-      .getOrDefault(emptyList())
+      .getOrElseUnlessCooperative { RejectedOutputDiagnosticSelection.Selected(emptyList()) }
+      .let { selection ->
+        when (selection) {
+          is RejectedOutputDiagnosticSelection.Selected -> selection.diagnostics
+          is RejectedOutputDiagnosticSelection.InvalidRequest -> emptyList()
+        }
+      }
       .associateBy { record -> rejectionKey(record.phaseId, record.attempt) }
 
   private fun assembleAttempts(

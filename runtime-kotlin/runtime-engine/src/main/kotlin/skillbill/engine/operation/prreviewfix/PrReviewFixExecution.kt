@@ -34,6 +34,7 @@ internal class PrReviewFixExecution(
       val directive = threadDirective(pullRequest, thread, reviewThread)
       when (val step = context.steps.runEditing(editing, THREAD_STEP, directive, mapOf(ANALYSIS_STEP to matrix))) {
         is OperationStepResult.Failed -> return stopped("thread ${thread.ordinal} failed: ${step.reason}")
+        is OperationStepResult.Refused -> return step.refusal
         is OperationStepResult.Settled -> fixes += ThreadFix(thread, step.value.trim(), step.changedPaths)
       }
     }

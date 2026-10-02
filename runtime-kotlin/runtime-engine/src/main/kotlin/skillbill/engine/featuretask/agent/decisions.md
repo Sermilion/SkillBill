@@ -1,3 +1,11 @@
+## [2026-10-02] Return rejected required phase writes as values (SKILL-398)
+
+Context: A rejected required start or briefing write is an expected outcome, but it travelled as the exception RequiredPhaseWriteRejected through the recorders, the run-loop bindings and goal planning, and was caught at the attempt boundary. The failure model reserves exceptions for defects.
+Decision: The recorders return a sealed RequiredPhaseWrite, either Acknowledged or Rejected carrying write kind, workflow, phase and attempt. Each attempt-boundary site handles it with an exhaustive when and the shared blockRequiredWriteRejection handler. Launch preparation and goal planning carry a rejection as a value (LaunchRequiredWriteRejected, GoalPlanningPhaseProduction.RequiredWriteRejected) so nothing runs after it. Unchanged: no execution after a rejected write, write kind, phase and attempt attribution, terminal recording, secondary-failure diagnostics and cooperative cancellation propagation. Goal planning's attempt and shared-preplan production now also rethrow InterruptedException instead of converting it to a stop.
+Reason: A returned value makes the unhandled case a compile error and keeps exceptions for defects, with identical behavior at every boundary.
+Supersedes: The raise-and-catch mechanism of [2026-09-28] Acknowledge required phase writes before execution.
+Alternatives considered: Keeping the exception, rejected under the failure model; a Boolean result, rejected because it loses the attribution the terminal record needs.
+
 ## [2026-09-30] A phase's value content section overrides the generic prose value
 
 Context: The shared settlement directive asked every phase for one prose value carrying everything the next phase needs, while audit's value content section requires exactly `[]` when satisfied. SKILL-386 subtask 1's audit settled `[]` followed by a satisfied summary, and the single-session audit blocked as invalid output.
@@ -57,6 +65,7 @@ Decision: Require effective command identity, zero exit status, and checkpoint e
 Reason: Command execution and executed work are different facts. Zero work can be valid evidence; zero command records cannot prove success, and earlier success cannot hide failed verification.
 
 ## [2026-09-28] Acknowledge required phase writes before execution
+Mechanism superseded by [2026-10-02] Return rejected required phase writes as values (SKILL-398); the guarantees below stand.
 Context: Required start and briefing writes returned false while child launches or runtime side effects could continue.
 Decision: Raise RequiredPhaseWriteRejected at the persistence owner and handle it at the shared attempt boundary before execution. Preserve write kind, phase, and attempt through terminal recording and secondary failures. Keep cancellation propagation, ephemeral in-memory acknowledgements, and audit's in-memory briefing exception.
 Reason: Execution needs an acknowledged prerequisite record. Treating rejected persistence as child failure loses attribution; moving transaction or lease ownership is unnecessary to enforce the prerequisite.

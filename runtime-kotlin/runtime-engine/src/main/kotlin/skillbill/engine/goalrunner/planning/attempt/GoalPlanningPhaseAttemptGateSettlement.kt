@@ -15,6 +15,7 @@ internal fun DefaultGoalPlanningSweep.settlePlanningProduction(
       recordPlanningAttempt(this, GoalPlanningAttemptRecordArgs(scope, GoalProgressOutcome.FAILED))
       production
     }
+    is GoalPlanningPhaseProduction.RequiredWriteRejected -> production
     is GoalPlanningPhaseProduction.Captured -> {
       recordPlanningAttempt(this, GoalPlanningAttemptRecordArgs(scope, GoalProgressOutcome.SUCCEEDED))
       production

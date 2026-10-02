@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.planning.state
 
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.slot.state.PhaseFanOutUnits
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.goalrunner.execution.core.ProduceMissingPlansArgs
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -13,6 +14,7 @@ import skillbill.engine.goalrunner.planning.model.GoalPlanningLaunch
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.model.SharedPreplanSettlementArgs
+import skillbill.engine.goalrunner.planning.outcome.SubtaskPlanProduction
 import skillbill.engine.goalrunner.planning.outcome.descriptor
 import skillbill.engine.goalrunner.planning.outcome.governedSubSpecReady
 import skillbill.engine.goalrunner.planning.outcome.noSuchSubtaskReason
@@ -59,7 +61,10 @@ internal class GoalPlanningRunProgress(
 
   val outputSink: AgentRunOutputSink = scope.request.outputSink
 
-  fun settlePreplan(launch: GoalPlanningLaunch): PhaseOutcome =
+  fun settlePreplan(
+    launch: GoalPlanningLaunch,
+    onRequiredWriteRejected: (RequiredPhaseWrite.Rejected) -> PhaseOutcome,
+  ): PhaseOutcome =
     when (
       val settled =
         sweep.settleSharedPreplan(
@@ -79,12 +84,14 @@ internal class GoalPlanningRunProgress(
         ready = settled
         completed(GoalPlanningSweepConstants.PHASE_PREPLAN)
       }
+      is SharedPreplanSettlement.RequiredWriteRejected -> onRequiredWriteRejected(settled.rejection)
     }
 
   fun producePlan(
     unitId: Int,
     unitOutputSink: AgentRunOutputSink,
     launch: GoalPlanningLaunch,
+    onRequiredWriteRejected: (RequiredPhaseWrite.Rejected) -> PhaseOutcome,
   ): PhaseOutcome {
     val settled = requireNotNull(ready)
     val subtask =
@@ -102,8 +109,11 @@ internal class GoalPlanningRunProgress(
         startedPlanIds = startedPlanIds,
       )
     val descriptor = descriptors.single { it.subtaskId == unitId }
-    val stoppedOutcome = sweep.producePlan(args, subtask, descriptor, launch)
-    if (stoppedOutcome != null) return unitStopped(unitId, stoppedOutcome)
+    when (val production = sweep.producePlan(args, subtask, descriptor, launch)) {
+      is SubtaskPlanProduction.Stopped -> return unitStopped(unitId, production.outcome)
+      is SubtaskPlanProduction.RequiredWriteRejected -> return onRequiredWriteRejected(production.rejection)
+      SubtaskPlanProduction.Planned -> Unit
+    }
     sweep.checkpoint.findStoredSubtaskPlan(scope.identity, unitId, descriptor.governedSubSpecPath)
       ?.let { persistedSubSpecHashes[unitId] = it.subSpecHash }
     return completed(GoalPlanningSweepConstants.PHASE_PLAN)

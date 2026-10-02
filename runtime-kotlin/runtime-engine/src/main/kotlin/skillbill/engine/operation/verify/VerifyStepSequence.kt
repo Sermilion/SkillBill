@@ -71,7 +71,7 @@ internal class VerifyStepSequence(
     while (stepId != VerifyWorkflow.FINISH) {
       val done =
         when (val result = execute(run, stepId, prior)) {
-          is VerifyStepDone.Failed -> return fail(run, stepId, attempt, result.reason)
+          is VerifyStepDone.Stopped -> return stopped(run, stepId, attempt, result)
           is VerifyStepDone.Settled -> result
         }
       done.report?.let { report = it }
@@ -95,6 +95,17 @@ internal class VerifyStepSequence(
     }
     return finish(run, attempt, report)
   }
+
+  private fun stopped(
+    run: VerifyRun,
+    stepId: String,
+    attempt: Int,
+    result: VerifyStepDone.Stopped,
+  ): OperationOutcome =
+    when (result) {
+      is VerifyStepDone.Failed -> fail(run, stepId, attempt, result.reason)
+      is VerifyStepDone.Refused -> result.refusal
+    }
 
   fun diffProjection(
     context: OperationContext,
@@ -176,6 +187,7 @@ internal class VerifyStepSequence(
       val outcome = codeReview.run(run.context, run.mode, target.baseRevision, target.headRevision, prior)
     ) {
       is VerifyCodeReviewOutcome.Failed -> VerifyStepDone.Failed(outcome.reason)
+      is VerifyCodeReviewOutcome.Refused -> VerifyStepDone.Refused(outcome.refusal)
       is VerifyCodeReviewOutcome.Reviewed -> {
         val register = outcome.review.findings.map(::registerLine)
         telemetry.reviewImported(importText(run, register))
@@ -326,10 +338,11 @@ internal class VerifyStepSequence(
     stepName: String,
     directive: String,
     prior: Map<String, String>,
-    onFailure: (VerifyStepDone.Failed) -> Nothing,
+    onFailure: (VerifyStepDone.Stopped) -> Nothing,
   ): String =
     when (val step = run.context.steps.runReadOnly(run.context, stepName, directive, prior)) {
       is OperationStepResult.Failed -> onFailure(VerifyStepDone.Failed(step.reason))
+      is OperationStepResult.Refused -> onFailure(VerifyStepDone.Refused(step.refusal))
       is OperationStepResult.Settled -> step.value
     }
 
@@ -418,7 +431,12 @@ internal sealed interface VerifyStepDone {
     val report: String? = null,
   ) : VerifyStepDone
 
-  data class Failed(val reason: String) : VerifyStepDone
+  sealed interface Stopped : VerifyStepDone
+
+  data class Failed(val reason: String) : Stopped
+
+  /** An operation anchor was unreadable; the run reports the refusal without recording a failed workflow step. */
+  data class Refused(val refusal: OperationOutcome.Blocked) : Stopped
 }
 
 internal sealed interface VerifyDiffProjection {

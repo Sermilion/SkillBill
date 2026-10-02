@@ -8,8 +8,8 @@ import skillbill.engine.featuretask.persist.deliveredProjectionsFrom
 import skillbill.engine.featuretask.persist.phaseBriefingsFrom
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.toMeasurementFailureClassification
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
@@ -36,10 +36,10 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
     attempt: Int,
-  ) = database.transaction { unitOfWork ->
+  ): RequiredPhaseWrite = database.transaction { unitOfWork ->
     val record =
       unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-        ?: throw RequiredPhaseWriteRejected(
+        ?: return@transaction RequiredPhaseWrite.Rejected(
           writeKind = RequiredPhaseWriteKind.BRIEFING,
           workflowId = workflowId,
           phaseId = briefing.phaseId,
@@ -84,6 +84,7 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
         ),
       )
     workflowPersistence.persistArtifactsPatch(unitOfWork.workflowStates, record, patch)
+    RequiredPhaseWrite.Acknowledged
   }
 
   fun recordProjectionRejection(

@@ -17,7 +17,7 @@ import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.state.PhaseReviewExecutionContext
 import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.error.shellcontent.InvalidReviewContextSchemaError
 import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
@@ -45,12 +45,8 @@ internal class CodeReviewStep(
     prompt: PhaseStepPromptSource,
   ): PhaseOutcome {
     val iteration = state.nextStepIteration()
-    return try {
-      state.startReviewStep(requestedRun, iteration)
-        ?: runAfterStart(requestedRun, context, state, prompt)
-    } catch (rejection: RequiredPhaseWriteRejected) {
-      state.blockRequiredReviewWrite(rejection)
-    }
+    return state.startReviewStep(requestedRun, iteration)
+      ?: runAfterStart(requestedRun, context, state, prompt)
   }
 
   private fun runAfterStart(
@@ -82,11 +78,15 @@ internal class CodeReviewStep(
           ?.reviewRunId
           ?.takeIf { passNumber == 1 }
         ?: InlineReviewEnvelope.mintReviewRunId(context.clock)
-    state.startReview(iteration, reviewRunId)
+    (state.startReview(iteration, reviewRunId) as? RequiredPhaseWrite.Rejected)?.let {
+      return state.blockRequiredReviewWrite(it)
+    }
     val fingerprint =
       repositoryFingerprint(run, context)
         ?: return PhaseOutcome.blocked("Runtime-owned review could not resolve a repository checkpoint fingerprint.")
-    state.prepareReviewBriefing(iteration, prompt, input)
+    (state.prepareReviewBriefing(iteration, prompt, input) as? RequiredPhaseWrite.Rejected)?.let {
+      return state.blockRequiredReviewWrite(it)
+    }
     state.reviewLaunched(iteration)
     val pass =
       ReviewPassRun(
@@ -381,7 +381,7 @@ internal fun failedLaneReason(result: ParallelCodeReviewResult): String? {
 private fun launchFailure(error: Throwable): ReviewPassLaunch.Failed? {
   val message = error.message.orEmpty()
   return when (error) {
-    is CancellationException, is RequiredPhaseWriteRejected -> null
+    is CancellationException -> null
     is DiffResolutionException ->
       ReviewPassLaunch.Failed("Runtime-owned review could not resolve the child-owned diff: $message")
     is UsageValidationException, is StackDetectionException ->

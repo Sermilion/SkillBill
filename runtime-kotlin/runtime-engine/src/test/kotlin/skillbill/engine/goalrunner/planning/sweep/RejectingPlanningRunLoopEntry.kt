@@ -13,8 +13,8 @@ import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunState
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.engine.goalrunner.planning.state.GoalPlanningPhaseRunState
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
@@ -76,11 +76,11 @@ internal class RejectingPlanningRunLoopEntry(
 
   private fun rejecting(delegate: PhaseRunRecords): PhaseRunRecords =
     object : PhaseRunRecords by delegate {
-      override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest) {
+      override fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite {
         if (request.phaseId == phase && kind == RequiredPhaseWriteKind.START) {
-          throw RequiredPhaseWriteRejected(kind, request.workflowId, phase, request.attemptCount)
+          return RequiredPhaseWrite.Rejected(kind, request.workflowId, phase, request.attemptCount)
         }
-        delegate.recordRequiredPhaseStart(request)
+        return delegate.recordRequiredPhaseStart(request)
       }
 
       override fun recordPhaseBriefing(
@@ -88,11 +88,11 @@ internal class RejectingPlanningRunLoopEntry(
         briefing: FeatureTaskRuntimePhaseLaunchBriefing,
         sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
         attempt: Int,
-      ) {
+      ): RequiredPhaseWrite {
         if (briefing.phaseId == phase && kind == RequiredPhaseWriteKind.BRIEFING) {
-          throw RequiredPhaseWriteRejected(kind, workflowId, phase, attempt)
+          return RequiredPhaseWrite.Rejected(kind, workflowId, phase, attempt)
         }
-        delegate.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement, attempt)
+        return delegate.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement, attempt)
       }
 
       override fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean {

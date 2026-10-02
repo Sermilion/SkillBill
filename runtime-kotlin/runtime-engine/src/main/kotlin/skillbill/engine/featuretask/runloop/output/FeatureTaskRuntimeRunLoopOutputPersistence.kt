@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.runloop.core.PhaseStateRequestAttachments
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 
 object FeatureTaskRuntimeRunLoopOutputPersistence {
   internal fun schemaInvalidAttempt(
@@ -26,7 +27,7 @@ object FeatureTaskRuntimeRunLoopOutputPersistence {
     context: PhaseOutputSettlementContext,
     goalContinuationRecorder: PhaseRunGoal,
     args: PersistPhaseArgs,
-  ) {
+  ): RequiredPhaseWrite {
     val coupling = context.settlementCoupling()
     val write = args.write
     val phaseState =
@@ -44,6 +45,6 @@ object FeatureTaskRuntimeRunLoopOutputPersistence {
             ),
         ),
       )
-    coupling.transitions.acknowledgeRequiredPhaseStart(context.recorder, phaseState)
+    return coupling.transitions.acknowledgeRequiredPhaseStart(context.recorder, phaseState)
   }
 }

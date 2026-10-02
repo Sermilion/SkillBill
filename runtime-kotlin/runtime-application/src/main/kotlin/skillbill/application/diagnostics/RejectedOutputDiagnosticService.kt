@@ -1,14 +1,22 @@
 package skillbill.application.diagnostics
 
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticConfig
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticDeletion
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRawRead
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRecording
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
-import skillbill.error.core.RejectedOutputDiagnosticError
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticSelection
+import skillbill.error.core.RejectedOutputDiagnosticFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rejectedOutputDiagnosticCorruptMessage
 import skillbill.ports.diagnostics.ProducerOutputEvidenceValidator
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticPermissions
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRead
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRecord
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import skillbill.ports.diagnostics.model.RejectedOutputLifecycle
@@ -26,14 +34,26 @@ class RejectedOutputDiagnosticService(
   private val clock: Clock,
   private val producerEvidenceValidator: ProducerOutputEvidenceValidator = { },
 ) {
-  fun record(request: RejectedOutputDiagnosticRequest): RejectedOutputDiagnostic {
-    validate(request)
-    val identity = stableIdentity(request.workflowId, request.phaseId, request.attempt, request.repairTurn)
-    existing(identity)?.let { record ->
-      if (!record.matches(request)) throw RejectedOutputDiagnosticError.Conflict(identity)
-      metadataValidator.validate(record.metadata)
-      return record.metadata
+  fun record(request: RejectedOutputDiagnosticRequest): RejectedOutputDiagnosticRecording {
+    requestValidationIssue(request)?.let { reason ->
+      return RejectedOutputDiagnosticRecording.InvalidRequest(reason)
     }
+    val identity = stableIdentity(request.workflowId, request.phaseId, request.attempt, request.repairTurn)
+    val existing = existing(identity)
+    return if (existing == null) {
+      recordNew(request, identity)
+    } else if (existing.matches(request)) {
+      metadataValidator.validate(existing.metadata)
+      RejectedOutputDiagnosticRecording.Recorded(existing.metadata)
+    } else {
+      RejectedOutputDiagnosticRecording.Conflict(identity)
+    }
+  }
+
+  private fun recordNew(
+    request: RejectedOutputDiagnosticRequest,
+    identity: String,
+  ): RejectedOutputDiagnosticRecording {
     cleanup()
     val oversized = request.truncated || request.observedByteSize > config.maximumPayloadBytes
     val metadata =
@@ -55,9 +75,16 @@ class RejectedOutputDiagnosticService(
       )
     metadataValidator.validate(metadata)
     applyRestrictivePermissions()
-    return repository.insert(
-      RejectedOutputDiagnosticRecord(metadata, request.rawResponse.takeUnless { oversized }),
-    ).metadata
+    return when (
+      val inserted =
+        repository.insert(
+          RejectedOutputDiagnosticRecord(metadata, request.rawResponse.takeUnless { oversized }),
+        )
+    ) {
+      is RejectedOutputDiagnosticInsert.Inserted ->
+        RejectedOutputDiagnosticRecording.Recorded(inserted.record.metadata)
+      is RejectedOutputDiagnosticInsert.Conflict -> RejectedOutputDiagnosticRecording.Conflict(inserted.identity)
+    }
   }
 
   fun retainProducerOutput(evidence: ProducerOutputEvidence) {
@@ -70,8 +97,6 @@ class RejectedOutputDiagnosticService(
   private fun applyRestrictivePermissions() {
     try {
       permissions.applyRestrictivePermissions()
-    } catch (error: RejectedOutputDiagnosticError) {
-      throw error
     } catch (error: IOException) {
       permissionFailure(error)
     } catch (error: SecurityException) {
@@ -81,15 +106,31 @@ class RejectedOutputDiagnosticService(
     }
   }
 
-  fun inspect(selector: RejectedOutputDiagnosticSelector): List<RejectedOutputDiagnostic> =
-    repository.select(validate(selector).also { cleanup() }).onEach(metadataValidator::validate)
-
-  fun readRaw(identity: String): ByteArray {
+  fun inspect(selector: RejectedOutputDiagnosticSelector): RejectedOutputDiagnosticSelection {
+    selectorValidationIssue(selector)?.let { reason ->
+      return RejectedOutputDiagnosticSelection.InvalidRequest(reason)
+    }
     cleanup()
-    val record = repository.read(identity)
+    return RejectedOutputDiagnosticSelection.Selected(
+      repository.select(selector).onEach(metadataValidator::validate),
+    )
+  }
+
+  fun readRaw(identity: String): RejectedOutputDiagnosticRawRead {
+    cleanup()
+    val record =
+      when (val read = repository.read(identity)) {
+        is RejectedOutputDiagnosticRead.Absent -> return RejectedOutputDiagnosticRawRead.Absent(read.identity)
+        is RejectedOutputDiagnosticRead.Found -> read.record
+        is RejectedOutputDiagnosticRead.Expired -> read.record
+        is RejectedOutputDiagnosticRead.Oversized -> read.record
+      }
     metadataValidator.validate(record.metadata)
-    ensureReadable(record.metadata)
-    return verifiedPayload(record)
+    return when (record.metadata.lifecycle) {
+      RejectedOutputLifecycle.EXPIRED -> RejectedOutputDiagnosticRawRead.Expired(record.metadata.identity)
+      RejectedOutputLifecycle.OVERSIZED -> RejectedOutputDiagnosticRawRead.Oversized(record.metadata.identity)
+      RejectedOutputLifecycle.STORED -> RejectedOutputDiagnosticRawRead.Payload(verifiedPayload(record))
+    }
   }
 
   fun cleanup(now: Instant = clock.instant()): Int {
@@ -97,32 +138,25 @@ class RejectedOutputDiagnosticService(
     return repository.markExpired(cutoff) + repository.deleteProducerOutputsBefore(cutoff)
   }
 
-  fun delete(selector: RejectedOutputDiagnosticSelector): Int = repository.delete(validate(selector))
-
-  private fun validate(request: RejectedOutputDiagnosticRequest) {
-    requestValidationIssue(request)?.let { reason ->
-      throw RejectedOutputDiagnosticError.InvalidRequest(reason)
-    }
-  }
+  fun delete(selector: RejectedOutputDiagnosticSelector): RejectedOutputDiagnosticDeletion =
+    selectorValidationIssue(selector)?.let { reason -> RejectedOutputDiagnosticDeletion.InvalidRequest(reason) }
+      ?: RejectedOutputDiagnosticDeletion.Deleted(repository.delete(selector))
 
   private fun existing(identity: String): RejectedOutputDiagnosticRecord? =
-    try {
-      repository.read(identity)
-    } catch (_: RejectedOutputDiagnosticError.Absent) {
-      null
+    when (val read = repository.read(identity)) {
+      is RejectedOutputDiagnosticRead.Found -> read.record
+      is RejectedOutputDiagnosticRead.Expired -> read.record
+      is RejectedOutputDiagnosticRead.Oversized -> read.record
+      is RejectedOutputDiagnosticRead.Absent -> null
     }
 
-  private fun validate(selector: RejectedOutputDiagnosticSelector): RejectedOutputDiagnosticSelector {
-    val issue =
-      when {
-        selector.workflowId.isBlank() -> "workflowId must be non-blank"
-        selector.phaseId?.isBlank() == true -> "phaseId must be non-blank when present"
-        selector.attempt?.let { it <= 0 } == true -> "attempt must be positive when present"
-        else -> null
-      }
-    if (issue != null) throw RejectedOutputDiagnosticError.InvalidRequest(issue)
-    return selector
-  }
+  private fun selectorValidationIssue(selector: RejectedOutputDiagnosticSelector): String? =
+    when {
+      selector.workflowId.isBlank() -> "workflowId must be non-blank"
+      selector.phaseId?.isBlank() == true -> "phaseId must be non-blank when present"
+      selector.attempt?.let { it <= 0 } == true -> "attempt must be positive when present"
+      else -> null
+    }
 
   companion object {
     fun stableIdentity(
@@ -142,14 +176,20 @@ class RejectedOutputDiagnosticService(
 }
 
 private fun verifiedPayload(record: RejectedOutputDiagnosticRecord): ByteArray {
-  val payload = record.payload ?: throw RejectedOutputDiagnosticError.Corrupt(record.metadata.identity)
+  val payload = record.payload ?: corruptDiagnostic(record.metadata.identity)
   if (payload.size.toLong() != record.metadata.byteSize ||
     RejectedOutputDiagnosticService.sha256(payload) != record.metadata.sha256
   ) {
-    throw RejectedOutputDiagnosticError.Corrupt(record.metadata.identity)
+    corruptDiagnostic(record.metadata.identity)
   }
   return payload
 }
+
+private fun corruptDiagnostic(identity: String): Nothing =
+  throw SkillBillRuntimeException(
+    RejectedOutputDiagnosticFailureCode.CORRUPT,
+    rejectedOutputDiagnosticCorruptMessage(identity),
+  )
 
 private fun requestValidationIssue(request: RejectedOutputDiagnosticRequest): String? {
   val required =
@@ -181,16 +221,12 @@ private fun requestValidationIssue(request: RejectedOutputDiagnosticRequest): St
   }
 }
 
-private fun ensureReadable(metadata: RejectedOutputDiagnostic) {
-  when (metadata.lifecycle) {
-    RejectedOutputLifecycle.EXPIRED -> throw RejectedOutputDiagnosticError.Expired(metadata.identity)
-    RejectedOutputLifecycle.OVERSIZED -> throw RejectedOutputDiagnosticError.Oversized(metadata.identity)
-    RejectedOutputLifecycle.STORED -> Unit
-  }
-}
-
 private fun permissionFailure(error: Throwable): Nothing =
-  throw RejectedOutputDiagnosticError.Permission("apply", error)
+  throw SkillBillRuntimeException(
+    RejectedOutputDiagnosticFailureCode.PERMISSION,
+    "Rejected output diagnostic permission operation 'apply' failed.",
+    error,
+  )
 
 private fun RejectedOutputDiagnosticRecord.matches(request: RejectedOutputDiagnosticRequest): Boolean =
   metadata.workflowId == request.workflowId &&

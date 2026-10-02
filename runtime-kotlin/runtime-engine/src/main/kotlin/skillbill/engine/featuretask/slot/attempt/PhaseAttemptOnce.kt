@@ -12,6 +12,7 @@ import skillbill.engine.featuretask.runloop.core.CapturedPhaseOutput
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopLaunch
 import skillbill.engine.featuretask.runloop.core.LaunchMeasurementContextReady
 import skillbill.engine.featuretask.runloop.core.LaunchPreparationRejected
+import skillbill.engine.featuretask.runloop.core.LaunchRequiredWriteRejected
 import skillbill.engine.featuretask.runloop.core.PauseAndPersistInPhaseArgs
 import skillbill.engine.featuretask.runloop.core.PersistPhaseArgs
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
@@ -35,7 +36,7 @@ import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.attempt.PhaseLaunchPreparation.prepareLaunchForCapture
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.stepFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -46,7 +47,7 @@ object PhaseAttemptOnce {
     context: PhaseAttemptLaunchCollaborationScope,
     run: PhaseRun,
     iteration: Int,
-  ) {
+  ): RequiredPhaseWrite =
     FeatureTaskRuntimeRunLoopOutputPersistence.persistPhase(
       context,
       context.goalContinuationRecorder,
@@ -62,33 +63,39 @@ object PhaseAttemptOnce {
         launched = FeatureTaskRuntimeRunLoopLaunch.launchedModelDirective(run),
       ),
     )
-  }
 
   internal fun attemptOnce(
     context: PhaseAttemptLaunchCollaborationScope,
     args: RecordRejectionAttemptArgs,
   ): AttemptResult {
     args.call.acceptedExecution.requireAcceptedAttempt(args.context.run, args.call)
-    return with(context) {
-      val run = args.context.run
-      val iteration = args.context.iteration
-      val priorCorrection = args.priorCorrection
-      try {
-        persistRequiredStart(this, run, iteration)
-        val launch = PhaseAttemptOnce.launchAndCapture(this, run, iteration, priorCorrection, args.call)
-        PhaseAttemptOnce.settleRecordRejectionLaunchOutcome(this, args, launch)
-      } catch (rejection: RequiredPhaseWriteRejected) {
-        AttemptResult.settled(blockRequiredWriteRejection(this, run, rejection))
-      }
+    val run = args.context.run
+    return when (val start = persistRequiredStart(context, run, args.context.iteration)) {
+      is RequiredPhaseWrite.Acknowledged -> attemptAfterRequiredStart(context, args)
+      is RequiredPhaseWrite.Rejected -> AttemptResult.settled(blockRequiredWriteRejection(context, run, start))
+    }
+  }
+
+  private fun attemptAfterRequiredStart(
+    context: PhaseAttemptLaunchCollaborationScope,
+    args: RecordRejectionAttemptArgs,
+  ): AttemptResult {
+    val run = args.context.run
+    val launch = launchAndCapture(context, run, args.context.iteration, args.priorCorrection, args.call)
+    val rejection = launch.requiredWriteRejection
+    return if (rejection == null) {
+      settleRecordRejectionLaunchOutcome(context, args, launch)
+    } else {
+      AttemptResult.settled(blockRequiredWriteRejection(context, run, rejection))
     }
   }
 
   internal fun blockRequiredWriteRejection(
     host: PhaseAttemptRunHost,
     run: PhaseRun,
-    rejection: RequiredPhaseWriteRejected,
+    rejection: RequiredPhaseWrite.Rejected,
   ): PhaseOutcome {
-    val reason = rejection.message.orEmpty()
+    val reason = rejection.message
     val scope = PhaseAttemptLaunchCollaborationScope(host)
     val coupling = scope.settlementCoupling()
     return runCatching {
@@ -106,7 +113,6 @@ object PhaseAttemptOnce {
         ),
       )
     }.getOrElse { secondary ->
-      rejection.addSuppressed(secondary)
       when (secondary) {
         is CancellationException -> throw secondary
         is InterruptedException -> throw secondary
@@ -124,7 +130,7 @@ object PhaseAttemptOnce {
   internal fun blockRequiredWriteRejection(
     context: PhaseAttemptLaunchCollaborationScope,
     run: PhaseRun,
-    rejection: RequiredPhaseWriteRejected,
+    rejection: RequiredPhaseWrite.Rejected,
   ): PhaseOutcome = blockRequiredWriteRejection(context.attemptRunHost(), run, rejection)
 
   internal fun launchAndCapture(
@@ -171,6 +177,10 @@ object PhaseAttemptOnce {
             }
             is LaunchPreparationRejected -> {
               rejected = preparation.result
+              null
+            }
+            is LaunchRequiredWriteRejected -> {
+              rejected = LaunchResult.RequiredWriteRejected(preparation.rejection)
               null
             }
             is LaunchMeasurementContextReady -> error("Unexpected launch preparation result.")

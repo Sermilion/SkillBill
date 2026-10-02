@@ -13,7 +13,6 @@ import skillbill.cli.kernel.agent.requireInvokingAgentId
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
-import skillbill.cli.kernel.cli.usageError
 import skillbill.cli.model.CliRunInputs
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationExecutor
@@ -22,7 +21,6 @@ import skillbill.engine.operation.core.OperationOutputFormat
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationResult
-import skillbill.error.operation.OperationUsageError
 
 @Inject
 class OperationCommand(
@@ -73,13 +71,7 @@ class OperationCommand(
         arguments = invocation.arguments,
         instructions = invocation.instructions,
       )
-    val result =
-      try {
-        executor.execute(request)
-      } catch (error: OperationUsageError) {
-        usageError(error)
-      }
-    writeOperationResult(state, request.operationId, result)
+    writeOperationResult(state, request.operationId, executor.execute(request))
   }
 }
 
@@ -180,6 +172,7 @@ internal fun writeOperationResult(
     when (val outcome = result.outcome) {
       is OperationOutcome.Completed -> listOf(outcome.text.trimEnd(), invocationLine) to 0
       is OperationOutcome.Blocked -> listOf("Operation '$operationId' blocked: ${outcome.reason}", invocationLine) to 1
+      is OperationOutcome.Usage -> throw UsageError(outcome.reason)
       is OperationOutcome.Failed -> listOf("Operation '$operationId' failed: ${outcome.reason}", invocationLine) to 1
       is OperationOutcome.AwaitingConfirmation ->
         listOf(

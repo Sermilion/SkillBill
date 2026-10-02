@@ -5,6 +5,7 @@ import skillbill.engine.featuretask.runloop.core.CapturedPhaseOutput
 import skillbill.engine.featuretask.runloop.core.RecordRejection
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeChildOutput
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
 internal sealed interface LaunchResult {
@@ -36,6 +37,12 @@ internal sealed interface LaunchResult {
     override val fileManifest: FeatureTaskRuntimePhaseFileManifest?,
   ) : LaunchResult
 
+  data class RequiredWriteRejected(
+    val rejection: RequiredPhaseWrite.Rejected,
+  ) : LaunchResult {
+    override val fileManifest: FeatureTaskRuntimePhaseFileManifest? = null
+  }
+
   val capturedStdout: String? get() = (this as? Captured)?.stdout
   val capturedStdoutBytes: ByteArray? get() = (this as? Captured)?.stdoutBytes
   val capturedStdoutTruncated: Boolean get() = (this as? Captured)?.stdoutTruncated == true
@@ -45,6 +52,7 @@ internal sealed interface LaunchResult {
   val infraFailureChildOutput: FeatureTaskRuntimeChildOutput? get() = (this as? InfraFailure)?.childOutput
   val providerLimitReason: String? get() = (this as? ProviderLimited)?.reason
   val recordRejection: RecordRejection? get() = (this as? RecordRejected)?.rejection
+  val requiredWriteRejection: RequiredPhaseWrite.Rejected? get() = (this as? RequiredWriteRejected)?.rejection
   val capturedSettledEnvelope: PhaseSettledEnvelopeRead
     get() = (this as? Captured)?.settledEnvelope ?: PhaseSettledEnvelopeRead.None
 

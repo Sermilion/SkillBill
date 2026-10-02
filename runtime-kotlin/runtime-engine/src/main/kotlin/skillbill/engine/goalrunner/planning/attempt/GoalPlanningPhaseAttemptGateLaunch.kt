@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.PhaseStepFacts
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.state.PhasePlanningBriefingBinding
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.goalrunner.planning.context.GoalPlanningContextPromptFormatter
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProduceAttemptArgs
@@ -55,7 +56,11 @@ internal fun DefaultGoalPlanningSweep.launchPlanningAttempt(
   return requireNotNull(output.launchOutcome) { output.launchFailure?.reason.orEmpty() }
 }
 
-internal fun DefaultGoalPlanningSweep.composePlanningPrompt(args: GoalPlanningProduceAttemptArgs): String {
+/** Composes the planning prompt; a rejected required briefing write is handed to [onRejected], which must not return. */
+internal inline fun DefaultGoalPlanningSweep.composePlanningPrompt(
+  args: GoalPlanningProduceAttemptArgs,
+  onRejected: (RequiredPhaseWrite.Rejected) -> Nothing,
+): String {
   val phase = args.phase
   val handoff =
     FeatureTaskRuntimeHandoffContract.assembleHandoff(
@@ -75,7 +80,8 @@ internal fun DefaultGoalPlanningSweep.composePlanningPrompt(args: GoalPlanningPr
       agentAddonSelection = phase.request.agentAddonSelection,
       scope = FeatureTaskRuntimeBriefingScope(invariantFields = phase.launch.invariantFields),
     )
-  (phase.launch.state as PhasePlanningBriefingBinding).recordPlanningBriefing(briefing, args.attempt)
+  val write = (phase.launch.state as PhasePlanningBriefingBinding).recordPlanningBriefing(briefing, args.attempt)
+  if (write is RequiredPhaseWrite.Rejected) onRejected(write)
   val basePrompt =
     FeatureTaskRuntimePhasePromptComposer.compose(
       FeatureTaskRuntimePhasePromptComposeInputs(

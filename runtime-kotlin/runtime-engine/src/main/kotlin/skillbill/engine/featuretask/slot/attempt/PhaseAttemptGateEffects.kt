@@ -17,7 +17,7 @@ import skillbill.engine.featuretask.runloop.settlement.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -63,10 +63,9 @@ internal fun PhaseQualityGateCycleContext.persistGateRequiredRunning(
           ),
       ),
     )
-  try {
-    coupledRunTransitions.acknowledgeRequiredPhaseStart(recorder, runningPhaseState)
-  } catch (rejection: RequiredPhaseWriteRejected) {
-    return blockGateRequiredWriteRejection(run, rejection)
+  when (val write = coupledRunTransitions.acknowledgeRequiredPhaseStart(recorder, runningPhaseState)) {
+    is RequiredPhaseWrite.Acknowledged -> Unit
+    is RequiredPhaseWrite.Rejected -> return blockGateRequiredWriteRejection(run, write)
   }
   observability.started(
     run.phaseId,
@@ -244,7 +243,7 @@ internal fun PhaseQualityGateCycleContext.runGateAttemptOnce(
 
 internal fun PhaseQualityGateCycleContext.blockGateRequiredWriteRejection(
   run: PhaseRun,
-  rejection: RequiredPhaseWriteRejected,
+  rejection: RequiredPhaseWrite.Rejected,
 ): PhaseOutcome =
   when (this) {
     is PhaseQualityGateCycleScope ->

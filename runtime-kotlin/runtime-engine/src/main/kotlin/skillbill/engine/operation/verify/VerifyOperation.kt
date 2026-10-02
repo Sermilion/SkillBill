@@ -9,22 +9,20 @@ import skillbill.application.workflow.model.WorkflowOpenResult
 import skillbill.application.workflow.model.WorkflowServiceOpenArgs
 import skillbill.application.workflow.service.WorkflowService
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.operation.core.ClosedVerifyWorkflowError
-import skillbill.engine.operation.core.ForeignVerifyWorkflowError
-import skillbill.engine.operation.core.InvalidOperationArgumentError
-import skillbill.engine.operation.core.MissingOperationIntakeError
-import skillbill.engine.operation.core.OperationAnchorUnreadableError
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
+import skillbill.engine.operation.core.OperationRefusal
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepResult
-import skillbill.engine.operation.core.PullRequestNotFoundError
 import skillbill.engine.operation.core.SelfConfirmingOperation
-import skillbill.engine.operation.core.UnknownVerifyWorkflowError
-import skillbill.engine.operation.core.UnresolvableVerifyTargetError
-import skillbill.engine.operation.core.VerifySpecRehydrateNeededError
-import skillbill.engine.operation.core.VerifyTargetNotCheckedOutError
-import skillbill.engine.operation.core.requireGitValue
+import skillbill.engine.operation.core.anchorUnreadable
+import skillbill.engine.operation.core.closedVerifyWorkflow
+import skillbill.engine.operation.core.gitValueOr
+import skillbill.engine.operation.core.invalidArgument
+import skillbill.engine.operation.core.missingIntake
+import skillbill.engine.operation.core.pullRequestNotFound
+import skillbill.engine.operation.core.unknownVerifyWorkflow
+import skillbill.engine.operation.core.unresolvableVerifyTarget
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
@@ -55,28 +53,31 @@ class VerifyOperation(
   private val sequence =
     VerifyStepSequence(store, gitOperations, telemetry, VerifyCodeReviewStep(delegatedReviewer), budget, clock)
 
-  override fun pre(context: OperationContext) {
+  override fun pre(context: OperationContext): OperationRefusal? {
     val arguments = context.arguments
     arguments.mode?.let { mode ->
-      VerifyReviewMode.fromWire(mode) ?: throw InvalidOperationArgumentError("mode", mode, "inline|delegated")
+      if (VerifyReviewMode.fromWire(mode) == null) return invalidArgument("mode", mode, "inline|delegated")
     }
     if (!context.confirming && arguments.spec.isNullOrBlank() && context.instructions.isNullOrBlank()) {
-      throw MissingOperationIntakeError(id, INTAKE)
+      return missingIntake(id, INTAKE)
     }
+    return null
   }
 
   override fun run(context: OperationContext): OperationRunResult {
-    val baseline = worktreeBaseline(context)
+    val baseline = worktreeBaseline(context) { return OperationRunResult.Finished(it) }
     val outcome = context.arguments.confirm?.let { token -> confirm(context, token.trim()) } ?: propose(context)
-    val changed = worktreeBaseline(context) != baseline
+    if (outcome is OperationRefusal) return OperationRunResult.Finished(outcome)
+    val changed = worktreeBaseline(context) { return OperationRunResult.Finished(it) } != baseline
     return OperationRunResult.Finished(
       if (changed) OperationOutcome.Failed(WORKTREE_CHANGED) else outcome,
     )
   }
 
   private fun propose(context: OperationContext): OperationOutcome {
-    val intake = intakeOf(context)
-    val target = resolveTarget(context, context.arguments.target?.trim()?.takeIf(String::isNotEmpty) ?: DEFAULT_TARGET)
+    val intake = intakeOf(context) { return it }
+    val requestedTarget = context.arguments.target?.trim()?.takeIf(String::isNotEmpty) ?: DEFAULT_TARGET
+    val target = resolveTarget(context, requestedTarget) { return it }
     val mode = VerifyReviewMode.fromWire(context.arguments.mode) ?: VerifyReviewMode.INLINE
     val openArgs = WorkflowServiceOpenArgs(WorkflowFamilyKind.VERIFY, currentStepId = VerifyWorkflow.EXTRACT_CRITERIA)
     val workflowId =
@@ -119,6 +120,7 @@ class VerifyOperation(
     val extracted =
       when (val step = context.steps.runReadOnly(context, VerifyPromptSections.EXTRACT_CRITERIA_STEP, directive)) {
         is OperationStepResult.Failed -> return failExtraction(workflowId, step.reason)
+        is OperationStepResult.Refused -> return step.refusal
         is OperationStepResult.Settled -> step.value
       }
     val criteria = VerifyCriteria.parse(extracted).bounded(budget, workflowId)
@@ -156,12 +158,14 @@ class VerifyOperation(
     context: OperationContext,
     workflowId: String,
   ): OperationOutcome {
-    val snapshot = confirmableSnapshot(context, workflowId)
+    val snapshot = confirmableSnapshot(context, workflowId) { return it }
     val inputContext = snapshot.artifacts[VerifyWorkflow.INPUT_CONTEXT]
     val target =
-      context.arguments.target?.takeIf(String::isNotBlank)?.let { raw -> resolveTarget(context, raw.trim()) }
+      context.arguments.target
+        ?.takeIf(String::isNotBlank)
+        ?.let { raw -> resolveTarget(context, raw.trim()) { return it } }
         ?: storedTarget(inputContext)
-        ?: throw MissingOperationIntakeError(id, "target:<pr-number|branch|base..head> for this workflow")
+        ?: return missingIntake(id, "target:<pr-number|branch|base..head> for this workflow")
     val storedMode = VerifyWorkflow.string(inputContext, VerifyWorkflow.REVIEW_MODE)
     val mode = VerifyReviewMode.fromWire(context.arguments.mode ?: storedMode) ?: VerifyReviewMode.INLINE
     val criteriaArtifact = snapshot.artifacts[VerifyWorkflow.CRITERIA_SUMMARY]
@@ -183,26 +187,32 @@ class VerifyOperation(
     return sequence.run(run, start, attempts)
   }
 
-  private fun confirmableSnapshot(
+  private inline fun confirmableSnapshot(
     context: OperationContext,
     workflowId: String,
+    refuse: (OperationOutcome.Blocked) -> Nothing,
   ): WorkflowSnapshotView {
-    val snapshot = verifyWorkflow(workflowId)
+    val snapshot = verifyWorkflow(workflowId, refuse)
     val repoRoot = repoRootOf(context)
     val storedRoot = VerifyWorkflow.string(snapshot.artifacts[VerifyWorkflow.INPUT_CONTEXT], VerifyWorkflow.REPO_ROOT)
-    if (storedRoot != null && storedRoot != repoRoot) throw ForeignVerifyWorkflowError(workflowId, repoRoot)
+    if (storedRoot != null && storedRoot != repoRoot) {
+      refuse(OperationOutcome.Blocked("Verify workflow '$workflowId' does not belong to '$repoRoot'."))
+    }
     if (snapshot.workflowStatus in CLOSED_STATUSES) {
       val notes = snapshot.artifacts[VerifyWorkflow.SESSION_NOTES]
       val supersededBy = VerifyWorkflow.string(notes, VerifyWorkflow.SUPERSEDED_BY)
-      throw ClosedVerifyWorkflowError(workflowId, snapshot.workflowStatus.wireValue, supersededBy)
+      refuse(closedVerifyWorkflow(workflowId, snapshot.workflowStatus.wireValue, supersededBy))
     }
     return snapshot
   }
 
-  private fun verifyWorkflow(workflowId: String): WorkflowSnapshotView =
+  private inline fun verifyWorkflow(
+    workflowId: String,
+    refuse: (OperationOutcome.Blocked) -> Nothing,
+  ): WorkflowSnapshotView =
     when (val found = workflows.get(WorkflowFamilyKind.VERIFY, workflowId)) {
       is WorkflowGetResult.Ok -> found.snapshot
-      is WorkflowGetResult.Error -> throw UnknownVerifyWorkflowError(workflowId)
+      is WorkflowGetResult.Error -> refuse(unknownVerifyWorkflow(workflowId))
     }
 
   private fun confirmParked(
@@ -259,13 +269,13 @@ class VerifyOperation(
     val view =
       when (val continued = workflows.continueWorkflow(WorkflowFamilyKind.VERIFY, workflowId)) {
         is WorkflowContinueResult.Standard -> continued.view
-        is WorkflowContinueResult.UnknownWorkflow -> throw UnknownVerifyWorkflowError(workflowId)
+        is WorkflowContinueResult.UnknownWorkflow -> onFailure(unknownVerifyWorkflow(workflowId))
         else -> onFailure(OperationOutcome.Failed("Verify workflow '$workflowId' cannot be continued."))
       }
     val step = view.continueStepId
     return when (view.continueStatus) {
       WorkflowContinueStatus.DONE ->
-        throw ClosedVerifyWorkflowError(workflowId, WorkflowStatus.COMPLETED.wireValue, supersededBy = null)
+        onFailure(closedVerifyWorkflow(workflowId, WorkflowStatus.COMPLETED.wireValue, supersededBy = null))
       WorkflowContinueStatus.BLOCKED ->
         onFailure(
           OperationOutcome.Failed(
@@ -325,16 +335,20 @@ class VerifyOperation(
       null
     }
 
-  private fun intakeOf(context: OperationContext): VerifyIntake {
+  private inline fun intakeOf(
+    context: OperationContext,
+    refuse: (OperationOutcome.Blocked) -> Nothing,
+  ): VerifyIntake {
     val specPath = context.arguments.spec?.trim()?.takeIf(String::isNotEmpty)
     if (specPath == null) return VerifyIntake.Text(context.instructions.orEmpty().trim())
-    requireSpec(context, specPath)
+    requireSpec(context, specPath, refuse)
     return VerifyIntake.SpecFile(specPath)
   }
 
-  private fun requireSpec(
+  private inline fun requireSpec(
     context: OperationContext,
     specPath: String,
+    refuse: (OperationOutcome.Blocked) -> Nothing,
   ) {
     val spec = specPath.trimEnd('/')
     val parent = spec.substringBeforeLast('/', missingDelimiterValue = "")
@@ -342,54 +356,76 @@ class VerifyOperation(
       listOf(spec, "$spec/spec.md", "$spec/$MANIFEST", if (parent.isEmpty()) MANIFEST else "$parent/$MANIFEST")
     when (val present = gitOperations.pathContentIdentities(context.repoRoot, candidates)) {
       is WorkflowPathContentIdentitiesResult.Resolved ->
-        if (present.identities.isEmpty()) throw VerifySpecRehydrateNeededError(specPath)
-      is WorkflowPathContentIdentitiesResult.Failed -> throw OperationAnchorUnreadableError(SPEC_ANCHOR, present.error)
+        if (present.identities.isEmpty()) {
+          refuse(
+            OperationOutcome.Blocked(
+              "rehydrate-needed: neither spec '$specPath' nor its decomposition-manifest.yaml exists; rehydrate " +
+                "the spec from Linear to that path, then invoke operation verify again.",
+            ),
+          )
+        }
+      is WorkflowPathContentIdentitiesResult.Failed -> refuse(anchorUnreadable(SPEC_ANCHOR, present.error))
     }
   }
 
-  private fun resolveTarget(
+  private inline fun resolveTarget(
     context: OperationContext,
     raw: String,
+    refuse: (OperationRefusal) -> Nothing,
   ): VerifyTarget {
     if (RANGE in raw) {
       val (base, head) = raw.split(RANGE, limit = 2)
-      return VerifyTarget(raw, commit(context, raw, base), commit(context, raw, head))
+      return VerifyTarget(raw, commit(context, raw, base, refuse), commit(context, raw, head, refuse))
     }
     val (head, baseRef) =
-      if (raw.all(Char::isDigit)) pullRequestHead(context, raw) else commit(context, raw, raw) to DEFAULT_BASE_REF
-    val current = gitOperations.runtimePhaseHeadCommit(context.repoRoot).requireGitValue(HEAD_ANCHOR)
-    if (head != current) throw VerifyTargetNotCheckedOutError(raw, head, current)
-    return VerifyTarget(raw, mergeBase(context, raw, baseRef), head)
+      if (raw.all(Char::isDigit)) {
+        pullRequestHead(context, raw, refuse)
+      } else {
+        commit(context, raw, raw, refuse) to DEFAULT_BASE_REF
+      }
+    val current = gitOperations.runtimePhaseHeadCommit(context.repoRoot).gitValueOr(HEAD_ANCHOR, refuse)
+    if (head != current) {
+      refuse(
+        OperationOutcome.Blocked(
+          "Verify target '$raw' is at $head but HEAD is $current; check the target out, or pass " +
+            "target:<base>..HEAD.",
+        ),
+      )
+    }
+    return VerifyTarget(raw, mergeBase(context, raw, baseRef, refuse), head)
   }
 
-  private fun pullRequestHead(
+  private inline fun pullRequestHead(
     context: OperationContext,
     number: String,
+    refuse: (OperationRefusal) -> Nothing,
   ): Pair<String, String> =
     when (val resolved = pullRequests.resolvePullRequest(context.repoRoot, number)) {
       is ReviewPullRequestResolution.Found ->
         resolved.pullRequest.headOid to "origin/${resolved.pullRequest.baseRefName}"
-      ReviewPullRequestResolution.Absent -> throw PullRequestNotFoundError(number)
-      is ReviewPullRequestResolution.Unavailable -> throw UnresolvableVerifyTargetError(number, resolved.reason)
+      ReviewPullRequestResolution.Absent -> refuse(pullRequestNotFound(number))
+      is ReviewPullRequestResolution.Unavailable -> refuse(unresolvableVerifyTarget(number, resolved.reason))
     }
 
-  private fun mergeBase(
+  private inline fun mergeBase(
     context: OperationContext,
     raw: String,
     baseRef: String,
+    refuse: (OperationRefusal) -> Nothing,
   ): String =
     (gitOperations.mergeBaseWithHead(context.repoRoot, baseRef) as? WorkflowGitOperationResult.Ok)
       ?.value?.trim()?.takeIf(String::isNotEmpty)
-      ?: throw UnresolvableVerifyTargetError(raw, "no merge base with $baseRef.")
+      ?: refuse(unresolvableVerifyTarget(raw, "no merge base with $baseRef."))
 
-  private fun commit(
+  private inline fun commit(
     context: OperationContext,
     raw: String,
     revision: String,
+    refuse: (OperationRefusal) -> Nothing,
   ): String =
     (gitOperations.resolveCommit(context.repoRoot, revision) as? WorkflowGitOperationResult.Ok)
       ?.value?.trim()?.takeIf(String::isNotEmpty)
-      ?: throw UnresolvableVerifyTargetError(raw, "'$revision' is not a commit.")
+      ?: refuse(unresolvableVerifyTarget(raw, "'$revision' is not a commit."))
 
   private fun storedTarget(inputContext: Any?): VerifyTarget? {
     val base = VerifyWorkflow.string(inputContext, VerifyWorkflow.BASE_REVISION) ?: return null
@@ -397,13 +433,16 @@ class VerifyOperation(
     return VerifyTarget(VerifyWorkflow.string(inputContext, VerifyWorkflow.TARGET) ?: "$base..$head", base, head)
   }
 
-  private fun worktreeBaseline(context: OperationContext): Pair<String, String> {
+  private inline fun worktreeBaseline(
+    context: OperationContext,
+    refuse: (OperationOutcome.Blocked) -> Nothing,
+  ): Pair<String, String> {
     val status =
       when (val result = gitOperations.worktreeStatus(context.repoRoot)) {
         is WorkflowGitOperationResult.Ok -> result.value.orEmpty()
-        else -> throw OperationAnchorUnreadableError(WORKTREE_ANCHOR, result.error)
+        else -> refuse(anchorUnreadable(WORKTREE_ANCHOR, result.error))
       }
-    return status to gitOperations.runtimePhaseHeadCommit(context.repoRoot).requireGitValue(HEAD_ANCHOR)
+    return status to gitOperations.runtimePhaseHeadCommit(context.repoRoot).gitValueOr(HEAD_ANCHOR, refuse)
   }
 
   private fun repoRootOf(context: OperationContext): String = context.repoRoot.toAbsolutePath().normalize().toString()

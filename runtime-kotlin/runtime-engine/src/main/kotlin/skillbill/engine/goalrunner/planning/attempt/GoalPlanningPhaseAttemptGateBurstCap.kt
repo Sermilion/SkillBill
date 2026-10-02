@@ -21,10 +21,9 @@ internal fun DefaultGoalPlanningSweep.produceAttemptAfterPauseCheck(
   currentSubtaskId: Int,
 ): GoalPlanningPhaseProduction {
   val prompt =
-    runCatching { composePlanningPrompt(args) }.getOrElse { error ->
-      if (error !is InvalidFeatureTaskRuntimeHandoffProjectionError) {
-        throw error
-      }
+    try {
+      composePlanningPrompt(args) { return GoalPlanningPhaseProduction.RequiredWriteRejected(it) }
+    } catch (error: InvalidFeatureTaskRuntimeHandoffProjectionError) {
       return GoalPlanningPhaseProduction.Stopped(
         stopped(shared, currentSubtaskId, projectionRejectedReason(phaseId, error), phaseId),
       )

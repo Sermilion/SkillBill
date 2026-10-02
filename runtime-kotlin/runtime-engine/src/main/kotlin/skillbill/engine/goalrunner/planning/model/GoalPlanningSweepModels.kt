@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.planning.model
 
 import skillbill.contracts.workflow.identity.status.GOAL_PLANNING_WAVE_CAP
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalRunnerStopReason
@@ -51,6 +52,9 @@ sealed interface GoalPlanningPhaseProduction {
   ) : GoalPlanningPhaseProduction
 
   data class Stopped(val outcome: GoalPlanningSweepOutcome.Stopped) : GoalPlanningPhaseProduction
+
+  /** A required phase write was rejected; nothing ran after it and the caller blocks the attempt. */
+  data class RequiredWriteRejected(val rejection: RequiredPhaseWrite.Rejected) : GoalPlanningPhaseProduction
 }
 
 data class GoalPlanningEmptyTurnEvidence(

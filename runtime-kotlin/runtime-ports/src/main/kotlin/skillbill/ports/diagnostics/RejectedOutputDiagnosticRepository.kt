@@ -2,16 +2,18 @@ package skillbill.ports.diagnostics
 
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRead
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRecord
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import java.time.Instant
 
 interface RejectedOutputDiagnosticRepository {
-  fun insert(record: RejectedOutputDiagnosticRecord): RejectedOutputDiagnosticRecord
+  fun insert(record: RejectedOutputDiagnosticRecord): RejectedOutputDiagnosticInsert
 
   fun select(selector: RejectedOutputDiagnosticSelector): List<RejectedOutputDiagnostic>
 
-  fun read(identity: String): RejectedOutputDiagnosticRecord
+  fun read(identity: String): RejectedOutputDiagnosticRead
 
   fun markExpired(before: Instant): Int
 

@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.error.core.RejectedOutputDiagnosticError
+import skillbill.error.core.RejectedOutputDiagnosticFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.schema.databasePath
 import java.io.IOException
 import java.net.URI
@@ -39,7 +40,7 @@ class FileRejectedOutputDiagnosticPermissionsTest {
     Files.createFile(dbPath)
 
     val error =
-      assertFailsWith<RejectedOutputDiagnosticError.Persistence> {
+      assertFailsWith<SkillBillRuntimeException> {
         FileRejectedOutputDiagnosticPermissions(
           databasePath = dbPath,
           diagnostics = SqliteTestDiagnostics,
@@ -49,6 +50,7 @@ class FileRejectedOutputDiagnosticPermissionsTest {
         ).applyRestrictivePermissions()
       }
 
+    assertEquals(RejectedOutputDiagnosticFailureCode.PERSISTENCE, error.code)
     assertTrue(error.message.orEmpty().contains("apply-restrictive-permissions"))
   }
 }

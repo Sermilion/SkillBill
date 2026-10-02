@@ -2,18 +2,20 @@ package skillbill.ports.diagnostics
 
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRead
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRecord
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import java.time.Instant
 
 object UnavailableRejectedOutputDiagnosticRepository : RejectedOutputDiagnosticRepository {
-  override fun insert(record: RejectedOutputDiagnosticRecord): RejectedOutputDiagnosticRecord =
+  override fun insert(record: RejectedOutputDiagnosticRecord): RejectedOutputDiagnosticInsert =
     error("Rejected-output diagnostic persistence is unavailable.")
 
   override fun select(selector: RejectedOutputDiagnosticSelector): List<RejectedOutputDiagnostic> =
     error("Rejected-output diagnostic persistence is unavailable.")
 
-  override fun read(identity: String): RejectedOutputDiagnosticRecord =
+  override fun read(identity: String): RejectedOutputDiagnosticRead =
     error("Rejected-output diagnostic persistence is unavailable.")
 
   override fun markExpired(before: Instant): Int = error("Rejected-output diagnostic persistence is unavailable.")

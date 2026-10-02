@@ -30,9 +30,11 @@ class OperationStepRunner(
     priorValues: Map<String, String> = emptyMap(),
     session: PhaseStepSession? = null,
   ): OperationStepResult {
-    val before = fingerprint(context)
+    val before = fingerprint(context) { return OperationStepResult.Refused(it) }
     val result = launch(stepName, stepInput(context, stepName, directive, priorValues, READ_ONLY_STEP_POLICY), session)
-    if (fingerprint(context) != before) return OperationStepResult.Failed(readOnlyViolation(stepName))
+    if (fingerprint(context) { return OperationStepResult.Refused(it) } != before) {
+      return OperationStepResult.Failed(readOnlyViolation(stepName))
+    }
     return result
   }
 
@@ -42,12 +44,12 @@ class OperationStepRunner(
     directive: String,
     priorValues: Map<String, String>,
   ): OperationStepResult {
-    val dirty = dirtyPaths(context)
-    val before = contentIdentities(context, dirty)
+    val dirty = dirtyPaths(context) { return OperationStepResult.Refused(it) }
+    val before = contentIdentities(context, dirty) { return OperationStepResult.Refused(it) }
     val result =
       launch(stepName, stepInput(context, stepName, directive, priorValues, EDITING_STEP_POLICY), session = null)
     if (result !is OperationStepResult.Settled) return result
-    val after = contentIdentities(context, dirty)
+    val after = contentIdentities(context, dirty) { return OperationStepResult.Refused(it) }
     val reedited = dirty.filter { path -> before[path] != after[path] }
     return result.copy(changedPaths = (result.changedPaths + reedited).distinct().sorted())
   }
@@ -113,23 +115,28 @@ class OperationStepRunner(
     }
   }
 
-  private fun fingerprint(context: OperationContext): String =
-    gitOperations.repositoryFingerprint(context.repoRoot).requireGitValue(REPOSITORY_FINGERPRINT)
+  private inline fun fingerprint(
+    context: OperationContext,
+    refuse: (OperationOutcome.Blocked) -> Nothing,
+  ): String = gitOperations.repositoryFingerprint(context.repoRoot).gitValueOr(REPOSITORY_FINGERPRINT, refuse)
 
-  private fun dirtyPaths(context: OperationContext): List<String> =
+  private inline fun dirtyPaths(
+    context: OperationContext,
+    refuse: (OperationOutcome.Blocked) -> Nothing,
+  ): List<String> =
     when (val status = gitOperations.worktreeStatus(context.repoRoot)) {
       is WorkflowGitOperationResult.Ok -> FeatureTaskRuntimePhaseSafetyPolicy.changedPaths(status.value.orEmpty())
-      else -> throw OperationAnchorUnreadableError(WORKTREE_STATUS, status.error)
+      else -> refuse(anchorUnreadable(WORKTREE_STATUS, status.error))
     }
 
-  private fun contentIdentities(
+  private inline fun contentIdentities(
     context: OperationContext,
     paths: List<String>,
+    refuse: (OperationOutcome.Blocked) -> Nothing,
   ): Map<String, String> =
     when (val identities = gitOperations.pathContentIdentities(context.repoRoot, paths)) {
       is WorkflowPathContentIdentitiesResult.Resolved -> identities.identities
-      is WorkflowPathContentIdentitiesResult.Failed ->
-        throw OperationAnchorUnreadableError(CONTENT_IDENTITIES, identities.error)
+      is WorkflowPathContentIdentitiesResult.Failed -> refuse(anchorUnreadable(CONTENT_IDENTITIES, identities.error))
     }
 }
 
@@ -141,6 +148,9 @@ sealed interface OperationStepResult {
   ) : OperationStepResult
 
   data class Failed(val reason: String) : OperationStepResult
+
+  /** The step could not start or finish because an operation anchor was unreadable; nothing was reported as failed. */
+  data class Refused(val refusal: OperationOutcome.Blocked) : OperationStepResult
 }
 
 private fun readOnlyViolation(stepName: String): String =

@@ -65,9 +65,9 @@ import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateC
 import skillbill.engine.featuretask.validation.ReadinessCheckSelection
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
-import skillbill.error.core.RejectedOutputDiagnosticError
-import skillbill.error.core.RejectedOutputDiagnosticError.Absent
-import skillbill.error.core.RejectedOutputDiagnosticError.Conflict
+import skillbill.error.core.RejectedOutputDiagnosticFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rejectedOutputDiagnosticConflictMessage
 import skillbill.featurespec.model.FeatureSpecPreparationDecision
 import skillbill.featurespec.model.FeatureSpecPreparationMode
 import skillbill.featurespec.model.FeatureSpecSubtaskPreparation
@@ -93,6 +93,8 @@ import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRead
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRecord
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import skillbill.ports.diff.DiffResolverPort
@@ -1746,7 +1748,7 @@ internal class RuntimeFakeDatabaseSessionFactory(
   var transactionCount: Int = 0
   val ledgerRows = mutableListOf<UnaddressedFinding>()
   val outcomeRows = mutableListOf<ReviewFindingOutcomeRecord>()
-  var producerOutputReadError: RejectedOutputDiagnosticError? = null
+  var producerOutputReadError: SkillBillRuntimeException? = null
   private val diagnosticRecords =
     linkedMapOf<String, RejectedOutputDiagnosticRecord>()
   private val producerEvidence =
@@ -1777,7 +1779,17 @@ internal class RuntimeFakeDatabaseSessionFactory(
 
   override fun <T> transaction(block: (UnitOfWork) -> T): T {
     transactionCount += 1
-    return block(unitOfWork())
+    val diagnosticsBefore = LinkedHashMap(diagnosticRecords)
+    val evidenceBefore = LinkedHashMap(producerEvidence)
+    return try {
+      block(unitOfWork())
+    } catch (error: RuntimeException) {
+      diagnosticRecords.clear()
+      diagnosticRecords.putAll(diagnosticsBefore)
+      producerEvidence.clear()
+      producerEvidence.putAll(evidenceBefore)
+      throw error
+    }
   }
 
   private fun unitOfWork(): UnitOfWork =
@@ -1795,8 +1807,8 @@ internal class RuntimeFakeDatabaseSessionFactory(
         RejectedOutputDiagnosticPermissions { }
       override val rejectedOutputDiagnostics =
         object : RejectedOutputDiagnosticRepository {
-          override fun insert(record: RejectedOutputDiagnosticRecord): RejectedOutputDiagnosticRecord =
-            diagnosticRecords.getOrPut(record.metadata.identity) { record }
+          override fun insert(record: RejectedOutputDiagnosticRecord): RejectedOutputDiagnosticInsert =
+            RejectedOutputDiagnosticInsert.Inserted(diagnosticRecords.getOrPut(record.metadata.identity) { record })
 
           override fun select(selector: RejectedOutputDiagnosticSelector): List<RejectedOutputDiagnostic> =
             diagnosticRecords.values
@@ -1807,9 +1819,9 @@ internal class RuntimeFakeDatabaseSessionFactory(
                   (selector.attempt == null || it.attempt == selector.attempt)
               }
 
-          override fun read(identity: String): RejectedOutputDiagnosticRecord =
-            diagnosticRecords[identity]
-              ?: throw Absent(identity)
+          override fun read(identity: String): RejectedOutputDiagnosticRead =
+            diagnosticRecords[identity]?.let(RejectedOutputDiagnosticRead::Found)
+              ?: RejectedOutputDiagnosticRead.Absent(identity)
 
           override fun markExpired(before: Instant): Int = 0
 
@@ -1832,9 +1844,12 @@ internal class RuntimeFakeDatabaseSessionFactory(
             if (retained.sha256 != evidence.sha256 || retained.byteSize != evidence.byteSize ||
               !samePayload(retained.payload, evidence.payload)
             ) {
-              throw Conflict(
-                "${evidence.workflowId}:${evidence.phaseId}:${evidence.generation}:${evidence.attempt}:" +
-                  "${evidence.repairTurn}:${evidence.agentId}",
+              throw SkillBillRuntimeException(
+                RejectedOutputDiagnosticFailureCode.CONFLICT,
+                rejectedOutputDiagnosticConflictMessage(
+                  "${evidence.workflowId}:${evidence.phaseId}:${evidence.generation}:${evidence.attempt}:" +
+                    "${evidence.repairTurn}:${evidence.agentId}",
+                ),
               )
             }
           }

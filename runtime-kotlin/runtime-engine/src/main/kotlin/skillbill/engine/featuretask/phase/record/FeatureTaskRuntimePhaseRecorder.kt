@@ -18,6 +18,7 @@ import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingRecorder
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewCheckpointRecorder
 import skillbill.engine.featuretask.review.goal.FeatureTaskRuntimeGoalReviewCompletionRecorder
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.db.DatabaseSessionFactory
@@ -130,7 +131,7 @@ class FeatureTaskRuntimePhaseRecorder
 
     fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean = phaseState.recordPhaseState(request)
 
-    fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest) =
+    fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
       phaseState.recordRequiredPhaseStart(request)
 
     fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
@@ -224,7 +225,7 @@ class FeatureTaskRuntimePhaseRecorder
       briefing: FeatureTaskRuntimePhaseLaunchBriefing,
       sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement? = null,
       attempt: Int = 1,
-    ) = briefingRecorder.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement, attempt)
+    ): RequiredPhaseWrite = briefingRecorder.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement, attempt)
 
     fun recordProjectionRejection(
       workflowId: String,

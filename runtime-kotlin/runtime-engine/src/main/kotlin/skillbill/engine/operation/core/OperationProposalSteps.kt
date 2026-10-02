@@ -7,6 +7,7 @@ internal fun OperationContext.proposeFromStep(
 ): OperationRunResult =
   when (val step = steps.runReadOnly(this, stepName, directive)) {
     is OperationStepResult.Failed -> OperationRunResult.Finished(OperationOutcome.Failed(step.reason))
+    is OperationStepResult.Refused -> OperationRunResult.Finished(step.refusal)
     is OperationStepResult.Settled ->
       OperationRunResult.Proposed(
         value = step.value,

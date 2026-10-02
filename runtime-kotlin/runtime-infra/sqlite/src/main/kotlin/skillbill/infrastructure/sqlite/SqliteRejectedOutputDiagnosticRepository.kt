@@ -1,12 +1,18 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.core.RejectedOutputDiagnosticError
+import skillbill.error.core.RejectedOutputDiagnosticFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rejectedOutputDiagnosticConflictMessage
+import skillbill.error.core.rejectedOutputDiagnosticCorruptMessage
+import skillbill.error.core.rejectedOutputDiagnosticPersistenceMessage
 import skillbill.error.shellcontent.InvalidProducerOutputEvidenceSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticRepository
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticInsert
+import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRead
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticRecord
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 import skillbill.ports.diagnostics.model.RejectedOutputLifecycle
@@ -21,13 +27,13 @@ import java.time.format.DateTimeParseException
 internal class SqliteRejectedOutputDiagnosticRepository(
   private val connection: Connection,
 ) : RejectedOutputDiagnosticRepository {
-  override fun insert(record: RejectedOutputDiagnosticRecord): RejectedOutputDiagnosticRecord {
+  override fun insert(record: RejectedOutputDiagnosticRecord): RejectedOutputDiagnosticInsert {
     val existing = persistence("insert-read-existing") { find(record.metadata.identity) }
     if (existing != null) {
       if (!existing.sameImmutableEvidence(record)) {
-        throw RejectedOutputDiagnosticError.Conflict(record.metadata.identity)
+        return RejectedOutputDiagnosticInsert.Conflict(record.metadata.identity)
       }
-      return existing
+      return RejectedOutputDiagnosticInsert.Inserted(existing)
     }
     try {
       connection.prepareStatement(
@@ -58,11 +64,15 @@ internal class SqliteRejectedOutputDiagnosticRepository(
         )
         statement.executeUpdate()
       }
-      return record
+      return RejectedOutputDiagnosticInsert.Inserted(record)
     } catch (error: SQLException) {
       val raced = persistence("insert-read-raced") { find(record.metadata.identity) }
-      if (raced != null && raced.sameImmutableEvidence(record)) return raced
-      throw RejectedOutputDiagnosticError.Persistence("insert", error)
+      if (raced != null && raced.sameImmutableEvidence(record)) return RejectedOutputDiagnosticInsert.Inserted(raced)
+      throw SkillBillRuntimeException(
+        RejectedOutputDiagnosticFailureCode.PERSISTENCE,
+        rejectedOutputDiagnosticPersistenceMessage("insert"),
+        error,
+      )
     }
   }
 
@@ -79,9 +89,9 @@ internal class SqliteRejectedOutputDiagnosticRepository(
     }
   }
 
-  override fun read(identity: String): RejectedOutputDiagnosticRecord =
+  override fun read(identity: String): RejectedOutputDiagnosticRead =
     persistence("read") {
-      find(identity) ?: throw RejectedOutputDiagnosticError.Absent(identity)
+      find(identity)?.classified() ?: RejectedOutputDiagnosticRead.Absent(identity)
     }
 
   override fun markExpired(before: Instant): Int =
@@ -144,11 +154,17 @@ internal class SqliteRejectedOutputDiagnosticRepository(
             exactGeneration = true,
             repairTurn = evidence.repairTurn,
           ),
-        ) ?: throw RejectedOutputDiagnosticError.Persistence("retain-producer-output-readback")
+        ) ?: throw SkillBillRuntimeException(
+          RejectedOutputDiagnosticFailureCode.PERSISTENCE,
+          rejectedOutputDiagnosticPersistenceMessage("retain-producer-output-readback"),
+        )
       if (retained.sha256 != evidence.sha256 || retained.byteSize != evidence.byteSize ||
         !payloadsEqual(retained.payload, evidence.payload)
       ) {
-        throw RejectedOutputDiagnosticError.Conflict(evidence.evidenceKey())
+        throw SkillBillRuntimeException(
+          RejectedOutputDiagnosticFailureCode.CONFLICT,
+          rejectedOutputDiagnosticConflictMessage(evidence.evidenceKey()),
+        )
       }
     }
   }
@@ -223,10 +239,19 @@ private inline fun <T> persistence(
 ): T =
   try {
     block()
-  } catch (error: RejectedOutputDiagnosticError) {
-    throw error
   } catch (error: SQLException) {
-    throw RejectedOutputDiagnosticError.Persistence(operation, error)
+    throw SkillBillRuntimeException(
+      RejectedOutputDiagnosticFailureCode.PERSISTENCE,
+      rejectedOutputDiagnosticPersistenceMessage(operation),
+      error,
+    )
+  }
+
+private fun RejectedOutputDiagnosticRecord.classified(): RejectedOutputDiagnosticRead =
+  when (metadata.lifecycle) {
+    RejectedOutputLifecycle.STORED -> RejectedOutputDiagnosticRead.Found(this)
+    RejectedOutputLifecycle.EXPIRED -> RejectedOutputDiagnosticRead.Expired(this)
+    RejectedOutputLifecycle.OVERSIZED -> RejectedOutputDiagnosticRead.Oversized(this)
   }
 
 private fun ResultSet.toRecord(): RejectedOutputDiagnosticRecord {
@@ -269,7 +294,12 @@ private fun ResultSet.toRecord(): RejectedOutputDiagnosticRecord {
 private fun corruptRecord(
   identity: String,
   error: Throwable,
-): Nothing = throw RejectedOutputDiagnosticError.Corrupt(identity, error)
+): Nothing =
+  throw SkillBillRuntimeException(
+    RejectedOutputDiagnosticFailureCode.CORRUPT,
+    rejectedOutputDiagnosticCorruptMessage(identity),
+    error,
+  )
 
 private fun RejectedOutputDiagnosticRecord.sameImmutableEvidence(other: RejectedOutputDiagnosticRecord): Boolean =
   metadata.copy(recordedAt = other.metadata.recordedAt) == other.metadata &&

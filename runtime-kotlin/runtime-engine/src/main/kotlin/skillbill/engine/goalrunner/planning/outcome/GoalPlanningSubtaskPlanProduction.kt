@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.planning.outcome
 
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.goalplanning.readStoredPlanningRecord
 import skillbill.engine.goalrunner.execution.core.ProduceMissingPlansArgs
 import skillbill.engine.goalrunner.planning.attempt.producePhase
@@ -22,23 +23,36 @@ import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import java.nio.file.Path
 
+/** How producing one subtask plan ended: planned and checkpointed, stopped, or stopped by a rejected required write. */
+internal sealed interface SubtaskPlanProduction {
+  data object Planned : SubtaskPlanProduction
+
+  data class Stopped(val outcome: GoalPlanningSweepOutcome.Stopped) : SubtaskPlanProduction
+
+  data class RequiredWriteRejected(val rejection: RequiredPhaseWrite.Rejected) : SubtaskPlanProduction
+}
+
 internal fun DefaultGoalPlanningSweep.producePlan(
   args: ProduceMissingPlansArgs,
   subtask: DecompositionSubtask,
   descriptor: GovernedGoalSubtaskDescriptor,
   launch: GoalPlanningLaunch,
-): GoalPlanningSweepOutcome.Stopped? {
+): SubtaskPlanProduction {
   val shared = args.shared
   val request = args.request
   val preplanPayload = args.sharedCheckpoint.preplanPayload
   val resolvedSpecPath =
     resolvedSubSpecPath(shared.repoRoot, subtask.specPath, repositoryEnclosingRootPort)
-      ?: return stopped(shared, subtask.id, unresolvedSpecReason(subtask), GoalPlanningSweepConstants.PHASE_PLAN)
+      ?: return SubtaskPlanProduction.Stopped(
+        stopped(shared, subtask.id, unresolvedSpecReason(subtask), GoalPlanningSweepConstants.PHASE_PLAN),
+      )
   val (runInvariants, snapshot) =
     runCatching {
       invariantsSource.read(resolvedSpecPath) to snapshotSubSpecs(shared, subtask, resolvedSpecPath)
     }.getOrElse { error ->
-      return stopped(shared, subtask.id, invariantReadReason(subtask, error), GoalPlanningSweepConstants.PHASE_PLAN)
+      return SubtaskPlanProduction.Stopped(
+        stopped(shared, subtask.id, invariantReadReason(subtask, error), GoalPlanningSweepConstants.PHASE_PLAN),
+      )
     }
   val preplanPhaseId = GoalPlanningSweepConstants.PHASE_PREPLAN
   val preplanOutput =
@@ -65,9 +79,16 @@ internal fun DefaultGoalPlanningSweep.producePlan(
         resolvedBodies = GoalPlanningResolvedBoundaryBodies(),
       ),
     )
-  if (planProduction is GoalPlanningPhaseProduction.Stopped) return planProduction.outcome
+  if (planProduction is GoalPlanningPhaseProduction.Stopped) {
+    return SubtaskPlanProduction.Stopped(planProduction.outcome)
+  }
+  if (planProduction is GoalPlanningPhaseProduction.RequiredWriteRejected) {
+    return SubtaskPlanProduction.RequiredWriteRejected(planProduction.rejection)
+  }
   val captured = planProduction as GoalPlanningPhaseProduction.Captured
   return checkpointProducedPlan(args, subtask, descriptor, resolvedSpecPath to snapshot, captured.payload)
+    ?.let { SubtaskPlanProduction.Stopped(it) }
+    ?: SubtaskPlanProduction.Planned
 }
 
 private fun DefaultGoalPlanningSweep.checkpointProducedPlan(

@@ -20,6 +20,7 @@ import skillbill.engine.featuretask.runloop.core.LaunchPreparation
 import skillbill.engine.featuretask.runloop.core.LaunchPreparationRejected
 import skillbill.engine.featuretask.runloop.core.LaunchPreparationRejectedArgs
 import skillbill.engine.featuretask.runloop.core.LaunchRejectionMeasurementContext
+import skillbill.engine.featuretask.runloop.core.LaunchRequiredWriteRejected
 import skillbill.engine.featuretask.runloop.core.LaunchSeamRejectionArgs
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.PreparedLaunch
@@ -35,6 +36,7 @@ import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.workflow.model.ValidationDepth
@@ -62,7 +64,8 @@ object PhaseLaunchPreparation {
         ) {
           is LaunchMeasurementContextReady -> resolution.value
           is LaunchPreparationRejected -> return resolution
-          is PreparedLaunchReady -> error("Unexpected launch measurement result.")
+          is PreparedLaunchReady, is LaunchRequiredWriteRejected ->
+            error("Unexpected launch measurement result.")
         }
       return PhaseLaunchPreparation.prepareDeclaredLaunch(
         context,
@@ -195,9 +198,7 @@ object PhaseLaunchPreparation {
       val priorCorrection = args.priorCorrection
       val measurementContext = args.context
       return try {
-        PreparedLaunchReady(
-          PhaseLaunchPreparation.prepareLaunch(context, args),
-        )
+        PhaseLaunchPreparation.prepareLaunch(context, args)
       } catch (error: InvalidFeatureTaskRuntimeHandoffProjectionError) {
         rejectedHandoffLaunch(recorder, run, state, error, measurementContext)
       } catch (error: InvalidWorkflowStateSchemaError) {
@@ -251,7 +252,7 @@ object PhaseLaunchPreparation {
   internal fun prepareLaunch(
     context: PhaseAttemptLaunchPreparationContext,
     args: DeclaredLaunchArgs,
-  ): PreparedLaunch {
+  ): LaunchPreparation {
     val run = args.run
     val iteration = args.iteration
     val priorCorrection = args.priorCorrection
@@ -285,12 +286,14 @@ object PhaseLaunchPreparation {
           ),
         )
       if (!run.policy.singleAgentSession) {
-        recorder.recordPhaseBriefing(
-          run.request.workflowId,
-          briefing,
-          sharedEvidence?.measurement,
-          iteration ?: 1,
-        )
+        val write =
+          recorder.recordPhaseBriefing(
+            run.request.workflowId,
+            briefing,
+            sharedEvidence?.measurement,
+            iteration ?: 1,
+          )
+        if (write is RequiredPhaseWrite.Rejected) return LaunchRequiredWriteRejected(write)
       }
       val inputs =
         PhaseLaunchPreparation
@@ -298,9 +301,11 @@ object PhaseLaunchPreparation {
           .copy(
             phaseSettlement = iteration?.let(::phaseSettlementTarget),
           )
-      return PreparedLaunch(
-        briefing,
-        PhaseLaunchPreparation.composeLaunchPrompt(context, run, inputs, prompt, args.boundStep),
+      return PreparedLaunchReady(
+        PreparedLaunch(
+          briefing,
+          PhaseLaunchPreparation.composeLaunchPrompt(context, run, inputs, prompt, args.boundStep),
+        ),
       )
     }
   }

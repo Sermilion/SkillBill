@@ -8,8 +8,8 @@ import skillbill.engine.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
 import skillbill.engine.openTestWorkflow
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -19,7 +19,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeShare
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceOutcome
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 
 class FeatureTaskRuntimeSharedEvidenceRecorderTest {
   @Test
@@ -27,7 +27,7 @@ class FeatureTaskRuntimeSharedEvidenceRecorderTest {
     val recorder = recorder(RecordingLifecycleTelemetryRepository())
 
     val rejection =
-      assertFailsWith<RequiredPhaseWriteRejected> {
+      assertIs<RequiredPhaseWrite.Rejected>(
         recorder.recordRequiredPhaseStart(
           FeatureTaskRuntimePhaseStateRequest(
             workflowId = "wf-missing",
@@ -37,8 +37,8 @@ class FeatureTaskRuntimeSharedEvidenceRecorderTest {
             resolvedAgentId = "claude",
             finished = false,
           ),
-        )
-      }
+        ),
+      )
 
     assertEquals(RequiredPhaseWriteKind.START, rejection.writeKind)
     assertEquals("validate", rejection.phaseId)
@@ -50,13 +50,13 @@ class FeatureTaskRuntimeSharedEvidenceRecorderTest {
     val recorder = recorder(RecordingLifecycleTelemetryRepository())
 
     val rejection =
-      assertFailsWith<RequiredPhaseWriteRejected> {
+      assertIs<RequiredPhaseWrite.Rejected>(
         recorder.recordPhaseBriefing(
           workflowId = "wf-missing",
           briefing = emptyBriefing("validate"),
           attempt = 6,
-        )
-      }
+        ),
+      )
 
     assertEquals(RequiredPhaseWriteKind.BRIEFING, rejection.writeKind)
     assertEquals("validate", rejection.phaseId)

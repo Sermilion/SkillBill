@@ -4,10 +4,11 @@ import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.application.decomposition.specSource
+import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.planning.attempt.producePhase
@@ -26,7 +27,13 @@ import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.text.sha256HexUtf8
 import java.nio.file.Path
-import java.util.concurrent.CancellationException
+
+/** The result of producing a shared preplan: the checkpoint, or the rejected required write that stopped it. */
+internal sealed interface SharedPreplanProduction {
+  data class Produced(val checkpoint: SharedGoalPreplanCheckpoint) : SharedPreplanProduction
+
+  data class RequiredWriteRejected(val rejection: RequiredPhaseWrite.Rejected) : SharedPreplanProduction
+}
 
 internal fun produceSharedPreplan(
   sweep: DefaultGoalPlanningSweep,
@@ -34,11 +41,13 @@ internal fun produceSharedPreplan(
   request: GoalRunnerRunRequest,
   provenance: GoalPlanningContractProvenance,
   launch: GoalPlanningLaunch,
-): Result<SharedGoalPreplanCheckpoint> =
-  produceSharedPreplanCheckpoint(sweep, shared, request, provenance, launch).mapCatching { produced ->
-    produced.also { sweep.checkpoint.recheckpointSharedPreplan(it) }
+): Result<SharedPreplanProduction> =
+  produceSharedPreplanCheckpoint(sweep, shared, request, provenance, launch).mapCatching { production ->
+    production.also {
+      if (it is SharedPreplanProduction.Produced) sweep.checkpoint.recheckpointSharedPreplan(it.checkpoint)
+    }
   }.onFailure { error ->
-    if (error is RequiredPhaseWriteRejected || error is CancellationException) throw error
+    error.rethrowIfCooperativeCancellationOrInterruption()
   }
 
 internal fun produceSharedPreplanCheckpoint(
@@ -47,7 +56,7 @@ internal fun produceSharedPreplanCheckpoint(
   request: GoalRunnerRunRequest,
   provenance: GoalPlanningContractProvenance,
   launch: GoalPlanningLaunch,
-): Result<SharedGoalPreplanCheckpoint> =
+): Result<SharedPreplanProduction> =
   runCatching {
     val runInvariants = sweep.invariantsSource.read(shared.parentSpecPath)
     val preplanProduction =
@@ -66,17 +75,22 @@ internal fun produceSharedPreplanCheckpoint(
         ),
       )
     if (preplanProduction is GoalPlanningPhaseProduction.Stopped) error(preplanProduction.outcome.blockedReason)
+    if (preplanProduction is GoalPlanningPhaseProduction.RequiredWriteRejected) {
+      return@runCatching SharedPreplanProduction.RequiredWriteRejected(preplanProduction.rejection)
+    }
     val captured = preplanProduction as GoalPlanningPhaseProduction.Captured
     val preplanPayload =
       enrichPreplan(
         proseRecordPayload(GoalPlanningSweepConstants.PHASE_PREPLAN, captured.payload),
         shared.planningPacket,
       )
-    SharedGoalPreplanCheckpoint(
-      identity = GoalPlanningIdentity(shared.parentWorkflowId, shared.normalizedIssueKey, shared.repositoryIdentity),
-      provenance = provenance,
-      payloadSha256 = sha256HexUtf8(preplanPayload),
-      preplanPayload = preplanPayload,
+    SharedPreplanProduction.Produced(
+      SharedGoalPreplanCheckpoint(
+        identity = GoalPlanningIdentity(shared.parentWorkflowId, shared.normalizedIssueKey, shared.repositoryIdentity),
+        provenance = provenance,
+        payloadSha256 = sha256HexUtf8(preplanPayload),
+        preplanPayload = preplanPayload,
+      ),
     )
   }
 

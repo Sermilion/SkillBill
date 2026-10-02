@@ -37,7 +37,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteRejected
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.model.SpecSource
@@ -261,7 +261,7 @@ internal fun PhaseRuntimeFinalizationContext.blockAndPersistInPhase(args: BlockA
 
 internal fun PhaseRuntimeFinalizationContext.blockRequiredWriteRejection(
   run: PhaseRun,
-  rejection: RequiredPhaseWriteRejected,
+  rejection: RequiredPhaseWrite.Rejected,
 ): PhaseOutcome = PhaseAttemptOnce.blockRequiredWriteRejection(finalizationAttemptHost(), run, rejection)
 
 internal fun PhaseRuntimeFinalizationContext.persistFinalizationRequiredRunning(
@@ -284,12 +284,10 @@ internal fun PhaseRuntimeFinalizationContext.persistFinalizationRequiredRunning(
           ),
       ),
     )
-  try {
-    coupledRunTransitions.acknowledgeRequiredPhaseStart(recorder, runningPhaseState)
-  } catch (rejection: RequiredPhaseWriteRejected) {
-    return blockRequiredWriteRejection(run, rejection)
+  return when (val write = coupledRunTransitions.acknowledgeRequiredPhaseStart(recorder, runningPhaseState)) {
+    is RequiredPhaseWrite.Acknowledged -> null
+    is RequiredPhaseWrite.Rejected -> blockRequiredWriteRejection(run, write)
   }
-  return null
 }
 
 internal fun PhaseRuntimeFinalizationContext.persistFinalizationCompleted(
