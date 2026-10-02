@@ -8,8 +8,10 @@ import com.networknt.schema.ValidationMessage
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.review.REVIEW_CONTEXT_CONTRACT_VERSION
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.ValidatedClasspathYamlNodeRequest
 import skillbill.infrastructure.contracts.locator.ReviewContextSchemaPaths
@@ -352,7 +354,8 @@ private fun readReviewContextSchemaNode(): JsonNode {
         },
       ),
     )
-  } catch (error: ShellContentContractException) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isShellContentContractFailure())
     throw logReviewContextSchemaFailure(error)
   }
 }

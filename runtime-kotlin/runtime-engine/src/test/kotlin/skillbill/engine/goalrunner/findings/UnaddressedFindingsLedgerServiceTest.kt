@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.findings
 
-import skillbill.error.shellcontent.InvalidUnaddressedFindingsLedgerSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.db.DatabaseSessionFactory
@@ -72,7 +73,8 @@ class UnaddressedFindingsLedgerServiceTest {
     val malformed = finding(subtaskId = 1, workflowId = "wf-1", ordinal = 1, severity = "catastrophic")
     val service = serviceFor(InMemoryUnaddressedFindings(setOf("SKILL-135"), listOf(malformed)))
 
-    assertFailsWith<InvalidUnaddressedFindingsLedgerSchemaError> { service.ledger("SKILL-135") }
+    val error = assertFailsWith<SkillBillRuntimeException> { service.ledger("SKILL-135") }
+    assertEquals(GovernedReviewFailureCode.INVALID_LEDGER_SCHEMA, error.code)
   }
 
   @Test
@@ -80,7 +82,8 @@ class UnaddressedFindingsLedgerServiceTest {
     val malformed = finding(subtaskId = 1, workflowId = "wf-1", ordinal = 1, category = "platform_correctness")
     val service = serviceFor(InMemoryUnaddressedFindings(setOf("SKILL-135"), listOf(malformed)))
 
-    assertFailsWith<InvalidUnaddressedFindingsLedgerSchemaError> { service.ledger("SKILL-135") }
+    val error = assertFailsWith<SkillBillRuntimeException> { service.ledger("SKILL-135") }
+    assertEquals(GovernedReviewFailureCode.INVALID_LEDGER_SCHEMA, error.code)
   }
 
   @Test
@@ -134,9 +137,11 @@ class UnaddressedFindingsLedgerServiceTest {
         diagnostics,
       )
 
-    assertFailsWith<InvalidUnaddressedFindingsLedgerSchemaError> {
-      service.repairLedgersByWorkflow("SKILL-135")
-    }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        service.repairLedgersByWorkflow("SKILL-135")
+      }
+    assertEquals(GovernedReviewFailureCode.INVALID_LEDGER_SCHEMA, error.code)
     assertTrue(diagnostics.warnings.single().contains("wfl-child"), diagnostics.warnings.single())
   }
 

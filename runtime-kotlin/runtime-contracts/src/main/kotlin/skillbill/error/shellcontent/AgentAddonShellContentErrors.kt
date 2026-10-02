@@ -1,41 +1,36 @@
 package skillbill.error.shellcontent
 
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.RuntimeFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 
-class InvalidAgentAddonSchemaError(
-  val sourceLabel: String,
-  val reason: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(
+enum class AgentAddonFailureCode : RuntimeFailureCode {
+  INVALID_SCHEMA,
+  MISSING_DECLARATION,
+  INVALID_SELECTION,
+  SELECTION_DRIFT,
+  INVALID_DELIVERY,
+}
+
+fun invalidAgentAddonSchema(sourceLabel: String, reason: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    AgentAddonFailureCode.INVALID_SCHEMA,
     "Agent add-on '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
     cause,
   )
 
-class MissingAgentAddonDeclarationError(
-  val slug: String,
-  val expectedRoot: String,
-) : ShellContentContractException(
+fun missingAgentAddonDeclaration(slug: String, expectedRoot: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    AgentAddonFailureCode.MISSING_DECLARATION,
     "Required agent add-on '$slug' was not found under '$expectedRoot'.",
   )
 
-class InvalidAgentAddonDeliveryTargetError(
-  val slug: String,
-  val target: String,
-  val reason: String,
-) : ShellContentContractException("Agent add-on '$slug' has invalid delivery target '$target': $reason")
-
-class AgentAddonPointerCollisionError(
-  val pointerName: String,
-) : ShellContentContractException("Agent add-on pointer '$pointerName' collides in the portable staging namespace.")
-
-class InvalidAgentAddonSelectionError(
-  message: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
-
-class AgentAddonSelectionDriftError(
-  val slug: String,
-  val sourceIdentity: String,
-) : ShellContentContractException(
-    "Selected agent add-on '$slug' changed at '$sourceIdentity'; start a new run to accept the new content.",
+fun invalidAgentAddonDeliveryTarget(slug: String, target: String, reason: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    AgentAddonFailureCode.INVALID_DELIVERY,
+    "Agent add-on '$slug' has invalid delivery target '$target': $reason",
   )
+
+fun agentAddonPointerCollision(pointerName: String): SkillBillRuntimeException = SkillBillRuntimeException(
+  AgentAddonFailureCode.INVALID_DELIVERY,
+  "Agent add-on pointer '$pointerName' collides in the portable staging namespace.",
+)

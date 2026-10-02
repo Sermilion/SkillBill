@@ -5,6 +5,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.telemetry.GoalRunnerBestEffortEmission
+import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.model.GoalAttemptLaunchOutcome
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -128,7 +129,7 @@ class GoalRunnerLedgerRecorder(
     GoalRunnerBestEffortEmission.recordWarning(
       diagnostics,
       "Best-effort goal ledger write failed: action='$action' workflowId='$workflowId' subtaskId=$subtaskId " +
-        "errorType='${error::class.qualifiedName}' " +
+        "errorType='${error.failureCodeLabel() ?: error::class.qualifiedName}' " +
         "message='${GoalRunnerBestEffortEmission.boundedMessage(error.message.orEmpty())}'",
       error,
     )

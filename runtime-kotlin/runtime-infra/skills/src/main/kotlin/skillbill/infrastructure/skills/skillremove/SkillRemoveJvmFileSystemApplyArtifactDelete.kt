@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.skillremove
 
+import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.skills.install.nativeagent.link.unlinkProviderAgents
 import skillbill.infrastructure.skills.scaffold.manifest.removeAddonReferences
 import skillbill.infrastructure.skills.scaffold.manifest.removeCodeReviewArea
@@ -148,6 +149,6 @@ internal fun SkillRemoveJvmFileSystemApply.handleApplyCascadeFailure(
 
 internal fun SkillRemoveJvmFileSystemApply.logApplyCascadeFailure(error: Throwable) {
   SkillRemoveJvmFileSystemApply.log.info(
-    "skill-bill remove failed: exceptionName=${error::class.simpleName.orEmpty()}",
+    "skill-bill remove failed: exceptionName=${error.failureCodeLabel() ?: error::class.simpleName.orEmpty()}",
   )
 }

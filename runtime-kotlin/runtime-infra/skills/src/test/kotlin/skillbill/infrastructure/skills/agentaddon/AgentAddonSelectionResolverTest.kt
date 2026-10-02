@@ -1,8 +1,8 @@
 package skillbill.infrastructure.skills.agentaddon
 
 import skillbill.agentaddon.model.AgentAddonConsumer
-import skillbill.error.shellcontent.AgentAddonSelectionDriftError
-import skillbill.error.shellcontent.InvalidAgentAddonSelectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import java.nio.file.Files
 import java.nio.file.Path
@@ -37,14 +37,20 @@ class AgentAddonSelectionResolverTest {
     writeAddon(repo, "helper", "Helper", "codex", "content")
     val resolver = AgentAddonSelectionResolver(NoopRuntimeDiagnostics)
 
-    assertFailsWith<InvalidAgentAddonSelectionError> {
-      resolver.resolveInitial(repo, listOf("helper", "helper"), AgentAddonConsumer.SKILL_BILL, listOf("codex"))
-    }
-    assertFailsWith<InvalidAgentAddonSelectionError> {
-      resolver.resolveInitial(repo, listOf("helper"), AgentAddonConsumer.SKILL_BILL, listOf("claude"))
-    }
-    assertFailsWith<InvalidAgentAddonSelectionError> {
-      resolver.resolveInitial(repo, listOf("helper"), AgentAddonConsumer.SKILL_BILL, emptyList())
+    val duplicate =
+      assertFailsWith<SkillBillRuntimeException> {
+        resolver.resolveInitial(repo, listOf("helper", "helper"), AgentAddonConsumer.SKILL_BILL, listOf("codex"))
+      }
+    val incompatible =
+      assertFailsWith<SkillBillRuntimeException> {
+        resolver.resolveInitial(repo, listOf("helper"), AgentAddonConsumer.SKILL_BILL, listOf("claude"))
+      }
+    val noReceivingAgent =
+      assertFailsWith<SkillBillRuntimeException> {
+        resolver.resolveInitial(repo, listOf("helper"), AgentAddonConsumer.SKILL_BILL, emptyList())
+      }
+    listOf(duplicate, incompatible, noReceivingAgent).forEach { error ->
+      assertEquals(AgentAddonFailureCode.INVALID_SELECTION, error.code)
     }
   }
 
@@ -81,9 +87,11 @@ class AgentAddonSelectionResolverTest {
       )
     Files.writeString(content, "changed")
 
-    assertFailsWith<AgentAddonSelectionDriftError> {
-      resolver.verifyPersisted(initial.persisted, AgentAddonConsumer.SKILL_BILL, listOf("codex"))
-    }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        resolver.verifyPersisted(initial.persisted, AgentAddonConsumer.SKILL_BILL, listOf("codex"))
+      }
+    assertEquals(AgentAddonFailureCode.SELECTION_DRIFT, error.code)
   }
 
   @Test

@@ -20,7 +20,9 @@ import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.agentaddon.AGENT_ADDON_SELECTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
 
 @Inject
@@ -69,7 +71,8 @@ class AgentAddonResolveSelectionCommand(
   private fun complete(block: () -> Map<String, Any?>) {
     try {
       state.complete(block(), format)
-    } catch (error: ShellContentContractException) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isShellContentContractFailure())
       state.complete(
         mapOf(SharedPayloadKeys.STATUS to "failed", "error" to error.message.orEmpty()),
         format,
@@ -110,7 +113,8 @@ class AgentAddonVerifySelectionCommand(
         ),
         format,
       )
-    } catch (error: ShellContentContractException) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isShellContentContractFailure())
       state.complete(
         mapOf(SharedPayloadKeys.STATUS to "failed", "error" to error.message.orEmpty()),
         format,

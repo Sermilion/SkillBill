@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.planning.outcome
 
 import skillbill.engine.agentoutput.stderrExcerpt
 import skillbill.engine.goalrunner.planning.model.GoalPlanningEmptyTurnEvidence
+import skillbill.error.core.failureCodeLabel
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.model.GoalRunnerLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -34,7 +35,7 @@ fun unexpectedPlanningFailureReason(
   error: Throwable,
 ): String =
   "Goal planning '$phaseId' failed before its output could be checkpointed: " +
-    "${error::class.simpleName ?: "Throwable"}: ${error.message.orEmpty()}"
+    "${error.failureCodeLabel() ?: error::class.simpleName ?: "Throwable"}: ${error.message.orEmpty()}"
 
 fun emptyTurnReason(
   phaseId: String,

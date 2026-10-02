@@ -2,6 +2,7 @@ package skillbill.application.scaffold
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
 import skillbill.ports.skillremove.SkillRemoveFileSystem
 import skillbill.skillremove.SkillBillRollbackException
 import skillbill.skillremove.TargetValidation
@@ -146,7 +147,7 @@ class SkillRemove(
     rollbackComplete: Boolean,
   ): SkillRemovalResult.Failed =
     SkillRemovalResult.Failed(
-      exceptionName = error::class.simpleName.orEmpty().ifBlank { "Exception" },
+      exceptionName = error.failureCodeLabel() ?: error::class.simpleName.orEmpty().ifBlank { "Exception" },
       exceptionMessage = error.message.orEmpty(),
       rollbackComplete = rollbackComplete,
     )

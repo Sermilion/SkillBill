@@ -3,6 +3,7 @@ package skillbill.application.scaffold
 import skillbill.application.install.ExternalAddonOverlayService
 import skillbill.application.scaffold.model.ScaffoldInvocationArgs
 import skillbill.application.scaffold.model.ScaffoldInvocationOutcome
+import skillbill.error.core.failureCodeLabel
 import skillbill.install.model.ExternalAddonSource
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.scaffold.ScaffoldGateway
@@ -84,6 +85,9 @@ private fun registerExternalAddonSourceAfterSuccess(
       environment = environment,
     )
   }.exceptionOrNull()?.let { error ->
-    error.message?.takeIf(String::isNotBlank) ?: error::class.simpleName ?: "registration failed"
+    error.message?.takeIf(String::isNotBlank)
+      ?: error.failureCodeLabel()
+      ?: error::class.simpleName
+      ?: "registration failed"
   }
 }

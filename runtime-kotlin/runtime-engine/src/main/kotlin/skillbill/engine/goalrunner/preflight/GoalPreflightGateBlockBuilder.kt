@@ -14,7 +14,8 @@ import skillbill.engine.goalrunner.model.GoalPreflightRequest
 import skillbill.engine.goalrunner.model.GoalPreflightSubtask
 import skillbill.engine.goalrunner.review.effectiveGoalRunnerReviewPolicy
 import skillbill.engine.goalrunner.review.goalRunnerReviewPolicyMismatch
-import skillbill.error.shellcontent.InvalidAgentAddonSelectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.model.GoalRunnerSelection
@@ -49,7 +50,8 @@ class GoalPreflightGateBlockBuilder(
         ?.let { manifestStore.reviewPolicy(it)?.agentAddonSelection }
     if (request.requestedAgentAddonSlugs.isNotEmpty()) {
       if (persisted != null && persisted.entries.map { it.slug } != request.requestedAgentAddonSlugs) {
-        throw InvalidAgentAddonSelectionError(
+        throw SkillBillRuntimeException(
+          AgentAddonFailureCode.INVALID_SELECTION,
           "Cannot change agent add-on selection on goal resume: " +
             "the parent workflow has a different durable selection.",
         )

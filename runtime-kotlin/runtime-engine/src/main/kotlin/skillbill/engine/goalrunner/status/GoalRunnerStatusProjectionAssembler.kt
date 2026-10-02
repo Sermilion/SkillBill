@@ -24,7 +24,9 @@ import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.model.GoalPlanningStatusAlignRequest
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningStatusReasonCoherence
 import skillbill.engine.goalrunner.planning.recovery.resolveChildExecutionLiveness
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
@@ -357,7 +359,8 @@ internal fun GoalRunnerStatusProjectionAssembler.derivedChildCurrentStep(childWo
         workflowId = workflowId,
       ),
     )?.currentPhaseId?.takeIf(String::isNotBlank)
-  } catch (error: ShellContentContractException) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isShellContentContractFailure())
     RuntimeDiagnosticsBestEffortWarning.record(
       diagnostics,
       "Goal status omitted derived child phase for workflow '$workflowId': " +

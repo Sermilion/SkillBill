@@ -10,6 +10,7 @@ import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_REGISTER_ABS
 import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_STDERR_EXCERPT_MAX_LENGTH
 import skillbill.application.review.parallel.runner.ParallelCodeReviewInlineParentLaunch
 import skillbill.application.review.parallel.runner.ParallelCodeReviewSoftRegisterAdmission
+import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.terminalStatus
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
@@ -172,7 +173,8 @@ private fun laneRegisterFailure(
     lane = lane,
     detail =
       "Review register parse seam '$LANE_FINDING_PARSE_SEAM' failed for lane '$lane': " +
-        "${cause::class.simpleName}: ${cause.message?.take(CAUSE_DETAIL_MAX_LENGTH) ?: "no detail"}",
+        "${cause.failureCodeLabel() ?: cause::class.simpleName}: " +
+        (cause.message?.take(CAUSE_DETAIL_MAX_LENGTH) ?: "no detail"),
   )
 
 internal fun parallelCodeReviewNoOpResumeOutcome(agentId: String) =
@@ -218,7 +220,8 @@ internal fun parallelCodeReviewCaptureLane(lane: () -> ParallelReviewLaneOutcome
       is Exception -> return ParallelReviewLaneOutcome(
         success = false,
         rawOutput = "",
-        failureReason = "lane launch threw ${error::class.simpleName}: ${error.message ?: "no detail"}",
+        failureReason =
+          "lane launch threw ${error.failureCodeLabel() ?: error::class.simpleName}: ${error.message ?: "no detail"}",
       )
       else -> error
     }

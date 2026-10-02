@@ -2,8 +2,8 @@ package skillbill.infrastructure.skills.agentaddon
 
 import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.error.core.InvalidAgentAddonAgentIdError
-import skillbill.error.shellcontent.InvalidAgentAddonSchemaError
-import skillbill.error.shellcontent.MissingAgentAddonDeclarationError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.repository.toFileLocation
 import java.nio.file.Files
@@ -69,17 +69,18 @@ class AgentAddonSourceLoaderTest {
     writeAddon(external, "shared", listOf("codex"))
 
     val error =
-      assertFailsWith<InvalidAgentAddonSchemaError> {
+      assertSchemaFailure {
         discoverAgentAddons(repo, listOf(external.resolve("agent-addons")))
       }
 
-    assertTrue(error.reason.contains("duplicate slug 'shared'"), error.reason)
+    assertTrue(error.message.orEmpty().contains("duplicate slug 'shared'"), error.message)
   }
 
   @Test
   fun `required lookup reports a typed missing declaration`() {
     val repo = Files.createTempDirectory("agent-addon-required")
-    assertFailsWith<MissingAgentAddonDeclarationError> { requireAgentAddon(repo, "missing") }
+    val error = assertFailsWith<SkillBillRuntimeException> { requireAgentAddon(repo, "missing") }
+    assertEquals(AgentAddonFailureCode.MISSING_DECLARATION, error.code)
   }
 
   @Test
@@ -87,18 +88,18 @@ class AgentAddonSourceLoaderTest {
     val nonDirectoryRepo = Files.createTempDirectory("agent-addon-root-file")
     Files.writeString(nonDirectoryRepo.resolve("agent-addons"), "not a directory")
     val nonDirectoryError =
-      assertFailsWith<InvalidAgentAddonSchemaError> {
+      assertSchemaFailure {
         discoverAgentAddons(nonDirectoryRepo)
       }
-    assertTrue(nonDirectoryError.reason.contains("root must be a directory"), nonDirectoryError.reason)
+    assertTrue(nonDirectoryError.message.orEmpty().contains("root must be a directory"), nonDirectoryError.message)
 
     val danglingLinkRepo = Files.createTempDirectory("agent-addon-root-link")
     Files.createSymbolicLink(danglingLinkRepo.resolve("agent-addons"), danglingLinkRepo.resolve("missing"))
     val danglingLinkError =
-      assertFailsWith<InvalidAgentAddonSchemaError> {
+      assertSchemaFailure {
         discoverAgentAddons(danglingLinkRepo)
       }
-    assertTrue(danglingLinkError.reason.contains("root must be a directory"), danglingLinkError.reason)
+    assertTrue(danglingLinkError.message.orEmpty().contains("root must be a directory"), danglingLinkError.message)
   }
 
   @Test
@@ -106,9 +107,9 @@ class AgentAddonSourceLoaderTest {
     val repo = Files.createTempDirectory("agent-addon-invalid-slug")
     writeAddon(repo, "invalid_slug", listOf("codex"))
 
-    val error = assertFailsWith<InvalidAgentAddonSchemaError> { discoverAgentAddons(repo) }
+    val error = assertSchemaFailure { discoverAgentAddons(repo) }
 
-    assertTrue(error.reason.contains("slug"), error.reason)
+    assertTrue(error.message.orEmpty().contains("slug"), error.message)
   }
 
   @Test
@@ -118,9 +119,9 @@ class AgentAddonSourceLoaderTest {
     writeAddon(repo, "first-directory", listOf("codex"), overrides)
     writeAddon(repo, "second-directory", listOf("codex"), overrides)
 
-    val error = assertFailsWith<InvalidAgentAddonSchemaError> { discoverAgentAddons(repo) }
+    val error = assertSchemaFailure { discoverAgentAddons(repo) }
 
-    assertTrue(error.reason.contains("duplicate slug 'shared-slug'"), error.reason)
+    assertTrue(error.message.orEmpty().contains("duplicate slug 'shared-slug'"), error.message)
   }
 
   @Test
@@ -133,11 +134,11 @@ class AgentAddonSourceLoaderTest {
       AddonOverrides(manifestSlug = "declared-slug"),
     )
 
-    val error = assertFailsWith<InvalidAgentAddonSchemaError> { discoverAgentAddons(repo) }
+    val error = assertSchemaFailure { discoverAgentAddons(repo) }
 
     assertTrue(
-      error.reason.contains("source directory 'source-directory' must match slug 'declared-slug'"),
-      error.reason,
+      error.message.orEmpty().contains("source directory 'source-directory' must match slug 'declared-slug'"),
+      error.message,
     )
   }
 
@@ -168,9 +169,9 @@ class AgentAddonSourceLoaderTest {
     val root = writeAddon(repo, "fixture", listOf("codex"))
     Files.delete(root.resolve("content.md"))
 
-    val error = assertFailsWith<InvalidAgentAddonSchemaError> { discoverAgentAddons(repo) }
+    val error = assertSchemaFailure { discoverAgentAddons(repo) }
 
-    assertTrue(error.reason.contains("content.md must be a regular file"), error.reason)
+    assertTrue(error.message.orEmpty().contains("content.md must be a regular file"), error.message)
   }
 
   @Test
@@ -180,9 +181,9 @@ class AgentAddonSourceLoaderTest {
     Files.delete(root.resolve("content.md"))
     Files.createDirectory(root.resolve("content.md"))
 
-    val error = assertFailsWith<InvalidAgentAddonSchemaError> { discoverAgentAddons(repo) }
+    val error = assertSchemaFailure { discoverAgentAddons(repo) }
 
-    assertTrue(error.reason.contains("content.md must be a regular file"), error.reason)
+    assertTrue(error.message.orEmpty().contains("content.md must be a regular file"), error.message)
   }
 
   @Test
@@ -190,9 +191,9 @@ class AgentAddonSourceLoaderTest {
     val repo = Files.createTempDirectory("agent-addon-wrong-version")
     writeAddon(repo, "fixture", listOf("codex"), AddonOverrides(contractVersion = "2.0"))
 
-    val error = assertFailsWith<InvalidAgentAddonSchemaError> { discoverAgentAddons(repo) }
+    val error = assertSchemaFailure { discoverAgentAddons(repo) }
 
-    assertTrue(error.reason.contains("contract_version"), error.reason)
+    assertTrue(error.message.orEmpty().contains("contract_version"), error.message)
   }
 
   @Test
@@ -200,10 +201,10 @@ class AgentAddonSourceLoaderTest {
     val repo = Files.createTempDirectory("agent-addon-unknown-agent")
     writeAddon(repo, "fixture", listOf("unknown"))
 
-    val error = assertFailsWith<InvalidAgentAddonSchemaError> { discoverAgentAddons(repo) }
+    val error = assertSchemaFailure { discoverAgentAddons(repo) }
 
-    assertTrue(error.reason.contains("unknown agent id 'unknown'"), error.reason)
-    SupportedAgent.supportedIds.forEach { assertTrue(error.reason.contains(it), error.reason) }
+    assertTrue(error.message.orEmpty().contains("unknown agent id 'unknown'"), error.message)
+    SupportedAgent.supportedIds.forEach { assertTrue(error.message.orEmpty().contains(it), error.message) }
   }
 
   @Test
@@ -211,9 +212,9 @@ class AgentAddonSourceLoaderTest {
     val repo = Files.createTempDirectory("agent-addon-duplicate-agent")
     writeAddon(repo, "fixture", listOf("codex", "codex"))
 
-    val error = assertFailsWith<InvalidAgentAddonSchemaError> { discoverAgentAddons(repo) }
+    val error = assertSchemaFailure { discoverAgentAddons(repo) }
 
-    assertTrue(error.reason.contains("agent_ids"), error.reason)
+    assertTrue(error.message.orEmpty().contains("agent_ids"), error.message)
   }
 
   @Test
@@ -226,9 +227,9 @@ class AgentAddonSourceLoaderTest {
       AddonOverrides(consumers = listOf("bill-review")),
     )
 
-    val error = assertFailsWith<InvalidAgentAddonSchemaError> { discoverAgentAddons(repo) }
+    val error = assertSchemaFailure { discoverAgentAddons(repo) }
 
-    assertTrue(error.reason.contains("consumers"), error.reason)
+    assertTrue(error.message.orEmpty().contains("consumers"), error.message)
   }
 
   @Test
@@ -241,9 +242,9 @@ class AgentAddonSourceLoaderTest {
       AddonOverrides(consumers = listOf("skill-bill", "skill-bill")),
     )
 
-    val error = assertFailsWith<InvalidAgentAddonSchemaError> { discoverAgentAddons(repo) }
+    val error = assertSchemaFailure { discoverAgentAddons(repo) }
 
-    assertTrue(error.reason.contains("consumers"), error.reason)
+    assertTrue(error.message.orEmpty().contains("consumers"), error.message)
   }
 
   @Test
@@ -270,9 +271,9 @@ class AgentAddonSourceLoaderTest {
       val repo = Files.createTempDirectory("agent-addon-description-$index")
       writeAddon(repo, "fixture", listOf("codex"), AddonOverrides(description = description))
 
-      val error = assertFailsWith<InvalidAgentAddonSchemaError> { discoverAgentAddons(repo) }
+      val error = assertSchemaFailure { discoverAgentAddons(repo) }
 
-      assertTrue(error.reason.contains("description"), error.reason)
+      assertTrue(error.message.orEmpty().contains("description"), error.message)
     }
   }
 
@@ -282,9 +283,9 @@ class AgentAddonSourceLoaderTest {
     val root = writeAddon(repo, "fixture", listOf("codex"))
     Files.writeString(root.resolve("SKILL.md"), "generated")
 
-    val error = assertFailsWith<InvalidAgentAddonSchemaError> { discoverAgentAddons(repo) }
+    val error = assertSchemaFailure { discoverAgentAddons(repo) }
 
-    assertTrue(error.reason.contains("only agent-addon.yaml and content.md are allowed"), error.reason)
+    assertTrue(error.message.orEmpty().contains("only agent-addon.yaml and content.md are allowed"), error.message)
   }
 
   @Test
@@ -293,9 +294,15 @@ class AgentAddonSourceLoaderTest {
     val source = writeAddon(repo, "source", listOf("codex"))
     Files.createSymbolicLink(repo.resolve("agent-addons/alias"), source)
 
-    val error = assertFailsWith<InvalidAgentAddonSchemaError> { discoverAgentAddons(repo) }
+    val error = assertSchemaFailure { discoverAgentAddons(repo) }
 
-    assertTrue(error.reason.contains("duplicate canonical source identity"), error.reason)
+    assertTrue(error.message.orEmpty().contains("duplicate canonical source identity"), error.message)
+  }
+
+  private fun assertSchemaFailure(block: () -> Unit): SkillBillRuntimeException {
+    val error = assertFailsWith<SkillBillRuntimeException> { block() }
+    assertEquals(AgentAddonFailureCode.INVALID_SCHEMA, error.code)
+    return error
   }
 
   private fun writeAddon(

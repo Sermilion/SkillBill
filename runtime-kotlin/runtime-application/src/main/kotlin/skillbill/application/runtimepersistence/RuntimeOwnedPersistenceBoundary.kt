@@ -3,6 +3,7 @@ package skillbill.application.runtimepersistence
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
@@ -107,5 +108,5 @@ class RuntimeOwnedPersistenceBoundary(
   }
 
   private fun causeOf(error: Exception): String =
-    error.message?.takeIf(String::isNotBlank) ?: error::class.simpleName.orEmpty()
+    error.message?.takeIf(String::isNotBlank) ?: error.failureCodeLabel() ?: error::class.simpleName.orEmpty()
 }

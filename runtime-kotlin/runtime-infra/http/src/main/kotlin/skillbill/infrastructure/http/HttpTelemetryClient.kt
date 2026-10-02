@@ -1,10 +1,12 @@
 package skillbill.infrastructure.http
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.TelemetryProxyInvalidResponseError
 import skillbill.error.core.TelemetryProxyRequestFailureError
 import skillbill.error.core.TelemetryRelayUrlUnconfiguredError
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.telemetry.model.RemoteTransportResponse
@@ -186,7 +188,8 @@ private fun decodeJsonObject(
   val decoded =
     try {
       JsonCodec.parseValue(body)
-    } catch (_: ShellContentContractException) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isShellContentContractFailure())
       return invalidJsonResponse(errorContext, "$errorContext returned invalid JSON.")
     }
   return JsonCodec.anyToStringAnyMap(decoded)

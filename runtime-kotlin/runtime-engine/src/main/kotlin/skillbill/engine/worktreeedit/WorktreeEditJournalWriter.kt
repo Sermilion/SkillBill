@@ -6,6 +6,7 @@ import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.contracts.workflow.payload.WorktreeEditJournalPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.checkpoint.isRuntimePrivatePath
+import skillbill.error.core.failureCodeLabel
 import skillbill.idestatus.model.WorktreeEditSource
 import skillbill.idestatus.model.WorktreeEditTick
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
@@ -50,7 +51,7 @@ class WorktreeEditJournalWriter(
       }.exceptionOrNull() ?: return
     error.rethrowIfCooperativeCancellationOrInterruption()
     val cause =
-      (error.message?.takeIf(String::isNotBlank) ?: error::class.simpleName.orEmpty())
+      (error.message?.takeIf(String::isNotBlank) ?: error.failureCodeLabel() ?: error::class.simpleName.orEmpty())
         .take(MAX_DIAGNOSTIC_CAUSE_LENGTH)
     RuntimeDiagnosticsBestEffortWarning.record(
       diagnostics,

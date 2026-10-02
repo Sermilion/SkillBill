@@ -1,7 +1,9 @@
 package skillbill.infrastructure.sqlite.review.stats
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.sqlite.core.ops.degradedValuePreview
 import skillbill.infrastructure.sqlite.core.ops.recordDegradedValue
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -41,7 +43,8 @@ internal fun parseJsonList(
       } else {
         try {
           JsonCodec.parseJsonArrayStrict(trimmed)
-        } catch (error: ShellContentContractException) {
+        } catch (error: SkillBillRuntimeException) {
+          error.rethrowUnless(error.isShellContentContractFailure())
           diagnostics.recordDegradedValue(
             seam = "review_stats.json_array",
             expected = "strict JSON array",

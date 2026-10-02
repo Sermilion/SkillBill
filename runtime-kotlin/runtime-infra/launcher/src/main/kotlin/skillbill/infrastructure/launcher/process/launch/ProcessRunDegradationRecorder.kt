@@ -1,5 +1,6 @@
 package skillbill.infrastructure.launcher.process.launch
 
+import skillbill.error.core.failureCodeLabel
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import java.util.logging.Logger
@@ -47,7 +48,7 @@ internal class ProcessRunDegradationRecorder(
       ProcessRunDegradationKind.PROBE_FAILURE,
       seam,
       failure.message.orEmpty().ifBlank {
-        failure::class.simpleName.orEmpty()
+        failure.failureCodeLabel() ?: failure::class.simpleName.orEmpty()
       },
     )
   }
@@ -57,7 +58,7 @@ internal class ProcessRunDegradationRecorder(
       ProcessRunDegradationKind.STDIN_DELIVERY_FAILURE,
       "stdin",
       failure.message.orEmpty().ifBlank {
-        failure::class.simpleName.orEmpty()
+        failure.failureCodeLabel() ?: failure::class.simpleName.orEmpty()
       },
     )
   }
@@ -70,7 +71,7 @@ internal class ProcessRunDegradationRecorder(
       ProcessRunDegradationKind.CLEANUP_FAILURE,
       seam,
       failure.message.orEmpty().ifBlank {
-        failure::class.simpleName.orEmpty()
+        failure.failureCodeLabel() ?: failure::class.simpleName.orEmpty()
       },
     )
   }
@@ -125,5 +126,6 @@ private const val DEGRADATION_FAILURE_DETAIL_LIMIT = 240
 
 private fun boundedDegradationFailureDetail(failure: Throwable): String {
   val message = failure.message?.takeIf { it.isNotBlank() }
-  return (message ?: failure::class.simpleName.orEmpty()).take(DEGRADATION_FAILURE_DETAIL_LIMIT)
+  return (message ?: failure.failureCodeLabel() ?: failure::class.simpleName.orEmpty())
+    .take(DEGRADATION_FAILURE_DETAIL_LIMIT)
 }

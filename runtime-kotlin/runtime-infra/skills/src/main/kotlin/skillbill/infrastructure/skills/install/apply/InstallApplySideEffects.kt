@@ -1,4 +1,5 @@
 package skillbill.infrastructure.skills.install.apply
+import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.host.resolveTelemetryConfigPath
 import skillbill.install.model.InstallApplyIssue
@@ -66,7 +67,7 @@ internal fun applyTelemetryIntent(
       InstallApplyIssue(
         kind = InstallApplyIssueKind.TELEMETRY_APPLY_FAILED,
         message = error.message.orEmpty(),
-        causeClass = error::class.qualifiedName,
+        causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
       )
     warnings.add(issue)
     InstallTelemetryApplyOutcome(
@@ -205,7 +206,7 @@ private fun registerMcpAgent(
         agent = agent,
         message = error.message.orEmpty(),
         warnings = warnings,
-        causeClass = error::class.qualifiedName,
+        causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
       )
     }
   return when (registration) {

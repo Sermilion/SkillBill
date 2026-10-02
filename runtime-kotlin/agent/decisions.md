@@ -1,5 +1,11 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-02] SKILL-398 subtask 4: Shell-content collapse starts with AgentAddon and GovernedReview, coded failures render their code label
+Context: The first implement attempt for subtask 4 blocked because all 97 shell-content classes were too much for one phase. The conversion is split into the shared transition pieces plus the two smallest areas here, and the other seven areas in SKILL-399.
+Decision: (1) Coded failures render `<CodeEnum>.<ENTRY>` through `Throwable.failureCodeLabel()` wherever a caught throwable's class name was rendered; uncoded throwables render as before. Pure null-message fallbacks (`message ?: x::class.simpleName`) are left alone, because a coded failure always carries a message and the label could never render there. (2) `isShellContentContractFailure()` is a transitional classification: each area conversion adds its code enum, and it is removed when `ShellContentContractException` retires. `ScaffoldFailureCode` is never added. (3) The shell-content conversion is split between SKILL-398 subtask 4 (AgentAddon, GovernedReview, edge sites) and SKILL-399 (the other seven areas).
+Reason: Catch sites that name `ShellContentContractException` would miss a plain coded `SkillBillRuntimeException`, so the predicate keeps them handling the same failures until the class retires.
+Revisit when: `ShellContentContractException` retires, or `LegacyFailureCode` is removed.
+
 ## [2026-10-02] SKILL-398: Failure model: results for expected outcomes, one runtime failure type with owner codes, defects via require/check
 Context: The census in .feature-specs/SKILL-398-runtime-exception-reduction/investigation.md found 231 custom throwables in main, and 62% are never discriminated by type.
 Decision: Three tiers. Defects use require/check/error() and are never caught for control flow. Expected outcomes are returned as results. Failures that end the run throw SkillBillRuntimeException with an owner-declared RuntimeFailureCode. A new custom Throwable earns its place only for a failure that crosses a boundary the runtime does not own and cannot be tier 3, with its reason recorded here. LegacyFailureCode.UNCLASSIFIED backs a transitional (message, cause) constructor while subclasses exist. custom-throwable-baseline.txt is a two-sided guard in FailureCodeTotalityArchitectureTest.

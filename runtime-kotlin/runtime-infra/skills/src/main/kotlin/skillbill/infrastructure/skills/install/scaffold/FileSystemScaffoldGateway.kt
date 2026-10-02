@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.install.scaffold
 import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.AgentAddonCatalogueEntry
-import skillbill.error.shellcontent.MissingAgentAddonDeclarationError
+import skillbill.error.shellcontent.missingAgentAddonDeclaration
 import skillbill.infrastructure.skills.agentaddon.AgentAddonDeliveryResolver
 import skillbill.infrastructure.skills.install.nativeagent.installNativeAgentCompositionContext
 import skillbill.infrastructure.skills.scaffold.authoring.AuthoringOperations
@@ -257,7 +257,7 @@ private fun requireAgentAddonEntry(
   identity: String,
 ): AgentAddonCatalogueEntry =
   AgentAddonDeliveryResolver().catalogue(repoRoot).firstOrNull { it.identity == identity }
-    ?: throw MissingAgentAddonDeclarationError(
+    ?: throw missingAgentAddonDeclaration(
       identity.removePrefix(AGENT_ADDON_PREFIX),
       repoRoot.resolve("agent-addons").toString(),
     )

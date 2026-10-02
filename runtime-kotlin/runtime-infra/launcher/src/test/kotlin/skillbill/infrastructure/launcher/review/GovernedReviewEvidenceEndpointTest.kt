@@ -1,7 +1,8 @@
 package skillbill.infrastructure.launcher.review
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.GovernedReviewEvidenceTransportError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.infrastructure.launcher.mcp.GovernedReviewMcpConfigWriter
 import skillbill.ports.review.evidence.ReviewEvidenceBroker
 import skillbill.ports.review.model.ReviewEvidenceBatchRequest
@@ -103,9 +104,11 @@ class GovernedReviewEvidenceEndpointTest {
     val tempRoot = GovernedReviewEvidenceEndpoint.perLaunchRoot()
     val before = perLaunchDirectories(tempRoot)
 
-    assertFailsWith<GovernedReviewEvidenceTransportError> {
-      GovernedReviewEvidenceEndpoint.bind("architecture", RecordingBroker(), emptyList())
-    }
+    val bindError =
+      assertFailsWith<SkillBillRuntimeException> {
+        GovernedReviewEvidenceEndpoint.bind("architecture", RecordingBroker(), emptyList())
+      }
+    assertEquals(GovernedReviewFailureCode.EVIDENCE_TRANSPORT, bindError.code)
 
     assertEquals(before, perLaunchDirectories(tempRoot))
   }
@@ -114,9 +117,10 @@ class GovernedReviewEvidenceEndpointTest {
   fun `an isolated home without runtime-mcp loud-fails instead of inheriting the host binary`() {
     val home = Files.createTempDirectory("review-evidence-home")
     val error =
-      assertFailsWith<GovernedReviewEvidenceTransportError> {
+      assertFailsWith<SkillBillRuntimeException> {
         bridgeCommand(emptyMap(), home)
       }
+    assertEquals(GovernedReviewFailureCode.EVIDENCE_TRANSPORT, error.code)
     assertTrue(error.message!!.contains(home.toString()))
     assertTrue(error.message!!.contains("missing or not executable"))
   }

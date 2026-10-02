@@ -276,7 +276,7 @@ This event is enqueued regardless of level. At `off` the row is written locally 
 
 | Field | off | anonymous | full | Source |
 |-------|-----|-----------|------|--------|
-| `workflow_phase`, `error_type` (exception class simple name) | queued only | ✓ | ✓ | `enqueueRuntimeException` |
+| `workflow_phase`, `error_type` (exception class simple name, or the failure code label for coded runtime failures) | queued only | ✓ | ✓ | `enqueueRuntimeException` |
 | `error_message` | queued only, redacted to `[redacted]` | redacted to `[redacted]` | ✓ (first 512 characters) | `enqueueRuntimeException` |
 | `stack_trace` | queued only, `skillbill.` frames only, first 12 | `skillbill.` frames only, first 12 | first 12 frames | `redactedStackTrace` |
 

@@ -15,7 +15,8 @@ import skillbill.application.review.parallel.verification.ParallelCodeReviewRunn
 import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
-import skillbill.error.shellcontent.InlineParallelReviewUnsupportedError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.ports.review.launch.ReviewNativeAgentPreflightPort
 import skillbill.ports.review.model.ReviewAccountingRecord
 import skillbill.ports.review.model.ReviewNativeAgentPreflightRequest
@@ -149,7 +150,11 @@ class ParallelCodeReviewRunner(
   private fun requireDelegatedMode(request: ParallelCodeReviewRequest) {
     val requested = request.resolvedTier ?: request.codeReviewMode
     if (ReviewExecutionModePolicy.resolve(requested) == ResolvedReviewExecutionMode.INLINE) {
-      throw InlineParallelReviewUnsupportedError(requested.wireValue)
+      throw SkillBillRuntimeException(
+        GovernedReviewFailureCode.INLINE_PARALLEL_UNSUPPORTED,
+        "The parallel code-review runner runs only delegated reviews; requested mode " +
+          "'${requested.wireValue}' resolves to inline, which the inline review strategy runs.",
+      )
     }
   }
 

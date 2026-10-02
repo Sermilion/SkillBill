@@ -6,7 +6,9 @@ import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
 import skillbill.ports.agentaddon.model.ExternalAgentAddonSourceConfigRequest
 
@@ -25,7 +27,8 @@ class ConfigResolveExternalAgentAddonsCommand(
         config.readExternalAgentAddonSources(
           ExternalAgentAddonSourceConfigRequest(inputs.userHome, inputs.environment),
         ).sources
-      } catch (error: ShellContentContractException) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isShellContentContractFailure())
         state.completeText(
           "${error.message}\n",
           mapOf(SharedPayloadKeys.STATUS to "failed", "error" to error.message.orEmpty()),

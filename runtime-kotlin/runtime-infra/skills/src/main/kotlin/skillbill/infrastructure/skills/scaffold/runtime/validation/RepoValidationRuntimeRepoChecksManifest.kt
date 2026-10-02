@@ -1,6 +1,8 @@
 package skillbill.infrastructure.skills.scaffold.runtime.validation
 
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.ORCHESTRATION_PLAYBOOKS
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.validatePointerTargetParity
@@ -25,7 +27,8 @@ internal fun loadFeatureAddonValidationPacks(root: Path): List<PlatformManifest>
       .forEach { packRoot ->
         try {
           packs += loadPlatformManifest(packRoot)
-        } catch (_: ShellContentContractException) {
+        } catch (error: SkillBillRuntimeException) {
+          error.rethrowUnless(error.isShellContentContractFailure())
         }
       }
   }
@@ -107,7 +110,8 @@ internal fun validatePointerTargetParityIssues(root: Path): List<String> {
       .forEach { packRoot ->
         try {
           packs += loadPlatformManifest(packRoot)
-        } catch (_: ShellContentContractException) {
+        } catch (error: SkillBillRuntimeException) {
+          error.rethrowUnless(error.isShellContentContractFailure())
         }
       }
   }

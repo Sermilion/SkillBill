@@ -3,8 +3,8 @@ package skillbill.mcp.core
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
-import skillbill.error.core.ShellContentContractException
 import skillbill.error.learning.InvalidLearningSourceError
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.mcp.shared.InvalidMcpToolArgumentError
 import skillbill.mcp.shared.McpComponent
 import skillbill.mcp.shared.McpToolArguments
@@ -22,14 +22,13 @@ internal object McpToolDispatcher {
   ): Map<String, Any?> =
     runCatching { mcpToolResult(invoke(toolName, rawArguments, component), isError = false) }
       .getOrElse { error ->
-        when (error) {
-          is CancellationException -> throw error
-          is ShellContentContractException,
-          is InvalidLearningSourceError,
-          is IllegalArgumentException,
-          is IllegalStateException,
-          -> mcpToolErrorResult(toolName, error)
-          is Exception -> {
+        when {
+          error is CancellationException -> throw error
+          error.isShellContentContractFailure() ||
+            error is InvalidLearningSourceError ||
+            error is IllegalArgumentException ||
+            error is IllegalStateException -> mcpToolErrorResult(toolName, error)
+          error is Exception -> {
             recordCaptureFailure(
               workflowPhase = toolName,
               capture = { component.telemetryService.captureException(toolName, error) },

@@ -1,5 +1,6 @@
 package skillbill.infrastructure.workflow.github
 
+import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.process.BoundedExternalProcessOutput
 import skillbill.infrastructure.host.process.BoundedExternalProcessRequest
@@ -50,9 +51,10 @@ internal class ProcessGhCommandRunner(
         GhCommandResult(exitCode = result.exitCode, stdout = result.output)
       }
     }.getOrElse { error ->
+      val errorName = error.failureCodeLabel() ?: error::class.simpleName
       GhCommandResult(
         exitCode = 1,
-        stdout = error.message?.let { "${error::class.simpleName}: $it" } ?: (error::class.simpleName ?: "Error"),
+        stdout = error.message?.let { "$errorName: $it" } ?: (errorName ?: "Error"),
       )
     }
 }

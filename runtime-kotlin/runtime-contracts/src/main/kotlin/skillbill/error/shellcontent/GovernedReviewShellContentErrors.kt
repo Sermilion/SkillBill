@@ -1,32 +1,18 @@
 package skillbill.error.shellcontent
 
 import skillbill.error.core.RuntimeFailureCode
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
 
 enum class GovernedReviewFailureCode : RuntimeFailureCode {
   UNADDRESSED_FINDINGS_LEDGER_ABSENT,
+  INVALID_LEDGER_SCHEMA,
+  EVIDENCE_TRANSPORT,
+  INLINE_PARALLEL_UNSUPPORTED,
+  LAUNCH_CAPABILITY,
 }
 
-class InvalidUnaddressedFindingsLedgerSchemaError(
-  message: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
-
-class GovernedReviewEvidenceTransportError(
-  message: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
-
-class InlineParallelReviewUnsupportedError(
-  val requestedMode: String,
-) : ShellContentContractException(
-    "The parallel code-review runner runs only delegated reviews; requested mode '$requestedMode' " +
-      "resolves to inline, which the inline review strategy runs.",
-  )
-
-class GovernedReviewLaunchCapabilityError(
-  val provider: String,
-  val capability: String,
-) : ShellContentContractException(
+fun governedReviewLaunchCapability(provider: String, capability: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    GovernedReviewFailureCode.LAUNCH_CAPABILITY,
     "Agent '$provider' cannot launch a governed review: missing capability '$capability'.",
   )

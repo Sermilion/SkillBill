@@ -1,3 +1,13 @@
+## [2026-10-02] SKILL-398 subtask 4 — AgentAddon and GovernedReview shell-content errors collapse to coded failures
+Areas: runtime-kotlin/runtime-{contracts,application,cli,engine,mcp,domain,core}, runtime-infra/{skills,launcher,contracts,sqlite,http,workflow}, docs/telemetry-privacy.md
+- The 10 AgentAddon and GovernedReview ShellContentContractException subclasses are deleted; both files keep only a failure-code enum plus message functions, and every throw site raises one coded SkillBillRuntimeException. reusable
+- New SkillBillRuntimeException.rethrowUnless(handled) and Throwable.failureCodeLabel() ("CodeEnum.ENTRY", null for uncoded or legacy codes) in runtime-contracts; ~40 class-name renders (telemetry error_type, diagnostics, install causeClass) use the label with the old expression as fallback. reusable
+- isShellContentContractFailure() is a transitional predicate (the old class plus the codes of converted areas); catch sites use it so coded failures stay handled like the old subclasses. Each later area conversion adds its code enum; it goes away when the base class retires.
+- Tests assert the coded exception and code instead of class types; one MCP test pins that AgentAddon coded failures stay no-capture while other coded failures are captured with the label. 10 baseline rows removed.
+- Limits: the other seven shell-content areas move to SKILL-399; CodeReviewCommand's aggregation-integrity catch is still dead; authored without compile or test runs, so validate checks import order, line width and detekt.
+Feature flag: N/A
+Acceptance criteria: implemented per reduced-scope spec; validate confirms
+
 ## [2026-10-02] SKILL-398 subtask 3 — local control-flow exceptions become results
 Areas: runtime-kotlin/runtime-{engine,application,cli,domain,ports,contracts,core}, runtime-infra/{launcher,skills,sqlite,contracts,workflow}
 - Custom throwables used only for local control flow were replaced by sealed results: runner already-running, launch-authorization denial, shared-preplan refresh refusal, missing unaddressed-findings ledger, spec-intent source read, parallel-review planning failures, lane-register parse, MCP registration outcome, skill-removal refusal. reusable

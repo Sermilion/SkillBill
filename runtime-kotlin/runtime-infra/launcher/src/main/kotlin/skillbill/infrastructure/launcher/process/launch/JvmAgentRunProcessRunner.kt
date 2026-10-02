@@ -1,6 +1,7 @@
 package skillbill.infrastructure.launcher.process.launch
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.model.GoalRunnerProcessState
 import skillbill.infrastructure.host.jvm.GateJvmResolver
 import skillbill.infrastructure.launcher.process.waitloop.ProcessLifecycleEmitter
@@ -122,7 +123,8 @@ class JvmAgentRunProcessRunner(
 
     private fun boundedTeardownFailureDetail(failure: Throwable): String {
       val message = failure.message?.takeIf { it.isNotBlank() }
-      return (message ?: failure::class.simpleName.orEmpty()).take(TEARDOWN_FAILURE_DETAIL_LIMIT)
+      return (message ?: failure.failureCodeLabel() ?: failure::class.simpleName.orEmpty())
+        .take(TEARDOWN_FAILURE_DETAIL_LIMIT)
     }
 
     private const val TEARDOWN_FAILURE_DETAIL_LIMIT = 240

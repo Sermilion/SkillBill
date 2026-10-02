@@ -29,7 +29,8 @@ import skillbill.application.review.spec.resolver
 import skillbill.application.review.verification.ReviewClaimVerificationRunner
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.config.model.RepoLocalConfig
-import skillbill.error.shellcontent.InlineParallelReviewUnsupportedError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.error.shellcontent.MissingInstalledNativeAgentError
 import skillbill.goalrunner.terminalStatus
 import skillbill.install.model.SupportedAgent
@@ -381,11 +382,12 @@ class ParallelCodeReviewRunnerTest {
       val runner = runner(launcher, diffResolver = RecordingDiffResolver(default = diffFor("A.kt")))
 
       val error =
-        assertFailsWith<InlineParallelReviewUnsupportedError> {
+        assertFailsWith<SkillBillRuntimeException> {
           runner.reviewed(baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = mode))
         }
 
-      assertEquals(mode.wireValue, error.requestedMode)
+      assertEquals(GovernedReviewFailureCode.INLINE_PARALLEL_UNSUPPORTED, error.code)
+      assertTrue(error.message.orEmpty().contains("requested mode '${mode.wireValue}'"))
       assertTrue(launcher.requests.isEmpty(), "$mode must not launch a parent agent.")
     }
   }

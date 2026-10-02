@@ -2,8 +2,10 @@ package skillbill.infrastructure.sqlite.workflow
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -168,7 +170,8 @@ internal fun decodeWorkflowStringList(rawValue: String?): List<String> {
   val parsed =
     try {
       JsonCodec.parseJsonArrayStrict(rawValue.trim())
-    } catch (_: ShellContentContractException) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isShellContentContractFailure())
       throw InvalidWorkflowStateSchemaError("spec_input_types must be a JSON array")
     }
   return parsed.map { element ->

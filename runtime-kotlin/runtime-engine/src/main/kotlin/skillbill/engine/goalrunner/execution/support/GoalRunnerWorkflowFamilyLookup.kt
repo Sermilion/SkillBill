@@ -4,7 +4,8 @@ import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
-import skillbill.error.shellcontent.InvalidAgentAddonSelectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.error.shellcontent.LegacyProseWorkflowError
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -32,7 +33,10 @@ fun decodeGoalAgentAddonSelection(raw: Any?): AgentAddonSelection {
   val values = raw ?: return AgentAddonSelection()
   val entries =
     values as? List<*>
-      ?: throw InvalidAgentAddonSelectionError("Goal review policy agent_addon_selection must be a list.")
+      ?: throw SkillBillRuntimeException(
+        AgentAddonFailureCode.INVALID_SELECTION,
+        "Goal review policy agent_addon_selection must be a list.",
+      )
   return AgentAddonSelection(
     entries.mapIndexed(::decodeGoalAgentAddonSelectionEntry),
   )
@@ -44,7 +48,8 @@ private fun decodeGoalAgentAddonSelectionEntry(
 ): PersistedAgentAddonSelectionEntry {
   val entry =
     JsonCodec.anyToStringAnyMap(value)
-      ?: throw InvalidAgentAddonSelectionError(
+      ?: throw SkillBillRuntimeException(
+        AgentAddonFailureCode.INVALID_SELECTION,
         "Goal review policy agent_addon_selection entry $index must be a map.",
       )
   val expectedKeys =
@@ -54,7 +59,8 @@ private fun decodeGoalAgentAddonSelectionEntry(
       FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256,
     )
   if (entry.keys != expectedKeys) {
-    throw InvalidAgentAddonSelectionError(
+    throw SkillBillRuntimeException(
+      AgentAddonFailureCode.INVALID_SELECTION,
       "Goal review policy agent_addon_selection entry $index has invalid fields.",
     )
   }
@@ -82,4 +88,7 @@ private fun requiredAddonField(
   label: String,
 ): String =
   entry[key] as? String
-    ?: throw InvalidAgentAddonSelectionError("Goal review policy add-on entry $index is missing $label.")
+    ?: throw SkillBillRuntimeException(
+      AgentAddonFailureCode.INVALID_SELECTION,
+      "Goal review policy add-on entry $index is missing $label.",
+    )

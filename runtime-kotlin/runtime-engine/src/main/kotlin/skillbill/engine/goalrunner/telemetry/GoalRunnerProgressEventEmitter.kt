@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.telemetry
 import skillbill.engine.goalrunner.model.GoalProgressEventDraft
 import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.error.core.failureCodeLabel
 import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.agentrun.model.AgentRunProgressEmitter
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -47,7 +48,7 @@ internal class GoalRunnerProgressEventEmitter(
       },
       failureMessage = { error ->
         "Best-effort goal progress emit failed: action='${emission.eventKind.wireValue}' " +
-          "workflowId='$workflowId' errorType='${error::class.qualifiedName}' " +
+          "workflowId='$workflowId' errorType='${error.failureCodeLabel() ?: error::class.qualifiedName}' " +
           "message='${GoalRunnerBestEffortEmission.boundedMessage(error.message.orEmpty())}'"
       },
     )

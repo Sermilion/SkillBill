@@ -9,7 +9,9 @@ import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.install.model.ExternalPlatformPackSource
 import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.policy.platformpack.model.PlatformPackSourceKind
@@ -36,7 +38,8 @@ class ConfigUnregisterExternalPlatformPackCommand(
           ExternalPlatformPackSource(resolvedPath.toFileLocation()),
           inputs.environment,
         )
-      } catch (error: ShellContentContractException) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isShellContentContractFailure())
         state.completeText(
           "${error.message}\n",
           externalPlatformPackFailurePayload(error, sourceKind = PlatformPackSourceKind.EXTERNAL),

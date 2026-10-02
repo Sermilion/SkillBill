@@ -4,7 +4,9 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleSessionCompletion
 import skillbill.contracts.telemetry.TelemetryMeasurementAvailability
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.sqlite.core.ops.degradedValuePreview
 import skillbill.infrastructure.sqlite.core.ops.recordDegradedValue
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
@@ -151,7 +153,8 @@ private fun Map<String, Any?>.nameList(name: String): ParsedNameList {
   }
   return try {
     ParsedNameList(values = JsonCodec.parseJsonArrayStrict(raw.trim()), corrupt = false)
-  } catch (_: ShellContentContractException) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isShellContentContractFailure())
     ParsedNameList(values = emptyList(), corrupt = true)
   }
 }
@@ -178,7 +181,8 @@ private fun parseStoredJsonArray(
   }
   return try {
     JsonCodec.parseJsonArrayStrict(rawValue.trim())
-  } catch (error: ShellContentContractException) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isShellContentContractFailure())
     diagnostics.recordDegradedValue(
       seam = "telemetry.json_array.$fieldName",
       expected = "strict JSON array",

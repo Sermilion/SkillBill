@@ -8,6 +8,7 @@ import skillbill.application.decomposition.model.DecompositionPlanManifestInput
 import skillbill.application.decomposition.model.PreparedDecompositionManifestWrite
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.issuekey.issueAndFeature
+import skillbill.error.core.failureCodeLabel
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
@@ -305,7 +306,8 @@ private fun invalidParentSpecManifestLoad(
   parentSpecLabel: String,
   error: Exception,
 ): Nothing {
-  val detail = error.message?.takeIf(String::isNotBlank) ?: error::class.simpleName.orEmpty()
+  val detail =
+    error.message?.takeIf(String::isNotBlank) ?: error.failureCodeLabel() ?: error::class.simpleName.orEmpty()
   invalidManifest(
     parentSpecPath.toString(),
     "failed to load decomposition manifest '$manifestPath' while validating parent_spec_path " +

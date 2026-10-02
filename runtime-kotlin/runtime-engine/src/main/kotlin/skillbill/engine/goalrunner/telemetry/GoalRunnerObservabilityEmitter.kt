@@ -5,6 +5,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityWorkerRole
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.model.GoalRunnerLaunchFacts
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -59,7 +60,8 @@ internal class GoalRunnerObservabilityEmitter(
       },
       failureMessage = { error ->
         "Best-effort goal observability emit failed: workflowId='${subject.workflowId}' " +
-          "livenessClass='${signal.livenessClass.wireValue}' errorType='${error::class.qualifiedName}' " +
+          "livenessClass='${signal.livenessClass.wireValue}' " +
+          "errorType='${error.failureCodeLabel() ?: error::class.qualifiedName}' " +
           "message='${GoalRunnerBestEffortEmission.boundedMessage(error.message.orEmpty())}'"
       },
     )

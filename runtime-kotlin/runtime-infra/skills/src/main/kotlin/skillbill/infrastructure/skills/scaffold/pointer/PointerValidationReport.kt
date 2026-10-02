@@ -1,6 +1,8 @@
 package skillbill.infrastructure.skills.scaffold.pointer
 
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
@@ -49,7 +51,8 @@ private fun loadValidPlatformPackManifests(packsRoot: Path): List<PlatformManife
 private fun tryLoadPlatformManifest(dir: Path): PlatformManifest? =
   try {
     loadPlatformManifest(dir)
-  } catch (_: ShellContentContractException) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isShellContentContractFailure())
     null
   }
 

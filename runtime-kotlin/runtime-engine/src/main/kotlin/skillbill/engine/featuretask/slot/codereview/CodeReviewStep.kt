@@ -17,6 +17,7 @@ import skillbill.engine.featuretask.slot.state.PhaseReviewExecutionContext
 import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.error.core.failureCodeLabel
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.error.shellcontent.InvalidReviewContextSchemaError
 import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
@@ -405,7 +406,7 @@ private fun launchFailure(error: Throwable): ReviewPassLaunch.Failed? {
       )
     is Exception ->
       ReviewPassLaunch.Failed(
-        "Runtime-owned review failed: ${error::class.simpleName}: $message",
+        "Runtime-owned review failed: ${error.failureCodeLabel() ?: error::class.simpleName}: $message",
         FeatureTaskRuntimeFailureDisposition.RETRYABLE,
       )
     else -> null

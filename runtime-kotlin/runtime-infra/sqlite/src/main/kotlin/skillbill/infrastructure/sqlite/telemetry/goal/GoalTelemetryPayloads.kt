@@ -3,7 +3,9 @@ package skillbill.infrastructure.sqlite.telemetry.goal
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.sqlite.core.ops.degradedValuePreview
 import skillbill.infrastructure.sqlite.core.ops.recordDegradedValue
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.booleanFromInt
@@ -37,7 +39,8 @@ private fun parseAgentIdArray(
   }
   return try {
     JsonCodec.parseJsonArrayStrict(trimmed)
-  } catch (error: ShellContentContractException) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isShellContentContractFailure())
     diagnostics.recordDegradedValue(
       seam = "telemetry.participating_agent_ids",
       expected = "strict JSON array for workflow $workflowId",

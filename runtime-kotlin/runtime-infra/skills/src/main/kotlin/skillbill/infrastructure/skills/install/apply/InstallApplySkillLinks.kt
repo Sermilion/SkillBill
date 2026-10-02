@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.apply
 
+import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
 import skillbill.install.model.InstallAgentLinkStatus
 import skillbill.install.model.InstallAgentSkillLinkOutcome
@@ -124,7 +125,7 @@ private fun failedSkillLinkOutcome(
       agent = context.agentTarget.agent,
       path = context.linkPath.toFileLocation(),
       guidance = symlinkError?.guidance,
-      causeClass = error::class.qualifiedName,
+      causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
     )
   return skillLinkOutcome(
     context = context,

@@ -3,7 +3,8 @@ package skillbill.engine.goalrunner.findings
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.goalrunner.telemetry.GoalRunnerBestEffortEmission
-import skillbill.error.shellcontent.InvalidUnaddressedFindingsLedgerSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.goalrunner.model.UNADDRESSED_FINDING_CATEGORIES
 import skillbill.goalrunner.model.UNADDRESSED_FINDING_SEVERITIES
 import skillbill.goalrunner.model.UnaddressedFinding
@@ -31,7 +32,8 @@ class UnaddressedFindingsLedgerService(
         val findings = unitOfWork.unaddressedFindings.fetchLedger(issueKey)
         findings.forEach { finding ->
           if (!isValidFinding(issueKey, finding)) {
-            throw InvalidUnaddressedFindingsLedgerSchemaError(
+            throw SkillBillRuntimeException(
+              GovernedReviewFailureCode.INVALID_LEDGER_SCHEMA,
               "Malformed unaddressed-findings ledger row for issue '$issueKey'.",
             )
           }
@@ -89,7 +91,7 @@ class UnaddressedFindingsLedgerService(
         val message =
           "Malformed finding verification disposition artifact for issue '$issueKey' workflow '$workflowId'."
         RuntimeDiagnosticsBestEffortWarning.record(diagnostics, message, error)
-        throw InvalidUnaddressedFindingsLedgerSchemaError(message)
+        throw SkillBillRuntimeException(GovernedReviewFailureCode.INVALID_LEDGER_SCHEMA, message)
       }
     }
 
@@ -109,7 +111,7 @@ class UnaddressedFindingsLedgerService(
           val message =
             "Malformed goal subtask review state for issue '$issueKey' workflow '$workflowId'."
           RuntimeDiagnosticsBestEffortWarning.record(diagnostics, message, error)
-          throw InvalidUnaddressedFindingsLedgerSchemaError(message, error)
+          throw SkillBillRuntimeException(GovernedReviewFailureCode.INVALID_LEDGER_SCHEMA, message, error)
         } ?: return@mapNotNull null
       repairLedger
         .takeUnless(FeatureTaskRuntimeRepairLedger::isEmpty)

@@ -1,6 +1,8 @@
 package skillbill.infrastructure.skills.scaffold.validation.shape
 
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.skills.scaffold.authoring.AuthoringRenderResult
 import skillbill.infrastructure.skills.scaffold.authoring.AuthoringTarget
 import skillbill.infrastructure.skills.scaffold.authoring.discoverTargets
@@ -109,7 +111,8 @@ private fun validatePointerRenderability(
         val pack =
           try {
             loadPlatformManifest(packRoot)
-          } catch (error: ShellContentContractException) {
+          } catch (error: SkillBillRuntimeException) {
+            error.rethrowUnless(error.isShellContentContractFailure())
             issues += "${driftDisplayPath(root, packRoot)}: cannot parse platform.yaml for drift check: " +
               error.message.orEmpty()
             return@forEach

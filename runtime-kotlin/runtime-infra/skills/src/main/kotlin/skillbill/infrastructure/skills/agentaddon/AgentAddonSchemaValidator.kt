@@ -3,7 +3,9 @@ package skillbill.infrastructure.skills.agentaddon
 import com.fasterxml.jackson.databind.JsonNode
 import com.networknt.schema.JsonSchema
 import skillbill.contracts.agentaddon.AGENT_ADDON_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidAgentAddonSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
+import skillbill.error.shellcontent.invalidAgentAddonSchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.SchemaIdentityRequest
 import skillbill.infrastructure.contracts.locator.AgentAddonSchemaPaths
@@ -14,7 +16,7 @@ private object ClasspathAgentAddonSchemaResourceLoader : AgentAddonSchemaResourc
       .getResourceAsStream(AgentAddonSchemaPaths.CLASSPATH_RESOURCE)
       ?.bufferedReader()
       ?.use { it.readText() }
-      ?: throw InvalidAgentAddonSchemaError(
+      ?: throw invalidAgentAddonSchema(
         AgentAddonSchemaPaths.CLASSPATH_RESOURCE,
         "canonical schema resource is missing",
       )
@@ -48,14 +50,14 @@ class AgentAddonSchemaValidator(
           classpathResource = source,
           expectedSchemaId = AgentAddonSchemaPaths.EXPECTED_SCHEMA_ID,
           expectedContractVersion = AGENT_ADDON_CONTRACT_VERSION,
-          identityFailure = { reason -> InvalidAgentAddonSchemaError(source, reason) },
+          identityFailure = { reason -> invalidAgentAddonSchema(source, reason) },
         ),
       )
       ClasspathContractSchemaLoader.compiledSchemaFromYamlNode(
         cacheKey = "agent-addon:${System.identityHashCode(resourceLoader)}:$source",
         yamlNode = node,
         processingFailure = { cause ->
-          InvalidAgentAddonSchemaError(source, cause.message ?: cause::class.simpleName.orEmpty(), cause)
+          invalidAgentAddonSchema(source, cause.message ?: cause::class.simpleName.orEmpty(), cause)
         },
       )
     }
@@ -74,13 +76,13 @@ private fun Throwable.asAgentAddonSchemaError(
   sourceLabel: String,
   fallbackReason: String,
 ): Throwable =
-  when (this) {
-    is InvalidAgentAddonSchemaError -> this
-    is Exception -> InvalidAgentAddonSchemaError(sourceLabel, message ?: fallbackReason, this)
+  when {
+    (this as? SkillBillRuntimeException)?.code == AgentAddonFailureCode.INVALID_SCHEMA -> this
+    this is Exception -> invalidAgentAddonSchema(sourceLabel, message ?: fallbackReason, this)
     else -> this
   }
 
 private fun invalidSchema(
   sourceLabel: String,
   reason: String,
-): Nothing = throw InvalidAgentAddonSchemaError(sourceLabel, reason)
+): Nothing = throw invalidAgentAddonSchema(sourceLabel, reason)
