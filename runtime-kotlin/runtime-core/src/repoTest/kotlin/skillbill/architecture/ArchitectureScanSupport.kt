@@ -427,7 +427,7 @@ object ArchitectureScanSupport {
     bodies.forEach { (functionName, body) ->
       forbiddenParseBoundaryReporter(body).forEach { reporter ->
         violations += "${site.relativePath}::$functionName reports malformed external input via $reporter; " +
-          "use a typed contract failure instead."
+          "use a result or a SkillBillRuntimeException code instead."
       }
     }
     (site.functionNames - bodies.keys).forEach { functionName ->

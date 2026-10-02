@@ -377,8 +377,8 @@ runtime-core
   more production modules read or that a `runtime-ports` signature exposes:
   contract DTOs, JSON/ordered-map helpers, runtime surface contracts,
   `*_CONTRACT_VERSION` constants (plus the two top-level `*_SCHEMA_ID` constants
-  read by ports, engine, and sqlite), and the `skillbill.error` runtime exception
-  taxonomy. `*SchemaPaths` locators and `logSchemaLoadFailure` are **not** here:
+  read by ports, engine, and sqlite), and the `skillbill.error` failure codes (owner
+  `RuntimeFailureCode` enums) and the single runtime failure type `SkillBillRuntimeException`. `*SchemaPaths` locators and `logSchemaLoadFailure` are **not** here:
   they live in `skillbill.infrastructure.contracts.locator` in
   `runtime-infra/contracts`, the module that stages the canonical YAML. A
   declaration with a single owner lives in that owner's module (SKILL-374). It no longer owns the JSON-Schema
@@ -391,7 +391,8 @@ runtime-core
   `skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode` owns the eleven
   phase-output failure wire tokens and their coarse `FeatureTaskRuntimePhaseOutputFailureKind`
   mapping; `coarseFailureKindForPhaseOutputWireCode` sits beside it and delegates to that
-  enum. The `skillbill.error.*` packages are acyclic: `ShellContentContractException` and
+  enum. The `skillbill.error.*` packages are acyclic: `SkillBillRuntimeException`,
+  `RuntimeFailureCode`, the transitional `LegacyFailureCode`, `ShellContentContractException`, and
   the `FailureWireCode` contract live in `skillbill.error.core`, feature-task failure
   vocabulary in `skillbill.error.featuretask`, and per-surface shell-content errors in
   `skillbill.error.shellcontent`, which depends on both.
@@ -633,7 +634,7 @@ and `:runtime-infra:sqlite`.
   structural repair and strict parsing live in `skillbill.infrastructure.contracts.phaseoutput`,
   not under `skillbill.infrastructure.contracts`, because they are
   adapter-owned parse/repair engines rather than schema validators.
-- `skillbill.error`: runtime exception taxonomy.
+- `skillbill.error`: failure codes (`RuntimeFailureCode` enums) and the single runtime failure type `SkillBillRuntimeException`.
 - `skillbill.agent.model`: phase handoff inputs and the prose `PhaseOutput` (`value`, optional `prompt`) owned by `runtime-domain`.
 - `skillbill.infrastructure.skills.agentaddon`: governed agent-add-on filesystem
   discovery and schema validation owned by `runtime-infra/skills`;

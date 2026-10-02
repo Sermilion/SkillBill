@@ -1,5 +1,13 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-02] SKILL-398: Failure model: results for expected outcomes, one runtime failure type with owner codes, defects via require/check
+Context: The census in .feature-specs/SKILL-398-runtime-exception-reduction/investigation.md found 231 custom throwables in main, and 62% are never discriminated by type.
+Decision: Three tiers. Defects use require/check/error() and are never caught for control flow. Expected outcomes are returned as results. Failures that end the run throw SkillBillRuntimeException with an owner-declared RuntimeFailureCode. A new custom Throwable earns its place only for a failure that crosses a boundary the runtime does not own and cannot be tier 3, with its reason recorded here. LegacyFailureCode.UNCLASSIFIED backs a transitional (message, cause) constructor while subclasses exist. custom-throwable-baseline.txt is a two-sided guard in FailureCodeTotalityArchitectureTest.
+Reason: 62% of types are never discriminated, and both the CLI and MCP edges discard the type and print the message.
+Supersedes: The "typed errors" retention of SKILL-349, SKILL-374 and SKILL-391, and the class-per-failure form of the SKILL-351/352/353 typed durable failures. Their ownership placement stands.
+Alternatives considered: IllegalStateException with a code (the edges would catch real bugs as user errors); guard only (it freezes 231 classes); results for everything (it pushes unrecoverable failures through every signature). All three rejected; see investigation.md.
+Revisit when: a boundary needs callers to discriminate a failure that a code on SkillBillRuntimeException cannot express.
+
 ## [2026-10-01] Goal-review accounting types stay in workflow.model.goalreview
 Context: SKILL-397 subtask 3 planned to move review accounting helpers into review.context.model.accounting to break a package cycle.
 Decision: GoalSubtaskCommitFocusedAccounting and ReviewAccountingBoundedJson stay in skillbill.workflow.model.goalreview.

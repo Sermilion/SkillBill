@@ -20,6 +20,14 @@ class ArchitectureBaselineRecorder {
     recordAmbientEnvironmentBaselines(baselineDir)
     recordInjectDefaultBaselines(baselineDir)
     recordSpilloverFileNameBaseline(baselineDir)
+    recordCustomThrowableBaseline(baselineDir)
+  }
+
+  private fun recordCustomThrowableBaseline(baselineDir: Path) {
+    Files.writeString(
+      baselineDir.resolve(PrincipleEnforcementInventory.CUSTOM_THROWABLE_BASELINE),
+      ArchitectureScanSupport.customThrowableRows().sorted().joinToString("\n") + "\n",
+    )
   }
 
   private fun recordLogicalTypeLineCeilingBaseline(baselineDir: Path) {

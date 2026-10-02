@@ -1,9 +1,19 @@
 package skillbill.error.core
 
+/** Marker for owner-declared failure code enums. */
+interface RuntimeFailureCode
+
+enum class LegacyFailureCode : RuntimeFailureCode {
+  UNCLASSIFIED,
+}
+
 open class SkillBillRuntimeException(
+  val code: RuntimeFailureCode,
   message: String,
   cause: Throwable? = null,
-) : RuntimeException(message, cause)
+) : RuntimeException(message, cause) {
+  constructor(message: String, cause: Throwable? = null) : this(LegacyFailureCode.UNCLASSIFIED, message, cause)
+}
 
 open class ShellContentContractException(
   message: String,

@@ -1,3 +1,14 @@
+## [2026-10-02] SKILL-398 subtask 1 — failure policy and throwable baseline
+Areas: runtime-kotlin/runtime-contracts (error/core, error/featuretask), runtime-domain decomposition model, runtime-core repoTest architecture guards, docs/code-principles.md, AGENTS.md, ARCHITECTURE.md
+- SkillBillRuntimeException now carries a RuntimeFailureCode; a secondary constructor keeps legacy callers on LegacyFailureCode.UNCLASSIFIED until later subtasks convert them. reusable
+- Four existing failure enums (phase-output code and kind, handoff-projection kind, decomposition-manifest validation code) implement RuntimeFailureCode.
+- New architecture scan lists every custom throwable in production main across modules (comments and literals stripped, nesting tracked, supertypes resolved transitively) and diffs it against custom-throwable-baseline.txt; the recorder regenerates the baseline. reusable
+- Parse-boundary guard messages now say "a result or a SkillBillRuntimeException code"; scan logic untouched.
+- Docs: Failure Contracts in code-principles.md rewritten as three tiers with an earns-its-place rule; AGENTS.md and ARCHITECTURE.md name the single failure type and code enums.
+- Limits: no exception class removed or converted yet (subtasks 2-6); authored without compile or test runs, so validate must sanity-check the baseline, the scan heuristics (simple-name fallback, Exception/Error suffix) and formatting.
+Feature flag: N/A
+Acceptance criteria: implemented per spec; build and validate confirm
+
 ## [2026-10-01] SKILL-397 subtask 3 — domain package graph repair
 Areas: runtime-kotlin/runtime-{domain,application,engine,cli,core,ports}, runtime-kotlin/runtime-infra/*, ARCHITECTURE.md
 - runtime-domain package graph is acyclic: the cycle baseline file is empty and stays empty; test packages and directories now mirror main packages.
