@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.planning.state
 
+import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.slot.state.PhaseFanOutUnits
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
@@ -11,6 +12,7 @@ import skillbill.engine.goalrunner.planning.context.SharedPreplanSettlement
 import skillbill.engine.goalrunner.planning.context.currentProvenance
 import skillbill.engine.goalrunner.planning.context.settleSharedPreplan
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLaunch
+import skillbill.engine.goalrunner.planning.model.GoalPlanningRecoveryProgress
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.model.SharedPreplanSettlementArgs
@@ -24,6 +26,7 @@ import skillbill.engine.goalrunner.planning.outcome.recoverySubtaskId
 import skillbill.engine.goalrunner.planning.outcome.resolvedSubSpecPath
 import skillbill.engine.goalrunner.planning.outcome.stopped
 import skillbill.engine.goalrunner.planning.outcome.unexpectedPlanningFailureReason
+import skillbill.engine.goalrunner.planning.remedies.goalPlanningPreparationStateReadStopReason
 import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
@@ -136,28 +139,48 @@ internal class GoalPlanningRunProgress(
           ),
         )
       }
-    val recovery =
-      runCatching {
-        sweep.checkpoint.recoveryProgress(scope.identity, descriptors, settled.provenance).also { progress ->
-          requireStoredPlansReady(settled.shared, progress.missingSubtaskIds)
-        }
-      }
-    val error = recovery.exceptionOrNull() ?: return PhaseFanOutUnits.Pending(recovery.getOrThrow().missingSubtaskIds)
-    val subtaskId = recoverySubtaskId(error)
-    val phaseId =
-      GoalPlanningSweepConstants.PHASE_PLAN.takeIf { subtaskId != 0 }
-        ?: GoalPlanningSweepConstants.PHASE_PREPLAN
-    return PhaseFanOutUnits.Stopped(
-      halt(
-        stopped(
-          settled.shared,
-          subtaskId,
-          preparationStateReadReason(error, settled.shared.issueKey, subtaskId),
-          phaseId,
+    return runCatching { recoveredPendingUnits(settled) }.getOrElse { error ->
+      error.rethrowIfCooperativeCancellationOrInterruption()
+      val subtaskId = recoverySubtaskId(error)
+      val phaseId =
+        GoalPlanningSweepConstants.PHASE_PLAN.takeIf { subtaskId != 0 }
+          ?: GoalPlanningSweepConstants.PHASE_PREPLAN
+      PhaseFanOutUnits.Stopped(
+        halt(
+          stopped(
+            settled.shared,
+            subtaskId,
+            preparationStateReadReason(error, settled.shared.issueKey, subtaskId),
+            phaseId,
+          ),
         ),
-      ),
-    )
+      )
+    }
   }
+
+  private fun recoveredPendingUnits(settled: SharedPreplanSettlement.Ready): PhaseFanOutUnits =
+    when (val recovery = sweep.checkpoint.recoveryProgress(scope.identity, descriptors, settled.provenance)) {
+      is GoalPlanningRecoveryProgress.IncompletePlan ->
+        PhaseFanOutUnits.Stopped(
+          halt(
+            stopped(
+              settled.shared,
+              0,
+              goalPlanningPreparationStateReadStopReason(
+                recovery.reason,
+                recovery.subtaskId,
+                settled.shared.issueKey,
+                0,
+              ),
+              GoalPlanningSweepConstants.PHASE_PREPLAN,
+            ),
+          ),
+        )
+      is GoalPlanningRecoveryProgress.Ready -> {
+        requireStoredPlansReady(settled.shared, recovery.progress.missingSubtaskIds)
+        PhaseFanOutUnits.Pending(recovery.progress.missingSubtaskIds)
+      }
+    }
 
   fun pauseBefore(unitId: Int): PhaseOutcome? =
     sweep.planningPauseOutcome(requireNotNull(ready).shared, unitId, GoalPlanningSweepConstants.PHASE_PLAN)

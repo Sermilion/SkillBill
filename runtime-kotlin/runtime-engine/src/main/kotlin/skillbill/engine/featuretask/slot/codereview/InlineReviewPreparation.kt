@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.codereview
 
+import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputBlocked
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputPreparation
@@ -16,7 +17,6 @@ import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.state.PhaseReviewExecutionContext
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.error.core.DatabaseBusyError
-import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -171,23 +171,13 @@ internal object InlineReviewPreparation {
   ): InlineReviewPrepared {
     val accepted =
       runCatching {
-        val output = state.carriedForwardReviewResult() ?: throw MissingCarriedForwardGoalReviewResultException()
-        NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(output, run.phaseId)
+        state.carriedForwardReviewResult()?.let { output ->
+          NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(output, run.phaseId)
+        }
       }.getOrElse { error ->
-        val detail =
-          if (error is MissingCarriedForwardGoalReviewResultException) {
-            "missing."
-          } else {
-            "malformed: ${error.message.orEmpty()}"
-          }
-        val reason = "Goal-subtask review pass budget is exhausted but its durable raw review result is $detail"
-        state.blockReviewPreparation(
-          state.nextStepIteration(),
-          reason,
-          FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
-        )
-        return InlineReviewPrepared.Settled(PhaseOutcome.blocked(reason))
-      }
+        error.rethrowIfCooperativeCancellationOrInterruption()
+        return blockCarriedForward(state, "malformed: ${error.message.orEmpty()}")
+      } ?: return blockCarriedForward(state, "missing.")
     val iteration = state.nextStepIteration()
     state.completeCarriedForwardReview(iteration, accepted)?.let { failure ->
       state.blockReviewPreparation(iteration, failure, FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE, accepted)
@@ -195,6 +185,19 @@ internal object InlineReviewPreparation {
     }
     state.stepCompleted(iteration)
     return InlineReviewPrepared.Settled(PhaseOutcome.completed(completedOutput(run, iteration, accepted)))
+  }
+
+  private fun blockCarriedForward(
+    state: PhaseReviewStepBinding,
+    detail: String,
+  ): InlineReviewPrepared {
+    val reason = "Goal-subtask review pass budget is exhausted but its durable raw review result is $detail"
+    state.blockReviewPreparation(
+      state.nextStepIteration(),
+      reason,
+      FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
+    )
+    return InlineReviewPrepared.Settled(PhaseOutcome.blocked(reason))
   }
 
   private fun blocked(
@@ -235,8 +238,3 @@ object ReviewTargetResolver {
 
   private const val HEAD_REVISION: String = "HEAD"
 }
-
-class MissingCarriedForwardGoalReviewResultException :
-  SkillBillRuntimeException(
-    "Goal review result was not carried forward from the prior phase.",
-  )

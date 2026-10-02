@@ -11,8 +11,8 @@ import skillbill.engine.goalrunner.planning.outcome.stdoutFor
 import skillbill.engine.goalrunner.planning.outcome.stopped
 import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
-import skillbill.error.goalrunner.GoalRunnerLaunchAuthorizationDeniedException
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 
 internal fun DefaultGoalPlanningSweep.produceAttemptAfterPauseCheck(
   args: GoalPlanningProduceAttemptArgs,
@@ -29,15 +29,11 @@ internal fun DefaultGoalPlanningSweep.produceAttemptAfterPauseCheck(
       )
     }
   val startedAtNanos = System.nanoTime()
-  val outcome =
-    runCatching { launchPlanningAttempt(args.phase, prompt) }
-      .getOrElse { error ->
-        if (error is GoalRunnerLaunchAuthorizationDeniedException) {
-          return planningPauseOutcome(shared, currentSubtaskId, phaseId, error.pauseReason)
-            ?: error("planning pause outcome was unexpectedly absent")
-        }
-        throw error
-      }
+  val outcome = launchPlanningAttempt(args.phase, prompt)
+  if (outcome is AgentRunLaunchDenied) {
+    return planningPauseOutcome(shared, currentSubtaskId, phaseId, outcome.pauseReason)
+      ?: error("planning pause outcome was unexpectedly absent")
+  }
   val durationMs = (System.nanoTime() - startedAtNanos) / GoalPlanningSweepConstants.NANOS_PER_MILLI
   val stdout =
     stdoutFor(outcome) ?: return emptyOrStopped(

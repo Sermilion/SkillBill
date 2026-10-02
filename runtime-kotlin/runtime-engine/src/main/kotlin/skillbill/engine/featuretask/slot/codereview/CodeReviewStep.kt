@@ -1,9 +1,8 @@
 package skillbill.engine.featuretask.slot.codereview
 
+import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewResult
-import skillbill.application.review.model.StackDetectionException
-import skillbill.application.review.model.UsageValidationException
-import skillbill.application.reviewevidence.model.DiffResolutionException
+import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.persist.RuntimeOwnedFactUnavailable
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
@@ -25,7 +24,6 @@ import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
-import skillbill.review.context.model.accounting.ReviewContextBudgetExceededException
 import skillbill.workflow.model.goalreview.GoalSubtaskBlockerDisposition
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -174,7 +172,10 @@ internal class CodeReviewStep(
   ): ReviewPassLaunch {
     val outcome = runCatching { reviewPass.review(run, input, reviewRunId, runner, state) }
     outcome.exceptionOrNull()?.let { error -> return launchFailure(error) ?: throw error }
-    return ReviewPassLaunch.Reviewed(outcome.getOrThrow())
+    return when (val review = outcome.getOrThrow()) {
+      is ParallelCodeReviewRunOutcome.Reviewed -> ReviewPassLaunch.Reviewed(review.result)
+      is ParallelCodeReviewRunOutcome.PlanningFailed -> planningFailureLaunch(review.failure)
+    }
   }
 
   private fun settle(
@@ -360,7 +361,7 @@ private sealed interface PhaseReviewRun {
   ) : PhaseReviewRun
 }
 
-private sealed interface ReviewPassLaunch {
+internal sealed interface ReviewPassLaunch {
   data class Reviewed(
     val result: ParallelCodeReviewResult,
   ) : ReviewPassLaunch
@@ -378,16 +379,21 @@ internal fun failedLaneReason(result: ParallelCodeReviewResult): String? {
   return "Feature-task-runtime phase 'review' $detail"
 }
 
+internal fun planningFailureLaunch(failure: ParallelCodeReviewPlanningFailure): ReviewPassLaunch.Failed =
+  when (failure) {
+    is ParallelCodeReviewPlanningFailure.DiffUnresolved ->
+      ReviewPassLaunch.Failed("Runtime-owned review could not resolve the child-owned diff: ${failure.message}")
+    is ParallelCodeReviewPlanningFailure.UsageInvalid, is ParallelCodeReviewPlanningFailure.StackUndetected ->
+      ReviewPassLaunch.Failed(
+        "Runtime-owned review failed: ${failure.message}",
+        FeatureTaskRuntimeFailureDisposition.RETRYABLE,
+      )
+  }
+
 private fun launchFailure(error: Throwable): ReviewPassLaunch.Failed? {
   val message = error.message.orEmpty()
   return when (error) {
     is CancellationException -> null
-    is DiffResolutionException ->
-      ReviewPassLaunch.Failed("Runtime-owned review could not resolve the child-owned diff: $message")
-    is UsageValidationException, is StackDetectionException ->
-      ReviewPassLaunch.Failed("Runtime-owned review failed: $message", FeatureTaskRuntimeFailureDisposition.RETRYABLE)
-    is ReviewContextBudgetExceededException ->
-      ReviewPassLaunch.Failed("Runtime-owned review exceeded a review-context budget: $message")
     is UnreadableSpecIntentProjectionError ->
       ReviewPassLaunch.Failed("Runtime-owned review could not read the spec intent projection: $message")
     is InvalidReviewContextSchemaError ->

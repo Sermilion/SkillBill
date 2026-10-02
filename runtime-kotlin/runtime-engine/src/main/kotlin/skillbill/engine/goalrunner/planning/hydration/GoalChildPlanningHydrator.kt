@@ -313,7 +313,7 @@ private class GoalChildPlanningImportMatcher(
   ): IncompatibleGoalPlanningPreparationRecoveryError {
     val detail = error.message.orEmpty()
     val reason =
-      if (classifyGoalPlanningRecovery(detail, error) == GoalPlanningRecoveryKind.HARD_RESET) {
+      if (classifyGoalPlanningRecovery("", error) == GoalPlanningRecoveryKind.HARD_RESET) {
         "stored goal planning '$phaseId' record for subtask ${request.descriptor.subtaskId} fails the " +
           "installed phase-output contract and requires a hard reset. Projection failure: $detail"
       } else {

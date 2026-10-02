@@ -16,7 +16,6 @@ import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.review.model.ParallelReviewLaneOutcome
 import skillbill.ports.review.model.ReviewLaneAccounting
 import skillbill.review.context.model.accounting.ReviewAccountingTerminalOutcome
-import skillbill.review.context.model.accounting.ReviewRegisterParseSeamException
 import skillbill.review.context.model.packet.ReviewLaneAssembledBundle
 import skillbill.review.model.ParallelReviewParseResult
 import skillbill.review.model.ParallelReviewRawFinding
@@ -32,18 +31,17 @@ class ParallelCodeReviewRunnerFailureAdmission(
     stdout: String,
     launch: ParallelCodeReviewInlineParentLaunch,
   ): ParallelCodeReviewSoftRegisterAdmission =
-    try {
-      val parsed = parseLaneRegisterSeam(stdout, launch.assignment.lane, registerParse)
-      ParallelCodeReviewSoftRegisterAdmission(
-        findings = attributeLaneFindings(parsed, launch.selected),
-        droppedCandidateDiagnostic = rejectedCandidateDiagnostic(parsed),
-        rejectedCandidateCount = parsed.rejections.size,
-        citationDiagnostics = parsed.citationDiagnostics,
-      )
-    } catch (cancellation: CancellationException) {
-      throw cancellation
-    } catch (_: ReviewRegisterParseSeamException) {
-      ParallelCodeReviewSoftRegisterAdmission(emptyList(), null, 0, emptyList())
+    when (val parse = parseLaneRegisterSeam(stdout, launch.assignment.lane, registerParse)) {
+      is LaneRegisterParse.Parsed -> {
+        val parsed = parse.result
+        ParallelCodeReviewSoftRegisterAdmission(
+          findings = attributeLaneFindings(parsed, launch.selected),
+          droppedCandidateDiagnostic = rejectedCandidateDiagnostic(parsed),
+          rejectedCandidateCount = parsed.rejections.size,
+          citationDiagnostics = parsed.citationDiagnostics,
+        )
+      }
+      is LaneRegisterParse.Failed -> ParallelCodeReviewSoftRegisterAdmission(emptyList(), null, 0, emptyList())
     }
 
   private fun attributeLaneFindings(
@@ -134,18 +132,48 @@ class ParallelCodeReviewRunnerFailureAdmission(
   }
 }
 
+private const val CAUSE_DETAIL_MAX_LENGTH: Int = 200
+
+internal sealed interface LaneRegisterParse {
+  data class Parsed(val result: ParallelReviewParseResult) : LaneRegisterParse
+
+  data class Failed(
+    val seam: String,
+    val lane: String,
+    val detail: String,
+  ) : LaneRegisterParse {
+    init {
+      require(seam.isNotBlank() && lane.isNotBlank()) {
+        "Review register parse seam failure must name its seam and lane."
+      }
+    }
+  }
+}
+
 internal fun parseLaneRegisterSeam(
   stdout: String,
   lane: String,
   parse: (String) -> ParallelReviewParseResult = ParallelReviewFindingParser::parse,
-): ParallelReviewParseResult =
+): LaneRegisterParse =
   try {
-    parse(stdout)
+    LaneRegisterParse.Parsed(parse(stdout))
   } catch (thrown: IllegalArgumentException) {
-    throw ReviewRegisterParseSeamException(seam = LANE_FINDING_PARSE_SEAM, lane = lane, cause = thrown)
+    laneRegisterFailure(lane, thrown)
   } catch (thrown: IllegalStateException) {
-    throw ReviewRegisterParseSeamException(seam = LANE_FINDING_PARSE_SEAM, lane = lane, cause = thrown)
+    laneRegisterFailure(lane, thrown)
   }
+
+private fun laneRegisterFailure(
+  lane: String,
+  cause: Throwable,
+): LaneRegisterParse.Failed =
+  LaneRegisterParse.Failed(
+    seam = LANE_FINDING_PARSE_SEAM,
+    lane = lane,
+    detail =
+      "Review register parse seam '$LANE_FINDING_PARSE_SEAM' failed for lane '$lane': " +
+        "${cause::class.simpleName}: ${cause.message?.take(CAUSE_DETAIL_MAX_LENGTH) ?: "no detail"}",
+  )
 
 internal fun parallelCodeReviewNoOpResumeOutcome(agentId: String) =
   ParallelReviewLaneOutcome(
@@ -186,7 +214,7 @@ internal fun parallelCodeReviewCaptureLane(lane: () -> ParallelReviewLaneOutcome
   val error = outcome.exceptionOrNull()!!
   val terminal =
     when (error) {
-      is ReviewRegisterParseSeamException, is CancellationException, is InterruptedException -> error
+      is CancellationException, is InterruptedException -> error
       is Exception -> return ParallelReviewLaneOutcome(
         success = false,
         rawOutput = "",

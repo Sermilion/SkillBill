@@ -1,9 +1,10 @@
 package skillbill.infrastructure.contracts.workflow.decomposition
 
-import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import com.networknt.schema.JsonSchema
@@ -44,7 +45,7 @@ private val decompositionManifestLog: Logger =
 @Inject
 class DecompositionManifestSchemaValidator : DecompositionManifestValidator {
   private val yamlMapper: YAMLMapper =
-    YAMLMapper(YAMLFactory().apply { enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION) })
+    YAMLMapper(YAMLFactory()).apply { enable(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY) }
   private val mapType = object : TypeReference<Map<String, Any?>>() {}
 
   override fun validate(
@@ -118,17 +119,18 @@ class DecompositionManifestSchemaValidator : DecompositionManifestValidator {
       }
     } catch (error: CancellationException) {
       throw error
-    } catch (error: JsonProcessingException) {
-      val duplicate = error.message.orEmpty().contains("duplicate", ignoreCase = true)
+    } catch (error: MismatchedInputException) {
       throw InvalidDecompositionManifestSchemaError(
         sourceLabel = sourceLabel,
-        reason =
-          if (duplicate) {
-            "YAML contains a duplicate key; duplicate keys are never repaired."
-          } else {
-            "YAML is malformed: ${error.message.orEmpty()}"
-          },
-        failureCode = if (duplicate) "duplicate_key" else "malformed",
+        reason = "YAML contains a duplicate key; duplicate keys are never repaired.",
+        failureCode = DecompositionManifestValidationFailureCode.DUPLICATE_KEY.wireValue,
+        cause = error,
+      )
+    } catch (error: JsonProcessingException) {
+      throw InvalidDecompositionManifestSchemaError(
+        sourceLabel = sourceLabel,
+        reason = "YAML is malformed: ${error.message.orEmpty()}",
+        failureCode = DecompositionManifestValidationFailureCode.MALFORMED.wireValue,
         cause = error,
       )
     } catch (error: IllegalArgumentException) {

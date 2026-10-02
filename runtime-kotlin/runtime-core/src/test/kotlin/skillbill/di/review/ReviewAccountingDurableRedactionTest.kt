@@ -7,6 +7,7 @@ import skillbill.application.review.snapshot.ReviewRecorder
 import skillbill.application.review.snapshot.diffForChanges
 import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.reviewHarness
+import skillbill.application.review.snapshot.reviewed
 import skillbill.application.review.snapshot.reviewPack
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.REVIEW_CONTEXT_CONTRACT_VERSION
@@ -204,7 +205,7 @@ class ReviewAccountingDurableRedactionTest {
       )
 
     val result =
-      runner.run(
+      runner.reviewed(
         harnessRequest(
           reviewRunId = REVIEW_RUN_ID,
           prelaunchExpansions =

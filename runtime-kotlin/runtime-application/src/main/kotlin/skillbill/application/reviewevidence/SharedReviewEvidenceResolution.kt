@@ -1,5 +1,6 @@
 package skillbill.application.reviewevidence
 
+import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.ports.diff.DiffResolverPort
@@ -27,30 +28,64 @@ internal class SharedReviewEvidenceResolution(
 ) {
   internal fun resolve(
     query: SharedReviewEvidenceQuery,
-    resolveAggregateDiff: () -> String,
-  ): SharedReviewEvidenceRecord {
-    val derive = {
-      val aggregateDiff = resolveAggregateDiff()
-      SharedReviewEvidenceRecord(
-        aggregateDiff = aggregateDiff,
-        sequence =
-          SharedReviewEvidenceAssembler(diffResolver)
-            .assemble(query.scope, query.repoRoot, query.range, query.suppliedDiff),
-      )
-    }
+    resolveAggregateDiff: () -> DiffResolution<String>,
+  ): DiffResolution<SharedReviewEvidenceRecord> {
+    val deriveRecord = { derive(query, resolveAggregateDiff) }
     val checkpoint = checkpoint(query)
     if (checkpoint == null) {
-      return persistAlreadyDerived(query, derive())
+      return when (val record = deriveRecord()) {
+        is DiffResolution.Unresolved -> record
+        is DiffResolution.Resolved -> DiffResolution.Resolved(persistAlreadyDerived(query, record.value))
+      }
     }
     var derived: SharedReviewEvidenceRecord? = null
+    var unresolved: DiffResolution.Unresolved? = null
     val resolution =
       sharedEvidenceResolver.resolve(
         FeatureTaskRuntimeSharedEvidenceRequest(query.repoRoot, query.workflowId, checkpoint),
       ) {
-        derive().also { derived = it }.let(::derivationOf)
+        when (val record = deriveRecord()) {
+          is DiffResolution.Unresolved -> {
+            unresolved = record
+            null
+          }
+          is DiffResolution.Resolved -> {
+            derived = record.value
+            derivationOf(record.value)
+          }
+        }
       }
-    val record = derived ?: SharedReviewEvidenceCodec.decode(resolution.diffPayload) ?: derive()
-    return record.copy(storePath = resolution.storePath)
+    if (resolution == null) {
+      return unresolved ?: DiffResolution.Unresolved("Shared review evidence could not be derived.")
+    }
+    val record = derived ?: SharedReviewEvidenceCodec.decode(resolution.diffPayload)
+    if (record != null) {
+      return DiffResolution.Resolved(record.copy(storePath = resolution.storePath))
+    }
+    return when (val rederived = deriveRecord()) {
+      is DiffResolution.Unresolved -> rederived
+      is DiffResolution.Resolved -> DiffResolution.Resolved(rederived.value.copy(storePath = resolution.storePath))
+    }
+  }
+
+  private fun derive(
+    query: SharedReviewEvidenceQuery,
+    resolveAggregateDiff: () -> DiffResolution<String>,
+  ): DiffResolution<SharedReviewEvidenceRecord> {
+    val aggregateDiff =
+      when (val resolved = resolveAggregateDiff()) {
+        is DiffResolution.Unresolved -> return resolved
+        is DiffResolution.Resolved -> resolved.value
+      }
+    return when (
+      val sequence =
+        SharedReviewEvidenceAssembler(diffResolver)
+          .assemble(query.scope, query.repoRoot, query.range, query.suppliedDiff)
+    ) {
+      is DiffResolution.Unresolved -> sequence
+      is DiffResolution.Resolved ->
+        DiffResolution.Resolved(SharedReviewEvidenceRecord(aggregateDiff = aggregateDiff, sequence = sequence.value))
+    }
   }
 
   private fun persistAlreadyDerived(
@@ -69,7 +104,7 @@ internal class SharedReviewEvidenceResolution(
       ) {
         derivationOf(record)
       }
-    return record.copy(storePath = resolution.storePath)
+    return record.copy(storePath = resolution?.storePath)
   }
 
   private fun checkpoint(query: SharedReviewEvidenceQuery): FeatureTaskRuntimeRepositoryCheckpoint? {

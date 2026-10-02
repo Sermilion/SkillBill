@@ -7,6 +7,7 @@ import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
 import skillbill.model.toPath
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -32,15 +33,13 @@ class SpecIntentProjectionResolver(
     val degradations = mutableListOf<SpecIntentDegradationRecord>()
     val explicit = request.explicitSpecPath
     if (explicit != null) {
-      return SpecIntentResolution.Resolved(
-        extractor.extract(
-          request.repoRoot.toPath(),
-          explicit.toPath(),
-          request.budget,
-          surrounding = null,
-          explicit = true,
-        ),
-      )
+      return when (
+        val read = extractor.extract(request.repoRoot.toPath(), explicit.toPath(), request.budget, surrounding = null)
+      ) {
+        is SpecIntentSourceRead.Read -> SpecIntentResolution.Resolved(read.value)
+        is SpecIntentSourceRead.Unavailable ->
+          throw UnreadableSpecIntentProjectionError(read.specPath, read.reason, read.cause)
+      }
     }
     val issueKey = TRACKER_STYLE_ISSUE_KEY.find(request.branchName)?.value?.uppercase()
     val fromManifest = resolveManifest(request, issueKey, degradations)
@@ -83,19 +82,18 @@ class SpecIntentProjectionResolver(
     val owner = owningSubtask(manifest, request)
     val primary = Path.of(owner?.specPath ?: manifest.parentSpecPath)
     val surrounding = owner?.let { loadSurroundingContext(request, manifest.parentSpecPath, degradations) }
-    return try {
-      SpecIntentResolution.Resolved(
-        extractor.extract(request.repoRoot.toPath(), primary, request.budget, surrounding, explicit = false),
-      )
-    } catch (error: SpecIntentSourceUnavailable) {
-      degradations +=
-        SpecIntentDegradationRecord(
-          seam = RESOLVE_SEAM,
-          reason = SpecIntentAbsenceReason.NO_SPEC_FOUND.wireValue,
-          rung = SpecIntentResolutionRung.MANIFEST.wireValue,
-          resolvedPath = error.specPath,
-        )
-      null
+    return when (val read = extractor.extract(request.repoRoot.toPath(), primary, request.budget, surrounding)) {
+      is SpecIntentSourceRead.Read -> SpecIntentResolution.Resolved(read.value)
+      is SpecIntentSourceRead.Unavailable -> {
+        degradations +=
+          SpecIntentDegradationRecord(
+            seam = RESOLVE_SEAM,
+            reason = SpecIntentAbsenceReason.NO_SPEC_FOUND.wireValue,
+            rung = SpecIntentResolutionRung.MANIFEST.wireValue,
+            resolvedPath = read.specPath,
+          )
+        null
+      }
     }
   }
 
@@ -113,18 +111,12 @@ class SpecIntentProjectionResolver(
     return when (matches.size) {
       0 -> none(SpecIntentAbsenceReason.NO_SPEC_FOUND, SpecIntentResolutionRung.GLOB, degradations)
       1 ->
-        try {
-          SpecIntentResolution.Resolved(
-            extractor.extract(
-              request.repoRoot.toPath(),
-              matches.single(),
-              request.budget,
-              surrounding = null,
-              explicit = false,
-            ),
-          )
-        } catch (_: SpecIntentSourceUnavailable) {
-          none(SpecIntentAbsenceReason.NO_SPEC_FOUND, SpecIntentResolutionRung.GLOB, degradations)
+        when (
+          val read = extractor.extract(request.repoRoot.toPath(), matches.single(), request.budget, surrounding = null)
+        ) {
+          is SpecIntentSourceRead.Read -> SpecIntentResolution.Resolved(read.value)
+          is SpecIntentSourceRead.Unavailable ->
+            none(SpecIntentAbsenceReason.NO_SPEC_FOUND, SpecIntentResolutionRung.GLOB, degradations)
         }
       else -> none(SpecIntentAbsenceReason.AMBIGUOUS_MATCH, SpecIntentResolutionRung.GLOB, degradations)
     }
@@ -151,17 +143,18 @@ class SpecIntentProjectionResolver(
     parentSpecPath: String,
     degradations: MutableList<SpecIntentDegradationRecord>,
   ): SpecIntentSurroundingContext? {
-    return try {
-      extractor.surroundingContext(request.repoRoot.toPath(), Path.of(parentSpecPath), explicit = false)
-    } catch (error: SpecIntentSourceUnavailable) {
-      degradations +=
-        SpecIntentDegradationRecord(
-          seam = PARENT_SPEC_UNAVAILABLE_SEAM,
-          reason = PARENT_SPEC_UNAVAILABLE_REASON,
-          rung = SpecIntentResolutionRung.MANIFEST.wireValue,
-          resolvedPath = error.specPath,
-        )
-      null
+    return when (val read = extractor.surroundingContext(request.repoRoot.toPath(), Path.of(parentSpecPath))) {
+      is SpecIntentSourceRead.Read -> read.value
+      is SpecIntentSourceRead.Unavailable -> {
+        degradations +=
+          SpecIntentDegradationRecord(
+            seam = PARENT_SPEC_UNAVAILABLE_SEAM,
+            reason = PARENT_SPEC_UNAVAILABLE_REASON,
+            rung = SpecIntentResolutionRung.MANIFEST.wireValue,
+            resolvedPath = read.specPath,
+          )
+        null
+      }
     }
   }
 

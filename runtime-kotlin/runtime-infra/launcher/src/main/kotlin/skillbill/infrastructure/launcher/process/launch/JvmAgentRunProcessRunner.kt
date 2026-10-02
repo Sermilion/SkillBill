@@ -10,6 +10,7 @@ import skillbill.infrastructure.launcher.process.waitloop.readStartupObserved
 import skillbill.infrastructure.launcher.process.waitloop.writeAndCloseStdin
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
 import skillbill.ports.agentrun.model.AgentRunOutputStream
+import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
 import java.io.IOException
 import java.io.InputStream
@@ -34,16 +35,37 @@ class JvmAgentRunProcessRunner(
 
   private fun runGoverned(request: AgentRunProcessRequest): AgentRunProcessResult {
     var startedProcess: ProcessStart? = null
-    val processStart =
+    val authorized =
       runCatching {
         request.review.spawnAuthorization?.withAuthorization {
           startProcess(request).also { startedProcess = it }
-        } ?: startProcess(request).also { startedProcess = it }
+        } ?: AgentRunSpawnAuthorizationResult.Authorized(startProcess(request).also { startedProcess = it })
       }.getOrElse { failure ->
         cleanupProcessStart(startedProcess)
         throw failure
       }
-    return when (processStart) {
+    return when (authorized) {
+      is AgentRunSpawnAuthorizationResult.Denied -> spawnDenied(authorized)
+      is AgentRunSpawnAuthorizationResult.Authorized -> settleProcessStart(authorized.value, request)
+    }
+  }
+
+  private fun spawnDenied(denied: AgentRunSpawnAuthorizationResult.Denied): AgentRunProcessResult =
+    AgentRunProcessResult(
+      exitStatus = null,
+      stdout = "",
+      stderr = "",
+      timedOut = false,
+      interrupted = false,
+      spawnFailed = false,
+      spawnDenied = denied,
+    )
+
+  private fun settleProcessStart(
+    processStart: ProcessStart,
+    request: AgentRunProcessRequest,
+  ): AgentRunProcessResult =
+    when (processStart) {
       is ProcessStart.Failed -> spawnFailure(processStart.error)
       is ProcessStart.Started ->
         runStartedProcess(
@@ -53,7 +75,6 @@ class JvmAgentRunProcessRunner(
           request = request,
         )
     }
-  }
 
   companion object {
     private val liveProcesses = ConcurrentHashMap.newKeySet<Process>()

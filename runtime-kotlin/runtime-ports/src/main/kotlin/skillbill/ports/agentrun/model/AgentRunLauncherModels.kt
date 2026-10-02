@@ -71,7 +71,13 @@ data class SkillRunRequest(
 }
 
 interface AgentRunSpawnAuthorization {
-  fun <T> withAuthorization(spawn: () -> T): T
+  fun <T> withAuthorization(spawn: () -> T): AgentRunSpawnAuthorizationResult<T>
+}
+
+sealed interface AgentRunSpawnAuthorizationResult<out T> {
+  data class Authorized<T>(val value: T) : AgentRunSpawnAuthorizationResult<T>
+
+  data class Denied(val pauseReason: String?) : AgentRunSpawnAuthorizationResult<Nothing>
 }
 
 data class SkillRunGoalContinuationContext(
@@ -254,6 +260,11 @@ fun AgentRunLaunchFacts.reviewProcessOutcome(): ReviewProcessOutcome =
         else -> ReviewProcessOutcome.ZERO_EXIT
       }
   }
+
+data class AgentRunLaunchDenied(
+  override val agent: SupportedAgent,
+  val pauseReason: String?,
+) : AgentRunLaunchOutcome
 
 data class UnsupportedAgentRunLaunch(
   override val agent: SupportedAgent,

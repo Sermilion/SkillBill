@@ -50,7 +50,7 @@ open class FileSystemFeatureTaskRuntimeSharedEvidenceStore :
   override fun resolve(
     request: FeatureTaskRuntimeSharedEvidenceRequest,
     deriver: FeatureTaskRuntimeSharedEvidenceDeriver,
-  ): FeatureTaskRuntimeSharedEvidenceResolution {
+  ): FeatureTaskRuntimeSharedEvidenceResolution? {
     val fingerprint = request.checkpoint.fingerprint
     val artifactDir = artifactDir(request)
     val storePath = storePath(request.repoRoot, artifactDir)
@@ -63,7 +63,8 @@ open class FileSystemFeatureTaskRuntimeSharedEvidenceStore :
       } else {
         FeatureTaskRuntimeSharedEvidenceResolveOutcome.DERIVATION
       }
-    return persist(artifactDir, fingerprint, deriver.derive(request.checkpoint))
+    val derivation = deriver.derive(request.checkpoint) ?: return null
+    return persist(artifactDir, fingerprint, derivation)
       .copy(storePath = storePath, outcome = outcome)
   }
 

@@ -1,8 +1,11 @@
 package skillbill.error.shellcontent
 
+import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.ShellContentContractException
 
-class UnaddressedFindingsLedgerAbsentError(message: String) : ShellContentContractException(message)
+enum class GovernedReviewFailureCode : RuntimeFailureCode {
+  UNADDRESSED_FINDINGS_LEDGER_ABSENT,
+}
 
 class InvalidUnaddressedFindingsLedgerSchemaError(
   message: String,

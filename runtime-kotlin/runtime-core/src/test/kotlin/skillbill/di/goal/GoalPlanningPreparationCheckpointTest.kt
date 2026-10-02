@@ -2,6 +2,7 @@ package skillbill.di.goal
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
+import skillbill.engine.goalrunner.planning.model.GoalPlanningRecoveryProgress
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
@@ -23,6 +24,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
@@ -222,11 +224,13 @@ class GoalPlanningPreparationCheckpointTest {
     )
 
     val wedged =
-      harness.checkpoint.recoveryProgress(
-        identity(),
-        listOf(descriptor()),
-        provenance(),
-      )
+      assertIs<GoalPlanningRecoveryProgress.Ready>(
+        harness.checkpoint.recoveryProgress(
+          identity(),
+          listOf(descriptor()),
+          provenance(),
+        ),
+      ).progress
     assertFalse(wedged.sharedPreplanPrepared, "a projection-invalid preplan must read as not prepared")
     assertEquals(0, wedged.preparedPlanCount)
     assertEquals(1, wedged.firstMissingSubtaskId)
@@ -235,14 +239,28 @@ class GoalPlanningPreparationCheckpointTest {
     harness.checkpoint.recheckpointSubtaskPlan(validPlan())
 
     val recovered =
-      harness.checkpoint.recoveryProgress(
-        identity(),
-        listOf(descriptor()),
-        provenance(),
-      )
+      assertIs<GoalPlanningRecoveryProgress.Ready>(
+        harness.checkpoint.recoveryProgress(
+          identity(),
+          listOf(descriptor()),
+          provenance(),
+        ),
+      ).progress
     assertTrue(recovered.sharedPreplanPrepared)
     assertEquals(1, recovered.preparedPlanCount)
     assertNull(recovered.firstMissingSubtaskId, "the goal must be fully prepared again with no operator surgery")
+  }
+
+  @Test
+  fun `a stored plan with a non-completed status is reported as an incomplete plan value`() {
+    val harness = checkpointHarness().withShared()
+    harness.storeRawPlan(validPlan(payload = payloadJson("plan", status = "blocked")))
+
+    val progress = harness.checkpoint.recoveryProgress(identity(), listOf(descriptor()), provenance())
+
+    val incomplete = assertIs<GoalPlanningRecoveryProgress.IncompletePlan>(progress)
+    assertEquals(1, incomplete.subtaskId)
+    assertContains(incomplete.reason, "must be completed with non-empty produced_outputs")
   }
 
   @Test

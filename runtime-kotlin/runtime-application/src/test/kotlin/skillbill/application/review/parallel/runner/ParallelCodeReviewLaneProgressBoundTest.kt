@@ -7,6 +7,7 @@ import skillbill.application.review.snapshot.ReviewRecorder
 import skillbill.application.review.snapshot.diffForPaths
 import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.reviewHarness
+import skillbill.application.review.snapshot.reviewed
 import skillbill.application.review.snapshot.sparseReviewPack
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
@@ -51,7 +52,7 @@ class ParallelCodeReviewLaneProgressBoundTest {
 
     val result =
       reviewHarness(config, recorder)
-        .run(harnessRequest(codeReviewMode = CodeReviewExecutionMode.DELEGATED).copy(laneProgressIdleTimeout = BOUND))
+        .reviewed(harnessRequest(codeReviewMode = CodeReviewExecutionMode.DELEGATED).copy(laneProgressIdleTimeout = BOUND))
 
     assertFalse(result.lane1.success)
     assertTrue(assertNotNull(result.lane1.failureReason).contains("agent timed out"))

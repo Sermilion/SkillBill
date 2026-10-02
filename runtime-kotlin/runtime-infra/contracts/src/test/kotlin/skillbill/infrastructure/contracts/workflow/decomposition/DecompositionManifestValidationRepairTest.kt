@@ -1,11 +1,13 @@
 package skillbill.infrastructure.contracts.workflow.decomposition
 
+import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationFailureCode
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationResult
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairOperation
 import java.security.MessageDigest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -51,6 +53,16 @@ class DecompositionManifestValidationRepairTest {
     val rejected = assertIs<DecompositionManifestValidationResult.Rejected>(result)
     assertEquals(DecompositionManifestValidationFailureCode.DUPLICATE_KEY, rejected.code)
     assertTrue("issue_key\":\"SKILL-153" !in rejected.reason)
+  }
+
+  @Test
+  fun `malformed YAML whose snippet contains the word duplicate is classified malformed not duplicate`() {
+    val error =
+      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+        validator.validateYamlTextMap("issue_key: [duplicate\nfeature_name: x\n", "manifest.yaml")
+      }
+
+    assertEquals(DecompositionManifestValidationFailureCode.MALFORMED.wireValue, error.failureCode)
   }
 
   @Test

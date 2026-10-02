@@ -128,9 +128,27 @@ data class ParallelReviewLaneStatus(
   val reviewDisposition: ReviewLaneReviewDisposition = ReviewLaneReviewDisposition.INCOMPLETE,
 )
 
-class UsageValidationException(message: String) : RuntimeException(message)
+sealed interface ParallelCodeReviewPlanningFailure {
+  val message: String
 
-class StackDetectionException(message: String, cause: Throwable) : RuntimeException(message, cause)
+  data class UsageInvalid(override val message: String) : ParallelCodeReviewPlanningFailure
+
+  data class StackUndetected(override val message: String) : ParallelCodeReviewPlanningFailure
+
+  data class DiffUnresolved(override val message: String) : ParallelCodeReviewPlanningFailure
+}
+
+sealed interface ParallelCodeReviewPlanned<out T> {
+  data class Ready<T>(val value: T) : ParallelCodeReviewPlanned<T>
+
+  data class Failed(val failure: ParallelCodeReviewPlanningFailure) : ParallelCodeReviewPlanned<Nothing>
+}
+
+sealed interface ParallelCodeReviewRunOutcome {
+  data class Reviewed(val result: ParallelCodeReviewResult) : ParallelCodeReviewRunOutcome
+
+  data class PlanningFailed(val failure: ParallelCodeReviewPlanningFailure) : ParallelCodeReviewRunOutcome
+}
 
 internal data class ReviewLaneIntegrationInput(
   val launch: ReviewSpecialistLaunchRequest,

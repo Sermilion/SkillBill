@@ -1,5 +1,7 @@
 package skillbill.infrastructure.sqlite
 
+import org.sqlite.SQLiteErrorCode
+import org.sqlite.SQLiteException
 import skillbill.error.core.DatabaseAccessError
 import skillbill.error.core.DatabaseAccessOperation
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
@@ -54,7 +56,12 @@ class SQLiteDatabaseSessionFactoryTest {
     val result =
       database.selfManagedWrite {
         busyCalls += 1
-        if (busyCalls == 1) throw SQLException("[SQLITE_BUSY] The database file is locked (database is locked)")
+        if (busyCalls == 1) {
+          throw SQLiteException(
+            "[SQLITE_BUSY] The database file is locked (database is locked)",
+            SQLiteErrorCode.SQLITE_BUSY,
+          )
+        }
         "written"
       }
 

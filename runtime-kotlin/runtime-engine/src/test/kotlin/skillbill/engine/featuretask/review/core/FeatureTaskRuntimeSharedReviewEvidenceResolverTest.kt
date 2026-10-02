@@ -75,13 +75,13 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolverTest {
     override fun resolve(
       request: FeatureTaskRuntimeSharedEvidenceRequest,
       deriver: FeatureTaskRuntimeSharedEvidenceDeriver,
-    ): FeatureTaskRuntimeSharedEvidenceResolution {
+    ): FeatureTaskRuntimeSharedEvidenceResolution? {
       val fingerprint = request.checkpoint.fingerprint
       stored[fingerprint]?.let {
         return it.copy(outcome = REUSE)
       }
       derivations++
-      val derivation = deriver.derive(request.checkpoint)
+      val derivation = deriver.derive(request.checkpoint) ?: return null
       val outcome =
         if (stored.isNotEmpty()) {
           CHECKPOINT_CHANGE_REDERIVATION
@@ -226,7 +226,9 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolverTest {
   fun `a resolution that cannot produce a store path yields null so the launch still succeeds`() {
     val blankStore =
       FeatureTaskRuntimeSharedEvidenceResolverPort { request, deriver ->
-        val derivation = deriver.derive(request.checkpoint)
+        val derivation =
+          deriver.derive(request.checkpoint)
+            ?: return@FeatureTaskRuntimeSharedEvidenceResolverPort null
         FeatureTaskRuntimeSharedEvidenceResolution(
           artifact =
             FeatureTaskRuntimeSharedEvidenceArtifact(

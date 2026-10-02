@@ -4,7 +4,6 @@ package skillbill.cli.skillremove
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.skillremove.SkillRemovalRefusedException
 import skillbill.skillremove.SkillRemoveErrorSanitizer
 import skillbill.skillremove.model.SkillRemovalRefusalReason
 import skillbill.skillremove.model.SkillRemovalRequest
@@ -36,22 +35,20 @@ internal fun executeRemoveCommand(
       environment = request.inputs.environment,
     )
   val outcome =
-    try {
-      if (request.dryRun) {
-        request.skillRemove.previewRemoval(removalRequest)
-      } else {
-        request.skillRemove.executeRemoval(removalRequest)
-      }
-    } catch (refusal: SkillRemovalRefusedException) {
-      return state.complete(
-        errorPayload(refusalErrorMessage(refusal, request.rawTarget, absoluteRepoRoot)),
-        format,
-        exitCode = 1,
-      )
+    if (request.dryRun) {
+      request.skillRemove.previewRemoval(removalRequest)
+    } else {
+      request.skillRemove.executeRemoval(removalRequest)
     }
   when (outcome) {
     is SkillRemovalResult.Preview -> state.complete(previewPayload(outcome), format)
     is SkillRemovalResult.Success -> state.complete(successPayload(outcome), format)
+    is SkillRemovalResult.Refused ->
+      state.complete(
+        errorPayload(refusalErrorMessage(outcome, request.rawTarget, absoluteRepoRoot)),
+        format,
+        exitCode = 1,
+      )
     is SkillRemovalResult.Failed -> state.complete(failedPayload(outcome, absoluteRepoRoot), format, exitCode = 1)
   }
 }
@@ -73,12 +70,12 @@ internal fun parseRemoveTarget(
 }
 
 internal fun refusalErrorMessage(
-  refusal: SkillRemovalRefusedException,
+  refusal: SkillRemovalResult.Refused,
   rawTarget: String,
   repoRootAbsolutePath: String,
 ): String {
-  val sanitized = SkillRemoveErrorSanitizer.sanitize(refusal.message.orEmpty(), repoRootAbsolutePath)
-  if (refusal.refusalReason != SkillRemovalRefusalReason.SHIPPED_REQUIRES_ALLOW_SHIPPED) {
+  val sanitized = SkillRemoveErrorSanitizer.sanitize(refusal.message, repoRootAbsolutePath)
+  if (refusal.reason != SkillRemovalRefusalReason.SHIPPED_REQUIRES_ALLOW_SHIPPED) {
     return sanitized
   }
   return """

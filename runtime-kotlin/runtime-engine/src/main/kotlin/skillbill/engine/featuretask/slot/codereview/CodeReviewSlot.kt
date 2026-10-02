@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.slot.codereview
 
-import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
@@ -55,7 +55,7 @@ internal interface CodeReviewPass {
     reviewRunId: String,
     runner: PhaseRunner,
     state: PhaseReviewStepBinding,
-  ): ParallelCodeReviewResult
+  ): ParallelCodeReviewRunOutcome
 }
 
 internal class CodeReviewSlot(

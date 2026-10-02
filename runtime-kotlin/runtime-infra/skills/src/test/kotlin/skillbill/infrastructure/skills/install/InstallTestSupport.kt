@@ -23,7 +23,7 @@ private class InstallTestMcpRegistrationPort(
 ) : InstallMcpRegistrationPort {
   override fun registerMcp(request: InstallMcpRegistrationRequest): InstallMcpRegistrationResult =
     InstallMcpRegistrationResult(
-      mutation =
+      outcome =
         McpRegistrationOperations.register(
           request.agent,
           request.runtimeMcpBin,
@@ -34,7 +34,7 @@ private class InstallTestMcpRegistrationPort(
 
   override fun unregisterMcp(request: InstallMcpUnregistrationRequest): InstallMcpRegistrationResult =
     InstallMcpRegistrationResult(
-      mutation =
+      outcome =
         McpRegistrationOperations.unregister(
           request.agent,
           request.home,

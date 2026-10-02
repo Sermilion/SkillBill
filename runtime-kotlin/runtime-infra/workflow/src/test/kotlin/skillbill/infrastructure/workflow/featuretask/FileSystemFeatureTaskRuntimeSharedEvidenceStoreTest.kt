@@ -24,7 +24,7 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
 
   @Test
   fun `persists under the workflow id and fingerprint address beneath the repo-local store`() {
-    store.resolve(request("fp-1"), CountingDeriver())
+    store.resolved(request("fp-1"), CountingDeriver())
 
     val expected = repoRoot.resolve(".skill-bill").resolve("run-evidence").resolve("wf-1").resolve("fp-1")
     assertTrue(Files.isDirectory(expected))
@@ -44,11 +44,11 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
 
   @Test
   fun `a new adapter instance reuses the persisted artifact without re-deriving`() {
-    store.resolve(request("fp-durable"), CountingDeriver())
+    store.resolved(request("fp-durable"), CountingDeriver())
 
     val artifact =
       FileSystemFeatureTaskRuntimeSharedEvidenceStore()
-        .resolve(request("fp-durable"), ThrowingDeriver).artifact
+        .resolved(request("fp-durable"), ThrowingDeriver).artifact
 
     assertEquals("fp-durable", artifact.fingerprint)
     assertEquals("main", artifact.baseRef)
@@ -57,12 +57,12 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
 
   @Test
   fun `an interrupted write leaves no artifact a later resolve would serve`() {
-    assertFailsWith<IllegalStateException> { store.resolve(request("fp-interrupted"), ThrowingDeriver) }
+    assertFailsWith<IllegalStateException> { store.resolved(request("fp-interrupted"), ThrowingDeriver) }
 
     val address = artifactDir(request("fp-interrupted"))
     assertFalse(Files.exists(address))
     val deriver = CountingDeriver()
-    assertEquals("fp-interrupted", store.resolve(request("fp-interrupted"), deriver).artifact.fingerprint)
+    assertEquals("fp-interrupted", store.resolved(request("fp-interrupted"), deriver).artifact.fingerprint)
     assertEquals(1, deriver.invocations)
   }
 
@@ -80,13 +80,13 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
         }
       }
 
-    assertFailsWith<IOException> { failing.resolve(request("fp-midwrite"), CountingDeriver()) }
+    assertFailsWith<IOException> { failing.resolved(request("fp-midwrite"), CountingDeriver()) }
 
     val address = artifactDir(request("fp-midwrite"))
     assertFalse(Files.exists(address.resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.PAYLOAD_FILE_NAME)))
     assertFalse(Files.exists(address.resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.ENVELOPE_FILE_NAME)))
     val deriver = CountingDeriver()
-    assertEquals("fp-midwrite", store.resolve(request("fp-midwrite"), deriver).artifact.fingerprint)
+    assertEquals("fp-midwrite", store.resolved(request("fp-midwrite"), deriver).artifact.fingerprint)
     assertEquals(1, deriver.invocations)
   }
 
@@ -105,14 +105,14 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
       }
     sharedEvidenceStoreLog.addHandler(handler)
     try {
-      store.resolve(request("fp-observed"), CountingDeriver())
+      store.resolved(request("fp-observed"), CountingDeriver())
       val envelope =
         artifactDir(request("fp-observed"))
           .resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.ENVELOPE_FILE_NAME)
       Files.writeString(envelope, "{ not json")
       records.clear()
 
-      store.resolve(request("fp-observed"), CountingDeriver())
+      store.resolved(request("fp-observed"), CountingDeriver())
 
       val messages = records.map { it.message }
       val parse = messages.single { it.contains("seam=stored_envelope_parse") }
@@ -138,7 +138,7 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
       }
     sharedEvidenceStoreLog.addHandler(handler)
     try {
-      store.resolve(request("fp-cold"), CountingDeriver())
+      store.resolved(request("fp-cold"), CountingDeriver())
       assertTrue(
         records.none { it.message.contains("cache degraded") },
         "first resolve at an empty address is derivation, not degradation: ${records.map { it.message }}",
@@ -159,14 +159,14 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
     )
     val deriver = CountingDeriver()
 
-    store.resolve(request("fp-staged"), deriver)
+    store.resolved(request("fp-staged"), deriver)
 
     assertEquals(1, deriver.invocations)
   }
 
   @Test
   fun `a contradictory recorded fingerprint loud-fails naming both fingerprints`() {
-    store.resolve(request("fp-addressed"), CountingDeriver())
+    store.resolved(request("fp-addressed"), CountingDeriver())
     val envelope =
       artifactDir(request("fp-addressed"))
         .resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.ENVELOPE_FILE_NAME)
@@ -174,7 +174,7 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
 
     val error =
       assertFailsWith<FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError> {
-        store.resolve(request("fp-addressed"), ThrowingDeriver)
+        store.resolved(request("fp-addressed"), ThrowingDeriver)
       }
 
     assertTrue(error.message!!.contains("fp-addressed"), error.message)
@@ -183,14 +183,14 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
 
   @Test
   fun `an envelope with no recorded fingerprint re-derives instead of failing the run`() {
-    store.resolve(request("fp-absent-field"), CountingDeriver())
+    store.resolved(request("fp-absent-field"), CountingDeriver())
     val envelope =
       artifactDir(request("fp-absent-field"))
         .resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.ENVELOPE_FILE_NAME)
     Files.writeString(envelope, "{\"diff_payload\":{\"relative_path\":\"diff.patch\",\"size_bytes\":0}}")
     val deriver = CountingDeriver()
 
-    store.resolve(request("fp-absent-field"), deriver)
+    store.resolved(request("fp-absent-field"), deriver)
 
     assertEquals(1, deriver.invocations)
   }
@@ -201,7 +201,7 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
     Files.writeString(gitignore, "/.skill-bill/\n")
     val before = Files.readAllBytes(gitignore)
 
-    store.resolve(request("fp-gitignore"), CountingDeriver())
+    store.resolved(request("fp-gitignore"), CountingDeriver())
 
     assertTrue(before.contentEquals(Files.readAllBytes(gitignore)))
   }
@@ -222,7 +222,7 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
 
   @Test
   fun `compose-time locator read of an unreadable payload fails closed instead of re-deriving`() {
-    val resolution = store.resolve(request("fp-unread"), CountingDeriver())
+    val resolution = store.resolved(request("fp-unread"), CountingDeriver())
     val payload =
       artifactDir(request("fp-unread"))
         .resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.PAYLOAD_FILE_NAME)

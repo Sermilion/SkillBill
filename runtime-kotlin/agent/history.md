@@ -1,3 +1,14 @@
+## [2026-10-02] SKILL-398 subtask 3 — local control-flow exceptions become results
+Areas: runtime-kotlin/runtime-{engine,application,cli,domain,ports,contracts,core}, runtime-infra/{launcher,skills,sqlite,contracts,workflow}
+- Custom throwables used only for local control flow were replaced by sealed results: runner already-running, launch-authorization denial, shared-preplan refresh refusal, missing unaddressed-findings ledger, spec-intent source read, parallel-review planning failures, lane-register parse, MCP registration outcome, skill-removal refusal. reusable
+- Callers branch on the value; absent-ledger CLI path throws one coded SkillBillRuntimeException (new governed-review failure code) with the old message.
+- Config model parsers validate then build; duplicate-key detection uses Jackson features and typed exceptions, not message matching; SQLite-busy detection walks causes by result code; recovery classification no longer reads Throwable.message.
+- custom-throwable-baseline.txt rows for every deleted class were removed; only two documented legacy wire strings still name old classes (profile-failure cause class, skill-removal refusal name).
+- Behaviour change: a delegated-verify planning failure now fails the code-review step with its message instead of escaping to the CLI edge.
+- Limits: authored without compile or test runs; some paths lack direct tests (carried-forward review settle, config parsers, assigned-child launch denial).
+Feature flag: N/A
+Acceptance criteria: implemented per spec; validate confirms
+
 ## [2026-10-02] SKILL-398 subtask 1 — failure policy and throwable baseline
 Areas: runtime-kotlin/runtime-contracts (error/core, error/featuretask), runtime-domain decomposition model, runtime-core repoTest architecture guards, docs/code-principles.md, AGENTS.md, ARCHITECTURE.md
 - SkillBillRuntimeException now carries a RuntimeFailureCode; a secondary constructor keeps legacy callers on LegacyFailureCode.UNCLASSIFIED until later subtasks convert them. reusable

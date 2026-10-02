@@ -1,7 +1,6 @@
 package skillbill.engine.goalrunner.findings
 
 import skillbill.error.shellcontent.InvalidUnaddressedFindingsLedgerSchemaError
-import skillbill.error.shellcontent.UnaddressedFindingsLedgerAbsentError
 import skillbill.goalrunner.model.ReviewFindingOutcomeRecord
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.db.DatabaseSessionFactory
@@ -29,21 +28,25 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class UnaddressedFindingsLedgerServiceTest {
   @Test
-  fun `an unknown issue key raises the typed absent error`() {
+  fun `an unknown issue key returns null from every read`() {
     val service = serviceFor(InMemoryUnaddressedFindings(durableIssueKeys = setOf("SKILL-135")))
 
-    assertFailsWith<UnaddressedFindingsLedgerAbsentError> { service.ledger("SKILL-404") }
+    assertNull(service.ledger("SKILL-404"))
+    assertNull(service.verificationDispositions("SKILL-404"))
+    assertNull(service.repairLedgersByWorkflow("SKILL-404"))
   }
 
   @Test
   fun `a telemetry-disabled goal with no findings returns an explicit empty ledger`() {
     val service = serviceFor(InMemoryUnaddressedFindings(durableIssueKeys = setOf("SKILL-135")))
 
-    val ledger = service.ledger("SKILL-135")
+    val ledger = assertNotNull(service.ledger("SKILL-135"))
 
     assertTrue(ledger.findings.isEmpty())
     assertEquals(mapOf("blocker" to 0, "major" to 0, "minor" to 0, "nit" to 0), ledger.severityBreakdown)
@@ -58,7 +61,7 @@ class UnaddressedFindingsLedgerServiceTest {
       )
     val service = serviceFor(InMemoryUnaddressedFindings(setOf("SKILL-135"), rows))
 
-    val ledger = service.ledger("SKILL-135")
+    val ledger = assertNotNull(service.ledger("SKILL-135"))
 
     assertEquals(listOf(1, 3), ledger.findings.map { it.subtaskId })
     assertEquals(mapOf("blocker" to 0, "major" to 1, "minor" to 1, "nit" to 0), ledger.severityBreakdown)
@@ -102,7 +105,7 @@ class UnaddressedFindingsLedgerServiceTest {
       )
     val service = serviceFor(InMemoryUnaddressedFindings(setOf("SKILL-135"), rows))
 
-    val ledger = service.ledger("SKILL-135")
+    val ledger = assertNotNull(service.ledger("SKILL-135"))
 
     assertEquals(3, ledger.findings.size)
     assertEquals(mapOf("blocker" to 1, "major" to 1, "minor" to 1, "nit" to 0), ledger.severityBreakdown)

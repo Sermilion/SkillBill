@@ -3,7 +3,8 @@ package skillbill.application.review.snapshot
 import skillbill.application.reviewevidence.ReviewCommitRange
 import skillbill.application.reviewevidence.SharedReviewEvidenceAssembler
 import skillbill.application.reviewevidence.SharedReviewEvidenceProjection
-import skillbill.application.reviewevidence.model.DiffResolutionException
+import skillbill.application.reviewevidence.ResolvedCommitSequence
+import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.ports.diff.DiffResolverPort
@@ -15,7 +16,7 @@ import skillbill.review.context.model.commit.ReviewCommitSource
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ReviewCommitSequenceResolverTest {
@@ -88,20 +89,34 @@ class ReviewCommitSequenceResolverTest {
     return branchRepo(shas, diffs, parents)
   }
 
+  private fun attempt(
+    git: DiffResolverPort,
+    scope: ParallelReviewScope,
+    aggregateDiff: String,
+    supplied: Boolean = false,
+  ): DiffResolution<ResolvedCommitSequence> =
+    when (
+      val assembled =
+        SharedReviewEvidenceAssembler(git).assemble(scope, repoRoot, ReviewCommitRange("base", "head"), supplied)
+    ) {
+      is DiffResolution.Unresolved -> assembled
+      is DiffResolution.Resolved ->
+        SharedReviewEvidenceProjection.project(assembled.value, ReviewDiffEvidence.parse(aggregateDiff))
+    }
+
   private fun resolve(
     git: DiffResolverPort,
     scope: ParallelReviewScope,
     aggregateDiff: String,
     supplied: Boolean = false,
-  ) = SharedReviewEvidenceProjection.project(
-    SharedReviewEvidenceAssembler(git).assemble(
-      scope,
-      repoRoot,
-      ReviewCommitRange("base", "head"),
-      supplied,
-    ),
-    ReviewDiffEvidence.parse(aggregateDiff),
-  )
+  ): ResolvedCommitSequence = assertIs<DiffResolution.Resolved<ResolvedCommitSequence>>(
+    attempt(git, scope, aggregateDiff, supplied),
+  ).value
+
+  private fun unresolvedMessage(
+    git: DiffResolverPort,
+    aggregateDiff: String,
+  ): String = assertIs<DiffResolution.Unresolved>(attempt(git, ParallelReviewScope.BRANCH, aggregateDiff)).message
 
   @Test fun `a six commit branch resolves an ordered first-parent sequence`() {
     val aggregate =
@@ -183,11 +198,7 @@ class ReviewCommitSequenceResolverTest {
         mapOf("head" to "base"),
       )
     val aggregate = diffFor("src/A.kt", "alpha") + "\n" + diffFor("src/Dropped.kt", "gone")
-    val failure =
-      assertFailsWith<DiffResolutionException> {
-        resolve(git, ParallelReviewScope.BRANCH, aggregate)
-      }
-    assertTrue("src/Dropped.kt" in failure.message.orEmpty())
+    assertTrue("src/Dropped.kt" in unresolvedMessage(git, aggregate))
   }
 
   @Test fun `a duplicated commit fails loudly`() {
@@ -198,11 +209,7 @@ class ReviewCommitSequenceResolverTest {
         metadata = mapOf("head" to ReviewCommitMetadata(listOf("base"), "subject head")),
         diffs = mapOf(ReviewDiffQuery.CommitRange("base", "head") to diff),
       )
-    val failure =
-      assertFailsWith<DiffResolutionException> {
-        resolve(git, ParallelReviewScope.BRANCH, diff)
-      }
-    assertTrue("more than once" in failure.message.orEmpty())
+    assertTrue("more than once" in unresolvedMessage(git, diff))
   }
 
   @Test fun `identical hunks in two commits keep distinct commit-scoped identities`() {
@@ -220,11 +227,7 @@ class ReviewCommitSequenceResolverTest {
   }
 
   @Test fun `a failed rev-list fails loudly instead of degrading to a synthetic unit`() {
-    val failure =
-      assertFailsWith<DiffResolutionException> {
-        resolve(FakeGit(), ParallelReviewScope.BRANCH, diffFor("src/A.kt", "alpha"))
-      }
-    assertTrue("enumerate the commit sequence" in failure.message.orEmpty())
+    assertTrue("enumerate the commit sequence" in unresolvedMessage(FakeGit(), diffFor("src/A.kt", "alpha")))
   }
 
   @Test fun `a sequence that does not reach head fails loudly`() {
@@ -234,9 +237,7 @@ class ReviewCommitSequenceResolverTest {
         mapOf("c1" to diffFor("src/A.kt", "alpha")),
         mapOf("c1" to "base"),
       )
-    assertFailsWith<DiffResolutionException> {
-      resolve(git, ParallelReviewScope.BRANCH, diffFor("src/A.kt", "alpha"))
-    }
+    assertTrue(unresolvedMessage(git, diffFor("src/A.kt", "alpha")).isNotBlank())
   }
 
   @Test fun `non-commit and locally-absent sources produce exactly one declared synthetic unit`() {

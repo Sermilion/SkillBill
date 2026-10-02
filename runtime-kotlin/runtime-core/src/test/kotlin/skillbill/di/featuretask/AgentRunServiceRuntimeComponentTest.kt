@@ -13,6 +13,7 @@ import skillbill.model.EnvironmentContext
 import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
+import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.SkillRunRequest
 import java.nio.file.Files
@@ -104,7 +105,7 @@ class AgentRunServiceRuntimeComponentTest {
               promptOverride = "Phase: implement",
               spawnAuthorization =
                 object : AgentRunSpawnAuthorization {
-                  override fun <T> withAuthorization(spawn: () -> T): T =
+                  override fun <T> withAuthorization(spawn: () -> T): AgentRunSpawnAuthorizationResult<T> =
                     error("The executable lookup refusal must prevent process authorization.")
                 },
             ),

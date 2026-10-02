@@ -47,10 +47,12 @@ import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
+import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
@@ -2092,6 +2094,24 @@ class GoalPlanningSweepTimingTest {
   }
 
   @Test
+  fun `a planning launch denied by a durable pause settles as PAUSED with the control pause reason`() {
+    val pauseStore = MutablePauseGoalPlanningManifestStore()
+    val harness =
+      sweepHarness(SweepHarnessConfig(manifestStore = pauseStore)) { _, _, _ ->
+        pauseStore.pauseRequested = true
+        AgentRunLaunchDenied(SupportedAgent.CLAUDE, "operator_request")
+      }
+
+    val outcome = harness.sweep.prepare(harness.stateFor(manifest(subtaskCount = 1)), harness.request())
+
+    val stopped = assertIs<GoalPlanningSweepOutcome.Stopped>(outcome)
+    assertEquals(GoalRunnerStopReason.PAUSED, stopped.reason)
+    assertContains(stopped.blockedReason, "durable pause boundary before launching phase 'preplan'")
+    assertContains(stopped.blockedReason, "(reason=operator_request)")
+    assertEquals(listOf("preplan"), harness.launcher.phases)
+  }
+
+  @Test
   fun `an interrupt during wait stops with the launch-interrupt terminal shape`() {
     val timing = RecordingRuntimeTimingPort(result = RuntimeWaitResult.INTERRUPTED)
     var launches = 0
@@ -3075,11 +3095,11 @@ private class TrackingPlanningAuthorization : AgentRunSpawnAuthorization {
   var open: Boolean = false
     private set
 
-  override fun <T> withAuthorization(spawn: () -> T): T {
+  override fun <T> withAuthorization(spawn: () -> T): AgentRunSpawnAuthorizationResult<T> {
     invocations += 1
     open = true
     return try {
-      spawn()
+      AgentRunSpawnAuthorizationResult.Authorized(spawn())
     } finally {
       open = false
     }

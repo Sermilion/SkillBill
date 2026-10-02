@@ -71,32 +71,6 @@ sealed interface ReviewBudgetOutcome {
   val type: String
 }
 
-class ReviewContextBudgetExceededException(
-  val outcome: ReviewContextBudgetExceeded,
-) : RuntimeException(
-    "${outcome.type}: ${outcome.budgetKind.wireValue} ${outcome.observedValue} > ${outcome.configuredLimit}",
-  )
-
-class ReviewRegisterParseSeamException(
-  val seam: String,
-  val lane: String,
-  cause: Throwable,
-) : RuntimeException(
-    "Review register parse seam '$seam' failed for lane '$lane': " +
-      "${cause::class.simpleName}: ${cause.message?.take(CAUSE_DETAIL_MAX_LENGTH) ?: "no detail"}",
-    cause,
-  ) {
-  init {
-    require(seam.isNotBlank() && lane.isNotBlank()) {
-      "Review register parse seam failure must name its seam and lane."
-    }
-  }
-
-  companion object {
-    const val CAUSE_DETAIL_MAX_LENGTH: Int = 200
-  }
-}
-
 data class ReviewContextBudgetExceeded(
   override val lane: String,
   override val budgetKind: ReviewBudgetKind,

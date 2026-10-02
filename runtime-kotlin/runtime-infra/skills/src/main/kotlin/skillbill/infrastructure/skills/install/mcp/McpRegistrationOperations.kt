@@ -3,9 +3,9 @@ package skillbill.infrastructure.skills.install.mcp
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.install.plan.codexConfigRoots
 import skillbill.infrastructure.skills.nativeagent.support.claudeConfigRoots
-import skillbill.install.model.ClaudeMcpProfileFailure
 import skillbill.install.model.McpMutationResult
 import skillbill.install.model.McpProfileOutcome
+import skillbill.install.model.McpRegistrationOutcome
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.repository.toFileLocation
 import java.nio.file.Path
@@ -16,7 +16,7 @@ object McpRegistrationOperations {
     runtimeMcpBin: Path,
     home: Path? = null,
     environment: Map<String, String>,
-  ): McpMutationResult {
+  ): McpRegistrationOutcome {
     val resolvedHome = home ?: resolveUserHome(null)
     val command = runtimeMcpBin.toAbsolutePath().normalize().toString()
     return when (val installAgent = SupportedAgent.fromId(agent)) {
@@ -28,8 +28,14 @@ object McpRegistrationOperations {
         codexFanOut(agent, resolvedHome, environment) { perProfilePath ->
           McpTomlConfig.register(agent, perProfilePath, command)
         }
-      SupportedAgent.JUNIE -> McpJsonConfig.register(agent, configPathFor(installAgent, resolvedHome), command)
-      SupportedAgent.CURSOR -> McpJsonConfig.register(agent, configPathFor(installAgent, resolvedHome), command)
+      SupportedAgent.JUNIE ->
+        McpRegistrationOutcome.Applied(
+          McpJsonConfig.register(agent, configPathFor(installAgent, resolvedHome), command),
+        )
+      SupportedAgent.CURSOR ->
+        McpRegistrationOutcome.Applied(
+          McpJsonConfig.register(agent, configPathFor(installAgent, resolvedHome), command),
+        )
     }
   }
 
@@ -37,7 +43,7 @@ object McpRegistrationOperations {
     agent: String,
     home: Path? = null,
     environment: Map<String, String>,
-  ): McpMutationResult {
+  ): McpRegistrationOutcome {
     val resolvedHome = home ?: resolveUserHome(null)
     return when (val installAgent = SupportedAgent.fromId(agent)) {
       SupportedAgent.CLAUDE ->
@@ -48,8 +54,10 @@ object McpRegistrationOperations {
         codexFanOut(agent, resolvedHome, environment) { perProfilePath ->
           McpTomlConfig.unregister(agent, perProfilePath)
         }
-      SupportedAgent.JUNIE -> McpJsonConfig.unregister(agent, configPathFor(installAgent, resolvedHome))
-      SupportedAgent.CURSOR -> McpJsonConfig.unregister(agent, configPathFor(installAgent, resolvedHome))
+      SupportedAgent.JUNIE ->
+        McpRegistrationOutcome.Applied(McpJsonConfig.unregister(agent, configPathFor(installAgent, resolvedHome)))
+      SupportedAgent.CURSOR ->
+        McpRegistrationOutcome.Applied(McpJsonConfig.unregister(agent, configPathFor(installAgent, resolvedHome)))
     }
   }
 
@@ -95,7 +103,7 @@ object McpRegistrationOperations {
     home: Path,
     environment: Map<String, String>,
     mutate: (Path) -> McpMutationResult,
-  ): McpMutationResult =
+  ): McpRegistrationOutcome =
     profileFanOut(
       agent = agent,
       profilePaths = claudeProfileConfigPaths(home, environment),
@@ -109,7 +117,7 @@ object McpRegistrationOperations {
     home: Path,
     environment: Map<String, String>,
     mutate: (Path) -> McpMutationResult,
-  ): McpMutationResult =
+  ): McpRegistrationOutcome =
     profileFanOut(
       agent = agent,
       profilePaths = codexProfileConfigPaths(home, environment),
@@ -124,7 +132,7 @@ object McpRegistrationOperations {
     representativePath: Path,
     failureLabel: String,
     mutate: (Path) -> McpMutationResult,
-  ): McpMutationResult {
+  ): McpRegistrationOutcome {
     val outcomes = mutableListOf<McpProfileOutcome>()
     val failures = mutableListOf<Pair<Path, Throwable>>()
 
@@ -136,17 +144,19 @@ object McpRegistrationOperations {
 
     if (failures.isNotEmpty()) {
       val names = failures.joinToString("; ") { (path, error) -> "$path: ${error.message}" }
-      throw ClaudeMcpProfileFailure(
+      return McpRegistrationOutcome.ProfilesFailed(
         "Failed to update $failureLabel MCP config for profile(s): $names",
         succeeded = outcomes.toList(),
       )
     }
 
-    return McpMutationResult(
-      agent = agent,
-      configPath = representativePath.toFileLocation(),
-      changed = outcomes.any { it.changed },
-      profiles = outcomes,
+    return McpRegistrationOutcome.Applied(
+      McpMutationResult(
+        agent = agent,
+        configPath = representativePath.toFileLocation(),
+        changed = outcomes.any { it.changed },
+        profiles = outcomes,
+      ),
     )
   }
 }

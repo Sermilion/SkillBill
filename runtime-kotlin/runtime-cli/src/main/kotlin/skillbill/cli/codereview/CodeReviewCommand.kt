@@ -13,10 +13,7 @@ import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelReviewLaneStatus
 import skillbill.application.review.model.ReviewPrelaunchExpansion
-import skillbill.application.review.model.StackDetectionException
-import skillbill.application.review.model.UsageValidationException
 import skillbill.application.review.service.RequestedReviewMode
-import skillbill.application.reviewevidence.model.DiffResolutionException
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
 import skillbill.cli.kernel.cli.CliRunState
@@ -260,12 +257,6 @@ private fun runPhaseReview(
 ): PhaseRunResult? =
   try {
     entry.run(request)
-  } catch (error: UsageValidationException) {
-    usageError(error)
-  } catch (error: DiffResolutionException) {
-    usageError(error)
-  } catch (error: StackDetectionException) {
-    usageError(error)
   } catch (error: ShellContentContractException) {
     usageError(error)
   } catch (error: ReviewAggregationIntegrityError) {

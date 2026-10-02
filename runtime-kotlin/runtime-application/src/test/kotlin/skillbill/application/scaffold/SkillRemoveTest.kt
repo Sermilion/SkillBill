@@ -4,10 +4,11 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import skillbill.error.core.RuntimeFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.skillremove.SkillRemoveFileSystem
 import skillbill.skillremove.SkillBillRollbackException
-import skillbill.skillremove.SkillRemovalRefusedException
 import skillbill.skillremove.model.AgentSymlinkUnlink
 import skillbill.skillremove.model.AppliedCascade
 import skillbill.skillremove.model.ManifestEdit
@@ -17,7 +18,7 @@ import skillbill.skillremove.model.SkillRemovalRefusalReason
 import skillbill.skillremove.model.SkillRemovalRequest
 import skillbill.skillremove.model.SkillRemovalResult
 import skillbill.skillremove.model.SkillRemovalTarget
-import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 
 class SkillRemoveTest {
   @Test
@@ -57,10 +58,27 @@ class SkillRemoveTest {
         target = SkillRemovalTarget.HorizontalSkill(skillName = "bill-code-review", allowShipped = false),
         repoRootAbsolutePath = "/repo",
       )
-    val refusal = assertFailsWith<SkillRemovalRefusedException> { SkillRemove(fs).previewRemoval(request) }
-    assertEquals(SkillRemovalRefusalReason.SHIPPED_REQUIRES_ALLOW_SHIPPED, refusal.refusalReason)
-    assertTrue("--allow-shipped" in refusal.message.orEmpty())
-    assertTrue("allowShipped" !in refusal.message.orEmpty())
+    val refusal = assertIs<SkillRemovalResult.Refused>(SkillRemove(fs).previewRemoval(request))
+    assertEquals(SkillRemovalRefusalReason.SHIPPED_REQUIRES_ALLOW_SHIPPED, refusal.reason)
+    assertTrue("--allow-shipped" in refusal.message)
+    assertTrue("allowShipped" !in refusal.message)
+  }
+
+  @Test
+  fun `executeRemoval maps a shipped skill refusal to Failed carrying the retained exception name`() {
+    val fs = FakeSkillRemoveFileSystem()
+    val request =
+      SkillRemovalRequest(
+        target = SkillRemovalTarget.HorizontalSkill(skillName = "bill-code-review", allowShipped = false),
+        repoRootAbsolutePath = "/repo",
+      )
+    val result = assertIs<SkillRemovalResult.Failed>(SkillRemove(fs).executeRemoval(request))
+    assertEquals("SkillRemovalRefusedException", result.exceptionName)
+    assertEquals(true, result.rollbackComplete)
+    assertEquals(
+      "Refusing to remove shipped surface 'bill-code-review' without --allow-shipped.",
+      result.exceptionMessage,
+    )
   }
 
   @Test
@@ -134,8 +152,8 @@ class SkillRemoveTest {
         target = SkillRemovalTarget.HorizontalSkill(skillName = ".bill-shared", allowShipped = true),
         repoRootAbsolutePath = "/repo",
       )
-    val refusal = assertFailsWith<SkillRemovalRefusedException> { SkillRemove(fs).previewRemoval(request) }
-    assertEquals(SkillRemovalRefusalReason.BILL_SHARED_PROTECTED, refusal.refusalReason)
+    val refusal = assertIs<SkillRemovalResult.Refused>(SkillRemove(fs).previewRemoval(request))
+    assertEquals(SkillRemovalRefusalReason.BILL_SHARED_PROTECTED, refusal.reason)
   }
 
   @Test
@@ -185,8 +203,8 @@ class SkillRemoveTest {
         target = SkillRemovalTarget.PlatformPack(platform = ".bill-shared", allowShipped = true),
         repoRootAbsolutePath = "/repo",
       )
-    val refusal = assertFailsWith<SkillRemovalRefusedException> { SkillRemove(fs).previewRemoval(request) }
-    assertEquals(SkillRemovalRefusalReason.BILL_SHARED_PROTECTED, refusal.refusalReason)
+    val refusal = assertIs<SkillRemovalResult.Refused>(SkillRemove(fs).previewRemoval(request))
+    assertEquals(SkillRemovalRefusalReason.BILL_SHARED_PROTECTED, refusal.reason)
   }
 
   @Test
@@ -241,8 +259,8 @@ class SkillRemoveTest {
       FakeSkillRemoveFileSystem(
         filesystemPaths = listOf("skills/bill-foo"),
         applyThrows =
-          SkillRemovalRefusedException(
-            SkillRemovalRefusalReason.BILL_SHARED_PROTECTED,
+          SkillBillRuntimeException(
+            RemoveTestFailureCode.APPLY_FAILED,
             "test",
           ),
       )
@@ -255,6 +273,13 @@ class SkillRemoveTest {
     assertEquals(true, result.rollbackComplete)
   }
 }
+
+private enum class RemoveTestFailureCode : RuntimeFailureCode {
+  APPLY_FAILED,
+}
+
+private val SkillRemovalResult.preview: SkillRemovalPreview
+  get() = assertIs<SkillRemovalResult.Preview>(this).preview
 
 private class FakeSkillRemoveFileSystem(
   private val cascadedNames: List<String> = emptyList(),

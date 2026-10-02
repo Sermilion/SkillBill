@@ -1,5 +1,6 @@
 package skillbill.install.model
 
+import skillbill.error.core.RuntimeFailureCode
 import skillbill.model.FileLocation
 
 enum class InstallPlanSkillKind {
@@ -62,17 +63,25 @@ data class InstallTransaction(
 
 data class McpProfileOutcome(val configPath: FileLocation, val changed: Boolean)
 
-class ClaudeMcpProfileFailure(
-  message: String,
-  val succeeded: List<McpProfileOutcome>,
-) : IllegalArgumentException(message)
-
 data class McpMutationResult(
   val agent: String,
   val configPath: FileLocation,
   val changed: Boolean,
   val profiles: List<McpProfileOutcome> = emptyList(),
 )
+
+sealed interface McpRegistrationOutcome {
+  data class Applied(val mutation: McpMutationResult) : McpRegistrationOutcome
+
+  data class ProfilesFailed(
+    val message: String,
+    val succeeded: List<McpProfileOutcome>,
+  ) : McpRegistrationOutcome
+}
+
+enum class McpRegistrationFailureCode : RuntimeFailureCode {
+  PROFILE_UPDATE_FAILED,
+}
 
 data class RenderedSkill(
   val skillName: String,

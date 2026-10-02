@@ -43,9 +43,10 @@ internal sealed interface SharedPreplanRefresh {
   ) : SharedPreplanRefresh
 
   data class RequiredWriteRejected(val rejection: RequiredPhaseWrite.Rejected) : SharedPreplanRefresh
-}
 
-class RefreshRefused(val reason: String) : RuntimeException(reason)
+  /** The refresh was refused; [reason] is the operator-facing text the halted sweep reports. */
+  data class Refused(val reason: String) : SharedPreplanRefresh
+}
 
 internal fun DefaultGoalPlanningSweep.settleSharedPreplan(args: SharedPreplanSettlementArgs): SharedPreplanSettlement {
   var working = args.shared
@@ -115,6 +116,10 @@ internal fun DefaultGoalPlanningSweep.settleStaleValidSharedPreplan(
       is SharedPreplanRefresh.Refreshed -> refresh
       is SharedPreplanRefresh.RequiredWriteRejected ->
         return SharedPreplanSettlement.RequiredWriteRejected(refresh.rejection)
+      is SharedPreplanRefresh.Refused ->
+        return SharedPreplanSettlement.Halt(
+          stopped(working, 0, refresh.reason, GoalPlanningSweepConstants.PHASE_PREPLAN),
+        )
     }
   alreadyRefreshed = true
   when (val loaded = loadSharedPreplanAfterRefresh(args, first)) {
@@ -138,10 +143,7 @@ private fun DefaultGoalPlanningSweep.refreshHaltOutcome(
   working: GoalPlanningSharedContext,
   error: Throwable,
 ): GoalPlanningSweepOutcome.Stopped =
-  when (error) {
-    is RefreshRefused -> stopped(working, 0, error.reason, GoalPlanningSweepConstants.PHASE_PREPLAN)
-    else -> stopped(working, 0, error.message.orEmpty(), GoalPlanningSweepConstants.PHASE_PREPLAN)
-  }
+  stopped(working, 0, error.message.orEmpty(), GoalPlanningSweepConstants.PHASE_PREPLAN)
 
 private sealed interface SharedPreplanAfterRefresh {
   class Ready(val checkpoint: SharedGoalPreplanCheckpoint) : SharedPreplanAfterRefresh
@@ -204,6 +206,10 @@ private fun DefaultGoalPlanningSweep.reclassifyAfterStaleRefresh(
               SharedPreplanSettlement.Ready(refreshed.provenance, refreshed.checkpoint, working)
             is SharedPreplanRefresh.RequiredWriteRejected ->
               SharedPreplanSettlement.RequiredWriteRejected(refreshed.rejection)
+            is SharedPreplanRefresh.Refused ->
+              SharedPreplanSettlement.Halt(
+                stopped(working, 0, refreshed.reason, GoalPlanningSweepConstants.PHASE_PREPLAN),
+              )
           }
         },
         onFailure = { error -> SharedPreplanSettlement.Halt(refreshHaltOutcome(working, error)) },
@@ -255,7 +261,7 @@ internal fun DefaultGoalPlanningSweep.refreshStaleSharedPreplan(
       return@runCatching SharedPreplanRefresh.Refreshed(existing.provenance, existing)
     }
     refuseRefreshReason(shared.issueKey, refreshLiveness.resolve(state))?.let { reason ->
-      throw RefreshRefused(reason)
+      return@runCatching SharedPreplanRefresh.Refused(reason)
     }
     val refreshShared = shared.copy(planningPacket = freshPlanningPacket(shared, state))
     val produced =

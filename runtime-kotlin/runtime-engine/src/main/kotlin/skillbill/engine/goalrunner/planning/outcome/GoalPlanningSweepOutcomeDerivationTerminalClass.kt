@@ -41,13 +41,5 @@ fun emptyTurnReason(
   evidence: GoalPlanningEmptyTurnEvidence,
 ): String = "Goal planning '$phaseId' agent turn exited cleanly and returned no output. ${evidence.summary()}"
 
-fun recoverySubtaskId(error: Throwable): Int {
-  val recoveryError = error as? IncompatibleGoalPlanningPreparationRecoveryError
-  if (
-    recoveryError != null &&
-    error.message?.contains("must be completed with non-empty produced_outputs") == true
-  ) {
-    return 0
-  }
-  return recoveryError?.subtaskId ?: 0
-}
+fun recoverySubtaskId(error: Throwable): Int =
+  (error as? IncompatibleGoalPlanningPreparationRecoveryError)?.subtaskId ?: 0
