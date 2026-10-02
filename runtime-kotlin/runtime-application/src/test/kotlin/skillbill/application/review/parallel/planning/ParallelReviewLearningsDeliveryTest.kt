@@ -15,7 +15,7 @@ import skillbill.contracts.learning.LearningPayloadKeys
 import skillbill.learnings.model.LearningRecord
 import skillbill.learnings.model.LearningScope
 import skillbill.ports.repository.RepositoryOriginScopeKeyPort
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull

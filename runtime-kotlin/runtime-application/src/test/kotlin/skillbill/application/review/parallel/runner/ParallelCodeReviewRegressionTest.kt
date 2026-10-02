@@ -11,7 +11,7 @@ import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.runner
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.toReviewAccountingBoundedJson
 import java.nio.file.Files
 import kotlin.test.Test

@@ -14,7 +14,7 @@ import skillbill.ports.review.evidence.ReviewEvidenceBroker
 import skillbill.ports.review.launch.ReviewLaunchAgentStagingPort
 import skillbill.ports.review.model.ResolvedReviewRubric
 import skillbill.ports.review.preparation.ReviewRubricResolver
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger

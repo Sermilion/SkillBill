@@ -2,11 +2,8 @@ package skillbill.review.context.model.hunk
 
 import skillbill.error.shellcontent.ReviewLearningRuleTextTooLongError
 import skillbill.error.shellcontent.ReviewLearningTitleTooLongError
-import skillbill.review.context.model.execution.SHA256_HEX
-import skillbill.review.context.model.execution.canonicalFieldList
-import skillbill.review.context.model.execution.canonicalFields
-import skillbill.review.context.model.execution.sha256
 import skillbill.review.model.requireRepositoryRelativePath
+import skillbill.text.sha256HexUtf8
 
 const val REVIEW_RULE_EXCERPT_MAX_CHARS: Int = 2_000
 
@@ -41,7 +38,7 @@ data class ReviewRuleReference(
   }
 
   companion object {
-    fun digestOf(excerpt: String): String = sha256(excerpt.replace("\r\n", "\n"))
+    fun digestOf(excerpt: String): String = sha256HexUtf8(excerpt.replace("\r\n", "\n"))
   }
 
   val canonical: String
@@ -76,7 +73,7 @@ data class ReviewLearningsReference(
   }
 
   companion object {
-    fun digestOf(ruleText: String): String = sha256(ruleText.replace("\r\n", "\n"))
+    fun digestOf(ruleText: String): String = sha256HexUtf8(ruleText.replace("\r\n", "\n"))
   }
 
   val canonical: String

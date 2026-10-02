@@ -6,8 +6,11 @@ import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.identity.subtask.GOAL_SUBTASK_REVIEW_STATE_CONTRACT_VERSION
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeRepairReceiptError
 import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.engine.model.GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewPassSequence
 
 data class GoalSubtaskReviewRevision(
   val commitFocusedAccounting: GoalSubtaskCommitFocusedAccounting? = null,
@@ -209,7 +212,8 @@ data class GoalSubtaskReviewState(
   fun acknowledgeSummariesThrough(passNumber: Int): GoalSubtaskReviewState =
     copy(emittedPassCount = passNumber.coerceIn(emittedPassCount, completedPassCount))
 
-  fun toPersistenceWire(): Any = toArtifactMap()
+  fun toPersistenceWire(): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
   internal fun toArtifactMap(): Map<String, Any?> =
     linkedMapOf<String, Any?>(

@@ -1,7 +1,6 @@
 package skillbill.engine.goalrunner.status
 
 import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
-import skillbill.engine.goalrunner.execution.support.pauseAtOperatorBoundary
 import skillbill.engine.goalrunner.manifest.SavedManifestProjection
 import skillbill.engine.goalrunner.manifest.mergeConcurrentGoalProgress
 import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
@@ -12,6 +11,8 @@ import skillbill.error.goalrunner.GoalRunnerLaunchAuthorizationDeniedException
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_REQUEST
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.goalrunner.model.pauseAtOperatorBoundary
+import skillbill.goalrunner.model.targetReached
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
@@ -20,8 +21,6 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
-import skillbill.workflow.model.DecompositionStatus
-import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
 import java.time.Clock
 
@@ -149,7 +148,7 @@ internal class GoalRunnerControlCoordinator(
       val controls = unitOfWork.goalRunnerControls.controlState(parent.workflowId)
       val authoritativeManifest = parent.decompositionRuntime() ?: state.manifest
       val authoritativeState = state.copy(manifest = authoritativeManifest)
-      val targetReached = controls.targetReached(authoritativeState)
+      val targetReached = controls.targetReached(authoritativeManifest)
       val pausedControls =
         if (controls.requiresPauseBoundary(authoritativeManifest)) {
           controls.pauseAtOperatorBoundary(clock.instant().toString(), targetReached)
@@ -224,13 +223,6 @@ internal fun GoalRunnerControlCoordinator.spawnAuthorization(
         spawn()
       }
   }
-
-internal fun GoalRunnerControlState.targetReached(state: GoalRunnerManifestState): Boolean =
-  stopAfterSubtaskId?.let { targetId ->
-    state.manifest.subtasks.any {
-      it.id == targetId && it.status.decompositionStatus() == DecompositionStatus.COMPLETE
-    }
-  } == true && !stopAfterConsumed
 
 internal fun GoalRunnerControlCoordinator.bindRepositoryIdentity(
   parentWorkflowId: String,

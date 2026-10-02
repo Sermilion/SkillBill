@@ -5,17 +5,18 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerm
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationFieldAdoption
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalPlanningImport
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttempt
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.featureTaskRuntimeImplementationAttemptRecordToWire
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.featureTaskRuntimeImplementationAttemptsFromWire
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.featureTaskRuntimeRunInvariantsFromArtifactMap
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.toArtifactMap
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationFieldAdoption
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
+import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeImplementationAttemptRecordToWire
+import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeImplementationAttemptsFromWire
+import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeRunInvariantsFromArtifactMap
+import skillbill.workflow.taskruntime.model.persistence.toArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 
-fun FeatureTaskRuntimeImplementationAttempt.asWorkflowArtifactEntry(): Any = toArtifactMap()
+fun FeatureTaskRuntimeImplementationAttempt.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
 fun decodeImplementationAttemptFromArtifact(raw: Any?): FeatureTaskRuntimeImplementationAttempt? =
   JsonCodec.anyToStringAnyMap(raw)?.let(FeatureTaskRuntimeImplementationAttempt::fromArtifactMap)
@@ -26,28 +27,37 @@ fun decodeImplementationAttemptsFromArtifact(raw: Any?): List<FeatureTaskRuntime
 fun Any.toWorkflowArtifactMap(): FeatureTaskRuntimeWorkflowArtifactMap =
   FeatureTaskRuntimeWorkflowArtifactMap.from(this)
 
-fun implementationAttemptRecordWorkflowArtifact(attempts: List<FeatureTaskRuntimeImplementationAttempt>): Any =
-  featureTaskRuntimeImplementationAttemptRecordToWire(attempts)
+fun implementationAttemptRecordWorkflowArtifact(
+  attempts: List<FeatureTaskRuntimeImplementationAttempt>,
+): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(featureTaskRuntimeImplementationAttemptRecordToWire(attempts))
 
-fun FeatureTaskRuntimeRunInvariants.asWorkflowArtifactEntry(): Any = toArtifactMap()
+fun FeatureTaskRuntimeRunInvariants.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
 fun decodeRunInvariantsFromArtifact(raw: Any?): FeatureTaskRuntimeRunInvariants? =
   JsonCodec.anyToStringAnyMap(raw)?.let { featureTaskRuntimeRunInvariantsFromArtifactMap(it) }
 
-fun FeatureTaskRuntimeResolvedBranch.asWorkflowArtifactEntry(): Any = toArtifactMap()
+fun FeatureTaskRuntimeResolvedBranch.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
-fun FeatureTaskRuntimeDecomposeTerminal.asWorkflowArtifactEntry(): Any = toArtifactMap()
+fun FeatureTaskRuntimeDecomposeTerminal.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
-fun FeatureTaskRuntimeGoalContinuationArtifact.asWorkflowArtifactEntry(): Any = toArtifactMap()
+fun FeatureTaskRuntimeGoalContinuationArtifact.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
 fun decodeGoalContinuationArtifactFromArtifact(raw: Any?): FeatureTaskRuntimeGoalContinuationArtifact? =
   JsonCodec.anyToStringAnyMap(raw)?.let(FeatureTaskRuntimeGoalContinuationArtifact::fromArtifactMap)
 
-fun FeatureTaskRuntimeGoalContinuationFieldAdoption.asWorkflowArtifactEntry(): Any = toArtifactMap()
+fun FeatureTaskRuntimeGoalContinuationFieldAdoption.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
-fun FeatureTaskRuntimeGoalPlanningImport.asWorkflowArtifactEntry(): Any = toArtifactMap()
+fun FeatureTaskRuntimeGoalPlanningImport.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
-fun FeatureTaskRuntimeDeliveredProjectionRecord.asWorkflowArtifactEntry(): Any = toArtifactMap()
+fun FeatureTaskRuntimeDeliveredProjectionRecord.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
 fun decodeDeliveredProjectionRecordFromArtifact(raw: Any?): FeatureTaskRuntimeDeliveredProjectionRecord? =
   JsonCodec.anyToStringAnyMap(raw)?.let(FeatureTaskRuntimeDeliveredProjectionRecord::fromArtifactMap)

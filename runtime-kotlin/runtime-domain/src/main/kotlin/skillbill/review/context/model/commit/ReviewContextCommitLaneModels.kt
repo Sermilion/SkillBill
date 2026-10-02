@@ -1,8 +1,8 @@
 package skillbill.review.context.model.commit
 
-import skillbill.review.context.model.execution.canonicalFieldList
-import skillbill.review.context.model.execution.canonicalFields
-import skillbill.review.context.model.execution.sha256
+import skillbill.review.context.model.hunk.canonicalFieldList
+import skillbill.review.context.model.hunk.canonicalFields
+import skillbill.text.sha256HexUtf8
 
 internal const val REVIEW_ROUTING_REASON_MAX_CHARS: Int = 600
 
@@ -91,5 +91,5 @@ data class ReviewCommitLaneRoutingMatrix(
       ),
     )
 
-  val routingDigest: String get() = sha256(canonical)
+  val routingDigest: String get() = sha256HexUtf8(canonical)
 }

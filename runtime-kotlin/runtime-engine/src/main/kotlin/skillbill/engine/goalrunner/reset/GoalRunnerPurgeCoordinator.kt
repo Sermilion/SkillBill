@@ -8,7 +8,6 @@ import skillbill.engine.decomposition.encodeDecompositionManifestYaml
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneGoalPurgeCheckpointRefs
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
-import skillbill.engine.goalrunner.manifest.resetManifest
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeResult
 import skillbill.engine.goalrunner.planning.recovery.resolveChildExecutionLiveness
@@ -25,6 +24,7 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.requireAccepted
+import skillbill.workflow.decomposition.resetManifest
 import java.nio.file.Path
 
 @Inject

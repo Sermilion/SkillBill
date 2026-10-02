@@ -17,6 +17,19 @@ enum class DecompositionStatus(val wireValue: String) {
   }
 }
 
+enum class DecompositionSubtaskAction(val wireValue: String) {
+  NONE("none"),
+  START("start"),
+  RESUME("resume"),
+  BLOCKED("blocked"),
+  COMPLETE("complete"),
+  ;
+
+  companion object {
+    fun fromWire(value: String): DecompositionSubtaskAction? = entries.firstOrNull { it.wireValue == value }
+  }
+}
+
 enum class WorkflowStatus(val wireValue: String) {
   PENDING("pending"),
   RUNNING("running"),

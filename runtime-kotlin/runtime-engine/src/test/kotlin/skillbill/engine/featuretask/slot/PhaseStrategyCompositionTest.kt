@@ -43,7 +43,7 @@ import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntim
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection

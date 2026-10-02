@@ -26,13 +26,14 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalreview.GoalSubtaskBlockerDisposition
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewRevision
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
-import skillbill.workflow.model.goalreview.appendBoundedHistoryBySequence
 import skillbill.workflow.model.goalreview.unionRefutedBlockerDispositions
+import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.GoalSubtaskReviewArtifactDecoder
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
+import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction.COMPLETE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -123,7 +124,7 @@ class FeatureTaskRuntimeGoalReviewCompletionRecorder(
     val envelope =
       requireNotNull(request.normalizedOutput) {
         "Goal review completion requires normalized output to persist the unaddressed-findings ledger."
-      }.envelopePayload().let(::workflowArtifactEntryMap)
+      }.envelopeWireMap()
     val recordedVerdicts =
       GoalSubtaskReviewSummaryReducer.recordedVerdicts(
         unitOfWork.reviews::fetchFindingVerdicts,
@@ -230,7 +231,7 @@ class FeatureTaskRuntimeGoalReviewCompletionRecorder(
     val output =
       requireNotNull(request.normalizedOutput) {
         "Goal review completion requires normalized output to persist the unaddressed-findings ledger."
-      }.envelopePayload().let(::workflowArtifactEntryMap)
+      }.envelopeWireMap()
     val recordedVerdicts =
       GoalSubtaskReviewSummaryReducer.recordedVerdicts(
         unitOfWork.reviews::fetchFindingVerdicts,

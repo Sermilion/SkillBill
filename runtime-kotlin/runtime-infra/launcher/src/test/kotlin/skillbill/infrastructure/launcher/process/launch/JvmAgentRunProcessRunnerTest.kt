@@ -27,8 +27,8 @@ import skillbill.ports.review.model.ReviewEvidenceBatchRequest
 import skillbill.ports.review.model.ReviewExpansionAuthorizationRequest
 import skillbill.ports.review.model.ReviewLaneAccounting
 import skillbill.ports.review.model.ReviewToolCall
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import skillbill.review.context.model.launch.ReviewConversationIsolation
-import skillbill.review.context.model.packet.ReviewExpansionRecord
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream

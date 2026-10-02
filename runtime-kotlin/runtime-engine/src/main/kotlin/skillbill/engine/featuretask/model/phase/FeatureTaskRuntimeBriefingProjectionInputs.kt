@@ -1,7 +1,7 @@
 package skillbill.engine.featuretask.model.phase
 
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseHandoff
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseHandoff
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReviewEvidenceReference
 
 data class FeatureTaskRuntimeBriefingProjectionInputs(

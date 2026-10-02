@@ -8,8 +8,8 @@ import skillbill.review.context.model.accounting.ReviewAccountingCounters
 import skillbill.review.context.model.accounting.ReviewAccountingInput
 import skillbill.review.context.model.accounting.ReviewCommitRoutingAccounting
 import skillbill.review.context.model.accounting.ReviewIntegrationAccounting
+import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcome
 import skillbill.review.context.model.accounting.ReviewParentAnalysisConsumption
-import skillbill.review.context.model.launch.ReviewIntegrationTerminalOutcome
 import java.nio.file.Files
 import java.sql.Connection
 import kotlin.test.Test

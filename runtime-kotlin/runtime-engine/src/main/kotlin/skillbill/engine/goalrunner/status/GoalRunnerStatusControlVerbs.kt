@@ -3,7 +3,6 @@ package skillbill.engine.goalrunner.status
 import skillbill.engine.goalrunner.execution.core.asWorkerOwnership
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
-import skillbill.engine.goalrunner.manifest.isAtUnlaunchedBoundary
 import skillbill.engine.goalrunner.model.GoalRunnerPauseResult
 import skillbill.engine.goalrunner.model.GoalRunnerPauseStatus
 import skillbill.engine.goalrunner.model.GoalRunnerResumeResult
@@ -15,6 +14,7 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
+import skillbill.workflow.decomposition.isAtUnlaunchedBoundary
 import java.nio.file.Path
 import java.time.Clock
 

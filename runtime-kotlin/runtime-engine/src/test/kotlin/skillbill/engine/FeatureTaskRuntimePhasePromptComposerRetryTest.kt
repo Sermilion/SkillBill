@@ -1,7 +1,7 @@
 
 package skillbill.engine
 
-import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeOperatorBlockRetry
+import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFailsWith

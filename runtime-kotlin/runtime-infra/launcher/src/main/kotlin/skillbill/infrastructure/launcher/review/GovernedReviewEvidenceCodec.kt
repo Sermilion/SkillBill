@@ -8,7 +8,7 @@ import skillbill.ports.review.model.ReviewEvidenceBatchRequest
 import skillbill.ports.review.model.ReviewEvidenceBatchResult
 import skillbill.ports.review.model.ReviewExpansionAuthorizationRequest
 import skillbill.review.context.model.execution.GovernedReviewJsonRpcArguments
-import skillbill.review.context.model.packet.ReviewExpansionRecord
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 
 internal object GovernedReviewEvidenceCodec {
   fun toolSpecList(): GovernedReviewToolSpecList =

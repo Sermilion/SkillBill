@@ -7,7 +7,6 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.workflow.decomposition.intentFor
 import skillbill.workflow.decomposition.model.DecompositionManifest
-import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.runtime.invalidManifest
 import skillbill.workflow.decomposition.withParentStatus
 import java.nio.file.NoSuchFileException
@@ -70,33 +69,6 @@ internal fun DecompositionManifest.assertExecutionModelCanReplace(
     )
   }
   return this
-}
-
-internal fun DecompositionManifest.withPreservedRuntimeState(existing: DecompositionManifest?): DecompositionManifest {
-  if (existing == null) {
-    return this
-  }
-  val existingById = existing.subtasks.associateBy(DecompositionSubtask::id)
-  return copy(
-    status = existing.status,
-    subtasks =
-      subtasks.map { planned ->
-        val previous = existingById[planned.id]
-        if (previous == null) {
-          planned
-        } else {
-          planned.copy(
-            status = previous.status,
-            branch = previous.branch,
-            commitSha = previous.commitSha,
-            workflowId = previous.workflowId,
-            blockedReason = previous.blockedReason,
-            lastResumableStep = previous.lastResumableStep,
-          )
-        }
-      },
-    currentSubtaskIntent = existing.currentSubtaskIntent,
-  )
 }
 
 internal fun DecompositionManifest.withRuntimeUpdate(

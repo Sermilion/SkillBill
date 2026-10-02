@@ -1,6 +1,6 @@
 package skillbill.config.model
 
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 
 enum class SpecType(
   val id: String,

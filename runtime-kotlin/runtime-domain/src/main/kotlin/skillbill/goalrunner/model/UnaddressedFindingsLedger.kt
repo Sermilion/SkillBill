@@ -5,7 +5,7 @@ import skillbill.review.model.ReviewFindingCitation
 import skillbill.review.model.ReviewIssueCategory
 import skillbill.review.model.ReviewScopeDisposition
 import skillbill.review.model.ReviewSeverityAdjustment
-import skillbill.workflow.model.goalreview.FeatureTaskRuntimeReviewSeverity
+import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewSeverity
 
 val UNADDRESSED_FINDING_SEVERITIES: Set<String> =
   FeatureTaskRuntimeReviewSeverity.entries.mapTo(linkedSetOf()) { it.wireValue }

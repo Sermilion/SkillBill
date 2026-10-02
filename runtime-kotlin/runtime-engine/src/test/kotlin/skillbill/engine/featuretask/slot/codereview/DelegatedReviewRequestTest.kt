@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.slot.codereview
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals

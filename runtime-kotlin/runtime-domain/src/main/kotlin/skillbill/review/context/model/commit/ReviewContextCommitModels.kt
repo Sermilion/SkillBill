@@ -1,12 +1,12 @@
 package skillbill.review.context.model.commit
 
-import skillbill.review.context.model.execution.canonicalFieldList
-import skillbill.review.context.model.execution.canonicalFields
-import skillbill.review.context.model.execution.sha256
 import skillbill.review.context.model.hunk.REVIEW_MIN_COMMIT_COUNT
 import skillbill.review.context.model.hunk.REVIEW_MIN_ORDER_INDEX
 import skillbill.review.context.model.hunk.REVIEW_SYNTHETIC_UNIT_ORDER_INDEX
 import skillbill.review.context.model.hunk.ReviewChangedHunk
+import skillbill.review.context.model.hunk.canonicalFieldList
+import skillbill.review.context.model.hunk.canonicalFields
+import skillbill.text.sha256HexUtf8
 
 const val REVIEW_SYNTHETIC_COMMIT_PREFIX: String = "synthetic:"
 
@@ -67,7 +67,7 @@ data class ReviewCommitUnit(
 
   val hunkIds: List<String> get() = canonicalHunks.map { it.hunkId }
 
-  val commitUnitId: String by lazy(LazyThreadSafetyMode.PUBLICATION) { sha256(canonicalValue()) }
+  val commitUnitId: String by lazy(LazyThreadSafetyMode.PUBLICATION) { sha256HexUtf8(canonicalValue()) }
 
   internal fun canonicalValue(): String =
     canonicalFields(

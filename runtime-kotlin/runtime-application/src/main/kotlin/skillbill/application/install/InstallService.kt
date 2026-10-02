@@ -9,13 +9,14 @@ import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.InstallPlatformPackDiscoverySnapshot
 import skillbill.install.model.InstallPlatformSkillMaterializationRequest
 import skillbill.install.model.InstallReconcileApplyOutcome
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.model.PlatformPackSelection
 import skillbill.install.model.PlatformPackSelectionMode
 import skillbill.install.model.ReconciliationPlan
 import skillbill.install.model.SharedInstallSelection
+import skillbill.install.model.buildInstallPlanWireMap
+import skillbill.install.model.selectedPlatformSlugs
 import skillbill.install.policy.InstallPlanPolicy
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
-import skillbill.install.policy.selectedPlatformSlugs
 import skillbill.model.toPath
 import skillbill.ports.install.InstallPlanWireValidator
 import skillbill.ports.install.apply.InstallApplyExecutionPort
@@ -151,7 +152,7 @@ class InstallService(
   }
 
   fun validateInstallPlanWire(plan: InstallPlan) {
-    InstallPlanPolicy.validateInstallPlanSnapshot(plan, installPlanWireValidator::validate)
+    installPlanWireValidator.validate(buildInstallPlanWireMap(plan))
   }
 
   fun discoverPlatformPackSlugs(request: InstallPlanRequest): Set<String> =

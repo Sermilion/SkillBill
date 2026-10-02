@@ -1,7 +1,5 @@
 package skillbill.review.context.model.execution
 
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
-
 enum class ResolvedReviewExecutionMode { INLINE, DELEGATED }
 
 fun ResolvedReviewExecutionMode.toCodeReviewExecutionMode(): CodeReviewExecutionMode =

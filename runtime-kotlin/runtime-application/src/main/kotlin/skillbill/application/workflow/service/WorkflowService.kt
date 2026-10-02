@@ -57,8 +57,8 @@ import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskWorkflowMode
-import skillbill.workflow.model.goalreview.GoalObservabilityEvent
-import skillbill.workflow.model.goalreview.goalObservabilityLatestEventFromArtifacts
+import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
+import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
 import java.time.Clock
 import kotlin.random.Random
 

@@ -137,3 +137,53 @@ sealed interface GoalRunnerRunReport {
     override val parentWorkflowId: String? = null,
   ) : GoalRunnerRunReport
 }
+
+fun GoalRunnerStopReason.toLedgerAction(): GoalAttemptLedgerAction =
+  when (this) {
+    GoalRunnerStopReason.TIMEOUT -> GoalAttemptLedgerAction.TIMEOUT
+    GoalRunnerStopReason.INTERRUPTED -> GoalAttemptLedgerAction.INTERRUPTION
+    GoalRunnerStopReason.NO_TERMINAL_STORE_OUTCOME -> GoalAttemptLedgerAction.RETRY
+    GoalRunnerStopReason.FAILED,
+    GoalRunnerStopReason.BLOCKED,
+    GoalRunnerStopReason.POLICY_BLOCKED,
+    GoalRunnerStopReason.PULL_REQUEST_FAILED,
+    GoalRunnerStopReason.DEPENDENCIES_BLOCKED,
+    GoalRunnerStopReason.RECONCILED_RESUMABLE,
+    GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
+    GoalRunnerStopReason.PAUSED,
+    -> GoalAttemptLedgerAction.FINAL_RECONCILED_OUTCOME
+  }
+
+fun GoalRunnerStopReason.toDiagnosticClass(): String =
+  when (this) {
+    GoalRunnerStopReason.NO_TERMINAL_STORE_OUTCOME -> "no_terminal_workflow_state"
+    GoalRunnerStopReason.FAILED -> "malformed_result_json"
+    GoalRunnerStopReason.TIMEOUT,
+    GoalRunnerStopReason.INTERRUPTED,
+    GoalRunnerStopReason.BLOCKED,
+    -> "child_process_failed"
+    GoalRunnerStopReason.POLICY_BLOCKED,
+    GoalRunnerStopReason.PULL_REQUEST_FAILED,
+    GoalRunnerStopReason.DEPENDENCIES_BLOCKED,
+    GoalRunnerStopReason.RECONCILED_RESUMABLE,
+    GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
+    GoalRunnerStopReason.PAUSED,
+    -> name.lowercase()
+  }
+
+fun GoalRunnerStopReason.nextSafeAction(): String =
+  when (this) {
+    GoalRunnerStopReason.NO_TERMINAL_STORE_OUTCOME,
+    GoalRunnerStopReason.TIMEOUT,
+    GoalRunnerStopReason.INTERRUPTED,
+    GoalRunnerStopReason.RECONCILED_RESUMABLE,
+    GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
+    GoalRunnerStopReason.PAUSED,
+    -> "resume_from_last_resumable_step"
+    GoalRunnerStopReason.FAILED -> "inspect_child_output_then_resume"
+    GoalRunnerStopReason.BLOCKED,
+    GoalRunnerStopReason.POLICY_BLOCKED,
+    GoalRunnerStopReason.PULL_REQUEST_FAILED,
+    GoalRunnerStopReason.DEPENDENCIES_BLOCKED,
+    -> "inspect_blocked_reason"
+  }

@@ -195,7 +195,7 @@ internal fun WorkflowUpdateInput.withGoalObservabilityArtifacts(
       GoalObservabilityArtifacts.patchForProgressEvent(
         input =
           GoalObservabilityProgressInput(
-            artifacts = mergedArtifacts,
+            artifacts = FeatureTaskRuntimeWorkflowArtifactMap.from(mergedArtifacts),
             workflowId = workflowId,
             workflowStatus = workflowStatus.wireValue,
             currentStepId = currentStepId,
@@ -209,18 +209,31 @@ internal fun WorkflowUpdateInput.withGoalObservabilityArtifacts(
                   )
                 },
           ),
-        validator = { event, sourceLabel ->
-          validator.validate(
-            FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT,
-            FeatureTaskRuntimeWorkflowArtifactMap.from(event),
-            sourceLabel,
-          )
-        },
       )
-    observabilityPatch?.let { patchValue ->
-      val decoded = JsonCodec.anyToStringAnyMap(patchValue) ?: return this
+    observabilityPatch?.let { decoded ->
+      validateGoalObservabilityPatch(validator, decoded)
       copy(artifactsPatch = WorkflowArtifactPatch.from(LinkedHashMap(patch).apply { putAll(decoded) }))
     } ?: this
+  }
+}
+
+private fun validateGoalObservabilityPatch(
+  validator: FeatureTaskRuntimeWireArtifactValidator,
+  patch: FeatureTaskRuntimeWorkflowArtifactMap,
+) {
+  val latestEvent = DurableWorkflowArtifactFamily.GOAL_OBSERVABILITY_LATEST_EVENT
+  validator.validate(
+    FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT,
+    FeatureTaskRuntimeWorkflowArtifactMap.from(latestEvent.value(patch)),
+    latestEvent.label(),
+  )
+  val runHistory = DurableWorkflowArtifactFamily.GOAL_OBSERVABILITY_RUN_HISTORY
+  (runHistory.value(patch) as List<*>).forEachIndexed { index, item ->
+    validator.validate(
+      FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(item),
+      "${runHistory.label()}[$index]",
+    )
   }
 }
 

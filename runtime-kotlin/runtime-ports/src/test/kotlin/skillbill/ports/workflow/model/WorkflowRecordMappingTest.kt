@@ -5,7 +5,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GOAL_PROGRESS_EVENT_CONTRACT_VERSION
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
-import skillbill.goalrunner.decodeDeclaredGoalProgressEvent
+import skillbill.goalrunner.ledger.decodeDeclaredGoalProgressEvent
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.goalrunner.model.GoalAttemptLedgerEntry
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts

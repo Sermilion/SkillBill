@@ -5,7 +5,7 @@ import skillbill.infrastructure.skills.scaffold.rendering.canonicalSeverityClose
 import skillbill.infrastructure.skills.scaffold.validation.review.ReviewSkillStructureValidator
 import skillbill.infrastructure.skills.scaffold.validation.review.severityRatings
 import skillbill.infrastructure.skills.scaffold.validation.review.severityViolations
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.testing.repoRootFromTest
 import java.nio.file.Files
 import java.nio.file.Path

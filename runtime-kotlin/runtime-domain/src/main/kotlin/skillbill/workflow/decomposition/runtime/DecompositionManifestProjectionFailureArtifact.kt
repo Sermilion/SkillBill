@@ -3,6 +3,7 @@ package skillbill.workflow.decomposition.runtime
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.decomposition.DecompositionManifestProjectionFailurePayloadKeys
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.workflow.engine.model.DECOMPOSITION_MANIFEST_PROJECTION_FAILURE_ARTIFACT_KEY
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 
 internal data class DecompositionManifestProjectionFailureArtifact(

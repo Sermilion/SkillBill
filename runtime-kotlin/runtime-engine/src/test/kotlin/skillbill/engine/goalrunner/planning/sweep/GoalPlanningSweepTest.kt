@@ -88,7 +88,7 @@ import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
-import skillbill.workflow.model.goalreview.GoalProgressEventKind
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CountDownLatch

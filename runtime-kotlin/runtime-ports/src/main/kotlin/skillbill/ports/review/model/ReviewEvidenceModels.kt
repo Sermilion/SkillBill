@@ -1,11 +1,11 @@
 package skillbill.ports.review.model
 
 import skillbill.review.context.model.accounting.ReviewAccountingTerminalOutcome
+import skillbill.review.context.model.accounting.ReviewBudgetOutcome
 import skillbill.review.context.model.execution.ForbiddenReviewOperation
 import skillbill.review.context.model.execution.ReviewOperationKind
-import skillbill.review.context.model.hunk.ReviewBudgetOutcome
 import skillbill.review.context.model.hunk.ReviewEvidenceLimits
-import skillbill.review.context.model.packet.ReviewExpansionRecord
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import skillbill.review.context.model.packet.ReviewLaneSegmentAccounting
 import skillbill.review.model.ReviewLaneReviewDisposition
 

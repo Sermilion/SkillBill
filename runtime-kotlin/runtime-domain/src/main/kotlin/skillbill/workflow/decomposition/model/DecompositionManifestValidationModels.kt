@@ -4,7 +4,7 @@ import skillbill.contracts.workflow.featuretask.DECOMPOSITION_MANIFEST_VALIDATIO
 import skillbill.error.core.FailureWireCode
 import skillbill.error.core.failureWireByValue
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
-import skillbill.review.context.model.execution.SHA256_HEX
+import skillbill.review.context.model.hunk.SHA256_HEX
 
 private const val DECOMPOSITION_MANIFEST_VALIDATION_VERSION: String =
   DECOMPOSITION_MANIFEST_VALIDATION_CONTRACT_VERSION

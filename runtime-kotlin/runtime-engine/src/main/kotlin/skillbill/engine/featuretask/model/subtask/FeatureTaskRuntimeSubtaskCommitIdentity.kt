@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.model.subtask
 
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.featureTaskRuntimeCheckpointRefName
+import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeCheckpointRefName
 
 internal const val SUBTASK_TRAILER_KEY = "Skill-Bill-Subtask"
 

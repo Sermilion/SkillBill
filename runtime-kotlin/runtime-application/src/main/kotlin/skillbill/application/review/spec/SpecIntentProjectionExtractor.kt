@@ -9,10 +9,10 @@ import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.review.context.ReviewContextWireMap
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.execution.SpecIntentProjection
 import skillbill.review.context.model.execution.SpecIntentProvenance
 import skillbill.review.context.model.execution.SpecIntentSurroundingContext
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
 import java.io.IOException

@@ -468,13 +468,7 @@ object ArchitectureScanSupport {
       PackageSiblingCount(
         packageName = packageName,
         fileCount = fileCount,
-        ceiling =
-          when {
-            packageName == "skillbill.goalrunner" -> 15
-            packageName == "skillbill.workflow.model.goalreview" -> 18
-            packageName.substringAfterLast('.') == "model" -> 20
-            else -> 12
-          },
+        ceiling = siblingCeiling(packageName),
       )
     }.sortedBy { it.packageName }
   }
@@ -500,18 +494,14 @@ object ArchitectureScanSupport {
     packageName: String,
     fileCount: Int,
   ): String? {
-    val ceiling =
-      when {
-        packageName == "skillbill.goalrunner" -> 15
-        packageName == "skillbill.workflow.model.goalreview" -> 18
-        packageName.substringAfterLast('.') == "model" -> 20
-        else -> 12
-      }
+    val ceiling = siblingCeiling(packageName)
     if (fileCount <= ceiling) return null
     return packageSiblingCountViolationMessage(
       PackageSiblingCount(packageName, fileCount, ceiling),
     )
   }
+
+  private fun siblingCeiling(packageName: String): Int = if (packageName.substringAfterLast('.') == "model") 20 else 12
 
   private fun packageSiblingCountViolationMessage(count: PackageSiblingCount): String =
     "${count.packageName} has ${count.fileCount} production Kotlin siblings; " +
@@ -836,6 +826,7 @@ object ArchitectureScanSupport {
     val sourceFiles = kotlinFilesUnder(runtimeRoot.resolve(scanRoot))
     val declaredPackages =
       sourceFiles.mapNotNull { sourceFile -> declaredPackage(sourceFile.readText()) }.toSet()
+    val leafPackages = leafPackages(sourceFiles, declaredPackages, packagePrefix)
     return sourceFiles.flatMap { sourceFile ->
       val source = sourceFile.readText()
       val sourcePackage = declaredPackage(source) ?: return@flatMap emptyList()
@@ -852,19 +843,37 @@ object ArchitectureScanSupport {
           }
           .filterNot(::isModelPackage)
           .filterNot { imported ->
-            imported == "skillbill.goalrunner" ||
+            imported in leafPackages ||
               imported == "skillbill.review.context" ||
-              imported == "skillbill.scaffold.policy" ||
-              imported == "skillbill.install.policy" ||
-              imported == "skillbill.workflow.engine" ||
-              imported == "skillbill.workflow.decomposition.runtime" ||
-              imported == "skillbill.workflow.time"
+              imported == "skillbill.scaffold.policy"
           }
           .distinct()
       owningPackages.map { targetPackage ->
         "${runtimeRoot.relativize(sourceFile)}: $sourcePackage imports non-model package $targetPackage"
       }
     }.sorted()
+  }
+
+  private fun leafPackages(
+    sourceFiles: List<Path>,
+    declaredPackages: Set<String>,
+    packagePrefix: String,
+  ): Set<String> {
+    val importedByPackage = declaredPackages.associateWith { mutableSetOf<String>() }
+    sourceFiles.forEach { sourceFile ->
+      val source = sourceFile.readText()
+      val sourcePackage = declaredPackage(source) ?: return@forEach
+      declaredImports(source)
+        .filter { imported -> imported.startsWith(packagePrefix) }
+        .mapNotNull { imported ->
+          declaredPackages
+            .filter { declared -> imported == declared || imported.startsWith("$declared.") }
+            .maxByOrNull(String::length)
+        }
+        .filter { importedPackage -> importedPackage != sourcePackage }
+        .forEach { importedPackage -> importedByPackage.getValue(sourcePackage).add(importedPackage) }
+    }
+    return importedByPackage.filterValues(MutableSet<String>::isEmpty).keys
   }
 
   fun publicDomainDeclarationViolations(

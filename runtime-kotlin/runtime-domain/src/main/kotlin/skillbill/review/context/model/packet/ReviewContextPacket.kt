@@ -3,17 +3,18 @@ package skillbill.review.context.model.packet
 import skillbill.review.context.model.commit.ReviewCommitCoverageFact
 import skillbill.review.context.model.commit.ReviewCommitLaneRoutingMatrix
 import skillbill.review.context.model.commit.ReviewCommitUnit
-import skillbill.review.context.model.execution.ReviewLaneDecision
-import skillbill.review.context.model.execution.canonicalFieldList
-import skillbill.review.context.model.execution.sha256
+import skillbill.review.context.model.commit.ReviewLaneDecision
 import skillbill.review.context.model.hunk.ReviewBaselineUntrackedPolicy
 import skillbill.review.context.model.hunk.ReviewBuildTestFact
 import skillbill.review.context.model.hunk.ReviewChangedHunk
 import skillbill.review.context.model.hunk.ReviewDependencyAllowlist
 import skillbill.review.context.model.hunk.ReviewEvidenceTarget
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import skillbill.review.context.model.hunk.ReviewLearningsReference
 import skillbill.review.context.model.hunk.ReviewRevision
 import skillbill.review.context.model.hunk.ReviewRuleReference
+import skillbill.review.context.model.hunk.canonicalFieldList
+import skillbill.text.sha256HexUtf8
 
 data class ReviewContextPacket(
   val reviewId: String,
@@ -107,7 +108,7 @@ data class ReviewContextPacket(
   }
 
   val commitSequenceDigest: String by lazy(LazyThreadSafetyMode.PUBLICATION) {
-    sha256(canonicalFieldList(commitUnits.sortedBy { it.orderIndex }.map { it.commitUnitId }))
+    sha256HexUtf8(canonicalFieldList(commitUnits.sortedBy { it.orderIndex }.map { it.commitUnitId }))
   }
 
   val ownedPaths: Set<String> by lazy(LazyThreadSafetyMode.PUBLICATION) {
@@ -117,11 +118,11 @@ data class ReviewContextPacket(
     changedHunks.map { it.hunkId }.toSet()
   }
 
-  val digest: String get() = sha256(canonicalValue())
+  val digest: String get() = sha256HexUtf8(canonicalValue())
 
   val expansionLedgerDigest: String
     get() =
-      sha256(
+      sha256HexUtf8(
         expansionLedger.sortedWith(compareBy({ it.sequence }, { it.expansionId }))
           .joinToString("\n") { it.canonical },
       )

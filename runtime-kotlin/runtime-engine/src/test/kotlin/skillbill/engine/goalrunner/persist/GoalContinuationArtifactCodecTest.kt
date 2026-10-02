@@ -6,7 +6,7 @@ import skillbill.engine.goalrunner.repair.GOAL_BRANCH
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuation
+import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull

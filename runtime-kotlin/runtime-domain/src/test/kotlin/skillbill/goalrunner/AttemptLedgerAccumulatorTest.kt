@@ -1,6 +1,7 @@
 package skillbill.goalrunner
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.goalrunner.ledger.summarizeAttemptLedgerFromEntries
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import kotlin.test.Test

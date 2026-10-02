@@ -1,7 +1,7 @@
 package skillbill.application.review.service
 
 import skillbill.review.context.ReviewExecutionModePolicy
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 
 object RequestedReviewMode {
   val defaultWireValue: String = CodeReviewExecutionMode.DEFAULT.wireValue

@@ -15,7 +15,6 @@ import skillbill.engine.goalrunner.completeOutcome
 import skillbill.engine.goalrunner.execution.core.fixedClock
 import skillbill.engine.goalrunner.execution.core.goalRunnerDeps
 import skillbill.engine.goalrunner.execution.core.testGoalRunner
-import skillbill.engine.goalrunner.execution.support.withWorkflowId
 import skillbill.engine.goalrunner.launchFacts
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerEventSink
@@ -26,6 +25,7 @@ import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.withWorkflowId
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant

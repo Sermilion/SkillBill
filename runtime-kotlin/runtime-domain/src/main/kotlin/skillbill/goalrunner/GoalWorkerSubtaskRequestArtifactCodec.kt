@@ -1,13 +1,13 @@
 package skillbill.goalrunner
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequest
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
-import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
-fun GoalRunnerSupervisionEvent.toPersistenceWire(): Any = toArtifactsMap()
+fun GoalRunnerSupervisionEvent.toPersistenceWire(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactsMap())
 
 internal fun GoalRunnerSupervisionEvent.toArtifactsMap(): Map<String, Any?> =
   linkedMapOf(
@@ -23,10 +23,10 @@ internal fun GoalRunnerSupervisionEvent.toArtifactsMap(): Map<String, Any?> =
     "last_output_at" to lastOutputAt,
   )
 
-internal const val WORKER_SUBTASK_REQUEST_OUTCOMES_ARTIFACT_KEY = "goal_worker_subtask_request_outcomes"
 const val WORKER_SUBTASK_REQUEST_OUTCOME_LIMIT = 50
 
-fun GoalRunnerWorkerSubtaskRequestOutcome.toPersistenceWire(): Any = toArtifactMap()
+fun GoalRunnerWorkerSubtaskRequestOutcome.toPersistenceWire(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
 internal fun GoalRunnerWorkerSubtaskRequestOutcome.toArtifactMap(): Map<String, Any?> =
   when (this) {
@@ -69,11 +69,3 @@ internal fun GoalRunnerWorkerSubtaskRequest.toArtifactMap(): Map<String, Any?> =
     "depends_on_subtask_ids" to dependsOnSubtaskIds,
     "requires_operator_confirmation" to requiresOperatorConfirmation,
   ).filterValues { value -> value != null }
-
-fun Any?.asGoalRunnerIntOrNull(): Int? =
-  if (this == null) {
-    null
-  } else {
-    asExactIntOrNull()
-      ?: throw InvalidWorkflowStateSchemaError("Goal-runner durable integer must be exact.")
-  }

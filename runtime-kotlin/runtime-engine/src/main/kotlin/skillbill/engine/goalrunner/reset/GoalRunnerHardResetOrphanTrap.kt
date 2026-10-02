@@ -2,11 +2,11 @@ package skillbill.engine.goalrunner.reset
 
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommitIdentity
 import skillbill.engine.goalrunner.execution.support.branchPlanFor
-import skillbill.engine.goalrunner.manifest.SUBTASK_ACTION_RESUME
 import skillbill.engine.goalrunner.planning.recovery.goalPlanningHardResetRemedy
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.model.DecompositionSubtaskAction
 import java.nio.file.Path
 
 internal data class GoalRunnerHardResetOrphanTrap(
@@ -65,7 +65,8 @@ private fun activeHardResetSubtaskId(manifest: DecompositionManifest): Int? {
         manifest.subtasks.firstOrNull { subtask ->
           subtask.id == currentSubtaskId &&
             (
-              manifest.currentSubtaskIntent.action == SUBTASK_ACTION_RESUME ||
+              DecompositionSubtaskAction.fromWire(manifest.currentSubtaskIntent.action) ==
+                DecompositionSubtaskAction.RESUME ||
                 (subtask.status == "in_progress" && !subtask.workflowId.isNullOrBlank())
             )
         }?.id

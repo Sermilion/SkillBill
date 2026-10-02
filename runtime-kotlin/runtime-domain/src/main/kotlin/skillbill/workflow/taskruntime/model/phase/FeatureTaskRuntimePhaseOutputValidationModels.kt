@@ -2,7 +2,7 @@ package skillbill.workflow.taskruntime.model.phase
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
-import skillbill.review.context.model.execution.SHA256_HEX
+import skillbill.review.context.model.hunk.SHA256_HEX
 import skillbill.workflow.model.persistence.artifact.DurableArtifactMapReader
 import skillbill.workflow.model.persistence.artifact.toStringKeyedArtifactMap
 

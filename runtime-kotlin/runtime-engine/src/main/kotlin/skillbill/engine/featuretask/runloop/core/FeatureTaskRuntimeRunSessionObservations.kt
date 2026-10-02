@@ -1,7 +1,7 @@
 package skillbill.engine.featuretask.runloop.core
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeOperatorBlockRetry
+import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 
 /** Read-only session facts for attempt and settlement helpers; mutations route through the transition owner. */
 internal interface FeatureTaskRuntimeRunSessionObservations {

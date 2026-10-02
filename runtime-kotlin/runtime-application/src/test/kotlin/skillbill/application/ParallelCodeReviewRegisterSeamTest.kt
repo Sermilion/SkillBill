@@ -6,8 +6,8 @@ import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
-import skillbill.review.context.model.hunk.ReviewRegisterParseSeamException
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.accounting.ReviewRegisterParseSeamException
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals

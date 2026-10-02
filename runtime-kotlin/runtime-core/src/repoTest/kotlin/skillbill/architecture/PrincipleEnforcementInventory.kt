@@ -448,8 +448,7 @@ object PrincipleEnforcementInventory {
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "task/runtime/run/" +
+          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/handoff/task/" +
             "FeatureTaskRuntimeRunInvariantPromptFields.kt",
         functionNames = setOf("fromWire"),
       ),
@@ -498,7 +497,6 @@ object PrincipleEnforcementInventory {
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "task/runtime/goal/" +
             "FeatureTaskRuntimeGoalContinuationArtifact.kt",
         functionNames = setOf("fromArtifactMap"),
       ),
@@ -535,14 +533,12 @@ object PrincipleEnforcementInventory {
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "task/runtime/implementation/" +
             "FeatureTaskRuntimeImplementationAttemptModels.kt",
         functionNames = setOf("fromArtifactMap", "featureTaskRuntimeImplementationAttemptsFromWire"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "task/runtime/goal/" +
             "FeatureTaskRuntimeGoalContinuationPersistenceModels.kt",
         functionNames = setOf("fromArtifactMap"),
       ),
@@ -561,7 +557,7 @@ object PrincipleEnforcementInventory {
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/" +
-            "goalreview/GoalObservabilityModels.kt",
+            "goalobservability/GoalObservabilityModels.kt",
         functionNames = setOf("fromWire"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
@@ -572,7 +568,7 @@ object PrincipleEnforcementInventory {
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/" +
-            "goalreview/GoalObservabilityParsing.kt",
+            "goalobservability/GoalObservabilityParsing.kt",
         functionNames =
           setOf(
             "goalObservabilityHistoryFromArtifacts",
@@ -589,7 +585,7 @@ object PrincipleEnforcementInventory {
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "task/runtime/goal/GoalSubtaskReviewArtifactDecoder.kt",
+            "GoalSubtaskReviewArtifactDecoder.kt",
         functionNames = setOf("decodeWire", "decodeContinuationOnlyWire", "decodeContinuationDirect"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
@@ -605,13 +601,13 @@ object PrincipleEnforcementInventory {
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/goalreview/" +
+          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/goalobservability/" +
             "GoalObservabilityParsing.kt",
         functionNames = setOf("goalObservabilityReader", "requireGoalObservabilityContractVersion"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/goalrunner/AttemptLedgerDecoding.kt",
+          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/goalrunner/ledger/AttemptLedgerDecoding.kt",
         functionNames =
           setOf(
             "decodeDeclaredGoalProgressEvent",

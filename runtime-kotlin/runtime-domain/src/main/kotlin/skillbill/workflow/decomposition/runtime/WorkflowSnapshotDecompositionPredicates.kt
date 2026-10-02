@@ -4,7 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.hasGoalContinuationMarker
+import skillbill.workflow.taskruntime.model.persistence.hasGoalContinuationMarker
 
 fun WorkflowStateSnapshot.decompositionRuntime(): DecompositionManifest? = artifacts.decompositionRuntime()
 

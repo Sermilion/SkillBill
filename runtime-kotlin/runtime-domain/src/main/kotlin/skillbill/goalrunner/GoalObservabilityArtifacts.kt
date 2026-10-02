@@ -4,12 +4,13 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.shellcontent.InvalidGoalObservabilityEventSchemaError
 import skillbill.goalrunner.model.GoalObservabilityProgressInput
 import skillbill.goalrunner.model.GoalObservabilityRuntimeEventInput
-import skillbill.workflow.model.goalreview.GOAL_OBSERVABILITY_LATEST_EVENT_ARTIFACT_KEY
-import skillbill.workflow.model.goalreview.GOAL_OBSERVABILITY_RUN_HISTORY_ARTIFACT_KEY
-import skillbill.workflow.model.goalreview.GoalObservabilityEvent
-import skillbill.workflow.model.goalreview.asGoalWorkflowArtifactMap
-import skillbill.workflow.model.goalreview.goalObservabilityHistoryFromArtifacts
+import skillbill.workflow.engine.model.GOAL_OBSERVABILITY_LATEST_EVENT_ARTIFACT_KEY
+import skillbill.workflow.engine.model.GOAL_OBSERVABILITY_RUN_HISTORY_ARTIFACT_KEY
+import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
+import skillbill.workflow.model.goalobservability.asGoalWorkflowArtifactMap
+import skillbill.workflow.model.goalobservability.goalObservabilityHistoryFromArtifacts
 import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 object GoalObservabilityArtifacts {
   private data class RequiredProgressFields(
@@ -19,26 +20,18 @@ object GoalObservabilityArtifacts {
     val timestamp: String,
   )
 
-  fun patchForProgressEvent(
-    input: GoalObservabilityProgressInput,
-    validator: (Any, String) -> Unit,
-  ): Any? =
+  fun patchForProgressEvent(input: GoalObservabilityProgressInput): FeatureTaskRuntimeWorkflowArtifactMap? =
     requiredProgressFields(input)?.let { fields ->
       patchForEvent(
         input.artifacts.asGoalWorkflowArtifactMap("goal observability progress input"),
-        validator,
       ) { sequenceNumber ->
         eventFrom(input, fields, sequenceNumber)
       }
     }
 
-  fun patchForRuntimeEvent(
-    input: GoalObservabilityRuntimeEventInput,
-    validator: (Any, String) -> Unit,
-  ): Any =
+  fun patchForRuntimeEvent(input: GoalObservabilityRuntimeEventInput): FeatureTaskRuntimeWorkflowArtifactMap =
     patchForEvent(
       artifacts = input.artifacts.asGoalWorkflowArtifactMap("goal observability runtime event input"),
-      validator = validator,
     ) { sequenceNumber ->
       GoalObservabilityEvent(
         issueKey = input.request.issueKey,
@@ -55,20 +48,16 @@ object GoalObservabilityArtifacts {
 
   private fun patchForEvent(
     artifacts: Map<String, Any?>,
-    validator: (Any, String) -> Unit,
     buildEvent: (Int) -> GoalObservabilityEvent,
-  ): Map<String, Any?> {
+  ): FeatureTaskRuntimeWorkflowArtifactMap {
     val existingHistory = goalObservabilityHistoryFromArtifacts(artifacts)
     val event = buildEvent(existingHistory.nextSequenceNumber())
-    val eventMap = event.toArtifactMap()
-    validator(eventMap, GOAL_OBSERVABILITY_LATEST_EVENT_ARTIFACT_KEY)
     val history = existingHistory.append(event).toArtifactList()
-    history.forEachIndexed { index, item ->
-      validator(item, "$GOAL_OBSERVABILITY_RUN_HISTORY_ARTIFACT_KEY[$index]")
-    }
-    return linkedMapOf(
-      GOAL_OBSERVABILITY_LATEST_EVENT_ARTIFACT_KEY to eventMap,
-      GOAL_OBSERVABILITY_RUN_HISTORY_ARTIFACT_KEY to history,
+    return FeatureTaskRuntimeWorkflowArtifactMap.from(
+      linkedMapOf(
+        GOAL_OBSERVABILITY_LATEST_EVENT_ARTIFACT_KEY to event.toArtifactMap(),
+        GOAL_OBSERVABILITY_RUN_HISTORY_ARTIFACT_KEY to history,
+      ),
     )
   }
 

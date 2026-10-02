@@ -7,7 +7,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.review.REVIEW_CONTEXT_CONTRACT_VERSION
 import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.review.context.model.commit.ReviewAssignment
-import skillbill.review.context.model.execution.ReviewLaneDecision
+import skillbill.review.context.model.commit.ReviewLaneDecision
 import skillbill.review.context.model.hunk.ReviewChangedHunk
 import skillbill.review.context.model.launch.GovernedReviewAdjudicationLaunch
 import skillbill.review.context.model.launch.GovernedReviewIntegrationLaunch

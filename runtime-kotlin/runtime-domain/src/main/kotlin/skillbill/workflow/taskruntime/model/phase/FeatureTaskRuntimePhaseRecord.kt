@@ -9,7 +9,6 @@ import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.requireKnownFeatureTaskRuntimePhaseId
 import skillbill.workflow.time.parsePersistedInstant
 import java.time.Instant
 

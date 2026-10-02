@@ -17,7 +17,7 @@ import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.review.context.model.launch.ReviewConversationIsolation
-import skillbill.workflow.model.goalreview.GoalProgressEventKind
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals

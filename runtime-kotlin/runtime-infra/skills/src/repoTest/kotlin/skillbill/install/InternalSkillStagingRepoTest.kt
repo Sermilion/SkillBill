@@ -5,7 +5,7 @@ import skillbill.infrastructure.skills.install.staging.stageInstalledSkill
 import skillbill.infrastructure.skills.scaffold.authoring.parseInternalForFrontmatter
 import skillbill.install.model.InstallPlanSkill
 import skillbill.install.model.InstallPlanSkillKind
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import skillbill.testing.repoRootFromTest

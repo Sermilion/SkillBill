@@ -4,8 +4,8 @@ import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.ports.review.model.ReviewEvidenceBatchResult
 import skillbill.ports.review.model.ReviewEvidenceResult
 import skillbill.ports.review.model.ReviewRefusedOperationRecord
-import skillbill.review.context.model.hunk.ReviewBudgetOutcome
-import skillbill.review.context.model.packet.ReviewExpansionRecord
+import skillbill.review.context.model.accounting.ReviewBudgetOutcome
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import java.nio.charset.StandardCharsets
 
 private const val EXPANSION_ID_HEX_LENGTH = 24

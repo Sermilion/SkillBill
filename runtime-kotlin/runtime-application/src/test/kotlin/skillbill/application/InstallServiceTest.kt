@@ -1,6 +1,7 @@
 package skillbill.application
 
 import skillbill.application.install.InstallService
+import skillbill.error.shellcontent.InvalidInstallPlanSchemaError
 import skillbill.install.model.InstallAgentDefaultTarget
 import skillbill.install.model.InstallAgentLinkStatus
 import skillbill.install.model.InstallAgentSelection
@@ -17,6 +18,7 @@ import skillbill.install.model.InstallPlan
 import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.InstallPlanSkill
 import skillbill.install.model.InstallPlanSkillKind
+import skillbill.install.model.InstallPlanWireMap
 import skillbill.install.model.InstallPlatformPackSnapshot
 import skillbill.install.model.InstallSkillStagingOutcome
 import skillbill.install.model.InstallSkillStagingStatus
@@ -28,6 +30,7 @@ import skillbill.install.model.InstallTelemetryLevel
 import skillbill.install.model.InstallationTargetPaths
 import skillbill.install.model.McpRegistrationChoice
 import skillbill.install.model.McpRegistrationIntent
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.model.PlatformPackSelection
 import skillbill.install.model.PlatformPackSelectionMode
 import skillbill.install.model.RuntimeDistributionInputs
@@ -37,8 +40,8 @@ import skillbill.install.model.WindowsSymlinkDecision
 import skillbill.install.model.WindowsSymlinkFallbackState
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
-import skillbill.install.policy.selectedPlatformSlugs
+import skillbill.install.model.selectedPlatformSlugs
+import skillbill.ports.install.InstallPlanWireValidator
 import skillbill.ports.install.apply.InstallApplyExecutionPort
 import skillbill.ports.install.apply.model.InstallApplyExecutionRequest
 import skillbill.ports.install.apply.model.InstallApplyExecutionResult
@@ -77,7 +80,9 @@ import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.RoutingSignals
 import java.nio.file.Path
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 
 class InstallServiceTest {
@@ -105,6 +110,44 @@ class InstallServiceTest {
     service.planInstall(request)
 
     assertEquals(1, planningFactsPort.collectCallCount)
+  }
+
+  @Test
+  fun `validate install plan wire delegates to the injected wire validator port`() {
+    val repoRoot = Path.of("/tmp/skillbill-install-wire-repo")
+    val home = Path.of("/tmp/skillbill-install-wire-home")
+    val plan = installPlan(request(repoRoot, home))
+    var capturedWireMap: Map<String, Any?>? = null
+    val recordingValidator =
+      object : InstallPlanWireValidator {
+        override fun validate(plan: InstallPlanWireMap) {
+          capturedWireMap = plan
+        }
+      }
+    serviceForApply(
+      result = successfulApplyResult(plan, resolvedAgent = SupportedAgent.CODEX),
+      selectionPort = NoopInstallSelectionPersistencePort,
+      wireValidator = recordingValidator,
+    ).validateInstallPlanWire(plan)
+    assertEquals("planned", capturedWireMap?.get("status"))
+
+    val loudFailValidator =
+      object : InstallPlanWireValidator {
+        override fun validate(plan: InstallPlanWireMap): Unit =
+          throw InvalidInstallPlanSchemaError(
+            fieldPath = "mcp_registration.runtime_mcp_bin",
+            reason = "must be a non-empty string when register is true.",
+          )
+      }
+    val error =
+      assertFailsWith<InvalidInstallPlanSchemaError> {
+        serviceForApply(
+          result = successfulApplyResult(plan, resolvedAgent = SupportedAgent.CODEX),
+          selectionPort = NoopInstallSelectionPersistencePort,
+          wireValidator = loudFailValidator,
+        ).validateInstallPlanWire(plan)
+      }
+    assertContains(error.message.orEmpty(), "mcp_registration.runtime_mcp_bin")
   }
 
   @Test
@@ -364,6 +407,7 @@ class InstallServiceTest {
   private fun serviceForApply(
     result: InstallApplyResult,
     selectionPort: InstallSelectionPersistencePort,
+    wireValidator: InstallPlanWireValidator = testInstallPlanWireValidator,
   ): InstallService =
     InstallService(
       planningFactsPort = UnsupportedPlanningFactsPort,
@@ -375,7 +419,7 @@ class InstallServiceTest {
       applyExecutionPort = StaticApplyExecutionPort(result),
       skillLinkPort = UnsupportedSkillLinkPort,
       installSelectionPersistencePort = selectionPort,
-      installPlanWireValidator = testInstallPlanWireValidator,
+      installPlanWireValidator = wireValidator,
     )
 
   private fun successfulApplyResult(

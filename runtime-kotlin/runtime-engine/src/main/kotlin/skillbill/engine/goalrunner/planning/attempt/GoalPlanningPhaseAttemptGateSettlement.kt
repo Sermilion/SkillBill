@@ -4,7 +4,7 @@ import skillbill.engine.goalrunner.planning.model.GoalPlanningAttemptRecordArgs
 import skillbill.engine.goalrunner.planning.model.GoalPlanningAttemptScope
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseProduction
 import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
-import skillbill.workflow.model.goalreview.GoalProgressOutcome
+import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 
 internal fun DefaultGoalPlanningSweep.settlePlanningProduction(
   scope: GoalPlanningAttemptScope,

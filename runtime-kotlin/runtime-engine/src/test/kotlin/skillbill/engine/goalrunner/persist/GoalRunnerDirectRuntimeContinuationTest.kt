@@ -7,11 +7,11 @@ import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
 import skillbill.engine.goalrunner.execution.core.SubtaskLaunchRequestArgs
 import skillbill.engine.goalrunner.execution.core.testActivityStampWriter
 import skillbill.engine.goalrunner.execution.core.testWorktreeEditJournalWriter
-import skillbill.engine.goalrunner.execution.support.withWorkflowId
 import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.workflow.decomposition.withWorkflowId
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals

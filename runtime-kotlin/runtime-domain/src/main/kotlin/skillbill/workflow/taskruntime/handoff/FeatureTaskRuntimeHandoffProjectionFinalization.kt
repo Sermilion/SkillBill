@@ -3,7 +3,7 @@ package skillbill.workflow.taskruntime.handoff
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionInputs
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffProjectionInputs
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal object FeatureTaskRuntimeHandoffProjectionFinalization {

@@ -6,7 +6,6 @@ import skillbill.engine.goalrunner.execution.support.GoalRunnerAttemptState
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationResult
 import skillbill.engine.goalrunner.execution.support.branchPlanFor
 import skillbill.engine.goalrunner.execution.support.protectedBranchName
-import skillbill.engine.goalrunner.execution.support.withBlockedSelection
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
@@ -26,6 +25,9 @@ import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.withBlockedSelection
+import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.DecompositionSubtaskAction
 
 internal class GoalRunnerGoalLoop(
   private val manifestStore: GoalRunnerManifestStore,
@@ -230,8 +232,9 @@ internal class GoalRunnerGoalLoop(
         state.manifest.withBlockedSelection(subtaskId, violation)
       } else {
         state.manifest.copy(
-          status = "blocked",
-          currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 0, action = "blocked"),
+          status = DecompositionStatus.BLOCKED.wireValue,
+          currentSubtaskIntent =
+            CurrentSubtaskIntent(subtaskId = 0, action = DecompositionSubtaskAction.BLOCKED.wireValue),
         )
       }
     val saved = manifestStore.save(state.copy(manifest = blockedManifest))

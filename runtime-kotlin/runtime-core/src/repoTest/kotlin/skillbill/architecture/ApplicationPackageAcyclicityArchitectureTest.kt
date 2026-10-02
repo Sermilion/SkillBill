@@ -139,6 +139,37 @@ class ApplicationPackageAcyclicityArchitectureTest {
   }
 
   @Test
+  fun `model packages may import a leaf package but not a package that imports another package`() {
+    val root = Files.createTempDirectory("architecture-model-leaf-rule")
+    try {
+      writeFixtureFile(root, "skillbill/text/Hashing.kt", listOf("package skillbill.text", "fun hash() = Unit"))
+      writeFixtureFile(
+        root,
+        "skillbill/helper/Helper.kt",
+        listOf("package skillbill.helper", "import skillbill.text.hash", "fun help() = hash()"),
+      )
+      writeFixtureFile(
+        root,
+        "skillbill/widget/model/Widget.kt",
+        listOf("package skillbill.widget.model", "import skillbill.text.hash", "fun widget() = hash()"),
+      )
+      assertEquals(emptyList(), ArchitectureScanSupport.modelPackageImportViolations(root.toString(), "skillbill."))
+      writeFixtureFile(
+        root,
+        "skillbill/widget/model/Widget.kt",
+        listOf("package skillbill.widget.model", "import skillbill.helper.help", "fun widget() = help()"),
+      )
+      val violations = ArchitectureScanSupport.modelPackageImportViolations(root.toString(), "skillbill.")
+      assertTrue(
+        violations.single().endsWith("skillbill.widget.model imports non-model package skillbill.helper"),
+        violations.joinToString("\n"),
+      )
+    } finally {
+      root.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
   fun `runtime-domain public declarations have cross-file consumers`() {
     val violations =
       ArchitectureScanSupport.publicDomainDeclarationViolations(

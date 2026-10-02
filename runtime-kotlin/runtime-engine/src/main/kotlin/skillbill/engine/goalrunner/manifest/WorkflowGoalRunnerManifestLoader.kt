@@ -19,7 +19,6 @@ import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.withParentStatus
 import skillbill.workflow.engine.WorkflowEngine
-import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.DecompositionStatus
@@ -128,7 +127,7 @@ internal class WorkflowGoalRunnerManifestLoader(
                   ),
                 )
               },
-            artifactsPatch = WorkflowArtifactPatch.from(parentProjection.artifacts(manifest, base.artifacts)),
+            artifactsPatch = parentProjection.artifacts(manifest, base.artifacts),
             sessionId = base.sessionId.orEmpty(),
             replaceArtifacts = true,
           ),

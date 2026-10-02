@@ -3,7 +3,7 @@ package skillbill.infrastructure.skills.install
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.supportingFileTargets
 import skillbill.install.model.InstallPlanSkill
 import skillbill.install.model.InstallPlanSkillKind
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.ports.repository.toFileLocation
 import skillbill.testsupport.SkillClassFixtures
 import java.nio.file.Files

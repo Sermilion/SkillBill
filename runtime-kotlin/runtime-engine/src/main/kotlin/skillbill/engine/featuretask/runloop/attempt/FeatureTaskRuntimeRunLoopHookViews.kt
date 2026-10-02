@@ -29,7 +29,7 @@ import skillbill.engine.featuretask.slot.attempt.PhasePlanningTraversalContext
 import skillbill.engine.featuretask.slot.attempt.PhasePullRequestLaunchHookContext
 import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
 internal object FeatureTaskRuntimeRunLoopHookViews {

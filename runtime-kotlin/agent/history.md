@@ -1,3 +1,26 @@
+## [2026-10-01] SKILL-397 subtask 3 — domain package graph repair
+Areas: runtime-kotlin/runtime-{domain,application,engine,cli,core,ports}, runtime-kotlin/runtime-infra/*, ARCHITECTURE.md
+- runtime-domain package graph is acyclic: the cycle baseline file is empty and stays empty; test packages and directories now mirror main packages.
+- Artifact keys are internal to workflow.engine.model; selectedPlatformSlugs moved to install.model; the planning package folded into phase.task; SHA-256 hashing lives only in skillbill.text.
+- Package names persistence.task.runtime, handoff.envelope and repair.task are gone; handoff assembly types sit in taskruntime.model.handoff.assembly, because a loose FeatureTaskRuntime* file beside a child package named task trips the clustering guard.
+- The package-name-specific file ceiling became a generic sibling ceiling; goalrunner and goalreview stay within 12 files.
+- Placement traps: GoalSubtaskCommitFocusedAccounting and ReviewAccountingBoundedJson stay in workflow.model.goalreview (moving them creates an accounting-goalreview cycle or puts JSON projection in a review domain package). reusable
+- Limits: no feature flag; agnix not run headless; empty leftover directories under src may remain untracked.
+Feature flag: N/A
+Acceptance criteria: all implemented (validate passed `./gradlew check --continue` and agent-config validation)
+
+## [2026-10-01] SKILL-397 subtask 1 — domain wire boundary honesty
+Areas: runtime-kotlin/runtime-{domain,application,engine,core}, runtime-kotlin/runtime-infra/skills, ARCHITECTURE.md
+- The 33 public domain wrappers that returned exact Any now return the typed workflow-artifact map carrier (which gained equals, hashCode, toString); the gate-run record's entry helper was deleted in favour of its presentation wire map, and the phase-output envelope payload is internal.
+- Domain accepts no validators: the wire-artifact validation file, the install-plan snapshot validators and the validator parameters on handoff-declaration and goal-observability helpers were deleted; application and engine callers validate through the ports validators instead.
+- Removed runtime-domain testFixtures, the java-test-fixtures plugin, its five consumer dependency lines and the module-catalog entry.
+- Raw-map allow-list now holds only the four durable-artifact-family members; six former exemptions were retyped to the carrier or patch type, and the goal-review artifact helper became a public method on the durable artifacts.
+- Architecture scanner now flags public declarations typed exactly Any; ARCHITECTURE.md Boundary Rule 11 rewritten. reusable
+- Pattern: domain exposes typed carriers; validation lives in ports implementations invoked by application or engine.
+- Limits: no feature flag; wire fixtures and expected payloads untouched; authored without compile or test runs, so validate must confirm formatting and build.
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented
+
 ## [2026-10-01] SKILL-395 subtask 1 — MCP vocabulary ownership and adapter hygiene
 Areas: runtime-kotlin/runtime-{mcp,contracts,core}, runtime-kotlin/runtime-infra/sqlite
 - Deleted the contracts-side MCP payload keys object; the 19 MCP-only keys now live in an internal object in runtime-mcp shared, values unchanged. Every other key use points at its existing owner object (lifecycle telemetry, workflow wire, shared, telemetry proxy, review verification, learning, update check, review accounting).

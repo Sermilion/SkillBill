@@ -11,7 +11,7 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinua
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import kotlin.coroutines.cancellation.CancellationException
 
 internal fun decodeReviewPolicy(raw: String): GoalRunnerReviewPolicy {

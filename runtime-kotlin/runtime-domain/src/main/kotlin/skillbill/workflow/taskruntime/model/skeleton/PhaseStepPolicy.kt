@@ -1,7 +1,7 @@
 package skillbill.workflow.taskruntime.model.skeleton
 
 import skillbill.contracts.JsonCodec
-import java.security.MessageDigest
+import skillbill.text.sha256HexUtf8
 
 data class PhaseStepPolicy(
   val mutating: Boolean,
@@ -32,10 +32,6 @@ data class PhaseStepPolicy(
           extendsOwnedInventory,
         ),
       )
-    val digest =
-      MessageDigest.getInstance("SHA-256")
-        .digest(encoded.toByteArray(Charsets.UTF_8))
-        .joinToString("") { "%02x".format(it) }
-    return "step-policy-v2:$digest"
+    return "step-policy-v2:${sha256HexUtf8(encoded)}"
   }
 }

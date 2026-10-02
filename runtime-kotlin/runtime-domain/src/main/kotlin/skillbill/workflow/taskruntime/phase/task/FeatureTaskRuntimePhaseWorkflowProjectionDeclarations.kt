@@ -9,13 +9,12 @@ import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclar
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDelivery
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionShape
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionTemplate
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionBudget
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffPromptVisibility
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseDeclaration
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeHandoffPromptVisibility
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePlanningProjectionContract
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReviewEvidenceReference
-import skillbill.workflow.taskruntime.phase.planning.UpstreamPlanningProjectionSpec
 
 internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
   private fun upstreamPlanningProjection(spec: UpstreamPlanningProjectionSpec): PhaseHandoffProjectionDeclaration =

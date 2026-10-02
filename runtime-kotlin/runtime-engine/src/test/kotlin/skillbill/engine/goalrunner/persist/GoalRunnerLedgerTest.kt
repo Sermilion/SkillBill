@@ -7,7 +7,6 @@ import skillbill.engine.goalrunner.RecordingSubtaskLauncher
 import skillbill.engine.goalrunner.completeOutcome
 import skillbill.engine.goalrunner.execution.core.goalRunnerDeps
 import skillbill.engine.goalrunner.execution.core.testGoalRunner
-import skillbill.engine.goalrunner.execution.support.withWorkflowId
 import skillbill.engine.goalrunner.launchFacts
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -24,6 +23,7 @@ import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.decomposition.withWorkflowId
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains

@@ -3,13 +3,8 @@ package skillbill.workflow.model.goalreview
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.review.ReviewFindingPayloadKeys
 
-internal const val GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY: String = "goal_subtask_review_state"
-internal const val GOAL_SUBTASK_REVIEW_INPUT_ARTIFACT_KEY: String = "goal_subtask_review_input"
-internal const val GOAL_SUBTASK_REVIEW_RESULTS_ARTIFACT_KEY: String = "goal_subtask_review_results"
 const val GOAL_SUBTASK_REVIEW_RESULT_ARTIFACT_PREFIX: String = "goal_subtask_review_results"
 const val GOAL_SUBTASK_REVIEW_BLOCKER_SEVERITY: String = "blocker"
-
-internal const val GOAL_REVIEW_BASE_RECOVERIES_ARTIFACT_KEY: String = "goal_review_base_recoveries"
 
 enum class GoalSubtaskOperatorDecision(val wireValue: String) {
   RETRY_FIX("retry_fix"),

@@ -14,9 +14,10 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaEr
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.model.workflowStepStatus
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
@@ -509,10 +510,10 @@ internal class FeatureTaskRuntimeRunState(
     val parsed =
       parsedOutputsByPayloadStorage.getOrPut(payload) {
         val envelope =
-          output.normalizedOutput?.envelopePayload()
+          output.normalizedOutput?.envelopeWireMap()
             ?: NormalizedFeatureTaskRuntimePhaseOutput
               .fromEnvelopeText(payload, output.phaseId)
-              .envelopePayload()
+              .envelopeWireMap()
         requireNotNull(detachedJsonValue(envelope)).toWorkflowArtifactMap()
       }
     return requireNotNull(detachedJsonValue(parsed)).toWorkflowArtifactMap()

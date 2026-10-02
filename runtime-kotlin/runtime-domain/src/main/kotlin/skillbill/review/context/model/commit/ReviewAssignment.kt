@@ -1,18 +1,17 @@
 package skillbill.review.context.model.commit
 
 import skillbill.review.context.model.bundle.ReviewLaneBundle
-import skillbill.review.context.model.execution.ReviewLaneDecision
-import skillbill.review.context.model.execution.SHA256_HEX
-import skillbill.review.context.model.execution.canonicalFieldList
-import skillbill.review.context.model.execution.sha256
 import skillbill.review.context.model.hunk.ReviewBaselineUntrackedPolicy
 import skillbill.review.context.model.hunk.ReviewDependencyAllowlist
 import skillbill.review.context.model.hunk.ReviewEvidenceTarget
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import skillbill.review.context.model.hunk.ReviewLearningsReference
 import skillbill.review.context.model.hunk.ReviewRevision
 import skillbill.review.context.model.hunk.ReviewRuleReference
-import skillbill.review.context.model.packet.ReviewExpansionRecord
+import skillbill.review.context.model.hunk.SHA256_HEX
+import skillbill.review.context.model.hunk.canonicalFieldList
 import skillbill.review.model.requireRepositoryRelativePath
+import skillbill.text.sha256HexUtf8
 
 data class ReviewAssignment(
   val reviewId: String,
@@ -86,12 +85,12 @@ data class ReviewAssignment(
 
   val expansionsDigest: String
     get() =
-      sha256(
+      sha256HexUtf8(
         expansions.sortedWith(compareBy({ it.sequence }, { it.expansionId })).joinToString("\n") { it.canonical },
       )
   val digest: String
     get() =
-      sha256(
+      sha256HexUtf8(
         listOf(
           reviewId,
           packetDigest,

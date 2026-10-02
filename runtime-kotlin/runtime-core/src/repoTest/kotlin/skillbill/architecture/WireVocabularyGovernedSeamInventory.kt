@@ -81,7 +81,7 @@ internal object WireVocabularyGovernedSeamInventory {
         schemaRepoRelativePath = GOAL_CONTINUATION_ARTIFACT_SCHEMA_AUTHORITY,
         governedRelativePathMarkers =
           listOf(
-            "taskruntime/model/persistence/task/runtime/goal/FeatureTaskRuntimeGoalContinuationArtifact",
+            "taskruntime/model/persistence/FeatureTaskRuntimeGoalContinuationArtifact",
             "engine/goalrunner/persist/GoalContinuationArtifactCodec.kt",
           ),
       ),

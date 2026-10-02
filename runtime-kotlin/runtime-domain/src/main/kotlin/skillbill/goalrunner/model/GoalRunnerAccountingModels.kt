@@ -3,10 +3,10 @@ package skillbill.goalrunner.model
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.time.parsePersistedInstant
 import java.time.Instant
 
-internal const val GOAL_ATTEMPT_LEDGER_ARTIFACT_KEY: String = "goal_attempt_ledger"
 const val GOAL_ATTEMPT_LEDGER_LIMIT: Int = 200
 
 enum class GoalAttemptLedgerAction(val wireValue: String) {
@@ -133,7 +133,8 @@ data class GoalAttemptLedgerEntry(
     require(sequenceNumber >= 0) { "GoalAttemptLedgerEntry.sequenceNumber must be non-negative." }
   }
 
-  fun toPersistenceWire(): Any = toArtifactMap()
+  fun toPersistenceWire(): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
   internal fun toArtifactMap(): Map<String, Any?> {
     val optional =

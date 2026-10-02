@@ -166,7 +166,6 @@ object RuntimeModuleCatalog {
     mapOf(
       "runtime-application" to
         setOf(
-          "runtime-domain",
           "runtime-infra:host",
           "runtime-infra:contracts",
           "runtime-infra:workflow",

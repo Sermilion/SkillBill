@@ -13,6 +13,7 @@ import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
 import skillbill.workflow.taskruntime.artifact.decodeValidationEvidenceFromArtifact
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
@@ -33,7 +34,7 @@ class FeatureTaskPhaseSettlementService(
         summary = request.summary?.takeIf { it.any { ch -> !ch.isWhitespace() } } ?: truncateSummary(request.value),
         output = PhaseOutput(value = request.value, prompt = request.prompt),
         verdict = request.verdict?.takeIf(String::isNotBlank),
-      ).envelopePayload().toWorkflowArtifactMap()
+      ).envelopeWireMap()
     return persist(
       PersistRequest(
         workflowId = request.workflowId,
@@ -58,7 +59,7 @@ class FeatureTaskPhaseSettlementService(
         output = PhaseOutput(value = request.reason),
         verdict = request.verdict?.takeIf(String::isNotBlank),
         failureDisposition = request.failureDisposition,
-      ).envelopePayload().toWorkflowArtifactMap()
+      ).envelopeWireMap()
     return persist(
       PersistRequest(
         workflowId = request.workflowId,
