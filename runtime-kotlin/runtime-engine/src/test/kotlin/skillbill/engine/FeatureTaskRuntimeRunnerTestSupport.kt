@@ -2036,7 +2036,7 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
     synchronized(this) {
       workerOwnership.values.mapNotNull { ownership ->
         val row = taskRuntimeRows[ownership.workflowId] ?: return@mapNotNull null
-        if (row.workflowStatus != "running" ||
+        if (row.workflowStatus !in setOf("running", "blocked") ||
           !leaseExpiredBefore(
             ownership.expiresAt,
             nowInstant,
@@ -2066,9 +2066,17 @@ internal class InMemoryRuntimeWorkflowRepository : WorkflowStateRepositoryDefaul
       }
       if (!leaseExpiredBefore(current.expiresAt, nowInstant)) return@synchronized false
       val row = taskRuntimeRows[workflowId] ?: return@synchronized false
-      if (row.workflowStatus != "running") return@synchronized false
+      if (row.workflowStatus !in setOf("running", "blocked")) return@synchronized false
       workerOwnership.remove(workflowId)
-      taskRuntimeRows[workflowId] = row.copy(workflowStatus = WorkflowStatus.PENDING.wireValue)
+      taskRuntimeRows[workflowId] =
+        row.copy(
+          workflowStatus =
+            if (row.workflowStatus == WorkflowStatus.RUNNING.wireValue) {
+              WorkflowStatus.PENDING.wireValue
+            } else {
+              row.workflowStatus
+            },
+        )
       reconciledInterruptionReasons[workflowId] = interruptionReason
       true
     }

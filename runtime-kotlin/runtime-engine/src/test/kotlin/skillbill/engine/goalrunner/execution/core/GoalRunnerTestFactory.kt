@@ -9,6 +9,7 @@ import skillbill.application.telemetry.lifecycle.noopGoalLifecycleTelemetryEmitt
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.engine.ExecutionPlanAdmissionFixture
 import skillbill.engine.InMemoryRuntimeWorkflowRepository
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
@@ -56,6 +57,7 @@ import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
+import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
@@ -208,7 +210,7 @@ internal fun goalRunnerDeps(
 internal fun testGoalRunner(deps: GoalRunnerTestInputs): GoalRunner = testGoalRunner(deps.toWiring())
 
 internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
-  val executionPlans = goalRunnerExecutionPlans(wiring)
+  val (executionPlans, crashReconciler) = goalRunnerExecutionPlans(wiring)
   val progressReader = GoalRunnerProgressReader(wiring.runBoundaries.outcomeStore)
   val finalization = GoalRunnerFinalization(wiring.finalizationBoundaries, progressReader)
   val workerRequestHandler =
@@ -253,6 +255,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         wiring.runBoundaries.manifestStore,
         TestRepositoryEnclosingRoot,
         executionPlans,
+        crashReconciler,
       ),
     perRunLoopAssembler = perRunLoopAssembler,
     pauseBoundary = pauseBoundary,
@@ -403,12 +406,23 @@ internal fun testGoalPlanningContextDiscovery(
     }
   }
 
-private fun goalRunnerExecutionPlans(wiring: GoalRunnerTestWiring): FeatureTaskRuntimeExecutionPlanResolver {
+private fun goalRunnerExecutionPlans(
+  wiring: GoalRunnerTestWiring,
+): Pair<FeatureTaskRuntimeExecutionPlanResolver, FeatureTaskRuntimeCrashReconciler> {
   val states = InMemoryRuntimeWorkflowRepository()
   val database = FakeDatabaseSessionFactory(states)
   val fixture = ExecutionPlanAdmissionFixture(database = database)
   val resolver = fixture.creationResolver()
-  val store = wiring.runBoundaries.manifestStore as? InMemoryGoalManifestStore ?: return resolver
+  val reconciler =
+    FeatureTaskRuntimeCrashReconciler(
+      database,
+      NoopFeatureTaskRuntimeWorkerSupervisor,
+      wiring.runBoundaries.diagnostics,
+      wiring.runBoundaries.clock,
+      fixture.compatibility,
+      fixture.recoveryResolver(),
+    )
+  val store = wiring.runBoundaries.manifestStore as? InMemoryGoalManifestStore ?: return resolver to reconciler
   val manifest = store.manifest
   manifest.subtasks.forEach { subtask ->
     val workflowId = subtask.workflowId ?: return@forEach
@@ -425,5 +439,5 @@ private fun goalRunnerExecutionPlans(wiring: GoalRunnerTestWiring): FeatureTaskR
       )
     fixture.seed(states, workflowId, manifest.issueKey, fixture.validator.read(descriptor.encoded(), "goal fixture"))
   }
-  return resolver
+  return resolver to reconciler
 }

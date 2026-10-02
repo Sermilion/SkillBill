@@ -17,6 +17,7 @@ import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.isConfirmedDead
+import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
@@ -28,6 +29,7 @@ import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import java.time.Clock
+import java.time.Instant
 
 @Inject
 class FeatureTaskRuntimeCrashReconciler(
@@ -38,11 +40,17 @@ class FeatureTaskRuntimeCrashReconciler(
   private val executionPlanCompatibility: FeatureTaskRuntimeExecutionPlanCompatibility,
   private val executionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver,
 ) {
-  fun reconcile(): FeatureTaskRuntimeCrashReconciliationResult {
-    val now = clock.instant().toString()
+  fun reconcile(workflowId: String? = null): FeatureTaskRuntimeCrashReconciliationResult {
+    val now = clock.instant()
     val candidates =
       runCatching {
-        database.read { it.workflowStates.findFeatureTaskRuntimeCrashReconciliationCandidates(now) }
+        database.read { unit ->
+          if (workflowId == null) {
+            unit.workflowStates.findFeatureTaskRuntimeCrashReconciliationCandidates(now.toString())
+          } else {
+            listOfNotNull(recoveryCandidate(unit.workflowStates, workflowId, now))
+          }
+        }
       }.getOrElse { error ->
         RuntimeDiagnosticsBestEffortWarning.record(
           diagnostics,
@@ -62,6 +70,22 @@ class FeatureTaskRuntimeCrashReconciler(
       }
     }
     return FeatureTaskRuntimeCrashReconciliationResult(reconciledCount, reasonClassCounts)
+  }
+
+  private fun recoveryCandidate(
+    states: WorkflowStateRepository,
+    workflowId: String,
+    now: Instant,
+  ): FeatureTaskRuntimeCrashReconciliationCandidate? {
+    val ownership = states.getFeatureTaskRuntimeWorkerOwnership(workflowId) ?: return null
+    val row = states.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME) ?: return null
+    if (row.workflowStatus.workflowStatus() !in setOf(WorkflowStatus.RUNNING, WorkflowStatus.BLOCKED) ||
+      ownership.leaseState != FeatureTaskRuntimeWorkerLeaseState.ACTIVE ||
+      !ownership.expiresAtInstant.isBefore(now)
+    ) {
+      return null
+    }
+    return FeatureTaskRuntimeCrashReconciliationCandidate(ownership, row.currentStepId, row.workflowStatus)
   }
 
   private fun reconcileCandidate(candidate: FeatureTaskRuntimeCrashReconciliationCandidate): String? =
@@ -138,7 +162,9 @@ class FeatureTaskRuntimeCrashReconciler(
       val row =
         states.getFeatureTaskWorkflowAsMode(candidate.ownership.workflowId, FeatureTaskWorkflowMode.RUNTIME)
           ?: return@transaction false
-      if (row.workflowStatus.workflowStatus() != WorkflowStatus.RUNNING) {
+      if (row.workflowStatus != candidate.workflowStatus ||
+        row.workflowStatus.workflowStatus() !in setOf(WorkflowStatus.RUNNING, WorkflowStatus.BLOCKED)
+      ) {
         return@transaction false
       }
       val currentOwnership =

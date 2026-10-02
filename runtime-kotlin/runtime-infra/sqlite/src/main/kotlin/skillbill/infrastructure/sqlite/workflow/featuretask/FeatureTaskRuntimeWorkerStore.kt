@@ -172,7 +172,7 @@ internal class FeatureTaskRuntimeWorkerStore(
       JOIN feature_task_runtime_worker_leases AS lease
         ON lease.workflow_id = workflows.workflow_id
       WHERE workflows.mode = 'runtime'
-        AND workflows.workflow_status = 'running'
+        AND workflows.workflow_status IN ('running', 'blocked')
         AND lease.lease_state = 'active'
         AND lease.expires_at < ?
       ORDER BY workflows.workflow_id
@@ -212,7 +212,7 @@ internal class FeatureTaskRuntimeWorkerStore(
           AND EXISTS (
             SELECT 1 FROM feature_task_workflows workflow
             WHERE workflow.workflow_id = feature_task_runtime_worker_leases.workflow_id
-              AND workflow.mode = 'runtime' AND workflow.workflow_status = 'running'
+              AND workflow.mode = 'runtime' AND workflow.workflow_status IN ('running', 'blocked')
           )
         """.trimIndent(),
       ).use { statement ->
@@ -224,8 +224,9 @@ internal class FeatureTaskRuntimeWorkerStore(
     return connection.prepareStatement(
       """
       UPDATE feature_task_workflows
-      SET workflow_status = 'pending', interruption_reason = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE workflow_id = ? AND mode = 'runtime' AND workflow_status = 'running'
+      SET workflow_status = CASE WHEN workflow_status = 'running' THEN 'pending' ELSE workflow_status END,
+        interruption_reason = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE workflow_id = ? AND mode = 'runtime' AND workflow_status IN ('running', 'blocked')
       """.trimIndent(),
     ).use { statement ->
       statement.bindAll(interruptionReason, workflowId)

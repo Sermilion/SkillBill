@@ -21,6 +21,23 @@ Supersedes: The "typed errors" retention of SKILL-349, SKILL-374 and SKILL-391, 
 Alternatives considered: IllegalStateException with a code (the edges would catch real bugs as user errors); guard only (it freezes 231 classes); results for everything (it pushes unrecoverable failures through every signature). All three rejected; see investigation.md.
 Revisit when: a boundary needs callers to discriminate a failure that a code on SkillBillRuntimeException cannot express.
 
+## [2026-10-02] Recover expired worker leases on blocked goal children
+
+The goal supervisor can kill a timed-out child before its worker cleanup runs, then
+mark the workflow blocked. The old crash scan selected only running workflows.
+Operator resume rejected the leftover worker lease as an incompatible execution
+plan even when the stored descriptor matched the installed runtime.
+
+Goal run preparation now reconciles the selected child's expired lease after
+validating its execution plan and before child resume. Recovery requires an active,
+expired lease and a confirmed dead process, then rechecks ownership, generation,
+workflow status, immutable identity, and descriptor inside the write transaction.
+The startup scan also includes blocked workflows. SQLite preserves their blocked
+status, phase records, artifacts, and execution identity while releasing the lease
+and recording the interruption reason. Only operator resume reopens a blocked phase.
+Running crash candidates still transition to pending. Live workers, reserved
+ownership, and uncertain process evidence remain untouched.
+
 ## [2026-10-01] Goal-review accounting types stay in workflow.model.goalreview
 Context: SKILL-397 subtask 3 planned to move review accounting helpers into review.context.model.accounting to break a package cycle.
 Decision: GoalSubtaskCommitFocusedAccounting and ReviewAccountingBoundedJson stay in skillbill.workflow.model.goalreview.

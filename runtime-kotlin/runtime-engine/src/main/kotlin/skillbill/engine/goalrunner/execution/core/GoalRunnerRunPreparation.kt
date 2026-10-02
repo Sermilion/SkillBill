@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.execution.core
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.AgentAddonSelection
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.goalrunner.goalRepositoryIdentity
@@ -26,6 +27,7 @@ class GoalRunnerRunPreparation(
   private val manifestStore: GoalRunnerManifestStore,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
+  private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
 ) {
   fun prepareRun(
     state: GoalRunnerManifestState,
@@ -74,6 +76,7 @@ class GoalRunnerRunPreparation(
           workflowId = workflowId,
         ),
       )
+    crashReconciler.reconcile(workflowId)
     return GoalRunnerChildExecutionPlanAdmission(workflowId, plan)
   }
 
