@@ -174,7 +174,11 @@ class ParallelCodeReviewIntegrationPassTest {
     val durableIntegrationPass = assertNotNull(recorder.durableIntegrationPass)
     assertEquals(ReviewIntegrationTerminalOutcome.SPAWN_FAILURE.wireValue, durableIntegrationPass.terminalOutcome)
 
-    val resumed = reviewHarness(delegatedConfig(sixCommitPaths), recorder).reviewed(delegatedRequest(reviewRunId = RUN_ID))
+    val resumed =
+      reviewHarness(
+        delegatedConfig(sixCommitPaths),
+        recorder,
+      ).reviewed(delegatedRequest(reviewRunId = RUN_ID))
 
     assertTrue(
       recorder.specialistLaunches.size == 1,

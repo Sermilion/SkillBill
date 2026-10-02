@@ -1,10 +1,10 @@
 package skillbill.engine.featuretask.persist
 
-import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceFailureCode
 import skillbill.application.runtimepersistence.runtimeOwnedFactUnavailable
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
+import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork

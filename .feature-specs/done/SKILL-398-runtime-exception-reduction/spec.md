@@ -8,7 +8,7 @@ decomposed
 
 The runtime uses as few custom exceptions as possible. Expected outcomes (absent, refused, conflicting, invalid input the runtime anticipates) flow back to the caller as sealed results, nullables or existing outcome types. Code defects use Kotlin's `require`, `check` and `error()` and are never caught for control flow. Failures that end the run with an operator message use one type, `SkillBillRuntimeException(code, message, cause)`, where `code` is an entry of an owner-declared enum. A two-sided baseline lists every custom `Throwable` declared in main, so a new one fails the build. Today main declares 231 custom throwables, 62% of which nothing catches by type, while both edges discard the type and print the message.
 
-Evidence, censuses, findings F-001 to F-008, what stays unchanged, the over-engineering register and coordination: [investigation.md](./investigation.md). Census tree: `8cea54bafc732f8e4ff79333aff18939797893b4` (SKILL-391 feature branch over base `3f2b96cde1e930672cdeaf96ed753a4a2c306600`).
+Evidence, censuses, findings F-001 to F-008, what stays unchanged, the over-engineering register and coordination: [investigation.md](investigation.md). Census tree: `8cea54bafc732f8e4ff79333aff18939797893b4` (SKILL-391 feature branch over base `3f2b96cde1e930672cdeaf96ed753a4a2c306600`).
 
 ## Target failure model
 
@@ -51,12 +51,12 @@ Split reason: subtask 1 is policy, the target type and the guard. Subtasks 2 and
 
 Each subtask spec holds the detailed, checkable criteria. The feature is done when all of them hold, which means:
 
-1. `docs/code-principles.md`, `AGENTS.md`, `runtime-kotlin/ARCHITECTURE.md` and a new `runtime-kotlin/agent/decisions.md` entry state the three-tier failure model and the "earns its place" rule, and no longer prescribe a typed exception class per contract (subtask 1).
+1. `../../../docs/code-principles.md`, `AGENTS.md`, `runtime-kotlin/ARCHITECTURE.md` and a new `runtime-kotlin/agent/decisions.md` entry state the three-tier failure model and the "earns its place" rule, and no longer prescribe a typed exception class per contract (subtask 1).
 2. A two-sided baseline lists every custom `Throwable` subclass declared in production main; a new declaration fails the runtime-core repoTest suite, and so does a listed class that no longer exists (subtask 1).
 3. No operation, rejected-output diagnostic, required-phase write, or any of the local control-flow cases named in subtask 3 reports an expected outcome by throwing; callers branch on values, and no main code branches on exception message text (subtasks 2, 3).
 4. `skillbill.error.shellcontent` and the other replaced leaf classes are gone; their failures throw `SkillBillRuntimeException` with an owner-declared code, or use `require`/`check`/`error()` where only a code defect can trigger them (subtasks 4, 5).
 5. No main code catches `IllegalArgumentException` or `IllegalStateException` to steer control flow, outside the CLI and MCP top-level arms (subtask 6).
-6. When all subtasks have landed, the baseline lists only `SkillBillRuntimeException` plus any class whose retention reason is recorded in `runtime-kotlin/agent/decisions.md`.
+6. When all subtasks have landed, the baseline lists only `SkillBillRuntimeException` plus any class whose retention reason is recorded in `../../../runtime-kotlin/agent/decisions.md`.
 7. CLI stdout, stderr and exit codes, MCP tool payloads and persisted bytes are unchanged: no existing expected-output, wire-fixture or payload assertion is edited, other than replacing an exception type assertion with a code assertion.
 
 ## Constraints

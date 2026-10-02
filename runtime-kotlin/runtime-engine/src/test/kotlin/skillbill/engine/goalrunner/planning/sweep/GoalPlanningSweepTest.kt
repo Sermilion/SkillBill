@@ -2105,7 +2105,7 @@ class GoalPlanningSweepTimingTest {
     val outcome = harness.sweep.prepare(harness.stateFor(manifest(subtaskCount = 1)), harness.request())
 
     val stopped = assertIs<GoalPlanningSweepOutcome.Stopped>(outcome)
-    assertEquals(GoalRunnerStopReason.PAUSED, stopped.reason)
+    assertEquals(GoalRunnerStopReason.PAUSED, stopped.reason, stopped.blockedReason)
     assertContains(stopped.blockedReason, "durable pause boundary before launching phase 'preplan'")
     assertContains(stopped.blockedReason, "(reason=operator_request)")
     assertEquals(listOf("preplan"), harness.launcher.phases)

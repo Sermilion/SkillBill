@@ -149,6 +149,5 @@ runtime-infra:launcher:CursorReviewStreamMalformedError
 runtime-infra:launcher:CursorReviewStreamProviderFailureError
 runtime-infra:launcher:CursorReviewStreamTerminationError
 runtime-infra:skills:InstallSymlinkException
-runtime-infra:skills:ReleaseLicensePolicyError
 runtime-infra:workflow:ValidationGateProcessException
 runtime-mcp:InvalidMcpToolArgumentError

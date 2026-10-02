@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.runloop.output
 
-import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceFailureCode
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
@@ -24,6 +23,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
+import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput

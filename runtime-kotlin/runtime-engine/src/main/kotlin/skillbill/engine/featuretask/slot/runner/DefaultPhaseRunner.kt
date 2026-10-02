@@ -194,7 +194,6 @@ class DefaultPhaseRunner(
           "Feature-task-runtime phase '$step' could not launch an agent: ${outcome.reason}",
           outcome.reason,
         )
-      // A denied launch is not a launch failure: the pause travels in the step output's launch outcome.
       is AgentRunLaunchDenied -> null
       is AgentRunLaunchFacts ->
         providerLimitSignal(outcome)

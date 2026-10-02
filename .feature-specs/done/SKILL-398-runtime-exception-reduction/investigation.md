@@ -1,6 +1,6 @@
 # SKILL-398 Investigation - runtime exception reduction
 
-Scope: every Kotlin main source set under `runtime-kotlin/` (runtime-contracts, runtime-domain, runtime-ports,
+Scope: every Kotlin main source set under `../../../runtime-kotlin` (runtime-contracts, runtime-domain, runtime-ports,
 runtime-application, runtime-engine, runtime-infra/*, runtime-cli, runtime-mcp, runtime-core). Test sources are
 counted only where they pin exception types.
 
@@ -30,7 +30,7 @@ read a code, it also catches real bugs and reports them as user errors. The targ
 | 3. Anticipated failure that ends the run | Corrupt durable state, malformed contract input, I/O failure, with nothing to do but stop and tell the operator | One type: `SkillBillRuntimeException(code, message, cause)`, where `code` is an owner-declared enum entry | At the CLI and MCP edges, and at a boundary that degrades (for example the rejected-output recorder) by checking `code` |
 
 A new custom `Throwable` subclass is allowed only when a failure must cross a boundary the runtime does not own and
-cannot be expressed as tier 3, and the reason is recorded in `runtime-kotlin/agent/decisions.md`. None qualifies
+cannot be expressed as tier 3, and the reason is recorded in `../../../runtime-kotlin/agent/decisions.md`. None qualifies
 today.
 
 ## Census

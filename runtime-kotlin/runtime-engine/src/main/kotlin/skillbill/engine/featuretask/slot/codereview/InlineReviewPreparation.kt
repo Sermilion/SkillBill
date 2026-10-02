@@ -35,8 +35,7 @@ internal sealed interface InlineReviewPrepared {
   ) : InlineReviewPrepared
 }
 
-private fun Throwable.isDatabaseBusy(): Boolean =
-  this is SkillBillRuntimeException && code == DatabaseFailureCode.BUSY
+private fun Throwable.isDatabaseBusy(): Boolean = this is SkillBillRuntimeException && code == DatabaseFailureCode.BUSY
 
 internal object InlineReviewPreparation {
   fun prepare(

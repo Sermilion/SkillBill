@@ -803,7 +803,7 @@ fun ArchitectureScanSupport.directComponentConstructionViolationsForSource(
 }
 
 private val THROWABLE_DECLARATION_PATTERN =
-  Regex("""(?<!::)\b(?:(enum|annotation|companion)\s+)?(?:class|object)\s+([A-Za-z_][A-Za-z0-9_]*)""")
+  Regex("""(?<!::)\b(?:(enum|annotation|companion)\s+)?(?:class|object|interface)\s+([A-Za-z_][A-Za-z0-9_]*)""")
 private val PRIMARY_CONSTRUCTOR_KEYWORD_PATTERN =
   Regex("""^(?:@\w+\s+)*(?:(?:public|internal|private|protected)\s+)?constructor\b""")
 private val SUPERTYPE_LIST_END_PATTERN =
@@ -947,7 +947,6 @@ private fun isThrowable(
   return declaration.supertypes.any { reference ->
     val sameFile = all.filter { other -> other.file == declaration.file && other.path == reference }
     val simpleReference = reference.substringAfterLast('.')
-    // Bare kotlin roots must not resolve to same-named non-throwable variants declared in other files.
     val resolved =
       sameFile.ifEmpty {
         if (simpleReference in KOTLIN_THROWABLE_ROOT_NAMES) emptyList() else bySimpleName[simpleReference].orEmpty()

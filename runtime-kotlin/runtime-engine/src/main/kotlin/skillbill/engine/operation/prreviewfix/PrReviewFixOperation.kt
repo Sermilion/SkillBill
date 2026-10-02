@@ -56,6 +56,13 @@ class PrReviewFixOperation(
     if (context.arguments.scope != ANALYZE_ONLY) {
       requirePullRequestBranch(context, pullRequest) { return OperationRunResult.Finished(it) }
     }
+    return analyzeThreads(context.copy(instructions = target.instructions), pullRequest)
+  }
+
+  private fun analyzeThreads(
+    context: OperationContext,
+    pullRequest: ReviewPullRequest,
+  ): OperationRunResult {
     val listed = listThreads(context, pullRequest) { return OperationRunResult.Finished(it) }
     val anchors = PrReviewFixAnchors.of(pullRequest, PrReviewFixAnchors.actionable(listed))
     if (anchors.ordinals.isEmpty()) {
@@ -64,7 +71,7 @@ class PrReviewFixOperation(
         OperationOutcome.Completed("${pullRequest.describe()} has no unresolved review threads.\n$handled"),
       )
     }
-    return analyze(context.copy(instructions = target.instructions), pullRequest, anchors, listed)
+    return analyze(context, pullRequest, anchors, listed)
   }
 
   private fun analyze(

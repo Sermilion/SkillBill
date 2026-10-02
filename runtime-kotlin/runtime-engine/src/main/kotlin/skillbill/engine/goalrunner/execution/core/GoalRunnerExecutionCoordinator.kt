@@ -198,8 +198,6 @@ class DefaultGoalRunnerExecutionCoordinator(
       teardownFailure?.let { secondary -> addSuppressedIfDistinct(bodyFailure, secondary) }
       throw bodyFailure
     }
-    // Pre-existing: a teardown failure alongside lost fencing stays unreported, as the old caught
-    // exception discarded its suppressed teardown failure.
     heartbeat.fencingLostReason()?.let { reason ->
       return GoalRunnerOwnedRun.AlreadyRunning(alreadyRunningReason(parentWorkflowId, reason))
     }

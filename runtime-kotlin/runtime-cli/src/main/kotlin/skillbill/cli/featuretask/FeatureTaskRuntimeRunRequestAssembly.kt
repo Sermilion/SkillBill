@@ -2,7 +2,6 @@ package skillbill.cli.featuretask
 
 import com.github.ajalt.clikt.core.UsageError
 import skillbill.application.review.service.RuntimeOwnedReviewMode
-import skillbill.cli.kernel.cli.usageError
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.error.featuretask.UnknownQualityGateSelectionError
@@ -137,11 +136,7 @@ internal fun FeatureTaskRuntimePhaseAgentCommand.requestedCodeReviewMode() =
   }
 
 internal fun FeatureTaskRuntimePhaseAgentCommand.parseRequestedCodeReviewMode(raw: String) =
-  try {
-    RuntimeOwnedReviewMode.parse(raw)
-  } catch (error: IllegalArgumentException) {
-    usageError(error)
-  }
+  RuntimeOwnedReviewMode.parse(raw) ?: throw UsageError(RuntimeOwnedReviewMode.unknownModeMessage(raw))
 
 internal fun FeatureTaskRuntimePhaseAgentCommand.goalContinuationMissingFields(): List<String> =
   buildList {

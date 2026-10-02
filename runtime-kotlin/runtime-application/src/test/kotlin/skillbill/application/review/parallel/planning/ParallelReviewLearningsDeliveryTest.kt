@@ -9,8 +9,8 @@ import skillbill.application.review.snapshot.harnessLearning
 import skillbill.application.review.snapshot.harnessOrigin
 import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.reviewHarness
-import skillbill.application.review.snapshot.reviewed
 import skillbill.application.review.snapshot.reviewPack
+import skillbill.application.review.snapshot.reviewed
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.learning.LearningPayloadKeys
 import skillbill.learnings.model.LearningRecord

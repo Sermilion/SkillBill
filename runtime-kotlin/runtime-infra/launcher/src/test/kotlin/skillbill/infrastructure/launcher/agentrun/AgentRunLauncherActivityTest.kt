@@ -257,7 +257,7 @@ class AgentRunLauncherActivityTest {
     val runner = RecordingAgentRunProcessRunner()
     val adapters = headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE)
     listOf(SupportedAgent.CODEX, SupportedAgent.CLAUDE, SupportedAgent.JUNIE, SupportedAgent.CURSOR).forEach { agent ->
-      val facts = requireNotNull(adapters[agent]).launch(skillRunRequest())
+      val facts = requireNotNull(adapters[agent]).launchFacts(skillRunRequest())
       assertEquals("/tmp/skillbill-agent-run", facts.childSessionPath, "session path for $agent")
       val sessionId = requireNotNull(facts.childSessionId) { "session id for $agent" }
       assertContains(sessionId, agent.id)

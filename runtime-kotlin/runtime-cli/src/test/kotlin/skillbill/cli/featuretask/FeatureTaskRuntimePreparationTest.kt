@@ -53,6 +53,38 @@ class FeatureTaskRuntimePreparationTest {
   }
 
   @Test
+  fun `unknown code review mode fails with the usage text`() {
+    val home = Files.createTempDirectory("skillbill-feature-task-preparation")
+    val db = home.resolve("metrics.db")
+    val repo = Files.createDirectories(home.resolve("repo"))
+    Files.createDirectories(repo.resolve(".git"))
+    val spec = repo.resolve(".feature-specs/SKILL-348-review-mode/spec.md")
+    Files.createDirectories(spec.parent)
+    Files.writeString(spec, "# Spec\n")
+    val context = CliRuntimeContext(userHome = home, environment = mapOf("SKILL_BILL_TEST_ENVIRONMENT" to "present"))
+
+    val result =
+      CliRuntime.run(
+        listOf(
+          "--db",
+          db.toString(),
+          "feature-task",
+          "run",
+          "SKILL-348",
+          spec.toString(),
+          "--repo-root",
+          repo.toString(),
+          "--code-review-mode",
+          "delegated",
+        ),
+        context,
+      )
+
+    assertEquals(1, result.exitCode, result.stderr)
+    assertContains(result.stderr, "Unknown code-review execution mode 'delegated'. Allowed: auto, inline.")
+  }
+
+  @Test
   fun `run with a spec outside the governed directory fails with the CLI usage text before opening a workflow`() {
     val home = Files.createTempDirectory("skillbill-feature-task-preparation")
     val db = home.resolve("metrics.db")

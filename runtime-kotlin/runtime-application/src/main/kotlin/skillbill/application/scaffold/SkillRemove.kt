@@ -155,7 +155,6 @@ class SkillRemove(
   companion object {
     const val BILL_SHARED_NAME: String = ".bill-shared"
 
-    // Retained wire value: the `exception` field of the non-dry-run refusal payload names the former exception.
     private const val REFUSAL_EXCEPTION_NAME: String = "SkillRemovalRefusedException"
   }
 }

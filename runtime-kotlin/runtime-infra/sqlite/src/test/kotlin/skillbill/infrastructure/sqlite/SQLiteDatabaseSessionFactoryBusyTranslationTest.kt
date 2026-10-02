@@ -53,9 +53,10 @@ class SQLiteDatabaseSessionFactoryBusyTranslationTest {
         SQLiteErrorCode.SQLITE_CONSTRAINT,
       )
 
-    val thrown = assertFailsWith<SQLiteException> { database.transaction { throw raised } }
+    val thrown = assertFailsWith<SkillBillRuntimeException> { database.transaction { throw raised } }
 
-    assertSame(raised, thrown)
+    assertEquals(DatabaseFailureCode.ACCESS, thrown.code)
+    assertSame(raised, thrown.cause)
   }
 
   @Test

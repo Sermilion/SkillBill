@@ -65,12 +65,12 @@ internal object StrictPhaseOutputParser {
     } catch (error: MismatchedInputException) {
       StrictParse.Failure(
         FeatureTaskRuntimePhaseOutputFailureCode.DUPLICATE_KEY,
-        "Phase output contains a duplicate key.",
+        "Phase output contains a duplicate key: ${error.originalMessage}",
       )
     } catch (error: JsonProcessingException) {
       StrictParse.Failure(
         FeatureTaskRuntimePhaseOutputFailureCode.MALFORMED,
-        "Phase output is malformed and cannot be parsed as one document.",
+        "Phase output is malformed and cannot be parsed as one document: ${error.originalMessage}",
       )
     }
 

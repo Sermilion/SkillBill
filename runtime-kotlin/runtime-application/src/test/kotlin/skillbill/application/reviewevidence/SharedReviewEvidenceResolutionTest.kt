@@ -157,7 +157,6 @@ class SharedReviewEvidenceResolutionTest {
       SharedReviewEvidenceProjection.project(record, aggregate),
     ).value
 
-
   @Test fun `a fingerprint hit serves the stored evidence with zero repository traversal`() {
     val store = InMemoryStore()
     val (first, aggregate) = twoCommitGit()

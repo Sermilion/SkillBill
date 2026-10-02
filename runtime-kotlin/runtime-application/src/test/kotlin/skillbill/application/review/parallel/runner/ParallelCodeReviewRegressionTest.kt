@@ -6,8 +6,8 @@ import skillbill.application.review.snapshot.ReviewRecorder
 import skillbill.application.review.snapshot.diffForPaths
 import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.reviewHarness
-import skillbill.application.review.snapshot.reviewed
 import skillbill.application.review.snapshot.reviewPack
+import skillbill.application.review.snapshot.reviewed
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.runner
 import skillbill.ports.agentrun.model.AgentRunTermination

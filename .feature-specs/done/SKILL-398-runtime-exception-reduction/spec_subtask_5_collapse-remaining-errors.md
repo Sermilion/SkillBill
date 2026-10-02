@@ -1,13 +1,13 @@
 # SKILL-398 Subtask 5 - collapse-remaining-errors
 
-Parent spec: [.feature-specs/SKILL-398-runtime-exception-reduction/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-398-runtime-exception-reduction/spec.md](spec.md)
 Issue key: SKILL-398
 
 ## Scope revision (2026-10-02)
 
 The first implement attempt blocked with no changes. Its scope was 75 classes in contracts, domain, engine, application, infra and mcp, about 60 catch-site changes, the MCP capture predicate, the telemetry and docs edits and the transition finish. That was too much for one implement phase that cannot compile. This subtask now converts only the persistence and transport failures. Those carry the riskiest behaviour (database retry, the goal-status payload, HTTP status handling and the runtime-owned fact boundary), and it adds the two shared pieces every other conversion needs.
 
-The other areas moved to the follow-up bundle `.feature-specs/SKILL-400-runtime-error-codes/`:
+The other areas moved to the follow-up bundle `../../SKILL-400-runtime-error-codes`:
 
 - JSON and failure-wire codes;
 - external platform-pack and add-on codes;
@@ -74,14 +74,14 @@ Census on `feat/SKILL-398-runtime-exception-reduction` at `14e681f4b` (after sub
    - `InlineReviewPreparationDispositionTest` builds through `databaseBusy(...)`.
    - A pinned class name that `failureCodeLabel()` now renders becomes the code label.
 7. **Baseline, docs, decision.**
-   - Remove each deleted class's row from `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt` by hand. Row format is `module:Class`; compare whole rows and edit no other row.
-   - Add a newest-first entry to `runtime-kotlin/agent/decisions.md`, "SKILL-398 subtask 5: persistence failures as codes, and the split into SKILL-400". Cover:
+   - Remove each deleted class's row from `../../../runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt` by hand. Row format is `module:Class`; compare whole rows and edit no other row.
+   - Add a newest-first entry to `../../../runtime-kotlin/agent/decisions.md`, "SKILL-398 subtask 5: persistence failures as codes, and the split into SKILL-400". Cover:
      - the handled-set rule and the database helper;
      - the MCP capture-parity predicate;
      - the accepted framing change: former `RuntimeException` classes that reach `CliRuntime` now print through the `SkillBillRuntimeException` arm without the `ClassName: ` prefix or the diagnostics record (known case: `DatabaseAccessError` on the non-monitor `goal status`, where `CliGoalStatusDatabaseFailureTest` still passes);
      - the split itself.
 
-After this subtask's edits, check whether any class in main still extends `SkillBillRuntimeException` or `ShellContentContractException`, or constructs one without a code. If none does, finish the transition as `.feature-specs/SKILL-400-runtime-error-codes/spec.md` "Transition finish" describes. Otherwise leave it open. SKILL-399 and SKILL-400 classes are expected to remain, so it is expected to stay open.
+After this subtask's edits, check whether any class in main still extends `SkillBillRuntimeException` or `ShellContentContractException`, or constructs one without a code. If none does, finish the transition as `../../SKILL-400-runtime-error-codes/spec.md` "Transition finish" describes. Otherwise leave it open. SKILL-399 and SKILL-400 classes are expected to remain, so it is expected to stay open.
 
 ## Acceptance Criteria
 

@@ -28,6 +28,16 @@ internal fun DefaultGoalPlanningSweep.produceAttemptAfterPauseCheck(
         stopped(shared, currentSubtaskId, projectionRejectedReason(phaseId, error), phaseId),
       )
     }
+  return launchedPlanningProduction(args, shared, phaseId, currentSubtaskId, prompt)
+}
+
+private fun DefaultGoalPlanningSweep.launchedPlanningProduction(
+  args: GoalPlanningProduceAttemptArgs,
+  shared: GoalPlanningSharedContext,
+  phaseId: String,
+  currentSubtaskId: Int,
+  prompt: String,
+): GoalPlanningPhaseProduction {
   val startedAtNanos = System.nanoTime()
   val outcome = launchPlanningAttempt(args.phase, prompt)
   if (outcome is AgentRunLaunchDenied) {

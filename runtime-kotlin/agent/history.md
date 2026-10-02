@@ -1,3 +1,14 @@
+## [2026-10-02] SKILL-398 subtask 6 — defect exceptions stop driving control flow at parse edges
+Areas: runtime-kotlin/runtime-{domain,ports,application,cli,core}, runtime-infra/skills
+- Four domain validators (execution mode, repository-relative path, validation depth, persisted instant) now fail with plain require/check defects; RuntimeOwnedReviewMode.parse and the scaffold payload-object decoder return null for bad input and callers branch on the value. reusable
+- Release-ref validation is a sealed port result (ReleaseRefValidation) instead of a custom ReleaseLicensePolicyError; the CLI maps malformed tags to the canonical message. Throwable class and its baseline row deleted.
+- CLI review-mode, goal-run and repo-validation sites render the typed failure directly; no catch of IllegalArgumentException remains at those sites.
+- Tests added through existing harnesses: delegated review mode rejected, non-object scaffold payload rejected, malformed release tag message.
+- Validate repairs: database access failure keeps its SQLite cause for typed BUSY detection; shared-preplan Stopped outcomes stay PAUSED not BLOCKED; throwable-baseline scanner treats interfaces as nesting parents; two shell-content error files renamed for detekt.
+- Limits: remaining IAE/ISE catch sites (scaffold payload run, wizard, install, agent addon parsing) belong to SKILL-401.
+Feature flag: N/A
+Acceptance criteria: implemented per spec; validate passed (check --continue, skill-bill validate)
+
 ## [2026-10-02] SKILL-398 subtask 5 — persistence and transport failures collapse to coded failures
 Areas: runtime-kotlin/runtime-{contracts,application,engine,cli,mcp,core}, runtime-infra/{sqlite,http}, ARCHITECTURE.md
 - Database access/busy, telemetry HTTP, goal-telemetry-row and runtime-owned persistence failures (9 classes) are now coded SkillBillRuntimeException via factories in runtime-contracts and runtime-application; baseline rows removed. reusable

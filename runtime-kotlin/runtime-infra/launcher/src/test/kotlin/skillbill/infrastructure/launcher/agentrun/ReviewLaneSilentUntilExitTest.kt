@@ -73,7 +73,7 @@ class ReviewLaneSilentUntilExitTest {
     commandBuilder = ClaudeAgentRunCommandBuilder(),
     processRunner = SilentScriptRunner(silentPeriod),
     executableLookup = ALL_EXECUTABLES_AVAILABLE,
-  ).launch(request)
+  ).launchFacts(request)
 
   private class SilentScriptRunner(
     private val silentPeriod: Duration,

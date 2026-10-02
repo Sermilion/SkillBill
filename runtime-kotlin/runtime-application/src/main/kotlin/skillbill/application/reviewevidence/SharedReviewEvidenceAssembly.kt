@@ -53,11 +53,17 @@ internal class SharedReviewEvidenceAssembler(private val diffResolver: DiffResol
     if (declaredSynthetic != null) {
       return DiffResolution.Resolved(synthetic(range, declaredSynthetic, "non-commit review scope"))
     }
-    val shas =
-      when (val listed = revList(repoRoot, range)) {
-        is DiffResolution.Unresolved -> return listed
-        is DiffResolution.Resolved -> listed.value
-      }
+    return when (val listed = revList(repoRoot, range)) {
+      is DiffResolution.Unresolved -> listed
+      is DiffResolution.Resolved -> assembleCommitRange(repoRoot, range, listed.value)
+    }
+  }
+
+  private fun assembleCommitRange(
+    repoRoot: Path,
+    range: ReviewCommitRange,
+    shas: List<String>,
+  ): DiffResolution<SharedReviewEvidenceCommits> {
     if (shas.isEmpty()) {
       return DiffResolution.Resolved(
         synthetic(

@@ -48,7 +48,15 @@ class OperationStepRunner(
     val before = contentIdentities(context, dirty) { return OperationStepResult.Refused(it) }
     val result =
       launch(stepName, stepInput(context, stepName, directive, priorValues, EDITING_STEP_POLICY), session = null)
-    if (result !is OperationStepResult.Settled) return result
+    return if (result is OperationStepResult.Settled) withReeditedPaths(context, dirty, before, result) else result
+  }
+
+  private fun withReeditedPaths(
+    context: OperationContext,
+    dirty: List<String>,
+    before: Map<String, String>,
+    result: OperationStepResult.Settled,
+  ): OperationStepResult {
     val after = contentIdentities(context, dirty) { return OperationStepResult.Refused(it) }
     val reedited = dirty.filter { path -> before[path] != after[path] }
     return result.copy(changedPaths = (result.changedPaths + reedited).distinct().sorted())

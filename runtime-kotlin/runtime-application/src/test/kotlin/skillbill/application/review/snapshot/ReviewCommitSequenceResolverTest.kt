@@ -1,9 +1,9 @@
 package skillbill.application.review.snapshot
 
+import skillbill.application.reviewevidence.ResolvedCommitSequence
 import skillbill.application.reviewevidence.ReviewCommitRange
 import skillbill.application.reviewevidence.SharedReviewEvidenceAssembler
 import skillbill.application.reviewevidence.SharedReviewEvidenceProjection
-import skillbill.application.reviewevidence.ResolvedCommitSequence
 import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
@@ -109,9 +109,10 @@ class ReviewCommitSequenceResolverTest {
     scope: ParallelReviewScope,
     aggregateDiff: String,
     supplied: Boolean = false,
-  ): ResolvedCommitSequence = assertIs<DiffResolution.Resolved<ResolvedCommitSequence>>(
-    attempt(git, scope, aggregateDiff, supplied),
-  ).value
+  ): ResolvedCommitSequence =
+    assertIs<DiffResolution.Resolved<ResolvedCommitSequence>>(
+      attempt(git, scope, aggregateDiff, supplied),
+    ).value
 
   private fun unresolvedMessage(
     git: DiffResolverPort,

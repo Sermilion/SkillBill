@@ -87,7 +87,11 @@ data class ReleaseRefMetadata(
     )
 }
 
-internal class ReleaseLicensePolicyError(message: String) : IllegalArgumentException(message)
+sealed interface ReleaseRefValidationResult {
+  data class Valid(val metadata: ReleaseRefMetadata) : ReleaseRefValidationResult
+
+  data class Rejected(val message: String) : ReleaseRefValidationResult
+}
 
 object RepoValidationRuntime {
   internal fun validateRepo(
@@ -125,7 +129,8 @@ object RepoValidationRuntime {
     repoRoot: Path,
     rawValue: String,
     forcePrerelease: Boolean = false,
-  ): ReleaseRefMetadata = RepoValidationRuntimeReleasePolicy.validateReleaseRef(repoRoot, rawValue, forcePrerelease)
+  ): ReleaseRefValidationResult =
+    RepoValidationRuntimeReleasePolicy.validateReleaseRef(repoRoot, rawValue, forcePrerelease)
 
   fun appendGithubOutput(
     outputPath: Path,

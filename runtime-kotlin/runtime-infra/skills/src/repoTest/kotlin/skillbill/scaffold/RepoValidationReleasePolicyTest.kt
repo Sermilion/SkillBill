@@ -1,12 +1,14 @@
 package skillbill.scaffold
 
 import skillbill.infrastructure.skills.nativeagent.testNativeAgentCompositionContext
+import skillbill.infrastructure.skills.scaffold.runtime.validation.ReleaseRefValidationResult
 import skillbill.infrastructure.skills.scaffold.runtime.validation.RepoValidationRuntime
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class RepoValidationReleasePolicyTest {
@@ -67,20 +69,20 @@ class RepoValidationReleasePolicyTest {
     Files.writeString(repoRoot.resolve("LICENSE"), completeMitLicense())
 
     listOf("v0.1.1", "v0.1.2", "v0.9.9-rc.1", "v1.0.0-rc.1", "v1.0.0", "v1.1.0", "v2.0.0+build.7")
-      .forEach { ref -> RepoValidationRuntime.validateReleaseRef(repoRoot, ref) }
+      .forEach { ref ->
+        assertIs<ReleaseRefValidationResult.Valid>(RepoValidationRuntime.validateReleaseRef(repoRoot, ref))
+      }
 
     Files.writeString(repoRoot.resolve("LICENSE"), completeMitLicense().replace("\n", "\r\n"))
-    RepoValidationRuntime.validateReleaseRef(repoRoot, "v1.0.0")
+    assertIs<ReleaseRefValidationResult.Valid>(RepoValidationRuntime.validateReleaseRef(repoRoot, "v1.0.0"))
   }
 
   @Test
   fun `release policy rejects missing truncated and restricted MIT licenses`() {
     val repoRoot = Files.createTempDirectory("skillbill-invalid-mit-license")
     val missing =
-      assertFailsWith<IllegalArgumentException> {
-        RepoValidationRuntime.validateReleaseRef(repoRoot, "v0.1.2")
-      }
-    assertTrue(missing.message.orEmpty().contains("LICENSE"))
+      assertIs<ReleaseRefValidationResult.Rejected>(RepoValidationRuntime.validateReleaseRef(repoRoot, "v0.1.2"))
+    assertTrue(missing.message.contains("LICENSE"))
 
     listOf(
       "",
@@ -91,10 +93,8 @@ class RepoValidationReleasePolicyTest {
       Files.writeString(repoRoot.resolve("LICENSE"), license)
       listOf("v0.1.1", "v0.1.2", "v1.0.0-rc.1", "v1.0.0", "v2.0.0").forEach { ref ->
         val failure =
-          assertFailsWith<IllegalArgumentException> {
-            RepoValidationRuntime.validateReleaseRef(repoRoot, ref)
-          }
-        assertTrue(failure.message.orEmpty().contains("complete current MIT license"), ref)
+          assertIs<ReleaseRefValidationResult.Rejected>(RepoValidationRuntime.validateReleaseRef(repoRoot, ref))
+        assertTrue(failure.message.contains("complete current MIT license"), ref)
       }
     }
   }
@@ -104,12 +104,15 @@ class RepoValidationReleasePolicyTest {
     val repoRoot = Files.createTempDirectory("skillbill-mit-staging")
     Files.writeString(repoRoot.resolve("LICENSE"), completeMitLicense())
 
-    val staging = RepoValidationRuntime.validateReleaseRef(repoRoot, "v1.0.0-staging.1", forcePrerelease = true)
-    assertTrue(staging.prerelease)
+    val staging =
+      assertIs<ReleaseRefValidationResult.Valid>(
+        RepoValidationRuntime.validateReleaseRef(repoRoot, "v1.0.0-staging.1", forcePrerelease = true),
+      )
+    assertTrue(staging.metadata.prerelease)
     val failure =
-      assertFailsWith<IllegalArgumentException> {
-        RepoValidationRuntime.validateReleaseRef(repoRoot, "v1.0.0", forcePrerelease = true)
-      }
-    assertTrue(failure.message.orEmpty().contains("prerelease identifier"))
+      assertIs<ReleaseRefValidationResult.Rejected>(
+        RepoValidationRuntime.validateReleaseRef(repoRoot, "v1.0.0", forcePrerelease = true),
+      )
+    assertTrue(failure.message.contains("prerelease identifier"))
   }
 }

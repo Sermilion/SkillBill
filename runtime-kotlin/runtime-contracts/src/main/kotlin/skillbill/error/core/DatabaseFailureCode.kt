@@ -17,10 +17,12 @@ fun databaseAccessFailure(
   dbPath: String,
   operation: DatabaseAccessOperation,
   condition: String,
+  cause: Throwable? = null,
 ): SkillBillRuntimeException =
   SkillBillRuntimeException(
     DatabaseFailureCode.ACCESS,
     "Database ${operation.wireValue} failed for '$dbPath': ${boundedCondition(condition)}",
+    cause,
   )
 
 fun databaseBusy(cause: Throwable): SkillBillRuntimeException =

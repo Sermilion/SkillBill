@@ -3,6 +3,7 @@ package skillbill.cli.scaffold.payload
 import kotlinx.serialization.json.JsonObject
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.install.ExternalAddonOverlayService
+import skillbill.application.scaffold.SCAFFOLD_PAYLOAD_NOT_OBJECT_MESSAGE
 import skillbill.application.scaffold.decodeScaffoldPayloadObject
 import skillbill.application.scaffold.model.ScaffoldInvocationArgs
 import skillbill.application.scaffold.runScaffoldInvocation
@@ -53,13 +54,12 @@ class NativeScaffoldPayloadRun(
       } catch (error: SkillBillRuntimeException) {
         return state.completeScaffoldError(error.message.orEmpty(), options.format)
       }
-    val payloadObject =
-      try {
-        decodeScaffoldPayloadObject(payloadText)
-      } catch (error: IllegalArgumentException) {
-        return state.completeScaffoldError(error.message.orEmpty(), options.format)
-      }
-    runPayload(payloadObject, options)
+    val payloadObject = decodeScaffoldPayloadObject(payloadText)
+    if (payloadObject == null) {
+      state.completeScaffoldError(SCAFFOLD_PAYLOAD_NOT_OBJECT_MESSAGE, options.format)
+    } else {
+      runPayload(payloadObject, options)
+    }
   }
 
   internal fun createAndFill(

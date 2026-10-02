@@ -56,7 +56,6 @@ internal fun DefaultGoalPlanningSweep.launchPlanningAttempt(
   return requireNotNull(output.launchOutcome) { output.launchFailure?.reason.orEmpty() }
 }
 
-/** Composes the planning prompt; a rejected required briefing write is handed to [onRejected], which must not return. */
 internal inline fun DefaultGoalPlanningSweep.composePlanningPrompt(
   args: GoalPlanningProduceAttemptArgs,
   onRejected: (RequiredPhaseWrite.Rejected) -> Nothing,

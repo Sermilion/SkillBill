@@ -225,7 +225,13 @@ class FeatureTaskRuntimePhaseRecorder
       briefing: FeatureTaskRuntimePhaseLaunchBriefing,
       sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement? = null,
       attempt: Int = 1,
-    ): RequiredPhaseWrite = briefingRecorder.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement, attempt)
+    ): RequiredPhaseWrite =
+      briefingRecorder.recordPhaseBriefing(
+        workflowId,
+        briefing,
+        sharedEvidenceMeasurement,
+        attempt,
+      )
 
     fun recordProjectionRejection(
       workflowId: String,

@@ -187,7 +187,6 @@ data class ReviewHarnessConfig(
   val originScopeKeyPort: RepositoryOriginScopeKeyPort = HARNESS_ORIGIN_UNAVAILABLE,
 )
 
-/** Runs the request and returns the reviewed result; fails the test when planning failed. */
 fun ParallelCodeReviewRunner.reviewed(request: ParallelCodeReviewRequest): ParallelCodeReviewResult =
   when (val outcome = run(request)) {
     is ParallelCodeReviewRunOutcome.Reviewed -> outcome.result

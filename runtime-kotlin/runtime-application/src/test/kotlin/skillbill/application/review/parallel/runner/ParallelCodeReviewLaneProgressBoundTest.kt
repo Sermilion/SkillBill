@@ -52,7 +52,9 @@ class ParallelCodeReviewLaneProgressBoundTest {
 
     val result =
       reviewHarness(config, recorder)
-        .reviewed(harnessRequest(codeReviewMode = CodeReviewExecutionMode.DELEGATED).copy(laneProgressIdleTimeout = BOUND))
+        .reviewed(
+          harnessRequest(codeReviewMode = CodeReviewExecutionMode.DELEGATED).copy(laneProgressIdleTimeout = BOUND),
+        )
 
     assertFalse(result.lane1.success)
     assertTrue(assertNotNull(result.lane1.failureReason).contains("agent timed out"))

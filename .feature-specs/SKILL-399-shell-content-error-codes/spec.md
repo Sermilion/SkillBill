@@ -1,7 +1,7 @@
 # SKILL-399 - shell-content-error-codes
 
 Issue key: SKILL-399
-Origin: split out of SKILL-398 subtask 4 (`.feature-specs/SKILL-398-runtime-exception-reduction/spec_subtask_4_collapse-shell-content-errors.md`) on 2026-10-02, after that subtask's implement phase blocked as too large. Investigation: `.feature-specs/SKILL-398-runtime-exception-reduction/investigation.md`, finding F-005.
+Origin: split out of SKILL-398 subtask 4 (`../done/SKILL-398-runtime-exception-reduction`) on 2026-10-02, after that subtask's implement phase blocked as too large. Investigation: `../done/SKILL-398-runtime-exception-reduction`, finding F-005.
 
 ## Outcome
 
@@ -21,7 +21,7 @@ Census on `feat/SKILL-398-runtime-exception-reduction` at `f9e4df35d`:
 
 ## Target failure model
 
-The model is SKILL-398's (`.feature-specs/SKILL-398-runtime-exception-reduction/spec.md`, "Target failure model"):
+The model is SKILL-398's (`../done/SKILL-398-runtime-exception-reduction`, "Target failure model"):
 
 ```kotlin
 package skillbill.error.core

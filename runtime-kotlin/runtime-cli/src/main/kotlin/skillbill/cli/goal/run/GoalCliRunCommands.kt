@@ -1,5 +1,6 @@
 package skillbill.cli.goal.run
 
+import com.github.ajalt.clikt.core.UsageError
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.multiple
@@ -14,7 +15,6 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.formatOption
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
-import skillbill.cli.kernel.cli.usageError
 import skillbill.cli.kernel.payload.toFeatureTaskContinuationCliMap
 import skillbill.cli.kernel.payload.toGoalContinuationCliMap
 import skillbill.cli.model.CliRunInputs
@@ -91,11 +91,7 @@ class GoalPreflightCommand(
 
 internal fun parseCodeReviewMode(raw: String?) =
   raw?.let { value ->
-    try {
-      RuntimeOwnedReviewMode.parse(value)
-    } catch (error: IllegalArgumentException) {
-      usageError(error)
-    }
+    RuntimeOwnedReviewMode.parse(value) ?: throw UsageError(RuntimeOwnedReviewMode.unknownModeMessage(value))
   }
 
 internal fun GoalPreflightResult.toGoalPreflightCliMap(): Map<String, Any?> =

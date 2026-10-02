@@ -6,6 +6,7 @@ import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompos
 import skillbill.infrastructure.skills.nativeagent.validatePlannedNativeAgentWorkers
 import skillbill.infrastructure.skills.scaffold.authoring.renderAuthoredContentBody
 import skillbill.infrastructure.skills.scaffold.runtime.validation.ReleaseRefMetadata
+import skillbill.infrastructure.skills.scaffold.runtime.validation.ReleaseRefValidationResult
 import skillbill.infrastructure.skills.scaffold.runtime.validation.RepoValidationIssue
 import skillbill.infrastructure.skills.scaffold.runtime.validation.RepoValidationIssueSeverity
 import skillbill.infrastructure.skills.scaffold.runtime.validation.RepoValidationReport
@@ -13,6 +14,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.validation.RepoValidatio
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.validation.RepoValidationGateway
+import skillbill.ports.validation.model.ReleaseRefValidation
 import java.nio.file.Path
 import skillbill.ports.validation.model.ReleaseRefMetadata as PortReleaseRefMetadata
 import skillbill.ports.validation.model.RepoValidationIssue as PortRepoValidationIssue
@@ -47,8 +49,11 @@ class FileSystemRepoValidationGateway(
     repoRoot: Path,
     rawRef: String,
     forcePrerelease: Boolean,
-  ): PortReleaseRefMetadata =
-    RepoValidationRuntime.validateReleaseRef(repoRoot, rawRef, forcePrerelease).toPortMetadata()
+  ): ReleaseRefValidation =
+    when (val result = RepoValidationRuntime.validateReleaseRef(repoRoot, rawRef, forcePrerelease)) {
+      is ReleaseRefValidationResult.Valid -> ReleaseRefValidation.Valid(result.metadata.toPortMetadata())
+      is ReleaseRefValidationResult.Rejected -> ReleaseRefValidation.Rejected(result.message)
+    }
 
   override fun appendGithubOutput(
     outputPath: Path,

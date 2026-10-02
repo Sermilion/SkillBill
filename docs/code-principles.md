@@ -101,7 +101,7 @@ Infrastructure Gradle directories: `runtime-infra/host`, `runtime-infra/contract
 
 - `runtime-kotlin/runtime-infra/skills/src/main/kotlin/skillbill/scaffold/platformpack/ShellContentLoader.kt` (`parseFallbackCapabilities`)
 - `runtime-kotlin/runtime-infra/skills/src/main/kotlin/skillbill/launcher/agentrun/AgentRunCommandBuildersLaunch.kt` (`GovernedReviewLaunchCapability`)
-- `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/GovernedReviewShellContentErrors.kt`
+- `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/shellcontent/GovernedReviewFailureCode.kt`
 
 **Amendment (SKILL-220 subtask 3).** `fallback_capabilities`, native-agent
 `entrypoint` paths, and `AgentRunIdlePolicy` remain open at their current

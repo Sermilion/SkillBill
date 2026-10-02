@@ -23,7 +23,6 @@ class UnaddressedFindingsLedgerService(
   private val database: DatabaseSessionFactory,
   private val diagnostics: RuntimeDiagnostics,
 ) {
-  /** Returns the ledger for [issueKey], or null when no goal exists for it. */
   fun ledger(issueKey: String): UnaddressedFindingsLedger? =
     database.read { unitOfWork ->
       if (!unitOfWork.unaddressedFindings.issueExists(issueKey)) {
@@ -42,7 +41,6 @@ class UnaddressedFindingsLedgerService(
       }
     }
 
-  /** Returns the verification dispositions for [issueKey], or null when no goal exists for it. */
   fun verificationDispositions(issueKey: String): List<FeatureTaskRuntimeFindingVerificationDisposition>? =
     database.read { unitOfWork ->
       if (!unitOfWork.unaddressedFindings.issueExists(issueKey)) {
@@ -52,7 +50,6 @@ class UnaddressedFindingsLedgerService(
       }
     }
 
-  /** Returns the repair ledgers for [issueKey] keyed by workflow, or null when no goal exists for it. */
   fun repairLedgersByWorkflow(issueKey: String): Map<String, FeatureTaskRuntimeRepairLedger>? =
     database.read { unitOfWork ->
       if (!unitOfWork.unaddressedFindings.issueExists(issueKey)) {

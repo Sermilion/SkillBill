@@ -41,12 +41,22 @@ class OperationConfirmationGate(
     token: String,
   ): OperationOutcome {
     val proposal = proposals.find(token) ?: return unknownToken(token)
-    refusal(operation, context, proposal)?.let { return it }
     val confirmed = ConfirmedOperationProposal(token, proposal.proposalValue, proposal.anchors.operationValues)
-    operation.admit(context, confirmed)?.let { return it }
-    if (!proposals.markConsumed(token, clock.instant().toString())) return consumedToken(token)
-    return operation.execute(context, confirmed)
+    return refusal(operation, context, proposal)
+      ?: operation.admit(context, confirmed)
+      ?: consumeAndExecute(operation, context, confirmed)
   }
+
+  private fun consumeAndExecute(
+    operation: ConfirmableOperation,
+    context: OperationContext,
+    confirmed: ConfirmedOperationProposal,
+  ): OperationOutcome =
+    if (proposals.markConsumed(confirmed.token, clock.instant().toString())) {
+      operation.execute(context, confirmed)
+    } else {
+      consumedToken(confirmed.token)
+    }
 
   private fun refusal(
     operation: ConfirmableOperation,

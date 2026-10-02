@@ -222,7 +222,6 @@ private fun registerMcpAgent(
   }
 }
 
-// Retained wire value: `cause_class` on the `install apply` payload kept the removed exception's class name.
 private const val PROFILE_FAILURE_CAUSE_CLASS: String = "skillbill.install.model.ClaudeMcpProfileFailure"
 
 private fun appliedMcpRegistrationOutcome(

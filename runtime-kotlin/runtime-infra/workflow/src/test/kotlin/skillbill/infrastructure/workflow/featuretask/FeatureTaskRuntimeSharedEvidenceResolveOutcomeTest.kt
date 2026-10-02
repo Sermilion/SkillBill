@@ -111,7 +111,7 @@ internal fun FileSystemFeatureTaskRuntimeSharedEvidenceStore.resolved(
 ): FeatureTaskRuntimeSharedEvidenceResolution =
   checkNotNull(resolve(request, deriver)) { "the deriver in this test always derives" }
 
-internal object ThrowingDeriver :FeatureTaskRuntimeSharedEvidenceDeriver {
+internal object ThrowingDeriver : FeatureTaskRuntimeSharedEvidenceDeriver {
   override fun derive(checkpoint: FeatureTaskRuntimeRepositoryCheckpoint): FeatureTaskRuntimeSharedEvidenceDerivation =
     error("Deriver must not be invoked on a fingerprint hit; resolving '${checkpoint.fingerprint}' traversed.")
 }

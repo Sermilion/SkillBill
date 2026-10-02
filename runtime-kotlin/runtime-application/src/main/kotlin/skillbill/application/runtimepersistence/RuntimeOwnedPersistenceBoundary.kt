@@ -2,17 +2,12 @@ package skillbill.application.runtimepersistence
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
-import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
+import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
-
-enum class RuntimeOwnedPersistenceFailureCode : RuntimeFailureCode {
-  FACT_UNAVAILABLE,
-  REVIEW_FACT_UNAVAILABLE,
-}
 
 fun runtimeOwnedFactUnavailable(
   code: RuntimeOwnedPersistenceFailureCode,

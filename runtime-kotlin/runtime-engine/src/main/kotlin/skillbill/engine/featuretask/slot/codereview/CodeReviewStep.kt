@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.slot.codereview
 import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelCodeReviewRunOutcome
-import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceFailureCode
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
@@ -19,6 +18,7 @@ import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
+import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.error.shellcontent.InvalidReviewContextSchemaError
 import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
@@ -68,6 +68,16 @@ internal class CodeReviewStep(
         is InlineReviewPrepared.Ready -> prepared.input
         is InlineReviewPrepared.Settled -> return prepared.outcome
       }
+    return startReviewPass(run, context, state, prompt, input)
+  }
+
+  private fun startReviewPass(
+    run: PhaseRun,
+    context: PhaseReviewExecutionContext,
+    state: PhaseReviewStepBinding,
+    prompt: PhaseStepPromptSource,
+    input: GoalSubtaskReviewInput,
+  ): PhaseOutcome {
     val iteration = state.nextStepIteration()
     val passNumber = state.reviewPassNumber
     val resolution =

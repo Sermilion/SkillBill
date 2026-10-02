@@ -54,7 +54,7 @@ class PrReviewFixOperationExecutionTest {
         val usage =
           assertIs<OperationOutcome.Usage>(harness.invoke(OperationArguments(confirm = token, select = select)))
 
-        assertContains(usage.reason, expected, "select=$select")
+        assertContains(usage.reason, expected, message = "select=$select")
         assertEquals(listOf(ANALYSIS_STEP), harness.runner.inputs.map { input -> input.stepName })
         assertEquals(emptyList(), harness.github.replies)
         assertEquals(emptyList(), harness.validations)

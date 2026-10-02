@@ -11,7 +11,10 @@ enum class GovernedReviewFailureCode : RuntimeFailureCode {
   LAUNCH_CAPABILITY,
 }
 
-fun governedReviewLaunchCapability(provider: String, capability: String): SkillBillRuntimeException =
+fun governedReviewLaunchCapability(
+  provider: String,
+  capability: String,
+): SkillBillRuntimeException =
   SkillBillRuntimeException(
     GovernedReviewFailureCode.LAUNCH_CAPABILITY,
     "Agent '$provider' cannot launch a governed review: missing capability '$capability'.",

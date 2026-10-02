@@ -1,6 +1,6 @@
 # SKILL-398 Subtask 4 - collapse-shell-content-errors
 
-Parent spec: [.feature-specs/SKILL-398-runtime-exception-reduction/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-398-runtime-exception-reduction/spec.md](spec.md)
 Issue key: SKILL-398
 
 ## Scope revision (2026-10-02)
@@ -10,7 +10,7 @@ The first implement attempt blocked with no changes: all 97 shell-content classe
 - it lays the shared transition pieces that every shell-content conversion needs;
 - it converts the two smallest areas, `AgentAddonShellContentErrors.kt` and `GovernedReviewShellContentErrors.kt`.
 
-The other seven areas (FeatureTaskRuntime, Install, Manifest, ReviewContext, Scaffold, SkillStaging and Workflow) moved to the follow-up bundle `.feature-specs/SKILL-399-shell-content-error-codes/`. Leave their classes, throw sites, catch sites and tests unchanged here. `spec.md` was not changed, so the shared preplan's parent-spec hash stays valid.
+The other seven areas (FeatureTaskRuntime, Install, Manifest, ReviewContext, Scaffold, SkillStaging and Workflow) moved to the follow-up bundle `../../SKILL-399-shell-content-error-codes`. Leave their classes, throw sites, catch sites and tests unchanged here. `spec.md` was not changed, so the shared preplan's parent-spec hash stays valid.
 
 Census on `feat/SKILL-398-runtime-exception-reduction` at `f9e4df35d`:
 
@@ -34,7 +34,7 @@ Census on `feat/SKILL-398-runtime-exception-reduction` at `f9e4df35d`:
      - `errorType=` diagnostics: `SchemaLoadFailureLogging`, `GoalRunnerObservabilityEmitter`, `GoalRunnerProgressEventEmitter`, `GoalRunnerLedgerRecorder`;
      - `"${simpleName}: ${message}"` reasons: `GoalPlanningSweepOutcomeDerivationTerminalClass.kt:37`, `CodeReviewStep.kt:402`, `ReviewServiceLaneComposition.kt:36`, `FileSystemFeatureTaskRuntimeSharedEvidenceStoreReads.kt:174-219`, `ParallelCodeReviewRunnerFailureAdmission.kt:193`, `PlatformPackSubstanceAuditCoreFns.kt:82`, `InstallStaging.kt:218-232`, `SkillRemove.kt:136`, `GoalPlanningRejectionRecorder.kt:41`;
      - the `cause.message ?: cause::class.simpleName` fallbacks.
-   - Update the `error_type` row in `docs/telemetry-privacy.md` to say "exception class simple name, or the failure code label for coded runtime failures".
+   - Update the `error_type` row in `../../../docs/telemetry-privacy.md` to say "exception class simple name, or the failure code label for coded runtime failures".
    - **Edge sites.** Every `catch (e: ShellContentContractException)` and every `is ShellContentContractException` arm in main becomes a `SkillBillRuntimeException` catch or arm guarded by `isShellContentContractFailure()`. Other `SkillBillRuntimeException` codes are rethrown, so each site handles exactly the failures it handled before. Sites at planning time:
      - CLI: `PhaseCommand`, `AgentAddonCliCommands`, `InstallApplyExternalAddonsCommand`, five `Config*` commands, `CodeReviewCommand`;
      - MCP: `McpToolDispatcher.kt:27`. Shell-content failures stay in the no-telemetry-capture arm, and every other `SkillBillRuntimeException` keeps `recordCaptureFailure`;
@@ -54,9 +54,9 @@ Census on `feat/SKILL-398-runtime-exception-reduction` at `f9e4df35d`:
    - Throw sites: every `throw`, and every returned or constructed instance of the 10 classes, uses the function or the coded constructor. Lambdas typed as returning one of them become `SkillBillRuntimeException`.
    - Catch, `is` and `as?` sites: `catch (e: FormerClass)` becomes `catch (e: SkillBillRuntimeException) { e.rethrowUnless(e.code == X) … }`, and `is`/`as?` become code checks on `(error as? SkillBillRuntimeException)?.code`. Known sites: `AgentAddonSchemaValidator.kt:78`, `AgentAddonSourceOperation.kt:19`. No main code reads a typed property from a caught failure of these areas other than `code`, `message` and `cause`. A value a reader needs moves into a returned result (tier 2) or into the message.
    - Tests: `assertFailsWith<FormerClass>` becomes `assertFailsWith<SkillBillRuntimeException>` plus `assertEquals(<Code>.<ENTRY>, error.code)`. Message, `contains`, payload and exit-code assertions stay byte-for-byte. Tests that construct former classes switch to the message function or the coded constructor.
-   - Delete the two areas' classes, and remove their rows from `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt`. Row format is `module:Class`; compare whole rows and edit no other row.
+   - Delete the two areas' classes, and remove their rows from `../../../runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt`. Row format is `module:Class`; compare whole rows and edit no other row.
 
-3. **Docs and decision.** Add a newest-first entry to `runtime-kotlin/agent/decisions.md` recording three choices: coded failures render their code label where a class name was rendered; `isShellContentContractFailure` is a transitional classification that the retirement of `ShellContentContractException` removes; and the shell-content conversion was split into SKILL-398 subtask 4 plus SKILL-399.
+3. **Docs and decision.** Add a newest-first entry to `../../../runtime-kotlin/agent/decisions.md` recording three choices: coded failures render their code label where a class name was rendered; `isShellContentContractFailure` is a transitional classification that the retirement of `ShellContentContractException` removes; and the shell-content conversion was split into SKILL-398 subtask 4 plus SKILL-399.
 
 ## Acceptance Criteria
 
@@ -270,11 +270,11 @@ Census taken on `feat/SKILL-398-runtime-exception-reduction` at `f9e4df35d`, aft
 
      Bugs this catches: the predicate misses an area enum, so shell-content failures start reporting telemetry; a non-shell coded failure loses its capture; or `error_type` doesn't use the code label. Add no other test.
 
-8. **Baseline** (AC-006). Delete the 10 rows listed in the facts from `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt`. Edit no other row, and don't re-record. `FailureCodeTotalityArchitectureTest` is the stale and new-row check.
+8. **Baseline** (AC-006). Delete the 10 rows listed in the facts from `../../../runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt`. Edit no other row, and don't re-record. `FailureCodeTotalityArchitectureTest` is the stale and new-row check.
 
 9. **Docs and decision** (scope item 3).
    - In `docs/telemetry-privacy.md:279`, change `(exception class simple name)` to `(exception class simple name, or the failure code label for coded runtime failures)`.
-   - Add a dated `## [2026-10-02] SKILL-398 subtask 4: …` entry at the top of `runtime-kotlin/agent/decisions.md`, with `Context` / `Decision` / `Reason` / `Revisit when` lines, below the H1 and above the current SKILL-398 failure-model entry. It records:
+   - Add a dated `## [2026-10-02] SKILL-398 subtask 4: …` entry at the top of `../../../runtime-kotlin/agent/decisions.md`, with `Context` / `Decision` / `Reason` / `Revisit when` lines, below the H1 and above the current SKILL-398 failure-model entry. It records:
      - coded failures render `<CodeEnum>.<ENTRY>` wherever a caught throwable's class name was rendered, and pure null-message fallbacks are left alone because coded failures always carry a message;
      - `isShellContentContractFailure` is a transitional classification, removed when `ShellContentContractException` retires;
      - the shell-content conversion is split between SKILL-398 subtask 4 and SKILL-399.

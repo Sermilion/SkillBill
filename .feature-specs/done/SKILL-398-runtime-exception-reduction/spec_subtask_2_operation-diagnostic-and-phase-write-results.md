@@ -1,13 +1,13 @@
 # SKILL-398 Subtask 2 - operation-diagnostic-and-phase-write-results
 
-Parent spec: [.feature-specs/SKILL-398-runtime-exception-reduction/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-398-runtime-exception-reduction/spec.md](spec.md)
 Issue key: SKILL-398
 
 ## Scope
 
 (F-003) Three families report expected outcomes by throwing and are turned back into results a few frames up. Make them return the result directly.
 
-**Operations** (`runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/operation/`, and `OperationUsageError` wherever it is declared, at the census tree `runtime-contracts/.../error/operation/OperationUsageError.kt`).
+**Operations** (`../../../runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/operation`, and `OperationUsageError` wherever it is declared, at the census tree `runtime-contracts/.../error/operation/OperationUsageError.kt`).
 
 - `Operation.pre`, the confirmation gate and every operation's `run`/`execute` report a refusal (today `OperationRefusalError` and its 17 subclasses: unknown, consumed, superseded or foreign token; moved or unreadable anchors; PR not found or not checked out; protected branch; dirty worktree; release branch behind; verify workflow unknown, foreign or closed; spec rehydrate needed; verify target not checked out) or a usage problem (today `OperationUsageError` and its 9 subclasses) as a value. Use one sealed type, for example `sealed interface OperationRefusal { Blocked(message); Usage(message) }`, returned from `pre` (null means proceed) and carried by `OperationOutcome` / `OperationRunResult` where `run` or confirmation can refuse. Reuse `OperationOutcome.Blocked` for the blocked case.
 - `OperationExecutor` has no `catch` of an operation failure. `runtime-cli/.../operation/OperationCommand.kt` maps the usage value to the same output and exit code it produces today for `OperationUsageError`.
@@ -55,7 +55,7 @@ Goal gates: build, unit tests, detekt and the runtime-core repoTest suite. Test 
 
 ## Implementation Details
 
-Paths below are relative to `runtime-kotlin/`. Line numbers refer to tree `432d427c8`. Do the tasks in order. Each family (operations, diagnostics, required writes) compiles on its own once its task block is finished.
+Paths below are relative to `../../../runtime-kotlin`. Line numbers refer to tree `432d427c8`. Do the tasks in order. Each family (operations, diagnostics, required writes) compiles on its own once its task block is finished.
 
 ### Task 0: target-type precondition (AC-004, AC-007)
 

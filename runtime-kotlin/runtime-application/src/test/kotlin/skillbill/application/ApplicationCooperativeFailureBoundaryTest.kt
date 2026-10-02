@@ -4,12 +4,12 @@ import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.review.spec.SpecIntentProjectionExtractor
 import skillbill.application.review.spec.SpecIntentSourceRead
 import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
-import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceFailureCode
 import skillbill.application.system.SystemService
 import skillbill.application.telemetry.settings.telemetrySettingsOrNull
 import skillbill.application.updatecheck.UpdateCheckService
 import skillbill.application.updatecheck.model.UpdateCheckStatus
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.model.RuntimeVersion
 import skillbill.ports.db.DatabaseSessionFactory

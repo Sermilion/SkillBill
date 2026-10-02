@@ -1,7 +1,7 @@
 # SKILL-400 - runtime-error-codes
 
 Issue key: SKILL-400
-Origin: split out of SKILL-398 subtask 5 (`.feature-specs/SKILL-398-runtime-exception-reduction/spec_subtask_5_collapse-remaining-errors.md`) on 2026-10-02, after that subtask's implement phase blocked as too large. Investigation: `.feature-specs/SKILL-398-runtime-exception-reduction/investigation.md`, finding F-005.
+Origin: split out of SKILL-398 subtask 5 (`../done/SKILL-398-runtime-exception-reduction`) on 2026-10-02, after that subtask's implement phase blocked as too large. Investigation: `../done/SKILL-398-runtime-exception-reduction`, finding F-005.
 
 ## Outcome
 
@@ -35,7 +35,7 @@ Former supertypes matter for the edge rules below. Most classes in subtasks 1–
 
 ## Target failure model
 
-The model is SKILL-398's (`.feature-specs/SKILL-398-runtime-exception-reduction/spec.md`, "Target failure model"):
+The model is SKILL-398's (`../done/SKILL-398-runtime-exception-reduction`, "Target failure model"):
 
 ```kotlin
 package skillbill.error.core

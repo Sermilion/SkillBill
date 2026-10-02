@@ -78,6 +78,14 @@ class VerifyOperation(
     val intake = intakeOf(context) { return it }
     val requestedTarget = context.arguments.target?.trim()?.takeIf(String::isNotEmpty) ?: DEFAULT_TARGET
     val target = resolveTarget(context, requestedTarget) { return it }
+    return openAndExtract(context, intake, target)
+  }
+
+  private fun openAndExtract(
+    context: OperationContext,
+    intake: VerifyIntake,
+    target: VerifyTarget,
+  ): OperationOutcome {
     val mode = VerifyReviewMode.fromWire(context.arguments.mode) ?: VerifyReviewMode.INLINE
     val openArgs = WorkflowServiceOpenArgs(WorkflowFamilyKind.VERIFY, currentStepId = VerifyWorkflow.EXTRACT_CRITERIA)
     val workflowId =
@@ -166,6 +174,16 @@ class VerifyOperation(
         ?.let { raw -> resolveTarget(context, raw.trim()) { return it } }
         ?: storedTarget(inputContext)
         ?: return missingIntake(id, "target:<pr-number|branch|base..head> for this workflow")
+    return confirmTarget(context, workflowId, snapshot, target)
+  }
+
+  private fun confirmTarget(
+    context: OperationContext,
+    workflowId: String,
+    snapshot: WorkflowSnapshotView,
+    target: VerifyTarget,
+  ): OperationOutcome {
+    val inputContext = snapshot.artifacts[VerifyWorkflow.INPUT_CONTEXT]
     val storedMode = VerifyWorkflow.string(inputContext, VerifyWorkflow.REVIEW_MODE)
     val mode = VerifyReviewMode.fromWire(context.arguments.mode ?: storedMode) ?: VerifyReviewMode.INLINE
     val criteriaArtifact = snapshot.artifacts[VerifyWorkflow.CRITERIA_SUMMARY]

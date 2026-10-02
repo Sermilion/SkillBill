@@ -8,7 +8,6 @@ import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
-import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.planning.attempt.producePhase
@@ -27,13 +26,6 @@ import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.text.sha256HexUtf8
 import java.nio.file.Path
-
-/** The result of producing a shared preplan: the checkpoint, or the rejected required write that stopped it. */
-internal sealed interface SharedPreplanProduction {
-  data class Produced(val checkpoint: SharedGoalPreplanCheckpoint) : SharedPreplanProduction
-
-  data class RequiredWriteRejected(val rejection: RequiredPhaseWrite.Rejected) : SharedPreplanProduction
-}
 
 internal fun produceSharedPreplan(
   sweep: DefaultGoalPlanningSweep,
@@ -74,25 +66,34 @@ internal fun produceSharedPreplanCheckpoint(
           recordedOutputs = emptyList(),
         ),
       )
-    if (preplanProduction is GoalPlanningPhaseProduction.Stopped) error(preplanProduction.outcome.blockedReason)
-    if (preplanProduction is GoalPlanningPhaseProduction.RequiredWriteRejected) {
-      return@runCatching SharedPreplanProduction.RequiredWriteRejected(preplanProduction.rejection)
+    when (preplanProduction) {
+      is GoalPlanningPhaseProduction.Stopped -> SharedPreplanProduction.Stopped(preplanProduction.outcome)
+      is GoalPlanningPhaseProduction.RequiredWriteRejected ->
+        SharedPreplanProduction.RequiredWriteRejected(preplanProduction.rejection)
+      else ->
+        producedSharedPreplan(shared, provenance, preplanProduction as GoalPlanningPhaseProduction.Captured)
     }
-    val captured = preplanProduction as GoalPlanningPhaseProduction.Captured
-    val preplanPayload =
-      enrichPreplan(
-        proseRecordPayload(GoalPlanningSweepConstants.PHASE_PREPLAN, captured.payload),
-        shared.planningPacket,
-      )
-    SharedPreplanProduction.Produced(
-      SharedGoalPreplanCheckpoint(
-        identity = GoalPlanningIdentity(shared.parentWorkflowId, shared.normalizedIssueKey, shared.repositoryIdentity),
-        provenance = provenance,
-        payloadSha256 = sha256HexUtf8(preplanPayload),
-        preplanPayload = preplanPayload,
-      ),
-    )
   }
+
+private fun producedSharedPreplan(
+  shared: GoalPlanningSharedContext,
+  provenance: GoalPlanningContractProvenance,
+  captured: GoalPlanningPhaseProduction.Captured,
+): SharedPreplanProduction.Produced {
+  val preplanPayload =
+    enrichPreplan(
+      proseRecordPayload(GoalPlanningSweepConstants.PHASE_PREPLAN, captured.payload),
+      shared.planningPacket,
+    )
+  return SharedPreplanProduction.Produced(
+    SharedGoalPreplanCheckpoint(
+      identity = GoalPlanningIdentity(shared.parentWorkflowId, shared.normalizedIssueKey, shared.repositoryIdentity),
+      provenance = provenance,
+      payloadSha256 = sha256HexUtf8(preplanPayload),
+      preplanPayload = preplanPayload,
+    ),
+  )
+}
 
 fun enrichPreplan(
   payload: String,

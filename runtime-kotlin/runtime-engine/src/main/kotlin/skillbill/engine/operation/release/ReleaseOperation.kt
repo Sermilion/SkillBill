@@ -28,6 +28,11 @@ class ReleaseOperation(
     if (gitOperations.worktreeStatus(repoRoot).gitValueOr("worktree status") { return it }.isNotBlank()) {
       return releaseWorktreeDirty(repoRoot.toString())
     }
+    return branchFreshnessRefusal(context)
+  }
+
+  private fun branchFreshnessRefusal(context: OperationContext): OperationRefusal? {
+    val repoRoot = context.repoRoot
     val branch = branch(context) { return it }
     gitOperations.refreshRemoteBranch(repoRoot, branch)
     val behind = gitOperations.localBranchBehindRemote(repoRoot, branch).gitValueOr("branch freshness") { return it }

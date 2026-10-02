@@ -320,7 +320,6 @@ internal class GoalRunnerSelectedSubtaskLoop(
     return SubtaskLaunchResult.Launched(launchReconciliation, workerRequestResult)
   }
 
-  /** Returns null when the launch was denied by a durable pause boundary and no process started. */
   private fun launchAndReconcileSubtask(args: LaunchAndReconcileSubtaskArgs): GoalRunnerLaunchReconciliation? {
     val state = args.state
     val subtaskId = args.subtaskId

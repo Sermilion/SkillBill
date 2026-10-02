@@ -216,8 +216,7 @@ class SqliteRejectedOutputDiagnosticRepositoryTest {
   private fun found(
     repository: SqliteRejectedOutputDiagnosticRepository,
     identity: String,
-  ): RejectedOutputDiagnosticRecord =
-    assertIs<RejectedOutputDiagnosticRead.Found>(repository.read(identity)).record
+  ): RejectedOutputDiagnosticRecord = assertIs<RejectedOutputDiagnosticRead.Found>(repository.read(identity)).record
 
   private fun withRepository(
     label: String,

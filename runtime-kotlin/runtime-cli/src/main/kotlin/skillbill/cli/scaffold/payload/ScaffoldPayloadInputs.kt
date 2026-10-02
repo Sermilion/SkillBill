@@ -5,9 +5,11 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import skillbill.application.scaffold.SCAFFOLD_PAYLOAD_NOT_OBJECT_MESSAGE
 import skillbill.application.scaffold.decodeScaffoldPayloadObject
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.model.CliFormat
+import skillbill.error.shellcontent.InvalidScaffoldPayloadError
 import skillbill.scaffold.model.SkillKind
 import java.nio.file.Path
 
@@ -84,7 +86,9 @@ internal fun readCliTextFile(
 internal fun readScaffoldPayload(
   payloadPath: String?,
   state: CliRunState,
-): JsonObject = decodeScaffoldPayloadObject(readScaffoldPayloadText(payloadPath, state))
+): JsonObject =
+  decodeScaffoldPayloadObject(readScaffoldPayloadText(payloadPath, state))
+    ?: throw InvalidScaffoldPayloadError(SCAFFOLD_PAYLOAD_NOT_OBJECT_MESSAGE)
 
 internal fun readScaffoldPayloadText(
   payloadPath: String?,

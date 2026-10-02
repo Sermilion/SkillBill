@@ -1,6 +1,6 @@
 # SKILL-398 Subtask 3 - local-control-flow-results
 
-Parent spec: [.feature-specs/SKILL-398-runtime-exception-reduction/spec.md](./spec.md)
+Parent spec: [.feature-specs/SKILL-398-runtime-exception-reduction/spec.md](spec.md)
 Issue key: SKILL-398
 
 ## Scope
@@ -66,7 +66,7 @@ Planned against `base/SKILL-380-phase-slot-strategies` at `432d427c8`. The goal 
 
 ### Ordered tasks
 
-**T0. Prerequisites (AC-005, all).** Confirm `skillbill.error.core.RuntimeFailureCode` and the coded `SkillBillRuntimeException(code, message, cause)` exist. If they don't, add them exactly as the parent spec's "Target failure model" defines them, including `LegacyFailureCode` and the open transition shape. Check whether `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt` exists (T13 uses it).
+**T0. Prerequisites (AC-005, all).** Confirm `skillbill.error.core.RuntimeFailureCode` and the coded `SkillBillRuntimeException(code, message, cause)` exist. If they don't, add them exactly as the parent spec's "Target failure model" defines them, including `LegacyFailureCode` and the open transition shape. Check whether `../../../runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt` exists (T13 uses it).
 
 **T1. Goal execution lease: already running as a value (AC-001, AC-002, AC-004).**
 - In `runtime-engine/.../goalrunner/execution/core/GoalRunnerExecutionCoordinator.kt`, delete `GoalRunnerExecutionAlreadyRunningException`. Add `sealed interface GoalRunnerOwnedRun<out T>` with `data class Completed<T>(val value: T)` and `data class AlreadyRunning(val reason: String) : GoalRunnerOwnedRun<Nothing>`. `reason` keeps the text `"Goal parent '$parentWorkflowId' cannot start: $detail"`, built by one private function because there are three sites.

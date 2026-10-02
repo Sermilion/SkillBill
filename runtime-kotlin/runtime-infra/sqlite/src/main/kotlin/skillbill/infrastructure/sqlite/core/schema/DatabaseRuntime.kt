@@ -217,4 +217,5 @@ internal fun databaseAccessError(
     dbPath = dbPath.toAbsolutePath().normalize().toString(),
     operation = operation,
     condition = "sqlite result code ${error.errorCode}: ${error.message.orEmpty()}",
+    cause = error,
   )
