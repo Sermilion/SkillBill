@@ -588,6 +588,7 @@ internal fun goalFixture(
   seedWorkflow: Boolean = true,
 ): GoalCliFixture {
   val tempDir = Files.createTempDirectory("skillbill-cli-goal")
+  installGoalBuildPack(tempDir)
   val parentSpec = tempDir.resolve(".feature-specs/SKILL-901-goal/spec.md")
   Files.createDirectories(parentSpec.parent)
   Files.writeString(
@@ -716,7 +717,7 @@ internal object NoopGoalTestAgentRunLauncher : AgentRunLauncher {
 
 internal object GoalTestWorkflowGitOperations : WorkflowGitOperationsTestBase() {
   override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult =
-    WorkflowGitNameListResult.Listed(emptyList())
+    WorkflowGitNameListResult.Listed(listOf("Main.kt"))
 
   override fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = "test-repository-fingerprint")

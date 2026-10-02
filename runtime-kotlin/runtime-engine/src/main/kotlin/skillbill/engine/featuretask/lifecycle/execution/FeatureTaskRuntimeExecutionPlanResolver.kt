@@ -5,11 +5,13 @@ import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
+import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.shellcontent.MissingValidationGateError
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.db.DatabaseSessionFactory
@@ -55,11 +57,12 @@ class FeatureTaskRuntimeExecutionPlanResolver(
         incompatible()
       }
       requireRequestedSettings(plan, qualityGate, validationDepth, timeout)
-      resolveRecordedInputs(repoRoot, plan)
+      requireBuildGate(resolveRecordedInputs(repoRoot, plan), recorded = true)
       return ValidatedFeatureTaskRuntimeExecutionPlan.read(codec.encode(plan), validator)
     }
     val plan = strategies.executionPlan(PhaseStrategySelectionFacts(definition, setOfNotNull(reviewMode, qualityGate)))
     val inputs = resolveInputs(repoRoot, qualityGate, validationDepth, timeout)
+    requireBuildGate(inputs, recorded = false)
     return ValidatedFeatureTaskRuntimeExecutionPlan.read(codec.encodeExecution(plan, inputs), validator)
   }
 
@@ -134,6 +137,24 @@ class FeatureTaskRuntimeExecutionPlanResolver(
     }.singleOrNull { inputs ->
       FeatureTaskRuntimeEffectivePolicies.resolve(plan, inputs).sortedBy { it.id } == plan.effectivePolicies
     } ?: incompatible()
+  }
+
+  private fun requireBuildGate(
+    inputs: EffectiveGatePolicyInputs,
+    recorded: Boolean,
+  ) {
+    if (inputs.commandFamily != ValidationGateCommandFamily.BUILD) return
+    if (ValidationGateCyclePhase.entries.all { !inputs.commandArgv(it).isNullOrEmpty() }) return
+    val pack = inputs.packSlug ?: "unrouted"
+    val source = if (recorded) "Recorded" else "Selected"
+    val recovery =
+      if (recorded) {
+        " The original execution plan is retained." +
+          " Resume requires a reviewed semantic mapping to a declared build gate."
+      } else {
+        " Repair pack routing or its build commands before creating the workflow."
+      }
+    throw MissingValidationGateError("$source build gate pack '$pack' has no complete build command pair.$recovery")
   }
 
   private fun recordedPlan(workflowId: String): ResolvedPhaseExecutionPlan =

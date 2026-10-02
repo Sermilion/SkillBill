@@ -14,6 +14,7 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.WorkflowEngine
@@ -461,3 +462,14 @@ internal object MeasuringHeadShaGitOperations : WorkflowGitOperations by NoopWor
   override fun headCommitSha(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = "measured-head-sha")
 }
+
+internal fun blockedBuildStepsJson(record: WorkflowStateRecord): String =
+  JsonCodec.valueToJsonString(
+    record.toSnapshot().steps.map { step ->
+      mapOf(
+        "step_id" to step.stepId,
+        "status" to if (step.stepId == "build") "blocked" else step.status.wireValue,
+        "attempt_count" to step.attemptCount,
+      )
+    },
+  )

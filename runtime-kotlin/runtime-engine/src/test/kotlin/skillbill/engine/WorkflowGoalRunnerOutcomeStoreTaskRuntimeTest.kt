@@ -3,6 +3,8 @@ package skillbill.engine
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.testWorkflowSnapshotValidator
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.model.GoalAttemptLedgerEntryDraft
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
@@ -16,6 +18,7 @@ import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestRejectionReason
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -361,7 +364,18 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
   @Test
   fun `operator resume reopens a running review phase left on a blocked child`() {
     val workflows = InMemoryWorkflowStates()
-    workflows.saveFeatureTaskWorkflow(tornBlockedReviewRecord("wftr-torn-review"), RUNTIME)
+    val original = tornBlockedReviewRecord("wftr-torn-review")
+    val oldReason = "Subtask 9 timed out before reaching a terminal workflow-store outcome."
+    workflows.saveFeatureTaskWorkflow(
+      original.copy(
+        artifactsJson =
+          JsonCodec.valueToJsonString(
+            original.toSnapshot().artifacts +
+              (DecompositionManifestPayloadKeys.BLOCKED_REASON to oldReason),
+          ),
+      ),
+      RUNTIME,
+    )
     val execution =
       ExecutionPlanAdmissionFixture(SkeletonDefinition.GOAL_CHILD)
     execution.seed(workflows, "wftr-torn-review")
@@ -384,10 +398,39 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
     val updated = requireNotNull(workflows.getFeatureTaskWorkflowAsMode("wftr-torn-review", RUNTIME))
     assertEquals("running", updated.workflowStatus)
     assertEquals("review", updated.currentStepId)
+    val artifacts = updated.toSnapshot().artifacts
+    assertNull(artifacts[DecompositionManifestPayloadKeys.BLOCKED_REASON])
+    val retry = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY.value(artifacts) as Map<*, *>
+    assertEquals(oldReason, retry["previous_blocked_reason"])
     val review =
       phaseRecordsFromWorkflowArtifacts(decodeWorkflowArtifactsForTest(updated.artifactsJson))
         .getValue("review")
     assertEquals("pending", review.status.wireValue)
+    val newReason = "Required build gate declaration is absent from dominant pack 'generic'."
+    workflows.saveFeatureTaskWorkflow(
+      updated.copy(
+        workflowStatus = "blocked",
+        currentStepId = "build",
+        stepsJson = blockedBuildStepsJson(updated),
+        artifactsJson =
+          JsonCodec.valueToJsonString(
+            artifacts + (
+              "goal_continuation_outcome" to
+                mapOf(
+                  "issue_key" to "SKILL-191",
+                  "subtask_id" to 9,
+                  "status" to "blocked",
+                  "blocked_reason" to newReason,
+                  "last_resumable_step" to "build",
+                )
+            ),
+          ),
+      ),
+      RUNTIME,
+    )
+    val outcome = assertNotNull(store.terminalOutcome("wftr-torn-review", "SKILL-191", 9))
+    assertEquals(newReason, outcome.blockedReason)
+    assertEquals("build", outcome.lastResumableStep)
   }
 
   @Test

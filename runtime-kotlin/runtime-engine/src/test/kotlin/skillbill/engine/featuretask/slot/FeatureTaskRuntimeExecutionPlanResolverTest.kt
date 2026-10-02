@@ -4,6 +4,7 @@ import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.engine.ExecutionPlanAdmissionFixture
 import skillbill.engine.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.validation.ValidationGateResolver
@@ -13,6 +14,8 @@ import skillbill.engine.featuretask.validation.reviewFallbackPackWithoutGate
 import skillbill.engine.featuretask.validation.validationGateTestDeclaration
 import skillbill.engine.featuretask.validation.validationGateTestRepoRoot
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.shellcontent.MissingValidationGateError
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
@@ -97,7 +100,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
   }
 
   @Test
-  fun `creation refuses unknown routing and records missing build commands for the required gate`() {
+  fun `creation refuses unknown routing and missing build commands before implementation`() {
     val fixture = Fixture()
     fixture.inventory = WorkflowGitNameListResult.Failed("inventory unavailable")
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
@@ -110,11 +113,9 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
     fixture.inventory = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
     fixture.packs = listOf(kotlinPackWithoutGate())
-    val absent = fixture.execution.codec.decode(fixture.create().encoded())
-    assertEquals(FeatureTaskRuntimeQualityGateSelection.BUILD, absent.qualityGateSelection)
+    assertFailsWith<MissingValidationGateError> { fixture.create() }
     fixture.packs = fixture.packs.map { it.copy(validationGate = validationGateTestDeclaration) }
-    val missingCommands = fixture.execution.codec.decode(fixture.create().encoded())
-    assertEquals(FeatureTaskRuntimeQualityGateSelection.BUILD, missingCommands.qualityGateSelection)
+    assertFailsWith<MissingValidationGateError> { fixture.create() }
     assertEquals(0, fixture.execution.launches)
   }
 
@@ -199,6 +200,43 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
         "wftr-clean",
       )
     }
+    assertEquals(0, fixture.execution.launches)
+  }
+
+  @Test
+  fun `resume refuses a recorded fallback build plan without replacing it with fresh Kotlin routing`() {
+    val fixture = Fixture()
+    fixture.packs = fixture.packs + reviewFallbackPackWithoutGate()
+    val original =
+      fixture.execution.codec.encodeExecution(
+        fixture.execution.plan,
+        EffectiveGatePolicyInputs(
+          ValidationGateCommandFamily.BUILD,
+          "generic",
+          null,
+          "runtime/gradlew",
+          ValidationDepth.FULL,
+          420000L,
+        ),
+      )
+    val descriptor = ValidatedFeatureTaskRuntimeExecutionPlan.read(original, fixture.execution.validator)
+    fixture.execution.seed(fixture.states, "wftr-fallback", descriptor = descriptor.artifactValue)
+    val error =
+      assertFailsWith<MissingValidationGateError> {
+        fixture.resolver().resolveCreation(
+          FeatureTaskRuntimeExecutionPlanCreationRequest(
+            root,
+            SkeletonDefinition.GOAL_CHILD,
+            CodeReviewExecutionMode.INLINE,
+            FeatureTaskRuntimeQualityGateSelection.BUILD,
+            ValidationDepth.FULL,
+            7.minutes,
+            "wftr-fallback",
+          ),
+        )
+      }
+    assertTrue(requireNotNull(error.message).contains("Recorded build gate pack 'generic'"))
+    assertTrue(requireNotNull(error.message).contains("reviewed semantic mapping"))
     assertEquals(0, fixture.execution.launches)
   }
 

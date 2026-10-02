@@ -2,6 +2,7 @@ package skillbill.engine.goalrunner.persist
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
 import skillbill.engine.goalrunner.model.GoalRunnerBlockWrite
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
@@ -152,6 +153,7 @@ internal class WorkflowGoalRunnerBlockWrites(
           phaseRecords,
           phaseLedgerFromWorkflowArtifacts(artifacts),
           reason,
+          artifacts[DecompositionManifestPayloadKeys.BLOCKED_REASON]?.toString(),
         ),
       ),
     )
@@ -176,6 +178,7 @@ internal class WorkflowGoalRunnerBlockWrites(
     phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
     reason: String,
+    previousBlockedReason: String?,
   ): WorkflowUpdateInput {
     val reopened =
       LinkedHashMap(phaseRecords).apply {
@@ -206,6 +209,7 @@ internal class WorkflowGoalRunnerBlockWrites(
       artifactsPatch =
         WorkflowArtifactPatch.from(
           mapOf(
+            DecompositionManifestPayloadKeys.BLOCKED_REASON to null,
             DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
               reopened.mapValues { (_, record) -> record.asWorkflowArtifactEntry() },
             ),
@@ -219,7 +223,7 @@ internal class WorkflowGoalRunnerBlockWrites(
                 SharedPayloadKeys.PHASE_ID to blockedRecord.phaseId,
                 "reason" to reason,
                 "retried_at" to clock.instant().atOffset(ZoneOffset.UTC).toString(),
-                "previous_blocked_reason" to blockedRecord.blockedReason,
+                "previous_blocked_reason" to (blockedRecord.blockedReason ?: previousBlockedReason),
                 "previous_blocked_record" to blockedRecord.asWorkflowArtifactEntry(),
               ),
             ),

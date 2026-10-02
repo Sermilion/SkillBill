@@ -1,5 +1,25 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-02] Refuse incomplete build gates at admission and retire the active blocker on resume
+
+A saved SKILL-390 child selected the generic review fallback before implementation.
+Fresh routing selects Kotlin, but resume reconstructs the saved gate policy digest.
+The repository fallback routing fix already protects fresh selection. Admission now
+also refuses a required build gate without both command roles, before creating a
+child or executing more phases on resume. Standalone validation keeps its existing
+behavior. Crash recovery can still reconstruct missing gate inputs to release dead
+workers without admitting them for execution.
+
+The saved descriptor remains immutable. Replacing its commands changes execution
+semantics, so recovery needs a reviewed mapping rather than automatic rerouting.
+This change adds no mapping and rewrites no stored descriptor.
+
+Operator resume now clears the active blocked reason in the same transaction that
+reopens the phase. Retry evidence retains the previous reason, including supervisor
+reasons absent from the phase record. Otherwise a later build block can lose its
+current continuation outcome during reconciliation because an old timeout still
+occupies the active blocked reason.
+
 ## [2026-10-02] SKILL-398 subtask 5: persistence failures as codes, and the split into SKILL-400
 Context: The first implement attempt for subtask 5 blocked because 75 classes across six modules were too much for one phase that cannot compile. This subtask converts only the persistence and transport failures (database, telemetry HTTP, goal telemetry row, runtime-owned persistence boundary) and adds the shared pieces; the other areas moved to the unlaunched SKILL-400 bundle.
 Decision: (1) Handled-set rule: `DatabaseAccessError` and `DatabaseBusyError` were plain `RuntimeException`s, so no `catch (SkillBillRuntimeException)` ever absorbed them. Unguarded catches a database failure can reach call `SkillBillRuntimeException.rethrowIfDatabaseFailure()` first. Guarded: `PlanDecompositionStop` (both catches, `persistDecomposeTerminal` is mandatory), `InstallCliCommands` replay (persisted selection read), `NativeScaffoldPayloadRun` scaffold invocation and `completeAuthoring`. Left unchanged after reachability checks: `FeatureTaskRuntimeRejectedOutputRecorder` (already rethrows non-diagnostic codes), `InstallStaging`, `AuthoringDiscovery`, `AuthoringMutation` (filesystem, rethrow), `ScaffoldWizardRun`, the other `NativeScaffoldPayloadRun` catches (payload read, encode, render), `SkillRemove` (filesystem port), `CliRuntime`. (2) `McpToolDispatcher.uncapturedAtMcp()` holds today's no-capture condition; a later conversion adds a code only when its former class was uncaptured. All nine classes here were captured or already shell-content failures, so it gains nothing. (3) Accepted framing change: former `RuntimeException` database failures that reach `CliRuntime` now print through the `SkillBillRuntimeException` arm without the `ClassName: ` prefix or the diagnostics record (known case: non-monitor `goal status`, still covered by `CliGoalStatusDatabaseFailureTest`). (4) `goalReviewPreparationFailure` takes its location from the first `skillbill.` stack frame, which is now the factory for factory-built failures. (5) `RuntimeOwnedFactUnavailable` becomes two entries, not one: `FACT_UNAVAILABLE` (engine boundary) and `REVIEW_FACT_UNAVAILABLE` (application boundary, thrown by the parallel review runner), because `CodeReviewStep.launchFailure` discriminated only the engine class and the application failure took the generic RETRYABLE arm. Readers match `FACT_UNAVAILABLE` only. (6) Both `invokeOrHandle` functions keep `runCatching` with the existing cooperative handling: detekt `TooGenericExceptionCaught` is active, `@Suppress` is banned, and no main site catches `Exception` by name. (7) `UnresolvedRemoteTransportPortError` became `error()`: it is reachable only by calling the component with an unresolved context, a composition defect. (8) `fetchProxyCapabilities` reads the response status as a value (execute, then check 404/405) instead of catching `TelemetryProxyRequestFailureError.statusCode`. (9) Test edits beyond type-to-code: assertions on removed properties (`operation`, `dbPath`, `condition`, `statusCode`, `detail`) assert the same fact from the message or `databaseAccessCondition(...)`. No expected CLI, MCP, wire or payload value changed. (10) The transition stays open: SKILL-399 and SKILL-400 classes still extend the legacy bases.
