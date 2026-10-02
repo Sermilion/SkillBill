@@ -2,8 +2,7 @@ package skillbill.engine.work
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.baseBranch
-import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetup
-import skillbill.engine.goalrunner.execution.support.protectedBranchName
+import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.work.model.IdeStatusCandidate
@@ -103,7 +102,7 @@ class IdeStatusService(
     repoRoot: Path,
   ): List<IdeStatusCandidate> {
     if (branch == null) return candidates
-    if (FeatureTaskRuntimeBranchSetup.protectedBranchName(branch) != null) return candidates
+    if (protectedBranchName(branch) != null) return candidates
     return candidates.filter { candidate ->
       candidate.issueKey?.let { IdeStatusBranchScope.branchReferencesIssueKey(branch, it) } == true ||
         isPlanningOnBaseBranch(candidate, branch, repoRoot)

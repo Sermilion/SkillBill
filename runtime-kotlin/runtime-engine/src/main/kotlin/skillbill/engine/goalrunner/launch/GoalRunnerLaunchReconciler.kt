@@ -80,6 +80,7 @@ class GoalRunnerLaunchReconciler(
         issueKey = issueKey,
         subtaskId = subtaskId,
         request = request,
+        clock = clock,
       )
     val progressEmitter =
       GoalRunnerProgressEventEmitter(

@@ -9,7 +9,6 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
-import skillbill.engine.goalrunner.status.completed
 import skillbill.error.shellcontent.FeatureTaskRuntimePhaseOrderViolationError
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase

@@ -6,7 +6,6 @@ import skillbill.engine.featuretask.lifecycle.subtask.decide
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
-import skillbill.engine.goalrunner.execution.support.protectedBranchName
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -87,7 +86,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
   ): String? {
     val normalizedPersisted = persistedBranch.trim()
     return if (currentBranch.trim() == normalizedPersisted) {
-      FeatureTaskRuntimeBranchSetup.protectedBranchName(normalizedPersisted)
+      protectedBranchName(normalizedPersisted)
         ?.let(::branchSetupReattachProtectedReason)
     } else {
       persistedBranchUnusableReason(request, persistedBranch, currentBranch)
@@ -174,7 +173,7 @@ class FeatureTaskRuntimeBranchSetupRunner(
       landedBranch != expectedBranch.trim() ->
         "Feature-task-runtime checkout reported success but HEAD is on '$landedBranch', not the " +
           "expected feature branch '$expectedBranch'; refusing to run file-mutating phases."
-      FeatureTaskRuntimeBranchSetup.protectedBranchName(landedBranch) != null ->
+      protectedBranchName(landedBranch) != null ->
         "Feature-task-runtime landed on a protected branch '$landedBranch' for the feature branch; " +
           "refusing to run file-mutating phases on a protected branch."
       else -> null

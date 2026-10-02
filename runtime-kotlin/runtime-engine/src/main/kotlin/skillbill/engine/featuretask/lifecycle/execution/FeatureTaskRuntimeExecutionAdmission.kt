@@ -90,7 +90,7 @@ class FeatureTaskRuntimeExecutionAdmission(
   ) {
     val matchingRow =
       identity.workflowId == workflowId && identity.mode == FeatureTaskWorkflowMode.RUNTIME &&
-        identity.normalizedIssueKey == row.issueKey?.trim()?.uppercase()
+        identity.normalizedIssueKey == row.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey)
     val matchingExpected = expected == null || identity == expected
     if (!matchingRow || !matchingExpected) {
       throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "execution identity changed")

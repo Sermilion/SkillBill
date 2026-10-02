@@ -1,7 +1,7 @@
 package skillbill.engine.featuretask.runloop.checkpoint
 
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetup
+import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.lifecycle.checkpoint.FeatureTaskRuntimeCheckpointMessage
 import skillbill.engine.featuretask.lifecycle.checkpoint.adoptionWarning
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
@@ -19,7 +19,6 @@ import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopRepa
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.slot.attempt.PhaseCheckpointRemediationContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.engine.goalrunner.execution.support.protectedBranchName
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshot
 import skillbill.ports.workflow.gitops.model.WorkflowGitIndexSnapshotResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -404,7 +403,7 @@ object FeatureTaskRuntimeRunLoopCheckpointRemediation {
   ): Boolean {
     with(context) {
       val branch = session.resolvedBranch
-      if (branch == null || FeatureTaskRuntimeBranchSetup.protectedBranchName(branch) != null) {
+      if (branch == null || protectedBranchName(branch) != null) {
         return true
       }
       val head = phaseGates.gitOperations.currentBranch(request.repoRoot)
@@ -453,7 +452,7 @@ object FeatureTaskRuntimeRunLoopCheckpointRemediation {
 
   internal fun remediationCheckpointSkippable(session: FeatureTaskRuntimeRunSessionObservations): Boolean {
     val branch = session.resolvedBranch
-    return branch == null || FeatureTaskRuntimeBranchSetup.protectedBranchName(branch) != null
+    return branch == null || protectedBranchName(branch) != null
   }
 
   internal fun remediationCheckpointOffBranch(

@@ -3,12 +3,10 @@ package skillbill.engine.featuretask.lifecycle.branch
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.defaultFeatureBranch
 import skillbill.contracts.issuekey.issueAndFeature
-import skillbill.engine.goalrunner.execution.support.protectedBranchName
 import skillbill.workflow.gitops.ProtectedBranches
 import java.nio.file.Path
 
 object FeatureTaskRuntimeBranchSetup {
-  private val PROTECTED_BRANCHES: Set<String> = ProtectedBranches.names
   private const val DEFAULT_BASE_BRANCH: String = "main"
 
   internal fun targetBranch(
@@ -70,11 +68,6 @@ object FeatureTaskRuntimeBranchSetup {
     }
   }
 
-  fun protectedBranchName(branch: String?): String? =
-    branch
-      ?.trim()
-      ?.takeIf(String::isNotBlank)
-      ?.takeIf { normalized -> normalized.lowercase() in PROTECTED_BRANCHES }
 }
 
 internal sealed interface FeatureTaskRuntimeTargetBranch {
@@ -123,3 +116,11 @@ internal data class FeatureTaskRuntimeBranchDecisionResolved(
 internal data class FeatureTaskRuntimeBranchDecisionInvalid(val reason: String) : FeatureTaskRuntimeBranchDecision {
   override val invalidReason: String get() = reason
 }
+
+private val PROTECTED_GOAL_BRANCHES: Set<String> = ProtectedBranches.names
+
+fun protectedBranchName(branch: String?): String? =
+  branch
+    ?.trim()
+    ?.takeIf(String::isNotBlank)
+    ?.takeIf { normalized -> normalized.lowercase() in PROTECTED_GOAL_BRANCHES }

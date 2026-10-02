@@ -41,8 +41,10 @@ object FeatureTaskExecutionIdentityPolicy {
         issueKeyFailure("issue_key", issueKey),
       )
     }
-    return issueKey.trim().uppercase()
+    return canonicalIssueKey(issueKey)
   }
+
+  fun canonicalIssueKey(issueKey: String): String = issueKey.trim().uppercase()
 
   fun validateLookupRequest(
     issueKey: String,

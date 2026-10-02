@@ -41,7 +41,6 @@ import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptPlanAuthorization
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.engine.goalrunner.status.completed
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult

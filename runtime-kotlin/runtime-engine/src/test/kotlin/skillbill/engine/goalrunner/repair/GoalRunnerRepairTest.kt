@@ -11,6 +11,7 @@ import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.engine.LiveProcessSupervisor
 import skillbill.engine.decodeWorkflowArtifactsForTest
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.persist.GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService

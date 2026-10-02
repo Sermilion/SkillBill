@@ -15,6 +15,7 @@ import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
@@ -64,7 +65,7 @@ class FeatureTaskRuntimeRunner(
     val admitted = requireNotNull(request.admittedExecution)
     val identity = admitted.identity
     if (identity.workflowId != request.workflowId ||
-      identity.normalizedIssueKey != request.issueKey.trim().uppercase() ||
+      identity.normalizedIssueKey != FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(request.issueKey) ||
       (identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD) != (request.goalContinuation != null)
     ) {
       throw InvalidFeatureTaskExecutionIdentitySchemaError(request.workflowId, "admission does not match run request")

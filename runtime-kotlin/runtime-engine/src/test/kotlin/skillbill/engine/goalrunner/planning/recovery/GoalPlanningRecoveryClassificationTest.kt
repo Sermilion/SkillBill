@@ -1,7 +1,7 @@
 package skillbill.engine.goalrunner.planning.recovery
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-import skillbill.engine.goalrunner.persist.staleChildPlanningRecoveryCommand
+import skillbill.engine.recovery.staleChildPlanningRecoveryCommand
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError

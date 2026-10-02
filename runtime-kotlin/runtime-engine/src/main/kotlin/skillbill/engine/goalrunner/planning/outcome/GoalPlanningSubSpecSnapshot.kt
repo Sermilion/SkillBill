@@ -1,7 +1,8 @@
 package skillbill.engine.goalrunner.planning.outcome
 
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
-import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
+import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
 import skillbill.text.sha256HexUtf8
@@ -17,16 +18,20 @@ internal data class GoalPlanningSubSpecSnapshot(
 internal fun governedSubSpecReady(specText: String): Boolean =
   acceptanceCriteriaOf(specText).isNotEmpty() && hasImplementationDetails(specText)
 
-internal fun DefaultGoalPlanningSweep.snapshotSubSpecs(
+internal fun snapshotSubSpecs(
   shared: GoalPlanningSharedContext,
   subtask: DecompositionSubtask,
   specPath: Path,
+  manifestFileStore: DecompositionManifestStore,
+  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ): GoalPlanningSubSpecSnapshot {
   val specText = manifestFileStore.readText(specPath)
   val siblings =
     shared.manifest.subtasks
       .filter { it.id != subtask.id }
-      .mapNotNull { sibling -> siblingHash(shared, sibling)?.let { sibling.id to it } }
+      .mapNotNull { sibling ->
+        siblingHash(shared, sibling, manifestFileStore, repositoryEnclosingRootPort)?.let { sibling.id to it }
+      }
       .toMap()
   return GoalPlanningSubSpecSnapshot(
     title = specTitle(specText),
@@ -35,14 +40,16 @@ internal fun DefaultGoalPlanningSweep.snapshotSubSpecs(
   )
 }
 
-internal fun DefaultGoalPlanningSweep.admitPersistedSubSpec(
+internal fun admitPersistedSubSpec(
   shared: GoalPlanningSharedContext,
   subtask: DecompositionSubtask,
-  launchedSpecPath: Path,
-  snapshot: GoalPlanningSubSpecSnapshot,
+  launchedSpec: Pair<Path, GoalPlanningSubSpecSnapshot>,
   startedSiblingIds: Set<Int>,
+  manifestFileStore: DecompositionManifestStore,
+  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ): Result<String> =
   runCatching {
+    val (launchedSpecPath, snapshot) = launchedSpec
     val path = resolvedSubSpecPath(shared.repoRoot, subtask.specPath, repositoryEnclosingRootPort)
     require(path != null && path == launchedSpecPath) {
       "the governed sub-spec no longer resolves to its assigned path inside the repository"
@@ -62,7 +69,9 @@ internal fun DefaultGoalPlanningSweep.admitPersistedSubSpec(
     val modifiedSibling =
       snapshot.siblingHashes.entries.firstOrNull { (id, hash) ->
         id !in startedSiblingIds &&
-          shared.manifest.subtasks.firstOrNull { it.id == id }?.let { siblingHash(shared, it) } != hash
+          shared.manifest.subtasks.firstOrNull { it.id == id }?.let {
+            siblingHash(shared, it, manifestFileStore, repositoryEnclosingRootPort)
+          } != hash
       }
     require(modifiedSibling == null) {
       "sibling sub-spec ${modifiedSibling?.key} was modified during the plan session"
@@ -76,9 +85,11 @@ internal fun DefaultGoalPlanningSweep.admitPersistedSubSpec(
     )
   }
 
-private fun DefaultGoalPlanningSweep.siblingHash(
+private fun siblingHash(
   shared: GoalPlanningSharedContext,
   sibling: DecompositionSubtask,
+  manifestFileStore: DecompositionManifestStore,
+  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ): String? {
   val path = resolvedSubSpecPath(shared.repoRoot, sibling.specPath, repositoryEnclosingRootPort) ?: return null
   if (!manifestFileStore.isRegularFile(path)) return null

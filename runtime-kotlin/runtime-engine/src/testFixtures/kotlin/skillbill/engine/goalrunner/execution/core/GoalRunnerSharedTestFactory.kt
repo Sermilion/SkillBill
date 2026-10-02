@@ -14,7 +14,6 @@ import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWi
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
-import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
@@ -31,8 +30,6 @@ import skillbill.engine.goalrunner.repair.NoopGoalRunnerChildRepairStore
 import skillbill.engine.goalrunner.reset.GoalRunnerPurgeCoordinator
 import skillbill.engine.goalrunner.reset.GoalRunnerResetReplanCoordinator
 import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
-import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionDataSources
-import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionValidationDependencies
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
@@ -40,7 +37,6 @@ import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
@@ -85,14 +81,11 @@ fun testGoalRunnerStatusService(
 ): GoalRunnerStatusService {
   val projectionAssembler =
     GoalRunnerStatusProjectionAssembler(
-      dataSources =
-        GoalRunnerStatusProjectionDataSources(
-          manifestStore = manifestStore,
-          outcomeStore = outcomeStore,
-          phaseQuery = phaseRecorder.phaseQuery,
-          attemptLedgerStore = ports.attemptLedgerStore,
-          database = database,
-        ),
+      manifestStore = manifestStore,
+      outcomeStore = outcomeStore,
+      phaseQuery = phaseRecorder.phaseQuery,
+      attemptLedgerStore = ports.attemptLedgerStore,
+      database = database,
       gitOperations = ports.gitOperations,
       clock = clock,
       workerSupervisor = ports.workerSupervisor,
@@ -100,14 +93,6 @@ fun testGoalRunnerStatusService(
       diagnostics = ports.diagnostics,
       runtimeStatusService = ports.runtimeStatusService,
       repositoryRoot = testRepositoryRoot,
-      validationDependencies =
-        GoalRunnerStatusProjectionValidationDependencies(
-          validationGateResolver =
-            ValidationGateResolver(
-              InstalledPlatformPackCatalogPort { ports.validationGatePlatformManifests },
-            ),
-          repoLocalConfig = ports.repoLocalConfig,
-        ),
     )
   return GoalRunnerStatusService(
     manifestStore = manifestStore,

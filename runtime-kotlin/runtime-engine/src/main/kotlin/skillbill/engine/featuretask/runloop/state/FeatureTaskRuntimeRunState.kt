@@ -9,7 +9,6 @@ import skillbill.engine.featuretask.runner.BRANCH_SETUP_AGENT_ID
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.validation.RuntimeGateRecordIntegrity
-import skillbill.engine.goalrunner.status.completed
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict

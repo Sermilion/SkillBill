@@ -4,7 +4,6 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.goalrunner.status.completed
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict

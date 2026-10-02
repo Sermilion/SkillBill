@@ -6,7 +6,7 @@ import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchDec
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetup
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeTargetBranchInvalid
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeTargetBranchResolved
-import skillbill.engine.goalrunner.execution.support.protectedBranchName
+import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -115,9 +115,9 @@ class FeatureTaskRuntimeBranchSetupTest {
 
   @Test
   fun `protected branch name is recognized case-insensitively`() {
-    assertEquals("main", FeatureTaskRuntimeBranchSetup.protectedBranchName("main"))
-    assertEquals("Master", FeatureTaskRuntimeBranchSetup.protectedBranchName("Master"))
-    assertNull(FeatureTaskRuntimeBranchSetup.protectedBranchName("feat/x"))
-    assertNull(FeatureTaskRuntimeBranchSetup.protectedBranchName(null))
+    assertEquals("main", protectedBranchName("main"))
+    assertEquals("Master", protectedBranchName("Master"))
+    assertNull(protectedBranchName("feat/x"))
+    assertNull(protectedBranchName(null))
   }
 }

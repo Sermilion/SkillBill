@@ -1,46 +1,46 @@
 package skillbill.engine.goalrunner.planning.state
 
+import java.util.concurrent.ConcurrentHashMap
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.slot.state.PhaseFanOutUnits
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.execution.core.ProduceMissingPlansArgs
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
-import skillbill.engine.goalrunner.planning.attempt.planningPauseOutcome
+import skillbill.engine.goalrunner.planning.attempt.GoalPlanningPhaseAttemptGate
+import skillbill.engine.goalrunner.planning.context.GoalPlanningSharedPreplanSettlement
 import skillbill.engine.goalrunner.planning.context.SharedPreplanSettlement
-import skillbill.engine.goalrunner.planning.context.currentProvenance
-import skillbill.engine.goalrunner.planning.context.settleSharedPreplan
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLaunch
 import skillbill.engine.goalrunner.planning.model.GoalPlanningRecoveryProgress
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.model.SharedPreplanSettlementArgs
+import skillbill.engine.goalrunner.planning.outcome.GoalPlanningSubtaskPlanProduction
 import skillbill.engine.goalrunner.planning.outcome.SubtaskPlanProduction
-import skillbill.engine.goalrunner.planning.outcome.descriptor
 import skillbill.engine.goalrunner.planning.outcome.governedSubSpecReady
 import skillbill.engine.goalrunner.planning.outcome.noSuchSubtaskReason
 import skillbill.engine.goalrunner.planning.outcome.preparationStateReadReason
-import skillbill.engine.goalrunner.planning.outcome.producePlan
 import skillbill.engine.goalrunner.planning.outcome.recoverySubtaskId
 import skillbill.engine.goalrunner.planning.outcome.resolvedSubSpecPath
 import skillbill.engine.goalrunner.planning.outcome.stopped
 import skillbill.engine.goalrunner.planning.outcome.unexpectedPlanningFailureReason
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningPreparationStateReadStopReason
-import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
+import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import java.util.concurrent.ConcurrentHashMap
 
 internal data class GoalPlanningRunScope(
   val state: GoalRunnerManifestState,
@@ -52,7 +52,12 @@ internal data class GoalPlanningRunScope(
 )
 
 internal class GoalPlanningRunProgress(
-  private val sweep: DefaultGoalPlanningSweep,
+  private val sharedPreplanSettlement: GoalPlanningSharedPreplanSettlement,
+  private val planProduction: GoalPlanningSubtaskPlanProduction,
+  private val attemptGate: GoalPlanningPhaseAttemptGate,
+  private val checkpoint: GoalPlanningPreparationCheckpoint,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val manifestFileStore: DecompositionManifestStore,
   private val scope: GoalPlanningRunScope,
 ) {
   private var ready: SharedPreplanSettlement.Ready? = null
@@ -70,10 +75,10 @@ internal class GoalPlanningRunProgress(
   ): PhaseOutcome =
     when (
       val settled =
-        sweep.settleSharedPreplan(
+        sharedPreplanSettlement.settleSharedPreplan(
           SharedPreplanSettlementArgs(
             existingShared = scope.existingShared,
-            currentProvenance = sweep.currentProvenance(scope.shared),
+            currentProvenance = sharedPreplanSettlement.currentProvenance(scope.shared),
             shared = scope.shared,
             state = scope.state,
             request = scope.request,
@@ -112,12 +117,12 @@ internal class GoalPlanningRunProgress(
         startedPlanIds = startedPlanIds,
       )
     val descriptor = descriptors.single { it.subtaskId == unitId }
-    when (val production = sweep.producePlan(args, subtask, descriptor, launch)) {
+    when (val production = planProduction.producePlan(args, subtask, descriptor, launch)) {
       is SubtaskPlanProduction.Stopped -> return unitStopped(unitId, production.outcome)
       is SubtaskPlanProduction.RequiredWriteRejected -> return onRequiredWriteRejected(production.rejection)
       SubtaskPlanProduction.Planned -> Unit
     }
-    sweep.checkpoint.findStoredSubtaskPlan(scope.identity, unitId, descriptor.governedSubSpecPath)
+    checkpoint.findStoredSubtaskPlan(scope.identity, unitId, descriptor.governedSubSpecPath)
       ?.let { persistedSubSpecHashes[unitId] = it.subSpecHash }
     return completed(GoalPlanningSweepConstants.PHASE_PLAN)
   }
@@ -127,7 +132,7 @@ internal class GoalPlanningRunProgress(
     if (scope.activeSubtasks.isEmpty()) return PhaseFanOutUnits.Pending(emptyList())
     descriptors =
       runCatching {
-        scope.activeSubtasks.mapIndexed { order, subtask -> sweep.descriptor(settled.shared, subtask, order) }
+        scope.activeSubtasks.mapIndexed { order, subtask -> planProduction.descriptor(settled.shared, subtask, order) }
       }.getOrElse { error ->
         return PhaseFanOutUnits.Stopped(
           halt(
@@ -159,7 +164,7 @@ internal class GoalPlanningRunProgress(
   }
 
   private fun recoveredPendingUnits(settled: SharedPreplanSettlement.Ready): PhaseFanOutUnits =
-    when (val recovery = sweep.checkpoint.recoveryProgress(scope.identity, descriptors, settled.provenance)) {
+    when (val recovery = checkpoint.recoveryProgress(scope.identity, descriptors, settled.provenance)) {
       is GoalPlanningRecoveryProgress.IncompletePlan ->
         PhaseFanOutUnits.Stopped(
           halt(
@@ -183,7 +188,7 @@ internal class GoalPlanningRunProgress(
     }
 
   fun pauseBefore(unitId: Int): PhaseOutcome? =
-    sweep.planningPauseOutcome(requireNotNull(ready).shared, unitId, GoalPlanningSweepConstants.PHASE_PLAN)
+    attemptGate.planningPauseOutcome(requireNotNull(ready).shared, unitId, GoalPlanningSweepConstants.PHASE_PLAN)
       ?.let { paused -> halt(paused.outcome) }
 
   fun settleUnit(
@@ -239,11 +244,11 @@ internal class GoalPlanningRunProgress(
     scope.activeSubtasks
       .filter { it.id !in missingSubtaskIds && it.status.decompositionStatus() != DecompositionStatus.COMPLETE }
       .forEach { subtask ->
-        val path = resolvedSubSpecPath(shared.repoRoot, subtask.specPath, sweep.repositoryEnclosingRootPort)
+        val path = resolvedSubSpecPath(shared.repoRoot, subtask.specPath, repositoryEnclosingRootPort)
         val ready =
           path != null &&
-            sweep.manifestFileStore.isRegularFile(path) &&
-            governedSubSpecReady(sweep.manifestFileStore.readText(path))
+            manifestFileStore.isRegularFile(path) &&
+            governedSubSpecReady(manifestFileStore.readText(path))
         if (!ready) {
           throw IncompatibleGoalPlanningPreparationRecoveryError(
             scope.identity.parentGoalWorkflowId,

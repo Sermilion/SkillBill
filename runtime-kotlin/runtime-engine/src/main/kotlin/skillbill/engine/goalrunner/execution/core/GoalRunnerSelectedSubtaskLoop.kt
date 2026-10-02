@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.execution.core
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goalrunner.execution.support.CompletedIterationArgs
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationPendingState
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationResult
@@ -35,7 +36,8 @@ private sealed interface SubtaskLaunchResult {
   data object Denied : SubtaskLaunchResult
 }
 
-internal class GoalRunnerSelectedSubtaskLoop(
+@Inject
+class GoalRunnerSelectedSubtaskLoop(
   private val manifestStore: GoalRunnerManifestStore,
   private val subtaskLauncher: GoalRunnerSubtaskLauncher,
   private val reconciler: GoalRunnerLaunchReconciler,
@@ -44,11 +46,12 @@ internal class GoalRunnerSelectedSubtaskLoop(
   private val pauseBoundary: GoalRunnerPauseBoundary,
   private val launchPrepare: GoalRunnerSubtaskLaunchPrepare,
   private val clock: Clock,
-  pendingState: GoalRunnerIterationPendingState,
 ) {
-  private val validationQualityState = pendingState.validationQualityState
-
-  internal fun runSelectedSubtask(args: RunSelectedSubtaskArgs): GoalRunnerIterationResult {
+  internal fun runSelectedSubtask(
+    args: RunSelectedSubtaskArgs,
+    pendingState: GoalRunnerIterationPendingState,
+  ): GoalRunnerIterationResult {
+    val validationQualityState = pendingState.validationQualityState
     val state = args.state
     val selection = args.selection
     val request = args.request
@@ -105,6 +108,7 @@ internal class GoalRunnerSelectedSubtaskLoop(
         ledger = ledger,
         attemptStartMillis = launch.attemptStartMillis,
       ),
+      pendingState,
     )
   }
 
@@ -228,7 +232,10 @@ internal class GoalRunnerSelectedSubtaskLoop(
       )
   }
 
-  private fun dispatchWorkerResult(args: DispatchWorkerResultArgs): GoalRunnerIterationResult {
+  private fun dispatchWorkerResult(
+    args: DispatchWorkerResultArgs,
+    pendingState: GoalRunnerIterationPendingState,
+  ): GoalRunnerIterationResult {
     val session =
       GoalRunnerIterationSession(
         request = args.request,
@@ -246,6 +253,7 @@ internal class GoalRunnerSelectedSubtaskLoop(
           reconciled = stop,
           session = session,
         ),
+        pendingState,
       )
     } ?: when (val reconciled = args.reconciled) {
       is GoalRunnerReconciledOutcome.Complete ->
@@ -266,6 +274,7 @@ internal class GoalRunnerSelectedSubtaskLoop(
             session = session,
             launchDiagnostics = args.launchReconciliation.diagnostics,
           ),
+          pendingState,
         )
     }
   }

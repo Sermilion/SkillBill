@@ -1,11 +1,12 @@
 package skillbill.engine.goalrunner
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
 import skillbill.engine.goalrunner.execution.core.DriveGoalLoopArgs
 import skillbill.engine.goalrunner.execution.core.GoalRunnerOwnedRun
+import skillbill.engine.goalrunner.execution.core.GoalRunnerExecutionCoordinator
 import skillbill.engine.goalrunner.execution.core.GoalRunnerPauseBoundary
 import skillbill.engine.goalrunner.execution.core.GoalRunnerPerRunLoopAssembler
-import skillbill.engine.goalrunner.execution.core.GoalRunnerRunBoundaries
 import skillbill.engine.goalrunner.execution.core.GoalRunnerRunPreparation
 import skillbill.engine.goalrunner.execution.core.StoppedReportArgs
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
@@ -13,38 +14,40 @@ import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationPendingS
 import skillbill.engine.goalrunner.execution.support.GoalRunnerValidationQualityPendingState
 import skillbill.engine.goalrunner.intake.GoalIntake
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
-import skillbill.engine.goalrunner.planning.recovery.GoalRunnerSpecDriftRecovery
+import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweep
 import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.status.unknownGoal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerTelemetryEmitter
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.nio.file.Path
+import java.time.Clock
 
 @Inject
 class GoalRunner(
-  private val runBoundaries: GoalRunnerRunBoundaries,
+  private val manifestStore: GoalRunnerManifestStore,
+  private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  private val goalPlanningSweep: GoalPlanningSweep,
+  private val telemetry: GoalLifecycleTelemetryEmitter,
+  private val clock: Clock,
+  private val diagnostics: RuntimeDiagnostics,
+  private val executionCoordinator: GoalRunnerExecutionCoordinator,
   private val runPreparation: GoalRunnerRunPreparation,
   private val perRunLoopAssembler: GoalRunnerPerRunLoopAssembler,
   private val pauseBoundary: GoalRunnerPauseBoundary,
   private val intakePreparation: GoalIntakePreparation,
-  private val specDriftRecovery: GoalRunnerSpecDriftRecovery,
 ) {
-  private val manifestStore = runBoundaries.manifestStore
-  private val outcomeStore = runBoundaries.outcomeStore
-  private val goalPlanningSweep = runBoundaries.goalPlanningSweep
-  private val clock = runBoundaries.clock
-  private val diagnostics = runBoundaries.diagnostics
-  private val executionCoordinator = runBoundaries.executionCoordinator
-
   fun issueKeyForIntake(
     intake: String,
     repoRoot: Path,
@@ -62,7 +65,7 @@ class GoalRunner(
       manifestStore.loadDurableByIssueKey(request.issueKey)?.copy(repoRoot = request.repoRoot)
         ?: intakePreparation.prepare(request)
         ?: return unknownGoal(request.issueKey)
-    val loadedState = specDriftRecovery.refresh(admittedState, request)
+    val loadedState = runPreparation.refreshSpecPlanning(admittedState, request)
     val childAdmission = runPreparation.existingChildExecutionPlanAdmission(loadedState, request)
     val execute = {
       val state = reconcileStateBeforeRun(loadedState)
@@ -126,7 +129,7 @@ class GoalRunner(
     val ledger = GoalRunnerLedgerRecorder(outcomeStore, effectiveRequest, clock, diagnostics)
     effectiveRequest.eventSink.emit(GoalRunnerRunEvent.Started(state.manifest.issueKey))
     val telemetryEmitter =
-      GoalRunnerTelemetryEmitter(runBoundaries.telemetry, clock, state)
+      GoalRunnerTelemetryEmitter(telemetry, clock, state)
         .also { it.goalStarted() }
     pauseBoundary.pauseBeforeLaunch(state)?.let { paused ->
       val pausedReport = requireNotNull(paused.report)
@@ -140,7 +143,7 @@ class GoalRunner(
     val validationQualityState = GoalRunnerValidationQualityPendingState(manifestStore)
     validationQualityState.bind(state.parentWorkflowId)
     val pendingState = GoalRunnerIterationPendingState(validationQualityState)
-    val goalLoop = perRunLoopAssembler.assemble(pendingState)
+    val goalLoop = perRunLoopAssembler.assemble()
     val loopResult =
       goalLoop.driveGoalLoop(
         DriveGoalLoopArgs(
@@ -150,6 +153,7 @@ class GoalRunner(
           ledger = ledger,
           telemetryEmitter = telemetryEmitter,
           planning = sweepOutcome as GoalPlanningSweepOutcome.PreparedAll,
+          pendingState = pendingState,
         ),
       )
     state = loopResult.state

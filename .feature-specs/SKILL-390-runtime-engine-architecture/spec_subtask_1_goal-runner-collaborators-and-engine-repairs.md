@@ -79,6 +79,98 @@ Build compiles runtime-domain, runtime-engine, runtime-core, runtime-cli and run
 - the runtime-cli goal suites and the runtime-mcp parity tests;
 - detekt and spotless.
 
+## Implementation Details
+
+This plan uses the upstream preplan digest as its repository evidence. Preserve every existing section of this spec. The digest supersedes the older implementation estimates for execution work: direct injection gives GoalRunner 11 parameters, launch preparation seven, finalization eight, and status projection 12 after deleting its unread validation dependency. There are 19 inline issue-key sites, no remaining featuretask-to-work imports, and an additional ambient-time default in GoalRunnerTickProgressReader. No dependency work is required. Do not repeat preplan discovery during planning.
+
+For the tasks below, `E` means `runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/`, `T` means `runtime-kotlin/runtime-engine/src/test/kotlin/skillbill/engine/`, and `A` means `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/`. Execute the tasks in order within this subtask. These are implementation steps, not a new decomposition.
+
+### 1. Unpack goal execution collaborators and preserve per-run state
+
+Serves AC-001, AC-002, AC-003 and AC-011.
+
+Replace the three bags in `Egoalrunner/execution/core/GoalRunnerBoundaries.kt` with direct private dependencies in `Egoalrunner/GoalRunner.kt`, `Egoalrunner/launch/GoalRunnerSubtaskLaunchPrepare.kt`, and `Egoalrunner/execution/core/GoalRunnerFinalization.kt`, then delete the bag file. GoalRunner needs the manifest store, outcome store, planning sweep, telemetry emitter, clock, diagnostics and execution coordinator alongside its four existing non-bag collaborators. Do not inject the nullable phase query or findings ledger service here. Launch preparation needs only the bag's manifest store, outcome store and git operations alongside its four existing collaborators. Replace forwarding getters with private constructor fields; do not retain collaborator accessors.
+
+Convert finalization's same-file receiver functions to private members. Cover reconciliation, dirty-worktree commit, stage-and-push, clean-worktree verification, unpushed-branch handling, feature-branch checks, scratch deletion and ledger resolution. Preserve result values, failure text, ordering, best-effort operations and visibility needed by generated cross-module DI.
+
+Make `GoalRunnerIterationOutcome` and `GoalRunnerSelectedSubtaskLoop` injectable behaviour owners in their existing execution-core files. Pass pending state through execution calls rather than capturing it in constructors. Keep the one mutable pending-state instance created and bound by `GoalRunner.runPrepared`. Selected-subtask execution reads pending reattempt cause and causing-loop entry; iteration outcome updates them and validation-quality retry counts. Shrink `GoalRunnerPerRunLoopAssembler.kt` to coordination if it still performs work, or delete it if direct coordination makes it redundant. Do not create a replacement collaborator factory. Keep durable sequence allocation, the per-run loop-count cache, cancellation propagation and read-only phase queries intact.
+
+Update `Tgoalrunner/execution/core/GoalRunnerTestFactory.kt`, `runtime-kotlin/runtime-engine/src/testFixtures/kotlin/skillbill/engine/goalrunner/execution/core/GoalRunnerSharedTestFactory.kt`, and affected construction callers as each constructor changes. Later validation runs existing goal execution and child-recovery suites. These rewiring changes require no new test that asserts constructor structure or collaborator calls.
+
+### 2. Make status projection own its operations
+
+Serves AC-001, AC-002, AC-003 and AC-011.
+
+In `Egoalrunner/status/GoalRunnerStatusProjectionAssembler.kt`, delete GoalRunnerStatusProjectionDataSources and GoalRunnerStatusProjectionValidationDependencies. Delete the unread validation dependency instead of unpacking it. Inject the five actual data sources privately: manifest store, outcome store, read-only phase query, attempt ledger store and database session factory. Retaining the other seven parameters gives 12.
+
+Move the 15 same-file receiver functions into the assembler, including runtime-input construction, worktree edit summaries, audit retry measurement, completed-subtask validation, planning-status alignment, manifest reconciliation, liveness, active-agent resolution and requested diff projections. Preserve externally called `project` and `resolveExecutionLiveness`. Neither functions nor properties may take the assembler as a receiver or parameter, and no top-level helper may receive its `this`. Update existing status test construction; later validation runs status-degradation coverage. Preserve durable-read failure reporting and read-only authority.
+
+### 3. Replace planning bags and sweep locators with behaviour owners
+
+Serves AC-001, AC-002, AC-003 and AC-011.
+
+Convert existing function families in their current files and packages, then delete `Egoalrunner/planning/sweep/GoalPlanningSweepBoundaries.kt`. Keep `GoalPlanningSweep.prepare(state, request)` unchanged. DefaultGoalPlanningSweep coordinates private behaviour owners, strategy selection, execution-plan assembly and the run-loop entry, with at most 12 parameters. Do not unpack all 15 dependencies into the sweep or introduce another service collection.
+
+Use the existing `Egoalrunner/planning/context/GoalPlanningSharedPreplanProduction.kt`, `GoalPlanningSharedPreplanSettlement.kt` and `GoalPlanningSharedPreplanSettlementEnvelope.kt` for production and settlement ownership. Keep context discovery and preplan production together with their manifest-file store, invariant source, context discovery, repository-root port and checkpoint. Keep preplan recovery and settlement with checkpoint and production operations they use.
+
+Use the existing `Egoalrunner/planning/attempt/GoalPlanningPhaseAttemptGate.kt`, `GoalPlanningPhaseAttemptGateBurstCap.kt`, `GoalPlanningPhaseAttemptGateLaunch.kt`, `GoalPlanningPhaseAttemptGateSettlement.kt` and `GoalPlanningAttemptRecording.kt` for attempt control. Group behaviour by actual reads: manifest controls, attempt and rejection recording, timing, burst schedule and clock. Keep `composePlanningPrompt(args)` a pure helper. Give launch behaviour its manifest-store authorization dependency, preserve briefing writes before launch, and keep the authorization lifetime unchanged.
+
+Use `Egoalrunner/planning/outcome/GoalPlanningSubtaskPlanProduction.kt` and `GoalPlanningSubSpecSnapshot.kt` for plan production and snapshot admission with checkpoint and governed-spec reads. In `Egoalrunner/planning/state/GoalPlanningRunProgress.kt`, replace the stored DefaultGoalPlanningSweep with the specific production, settlement and checkpoint operations plus the repository-root, manifest-file, descriptor and pause collaborators it actually uses. Removing receiver syntax alone does not satisfy AC-003.
+
+Implementation must confirm the exact class names and dependency subsets while converting these existing files. The digest establishes the behaviour grouping but does not prescribe new owner names. Keep every added injected planning owner within 12 private or plain parameters; expose operations rather than dependencies. Add no file to a full package. Preserve prose phase content, runtime-owned decisions, authoritative sub-spec handoff, governed-path and hash checks, and legacy extraction restricted to persistence and recovery. Do not derive executable plans from response text, restore response-envelope validation, or overwrite the parent spec.
+
+Adapt planning factories and callers, including the existing concrete-sweep binding in `runtime-kotlin/runtime-core/src/main/kotlin/skillbill/di/goal/RuntimeGoalPlanningSweepProvides.kt` if constructor wiring requires it. Later validation runs planning sweep, planning recovery and goal-planning persistence/capture coverage. Preserve existing regression tests; do not add owner-by-owner wiring tests.
+
+### 4. Use one domain issue-key derivation
+
+Serves AC-004 and AC-011.
+
+Add `canonicalIssueKey(issueKey: String): String` to `runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/FeatureTaskExecutionIdentityPolicy.kt`, returning the existing non-validating `issueKey.trim().uppercase()` expression. Keep normalizeIssueKey's original-input validation and error text, then return canonicalIssueKey's result. Do not use or rename the different contracts-level normalizer.
+
+Replace all 19 digest-listed engine derivations: launch preparation; purge twice and reset/replan; planning status coherence; shared-preplan production three times and the sweep; `Ework/IdeStatusRepositoryCorrelation.kt` three times and `IdeStatusLivenessAnchors.kt`; `Efeaturetask/runner/FeatureTaskRuntimeRunner.kt`; continuation lookup twice; execution admission; and crash reconciliation twice. Use nullable `let` where needed and retain existing blank filtering, `takeIf`, early returns and uppercase semantics. Preserve FeatureTaskRuntimeRunEntry and execution-entry identity ownership.
+
+Later validation runs the existing `runtime-kotlin/runtime-application/src/test/kotlin/skillbill/application/FeatureTaskExecutionIdentityPolicyTest.kt` and affected purge/reset, continuation and runner coverage. Do not move the policy tests. The named bug obligation is accidental validation at a previously non-validating canonicalisation call or changed nullable behaviour; prefer existing boundary coverage over duplicate literal-based tests.
+
+### 5. Replace ambient elapsed time and prove the planning duration
+
+Serves AC-005, AC-006 and AC-011.
+
+In `Egoalrunner/planning/attempt/GoalPlanningPhaseAttemptGateBurstCap.kt`, read the same injected Clock immediately before launch and after launch and compute elapsed milliseconds directly. Preserve required-start persistence before execution and pause handling. Delete `GoalPlanningSweepConstants.NANOS_PER_MILLI` once it has no callers.
+
+Remove `clockNanos: () -> Long = System::nanoTime` from `Egoalrunner/execution/support/GoalRunnerTickProgressReader.kt`. Pass the Clock already injected into `Egoalrunner/launch/GoalRunnerLaunchReconciler.kt`. Express the memo interval as 200 milliseconds. Preserve cached absence and the refresh cadence; refresh when time moves backwards rather than retaining the cache indefinitely. Do not widen the shared ambient-time scan or alter unrelated infrastructure baselines.
+
+Add the one required regression in `Tgoalrunner/planning/sweep/GoalPlanningSweepTest.kt`. Thread an injectable clock through GoalPlanningSweepPortsParams and testGoalPlanningSweepPorts instead of the hardcoded Clock.systemUTC(). Follow the existing empty-provider-turn recorder boundary: advance the clock by 137 milliseconds inside the first launcher callback, return emptyProviderTurnOutcome(), capture GoalPlanningRejectionRecord and assert that its empty-turn evidence durationMs is exactly 137. Allow valid subsequent output so the attempt sequence completes. The realistic bug is a start read after launch or use of another clock, both recording zero. A successful captured response is not this assertion boundary; duration reaches GoalPlanningEmptyTurnEvidence through `Egoalrunner/planning/outcome/GoalPlanningSweepOutcomeDerivationChildStatus.kt`.
+
+Later validation runs this regression and existing planning and tick-progress coverage. Implementation should confirm available tick-progress coverage and preserve its boundary assertions, including cached absence and rollback where present. Do not add a second test merely to duplicate elapsed-time mechanics. Fixed-clock memoisation is an implementation risk to inspect explicitly during review.
+
+### 6. Remove recovery forwarding and reverse the featuretask dependency
+
+Serves AC-007, AC-008, AC-009 and AC-011.
+
+Delete `Egoalrunner/persist/DurableChildRecoveryClass.kt`. Import authoritative recovery symbols from `skillbill.engine.recovery` in GoalOperatorDecisionService, GoalRunnerResetReplanCoordinator, GoalPlanningRecoveryKind, GoalRunnerReAttemptCause, GoalRunnerRepairCoordinator and `Tgoalrunner/planning/recovery/GoalPlanningRecoveryClassificationTest.kt`. Keep classification and recovery command strings unchanged.
+
+Delete the six unused goalrunner.status.completed imports from the three featuretask runloop-state files, runloop output verification, goal review-pass recorder and runloop drive listed in the digest. Move protectedBranchName and PROTECTED_GOAL_BRANCHES from GoalRunnerTickProgressReader into an existing file under `Efeaturetask/lifecycle/branch/`. Preserve trimming, blank filtering, lowercase membership and returned spelling. Rewrite its four featuretask importers and goalrunner consumers toward this owner. Move GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY into an existing file under `Efeaturetask/persist/`, keeping the literal `"goal_child_repair_evidence"`, then update every consumer including FeatureTaskRuntimeWorkflowPersistence. The digest does not name destination files; implementation chooses existing files that own branch policy and persisted artifact vocabulary without adding siblings to full packages.
+
+Empty `Abaselines/runtime-engine-package-cycle-baseline.txt` after removing the remaining featuretask-to-goalrunner edge. The featuretask-to-work edge and ports aliases are already gone, so do not execute the stale conditional alias work in Dependency Notes. Later validation runs recovery classification, child recovery, branch/recovery coverage, the package-cycle guard and persisted-artifact captures. Moves and import deletion need no new structural tests.
+
+### 7. Delete only the inert visibility checks
+
+Serves AC-010 and AC-011.
+
+In `ARuntimeEngineBoundaryArchitectureTest.kt`, remove `new public top-level engine declarations stay within inbound api and model packages`, the two visibility-census fixture methods and private topLevelPublicDeclarations helper from RuntimeEnginePublicTopLevelDeclarationArchitectureTest. Keep that carrier class and its live run-loop acyclicity and leaf checks. Keep every other engine boundary guard in the file and RuntimeEngineInboundApiTest. Preserve comment/literal stripping in declaration-cycle scans and slot dependency guards. Do not add an architecture-test class, suppression, exemption or baseline row. Later validation runs these existing guards; deleting inert checks requires no replacement test.
+
+### 8. Complete construction updates and hand off validation evidence
+
+Serves AC-001 through AC-011, without taking ownership of later subtasks or phases.
+
+Finish affected engine tests and testFixtures construction updates while retaining observable assertions. Keep test packages and golden resources unchanged. Review the resulting collaborator graph against A1, A2, A3, A5, A6, A8, A9, A10, P3 and G1 through G7. Later review applies the architecture-guidelines section 5 checklist, verifies private collaborator ownership and constructor limits, and checks for receiver/parameter locators and service-forwarding getters that mechanical guards do not detect.
+
+AC-001's broad no-Boundaries end state includes the featuretask bags assigned to subtask 2. This subtask deletes every goalrunner bag named here and records that remaining featuretask cleanup belongs to subtask 2. Do not expand this implementation into featuretask gate removal or the engine inject-property guard. Test-package moves remain subtask 3. Keep all criteria unchanged and make this sequencing explicit in the later audit evidence.
+
+The build phase alone owns the pack build command and kotlin-inject compilation proof. Validate alone owns test execution, full project checks, repoTest, detekt, Spotless, scripts/validate_agent_configs and required CLI/MCP parity checks. Relevant existing suites include goal execution, status degradation, purge/reset, planning sweep and recovery, child recovery, goal-planning slotbaseline capture and domain-policy coverage. Validation must discover any other required project checks at that time. Do not regenerate goldens to accept changed artifacts. Persisted bytes, CLI/MCP output, recovery text, phase identities, module ownership and public inbound pins remain unchanged.
+
+Planning executes no tests or build commands and leaves tests_executed empty if a receipt requests it. No schema migration, feature flag, module, install refresh or release work is planned. Later phases own implementation, simplification, audit, review, findings verification, validation, history, commit/push and PR work. No unresolved user decision remains.
+
 ## Next Path
 
 skill-bill goal SKILL-390

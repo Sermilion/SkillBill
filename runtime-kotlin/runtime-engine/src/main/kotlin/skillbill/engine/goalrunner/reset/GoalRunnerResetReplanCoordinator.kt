@@ -19,12 +19,12 @@ import skillbill.engine.goalrunner.model.GoalRunnerResetSnapshot
 import skillbill.engine.goalrunner.model.GoalRunnerResetSubtaskSnapshot
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
-import skillbill.engine.goalrunner.persist.DurableChildRecoveryClass
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.goalrunner.persist.classifyDurableChild
-import skillbill.engine.goalrunner.persist.recommendedDurableChildRecoveryCommand
 import skillbill.engine.goalrunner.status.GoalRunnerStatusDurableReadTracker
 import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
+import skillbill.engine.recovery.DurableChildRecoveryClass
+import skillbill.engine.recovery.classifyDurableChild
+import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerAcceptedSubtask
 import skillbill.model.RepositoryRoot
@@ -37,6 +37,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.replanIntent
 import skillbill.workflow.decomposition.resetManifest
 import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
 
@@ -175,7 +176,7 @@ class GoalRunnerResetReplanCoordinator(
       if (request.includeSharedPreplan && expectedSharedDigest != null) {
         GoalPlanningIdentity(
           parentGoalWorkflowId = loaded.parentWorkflowId,
-          normalizedIssueKey = loaded.manifest.issueKey.trim().uppercase(),
+          normalizedIssueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(loaded.manifest.issueKey),
           repositoryIdentity =
             goalRepositoryIdentity(
               request.repoRoot ?: repositoryRoot.path,

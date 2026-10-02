@@ -14,9 +14,9 @@ import skillbill.engine.goalrunner.model.GoalRunnerRepairStatus
 import skillbill.engine.goalrunner.model.GoalRunnerWedgeClass
 import skillbill.engine.goalrunner.model.GoalRunnerWedgeFinding
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.goalrunner.persist.recommendedDurableChildRecoveryCommand
 import skillbill.engine.goalrunner.planning.recovery.goalPlanningHardResetRemedy
 import skillbill.engine.goalrunner.status.GoalRunnerStatusDurableReadTracker
+import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.model.RepositoryRoot
 import skillbill.ports.diagnostics.RuntimeDiagnostics

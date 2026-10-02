@@ -21,6 +21,7 @@ import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.text.sha256HexUtf8
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import java.nio.file.Path
 
 fun interface GoalPlanningStatusReasonCoherence {
@@ -59,7 +60,7 @@ class LaunchAlignedGoalPlanningStatusReasonCoherence(
     val identity =
       GoalPlanningIdentity(
         request.parentWorkflowId,
-        request.issueKey.trim().uppercase(),
+        FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(request.issueKey),
         repositoryEnclosingRootPort.repositoryIdentity(request.repoRoot),
       )
     val existing =
