@@ -40,5 +40,22 @@ class SkillBillCommand(
       "feature-task-runtime-stats" to listOf("runtime-stats"),
     )
 
+  internal fun routeIntake(arguments: List<String>): List<String> {
+    var index = 0
+    while (index < arguments.size) {
+      val token = arguments[index]
+      if (token == "--db" || token == "--home") {
+        index += 2
+      } else if (token.startsWith("--db=") || token.startsWith("--home=")) {
+        index += 1
+      } else {
+        break
+      }
+    }
+    val first = arguments.getOrNull(index) ?: return arguments
+    if (first.startsWith('-') || first in registeredSubcommandNames() || first in aliases()) return arguments
+    return arguments.take(index) + "goal" + arguments.drop(index)
+  }
+
   override fun run() = Unit
 }

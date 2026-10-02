@@ -11,6 +11,8 @@ import skillbill.engine.goalrunner.execution.core.StoppedReportArgs
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationPendingState
 import skillbill.engine.goalrunner.execution.support.GoalRunnerValidationQualityPendingState
+import skillbill.engine.goalrunner.intake.GoalIntake
+import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
@@ -24,6 +26,7 @@ import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerTelemetryEmitter
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import java.nio.file.Path
 
 @Inject
 class GoalRunner(
@@ -31,6 +34,7 @@ class GoalRunner(
   private val runPreparation: GoalRunnerRunPreparation,
   private val perRunLoopAssembler: GoalRunnerPerRunLoopAssembler,
   private val pauseBoundary: GoalRunnerPauseBoundary,
+  private val intakePreparation: GoalIntakePreparation,
 ) {
   private val manifestStore = runBoundaries.manifestStore
   private val outcomeStore = runBoundaries.outcomeStore
@@ -39,10 +43,21 @@ class GoalRunner(
   private val diagnostics = runBoundaries.diagnostics
   private val executionCoordinator = runBoundaries.executionCoordinator
 
+  fun issueKeyForIntake(
+    intake: String,
+    repoRoot: Path,
+  ): String {
+    val trimmed = intake.trim()
+    if (trimmed.isNotBlank() && trimmed.none(Char::isWhitespace) && !trimmed.contains('/')) {
+      manifestStore.readByIssueKeyIfPresent(trimmed, repoRoot)?.let { return it.manifest.issueKey }
+    }
+    return GoalIntake.parse(trimmed).issueKey
+  }
+
   fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport {
     val loadedState =
       manifestStore.loadDurableByIssueKey(request.issueKey)?.copy(repoRoot = request.repoRoot)
-        ?: manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
+        ?: intakePreparation.prepare(request)
         ?: return unknownGoal(request.issueKey)
     val childAdmission = runPreparation.existingChildExecutionPlanAdmission(loadedState, request)
     return try {

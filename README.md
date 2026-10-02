@@ -37,7 +37,7 @@ Open your coding agent in the target repository and start a feature:
 /skill-bill APP-123 Add CSV export for the filtered orders list
 ```
 
-Provide observable acceptance criteria and constraints. Skill Bill checks for existing work, prepares missing spec artifacts, and presents the execution plan for confirmation before launching. Use `/skill-bill APP-123 phase:plan` to prepare a spec without starting implementation, or `/skill-bill phase:review target:uncommitted` to review existing changes. These examples use slash notation; use your agent's skill invocation syntax.
+Provide a connected tracker link or key, raw requirements, or an existing spec key. Skill Bill launches the full workflow, prepares missing spec artifacts, and resumes existing work. Include observable acceptance criteria and constraints in raw requirements. Use `/skill-bill APP-123 phase:plan` to prepare a spec without starting implementation, or `/skill-bill phase:review target:uncommitted` to review existing changes. These examples use slash notation; use your agent's skill invocation syntax.
 
 <details>
 <summary>Install requirements, PATH setup, and source builds</summary>
@@ -134,7 +134,7 @@ skill-bill goal resume APP-123
 skill-bill goal APP-123 --agent claude
 ```
 
-Use the agent ID for your installed CLI, such as `claude`, `codex`, or `cursor`. `/skill-bill APP-123` also performs continuation preflight and presents the applicable launch gate. Recovery can use another compatible agent because workflow state belongs to Skill Bill.
+Use the agent ID for your installed CLI, such as `claude`, `codex`, or `cursor`. `/skill-bill APP-123` starts or resumes the full workflow. Recovery can use another compatible agent because workflow state belongs to Skill Bill.
 
 ## Review and quality checks
 
@@ -181,12 +181,19 @@ The phase uses the same agent strategy as goal validate. It discovers required c
 Boundary history and decisions are written by the goal's `write_history` phase. Goal status is CLI-only: run `skill-bill goal status <KEY>`.
 
 ```text
-/skill-bill APP-123 Add CSV export               # full run with one confirmation gate
+/skill-bill APP-123 Add CSV export               # full workflow from intake
 /skill-bill APP-123 phase:plan                   # skill-bill phase plan APP-123
 /skill-bill phase:review mode:delegated target:HEAD
 ```
 
-The full run forwards `code-review:inline|auto` as `--code-review-mode`; `phase:review` forwards `mode:` and `target:` unchanged. When preflight finds no spec, the full run calls `skill-bill phase plan`. Release first prints the proposed version and changelog and exits `awaiting_confirmation`; confirming it with `confirm:<token>` creates and pushes the tag. `[<scope>] operation:unit-test-value-check` reviews unit tests without editing. `<intake> operation:feature-guard` and `<intake> operation:feature-guard-cleanup` print a plan and exit `awaiting_confirmation`. They edit only on `confirm:<token>`. `[<pr>] operation:pr-review-fix` prints a per-thread matrix for the PR's unresolved review threads and exits `awaiting_confirmation`; the dispatcher asks which threads to fix and re-runs it with `confirm:<token>` and `select:`. It pushes only with `push:on`.
+Standalone phases and operations are operator tools. Agents invoke them only
+when explicitly requested and never select them as full-run steps or recovery
+actions. Full-run intake accepts connected tracker links or keys, raw
+requirements, and existing spec keys or paths. `skill-bill <intake>` routes to
+the goal runtime, which prepares new work and resumes existing specs without
+invoking a standalone phase command.
+
+The full run forwards `code-review:inline|auto` as `--code-review-mode`; `phase:review` forwards `mode:` and `target:` unchanged. Release first prints the proposed version and changelog and exits `awaiting_confirmation`; confirming it with `confirm:<token>` creates and pushes the tag. `[<scope>] operation:unit-test-value-check` reviews unit tests without editing. `<intake> operation:feature-guard` and `<intake> operation:feature-guard-cleanup` print a plan and exit `awaiting_confirmation`. They edit only on `confirm:<token>`. `[<pr>] operation:pr-review-fix` prints a per-thread matrix for the PR's unresolved review threads and exits `awaiting_confirmation`; the dispatcher asks which threads to fix and re-runs it with `confirm:<token>` and `select:`. It pushes only with `push:on`.
 
 ## Platform packs
 

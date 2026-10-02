@@ -57,7 +57,7 @@ object CliRuntime {
   ): CliExecutionResult {
     val rootCommand = cliComponent.rootCommand
     return runCatching {
-      CommandLineParser.parseAndRun(rootCommand, arguments) { command -> command.run() }
+      CommandLineParser.parseAndRun(rootCommand, rootCommand.routeIntake(arguments)) { command -> command.run() }
       cliComponent.runState.result
         ?: CliExecutionResult(
           exitCode = 0,

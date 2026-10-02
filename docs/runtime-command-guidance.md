@@ -4,9 +4,28 @@ These instructions apply to runtime commands, planning, execution, and goal comm
 
 ## Product Intent
 
-`/skill-bill` is the only listed skill. Its full-run form (`/skill-bill <intake>`) presents one confirmation gate, then delegates to the foreground runtime driver with durable state, telemetry, packs, add-ons, and native subagents. Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name>` forms run `skill-bill operation <name>`, relaying one operator confirmation. `skill-bill goal status` stays CLI-only; no skill wraps it.
+`/skill-bill` is the only listed skill. Its full-run form (`/skill-bill <intake>`) resolves the supplied requirements and launches `skill-bill <intake>` through the foreground goal runtime with durable state, telemetry, packs, add-ons, and native subagents. Intake accepts connected tracker links or keys, raw requirements, and existing spec keys or paths. The CLI also accepts the explicit `skill-bill goal <intake>` form. New requirements create a spec bundle and parent workflow before durable planning; existing specs resume without replacement. Raw text receives a stable local workflow key and creates no tracker issue. Tracker references must resolve through the connected tracker before implementation; lookup failures block without inferred requirements. Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name>` forms run `skill-bill operation <name>`, relaying one operator confirmation. `skill-bill goal status` stays CLI-only; no skill wraps it.
+
+## Phase and operation concepts
+
+Standalone phases and operations are operator tools. Agents may invoke
+`skill-bill phase` or `skill-bill operation` only when the operator explicitly
+requests the corresponding standalone task. A named `phase:` or `operation:`
+form, or an unambiguous standalone validation request, supplies that intent.
+A full feature request or issue URL does not.
+
+Agents must not use these commands to assemble a workflow, prepare a missing
+spec, recover a blocked goal, or add checks they chose themselves. A full run
+stays on the goal route. The runtime prepares missing specs as part of starting
+new work, then drives its durable planning and execution. The
+runtime executes internal phases through its run loop; workers carry out their
+supplied briefing without starting standalone phase or operation commands.
+
+### Phases
 
 `skill-bill phase <review|validation|plan|pr>` and `skill-bill code-review` run one in-memory phase through the same run loop, with no workflow row, new branch, or checkpoint commit. `skill-bill code-review` finds, verifies, and fixes findings in both modes. `phase plan <KEY> [description]` writes a governed spec bundle that `skill-bill goal` runs, and a direct plan blocks. Implementation and simplification run inside workflows and consume their plan output. `phase pr` composes `commit_push -> pr`. It refuses a detached, protected, or base branch before staging. The runtime commits all staged, unstaged, and untracked changes, excluding ignored and runtime-private files, then pushes before creating or updating the pull request. A clean retry pushes the existing commit without creating an empty one. `commit_push` and the durable definitions are not runnable on their own.
+
+### Operations
 
 `skill-bill operation <update-check|release|unit-test-value-check|feature-guard|feature-guard-cleanup|pr-review-fix|verify>` runs one runtime operation with no feature-task workflow. `release` confirms in two invocations. The first stores the proposed version and changelog and exits `awaiting_confirmation` with a token. `confirm:<token>` then tags and pushes exactly the stored proposal, once. `unit-test-value-check` is a read-only report over the current changes or `scope:` and needs no confirmation. `feature-guard` and `feature-guard-cleanup` confirm the same way as `release`. Their first invocation changes no file and stores a plan anchored on HEAD and the current branch. Only `confirm:<token>` edits. After confirm, cleanup runs the `validation` definition. `pr-review-fix [<pr>]` proposes a per-thread matrix over the PR's unresolved GraphQL review threads. `confirm:<token> select:<...>` fixes only the selected threads, runs `validation`, then replies, and pushes only with `push:on`. `verify <intake> [target:<pr|branch|base..head>] [mode:inline|delegated]` is report-only. Its intake is free text (a Linear issue key or URL, or the requirements themselves) or `spec:<path>`, and an omitted target verifies HEAD against `origin/HEAD`. It parks a verify workflow (stored `workflow_name` `bill-feature-verify`) at the extracted criteria and exits `awaiting_confirmation`, with the workflow id as the token. `confirm:<token>` runs the audits, the review, and the verdict on that workflow.
 

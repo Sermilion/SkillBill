@@ -3,7 +3,7 @@ package skillbill.cli.goal.core
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.arguments.optional
+import com.github.ajalt.clikt.parameters.arguments.multiple
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.multiple
@@ -112,7 +112,9 @@ class GoalRunCommand(
     "goal",
     "Run a decomposed goal in the foreground. Exit codes: complete=0, failed=1, paused=2, blocked=3.",
   ) {
-  private val issueKey by argument(help = "Parent issue key for the decomposed goal.").optional()
+  private val intakeTokens by argument(
+    help = "Tracker link or issue key, raw requirements, or an existing spec key or path.",
+  ).multiple()
   private val agent by option(
     "--agent",
     help = invokingAgentResolutionHelp("--agent"),
@@ -185,7 +187,7 @@ class GoalRunCommand(
     val invokedAgentId = resolveInvokedAgentId(agent, inputs.environment)
     inputPreparation.validate(
       GoalRunInputValidationArgs(
-        issueKey = issueKey,
+        issueKey = intakeTokens.joinToString(" ").takeIf(String::isNotBlank),
         stopAfterSubtask = stopAfterSubtask,
         agentAddonSlugs = agentAddonSlugs,
         agentAddonSelectionJson = agentAddonSelectionJson,
@@ -193,7 +195,8 @@ class GoalRunCommand(
         agentOverride = agentOverride,
       ),
     )
-    val runIssueKey = issueKey!!
+    val intake = intakeTokens.joinToString(" ").trim()
+    val runIssueKey = goalRunner.issueKeyForIntake(intake, effectiveRepoRoot)
     val receivingAgents =
       listOfNotNull(
         invokedAgentId,
@@ -224,7 +227,9 @@ class GoalRunCommand(
           ),
       )
     presenter.emitStartupProvenance()
-    val request = runRequest(runIssueKey, invokedAgentId, hydratedSelection, presenter, effectiveRepoRoot)
+    val request =
+      runRequest(runIssueKey, invokedAgentId, hydratedSelection, presenter, effectiveRepoRoot)
+        .copy(intake = intake)
     val report = goalRunner.run(request)
     val payload = report.toGoalRunCliMap()
     state.completeText(goalRunText(report), payload, exitCode = report.goalRunExitCode())

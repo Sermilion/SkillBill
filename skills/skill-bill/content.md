@@ -7,18 +7,32 @@ description: "Dispatcher for the full governed feature run, single in-memory pha
 
 `skill-bill` routes a full feature run, one phase over the working tree, or one
 runtime operation to the `skill-bill` CLI. The full run is the only feature entry
-point and keeps the governed feature ceremony and its single confirmation
-question. Phase and operation forms run one command and relay its output.
+point. The runtime owns preparation, planning, execution, and durable state.
+Phase and operation forms run one command and relay its output.
+
+## Operator-only commands
+
+Standalone phases and operations are operator tools. An agent may run
+`skill-bill phase` or `skill-bill operation` only when the operator explicitly
+requests that standalone phase or operation, through a named form or an
+unambiguous standalone task such as running validation. A full feature request,
+an issue URL, a workflow briefing, or a missing spec does not authorize either
+command.
+
+Agents must not select these commands as workflow steps, prerequisites,
+recovery actions, or substitutes for the full run. The runtime owns its internal
+phase execution. Runtime-launched workers execute their supplied briefing and
+must not start standalone phase or operation commands.
 
 ## Update Check
 
 Only the initial, user-facing full-run invocation performs this automatic check.
-Call `mcp__skill-bill__update_check` once before full-run intake and preflight.
+Call `mcp__skill-bill__update_check` once before full-run intake.
 Keep the selected runtime for the whole run, including every subtask and retry.
 
 Runtime-launched phase workers, goal children, retries, and continuations execute
 their supplied briefing. They must not call `mcp__skill-bill__update_check`, ask
-whether to update, or repeat this dispatcher's intake, preflight, or confirmation
+whether to update, or repeat this dispatcher's intake or confirmation
 gate. Reading this skill during an active phase does not start a new invocation.
 Phase and operation forms skip the automatic check. An explicit
 `operation:update-check` still runs the requested check through its operation route.
@@ -36,12 +50,13 @@ without prompting.
 
 ## Forms and Routing
 
-Pick the route from the invocation. `phase:<name>` may come before or after the
-intake. Forwarded `key:value` tokens follow the intake unchanged.
+Pick the route from the operator's explicit request. Without a standalone phase
+or operation request, use the full-run route. `phase:<name>` may come before or
+after the intake. Forwarded `key:value` tokens follow the intake unchanged.
 
 | Invocation | Route | Intake |
 | --- | --- | --- |
-| `/skill-bill <intake>` | full run: Intake, Preflight, Gate, Rehydrate, Launch, Relay | required |
+| `/skill-bill <intake>` | full run: Intake, Issue resolution, Launch, Relay | required |
 | `/skill-bill <intake> phase:plan` | `skill-bill phase plan <intake> --agent <currently-executing-agent>` | required |
 | `/skill-bill [<intake>] phase:review` | `skill-bill phase review [<intake>] [mode:<value>] [target:<value>] --agent <currently-executing-agent>` | optional |
 | `/skill-bill [<intake>] phase:validation` | `skill-bill phase validation [<intake>] --agent <currently-executing-agent>` | optional |
@@ -93,7 +108,7 @@ tokens. Without `mode:`, the runtime reviews inline.
 The dispatcher never resolves a review mode, a target, or an add-on catalogue, and
 never constructs JSON; the runtime selects.
 
-Stop without running preflight or any CLI command when:
+Stop without running any CLI command when:
 
 - the caller passes `parallel-review:<agent>`: name the removed dual-agent
   parallel review capability.
@@ -104,42 +119,38 @@ Stop without running preflight or any CLI command when:
   report a usage error naming the token and the form that accepts it. Never drop
   the token or fold it into the intake.
 
+## Issue resolution
+
+For a tracker link or issue key, first check whether it names an existing local
+spec. Reuse an existing spec without fetching replacement requirements. Otherwise
+fetch the exact referenced issue through its connected tracker. This applies to
+Linear, Jira, and any other connected tracker; do not hard-code a provider. A
+URL slug or issue key alone does not supply requirements. Raw requirements and
+readable local specs need no tracker lookup.
+
+If lookup fails, report the reference and returned error and stop before launch.
+Do not search substitute sources, retry automatically, or infer requirements
+from the URL title. Resume when the requirements or tracker access are supplied.
+
+On success, retain the returned title, description, acceptance criteria, and
+constraints. Pass the original reference together with those resolved
+requirements as full-run intake. Only an explicitly requested `phase:plan`
+passes them to `phase plan`. Runtime workers use their supplied briefing and do
+not repeat this dispatcher's intake or launch ceremony.
+
 ## Intake
 
-For the full run, establish:
+The full run accepts a connected tracker link or issue key, raw requirements,
+or the key or path of an existing spec. Preserve the operator's requirements,
+acceptance criteria, constraints, affected areas, and non-goals in the intake.
+Do not require an issue key for raw text or create a tracker issue. The runtime
+assigns a local workflow identity when the intake has no issue key.
 
-- the issue key
-- the intended outcome
-- the acceptance criteria
-- constraints, affected areas, and non-goals
-
-If the issue key is missing, stop and ask for it. Do not invent one.
-
-## Preflight
-
-For the full run, call this command exactly once:
-
-```text
-skill-bill goal preflight <issue-key> --agent <currently-executing-agent> --format json
-```
-
-Always pass the currently executing agent explicitly; do not rely on environment
-detection. Forward the review and agent add-on values as flags.
-Derive the next action from the returned `verdict`. When the verdict reports new
-work, the spec is missing: run
-`skill-bill phase plan <intake> --agent <currently-executing-agent>` after this
-preflight, retaining the returned gate state without recomputing it. Report and
-stop for an already-running or terminal-only goal. Report every candidate for an
-ambiguous verdict. Surface loud failures.
-
-## Gate
-
-Present the returned `gate_block` as a concise human-readable summary. Include
-the issue key, feature name, child agent, review settings, add-ons, expected
-first runnable subtask, and each subtask with its status and dependencies.
-Do not print the raw JSON or expose internal field names. Ask exactly one
-question: whether to proceed. Do not launch while unconfirmed. If the user
-declines, stop.
+An existing spec selects or resumes its goal. New requirements start preparation
+and durable planning inside the full runtime. A missing spec is normal for new
+work; never route it to an individual phase or report it as a launch prerequisite.
+Do not run `goal preflight` or assemble the workflow in this session. Launch the
+full runtime once with the resolved intake.
 
 ## Rehydrate
 
@@ -148,11 +159,16 @@ write the returned spec content to the target path. Fetch nothing when the list 
 
 ## Launch
 
-After confirmation and any required rehydration, run:
+Run the full-workflow intake form:
 
 ```text
-skill-bill goal <issue-key> --agent <currently-executing-agent> --no-live-output
+skill-bill <intake> --agent <currently-executing-agent> --no-live-output
 ```
+
+Pass the intake as one shell-quoted argument with real newlines preserved. The
+CLI routes it to the goal runtime. `skill-bill goal <intake>` is the explicit
+equivalent. The runtime creates missing specs and the parent workflow before
+planning; existing specs resume through the same entry point.
 
 Forward the supplied review and agent add-on flags. Never ask
 the user to run the command manually.
@@ -166,8 +182,11 @@ output. Run goal status only when the user explicitly asks.
 
 ## Phase Forms
 
-For a `phase:` form, skip Intake, Preflight, Gate, Rehydrate, and Launch. Run the
-translated command from Forms and Routing once and relay its output verbatim,
+Run a `phase:` form only at the operator's explicit request for that standalone
+phase. These forms are operator tools, not agent-selected workflow steps. Skip
+full-run Intake, Issue resolution, Rehydrate, and Launch.
+`phase:plan` first follows Issue resolution. Run the translated command from
+Forms and Routing once and relay its output verbatim,
 adding nothing. Do not add checklists, rubrics, or steps from other skills. Never
 ask the user to run the command manually.
 
@@ -278,8 +297,10 @@ and CI, then runs and repairs those checks. Compilation alone is insufficient.
 
 ## Operation Forms
 
-For an `operation:` form, skip Intake, Preflight, Gate, Rehydrate, and Launch. Run
-the translated command once and relay its output verbatim.
+Run an `operation:` form only at the operator's explicit request for that
+standalone operation. These forms are operator tools, not agent-selected
+workflow steps. Skip full-run Intake, Issue resolution, Rehydrate, and Launch. Run the
+translated command once and relay its output verbatim.
 
 When the command exits with `awaiting_confirmation` (its last line reads
 `status: awaiting_confirmation confirm:<token>`), show the proposal and ask the

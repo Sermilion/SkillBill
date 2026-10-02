@@ -16,8 +16,10 @@ code-review family (SKILL-104, the platform-pack extension, re-parented to
 ### The idea in one paragraph
 
 The catalog has one listed skill: `skill-bill`. It is a dispatcher. Its
-full-run form owns intake, preflight, the single confirmation gate, and launch
-of the goal runtime. Its `phase:<name>` forms run `skill-bill phase <name>`,
+full-run form resolves intake and launches the goal runtime, which owns new
+work preparation, durable planning, and execution. Standalone phases and operations are operator tools;
+agents invoke them only at the operator's explicit request. Its `phase:<name>`
+forms run `skill-bill phase <name>`,
 and its `operation:<name>` forms run `skill-bill operation <name>`. The
 runtime owns preparation, continuation, execution, and durable goal state. The
 text of the retired listed skills (`bill-feature`, `bill-feature-spec`,
@@ -71,13 +73,14 @@ user: "/skill-bill APP-1 …" / "/skill-bill phase:review" / "/skill-bill operat
   ▼
 skill-bill                                       [listed]
   │  update check
-  │  full run:  intake → goal preflight
-  │               new work → skill-bill phase plan
-  │               runnable verdict → one confirmation gate
-  │               rehydrate_targets → listed Linear specs only
-  │               confirmed → skill-bill goal
-  │  phase:<name>      → skill-bill phase <name>
-  │  operation:<name>  → skill-bill operation <name>
+  │  full run:  tracker link/key → connected tracker requirements
+  │             raw requirements / existing spec key or path
+  │               → skill-bill <intake> → goal runtime
+  │               new work → runtime prepares spec and parent workflow
+  │               existing spec → resume its durable goal
+  │               durable planning → execution
+  │  operator-requested phase:<name>      → skill-bill phase <name>
+  │  operator-requested operation:<name>  → skill-bill operation <name>
   │                        awaiting_confirmation → one operator question → confirm:<token>
   ▼
 runtime output → verbatim relay

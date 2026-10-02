@@ -22,6 +22,7 @@ data class GoalRunnerRunRequest(
   val codeReviewMode: CodeReviewExecutionMode? = null,
   val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
   val stopAfterSubtaskId: Int? = null,
+  val intake: String? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

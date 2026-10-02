@@ -419,7 +419,7 @@ class CliRuntimeShellCommandsTest {
     assertEquals(1, invalidFormat.exitCode)
     assertContains(invalidFormat.stderr, "invalid choice")
 
-    val unknownCommand = CliRuntime.run(listOf("unknown"))
+    val unknownCommand = CliRuntime.run(listOf("install", "unknown"))
     assertEquals(1, unknownCommand.exitCode)
     assertContains(unknownCommand.stderr, "no such subcommand")
   }
