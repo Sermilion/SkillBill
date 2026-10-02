@@ -9,7 +9,7 @@ intake, preflight, or confirmation, including on retries and continuation.
 Reading the installed skill-bill skill does not make this phase a new invocation.
 
 Phase: plan (Phase 2: Plan)
-Task: Author a governed spec bundle that satisfies every acceptance criterion, using the upstream preplan value as planning context. Write files only inside a new .feature-specs/<issue key>-<slug>/ directory and modify no other repository file. When the bundle is complete, finish with a short prose summary of the plan.
+Task: Author a governed spec bundle that satisfies every acceptance criterion from the upstream preplan digest. Write files only inside a new .feature-specs/<issue key>-<slug>/ directory and modify no other repository file. When the bundle is complete, finish with a short prose summary of the plan. The preplan digest is this phase's only repository knowledge: preplan discovers once for every subtask so planning never repeats it. Do not read, search, grep, or list repository source, tests, build files, or git history, and do not re-verify the digest. Settle every open question from the digest's evidence. When the digest lacks a fact, decide from what it does say and record that assumption in the affected spec or plan step for implement to confirm. Do not read existing .feature-specs bundles either; the manifest template below is the format.
 
 ## Installed runtime owns phase output and settlement
 The installed Skill Bill runtime validates this phase's output and MCP settlement.
@@ -227,6 +227,49 @@ list those files in order, each depending only on earlier subtasks. The parent a
 need an Acceptance Criteria list as the Spec Format Contract requires. Write nothing outside that
 directory, never write through a symlink, and never overwrite an existing spec. A bundle that fails
 these checks blocks the plan.
+
+Write decomposition-manifest.yaml in exactly this shape, one subtasks entry per subtask spec. Every
+field shown is required; dependencies lists only earlier subtask ids:
+
+```yaml
+---
+contract_version: "0.5"
+issue_key: "<issue key>"
+feature_name: "<slug>"
+parent_spec_path: ".feature-specs/<issue key>-<slug>/spec.md"
+status: "pending"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "<repository default branch>"
+feature_branch: "feat/<issue key>-<slug>"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 1
+  action: "start"
+subtasks:
+- id: 1
+  name: "<subtask name>"
+  spec_path: ".feature-specs/<issue key>-<slug>/spec_subtask_1_<subtask slug>.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies: []
+- id: 2
+  name: "<subtask name>"
+  spec_path: ".feature-specs/<issue key>-<slug>/spec_subtask_2_<subtask slug>.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false
+```
 
 # Feature-task-runtime phase briefing
 phase: plan

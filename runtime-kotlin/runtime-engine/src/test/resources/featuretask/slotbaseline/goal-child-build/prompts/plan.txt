@@ -9,7 +9,7 @@ intake, preflight, or confirmation, including on retries and continuation.
 Reading the installed skill-bill skill does not make this phase a new invocation.
 
 Phase: plan (Phase 2: Plan)
-Task: Produce an ordered implementation plan that satisfies every acceptance criterion, using the upstream preplan value as planning context. Do not modify repository files during this phase. Write the plan as prose the implement phase can follow: the ordered tasks, the acceptance criteria each one serves, the paths or symbols it touches, the tests to add or run, constraints, and how the plan is validated. Do not forward progress diagnostics or a generic summary.
+Task: Produce an ordered implementation plan that satisfies every acceptance criterion from the upstream preplan digest. Do not modify repository files during this phase. Write the plan as prose the implement phase can follow: the ordered tasks, the acceptance criteria each one serves, the paths or symbols it touches, the tests to add or run, constraints, and how the plan is validated. Do not forward progress diagnostics or a generic summary. The preplan digest is this phase's only repository knowledge: preplan discovers once for every subtask so planning never repeats it. Do not read, search, grep, or list repository source, tests, build files, or git history, and do not re-verify the digest. Settle every open question from the digest's evidence. When the digest lacks a fact, decide from what it does say and record that assumption in the affected spec or plan step for implement to confirm.
 
 ## Installed runtime owns phase output and settlement
 The installed Skill Bill runtime validates this phase's output and MCP settlement.

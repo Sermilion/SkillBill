@@ -2486,3 +2486,13 @@ Decision: The audit prompt asks for the single line `No production criteria rema
 Reason: A fixed success line and an open-only list give the runtime a branch signal it can read without guessing at prose. Skipping satisfied notes and ignoring bullets keeps older-style reports from blocking a completed phase.
 
 Revisit when: A model regularly lists open criteria without leading IDs, or the completion phrase appears beside open criteria in real reports.
+
+## [2026-10-02] Plan works only from the preplan digest, delivered as fenced markdown
+
+Context: On ENG-1251 (capmo-android) the plan session re-read 17 of the files preplan had just mapped and spent about 40 seconds copying the manifest format from older bundles. Preplan had handed three open questions forward without the evidence to settle them. Its 100-line digest reached plan as one line with 99 escaped `\n`.
+
+Decision: Preplan is the feature's only discovery. It settles every question the repository can answer and carries the paths, symbols, hierarchies and test helpers that each subtask spec cites. Plan, bundle authoring and the goal fan-out planner treat the digest as their only repository knowledge (`PREPLAN_DIGEST_AUTHORITY`). They do not read, grep or re-verify, and they record an assumption when a fact is missing. The bundle directive carries a schema-checked manifest template. A multi-line projection text value is delivered inside a fence one backtick longer than its longest backtick run. Single-line values keep `name: value`.
+
+Reason: Discovery done once is the point of preplan, and a plan that re-verifies pays for it twice, once per subtask in a fan-out. The fence keeps the digest readable while a heading inside it still cannot pass for a briefing section, which the escaping used to guarantee.
+
+Revisit when: Plans regularly record assumptions that implement finds wrong, which would mean preplan digests are too thin rather than plan too strict.

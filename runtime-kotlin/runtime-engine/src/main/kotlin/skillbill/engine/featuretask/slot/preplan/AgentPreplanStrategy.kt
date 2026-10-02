@@ -66,10 +66,15 @@ class AgentPreplanStrategy : PhaseStrategy() {
 
     private const val DIRECTIVE: String =
       "Produce the scaled pre-planning digest for the resolved feature size, as prose. Do not modify repository " +
-        "files during this phase. Write what the plan phase needs: the boundaries the change touches, the " +
-        "patterns and decisions that apply, concrete risks, rollout and validation considerations, and open " +
-        "questions. Walk the boundary memory headings for relevance and weave their context into the prose; " +
-        "name a heading by its heading_id exactly as the boundary catalog spells it. Do not forward progress " +
-        "diagnostics or a generic summary."
+        "files during this phase. This is the feature's only discovery: the plan phase plans every subtask " +
+        "from this digest and never reads the repository. Write what the plan phase needs: the boundaries the " +
+        "change touches, the patterns and decisions that apply, concrete risks, and rollout and validation " +
+        "considerations. Carry the evidence each subtask spec will cite: exact paths, symbols, signatures, type " +
+        "hierarchies, the tests and test helpers the change affects, and the existing patterns to follow. " +
+        "Settle every question the repository can answer here. Leave open only decisions the repository " +
+        "cannot answer, each with the facts that bear on it and the option you recommend. Walk the boundary " +
+        "memory headings for relevance and weave their context into the prose; name a heading by its " +
+        "heading_id exactly as the boundary catalog spells it. Do not forward progress diagnostics or a " +
+        "generic summary."
   }
 }

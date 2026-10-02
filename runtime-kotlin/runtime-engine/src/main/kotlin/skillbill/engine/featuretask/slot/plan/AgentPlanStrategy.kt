@@ -151,17 +151,18 @@ class AgentPlanStrategy : PhaseStrategy() {
     private val featureSpecDirective: String by lazy { directiveResource(FEATURE_SPEC_DIRECTIVE).trimEnd() }
 
     private const val BUNDLE_DIRECTIVE: String =
-      "Author a governed spec bundle that satisfies every acceptance criterion, using the upstream preplan " +
-        "value as planning context. Write files only inside a new .feature-specs/<issue key>-<slug>/ " +
-        "directory and modify no other repository file. When the bundle is complete, finish with a short " +
-        "prose summary of the plan."
+      "Author a governed spec bundle that satisfies every acceptance criterion from the upstream preplan " +
+        "digest. Write files only inside a new .feature-specs/<issue key>-<slug>/ directory and modify no " +
+        "other repository file. When the bundle is complete, finish with a short prose summary of the plan. " +
+        PREPLAN_DIGEST_AUTHORITY + " Do not read existing .feature-specs bundles either; the manifest template " +
+        "below is the format."
 
     private const val DIRECTIVE: String =
-      "Produce an ordered implementation plan that satisfies every acceptance criterion, using the upstream " +
-        "preplan value as planning context. Do not modify repository files during this phase. Write the plan " +
+      "Produce an ordered implementation plan that satisfies every acceptance criterion from the upstream " +
+        "preplan digest. Do not modify repository files during this phase. Write the plan " +
         "as prose the implement phase can follow: the ordered tasks, the acceptance criteria each one serves, " +
         "the paths or symbols it touches, the tests to add or run, constraints, and how the plan is validated. " +
-        "Do not forward progress diagnostics or a generic summary."
+        "Do not forward progress diagnostics or a generic summary. " + PREPLAN_DIGEST_AUTHORITY
 
     private val GOAL_CONTINUATION_CONSTRAINT: String =
       """
@@ -189,6 +190,49 @@ class AgentPlanStrategy : PhaseStrategy() {
       need an Acceptance Criteria list as the Spec Format Contract requires. Write nothing outside that
       directory, never write through a symlink, and never overwrite an existing spec. A bundle that fails
       these checks blocks the plan.
+
+      Write decomposition-manifest.yaml in exactly this shape, one subtasks entry per subtask spec. Every
+      field shown is required; dependencies lists only earlier subtask ids:
+
+      ```yaml
+      ---
+      contract_version: "0.5"
+      issue_key: "<issue key>"
+      feature_name: "<slug>"
+      parent_spec_path: ".feature-specs/<issue key>-<slug>/spec.md"
+      status: "pending"
+      execution_model: "same_branch_commit_per_subtask"
+      base_branch: "<repository default branch>"
+      feature_branch: "feat/<issue key>-<slug>"
+      stack_branches: []
+      current_subtask_intent:
+        subtask_id: 1
+        action: "start"
+      subtasks:
+      - id: 1
+        name: "<subtask name>"
+        spec_path: ".feature-specs/<issue key>-<slug>/spec_subtask_1_<subtask slug>.md"
+        status: "pending"
+        branch: null
+        commit_sha: null
+        workflow_id: null
+        blocked_reason: null
+        last_resumable_step: null
+        dependencies: []
+      - id: 2
+        name: "<subtask name>"
+        spec_path: ".feature-specs/<issue key>-<slug>/spec_subtask_2_<subtask slug>.md"
+        status: "pending"
+        branch: null
+        commit_sha: null
+        workflow_id: null
+        blocked_reason: null
+        last_resumable_step: null
+        dependencies:
+        - subtask_id: 1
+          optional: false
+          skipped: false
+      ```
       """.trimIndent()
   }
 }

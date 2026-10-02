@@ -3,6 +3,7 @@ package skillbill.engine
 
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditPromptSections
 import skillbill.engine.featuretask.slot.pullrequest.PullRequestTemplateSearch
+import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
@@ -58,7 +59,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(preplanPrompt, "Do not modify repository files during this phase.")
     assertContains(preplanPrompt, "as prose")
     assertContains(planPrompt, "Do not modify repository files during this phase.")
-    assertContains(planPrompt, "upstream preplan value")
+    assertContains(planPrompt, "upstream preplan digest")
     assertContains(implementPrompt, "Reconcile the repository to the intended state")
     assertContains(implementPrompt, "read the file named by spec_reference")
     assertFalse(implementPrompt.contains("executable_plan"))
@@ -276,6 +277,41 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertFalse(prompt.contains("\"mode\": \"direct\""))
     assertFalse(prompt.contains("Do not forward the complete plan envelope"))
     assertFalse(prompt.contains("at least two"), "a spec bundle may hold one subtask")
+  }
+
+  @Test
+  fun `spec bundle plan carries a manifest template the schema accepts`() {
+    val prompt =
+      composePhasePrompt(
+        PROMPT_COMPOSER_ISSUE_KEY,
+        promptComposerBriefingFor("plan"),
+      ) { copy(specBundleRequired = true) }
+    val template = prompt.substringAfter("```yaml\n").substringBefore("\n```")
+    val manifest =
+      template
+        .replace("<issue key>", "SKILL-1")
+        .replace("<slug>", "feature")
+        .replace("<subtask slug>", "part")
+        .replace("<subtask name>", "Part")
+        .replace("<repository default branch>", "main")
+
+    DecompositionManifestSchemaValidator().validateYamlText(manifest, "decomposition-manifest.yaml")
+  }
+
+  @Test
+  fun `plan works only from the preplan digest and preplan carries the evidence for it`() {
+    listOf(false, true).forEach { bundle ->
+      val plan =
+        composePhasePrompt(
+          PROMPT_COMPOSER_ISSUE_KEY,
+          promptComposerBriefingFor("plan"),
+        ) { copy(specBundleRequired = bundle) }
+      assertContains(plan, "The preplan digest is this phase's only repository knowledge")
+      assertContains(plan, "do not re-verify the digest")
+    }
+    val preplan = composePromptForPhase("preplan")
+    assertContains(preplan, "never reads the repository")
+    assertContains(preplan, "Settle every question the repository can answer here")
   }
 
   @Test
