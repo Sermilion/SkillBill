@@ -1319,8 +1319,9 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `PhaseRunIntakeResolver` turns the intake into the run's issue key and run
   invariants as the definition's intake requirement says. An optional-intake
   run takes its issue key from the intake, else the current branch, else the
-  definition id, so a `phase pr` title names the real issue. A missing issue key
-  raises `PhaseIntakeRequiredError`. The CLI rejects an empty plan intake as a
+  definition id, so a `phase pr` title names the real issue. An issue URL in the
+  intake supplies its key from the first path segment that is one. A missing
+  issue key raises `PhaseIntakeRequiredError`. The CLI rejects an empty plan intake as a
   usage error. `skill-bill phase plan <KEY> [description]` sets
   `specBundleRequired`: the plan prompt asks for a decomposition package, the
   planning stopper writes the parent spec, subtask specs and decomposition
