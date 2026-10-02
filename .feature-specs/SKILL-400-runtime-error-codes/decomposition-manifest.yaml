@@ -1,0 +1,105 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-400"
+feature_name: "runtime-error-codes"
+parent_spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec.md"
+status: "pending"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "base/SKILL-380-phase-slot-strategies"
+feature_branch: "feat/SKILL-400-runtime-error-codes"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 1
+  action: "start"
+subtasks:
+- id: 1
+  name: "json-and-failure-wire-codes"
+  spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec_subtask_1_json-and-failure-wire-codes.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 2
+  name: "external-platform-pack-and-addon-codes"
+  spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec_subtask_2_external-platform-pack-and-addon-codes.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 3
+  name: "durable-decode-and-request-codes"
+  spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec_subtask_3_durable-decode-and-request-codes.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 4
+  name: "phase-slot-codes"
+  spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec_subtask_4_phase-slot-codes.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 5
+  name: "execution-plan-codes"
+  spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec_subtask_5_execution-plan-codes.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 6
+  name: "domain-and-mcp-codes"
+  spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec_subtask_6_domain-and-mcp-codes.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 7
+  name: "infra-host-launcher-skills-workflow-codes"
+  spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec_subtask_7_infra-host-launcher-skills-workflow-codes.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []

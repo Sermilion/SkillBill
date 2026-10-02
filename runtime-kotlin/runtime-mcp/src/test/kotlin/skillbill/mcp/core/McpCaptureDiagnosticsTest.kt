@@ -2,6 +2,7 @@ package skillbill.mcp.core
 
 import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.telemetryProxyRequestFailure
 import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.infrastructure.sqlite.ensureTestDatabase
 import skillbill.mcp.shared.McpRuntimeContext
@@ -100,6 +101,29 @@ class McpCaptureDiagnosticsTest {
     assertEquals(CAPTURED_TOOL, probe["tool"])
     assertEquals("probe failed", probe["error"])
     assertEquals(listOf("ProbeFailureCode.PROBE"), capturedErrorTypes(dbPath))
+  }
+
+  @Test
+  fun `dispatcher captures a proxy request failure and leaves an illegal argument uncaptured`() {
+    val tempDir = Files.createTempDirectory("skillbill-mcp-capture-proxy")
+    val environment = enabledTelemetryEnvironment(tempDir)
+    val dbPath = tempDir.resolve("metrics.db")
+    ensureTestDatabase(dbPath).close()
+
+    val proxyFailure =
+      McpRuntimeContext(
+        requester = failingRequester(telemetryProxyRequestFailure(500, "capabilities", "upstream")),
+        environment = environment,
+      ).callToolError(CAPTURED_TOOL)
+    val illegalArgument =
+      McpRuntimeContext(
+        requester = failingRequester(IllegalArgumentException("bad argument")),
+        environment = environment,
+      ).callToolError(CAPTURED_TOOL)
+
+    assertEquals("Telemetry proxy request failed at capabilities with HTTP 500: upstream", proxyFailure["error"])
+    assertEquals("bad argument", illegalArgument["error"])
+    assertEquals(listOf("TelemetryHttpFailureCode.PROXY_REQUEST_FAILED"), capturedErrorTypes(dbPath))
   }
 
   private fun failingRequester(failure: Exception): RemoteTransportPort =

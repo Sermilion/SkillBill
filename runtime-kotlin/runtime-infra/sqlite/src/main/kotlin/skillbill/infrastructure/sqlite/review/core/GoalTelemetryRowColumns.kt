@@ -1,20 +1,16 @@
 package skillbill.infrastructure.sqlite.review.core
 
-import skillbill.error.core.ShellContentContractException
-
-internal class InvalidGoalTelemetryRowError(
-  internal val rowIdentity: String,
-  internal val reason: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(
-    "Goal telemetry row $rowIdentity is malformed: $reason",
-    cause,
-  )
+import skillbill.error.core.GoalTelemetryRowFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 
 private fun goalRowError(
   identity: String,
   reason: String,
-): Nothing = throw InvalidGoalTelemetryRowError(identity, reason)
+): Nothing =
+  throw SkillBillRuntimeException(
+    GoalTelemetryRowFailureCode.MALFORMED,
+    "Goal telemetry row $identity is malformed: $reason",
+  )
 
 internal fun Map<String, Any?>.requirePresentString(
   column: String,

@@ -1,6 +1,7 @@
 package skillbill.infrastructure.http
 
-import skillbill.error.core.InvalidTelemetryTransportOutcomeError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.TelemetryHttpFailureCode
 import skillbill.telemetry.model.TelemetryDeliveryOutcome
 
 internal const val HTTP_NOT_FOUND: Int = 404
@@ -18,7 +19,10 @@ private const val HTTP_TOO_MANY_REQUESTS: Int = 429
 
 internal fun classifyDeliveryOutcome(statusCode: Int): TelemetryDeliveryOutcome {
   if (statusCode !in HTTP_STATUS_MIN..HTTP_STATUS_MAX) {
-    throw InvalidTelemetryTransportOutcomeError(statusCode)
+    throw SkillBillRuntimeException(
+      TelemetryHttpFailureCode.INVALID_TRANSPORT_OUTCOME,
+      "Telemetry transport returned $statusCode, which is not a valid HTTP status code.",
+    )
   }
   return when {
     statusCode in HTTP_SUCCESS_RANGE -> TelemetryDeliveryOutcome.ACCEPTED

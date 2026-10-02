@@ -13,6 +13,7 @@ import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowIfDatabaseFailure
 import skillbill.ports.scaffold.ScaffoldGateway
 import skillbill.ports.scaffold.model.ScaffoldRenderResult
 import java.nio.file.Path
@@ -109,6 +110,7 @@ class NativeScaffoldPayloadRun(
           ),
         )
       } catch (error: SkillBillRuntimeException) {
+        error.rethrowIfDatabaseFailure()
         return state.completeScaffoldError(error.message.orEmpty(), options.format)
       }
     val result = outcome.scaffoldResult
@@ -154,6 +156,7 @@ internal fun CliRunState.completeAuthoring(
     val payload = block()
     complete(payload, format, successExitCode(payload))
   } catch (error: SkillBillRuntimeException) {
+    error.rethrowIfDatabaseFailure()
     completeScaffoldError(error.message.orEmpty(), format)
   } catch (error: IllegalArgumentException) {
     completeScaffoldError(error.message.orEmpty(), format)

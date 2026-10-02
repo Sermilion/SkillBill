@@ -2,8 +2,9 @@ package skillbill.infrastructure.sqlite
 
 import org.junit.jupiter.api.parallel.Execution
 import org.junit.jupiter.api.parallel.ExecutionMode
-import skillbill.error.core.DatabaseAccessError
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.DatabaseFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigration
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.schema.DatabaseIdentity
@@ -151,7 +152,7 @@ class DatabaseWriteReadinessTest {
   }
 
   @Test
-  fun `unreadable database file surfaces read DatabaseAccessError from ensureReady`() {
+  fun `unreadable database file surfaces read ACCESS database failure from ensureReady`() {
     val tempDir = Files.createTempDirectory("skillbill-write-readiness-unreadable")
     val dbPath = tempDir.resolve("metrics.db")
     Files.writeString(dbPath, "not-a-sqlite-database")
@@ -159,10 +160,11 @@ class DatabaseWriteReadinessTest {
     val gate = CountingReadinessGate { establishments += 1 }
 
     val error =
-      assertFailsWith<DatabaseAccessError> {
+      assertFailsWith<SkillBillRuntimeException> {
         gate.ensureReady(dbPath)
       }
-    assertEquals(DatabaseAccessOperation.READ, error.operation)
+    assertEquals(DatabaseFailureCode.ACCESS, error.code)
+    assertTrue(error.message.orEmpty().startsWith("Database ${DatabaseAccessOperation.READ.wireValue} failed for '"))
     assertEquals(0, establishments)
   }
 
@@ -178,9 +180,11 @@ class DatabaseWriteReadinessTest {
         environment = emptyMap(),
       )
 
-    assertFailsWith<DatabaseAccessError> {
-      database.transaction { Unit }
-    }
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        database.transaction { Unit }
+      }
+    assertEquals(DatabaseFailureCode.ACCESS, failure.code)
 
     Files.delete(invalidPath)
     database.transaction { unitOfWork ->

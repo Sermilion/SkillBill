@@ -4,7 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import org.sqlite.SQLiteErrorCode
 import org.sqlite.SQLiteException
 import skillbill.error.core.DatabaseAccessOperation
-import skillbill.error.core.DatabaseBusyError
+import skillbill.error.core.databaseBusy
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionBeginMode
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionSpec
 import skillbill.infrastructure.sqlite.core.ops.inDatabaseTransaction
@@ -126,7 +126,7 @@ class SQLiteDatabaseSessionFactory(
 private fun <T> translatingBusyFailures(block: () -> T): T =
   runCatching(block).getOrElse { error ->
     error.rethrowIfCooperativeCancellationOrInterruption()
-    if (error.isSqliteBusy()) throw DatabaseBusyError(error)
+    if (error.isSqliteBusy()) throw databaseBusy(error)
     throw error
   }
 

@@ -9,7 +9,7 @@ base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feat/SKILL-398-runtime-exception-reduction"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 4
+  subtask_id: 5
   action: "resume"
 subtasks:
 - id: 1
@@ -54,12 +54,12 @@ subtasks:
 - id: 4
   name: "collapse-shell-content-errors"
   spec_path: ".feature-specs/SKILL-398-runtime-exception-reduction/spec_subtask_4_collapse-shell-content-errors.md"
-  status: "in_progress"
+  status: "complete"
   branch: null
   commit_sha: null
   workflow_id: "wftr-20261002-104004-hav2"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
@@ -67,12 +67,12 @@ subtasks:
 - id: 5
   name: "collapse-remaining-errors"
   spec_path: ".feature-specs/SKILL-398-runtime-exception-reduction/spec_subtask_5_collapse-remaining-errors.md"
-  status: "pending"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261002-140256-p356"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

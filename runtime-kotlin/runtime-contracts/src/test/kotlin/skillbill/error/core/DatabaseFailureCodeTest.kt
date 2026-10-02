@@ -6,11 +6,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class DatabaseAccessErrorTest {
+class DatabaseFailureCodeTest {
   @Test
   fun `message carries the resolved path and the sqlite result code`() {
     val error =
-      DatabaseAccessError(
+      databaseAccessFailure(
         dbPath = "/tmp/skill-bill/review-metrics.db",
         operation = DatabaseAccessOperation.READ,
         condition = "sqlite result code 5: database is locked",
@@ -24,7 +24,7 @@ class DatabaseAccessErrorTest {
   @Test
   fun `bounded condition collapses a multi line condition and drops stack frames`() {
     val error =
-      DatabaseAccessError(
+      databaseAccessFailure(
         dbPath = "/tmp/metrics.db",
         operation = DatabaseAccessOperation.OPEN,
         condition =
@@ -48,40 +48,50 @@ class DatabaseAccessErrorTest {
   @Test
   fun `condition is length bounded`() {
     val error =
-      DatabaseAccessError(
+      databaseAccessFailure(
         dbPath = "/tmp/metrics.db",
         operation = DatabaseAccessOperation.READ,
         condition = "x".repeat(5_000),
       )
 
-    assertTrue(error.condition.length <= 201, "condition length was ${error.condition.length}")
+    val condition = databaseAccessCondition(error)
+    assertTrue(condition.length <= 201, "condition length was ${condition.length}")
     assertEquals(1, error.message.orEmpty().lines().size)
   }
 
   @Test
-  fun `the typed error is not absorbed by supertype catches for domain failures`() {
+  fun `the access failure carries the database access code`() {
     val error =
-      DatabaseAccessError(
+      databaseAccessFailure(
         dbPath = "/tmp/metrics.db",
         operation = DatabaseAccessOperation.OPEN,
         condition = "sqlite result code 5: database is locked",
       )
 
-    assertFalse(
-      SkillBillRuntimeException::class.java.isInstance(error),
-      "a transient database condition would be reclassified as a terminal domain failure",
-    )
+    assertEquals(DatabaseFailureCode.ACCESS, error.code)
   }
 
   @Test
   fun `blank condition falls back to a bounded placeholder`() {
     val error =
-      DatabaseAccessError(
+      databaseAccessFailure(
         dbPath = "/tmp/metrics.db",
         operation = DatabaseAccessOperation.OPEN,
         condition = "   \n  ",
       )
 
-    assertEquals("unknown sqlite condition", error.condition)
+    assertEquals("unknown sqlite condition", databaseAccessCondition(error))
+  }
+
+  @Test
+  fun `condition extractor returns the bounded condition and not the path or prefix`() {
+    val error =
+      databaseAccessFailure(
+        dbPath = "/tmp/metrics.db",
+        operation = DatabaseAccessOperation.READ,
+        condition = "sqlite result code 14: unable to open database file",
+      )
+
+    assertEquals("sqlite result code 14: unable to open database file", databaseAccessCondition(error))
   }
 }

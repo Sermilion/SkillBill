@@ -3,12 +3,13 @@ package skillbill.application
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.review.spec.SpecIntentProjectionExtractor
 import skillbill.application.review.spec.SpecIntentSourceRead
-import skillbill.application.runtimepersistence.RuntimeOwnedFactUnavailable
 import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
+import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceFailureCode
 import skillbill.application.system.SystemService
 import skillbill.application.telemetry.settings.telemetrySettingsOrNull
 import skillbill.application.updatecheck.UpdateCheckService
 import skillbill.application.updatecheck.model.UpdateCheckStatus
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.model.RuntimeVersion
 import skillbill.ports.db.DatabaseSessionFactory
@@ -180,9 +181,10 @@ class ApplicationCooperativeFailureBoundaryTest {
     val root = IOException("store-down")
     val boundary = RuntimeOwnedPersistenceBoundary(FailingDatabase(root), RecordingDiagnostics())
     val error =
-      assertFailsWith<RuntimeOwnedFactUnavailable> {
+      assertFailsWith<SkillBillRuntimeException> {
         boundary.requiredRead("probe", "fact") { "unreachable" }
       }
+    assertEquals(RuntimeOwnedPersistenceFailureCode.REVIEW_FACT_UNAVAILABLE, error.code)
     assertEquals(root, error.cause)
     assertTrue(RecordingDiagnostics.lastWarning.orEmpty().contains("store-down"))
   }
@@ -203,10 +205,11 @@ class ApplicationCooperativeFailureBoundaryTest {
         ) = Unit
       }
     val error =
-      assertFailsWith<RuntimeOwnedFactUnavailable> {
+      assertFailsWith<SkillBillRuntimeException> {
         RuntimeOwnedPersistenceBoundary(FailingDatabase(root), diagnostics)
           .requiredRead("probe", "fact") { "unreachable" }
       }
+    assertEquals(RuntimeOwnedPersistenceFailureCode.REVIEW_FACT_UNAVAILABLE, error.code)
     assertSame(root, error.cause)
   }
 

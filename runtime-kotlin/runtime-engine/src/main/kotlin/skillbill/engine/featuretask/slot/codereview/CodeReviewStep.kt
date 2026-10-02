@@ -3,8 +3,8 @@ package skillbill.engine.featuretask.slot.codereview
 import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelCodeReviewRunOutcome
+import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceFailureCode
 import skillbill.engine.featuretask.model.review.ReviewTarget
-import skillbill.engine.featuretask.persist.RuntimeOwnedFactUnavailable
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -17,6 +17,7 @@ import skillbill.engine.featuretask.slot.state.PhaseReviewExecutionContext
 import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.error.shellcontent.InvalidReviewContextSchemaError
@@ -393,18 +394,18 @@ internal fun planningFailureLaunch(failure: ParallelCodeReviewPlanningFailure): 
 
 private fun launchFailure(error: Throwable): ReviewPassLaunch.Failed? {
   val message = error.message.orEmpty()
-  return when (error) {
-    is CancellationException -> null
-    is UnreadableSpecIntentProjectionError ->
+  return when {
+    error is CancellationException -> null
+    error is UnreadableSpecIntentProjectionError ->
       ReviewPassLaunch.Failed("Runtime-owned review could not read the spec intent projection: $message")
-    is InvalidReviewContextSchemaError ->
+    error is InvalidReviewContextSchemaError ->
       ReviewPassLaunch.Failed("Runtime-owned review produced an invalid review-context envelope: $message")
-    is RuntimeOwnedFactUnavailable ->
+    error is SkillBillRuntimeException && error.code == RuntimeOwnedPersistenceFailureCode.FACT_UNAVAILABLE ->
       ReviewPassLaunch.Failed(
         "Runtime-owned review could not establish a required persistence fact: $message",
         FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
       )
-    is Exception ->
+    error is Exception ->
       ReviewPassLaunch.Failed(
         "Runtime-owned review failed: ${error.failureCodeLabel() ?: error::class.simpleName}: $message",
         FeatureTaskRuntimeFailureDisposition.RETRYABLE,

@@ -248,7 +248,7 @@ heal, and one-time legacy goal-runner and telemetry repairs are named ledger mig
 
 `DatabaseWriteReadinessGate` compares the `DatabaseIdentity` snapshot already read
 for each cache decision (`DatabaseIdentity.matches`) instead of rereading the file
-through `matchesFile`. Unreadable database files raise `DatabaseAccessError(READ)` from
+through `matchesFile`. Unreadable database files raise a `DatabaseFailureCode.ACCESS` failure for `READ` from
 identity read and do not trigger migrate-on-access re-establishment. The synchronized
 initialization path still performs a second identity observation after acquiring the lock.
 `DatabaseWriteReadinessTest` exercises the gate through `sqliteSessionFactoryForTests`

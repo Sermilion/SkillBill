@@ -16,7 +16,8 @@ import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.state.PhaseReviewExecutionContext
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
-import skillbill.error.core.DatabaseBusyError
+import skillbill.error.core.DatabaseFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -33,6 +34,9 @@ internal sealed interface InlineReviewPrepared {
     val outcome: PhaseOutcome,
   ) : InlineReviewPrepared
 }
+
+private fun Throwable.isDatabaseBusy(): Boolean =
+  this is SkillBillRuntimeException && code == DatabaseFailureCode.BUSY
 
 internal object InlineReviewPreparation {
   fun prepare(
@@ -72,7 +76,7 @@ internal object InlineReviewPreparation {
   }
 
   fun goalReviewPreparationDisposition(error: Throwable): FeatureTaskRuntimeFailureDisposition =
-    if (generateSequence(error, Throwable::cause).any { it is DatabaseBusyError }) {
+    if (generateSequence(error, Throwable::cause).any(Throwable::isDatabaseBusy)) {
       FeatureTaskRuntimeFailureDisposition.RETRYABLE
     } else {
       FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION

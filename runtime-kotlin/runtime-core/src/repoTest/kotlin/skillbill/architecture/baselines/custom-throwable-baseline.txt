@@ -1,11 +1,8 @@
-runtime-application:RuntimeOwnedFactUnavailable
 runtime-contracts:AmbiguousExternalPlatformPackError
 runtime-contracts:AmbiguousLaneOwnershipError
 runtime-contracts:ComposedNativeAgentBudgetExceededError
 runtime-contracts:ContractVersionMismatchError
 runtime-contracts:CorruptFeatureTaskRuntimeExecutionPlanError
-runtime-contracts:DatabaseAccessError
-runtime-contracts:DatabaseBusyError
 runtime-contracts:DuplicatePhaseStrategyError
 runtime-contracts:ExternalAddonConfigError
 runtime-contracts:ExternalAddonOverlayError
@@ -75,7 +72,6 @@ runtime-contracts:InvalidSkeletonDefinitionError
 runtime-contracts:InvalidSkillContentIdentityError
 runtime-contracts:InvalidSkillMdShapeError
 runtime-contracts:InvalidTelemetryEventSchemaError
-runtime-contracts:InvalidTelemetryTransportOutcomeError
 runtime-contracts:InvalidValidationGateDeclarationError
 runtime-contracts:InvalidWorkListRowError
 runtime-contracts:InvalidWorkflowStateSchemaError
@@ -119,9 +115,6 @@ runtime-contracts:ShellContentContractException
 runtime-contracts:SkillAlreadyExistsError
 runtime-contracts:SkillBillRuntimeException
 runtime-contracts:SkillContentIdentityMismatchError
-runtime-contracts:TelemetryProxyInvalidResponseError
-runtime-contracts:TelemetryProxyRequestFailureError
-runtime-contracts:TelemetryRelayUrlUnconfiguredError
 runtime-contracts:UnknownPhaseReviewTargetError
 runtime-contracts:UnknownPhaseStepError
 runtime-contracts:UnknownPhaseStrategyError
@@ -136,7 +129,6 @@ runtime-contracts:UnreadableSpecIntentProjectionError
 runtime-contracts:UnrecognizedFailureWireCodeError
 runtime-contracts:UnregisteredPhaseStrategySelectionError
 runtime-contracts:UnresolvedEnvironmentContextFieldError
-runtime-contracts:UnresolvedRemoteTransportPortError
 runtime-contracts:UnsafeFeatureTaskRuntimeRegenerationError
 runtime-contracts:UnsupportedFeatureTaskRuntimeExecutionPlanError
 runtime-contracts:UnsupportedJsonValueError
@@ -144,7 +136,6 @@ runtime-contracts:WorkflowIssueKeyConflictError
 runtime-domain:ReviewAttributionResolutionError
 runtime-domain:ReviewAttributionResolutionError.MalformedVocabulary
 runtime-domain:SkillBillRollbackException
-runtime-engine:RuntimeOwnedFactUnavailable
 runtime-infra:host:GateJvmGuardExecutionException
 runtime-infra:host:GateJvmGuardOutputException
 runtime-infra:host:GateJvmGuardResourceMissingException
@@ -159,6 +150,5 @@ runtime-infra:launcher:CursorReviewStreamProviderFailureError
 runtime-infra:launcher:CursorReviewStreamTerminationError
 runtime-infra:skills:InstallSymlinkException
 runtime-infra:skills:ReleaseLicensePolicyError
-runtime-infra:sqlite:InvalidGoalTelemetryRowError
 runtime-infra:workflow:ValidationGateProcessException
 runtime-mcp:InvalidMcpToolArgumentError

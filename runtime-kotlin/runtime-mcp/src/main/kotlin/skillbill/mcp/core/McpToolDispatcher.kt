@@ -24,10 +24,7 @@ internal object McpToolDispatcher {
       .getOrElse { error ->
         when {
           error is CancellationException -> throw error
-          error.isShellContentContractFailure() ||
-            error is InvalidLearningSourceError ||
-            error is IllegalArgumentException ||
-            error is IllegalStateException -> mcpToolErrorResult(toolName, error)
+          error.uncapturedAtMcp() -> mcpToolErrorResult(toolName, error)
           error is Exception -> {
             recordCaptureFailure(
               workflowPhase = toolName,
@@ -39,6 +36,12 @@ internal object McpToolDispatcher {
           else -> throw error
         }
       }
+
+  private fun Throwable.uncapturedAtMcp(): Boolean =
+    isShellContentContractFailure() ||
+      this is InvalidLearningSourceError ||
+      this is IllegalArgumentException ||
+      this is IllegalStateException
 
   private fun invoke(
     toolName: String,

@@ -1,3 +1,13 @@
+## [2026-10-02] SKILL-398 subtask 5 — persistence and transport failures collapse to coded failures
+Areas: runtime-kotlin/runtime-{contracts,application,engine,cli,mcp,core}, runtime-infra/{sqlite,http}, ARCHITECTURE.md
+- Database access/busy, telemetry HTTP, goal-telemetry-row and runtime-owned persistence failures (9 classes) are now coded SkillBillRuntimeException via factories in runtime-contracts and runtime-application; baseline rows removed. reusable
+- rethrowIfDatabaseFailure() guards catches a database failure could newly reach (planning stop, install replay, scaffold payload run); readers match codes through rethrowUnless.
+- McpToolDispatcher keeps no-capture classification in one private predicate; unresolved remote transport port is now a plain error() composition defect.
+- Telemetry request is split into execute and body-check steps so proxy capability detection reads the status as a value.
+- Limits: authored without compile or test runs; planning-stop database-propagation test not yet written; remaining shell-content and error areas move to SKILL-399 and SKILL-400, so the legacy bases stay.
+Feature flag: N/A
+Acceptance criteria: implemented per reduced-scope spec; validate confirms
+
 ## [2026-10-02] SKILL-398 subtask 4 — AgentAddon and GovernedReview shell-content errors collapse to coded failures
 Areas: runtime-kotlin/runtime-{contracts,application,cli,engine,mcp,domain,core}, runtime-infra/{skills,launcher,contracts,sqlite,http,workflow}, docs/telemetry-privacy.md
 - The 10 AgentAddon and GovernedReview ShellContentContractException subclasses are deleted; both files keep only a failure-code enum plus message functions, and every throw site raises one coded SkillBillRuntimeException. reusable

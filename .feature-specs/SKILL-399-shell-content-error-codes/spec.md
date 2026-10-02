@@ -40,7 +40,7 @@ Transition: while any class in main still extends `SkillBillRuntimeException` or
 
 - it deletes `ShellContentContractException`, `LegacyFailureCode` and the secondary constructor;
 - it makes `SkillBillRuntimeException` final;
-- it replaces the remaining `ShellContentContractException` catches, and the `isShellContentContractFailure()` guards, with `catch (e: SkillBillRuntimeException)`.
+- it removes the `is ShellContentContractException` term from `isShellContentContractFailure()` and keeps every guarded edge site with its rethrow, retargeting any `ShellContentContractException` catch, function type or `is` check left in main or tests to `SkillBillRuntimeException` under the same guard. Widening a guarded catch to every `SkillBillRuntimeException` is not allowed: it would absorb database, runtime-owned fact, gate-JVM and validation-gate failures that propagate today. The full rule is `.feature-specs/SKILL-400-runtime-error-codes/spec.md` "Transition finish"; the condition also requires that no source calls the codeless constructor.
 
 Every subtask in this bundle checks that condition after its own edits.
 
@@ -102,7 +102,7 @@ The feature is done when every subtask's criteria hold. Together:
 ## Non-Goals
 
 - The AgentAddon and GovernedReview files and the shared transition pieces (SKILL-398 subtask 4).
-- Classes outside `skillbill.error.shellcontent` (SKILL-398 subtask 5).
+- Classes outside `skillbill.error.shellcontent` (SKILL-398 subtask 5 and SKILL-400).
 - Renaming the `skillbill.error.shellcontent` package (SKILL-372 retention).
 - The CLI and MCP top-level arms.
 

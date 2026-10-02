@@ -1,9 +1,9 @@
 package skillbill.engine.featuretask.runloop.output
 
+import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceFailureCode
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
-import skillbill.engine.featuretask.persist.RuntimeOwnedFactUnavailable
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistArgs
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
@@ -22,6 +22,8 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitio
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -56,7 +58,8 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
     val persisted =
       try {
         recordStandaloneReviewCompletion(args, outputText, acceptedOutput)
-      } catch (error: RuntimeOwnedFactUnavailable) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code == RuntimeOwnedPersistenceFailureCode.FACT_UNAVAILABLE)
         return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
           state,
           transitions,
