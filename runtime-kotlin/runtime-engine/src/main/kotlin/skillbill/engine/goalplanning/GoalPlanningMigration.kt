@@ -27,6 +27,7 @@ import skillbill.text.sha256HexUtf8
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import java.time.Clock
 
@@ -160,8 +161,13 @@ class GoalPlanningMigration(
       val subtask =
         manifest.subtasks.singleOrNull { it.id == plan.subtaskId }
           ?: migrationFailure(FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT)
-      if (subtask.specPath != plan.governedSubSpecPath ||
-        manifest.subtasks.indexOf(subtask) != plan.manifestOrder || plan.provenance != shared.provenance
+      if (!FeatureTaskExecutionIdentityPolicy.sameGovernedSpecPath(
+          subtask.specPath,
+          plan.governedSubSpecPath,
+          shared.identity.repositoryIdentity,
+        ) ||
+        manifest.subtasks.indexOf(subtask) != plan.manifestOrder ||
+        plan.provenance != shared.provenance
       ) {
         migrationFailure(FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT)
       }

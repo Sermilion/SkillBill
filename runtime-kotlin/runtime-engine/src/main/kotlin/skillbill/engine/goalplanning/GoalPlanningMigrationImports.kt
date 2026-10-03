@@ -25,6 +25,7 @@ import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStepStatus
@@ -87,7 +88,11 @@ class GoalPlanningMigrationImports(
       if (
         ownership.repositoryIdentity != sourceShared.identity.repositoryIdentity ||
         ownership.normalizedIssueKey != sourceShared.identity.normalizedIssueKey ||
-        ownership.governedSpecPath != subtask.specPath
+        !FeatureTaskExecutionIdentityPolicy.sameGovernedSpecPath(
+          ownership.governedSpecPath,
+          subtask.specPath,
+          ownership.repositoryIdentity,
+        )
       ) {
         migrationFailure(FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT)
       }

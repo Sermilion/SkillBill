@@ -1,3 +1,13 @@
+## [2026-10-03] Canonicalize governed spec paths before planning-import admission
+
+Context: A new goal child's implement admission refused `unsafe_import` with `source_version=unknown` even though planning had just written 0.7 payloads. Launch stores a repository-relative identity path; decomposition can still carry an absolute `spec_path` for the same file.
+
+Decision: Treat those strings as the same governed spec by canonicalizing against `repository_identity` in `FeatureTaskExecutionIdentityPolicy`, and use that comparison in planning topology and child-import admission.
+
+Reason: String equality treated a fresh same-runtime import as a foreign source. The diagnostic then had no phase-output version facts, so it logged `unknown`. Converting the bytes was never the failure.
+
+Alternatives considered: Forcing planners to write only relative spec paths still leaves already-persisted absolute manifests, and child identity is required to stay repository-relative.
+
 ## [2026-10-03] Preserve slotbaseline resource paths during test relocation
 Context: SKILL-390 subtask 3 moves slotbaseline capture tests into featuretask.runner while requiring resource and persisted-byte preservation.
 Decision: Keep the featuretask/slotbaseline resource tree, module-root resolution and absolute audit-resource lookups unchanged while relocating capture tests and repairing their setup.

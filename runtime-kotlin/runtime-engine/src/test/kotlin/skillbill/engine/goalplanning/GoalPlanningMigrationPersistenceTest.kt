@@ -147,9 +147,30 @@ class GoalPlanningMigrationPersistenceTest {
       assertEquals(beforeChild, fixture.child())
     }
   }
+
+  @Test
+  fun `current planning import admits when the parent manifest stored an absolute subtask spec path`() {
+    val fixture =
+      MigrationFixture(
+        historicalPhaseOutput = false,
+        launchedSubtaskSpecPath = "/tmp/admission-repository/.feature-specs/SKILL-384/spec.md",
+      )
+    val beforeShared = fixture.shared()
+    val beforePlan = fixture.plan()
+    val beforeChild = fixture.child()
+    assertFalse(fixture.migrate(requirePreparation = true))
+    assertEquals(beforeShared, fixture.shared())
+    assertEquals(beforePlan, fixture.plan())
+    assertEquals(beforeChild, fixture.child())
+  }
 }
 
-private class MigrationFixture {
+private const val RELATIVE_SPEC = ".feature-specs/SKILL-384/spec.md"
+
+private class MigrationFixture(
+  historicalPhaseOutput: Boolean = true,
+  launchedSubtaskSpecPath: String = RELATIVE_SPEC,
+) {
   private val home = Files.createTempDirectory("durable-planning-migration")
   private val path = home.resolve("state.db")
   val database = sqliteSessionFactoryForTests(home, path.toString(), emptyMap())
@@ -159,7 +180,7 @@ private class MigrationFixture {
       "SKILL-384",
       "repo-root-realpath-v1:/tmp/admission-repository",
     )
-  private val spec = ".feature-specs/SKILL-384/spec.md"
+  private val spec = RELATIVE_SPEC
   private val manifest =
     DecompositionManifest(
       issueKey = "SKILL-384",
@@ -174,7 +195,7 @@ private class MigrationFixture {
           DecompositionSubtask(
             1,
             "completed",
-            spec,
+            specPath = launchedSubtaskSpecPath,
             status = "complete",
             commitSha = "f".repeat(40),
             workflowId = "wftr-migration-child",
@@ -275,28 +296,33 @@ private class MigrationFixture {
         ),
       )
     }
-    ensureTestDatabase(path).use { connection ->
-      connection.prepareStatement(
-        "UPDATE goal_shared_preplans SET phase_output_contract_version = '0.6', " +
-          "preplan_payload_json = ?, payload_sha256 = ?",
-      ).use {
-        it.setString(1, historicalPreplan)
-        it.setString(2, sha256HexUtf8(historicalPreplan))
-        it.executeUpdate()
-      }
-      connection.prepareStatement(
-        "UPDATE goal_subtask_plans SET phase_output_contract_version = '0.6', " +
-          "plan_payload_json = ?, payload_sha256 = ?",
-      ).use {
-        it.setString(1, historicalPlan)
-        it.setString(2, sha256HexUtf8(historicalPlan))
-        it.executeUpdate()
+    if (historicalPhaseOutput) {
+      ensureTestDatabase(path).use { connection ->
+        connection.prepareStatement(
+          "UPDATE goal_shared_preplans SET phase_output_contract_version = '0.6', " +
+            "preplan_payload_json = ?, payload_sha256 = ?",
+        ).use {
+          it.setString(1, historicalPreplan)
+          it.setString(2, sha256HexUtf8(historicalPreplan))
+          it.executeUpdate()
+        }
+        connection.prepareStatement(
+          "UPDATE goal_subtask_plans SET phase_output_contract_version = '0.6', " +
+            "plan_payload_json = ?, payload_sha256 = ?",
+        ).use {
+          it.setString(1, historicalPlan)
+          it.setString(2, sha256HexUtf8(historicalPlan))
+          it.executeUpdate()
+        }
       }
     }
+    val importedPreplan = if (historicalPhaseOutput) historicalPreplan else currentPreplan
+    val importedPlan = if (historicalPhaseOutput) historicalPlan else currentPlan
+    val importedPhaseOutputVersion = if (historicalPhaseOutput) "0.6" else "0.7"
     database.transaction { unit ->
       val child = requireNotNull(unit.workflowStates.get(WorkflowFamily.TASK_RUNTIME, "wftr-migration-child"))
       val records =
-        listOf("preplan" to historicalPreplan, "plan" to historicalPlan).associate { (phase, payload) ->
+        listOf("preplan" to importedPreplan, "plan" to importedPlan).associate { (phase, payload) ->
           phase to
             FeatureTaskRuntimePhaseRecord(
               phaseId = phase,
@@ -314,8 +340,9 @@ private class MigrationFixture {
         FeatureTaskRuntimeGoalPlanningImport(
           identity.parentGoalWorkflowId, identity.normalizedIssueKey,
           identity.repositoryIdentity, provenance.parentSpecHash, provenance.decompositionManifestHash,
-          provenance.planningContractId, provenance.planningContractVersion, provenance.phaseOutputContractId, "0.6",
-          1, 0, spec, "c".repeat(64), sha256HexUtf8(historicalPreplan), sha256HexUtf8(historicalPlan),
+          provenance.planningContractId, provenance.planningContractVersion, provenance.phaseOutputContractId,
+          importedPhaseOutputVersion,
+          1, 0, spec, "c".repeat(64), sha256HexUtf8(importedPreplan), sha256HexUtf8(importedPlan),
         ).asWorkflowArtifactEntry()
       val ledger =
         listOf("preplan", "plan").mapIndexed { index, phase ->
@@ -359,6 +386,7 @@ private class MigrationFixture {
   fun migrate(
     interruptBeforeCommit: Boolean = false,
     outputs: FeatureTaskRuntimePhaseOutputMigration = ContractFeatureTaskRuntimePhaseOutputMigration(),
+    requirePreparation: Boolean = false,
   ): Boolean =
     database.transaction {
       val changed =
@@ -367,6 +395,7 @@ private class MigrationFixture {
           identity.parentGoalWorkflowId,
           identity.repositoryIdentity,
           identity.normalizedIssueKey,
+          requirePreparation = requirePreparation,
         )
       if (interruptBeforeCommit) throw InterruptedException("injected before commit")
       changed.result == RuntimeMigrationReceipt.Result.CONVERTED
