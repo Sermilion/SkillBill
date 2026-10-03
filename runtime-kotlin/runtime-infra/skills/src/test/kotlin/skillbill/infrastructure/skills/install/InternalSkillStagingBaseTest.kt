@@ -1,6 +1,16 @@
 package skillbill.infrastructure.skills.install
 
-import skillbill.error.shellcontent.InternalSkillSidecarCollisionError
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.install.apply.NativeAgentSourceRootsRequest
 import skillbill.infrastructure.skills.install.apply.nativeAgentSourceRoots
 import skillbill.infrastructure.skills.install.apply.standaloneInstallableSkills
@@ -15,14 +25,6 @@ import skillbill.infrastructure.skills.scaffold.authoring.resolveTarget
 import skillbill.install.model.AgentTarget
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
 
 class InternalSkillStagingBaseTest : InternalSkillStagingTestSupport() {
   @Test
@@ -83,12 +85,14 @@ class InternalSkillStagingBaseTest : InternalSkillStagingTestSupport() {
     Files.writeString(fixture.parentDir.resolve("${fixture.childName}.md"), "authored collision\n")
 
     val error =
-      assertFailsWith<InternalSkillSidecarCollisionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         stageInstalledSkill(fixture.repoRoot, fixture.parentDir, fixture.home)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INTERNAL_SKILL_SIDECAR_COLLISION, failure.code)
       }
-    assertEquals(fixture.parentName, error.parentSkillName)
-    assertEquals(fixture.childName, error.internalSkillName)
-    assertEquals("${fixture.childName}.md", error.sidecarRelativePath)
+    assertContains(error.message.orEmpty(), "inside parent '${fixture.parentName}'")
+    assertContains(error.message.orEmpty(), "Internal skill '${fixture.childName}'")
+    assertContains(error.message.orEmpty(), "sidecar '${fixture.childName}.md'")
   }
 
   @Test

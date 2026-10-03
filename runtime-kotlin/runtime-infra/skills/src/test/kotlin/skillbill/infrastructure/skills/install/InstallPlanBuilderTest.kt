@@ -1,10 +1,18 @@
 package skillbill.infrastructure.skills.install
 
+import java.io.FileNotFoundException
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ContractVersionMismatchError
-import skillbill.error.shellcontent.InvalidFallbackCapabilityError
 import skillbill.error.shellcontent.InvalidInstallPlanSchemaError
-import skillbill.error.shellcontent.InvalidReviewSkillStructureError
-import skillbill.error.shellcontent.MissingContentFileError
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.install.staging.applicablePointers
 import skillbill.infrastructure.skills.install.staging.authoredFilesFor
 import skillbill.infrastructure.skills.install.staging.content.computeInstallContentHash
@@ -24,15 +32,6 @@ import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
-import java.io.FileNotFoundException
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class InstallPlanBuilderTest : InstallPlanBuilderTestSupport() {
   @Test
@@ -67,8 +66,10 @@ class InstallPlanBuilderTest : InstallPlanBuilderTestSupport() {
       declareCodeReviewFallback(fixture.repoRoot, slug)
     }
 
-    assertFailsWith<InvalidFallbackCapabilityError> {
+    assertFailsWith<SkillBillRuntimeException> {
       planInstallForTest(fixture.request())
+    }.also { failure ->
+      assertEquals(SkillStagingFailureCode.INVALID_FALLBACK_CAPABILITY, failure.code)
     }
   }
 
@@ -159,7 +160,7 @@ class InstallPlanBuilderTest : InstallPlanBuilderTestSupport() {
     )
 
     val error =
-      assertFailsWith<InvalidReviewSkillStructureError> {
+      assertFailsWith<SkillBillRuntimeException> {
         planInstallForTest(
           fixture.request(
             platformPackSelection =
@@ -169,6 +170,8 @@ class InstallPlanBuilderTest : InstallPlanBuilderTestSupport() {
               ),
           ),
         )
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_REVIEW_SKILL_STRUCTURE, failure.code)
       }
 
     assertContains(error.message.orEmpty(), "specialist H2 sequence")
@@ -341,7 +344,7 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
     )
 
     val contentError =
-      assertFailsWith<MissingContentFileError> {
+      assertFailsWith<SkillBillRuntimeException> {
         planInstallForTest(
           missingContent.request(
             platformPackSelection =
@@ -351,6 +354,8 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
               ),
           ),
         )
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.MISSING_CONTENT_FILE, failure.code)
       }
     assertContains(contentError.message.orEmpty(), "bill-kotlin-code-review-architecture/content.md")
   }

@@ -1,15 +1,5 @@
 package skillbill.infrastructure.skills.scaffold
 
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.io.TempDir
-import skillbill.error.shellcontent.InvalidFallbackCapabilityError
-import skillbill.error.shellcontent.InvalidManifestSchemaError
-import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlatformPackManifests
-import skillbill.infrastructure.skills.scaffold.platformpack.loader.validatePlatformPackFallbacks
-import skillbill.ports.repository.toFileLocation
-import skillbill.scaffold.model.DeclaredFiles
-import skillbill.scaffold.model.PlatformManifest
-import skillbill.scaffold.model.RoutingSignals
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -17,6 +7,17 @@ import kotlin.io.path.writeText
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.error.shellcontent.SkillStagingFailureCode
+import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlatformPackManifests
+import skillbill.infrastructure.skills.scaffold.platformpack.loader.validatePlatformPackFallbacks
+import skillbill.ports.repository.toFileLocation
+import skillbill.scaffold.model.DeclaredFiles
+import skillbill.scaffold.model.PlatformManifest
+import skillbill.scaffold.model.RoutingSignals
 
 class PlatformPackFallbackTest {
   @TempDir
@@ -62,15 +63,19 @@ class PlatformPackFallbackTest {
 
   @Test
   fun `duplicate fallback owners fail with typed contract error`() {
-    assertFailsWith<InvalidFallbackCapabilityError> {
+    assertFailsWith<SkillBillRuntimeException> {
       validatePlatformPackFallbacks(listOf(pack("one", review = true), pack("two", review = true)))
+    }.also { failure ->
+      assertEquals(SkillStagingFailureCode.INVALID_FALLBACK_CAPABILITY, failure.code)
     }
   }
 
   @Test
   fun `review fallback without baseline fails with typed contract error`() {
-    assertFailsWith<InvalidFallbackCapabilityError> {
+    assertFailsWith<SkillBillRuntimeException> {
       validatePlatformPackFallbacks(listOf(pack("broken", review = false)))
+    }.also { failure ->
+      assertEquals(SkillStagingFailureCode.INVALID_FALLBACK_CAPABILITY, failure.code)
     }
   }
 
@@ -88,8 +93,10 @@ class PlatformPackFallbackTest {
       """.trimIndent(),
     )
 
-    assertFailsWith<InvalidManifestSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       discoverPlatformPackManifests(tempDir)
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
     }
   }
 

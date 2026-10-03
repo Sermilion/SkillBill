@@ -2,13 +2,20 @@ package skillbill.scaffold
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InvalidInstallPlanSchemaError
-import skillbill.error.shellcontent.InvalidManifestSchemaError
 import skillbill.error.shellcontent.InvalidNativeAgentCompositionSchemaError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.error.shellcontent.invalidManifestSchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.SchemaIdentityRequest
 import skillbill.infrastructure.contracts.locator.InstallPlanSchemaPaths
@@ -20,11 +27,6 @@ import skillbill.infrastructure.skills.scaffold.platformpack.manifest.PlatformPa
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.PlatformPackSchemaValidator
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
 import skillbill.testing.repoRootFromTest
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertFailsWith
 
 class PlatformPackSchemaCleanupTest {
   @Test
@@ -41,10 +43,12 @@ class PlatformPackSchemaCleanupTest {
     val node = YAMLMapper().readTree(mismatchedIdYaml)
 
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateIdentity(node, PlatformPackSchemaPaths.EXPECTED_SCHEMA_ID, SHELL_CONTRACT_VERSION) {
-          InvalidManifestSchemaError(it)
+          invalidManifestSchema(it)
         }
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "https://malicious.example/shadow-schema.yaml")
@@ -65,10 +69,12 @@ class PlatformPackSchemaCleanupTest {
     val node = YAMLMapper().readTree(mismatchedConstYaml)
 
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateIdentity(node, PlatformPackSchemaPaths.EXPECTED_SCHEMA_ID, SHELL_CONTRACT_VERSION) {
-          InvalidManifestSchemaError(it)
+          invalidManifestSchema(it)
         }
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "9.99")
@@ -83,7 +89,7 @@ class PlatformPackSchemaCleanupTest {
     val node = YAMLMapper().readTree(Files.readString(schemaPath))
 
     validateIdentity(node, PlatformPackSchemaPaths.EXPECTED_SCHEMA_ID, SHELL_CONTRACT_VERSION) {
-      InvalidManifestSchemaError(it)
+      invalidManifestSchema(it)
     }
   }
 
@@ -300,7 +306,12 @@ class PlatformPackSchemaCleanupTest {
     Files.createDirectories(packRoot)
     Files.writeString(packRoot.resolve("platform.yaml"), manifest)
 
-    val error = assertFailsWith<InvalidManifestSchemaError> { loadPlatformManifest(packRoot) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        loadPlatformManifest(packRoot)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     val message = error.message.orEmpty()
     assertContains(message, "declared_code_review_areas")
   }
@@ -358,7 +369,7 @@ private fun validateIdentity(
   expectedSchemaId: String,
   expectedContractVersion: String,
   contractVersionPath: List<String> = listOf("properties", "contract_version", "const"),
-  error: (String) -> ShellContentContractException,
+  error: (String) -> SkillBillRuntimeException,
 ) {
   ClasspathContractSchemaLoader.validateSchemaIdentity(
     SchemaIdentityRequest(

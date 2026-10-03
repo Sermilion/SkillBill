@@ -1,6 +1,15 @@
 package skillbill.infrastructure.skills.install
 
-import skillbill.error.shellcontent.InvalidInternalSkillClassificationError
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.install.plan.InstallContext
 import skillbill.infrastructure.skills.install.plan.installSkill
 import skillbill.infrastructure.skills.install.plan.uninstallTargets
@@ -13,14 +22,6 @@ import skillbill.infrastructure.skills.scaffold.runtime.validation.RepoValidatio
 import skillbill.install.model.AgentTarget
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
 
 class InternalSkillStagingPackTest : InternalSkillStagingTestSupport() {
   @Test
@@ -30,12 +31,14 @@ class InternalSkillStagingPackTest : InternalSkillStagingTestSupport() {
     Files.createDirectories(agentRoot)
 
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         installSkill(
           skillPath = fixture.childDir,
           agentTargets = listOf(AgentTarget("test-agent", agentRoot.toFileLocation())),
           context = InstallContext(repoRoot = fixture.repoRoot, home = fixture.home),
         )
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertTrue(error.message.orEmpty().contains("internal-for: ${fixture.parentName}"))
     assertFalse(

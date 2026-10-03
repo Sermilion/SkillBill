@@ -1,19 +1,21 @@
 package skillbill.infrastructure.skills.scaffold
 
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ContractVersionMismatchError
-import skillbill.error.shellcontent.InvalidManifestSchemaError
+import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.validateGovernedSkill
 import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 
 class PlatformPackSchemaViolationsTest {
   @Test
@@ -34,8 +36,10 @@ class PlatformPackSchemaViolationsTest {
           required: true
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     assertContains(error.message.orEmpty(), "path")
   }
@@ -57,8 +61,10 @@ class PlatformPackSchemaViolationsTest {
           architecture: code-review/architecture/content.md
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     assertContains(error.message.orEmpty(), "lane_conditions")
     assertContains(error.message.orEmpty(), "architecture")
@@ -74,8 +80,10 @@ class PlatformPackSchemaViolationsTest {
       declared_code_review_areas: []
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
 
     val message = error.message.orEmpty()
@@ -93,8 +101,10 @@ class PlatformPackSchemaViolationsTest {
       declared_code_review_areas: []
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     assertContains(error.message.orEmpty(), "routing_signals")
     assertContains(error.message.orEmpty(), "strong")
@@ -111,8 +121,10 @@ class PlatformPackSchemaViolationsTest {
       declared_code_review_areas: []
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("kotlin", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "platform")
@@ -138,8 +150,10 @@ class PlatformPackSchemaViolationsTest {
           focus: "architecture"
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     assertContains(error.message.orEmpty(), "declared_files")
     assertContains(error.message.orEmpty(), "baseline")
@@ -166,8 +180,10 @@ class PlatformPackSchemaViolationsTest {
           focus: "security"
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     assertContains(error.message.orEmpty(), "area_metadata")
     assertContains(error.message.orEmpty(), "security")
@@ -185,8 +201,10 @@ class PlatformPackSchemaViolationsTest {
         - laravel
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     assertContains(error.message.orEmpty(), "declared_code_review_areas")
     assertContains(error.message.orEmpty(), "laravel")
@@ -265,8 +283,10 @@ class PlatformPackSchemaViolationsTest {
             target: "orchestration/shell-content-contract/shell-ceremony.md"
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "review.txt")
@@ -288,8 +308,10 @@ class PlatformPackSchemaViolationsTest {
             target: "orchestration/shell-content-contract/shell-ceremony.md"
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "name")
@@ -311,8 +333,10 @@ class PlatformPackSchemaViolationsTest {
             target: "../../etc/passwd"
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "target")
@@ -336,8 +360,10 @@ class PlatformPackSchemaViolationsTest {
           performance: code-review/performance/content.md
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     assertContains(error.message.orEmpty(), "declared_files.areas")
     assertContains(error.message.orEmpty(), "performance")
@@ -360,8 +386,10 @@ class PlatformPackSchemaViolationsTest {
           architecture: code-review/architecture/content.md
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "declared_files.areas")
@@ -385,8 +413,10 @@ class PlatformPackSchemaViolationsTest {
             target: "orchestration/shell-content-contract/shell-ceremony.md"
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "shell-ceremony.md")
@@ -416,8 +446,10 @@ class PlatformPackSchemaViolationsTest {
             entrypoint: android-compose-review.md
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "addon_usage")
@@ -464,8 +496,10 @@ class PlatformPackSchemaViolationsTest {
             entrypoint: android-compose-review.md
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "addon_usage")
@@ -495,8 +529,10 @@ class PlatformPackSchemaViolationsTest {
             entrypoint: shell-ceremony.md
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "addon_usage")
@@ -530,8 +566,10 @@ class PlatformPackSchemaViolationsTest {
             entrypoint: android-compose-edge-to-edge.md
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "android-compose")
@@ -550,8 +588,10 @@ class PlatformPackSchemaViolationsTest {
       feature_addon_usage: "not a mapping"
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     assertContains(error.message.orEmpty(), "feature_addon_usage")
   }
@@ -576,8 +616,10 @@ class PlatformPackSchemaViolationsTest {
             unexpected: true
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "feature_addon_usage")
@@ -603,8 +645,10 @@ class PlatformPackSchemaViolationsTest {
             entrypoint: android-compose-implementation.md
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "feature_addon_usage")
@@ -663,8 +707,10 @@ class PlatformPackSchemaViolationsTest {
           focus: "architecture"
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
 
@@ -685,8 +731,10 @@ class PlatformPackSchemaViolationsTest {
         baseline: code-review/content.md
       """.trimIndent()
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "declared_filez")
@@ -705,8 +753,10 @@ class PlatformPackSchemaViolationsTest {
     val (pack, qualityCheck) = qualityCheckOverridePack(internalFor = "bill-code-check")
 
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateGovernedSkill(pack, "declared_quality_check_file", qualityCheck, "quality-check")
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     assertContains(error.message.orEmpty(), "internal-for: $PACK_SIDECAR_PARENT_SKILL")
   }

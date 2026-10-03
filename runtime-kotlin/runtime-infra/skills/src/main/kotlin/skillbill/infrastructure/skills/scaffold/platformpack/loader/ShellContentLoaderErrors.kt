@@ -1,26 +1,26 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.loader
 
 import skillbill.error.shellcontent.ContractVersionMismatchError
-import skillbill.error.shellcontent.InvalidFallbackCapabilityError
-import skillbill.error.shellcontent.InvalidManifestSchemaError
-import skillbill.error.shellcontent.InvalidValidationGateDeclarationError
-import skillbill.error.shellcontent.MissingContentFileError
-import skillbill.error.shellcontent.MissingRequiredSectionError
+import skillbill.error.shellcontent.invalidFallbackCapability as codedInvalidFallbackCapability
+import skillbill.error.shellcontent.invalidManifestSchema as codedInvalidManifestSchema
+import skillbill.error.shellcontent.invalidValidationGateDeclaration as codedInvalidValidationGateDeclaration
+import skillbill.error.shellcontent.missingContentFile as codedMissingContentFile
+import skillbill.error.shellcontent.missingRequiredSection as codedMissingRequiredSection
 
 internal fun invalidManifestSchema(message: String): Nothing {
-  throw InvalidManifestSchemaError(message)
+  throw codedInvalidManifestSchema(message)
 }
 
 internal fun missingManifestContent(message: String): Nothing {
-  throw MissingContentFileError(message)
+  throw codedMissingContentFile(message)
 }
 
 internal fun missingManifestSection(message: String): Nothing {
-  throw MissingRequiredSectionError(message)
+  throw codedMissingRequiredSection(message)
 }
 
 internal fun invalidFallbackCapability(message: String): Nothing {
-  throw InvalidFallbackCapabilityError(message)
+  throw codedInvalidFallbackCapability(message)
 }
 
 internal fun contractVersionMismatch(message: String): Nothing {
@@ -28,12 +28,12 @@ internal fun contractVersionMismatch(message: String): Nothing {
 }
 
 internal fun invalidValidationGateDeclaration(message: String): Nothing {
-  throw InvalidValidationGateDeclarationError(message)
+  throw codedInvalidValidationGateDeclaration(message)
 }
 
 internal fun invalidManifestSchemaFromPath(
   message: String,
   cause: Throwable,
 ): Nothing {
-  throw InvalidManifestSchemaError(message, cause)
+  throw codedInvalidManifestSchema(message, cause)
 }

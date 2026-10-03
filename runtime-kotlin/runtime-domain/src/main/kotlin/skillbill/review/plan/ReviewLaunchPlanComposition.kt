@@ -1,24 +1,24 @@
 package skillbill.review.plan
 
-import skillbill.error.shellcontent.AmbiguousLaneOwnershipError
-import skillbill.error.shellcontent.IncompatibleCompositionContractError
-import skillbill.error.shellcontent.MissingCompositionLayerError
-import skillbill.error.shellcontent.ReviewCompositionCycleError
+import skillbill.error.shellcontent.ambiguousLaneOwnership
+import skillbill.error.shellcontent.incompatibleCompositionContract
+import skillbill.error.shellcontent.missingCompositionLayer
+import skillbill.error.shellcontent.reviewCompositionCycle
 import skillbill.review.plan.model.ReviewLaunchLane
 import skillbill.review.plan.model.ReviewLaunchPlan
 import skillbill.scaffold.model.PlatformManifest
 
 internal object ReviewLaunchPlanCompositionFailures {
   fun compositionCycle(cycle: String): Nothing =
-    throw ReviewCompositionCycleError(
+    throw reviewCompositionCycle(
       "Review composition contains a cycle: $cycle.",
     )
 
-  fun missingLayer(message: String): Nothing = throw MissingCompositionLayerError(message)
+  fun missingLayer(message: String): Nothing = throw missingCompositionLayer(message)
 
-  fun incompatibleContract(message: String): Nothing = throw IncompatibleCompositionContractError(message)
+  fun incompatibleContract(message: String): Nothing = throw incompatibleCompositionContract(message)
 
-  fun ambiguousOwnership(message: String): Nothing = throw AmbiguousLaneOwnershipError(message)
+  fun ambiguousOwnership(message: String): Nothing = throw ambiguousLaneOwnership(message)
 }
 
 internal fun composeReviewLaunchAreas(

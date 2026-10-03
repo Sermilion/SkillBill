@@ -1,9 +1,5 @@
 package skillbill.infrastructure.skills.scaffold
 
-import org.yaml.snakeyaml.Yaml
-import skillbill.error.shellcontent.InvalidValidationGateDeclarationError
-import skillbill.infrastructure.skills.scaffold.platformpack.loader.parseValidationGate
-import skillbill.testing.repoRootFromTest
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -11,6 +7,11 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import org.yaml.snakeyaml.Yaml
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.infrastructure.skills.scaffold.platformpack.loader.parseValidationGate
+import skillbill.testing.repoRootFromTest
 
 class ShellContentLoaderValidationGateTest {
   @Test
@@ -42,8 +43,10 @@ class ShellContentLoaderValidationGateTest {
     val gate = wellFormedGate().toMutableMap()
     gate.remove("collect_all_full_gate_command")
     val manifest = mapOf("validation_gate" to gate)
-    assertFailsWith<InvalidValidationGateDeclarationError> {
+    assertFailsWith<SkillBillRuntimeException> {
       parseValidationGate(manifest, "kotlin")
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.INVALID_VALIDATION_GATE_DECLARATION, failure.code)
     }
   }
 
@@ -52,8 +55,10 @@ class ShellContentLoaderValidationGateTest {
     val gate = wellFormedGate().toMutableMap()
     gate["collect_all_full_gate_command"] = listOf("./gradlew", "check", " ")
     val manifest = mapOf("validation_gate" to gate)
-    assertFailsWith<InvalidValidationGateDeclarationError> {
+    assertFailsWith<SkillBillRuntimeException> {
       parseValidationGate(manifest, "kotlin")
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.INVALID_VALIDATION_GATE_DECLARATION, failure.code)
     }
   }
 
@@ -72,8 +77,10 @@ class ShellContentLoaderValidationGateTest {
     val gate = wellFormedGate().toMutableMap()
     gate["suppression_markers"] = listOf("  ")
     val manifest = mapOf("validation_gate" to gate)
-    assertFailsWith<InvalidValidationGateDeclarationError> {
+    assertFailsWith<SkillBillRuntimeException> {
       parseValidationGate(manifest, "kotlin")
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.INVALID_VALIDATION_GATE_DECLARATION, failure.code)
     }
   }
 
@@ -82,8 +89,10 @@ class ShellContentLoaderValidationGateTest {
     val gate = wellFormedGate().toMutableMap()
     gate["build_command"] = listOf("./gradlew", " ")
     val manifest = mapOf("validation_gate" to gate)
-    assertFailsWith<InvalidValidationGateDeclarationError> {
+    assertFailsWith<SkillBillRuntimeException> {
       parseValidationGate(manifest, "kotlin")
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.INVALID_VALIDATION_GATE_DECLARATION, failure.code)
     }
   }
 
@@ -93,8 +102,10 @@ class ShellContentLoaderValidationGateTest {
     gate["build_command"] = listOf("./gradlew", "check", "--continue")
     val manifest = mapOf("validation_gate" to gate)
     val error =
-      assertFailsWith<InvalidValidationGateDeclarationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseValidationGate(manifest, "kotlin")
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_VALIDATION_GATE_DECLARATION, failure.code)
       }
     assertEquals(
       "Platform pack 'kotlin': 'validation_gate.build_command' must not be byte-identical to " +
@@ -109,8 +120,10 @@ class ShellContentLoaderValidationGateTest {
     gate["cache_bypassing_build_command"] = listOf("./gradlew", "check", "--continue", "--rerun-tasks")
     val manifest = mapOf("validation_gate" to gate)
     val error =
-      assertFailsWith<InvalidValidationGateDeclarationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseValidationGate(manifest, "kotlin")
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_VALIDATION_GATE_DECLARATION, failure.code)
       }
     assertEquals(
       "Platform pack 'kotlin': 'validation_gate.cache_bypassing_build_command' must not be " +
@@ -162,8 +175,10 @@ class ShellContentLoaderValidationGateTest {
           full_gate_command: []
         """.trimIndent(),
       )
-    assertFailsWith<InvalidValidationGateDeclarationError> {
+    assertFailsWith<SkillBillRuntimeException> {
       parseValidationGate(manifest, "kotlin")
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.INVALID_VALIDATION_GATE_DECLARATION, failure.code)
     }
   }
 

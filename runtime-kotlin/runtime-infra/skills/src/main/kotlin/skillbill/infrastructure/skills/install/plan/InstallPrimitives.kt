@@ -1,9 +1,13 @@
 package skillbill.infrastructure.skills.install.plan
 
-import skillbill.error.shellcontent.InvalidInternalSkillClassificationError
+import java.io.FileNotFoundException
+import java.nio.file.Files
+import java.nio.file.Path
+import skillbill.error.shellcontent.invalidInternalSkillClassification
 import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
 import skillbill.infrastructure.skills.install.staging.StagedSymlinkTargetInput
 import skillbill.infrastructure.skills.install.staging.resolveStagedSymlinkTarget
+import skillbill.infrastructure.skills.nativeagent.support.detectCodexAgentsTargets as nativeDetectCodexAgentsTargets
 import skillbill.infrastructure.skills.scaffold.authoring.parseInternalForFrontmatter
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.install.model.AgentTarget
@@ -13,10 +17,6 @@ import skillbill.install.model.SupportedAgent
 import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.model.PlatformManifest
-import java.io.FileNotFoundException
-import java.nio.file.Files
-import java.nio.file.Path
-import skillbill.infrastructure.skills.nativeagent.support.detectCodexAgentsTargets as nativeDetectCodexAgentsTargets
 
 internal val SUPPORTED_AGENTS: List<SupportedAgent> = SupportedAgent.entries
 
@@ -117,7 +117,7 @@ internal fun installSkill(
     throw FileNotFoundException("Skill directory '$resolvedSkill' does not exist.")
   }
   parseInternalForFrontmatter(resolvedSkill.resolve("content.md"))?.let { declaredParent ->
-    throw InvalidInternalSkillClassificationError(
+    throw invalidInternalSkillClassification(
       "Skill '${resolvedSkill.fileName}' declares 'internal-for: $declaredParent' and cannot be " +
         "installed or linked directly: internal skills install as '<skill-name>.md' sidecars inside " +
         "their parent's installed directory. Install the parent skill instead.",

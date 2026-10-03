@@ -1,7 +1,5 @@
 package skillbill.infrastructure.skills.scaffold
 
-import skillbill.error.shellcontent.InvalidManifestSchemaError
-import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -10,6 +8,9 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 
 class PointerManifestParsingTest {
   private val temp: Path = Files.createTempDirectory("skillbill-pointer-manifest-")
@@ -68,7 +69,12 @@ class PointerManifestParsingTest {
                 target: orchestration/shell-content-contract/shell-ceremony.md
           """.trimIndent(),
       )
-    val error = assertFailsWith<InvalidManifestSchemaError> { loadPlatformManifest(pack) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        loadPlatformManifest(pack)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     assertContains(error.message.orEmpty(), "shell-ceremony.txt")
     assertContains(error.message.orEmpty(), ".md")
   }
@@ -85,7 +91,12 @@ class PointerManifestParsingTest {
               - target: orchestration/x.md
           """.trimIndent(),
       )
-    val error = assertFailsWith<InvalidManifestSchemaError> { loadPlatformManifest(pack) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        loadPlatformManifest(pack)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     assertContains(error.message.orEmpty(), "name")
   }
 
@@ -101,7 +112,12 @@ class PointerManifestParsingTest {
               - name: shell-ceremony.md
           """.trimIndent(),
       )
-    val error = assertFailsWith<InvalidManifestSchemaError> { loadPlatformManifest(pack) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        loadPlatformManifest(pack)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     assertContains(error.message.orEmpty(), "target")
   }
 
@@ -116,7 +132,12 @@ class PointerManifestParsingTest {
             "    - name: shell-ceremony.md\n" +
             "      target: \"\"\n",
       )
-    val error = assertFailsWith<InvalidManifestSchemaError> { loadPlatformManifest(pack) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        loadPlatformManifest(pack)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     assertContains(error.message.orEmpty(), "non-empty 'target'")
   }
 
@@ -133,7 +154,12 @@ class PointerManifestParsingTest {
                 target: orchestration/x.md
           """.trimIndent(),
       )
-    val error = assertFailsWith<InvalidManifestSchemaError> { loadPlatformManifest(pack) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        loadPlatformManifest(pack)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     assertContains(error.message.orEmpty(), "..")
   }
 
@@ -150,7 +176,12 @@ class PointerManifestParsingTest {
                 target: orchestration/x.md
           """.trimIndent(),
       )
-    val error = assertFailsWith<InvalidManifestSchemaError> { loadPlatformManifest(pack) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        loadPlatformManifest(pack)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     assertContains(error.message.orEmpty(), "nested/inner.md")
   }
 
@@ -169,7 +200,12 @@ class PointerManifestParsingTest {
                 target: orchestration/b.md
           """.trimIndent(),
       )
-    val error = assertFailsWith<InvalidManifestSchemaError> { loadPlatformManifest(pack) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        loadPlatformManifest(pack)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     assertContains(error.message.orEmpty(), "duplicate pointer entry")
   }
 
@@ -186,7 +222,12 @@ class PointerManifestParsingTest {
                 target: /etc/passwd
           """.trimIndent(),
       )
-    val error = assertFailsWith<InvalidManifestSchemaError> { loadPlatformManifest(pack) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        loadPlatformManifest(pack)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     assertContains(error.message.orEmpty(), "repo-relative")
   }
 
@@ -203,7 +244,12 @@ class PointerManifestParsingTest {
                 target: ../../../etc/passwd
           """.trimIndent(),
       )
-    val error = assertFailsWith<InvalidManifestSchemaError> { loadPlatformManifest(pack) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        loadPlatformManifest(pack)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     assertContains(error.message.orEmpty(), "..")
   }
 
@@ -220,7 +266,12 @@ class PointerManifestParsingTest {
                 target: orchestration/x.md
           """.trimIndent(),
       )
-    val error = assertFailsWith<InvalidManifestSchemaError> { loadPlatformManifest(pack) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        loadPlatformManifest(pack)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     assertContains(error.message.orEmpty(), "..")
   }
 

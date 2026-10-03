@@ -1,3 +1,15 @@
+## [2026-10-03] SKILL-399 manifest and skill-staging failure codes
+Areas: runtime-contracts/error/shellcontent, runtime-domain/install/review/scaffold, runtime-engine/featuretask, runtime-infra/skills/contracts/launcher/workflow, runtime-cli, runtime-application tests, runtime-core architecture baseline
+- Replaced eight Manifest and twelve SkillStaging exception classes with owner failure-code enums and message functions. Producers now construct coded SkillBillRuntimeException failures.
+- Added both enums to shell-content classification. Manifest-schema wrapping and skill-shape validation handle their exact codes and rethrow other failures; telemetry preserves its existing category mapping.
+- Followed owner-code discrimination without reading removed exception properties. Shared schema-loader callbacks accept SkillBillRuntimeException while retaining shell-content guards.
+- Reusable: ManifestFailureCode, SkillStagingFailureCode and message functions preserve producer context, causes and operator repair guidance across modules.
+- Converted existing exception assertions to exact codes and removed the twenty owned custom-throwable baseline rows.
+- Compatibility: user-visible messages remain unchanged; manifest ERROR_TYPE and sidecar causeClass labels now identify their owner codes.
+- Limit: this entry covers subtask 1 only. Other shell-content families and legacy exception transition support remain until all remaining subclasses and codeless callers are gone.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-01] SKILL-391 runtime-contracts kernel ownership cleanup
 Areas: runtime-contracts/{error,learning,validation}, runtime-engine/operation/core, runtime-mcp/shared, runtime-infra contracts repoTests
 - Moved InvalidMcpToolArgumentError out of the kernel into an internal class in runtime-mcp shared; the kernel error/core package keeps only shared failure types.

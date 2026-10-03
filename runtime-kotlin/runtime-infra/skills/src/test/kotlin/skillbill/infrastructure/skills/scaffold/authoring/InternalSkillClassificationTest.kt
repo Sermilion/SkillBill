@@ -1,6 +1,5 @@
 package skillbill.infrastructure.skills.scaffold.authoring
 
-import skillbill.error.shellcontent.InvalidInternalSkillClassificationError
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -9,6 +8,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
 
 class InternalSkillClassificationTest {
   private val tempDirs = mutableListOf<Path>()
@@ -120,8 +121,10 @@ class InternalSkillClassificationTest {
         "bill-feature-task" to target("bill-feature-task", internalFor = "   "),
       )
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInternalSkillClassification(targets)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertMessageNames(error, "bill-feature-task", "empty value")
   }
@@ -133,8 +136,10 @@ class InternalSkillClassificationTest {
         "bill-feature-task" to target("bill-feature-task", internalFor = "bill-feature-task"),
       )
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInternalSkillClassification(targets)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertMessageNames(error, "bill-feature-task", "skill itself")
   }
@@ -146,8 +151,10 @@ class InternalSkillClassificationTest {
         "bill-feature-task" to target("bill-feature-task", internalFor = "bill-featur"),
       )
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInternalSkillClassification(targets)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertMessageNames(error, "bill-feature-task", "not a discovered skill")
   }
@@ -161,8 +168,10 @@ class InternalSkillClassificationTest {
         "bill-feature-task" to target("bill-feature-task", internalFor = "bill-feature"),
       )
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInternalSkillClassification(targets)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertMessageNames(error, "bill-feature-task", "chained internal-for")
   }
@@ -195,8 +204,10 @@ class InternalSkillClassificationTest {
           ),
       )
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInternalSkillClassification(targets)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertMessageNames(error, "bill-kotlin-code-review", "empty value")
   }
@@ -213,8 +224,10 @@ class InternalSkillClassificationTest {
           ),
       )
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInternalSkillClassification(targets)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertMessageNames(error, "bill-kotlin-code-review", "skill itself")
   }
@@ -231,8 +244,10 @@ class InternalSkillClassificationTest {
           ),
       )
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInternalSkillClassification(targets)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertMessageNames(error, "bill-kotlin-code-review", "not a discovered skill")
   }
@@ -255,8 +270,10 @@ class InternalSkillClassificationTest {
           ),
       )
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInternalSkillClassification(targets)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertMessageNames(error, "bill-kotlin-code-review-security", "listed base skill")
   }
@@ -275,8 +292,10 @@ class InternalSkillClassificationTest {
           ),
       )
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInternalSkillClassification(targets)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertMessageNames(error, "bill-kotlin-code-review", "chained internal-for")
   }
@@ -289,8 +308,10 @@ class InternalSkillClassificationTest {
         "bill-feature-task" to target("bill-feature-task", internalFor = "bill-kotlin-code-review"),
       )
     val error =
-      assertFailsWith<InvalidInternalSkillClassificationError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateInternalSkillClassification(targets)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, failure.code)
       }
     assertMessageNames(error, "bill-feature-task", "listed base skill")
   }
@@ -320,7 +341,7 @@ class InternalSkillClassificationTest {
   }
 
   private fun assertMessageNames(
-    error: InvalidInternalSkillClassificationError,
+    error: SkillBillRuntimeException,
     skillName: String,
     ruleFragment: String,
   ) {

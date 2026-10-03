@@ -1,13 +1,13 @@
 package skillbill.cli.phase
 
 import com.github.ajalt.clikt.core.UsageError
-import skillbill.cli.kernel.cli.CliRunState
-import skillbill.error.featuretask.UnknownPhaseReviewTargetError
-import skillbill.error.shellcontent.MissingValidationGateError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import skillbill.cli.kernel.cli.CliRunState
+import skillbill.error.featuretask.UnknownPhaseReviewTargetError
+import skillbill.error.shellcontent.missingValidationGate
 
 class PhaseRunErrorMappingTest {
   @Test
@@ -31,7 +31,7 @@ class PhaseRunErrorMappingTest {
   fun `any other contract error prints its message and exits 1`() {
     val state = CliRunState(stdinText = null)
 
-    val result = runPhase(state) { throw MissingValidationGateError("The dominant platform pack has no gate.") }
+    val result = runPhase(state) { throw missingValidationGate("The dominant platform pack has no gate.") }
 
     assertNull(result)
     assertEquals(1, state.result?.exitCode)

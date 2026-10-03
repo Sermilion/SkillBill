@@ -1,6 +1,9 @@
 package skillbill.infrastructure.skills.scaffold.adapters
+
+import java.nio.file.Files
+import java.nio.file.Path
 import skillbill.error.shellcontent.InvalidScaffoldPayloadError
-import skillbill.error.shellcontent.MissingRequiredSectionError
+import skillbill.error.shellcontent.missingRequiredSection
 import skillbill.infrastructure.skills.agentaddon.discoverAgentAddons
 import skillbill.infrastructure.skills.scaffold.authoring.AuthoringTarget
 import skillbill.infrastructure.skills.scaffold.authoring.validateTarget
@@ -18,8 +21,6 @@ import skillbill.ports.scaffold.repo.model.ScaffoldAuthoringValidationResult
 import skillbill.scaffold.model.CodeReviewBaselineLayer
 import skillbill.scaffold.policy.SKILL_KIND_AGENT_ADDON
 import skillbill.scaffold.policy.SKILL_KIND_HORIZONTAL
-import java.nio.file.Files
-import java.nio.file.Path
 import skillbill.scaffold.policy.parseBaselineLayerPayload as policyParseBaselineLayerPayload
 
 class FileSystemScaffoldRepoValidation(
@@ -196,4 +197,4 @@ private fun failBaselineUnsupportedMode(
 private fun failMissingRequiredSection(
   skillName: String,
   firstIssue: String,
-): Nothing = throw MissingRequiredSectionError("Horizontal skill '$skillName': $firstIssue")
+): Nothing = throw missingRequiredSection("Horizontal skill '$skillName': $firstIssue")

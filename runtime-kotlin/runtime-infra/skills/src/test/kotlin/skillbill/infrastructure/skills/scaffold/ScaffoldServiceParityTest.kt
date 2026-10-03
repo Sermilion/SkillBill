@@ -1,10 +1,19 @@
 package skillbill.infrastructure.skills.scaffold
 
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.name
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.error.shellcontent.InvalidScaffoldPayloadError
-import skillbill.error.shellcontent.MissingRequiredSectionError
 import skillbill.error.shellcontent.RetiredScaffoldKindError
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentInstallRenderRequest
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
@@ -33,15 +42,6 @@ import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
 import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestRenderRequest
 import skillbill.scaffold.policy.platformpack.renderPlatformPackManifest
 import skillbill.testsupport.SkillClassFixtures
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.io.path.name
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class ScaffoldServiceParityTest {
   @Test
@@ -141,7 +141,7 @@ class ScaffoldServiceParityTest {
       val before = snapshotTree(repo)
 
       val error =
-        assertFailsWith<MissingRequiredSectionError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(
               repo,
@@ -150,6 +150,8 @@ class ScaffoldServiceParityTest {
               "content_body" to "## Descriptor\n\nGenerated wrapper content must not be authored here.",
             ),
           )
+        }.also { failure ->
+          assertEquals(SkillStagingFailureCode.MISSING_REQUIRED_SECTION, failure.code)
         }
 
       assertContains(error.message.orEmpty(), "generated wrapper boilerplate heading '## Descriptor'")
@@ -165,7 +167,7 @@ class ScaffoldServiceParityTest {
       val before = snapshotTree(repo)
 
       val error =
-        assertFailsWith<MissingRequiredSectionError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(
               repo,
@@ -174,6 +176,8 @@ class ScaffoldServiceParityTest {
               "content_body" to "## Descriptor\n\nGenerated wrapper content must not be authored here.",
             ),
           )
+        }.also { failure ->
+          assertEquals(SkillStagingFailureCode.MISSING_REQUIRED_SECTION, failure.code)
         }
 
       assertContains(error.message.orEmpty(), "generated wrapper boilerplate heading '## Descriptor'")

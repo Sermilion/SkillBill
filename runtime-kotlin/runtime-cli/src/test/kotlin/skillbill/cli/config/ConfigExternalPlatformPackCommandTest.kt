@@ -1,17 +1,17 @@
 package skillbill.cli.config
 
-import skillbill.cli.core.CliRuntime
-import skillbill.cli.model.CliRuntimeContext
-import skillbill.contracts.JsonCodec
-import skillbill.contracts.config.ExternalPlatformPackTelemetryPayloadKeys
-import skillbill.infrastructure.skills.externalplatformpack.ExternalPlatformPackConfigKeys
-import skillbill.telemetry.CONFIG_ENVIRONMENT_KEY
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import skillbill.cli.core.CliRuntime
+import skillbill.cli.model.CliRuntimeContext
+import skillbill.contracts.JsonCodec
+import skillbill.contracts.config.ExternalPlatformPackTelemetryPayloadKeys
+import skillbill.infrastructure.skills.externalplatformpack.ExternalPlatformPackConfigKeys
+import skillbill.telemetry.CONFIG_ENVIRONMENT_KEY
 
 class ConfigExternalPlatformPackCommandTest {
   @Test
@@ -107,7 +107,7 @@ class ConfigExternalPlatformPackCommandTest {
     assertEquals(1, result.exitCode)
     val payload = requireNotNull(result.payload)
     assertEquals(
-      "InvalidManifestSchemaError",
+      "ManifestFailureCode.INVALID_MANIFEST_SCHEMA",
       payload[ExternalPlatformPackTelemetryPayloadKeys.ERROR_TYPE],
     )
     assertEquals("external", payload[ExternalPlatformPackTelemetryPayloadKeys.SOURCE_KIND])

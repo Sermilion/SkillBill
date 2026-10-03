@@ -1,5 +1,13 @@
 package skillbill.engine.featuretask.slot
 
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
@@ -13,8 +21,9 @@ import skillbill.engine.featuretask.validation.repoLocalConfig
 import skillbill.engine.featuretask.validation.reviewFallbackPackWithoutGate
 import skillbill.engine.featuretask.validation.validationGateTestDeclaration
 import skillbill.engine.featuretask.validation.validationGateTestRepoRoot
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.shellcontent.MissingValidationGateError
+import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -24,14 +33,6 @@ import skillbill.scaffold.model.RoutingSignals
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.minutes
 
 class FeatureTaskRuntimeExecutionPlanResolverTest {
   @Test
@@ -113,9 +114,17 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
     assertFailsWith<IncompatibleFeatureTaskRuntimeExecutionPlanError> { fixture.create() }
     fixture.inventory = WorkflowGitNameListResult.Listed(listOf("runtime-kotlin/Main.kt"))
     fixture.packs = listOf(kotlinPackWithoutGate())
-    assertFailsWith<MissingValidationGateError> { fixture.create() }
+    assertFailsWith<SkillBillRuntimeException> {
+      fixture.create()
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.MANIFEST_FAILURE, failure.code)
+    }
     fixture.packs = fixture.packs.map { it.copy(validationGate = validationGateTestDeclaration) }
-    assertFailsWith<MissingValidationGateError> { fixture.create() }
+    assertFailsWith<SkillBillRuntimeException> {
+      fixture.create()
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.MANIFEST_FAILURE, failure.code)
+    }
     assertEquals(0, fixture.execution.launches)
   }
 
@@ -222,7 +231,7 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
     val descriptor = ValidatedFeatureTaskRuntimeExecutionPlan.read(original, fixture.execution.validator)
     fixture.execution.seed(fixture.states, "wftr-fallback", descriptor = descriptor.artifactValue)
     val error =
-      assertFailsWith<MissingValidationGateError> {
+      assertFailsWith<SkillBillRuntimeException> {
         fixture.resolver().resolveCreation(
           FeatureTaskRuntimeExecutionPlanCreationRequest(
             root,
@@ -234,6 +243,8 @@ class FeatureTaskRuntimeExecutionPlanResolverTest {
             "wftr-fallback",
           ),
         )
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.MANIFEST_FAILURE, failure.code)
       }
     assertTrue(requireNotNull(error.message).contains("Recorded build gate pack 'generic'"))
     assertTrue(requireNotNull(error.message).contains("reviewed semantic mapping"))

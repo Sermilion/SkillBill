@@ -1,8 +1,16 @@
 package skillbill.scaffold
 
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ContractVersionMismatchError
-import skillbill.error.shellcontent.InvalidManifestSchemaError
-import skillbill.error.shellcontent.MissingManifestError
+import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.SKILL_CLASSES_DIR
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.discoverSkillClasses
@@ -13,14 +21,6 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.support.required
 import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.model.SkillClassManifest
 import skillbill.scaffold.model.SkillClassMatcher
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 private val LEGACY_POINTER_GOLDEN: Map<String, Set<String>> =
   mapOf(
@@ -138,7 +138,12 @@ class SkillClassLoaderTest {
         manifest("a", matchers = listOf("pattern" to "^bill-thing$")),
         manifest("b", matchers = listOf("exact" to "bill-thing")),
       )
-    val error = assertFailsWith<InvalidManifestSchemaError> { resolveSkillClass("bill-thing", classes) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        resolveSkillClass("bill-thing", classes)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     assertTrue(error.message.orEmpty().contains("matches more than one class"), error.message.orEmpty())
   }
 
@@ -156,7 +161,12 @@ class SkillClassLoaderTest {
         - exact: bill-widget
       """.trimIndent() + "\n",
     )
-    val error = assertFailsWith<InvalidManifestSchemaError> { discoverSkillClasses(repoRoot) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        discoverSkillClasses(repoRoot)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     assertTrue(error.message.orEmpty().contains("expected 'widget-shell' to match the filename"))
   }
 
@@ -189,14 +199,23 @@ class SkillClassLoaderTest {
       contract_version: "1.8"
       """.trimIndent() + "\n",
     )
-    val error = assertFailsWith<InvalidManifestSchemaError> { discoverSkillClasses(repoRoot) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        discoverSkillClasses(repoRoot)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     assertTrue(error.message.orEmpty().contains("'matchers' is missing"))
   }
 
   @Test
   fun `missing classes directory loud-fails`() {
     val repoRoot = Files.createTempDirectory("skill-class-loader-empty-repo")
-    assertFailsWith<MissingManifestError> { discoverSkillClasses(repoRoot) }
+    assertFailsWith<SkillBillRuntimeException> {
+      discoverSkillClasses(repoRoot)
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.MISSING_MANIFEST, failure.code)
+    }
   }
 
   @Test

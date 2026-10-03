@@ -1,14 +1,24 @@
 package skillbill.infrastructure.skills.externalplatformpack
 
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.config.ExternalPlatformPackTelemetryPayloadKeys
 import skillbill.error.core.AmbiguousExternalPlatformPackError
 import skillbill.error.core.ExternalPlatformPackConfigError
 import skillbill.error.core.ExternalPlatformPackPublishError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.ContractVersionMismatchError
-import skillbill.error.shellcontent.InvalidManifestSchemaError
-import skillbill.error.shellcontent.MissingContentFileError
+import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.install.nativeagent.installNativeAgentCompositionContext
 import skillbill.infrastructure.skills.install.nativeagent.link.InstallNativeAgentOperations
 import skillbill.infrastructure.skills.install.nativeagent.link.NativeAgentLinkOverrides
@@ -64,15 +74,6 @@ import skillbill.scaffold.model.PointerSpec
 import skillbill.scaffold.model.RoutingSignals
 import skillbill.scaffold.policy.platformpack.model.PlatformPackSourceKind
 import skillbill.telemetry.CONFIG_ENVIRONMENT_KEY
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
 
 class ExternalPlatformPackCatalogIntegrationTest {
   @Test
@@ -164,8 +165,10 @@ class ExternalPlatformPackCatalogIntegrationTest {
     Files.writeString(external.resolve("platform.yaml"), "platform: [\n")
     writeSources(config, external)
 
-    assertFailsWith<InvalidManifestSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       loader().loadEffectiveCatalog(context(repo, home, config))
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
     }
   }
 
@@ -207,8 +210,10 @@ class ExternalPlatformPackCatalogIntegrationTest {
       Files.readString(mismatched.resolve("platform.yaml")).replace("platform: kotlin", "platform: acme"),
     )
     writeSources(config, mismatched)
-    assertFailsWith<InvalidManifestSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       loader().loadEffectiveCatalog(context(repo, home, config))
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
     }
 
     val wrongVersion = root.resolve("external/version/kotlin")
@@ -228,8 +233,10 @@ class ExternalPlatformPackCatalogIntegrationTest {
     writePack(missingContent, "kotlin", "MISSING_MARKER", listOf(".kt"), "missing-gate")
     Files.delete(missingContent.resolve("code-review/bill-kotlin-code-review/content.md"))
     writeSources(config, missingContent)
-    assertFailsWith<MissingContentFileError> {
+    assertFailsWith<SkillBillRuntimeException> {
       loader().loadEffectiveCatalog(context(repo, home, config))
+    }.also { failure ->
+      assertEquals(SkillStagingFailureCode.MISSING_CONTENT_FILE, failure.code)
     }
   }
 
@@ -274,8 +281,10 @@ class ExternalPlatformPackCatalogIntegrationTest {
         .replace("skill: bill-kotlin-code-review", "skill: bill-kotlin-code-review-architecture"),
     )
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loader().loadEffectiveCatalog(context(repo, home, config))
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
     assertFalse(error.message.orEmpty().contains("BUNDLED_AREA_MARKER"))
   }
@@ -319,8 +328,10 @@ class ExternalPlatformPackCatalogIntegrationTest {
       kmpRoot,
       listOf(external, kmpRoot),
     )
-    assertFailsWith<InvalidManifestSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       InstallNativeAgentPlatformPackLoader.loadPlatformPack(kmpRoot, emptyList())
+    }.also { failure ->
+      assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
     }
   }
 
