@@ -330,6 +330,7 @@ listed change.
 | pr and write_history step prompts | 11 | the "Invoke bill-pr-description …" and "Invoke bill-boundary-history inline …" directives replaced by strategy-owned rules |
 | Phase-run outputs | first captured by the subtask that adds the program | none in this bundle; SKILL-383 replaces retired skill names |
 | archived revision-one audit execution descriptors | 2026-10-03 operator-requested audit compatibility mapping | retain snapshots from `8527efaee` as migration rejection and admission fixtures; restore normalized digests from policy identities in tests |
+| full-run audit prompts and execution descriptors, archived revision-two descriptors | 2026-10-03 operator-requested prose repair planning | remove mandatory plan headings and labels, retain prose handoffs, record audit strategy revision 3, and preserve revision-two fixtures for checked migration |
 | full-run workflow execution descriptors and audit prompts | 2026-10-03 operator-requested audit repair planning | add read-only `audit_plan_fix` before repair, require its saved output, route the audit edge through it, and record acceptance-audit strategy revision 2 |
 
 ## Self-sufficient execution

@@ -22,14 +22,16 @@ import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPla
 
 class AuditPlanningExecutionPlanMappingTest {
   @Test
-  fun `archived revision one descriptors map to the shipped revision two composition in every skeleton`() {
+  fun `archived audit descriptors map to prose planning in every skeleton`() {
     val fixture = ExecutionPlanAdmissionFixture()
     listOf("standalone", "goal-child-build", "goal-child-validate").forEach { mode ->
-      val encoded = archive(fixture, mode)
-      val mapped = fixture.compatibility.requireSupportedComposition(encoded)
-      val expected = currentArchive(fixture, mode)
-      assertContentEquals(expected, fixture.codec.encode(mapped))
-      assertEquals(2, mapped.selectedStrategies.single { it.slot == PhaseSlot.AUDIT }.semanticRevision)
+      listOf(1, 2).forEach { revision ->
+        val encoded = archive(fixture, mode, revision)
+        val mapped = fixture.compatibility.requireSupportedComposition(encoded)
+        val expected = currentArchive(fixture, mode)
+        assertContentEquals(expected, fixture.codec.encode(mapped))
+        assertEquals(3, mapped.selectedStrategies.single { it.slot == PhaseSlot.AUDIT }.semanticRevision)
+      }
     }
   }
 
@@ -131,7 +133,11 @@ class AuditPlanningExecutionPlanMappingTest {
   private fun archive(
     fixture: ExecutionPlanAdmissionFixture,
     mode: String,
-  ): ByteArray = restoreDigests(fixture, resourcePayload("featuretask/audit-mapping-$mode.json"))
+    revision: Int = 1,
+  ): ByteArray {
+    val prefix = if (revision == 1) "audit-mapping" else "audit-mapping-v2"
+    return restoreDigests(fixture, resourcePayload("featuretask/$prefix-$mode.json"))
+  }
 
   private fun currentArchive(
     fixture: ExecutionPlanAdmissionFixture,

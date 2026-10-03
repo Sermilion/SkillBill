@@ -21,14 +21,11 @@ internal object AuditPlanFixPromptSections {
     PhaseStepPromptSections(
       taskDirective = DIRECTIVE,
       valueContent =
-        "Write the repair plan in execution order. Start each independent gap with a heading " +
-          "'### <criterion ID>', using the audit's criterion ID. Repeat the heading for separate gaps " +
-          "under the same criterion. Each item must contain these four labels with concrete nonempty " +
-          "text on the label line: 'Gap:', 'Production path:', 'Changes:', and 'Closure evidence:'. " +
-          "Changes names the edits, their order, and dependencies. Closure evidence names the " +
-          "production behavior and source inspection that must hold after execution, without " +
-          "claiming tests ran. Cover every remaining production criterion and every independent " +
-          "finding under it. Do not plan repairs for satisfied criteria. This value is the persisted " +
-          "plan delivered to audit_implement_fix; no repair happens in this step.",
+        "Write the repair plan as prose in execution order. Explain each reported production gap, " +
+          "the production paths involved, the changes needed, and any dependencies between fixes. " +
+          "Describe how the changes close each gap. Account for completed edits in the current " +
+          "tree. Cover the remaining production criteria and independent findings under them. " +
+          "This value is the persisted plan delivered to audit_implement_fix; no repair happens " +
+          "in this step.",
     )
 }

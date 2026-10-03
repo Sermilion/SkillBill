@@ -2569,3 +2569,16 @@ Route resumed loop-only successors through an unfinished predecessor so repair
 plans run before old blocked repairs continue. Do not delete child workflows or
 reset their budgets to make them compatible. This keeps ownership in execution
 admission and the run loop, as required by A1, A2, A7, and A10.
+
+## 2026-10-03: Keep audit repair plans as prose
+
+Context: A repair plan blocked because the completion hook parsed headings and
+required four field labels. The operator requested prose planning without content
+verification.
+
+Decision: Delete the parser and completion hook. Keep planning instructions for
+each gap's production changes and execution order. Persist the prose through the
+ordinary phase output and deliver it to repair. Bump acceptance-audit to revision
+3 and extend the checked mapping to the exact revision 1 and 2 compositions. Keep
+the original descriptors and evidence. This removes the restrictive parser rather
+than moving it, as required by A5. No architecture guard changes.

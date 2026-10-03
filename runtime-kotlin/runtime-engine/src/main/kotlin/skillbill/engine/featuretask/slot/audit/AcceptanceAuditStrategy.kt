@@ -13,7 +13,6 @@ import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.audit.planning.AuditPlanFixPromptSections
-import skillbill.engine.featuretask.slot.audit.planning.AuditPlanFixStep
 import skillbill.engine.featuretask.slot.audit.planning.AuditPlanningExecutionPlanMapping
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
@@ -56,7 +55,7 @@ class AcceptanceAuditStrategy : PhaseStrategyStatusProjection() {
 
   override val slot: PhaseSlot = PhaseSlot.AUDIT
   override val strategyId: String = ID
-  override val semanticRevision: Int = 2
+  override val semanticRevision: Int = AuditPlanningExecutionPlanMapping.SEMANTIC_REVISION
   override val steps: List<String> = policies.keys.toList()
   override val entryStep: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
 
@@ -97,7 +96,7 @@ class AcceptanceAuditStrategy : PhaseStrategyStatusProjection() {
     policies.policyOf(stepId)
     return when (stepId) {
       entryStep -> AcceptanceAuditRound
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX -> AuditPlanFixStep
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX -> PhaseStepHooks.None
       else -> AuditImplementFixStep
     }
   }

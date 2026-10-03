@@ -65,9 +65,9 @@ existing recovery paths.
 The acceptance-audit slot inspects production criteria in `audit`. Open findings
 enter `audit_plan_fix`, a read-only reasoning step that plans each independent
 gap before repair. Each plan item names the criterion, gap, production path,
-ordered changes and dependencies, and evidence needed to close it. The runtime
-rejects incomplete criterion coverage or missing item fields and persists the
-accepted plan as an ordinary phase output.
+ordered changes and dependencies, and evidence needed to close it. The agent
+writes the plan as prose. The runtime persists it as an ordinary phase output
+without parsing headings, field labels, or criterion coverage.
 
 `audit_implement_fix` consumes that saved plan and the latest audit findings,
 reconciles completed edits, and executes the remaining planned changes. Repair
@@ -76,10 +76,10 @@ produces a new repair plan. A satisfied audit skips both repair steps. Audit,
 repair planning, and repair do not run builds or tests. Existing audit retry and
 non-shrinking limits still apply.
 
-Existing workflows with the exact acceptance-audit revision 1 composition can
-resume through a checked mapping to revision 2. The runtime retains their
+Existing workflows with the exact acceptance-audit revision 1 or 2 composition
+can resume through a checked mapping to revision 3. The runtime retains their
 original execution descriptor, phase records, ledger entries, and checkpoint
 evidence. It verifies the old composition and retry/resume policy digests before
-adding repair planning. Other strategy, traversal, or effective-policy changes
+mapping to prose repair planning. Other strategy, traversal, or effective-policy changes
 still refuse admission. A resumed repair without a completed repair plan starts
 at `audit_plan_fix`. A diagnostic records the mapping at execution admission.

@@ -874,19 +874,19 @@
             },
             "dispatch_ownership": [
                 {
-                    "semantic_revision": 2,
+                    "semantic_revision": 3,
                     "slot": "audit",
                     "step": "audit",
                     "strategy_id": "acceptance-audit"
                 },
                 {
-                    "semantic_revision": 2,
+                    "semantic_revision": 3,
                     "slot": "audit",
                     "step": "audit_implement_fix",
                     "strategy_id": "acceptance-audit"
                 },
                 {
-                    "semantic_revision": 2,
+                    "semantic_revision": 3,
                     "slot": "audit",
                     "step": "audit_plan_fix",
                     "strategy_id": "acceptance-audit"
@@ -1001,17 +1001,17 @@
             "quality_gate_selection": "validate",
             "resume_interpretations": [
                 {
-                    "identity": "acceptance-audit/2:audit",
+                    "identity": "acceptance-audit/3:audit",
                     "semantic_digest": "__NORMALIZED_SHA64__",
                     "step": "audit"
                 },
                 {
-                    "identity": "acceptance-audit/2:audit_implement_fix",
+                    "identity": "acceptance-audit/3:audit_implement_fix",
                     "semantic_digest": "__NORMALIZED_SHA64__",
                     "step": "audit_implement_fix"
                 },
                 {
-                    "identity": "acceptance-audit/2:audit_plan_fix",
+                    "identity": "acceptance-audit/3:audit_plan_fix",
                     "semantic_digest": "__NORMALIZED_SHA64__",
                     "step": "audit_plan_fix"
                 },
@@ -1075,7 +1075,7 @@
                         "audit_implement_fix",
                         "audit"
                     ],
-                    "semantic_revision": 2,
+                    "semantic_revision": 3,
                     "slot": "audit",
                     "strategy_id": "acceptance-audit"
                 },
