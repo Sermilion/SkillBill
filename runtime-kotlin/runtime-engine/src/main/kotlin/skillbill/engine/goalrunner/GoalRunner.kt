@@ -57,7 +57,11 @@ class GoalRunner(
     if (trimmed.isNotBlank() && trimmed.none(Char::isWhitespace) && !trimmed.contains('/')) {
       manifestStore.readByIssueKeyIfPresent(trimmed, repoRoot)?.let { return it.manifest.issueKey }
     }
-    return GoalIntake.parse(trimmed).issueKey
+    val issueKey = GoalIntake.parse(trimmed).issueKey
+    if (manifestStore.readByIssueKeyIfPresent(issueKey, repoRoot) == null) {
+      intakePreparation.admitNewWorkIntake(trimmed, issueKey, repoRoot)
+    }
+    return issueKey
   }
 
   fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport {

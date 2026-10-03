@@ -149,12 +149,13 @@ Only when neither a local spec nor a matching persisted workflow exists, fetch
 the exact referenced issue through its connected tracker. This applies to
 Linear, Jira, and any other connected tracker; do not hard-code a provider. A
 URL slug or issue key alone does not supply requirements. Readable local specs
-need no tracker lookup. If the operator supplies only raw requirements, stop and
+need no tracker lookup. If the operator supplies only raw requirements,
 ask for the tracker issue key before launch.
 
-If lookup fails, report the reference and returned error and stop before launch.
-Do not search substitute sources, retry automatically, or infer requirements
-from the URL title. Resume when the requirements or tracker access are supplied.
+If lookup fails, report the reference and returned error, then ask the operator
+for the requirements before launch. Do not search substitute sources, retry
+automatically, or infer requirements from the URL title. Launch when the
+requirements or tracker access are supplied.
 
 On success, retain the returned title, description, acceptance criteria, and
 constraints. Pass the original reference together with those resolved
@@ -165,11 +166,13 @@ intake or launch ceremony.
 
 ## Intake
 
-The full run requires a connected tracker link or issue key, or the key or path
-of an existing spec. Preserve the operator's requirements, acceptance criteria,
-constraints, affected areas, and non-goals in the intake. If the intake has no
-tracker issue key or link and is not an existing spec, stop and ask for the
-tracker issue key. Do not invent a local workflow identity or launch without one.
+New work requires both a connected tracker link or issue key and its
+requirements. An existing spec key or path needs neither. Preserve the
+operator's requirements, acceptance criteria, constraints, affected areas, and
+non-goals in the intake. If new work has no tracker issue key or link,
+ask for the tracker issue key. If it has a key but no requirements and tracker
+lookup supplies none, ask for the requirements. Do not invent a local workflow
+identity, and do not launch until both are present.
 
 An existing spec or matching persisted goal selects or resumes its goal.
 New requirements start preparation and durable planning inside the full runtime.

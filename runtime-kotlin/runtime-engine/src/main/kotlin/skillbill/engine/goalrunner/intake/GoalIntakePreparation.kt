@@ -31,15 +31,24 @@ class GoalIntakePreparation(
     repoRoot: Path,
   ): String? = referencedSpecPath(intake, repoRoot)?.let { GoalIntake.parse(it.toString()).issueKey }
 
+  fun admitNewWorkIntake(
+    intake: String,
+    issueKey: String,
+    repoRoot: Path,
+  ) {
+    if (existingSpecPath(intake, issueKey, repoRoot) == null) {
+      newWorkFeatureName(GoalIntake.parse(intake))
+    }
+  }
+
   fun prepare(request: GoalRunnerRunRequest): GoalRunnerManifestState? {
     manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)?.let { return it }
     val suppliedIntake = request.intake?.takeIf(String::isNotBlank) ?: return null
-    val specPath = existingSpecPath(suppliedIntake, request)
+    val specPath = existingSpecPath(suppliedIntake, request.issueKey, request.repoRoot)
     val intake = specPath?.let(fileStore::readText) ?: suppliedIntake
     val featureName =
       specPath?.parent?.fileName?.toString()?.let { issueAndFeature(it).second }
-        ?: GoalIntake.parse(suppliedIntake).featureName
-        ?: invalidIntake("feature_name", "supply a short description after the tracker issue key.")
+        ?: newWorkFeatureName(GoalIntake.parse(suppliedIntake))
     val baseBranch =
       if (specPath == null) {
         "main"
@@ -85,23 +94,32 @@ class GoalIntakePreparation(
     return manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
   }
 
+  private fun newWorkFeatureName(intake: GoalIntake): String {
+    if (!intake.hasRequirements) {
+      invalidIntake("requirements", "supply the requirements after the tracker issue key or link.")
+    }
+    return intake.featureName
+      ?: invalidIntake("feature_name", "supply a short description after the tracker issue key.")
+  }
+
   private fun existingSpecPath(
     intake: String,
-    request: GoalRunnerRunRequest,
+    issueKey: String,
+    repoRoot: Path,
   ): Path? {
-    referencedSpecPath(intake, request.repoRoot)?.let { return it }
+    referencedSpecPath(intake, repoRoot)?.let { return it }
     val firstToken = intake.trim().substringBefore(' ').substringBefore('\n')
     if (firstToken.endsWith(".md") || firstToken.contains(".feature-specs/")) {
       invalidIntake("parent_spec", "the supplied spec path does not contain a readable spec.md.")
     }
     return when (
-      val resolved = specPathResolver.resolve(FeatureSpecPathResolveInput(request.issueKey, null, request.repoRoot))
+      val resolved = specPathResolver.resolve(FeatureSpecPathResolveInput(issueKey, null, repoRoot))
     ) {
       is FeatureSpecPathResolveResult.Explicit -> Path.of(resolved.specPath)
       is FeatureSpecPathResolveResult.SingleMatch -> Path.of(resolved.specPath)
       is FeatureSpecPathResolveResult.NoMatch -> null
       is FeatureSpecPathResolveResult.Ambiguous ->
-        invalidIntake("parent_spec", "multiple specs match ${request.issueKey}; supply the spec path.")
+        invalidIntake("parent_spec", "multiple specs match $issueKey; supply the spec path.")
     }
   }
 

@@ -8,6 +8,16 @@ Reason: Spec identity is `KEY-short-description`. A hashed local key and an `int
 
 Alternatives considered: Keeping LOCAL minting for CLI-only raw text still creates untracked folders and a second identity scheme. Fetching the tracker title during prepare would hide a missing description on key-only CLI launches.
 
+## [2026-10-03] Require requirements text with the tracker key for new goal intake
+
+Context: A bare tracker URL with a slug started a new goal whose spec held only the link, and a bare key printed launch output before preparation refused it.
+
+Decision: New work needs both a tracker key or link and requirements text after it; a URL slug names the folder but is not requirements. `GoalRunner.issueKeyForIntake` checks this before the CLI prints launch output, unless a persisted goal or existing spec matches the key. The dispatcher asks the operator for the missing key or requirements.
+
+Reason: The tracker reference names the work and the requirements define it. Refusing before launch output keeps a missing part a question for the operator rather than something that looks like a started run.
+
+Alternatives considered: Accepting the slug as requirements leaves planning with nothing to plan from. Checking only inside `prepare` keeps the misleading launch banner.
+
 ## [2026-10-03] Canonicalize governed spec paths before planning-import admission
 
 Context: A new goal child's implement admission refused `unsafe_import` with `source_version=unknown` even though planning had just written 0.7 payloads. Launch stores a repository-relative identity path; decomposition can still carry an absolute `spec_path` for the same file.

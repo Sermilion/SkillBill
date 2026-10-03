@@ -86,6 +86,7 @@ class SkillBillDispatcherRoutingTest {
       "skill-bill <intake> --agent <currently-executing-agent> --no-live-output",
     )
     assertContains(section(dispatcher, "Intake"), "ask for the tracker issue key")
+    assertContains(section(dispatcher, "Intake"), "ask for the requirements")
     assertContains(section(dispatcher, "Issue resolution"), "Linear, Jira, and any other connected tracker")
     assertContains(section(dispatcher, "Relay"), "Relay its output verbatim, adding nothing.")
     assertContains(

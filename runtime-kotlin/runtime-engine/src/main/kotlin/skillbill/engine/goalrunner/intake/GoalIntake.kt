@@ -8,6 +8,7 @@ internal data class GoalIntake(
   val issueKey: String,
   val requirements: String,
   val featureName: String?,
+  val hasRequirements: Boolean,
 ) {
   companion object {
     fun parse(text: String): GoalIntake {
@@ -22,7 +23,8 @@ internal data class GoalIntake(
             "issue_key",
             "supply a tracker issue key or link. A local workflow identity is not assigned.",
           )
-      return GoalIntake(key, intake, fromReference ?: slug(firstContentLine(intake, first)))
+      val contentLine = firstContentLine(intake, first)
+      return GoalIntake(key, intake, fromReference ?: slug(contentLine), contentLine != null)
     }
 
     private fun reference(first: String): Pair<String, String?>? =

@@ -22,7 +22,7 @@ import kotlin.test.assertTrue
 class CliGoalIntakeTest {
   @Test
   fun `a tracker URL starts durable planning without a prepared workflow`() {
-    startNewGoal("https://linear.app/capmo/issue/WE-5018/update", "WE-5018", "update")
+    startNewGoal("https://linear.app/capmo/issue/WE-5018/update\n\nRefresh the board filters.", "WE-5018", "update")
     startNewGoal(
       "https://team.atlassian.net/browse/APP-123\n\n# Board cache",
       "APP-123",
@@ -40,9 +40,10 @@ class CliGoalIntakeTest {
   }
 
   @Test
-  fun `a tracker key without a description does not default a feature name`() {
-    refuseNewGoal("APP-123", "short description")
-    refuseNewGoal("https://team.atlassian.net/browse/APP-123", "short description")
+  fun `a tracker key or link without requirements does not start new work`() {
+    refuseNewGoal("APP-123", "supply the requirements")
+    refuseNewGoal("https://team.atlassian.net/browse/APP-123", "supply the requirements")
+    refuseNewGoal("https://linear.app/capmo/issue/WE-5018/update", "supply the requirements")
   }
 
   @Test
@@ -201,6 +202,7 @@ class CliGoalIntakeTest {
       val result = CliRuntime.run(command, fixture.context(launcher = launcher).copy(repositoryRoot = root))
       assertEquals(1, result.exitCode, result.stderr + result.stdout)
       assertContains(result.stderr, message)
+      assertFalse(result.stdout.contains("launched runtime"), result.stdout)
       val specs = root.resolve(".feature-specs")
       assertTrue(!Files.exists(specs) || Files.list(specs).use { it.count() } == 0L)
       assertTrue(launcher.prompts.isEmpty())
