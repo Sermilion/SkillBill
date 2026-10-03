@@ -105,4 +105,16 @@ interface LegacyGoalPlanningPreparationRepository {
 interface GoalPlanningPreparationRepository :
   SharedGoalPreplanRepository,
   GoalSubtaskPlanRepository,
-  LegacyGoalPlanningPreparationRepository
+  LegacyGoalPlanningPreparationRepository {
+  fun migrateSharedPreplan(
+    source: SharedGoalPreplanCheckpoint,
+    target: SharedGoalPreplanCheckpoint,
+  )
+
+  fun listSubtaskPlansForMigration(identity: GoalPlanningIdentity): List<GoalSubtaskPlanCheckpoint>
+
+  fun migrateSubtaskPlan(
+    source: GoalSubtaskPlanCheckpoint,
+    target: GoalSubtaskPlanCheckpoint,
+  )
+}

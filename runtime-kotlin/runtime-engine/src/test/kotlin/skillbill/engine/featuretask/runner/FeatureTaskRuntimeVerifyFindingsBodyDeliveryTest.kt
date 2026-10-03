@@ -131,7 +131,7 @@ class FeatureTaskRuntimeVerifyFindingsBodyDeliveryTest {
 private fun reviewFindingWithLocation(locationPath: String): String =
   """
   {
-    "contract_version": "0.3",
+    "contract_version": "0.7",
     "phase_id": "review",
     "status": "completed",
     "summary": "Review produced a validated output.",

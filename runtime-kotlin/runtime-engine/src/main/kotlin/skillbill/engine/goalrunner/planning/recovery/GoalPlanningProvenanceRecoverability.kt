@@ -31,7 +31,7 @@ internal fun classifyGoalPlanningProvenanceRecoverability(
       saved.phaseOutputContractId == current.phaseOutputContractId &&
       saved.phaseOutputContractVersion == current.phaseOutputContractVersion
   if (!contractCompatible) {
-    return GoalPlanningProvenanceRecoverability.Irrecoverable(GoalPlanningRecoveryKind.HARD_RESET)
+    return GoalPlanningProvenanceRecoverability.Irrecoverable(GoalPlanningRecoveryKind.BLOCKED)
   }
   val valid =
     saved.decompositionManifestHash == current.decompositionManifestHash &&

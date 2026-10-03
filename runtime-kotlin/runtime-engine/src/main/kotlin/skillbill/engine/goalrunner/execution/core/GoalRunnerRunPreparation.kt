@@ -5,6 +5,7 @@ import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
+import skillbill.engine.goalplanning.GoalPlanningMigrationAdmission
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunPreparation
@@ -18,6 +19,7 @@ import skillbill.engine.goalrunner.status.stopped
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.workflow.model.ValidationDepth
@@ -30,7 +32,22 @@ class GoalRunnerRunPreparation(
   private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
   private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
   private val specDriftRecovery: GoalRunnerSpecDriftRecovery,
+  private val migrationAdmission: GoalPlanningMigrationAdmission,
 ) {
+  internal fun admitPlanningMigration(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ) {
+    val repositoryIdentity = goalRepositoryIdentity(request.repoRoot, repositoryEnclosingRootPort)
+    migrationAdmission.admit(
+      GoalPlanningIdentity(
+        state.parentWorkflowId,
+        state.manifest.issueKey.trim().uppercase(),
+        repositoryIdentity,
+      ),
+    )
+  }
+
   internal fun refreshSpecPlanning(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,

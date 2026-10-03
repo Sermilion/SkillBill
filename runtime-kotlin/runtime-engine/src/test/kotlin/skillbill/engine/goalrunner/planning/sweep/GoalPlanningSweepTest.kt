@@ -60,6 +60,7 @@ import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
+import skillbill.ports.goalrunner.GoalPlanningPreparationRepositoryDefaults
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationProvenance
@@ -1157,7 +1158,7 @@ class GoalPlanningSweepPrepareAndResumeTest {
       )
 
     assertIs<GoalPlanningProvenanceRecoverability.Irrecoverable>(result)
-    assertEquals(GoalPlanningRecoveryKind.HARD_RESET, result.recoveryKind)
+    assertEquals(GoalPlanningRecoveryKind.BLOCKED, result.recoveryKind)
   }
 
   @Test
@@ -2564,7 +2565,7 @@ private class ThrowingManifestFileStore : DecompositionManifestStore {
 private class InMemoryPreparationRepository(
   private val markPreparedThrows: Boolean = false,
   private val planCheckpointThrows: Boolean = false,
-) : GoalPlanningPreparationRepository {
+) : GoalPlanningPreparationRepositoryDefaults() {
   private val records = linkedMapOf<Int, GoalPlanningPreparationRecord>()
   private var sharedPreplan: SharedGoalPreplanCheckpoint? = null
   private val plans = linkedMapOf<Int, GoalSubtaskPlanCheckpoint>()
@@ -3022,7 +3023,7 @@ private fun assertBlankProsePlanLaunchStop(
   assertEquals(1, stopped.currentSubtaskId)
   assertTrue(stopped.blockedReason.contains("rejected a declared bounded projection at the launch seam"))
   assertTrue(
-    stopped.blockedReason.contains("Migrate or delete"),
+    stopped.blockedReason.contains("Preserve the saved record"),
     "the block must name the operator remedy for a non-conforming durable record",
   )
   assertContains(stopped.blockedReason, "must contain non-blank prose")

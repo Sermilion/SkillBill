@@ -87,6 +87,7 @@ has_flag() {
 }
 
 case "$cmd" in
+  "--check-packaged-contracts") exit 0 ;;
   "version")
     echo "skill-bill version 0.0.0-smoke"
     ;;

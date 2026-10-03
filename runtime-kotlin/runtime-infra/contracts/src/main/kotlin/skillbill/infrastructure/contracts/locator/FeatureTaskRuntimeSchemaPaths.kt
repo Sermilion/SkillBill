@@ -9,6 +9,17 @@ object FeatureTaskRuntimeExecutionPlanSchemaPaths {
     "https://skill-bill.dev/contracts/feature-task-runtime-execution-plan.yaml"
 }
 
+object FeatureTaskRuntimePhaseOutputSchemaPaths {
+  const val CURRENT_CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/feature-task-runtime-phase-output-schema.yaml"
+  const val HISTORICAL_0_6_CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/feature-task-runtime-phase-output-schema-0.6.yaml"
+  const val REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/feature-task-runtime-phase-output-schema.yaml"
+  const val EXPECTED_SCHEMA_ID: String =
+    "https://skill-bill.dev/contracts/feature-task-runtime-phase-output-schema.yaml"
+}
+
 object FeatureTaskRuntimeHandoffEnvelopeSchemaPaths {
   const val REPO_RELATIVE_PATH: String =
     "orchestration/contracts/feature-task-runtime-handoff-envelope-schema.yaml"

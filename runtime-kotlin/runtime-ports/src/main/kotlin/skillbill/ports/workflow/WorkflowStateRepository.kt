@@ -19,6 +19,11 @@ interface WorkflowStateRepository :
   FeatureTaskWorkflowStateRepository,
   GoalChildWorkflowStateRepository,
   FeatureTaskRuntimeWorkerRepository {
+  fun migrateFeatureTaskArtifacts(
+    source: WorkflowStateRecord,
+    targetArtifactsJson: String,
+  )
+
   fun save(
     family: WorkflowFamily,
     snapshot: WorkflowStateSnapshot,

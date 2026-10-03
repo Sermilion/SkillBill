@@ -12,6 +12,13 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 
 abstract class WorkflowStateRepositoryDefaults : WorkflowStateRepository {
+  open override fun migrateFeatureTaskArtifacts(
+    source: WorkflowStateRecord,
+    targetArtifactsJson: String,
+  ) {
+    throw UnsupportedOperationException("Fixture does not support durable artifact migration")
+  }
+
   open override fun saveFeatureTaskExecutionIdentity(identity: FeatureTaskExecutionIdentity) = Unit
 
   open override fun getFeatureTaskExecutionIdentity(workflowId: String): FeatureTaskExecutionIdentity? = null

@@ -1,7 +1,8 @@
 package skillbill.engine.goalrunner.planning.recovery
 
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.engine.recovery.staleChildPlanningRecoveryCommand
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
@@ -9,23 +10,30 @@ import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
 internal enum class GoalPlanningRecoveryKind {
   HARD_RESET,
   SCOPED_REPLAN,
+  BLOCKED,
 }
 
 fun goalPlanningHardResetRemedy(issueKey: String): String = "skill-bill goal reset $issueKey --hard --yes"
 
-internal fun classifyGoalPlanningRecovery(
-  reason: String,
-  cause: Throwable? = null,
-): GoalPlanningRecoveryKind {
-  if (causeIndicatesContractVersionHardReset(cause) || reasonIndicatesContractVersionHardReset(reason)) {
-    return GoalPlanningRecoveryKind.HARD_RESET
+internal fun classifyGoalPlanningRecovery(cause: Throwable?): GoalPlanningRecoveryKind {
+  var current = cause
+  while (current != null) {
+    if ((current as? SkillBillRuntimeException)?.code is FeatureTaskRuntimeMigrationFailureCode) {
+      return GoalPlanningRecoveryKind.BLOCKED
+    }
+    if (current is InvalidGoalPlanningPreparationSchemaError ||
+      current is InvalidFeatureTaskRuntimePhaseOutputSchemaError
+    ) {
+      return GoalPlanningRecoveryKind.BLOCKED
+    }
+    current = current.cause
   }
   return GoalPlanningRecoveryKind.SCOPED_REPLAN
 }
 
 internal fun classifyGoalPlanningRecovery(
   error: IncompatibleGoalPlanningPreparationRecoveryError,
-): GoalPlanningRecoveryKind = classifyGoalPlanningRecovery(error.reason, error.cause)
+): GoalPlanningRecoveryKind = classifyGoalPlanningRecovery(error.cause)
 
 fun goalPlanningChildImportConflictBlockedReason(
   issueKey: String,
@@ -36,9 +44,8 @@ fun goalPlanningChildImportConflictBlockedReason(
   val detail = error.reason.ifBlank { error.message.orEmpty() }
   return when (kind) {
     GoalPlanningRecoveryKind.HARD_RESET ->
-      "Goal-subtask planning is incompatible with the installed phase-output contract " +
-        "('$FEATURE_TASK_RUNTIME_CONTRACT_VERSION'). Workflows created under an earlier version require a " +
-        "hard reset. Recover with: '${goalPlanningHardResetRemedy(issueKey)}'. Planning failure: $detail"
+      "Goal-subtask planning is incompatible with the current runtime. Keep the workflow and checkpoints " +
+        "intact and repair the incompatible record before resuming. Planning failure: $detail"
     GoalPlanningRecoveryKind.SCOPED_REPLAN ->
       "Goal-subtask planning import conflicts with the stored shared preplan or subtask plan. " +
         "This occurs when a shared preplan was regenerated after the child was hydrated, " +
@@ -46,48 +53,8 @@ fun goalPlanningChildImportConflictBlockedReason(
         "Recover this subtask's child without discarding sibling planning or completed commits: " +
         "'${staleChildPlanningRecoveryCommand(issueKey, subtaskId)}'. " +
         "Planning failure: $detail"
+    GoalPlanningRecoveryKind.BLOCKED ->
+      "Stored goal planning failed contract validation. Keep the workflow and its checkpoints intact, " +
+        "then retry after a runtime with migration support is available. Planning failure: $detail"
   }
-}
-
-fun contractVersionHardResetStopReason(issueKey: String): String =
-  "Goal planning phase-output contract version is incompatible with the installed runtime " +
-    "('$FEATURE_TASK_RUNTIME_CONTRACT_VERSION'). Workflows created under an earlier version require a " +
-    "hard reset. Recover with: '${goalPlanningHardResetRemedy(issueKey)}'"
-
-private fun causeIndicatesContractVersionHardReset(cause: Throwable?): Boolean {
-  var current = cause
-  while (current != null) {
-    when (current) {
-      is InvalidGoalPlanningPreparationSchemaError ->
-        if (reasonIndicatesContractVersionHardReset(current.fieldPath) ||
-          reasonIndicatesContractVersionHardReset(current.reason)
-        ) {
-          return true
-        }
-      is InvalidFeatureTaskRuntimePhaseOutputSchemaError ->
-        if (reasonIndicatesContractVersionHardReset(current.reason) ||
-          reasonIndicatesContractVersionHardReset(current.payloadFreeReason.orEmpty())
-        ) {
-          return true
-        }
-      is IncompatibleGoalPlanningPreparationRecoveryError ->
-        if (reasonIndicatesContractVersionHardReset(current.reason)) return true
-    }
-    current = current.cause
-  }
-  return false
-}
-
-private fun reasonIndicatesContractVersionHardReset(text: String): Boolean {
-  if (text.isBlank()) return false
-  val normalized = text.lowercase()
-  return normalized.contains("phase_output_contract_version") ||
-    normalized.contains("planning_contract_version") ||
-    normalized.contains("phase_output_contract_id") ||
-    normalized.contains("planning_contract_id") ||
-    normalized.contains("hard-reset") ||
-    normalized.contains("hard reset") ||
-    normalized.contains("must be the constant value") ||
-    (normalized.contains("contract_version") && normalized.contains("incompatible")) ||
-    (normalized.contains("contract_version") && normalized.contains("must be"))
 }

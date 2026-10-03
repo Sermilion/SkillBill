@@ -686,7 +686,7 @@ print_install_plan() {
   echo ""
   printf "${CYAN}━━━ What this installer will change ━━━${NC}\n"
   echo ""
-  info "Clean-slate reset: re-runs ./uninstall.sh first, wiping ~/.skill-bill and removing prior Skill Bill agent symlinks, launchers, and MCP registrations."
+  info "Cleanup: after both runtime candidates pass parity, re-runs ./uninstall.sh while preserving copied source and durable databases."
   info "Agent symlinks: links Skill Bill skills into your selected agents' skill/command directories."
   info "Runtime: installs the Kotlin runtime under $RUNTIME_INSTALL_ROOT"
   info "Launchers: $RUNTIME_LAUNCHER_BIN_DIR/skill-bill, $RUNTIME_LAUNCHER_BIN_DIR/skill-bill-mcp"
@@ -762,22 +762,46 @@ locate_packaged_runtime_bin() {
   fi
 }
 
-install_packaged_runtime_distribution() {
-  local source_dir="$1"
-  local target_dir="$2"
-  local label="$3"
+stage_packaged_runtime_distribution() {
+  local source_dir="$1" target_dir="$2" label="$3"
   local tmp_dir="$target_dir.tmp"
-
   if [[ ! -d "$source_dir" ]]; then
     err "Missing packaged Kotlin $label distribution: $source_dir"
     return 1
   fi
+  rm -rf "$tmp_dir" || return 1
+  mkdir -p "$(dirname "$target_dir")" || return 1
+  cp -R "$source_dir" "$tmp_dir" || return 1
+}
 
-  rm -rf "$tmp_dir"
-  mkdir -p "$(dirname "$target_dir")"
-  cp -R "$source_dir" "$tmp_dir"
-  rm -rf "$target_dir"
-  mv "$tmp_dir" "$target_dir"
+install_packaged_runtime_pair() {
+  local cli_source="$1" mcp_source="$2"
+  local candidate_root
+  candidate_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-bill-runtime-candidates.XXXXXX")" || return 1
+  local cli_target="$candidate_root/runtime-cli" mcp_target="$candidate_root/runtime-mcp"
+  if ! stage_packaged_runtime_distribution "$cli_source" "$cli_target" "CLI" ||
+     ! stage_packaged_runtime_distribution "$mcp_source" "$mcp_target" "MCP"; then
+    rm -rf "$candidate_root"
+    return 1
+  fi
+  local candidate
+  for candidate in "$cli_target.tmp/bin/runtime-cli" "$mcp_target.tmp/bin/runtime-mcp"; do
+    if ! "$candidate" --check-packaged-contracts; then
+      err "Packaged runtime contract parity failed. Both live distributions and durable databases were preserved."
+      rm -rf "$candidate_root"
+      return 1
+    fi
+  done
+  if ! clean_install_state_if_requested || ! run_pre_install_uninstall; then
+    rm -rf "$candidate_root"
+    return 1
+  fi
+  mkdir -p "$(dirname "$RUNTIME_CLI_INSTALL_DIR")" "$(dirname "$RUNTIME_MCP_INSTALL_DIR")" || return 1
+  rm -rf "$RUNTIME_CLI_INSTALL_DIR" || return 1
+  mv "$cli_target.tmp" "$RUNTIME_CLI_INSTALL_DIR" || return 1
+  rm -rf "$RUNTIME_MCP_INSTALL_DIR" || return 1
+  mv "$mcp_target.tmp" "$RUNTIME_MCP_INSTALL_DIR" || return 1
+  rm -rf "$candidate_root"
 }
 
 # Copy the clone's authored skill/platform/orchestration source into the
@@ -970,16 +994,11 @@ reconcile_and_commit_authored_source_with_recovery() {
 
 install_packaged_runtime_distributions() {
   info "Installing packaged Kotlin runtime to: $RUNTIME_INSTALL_ROOT"
-  install_packaged_runtime_distribution \
+  install_packaged_runtime_pair \
     "$RUNTIME_KOTLIN_DIR/runtime-cli/build/install/runtime-cli" \
-    "$RUNTIME_CLI_INSTALL_DIR" \
-    "CLI"
-  install_packaged_runtime_distribution \
-    "$RUNTIME_KOTLIN_DIR/runtime-mcp/build/install/runtime-mcp" \
-    "$RUNTIME_MCP_INSTALL_DIR" \
-    "MCP"
-  locate_packaged_runtime_bin "$RUNTIME_CLI_BIN" "CLI"
-  locate_packaged_runtime_bin "$RUNTIME_MCP_BIN" "MCP"
+    "$RUNTIME_KOTLIN_DIR/runtime-mcp/build/install/runtime-mcp" || return 1
+  locate_packaged_runtime_bin "$RUNTIME_CLI_BIN" "CLI" || return 1
+  locate_packaged_runtime_bin "$RUNTIME_MCP_BIN" "MCP" || return 1
   ok "Kotlin runtime installed"
 }
 
@@ -1039,10 +1058,9 @@ install_prebuilt_runtime_distributions() {
   mcp_src="$(unpack_runtime_image "$mcp_archive" "runtime-mcp" "$work_dir/extract-mcp")" || return 1
 
   info "Installing packaged Kotlin runtime to: $RUNTIME_INSTALL_ROOT"
-  install_packaged_runtime_distribution "$cli_src" "$RUNTIME_CLI_INSTALL_DIR" "CLI"
-  install_packaged_runtime_distribution "$mcp_src" "$RUNTIME_MCP_INSTALL_DIR" "MCP"
-  locate_packaged_runtime_bin "$RUNTIME_CLI_BIN" "CLI"
-  locate_packaged_runtime_bin "$RUNTIME_MCP_BIN" "MCP"
+  install_packaged_runtime_pair "$cli_src" "$mcp_src" || return 1
+  locate_packaged_runtime_bin "$RUNTIME_CLI_BIN" "CLI" || return 1
+  locate_packaged_runtime_bin "$RUNTIME_MCP_BIN" "MCP" || return 1
   ok "Kotlin runtime installed from prebuilt release"
 }
 
@@ -1053,21 +1071,21 @@ install_prebuilt_runtime_distributions() {
 install_runtime_distributions() {
   if [[ "$INSTALL_SOURCE" == "source" ]]; then
     info "Installing runtime from source (--from-source); ignoring any --release tag."
-    build_kotlin_runtime_distributions
+    build_kotlin_runtime_distributions || return 1
     return 0
   fi
 
   # The test escape hatch short-circuits to the durable/build copy path without a
   # network fetch, regardless of source. Honor it on the prebuilt path too.
   if [[ "${SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD:-}" == "1" ]]; then
-    build_kotlin_runtime_distributions
+    build_kotlin_runtime_distributions || return 1
     return 0
   fi
 
   check_prebuilt_dependencies || exit 1
 
   if resolve_release_assets; then
-    install_prebuilt_runtime_distributions
+    install_prebuilt_runtime_distributions || return 1
     return 0
   fi
 
@@ -1091,7 +1109,7 @@ build_kotlin_runtime_distributions() {
   if [[ "${SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD:-}" == "1" ]]; then
     warn "Skipping packaged Kotlin runtime distribution build because SKILL_BILL_SKIP_RUNTIME_DISTRIBUTION_BUILD=1."
     if [[ -x "$RUNTIME_CLI_BUILD_BIN" && -x "$RUNTIME_MCP_BUILD_BIN" ]]; then
-      install_packaged_runtime_distributions
+      install_packaged_runtime_distributions || return 1
     else
       locate_packaged_runtime_bin "$RUNTIME_CLI_BIN" "CLI"
       locate_packaged_runtime_bin "$RUNTIME_MCP_BIN" "MCP"
@@ -2113,11 +2131,9 @@ run_full_install() {
     build_platform_packages
     replay_last_install_selection
   fi
-  clean_install_state_if_requested
   migrate_legacy_config_to_durable_path
-  run_pre_install_uninstall
-  copy_in_authored_source
   install_runtime_distributions
+  copy_in_authored_source
   reconcile_and_commit_authored_source_with_recovery
   if [[ "$REUSE_LAST_SELECTION" -ne 1 ]]; then
     build_platform_packages

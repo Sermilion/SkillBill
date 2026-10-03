@@ -323,6 +323,7 @@ listed change.
 
 | Fixture | Re-baselined by | Allowed change |
 | --- | --- | --- |
+| review output and consuming handoffs in full-run fixtures | 2026-10-03 operator-requested durable schema migration | seed current output version 0.7; historical migration fixtures retain their explicit source versions |
 | validate prompt, phase record, and consuming handoffs | 4 | uniform output; the shrink decision reads the `progress` / `no_progress` verdict |
 | write_history and pr prompts, phase records, and consuming handoffs | 5 | uniform output; history and PR facts measured by the runtime |
 | output-contract section of every non-review step prompt, and those steps' phase records | 5 | the "validated schema gate" JSON contract replaced by the minimal settlement instruction; stored envelopes keep only settlement fields |

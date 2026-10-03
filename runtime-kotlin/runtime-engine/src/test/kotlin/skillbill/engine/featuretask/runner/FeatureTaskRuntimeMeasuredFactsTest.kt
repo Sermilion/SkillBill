@@ -221,7 +221,7 @@ class FeatureTaskRuntimeMeasuredFactsTest {
         """{"pr_url":"$FORGED_PR_URL","pr_number":999,"pr_created":false}}}"""
 
     const val LEGACY_WRITE_HISTORY_OUTPUT =
-      """{"contract_version":"0.6","phase_id":"write_history","status":"completed","summary":"done",""" +
+      """{"contract_version":"0.7","phase_id":"write_history","status":"completed","summary":"done",""" +
         """"produced_outputs":{"history_result":{"changed_paths":["agent/history.md"],""" +
         """"decisions_recorded":["recorded"]}}}"""
   }

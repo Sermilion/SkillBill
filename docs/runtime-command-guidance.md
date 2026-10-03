@@ -88,3 +88,23 @@ evidence. It verifies the old composition and retry/resume policy digests before
 mapping to prose repair planning. Other strategy, traversal, or effective-policy changes
 still refuse admission. A resumed repair without a completed repair plan starts
 at `audit_plan_fix`. A diagnostic records the mapping at execution admission.
+
+## Durable planning migration
+
+Readiness and resume admit the declared preparation 0.2, planning 0.2, and
+phase-output 0.6 tuple before spec-drift recovery or child execution. The runtime
+validates the historical records, converts phase outputs to 0.7, and validates
+the resulting preparation and import records. One immediate transaction updates
+payload bytes, hashes, version provenance, and coupled child imports. Completed
+work, skipped subtasks, commits, descriptors, and ledger entries retain their
+meaning. Repeated admission changes no current record.
+
+Unsupported, corrupt, or unsafe sources block with a typed refusal and preserve
+the original records. The 0.6-to-0.7 conversion reuses planning and requires no
+refresh. Existing spec-drift recovery remains responsible for changed unfinished
+specs. Migration diagnostics contain version and result fields, without payloads.
+
+Both packaged runtime entry points accept `--check-packaged-contracts`. This
+database-free check compares producer pins with resources inside that candidate
+image. Installation stages CLI and MCP candidates and checks both before
+promoting either image. A parity failure leaves both installed runtimes intact.

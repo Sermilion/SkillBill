@@ -34,5 +34,8 @@ jobs:
       - name: Build runtime CLI
         run: (cd runtime-kotlin && ./gradlew -q :runtime-cli:installDist :runtime-mcp:installDist)
 
+      - name: Reject mismatched runtime candidates before promotion
+        run: bash scripts/runtime_package_parity_smoke_test.sh
+
       - name: Run install smoke test
         run: bash scripts/install_smoke_test.sh

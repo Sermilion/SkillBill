@@ -75,7 +75,8 @@ class GoalPlanningPreparationValidator {
         "provenance.phase_output_contract_id must be the feature-task-runtime phase output schema id"
       record.provenance.phaseOutputContractVersion != FEATURE_TASK_RUNTIME_CONTRACT_VERSION ->
         "provenance.phase_output_contract_version must be '$FEATURE_TASK_RUNTIME_CONTRACT_VERSION'; existing " +
-          "workflow state is incompatible and must be hard-reset"
+          "workflow state is unsupported by this runtime. Keep the workflow and checkpoints intact, then resume " +
+          "with a runtime that supports this version or an explicitly reviewed migration."
       else -> null
     }
 

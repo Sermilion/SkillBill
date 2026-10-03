@@ -15,7 +15,6 @@ import skillbill.engine.goalrunner.model.GoalRunnerRepairStatus
 import skillbill.engine.goalrunner.model.GoalRunnerWedgeClass
 import skillbill.engine.goalrunner.model.GoalRunnerWedgeFinding
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
-import skillbill.engine.goalrunner.planning.recovery.goalPlanningHardResetRemedy
 import skillbill.engine.goalrunner.status.GoalRunnerStatusDurableReadTracker
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
@@ -165,8 +164,8 @@ class GoalRunnerRepairCoordinator(
       parentPassedChecks = parentDiagnosis.passedChecks,
       diagnoses = diagnoses,
       refusalReason =
-        "Phase-output contract version is incompatible with the installed runtime. " +
-          "Recover with: '${goalPlanningHardResetRemedy(request.issueKey)}'.",
+        "Saved phase-output evidence is incompatible with the installed runtime. " +
+          "Keep the workflow and checkpoints intact, then retry after migration support is available.",
     )
 
   private fun inspectedResult(

@@ -87,7 +87,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
       when (val claim = claimUnowned(workflowId, inputs, identity, reviewSelection)) {
         is UnownedClaim.Owned -> return claim.acquired
         is UnownedClaim.Recover -> return recoverOwned(claim.existing, inputs, identity, reviewSelection)
-        UnownedClaim.Lost -> Unit
+        is UnownedClaim.Lost -> Unit
       }
     }
     error("Workflow '$workflowId' changed before worker ownership could be acquired.")
@@ -110,18 +110,36 @@ class FeatureTaskRuntimeWorkerCoordinator(
           "Cannot acquire worker ownership for terminal workflow '$workflowId' (${row.workflowStatus}).",
         )
       }
-      val execution = executionAdmission.admit(unitOfWork.workflowStates, workflowId, inputs, identity, reviewSelection)
+      val execution =
+        executionAdmission.admit(
+          unitOfWork,
+          workflowId,
+          inputs,
+          identity,
+          reviewSelection,
+        )
+      val admittedRow =
+        unitOfWork.workflowStates.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
+          ?: throw InvalidWorkflowStateSchemaError(
+            "Feature-task runtime worker workflow '$workflowId' disappeared during admission.",
+          )
       val ownership =
         newOwnership(
           workflowId,
           generation = 1,
-          phaseId = row.currentStepId,
+          phaseId = admittedRow.currentStepId,
           phaseAttempt = 1,
         )
-      if (unitOfWork.workflowStates.acquireFeatureTaskRuntimeWorker(ownership, row.updatedAt)) {
+      if (unitOfWork.workflowStates.acquireFeatureTaskRuntimeWorker(ownership, admittedRow.updatedAt)) {
         UnownedClaim.Owned(AcquiredWorker(ownership, execution))
       } else {
-        UnownedClaim.Lost
+        UnownedClaim.Lost(execution)
+      }
+    }.also { claim ->
+      when (claim) {
+        is UnownedClaim.Owned -> executionAdmission.recordCommittedMigrations(claim.acquired.execution)
+        is UnownedClaim.Lost -> executionAdmission.recordCommittedMigrations(claim.execution)
+        is UnownedClaim.Recover -> Unit
       }
     }
 
@@ -144,7 +162,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
       database.transaction {
         val execution =
           executionAdmission.admit(
-            it.workflowStates,
+            it,
             existing.workflowId,
             inputs,
             identity,
@@ -158,7 +176,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
           )
         if (!reserved) error("Concurrent continuation already claimed workflow '${existing.workflowId}'.")
         execution
-      }
+      }.also(executionAdmission::recordCommittedMigrations)
     if (inspection == FeatureTaskRuntimeProcessInspection.ExactLive) stopExactWorker(existing)
     val replacement =
       newOwnership(
@@ -171,7 +189,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
       database.transaction {
         val execution =
           executionAdmission.admit(
-            it.workflowStates,
+            it,
             existing.workflowId,
             inputs,
             admitted.identity,
@@ -186,7 +204,7 @@ class FeatureTaskRuntimeWorkerCoordinator(
           error("Worker takeover fencing changed for workflow '${existing.workflowId}'.")
         }
         execution
-      }
+      }.also(executionAdmission::recordCommittedMigrations)
     return AcquiredWorker(replacement, transferred)
   }
 
@@ -266,6 +284,6 @@ class FeatureTaskRuntimeWorkerCoordinator(
 
     class Recover(val existing: FeatureTaskRuntimeWorkerOwnership) : UnownedClaim()
 
-    data object Lost : UnownedClaim()
+    class Lost(val execution: AdmittedFeatureTaskRuntimeExecution) : UnownedClaim()
   }
 }

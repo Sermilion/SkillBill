@@ -7,6 +7,7 @@ import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.contracts.locator.GoalPlanningPreparationSchemaPaths
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class GoalPlanningPreparationSchemaValidatorTest {
@@ -48,7 +49,7 @@ class GoalPlanningPreparationSchemaValidatorTest {
   }
 
   @Test
-  fun `legacy phase output provenance tells operators to hard reset`() {
+  fun `unsupported provenance fails without destructive reset guidance`() {
     val legacyProvenance = provenance() + ("phase_output_contract_version" to "0.2")
     val error =
       assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
@@ -58,7 +59,8 @@ class GoalPlanningPreparationSchemaValidatorTest {
         )
       }
 
-    assertContains(error.message.orEmpty(), "skill-bill goal reset <issue-key> --hard --yes")
+    assertContains(error.message.orEmpty(), "contract validation failed")
+    assertEquals(false, error.message.orEmpty().contains("--hard"))
   }
 
   private fun sharedEnvelope(): Map<String, Any?> =

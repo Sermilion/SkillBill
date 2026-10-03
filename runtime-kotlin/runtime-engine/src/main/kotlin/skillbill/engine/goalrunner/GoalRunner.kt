@@ -65,7 +65,11 @@ class GoalRunner(
       manifestStore.loadDurableByIssueKey(request.issueKey)?.copy(repoRoot = request.repoRoot)
         ?: intakePreparation.prepare(request)
         ?: return unknownGoal(request.issueKey)
-    val loadedState = runPreparation.refreshSpecPlanning(admittedState, request)
+    runPreparation.admitPlanningMigration(admittedState, request)
+    val migratedState =
+      manifestStore.loadDurableByIssueKey(request.issueKey)?.copy(repoRoot = request.repoRoot)
+        ?: admittedState
+    val loadedState = runPreparation.refreshSpecPlanning(migratedState, request)
     val childAdmission = runPreparation.existingChildExecutionPlanAdmission(loadedState, request)
     val execute = {
       val state = reconcileStateBeforeRun(loadedState)

@@ -9,6 +9,7 @@ import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
+import skillbill.engine.goalplanning.GoalPlanningMigrationAdmission
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -40,7 +41,13 @@ class GoalPlanningSharedPreplanProduction(
   private val contextDiscovery: GoalPlanningContextDiscovery,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val attemptGate: GoalPlanningPhaseAttemptGate,
+  private val migrationAdmission: GoalPlanningMigrationAdmission,
 ) {
+  internal fun findAdmittedSharedPreplan(identity: GoalPlanningIdentity): SharedGoalPreplanCheckpoint? {
+    migrationAdmission.admit(identity)
+    return checkpoint.findSharedPreplan(identity)
+  }
+
   internal fun produceSharedPreplan(
     shared: GoalPlanningSharedContext,
     request: GoalRunnerRunRequest,

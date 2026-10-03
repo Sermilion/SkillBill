@@ -130,7 +130,7 @@ class FeatureTaskRuntimeStatelessAuditTest {
       "claude",
       auditGapsFoundOutput(),
     )
-    harness.seedPhase("review", "completed", 1, "claude", """{"contract_version":"0.1","verdict":"approved"}""")
+    harness.seedPhase("review", "completed", 1, "claude", VALID_REVIEW_OUTPUT)
     val report = harness.runner.run(harness.request())
     assertIs<FeatureTaskRuntimeRunReport.Completed>(report)
     assertEquals(1, harness.launchedPromptPhaseOrder().count { it == "audit" })

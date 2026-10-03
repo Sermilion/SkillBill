@@ -522,7 +522,7 @@
                                 {
                                     "kind": "text",
                                     "name": "value",
-                                    "text": "{\"contract_version\":\"0.3\",\"produced_outputs\":{\"findings\":[]}}"
+                                    "text": "{\"contract_version\":\"0.7\",\"produced_outputs\":{\"findings\":[]}}"
                                 },
                                 {
                                     "kind": "compact_reference",
@@ -1801,7 +1801,7 @@
                     "AC-1",
                     "AC-2"
                 ],
-                "briefing_text": "# Feature-task-runtime phase briefing\nphase: verify_findings\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nacceptance_criteria:\n  AC-001\n  AC-002\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: review\nvalue: {\"contract_version\":\"0.3\",\"produced_outputs\":{\"findings\":[]}}\nrepository_checkpoint: repository_checkpoint=slot-baseline-checkpoint+producer-claimed:slot-baseline-checkpoint\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)\nacceptance_criteria:\n  - AC-1\n  - AC-2\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: slot-baseline-checkpoint\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n(none)",
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: verify_findings\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nacceptance_criteria:\n  AC-001\n  AC-002\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: review\nvalue: {\"contract_version\":\"0.7\",\"produced_outputs\":{\"findings\":[]}}\nrepository_checkpoint: repository_checkpoint=slot-baseline-checkpoint+producer-claimed:slot-baseline-checkpoint\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)\nacceptance_criteria:\n  - AC-1\n  - AC-2\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: slot-baseline-checkpoint\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n(none)",
                 "contract_version": "0.2",
                 "derived_context_keys": [],
                 "feature_size": "MEDIUM",
@@ -1814,7 +1814,7 @@
                                 {
                                     "kind": "text",
                                     "name": "value",
-                                    "text": "{\"contract_version\":\"0.3\",\"produced_outputs\":{\"findings\":[]}}"
+                                    "text": "{\"contract_version\":\"0.7\",\"produced_outputs\":{\"findings\":[]}}"
                                 },
                                 {
                                     "kind": "compact_reference",
@@ -2444,7 +2444,7 @@
                 ],
                 "finished_at": "__NORMALIZED_TIMESTAMP__",
                 "first_started_at": "__NORMALIZED_TIMESTAMP__",
-                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"review\",\"status\":\"completed\",\"summary\":\"{\\\"contract_version\\\":\\\"0.3\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"produced_outputs\":{\"value\":\"{\\\"contract_version\\\":\\\"0.3\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"findings\":[],\"review_run_id\":\"__NORMALIZED_REVIEW_RUN_ID__\",\"repository_checkpoint\":{\"fingerprint\":\"slot-baseline-checkpoint\"}},\"verdict\":\"approved\"}",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"review\",\"status\":\"completed\",\"summary\":\"{\\\"contract_version\\\":\\\"0.7\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"produced_outputs\":{\"value\":\"{\\\"contract_version\\\":\\\"0.7\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"findings\":[],\"review_run_id\":\"__NORMALIZED_REVIEW_RUN_ID__\",\"repository_checkpoint\":{\"fingerprint\":\"slot-baseline-checkpoint\"}},\"verdict\":\"approved\"}",
                 "phase_id": "review",
                 "record_kind": "private_phase_record",
                 "resolved_agent_id": "agent-review",
@@ -2598,7 +2598,7 @@
             "tracked_delta": ""
         },
         "goal_subtask_review_results": {
-            "1": "{\"contract_version\":\"0.7\",\"phase_id\":\"review\",\"status\":\"completed\",\"summary\":\"{\\\"contract_version\\\":\\\"0.3\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"produced_outputs\":{\"value\":\"{\\\"contract_version\\\":\\\"0.3\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"findings\":[],\"review_run_id\":\"__NORMALIZED_REVIEW_RUN_ID__\",\"repository_checkpoint\":{\"fingerprint\":\"slot-baseline-checkpoint\"}},\"verdict\":\"approved\"}"
+            "1": "{\"contract_version\":\"0.7\",\"phase_id\":\"review\",\"status\":\"completed\",\"summary\":\"{\\\"contract_version\\\":\\\"0.7\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"produced_outputs\":{\"value\":\"{\\\"contract_version\\\":\\\"0.7\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"findings\":[],\"review_run_id\":\"__NORMALIZED_REVIEW_RUN_ID__\",\"repository_checkpoint\":{\"fingerprint\":\"slot-baseline-checkpoint\"}},\"verdict\":\"approved\"}"
         },
         "goal_subtask_review_state": {
             "blocker_dispositions": [],

@@ -106,7 +106,7 @@
         ],
         "finished_at": "__NORMALIZED_TIMESTAMP__",
         "first_started_at": "__NORMALIZED_TIMESTAMP__",
-        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"review\",\"status\":\"completed\",\"summary\":\"{\\\"contract_version\\\":\\\"0.3\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"produced_outputs\":{\"value\":\"{\\\"contract_version\\\":\\\"0.3\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"findings\":[],\"review_run_id\":\"__NORMALIZED_REVIEW_RUN_ID__\",\"repository_checkpoint\":{\"fingerprint\":\"slot-baseline-checkpoint\"}},\"verdict\":\"approved\"}",
+        "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"review\",\"status\":\"completed\",\"summary\":\"{\\\"contract_version\\\":\\\"0.7\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"produced_outputs\":{\"value\":\"{\\\"contract_version\\\":\\\"0.7\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"findings\":[],\"review_run_id\":\"__NORMALIZED_REVIEW_RUN_ID__\",\"repository_checkpoint\":{\"fingerprint\":\"slot-baseline-checkpoint\"}},\"verdict\":\"approved\"}",
         "phase_id": "review",
         "record_kind": "private_phase_record",
         "resolved_agent_id": "agent-review",

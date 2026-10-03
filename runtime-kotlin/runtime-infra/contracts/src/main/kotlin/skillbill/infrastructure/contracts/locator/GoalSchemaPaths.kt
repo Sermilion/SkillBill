@@ -9,6 +9,12 @@ object GoalPlanningPreparationSchemaPaths {
 
   const val EXPECTED_SCHEMA_ID: String =
     "https://skill-bill.dev/contracts/goal-planning-preparation-schema.yaml"
+
+  const val HISTORICAL_0_2_PHASE_OUTPUT_0_6_REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/goal-planning-preparation-schema-0.2-phase-output-0.6.yaml"
+
+  const val HISTORICAL_0_2_PHASE_OUTPUT_0_6_CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/goal-planning-preparation-schema-0.2-phase-output-0.6.yaml"
 }
 
 object GoalProgressEventSchemaPaths {

@@ -83,25 +83,18 @@ class GoalRunnerSpecDriftRecovery(
         val stored =
           checkpoint.findStoredSubtaskPlan(identity, subtask.id, governedPath)
             ?: return@firstNotNullOfOrNull null
-        detectDrift(stored, path, request.issueKey)
+        detectDrift(stored, path)
       }
   }
 
   private fun detectDrift(
     stored: GoalSubtaskPlanCheckpoint,
     path: Path,
-    issueKey: String,
   ): SpecDrift? {
+    projectionGate.validateSubtaskPlan(stored)
     if (!fileStore.isRegularFile(path)) return null
     val currentHash = sha256HexUtf8(fileStore.readText(path))
     if (stored.subSpecHash == currentHash) return null
-    if (projectionGate.subtaskPlanRejection(stored) != null) {
-      diagnostics.warning(
-        "seam=goal_spec_drift_recovery value_expected=valid_saved_plan value_used=existing_contract_recovery " +
-          "issue_key=$issueKey subtask_id=${stored.subtaskId}",
-      )
-      return null
-    }
     return SpecDrift(stored.subtaskId, stored.subSpecHash, currentHash)
   }
 

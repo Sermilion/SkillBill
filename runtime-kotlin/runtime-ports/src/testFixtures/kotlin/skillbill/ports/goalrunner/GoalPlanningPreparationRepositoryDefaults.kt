@@ -8,6 +8,19 @@ import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 
 abstract class GoalPlanningPreparationRepositoryDefaults : GoalPlanningPreparationRepository {
+  open override fun migrateSharedPreplan(
+    source: SharedGoalPreplanCheckpoint,
+    target: SharedGoalPreplanCheckpoint,
+  ) = Unit
+
+  open override fun migrateSubtaskPlan(
+    source: GoalSubtaskPlanCheckpoint,
+    target: GoalSubtaskPlanCheckpoint,
+  ) = Unit
+
+  open override fun listSubtaskPlansForMigration(identity: GoalPlanningIdentity): List<GoalSubtaskPlanCheckpoint> =
+    emptyList()
+
   open override fun checkpointSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) = Unit
 
   open override fun replaceSharedPreplan(

@@ -161,6 +161,11 @@ governedResources {
     "SKILL-128: canonical goal planning preparation schema",
   )
   copy(
+    "copyGoalPlanningPreparationHistoricalPhaseOutput06Schema",
+    "goal-planning-preparation-schema-0.2-phase-output-0.6.yaml",
+    "LOCAL-274870733146662: historical goal planning preparation schema for phase output 0.6",
+  )
+  copy(
     "copyFeatureTaskRuntimeImplementationAttemptSchema",
     "feature-task-runtime-implementation-attempt-schema.yaml",
     "SKILL-150: canonical implementation-attempt schema",
@@ -174,6 +179,16 @@ governedResources {
     "copyFeatureTaskRuntimeExecutionPlanSchema",
     "feature-task-runtime-execution-plan.yaml",
     "SKILL-384: canonical execution-plan schema",
+  )
+  copy(
+    "copyFeatureTaskRuntimePhaseOutputSchema",
+    "feature-task-runtime-phase-output-schema.yaml",
+    "SKILL-380: canonical current phase-output schema",
+  )
+  copy(
+    "copyFeatureTaskRuntimePhaseOutputSchemaV06",
+    "feature-task-runtime-phase-output-schema-0.6.yaml",
+    "LOCAL-274870733146662: historical phase-output migration source schema",
   )
   copy(
     "copyFeatureTaskRuntimeQuarantineSchema",

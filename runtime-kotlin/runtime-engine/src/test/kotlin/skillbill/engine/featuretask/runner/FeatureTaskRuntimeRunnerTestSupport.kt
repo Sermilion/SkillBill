@@ -226,7 +226,7 @@ internal const val VALID_OUTPUT = """{"contract_version":"0.2"}"""
 internal val VALIDATE_REPAIR_WITHOUT_GATE_COUNTS =
   """
   {
-    "contract_version": "0.3",
+    "contract_version": "0.7",
     "phase_id": "validate",
     "status": "completed",
     "summary": "Gate repair segment without measured counts.",
@@ -244,7 +244,7 @@ internal val VALIDATE_REPAIR_WITHOUT_GATE_COUNTS =
   }
   """.trimIndent()
 
-internal const val VALID_REVIEW_OUTPUT = """{"contract_version":"0.3","produced_outputs":{"findings":[]}}"""
+internal const val VALID_REVIEW_OUTPUT = """{"contract_version":"0.7","produced_outputs":{"findings":[]}}"""
 
 internal const val VALID_AUDIT_OUTPUT =
   """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"audit",""" +
@@ -271,7 +271,7 @@ private fun seededProjectionEnvelope(
   phaseId: String,
   producedOutputs: String,
 ): String =
-  """{"contract_version":"0.3","phase_id":"$phaseId","status":"completed",""" +
+  """{"contract_version":"0.7","phase_id":"$phaseId","status":"completed",""" +
     """"summary":"Phase produced a validated output.","produced_outputs":$producedOutputs}"""
 
 internal val ALL_PHASES =
@@ -1540,7 +1540,7 @@ internal val IMPLEMENT_FIX_CYCLE =
 internal fun verdictReviewOutput(verdict: String): String =
   """
   {
-    "contract_version": "0.3",
+    "contract_version": "0.7",
     "phase_id": "review",
     "status": "completed",
     "summary": "Review produced a validated output.",
@@ -1569,7 +1569,7 @@ internal fun reviewFindingsOutput(
     }
   return """
     {
-      "contract_version": "0.3",
+      "contract_version": "0.7",
       "phase_id": "review",
       "status": "completed",
       "summary": "Review produced a validated output.",
@@ -1607,7 +1607,7 @@ internal fun reviewFixLauncher(
 internal val COMMIT_PUSH_NO_SHA_OUTPUT: String =
   """
   {
-    "contract_version": "0.3",
+    "contract_version": "0.7",
     "phase_id": "commit_push",
     "status": "completed",
     "summary": "Phase produced a validated output.",
@@ -1618,7 +1618,7 @@ internal val COMMIT_PUSH_NO_SHA_OUTPUT: String =
 internal val COMMIT_PUSH_BLOCKED_OUTPUT: String =
   """
   {
-    "contract_version": "0.3",
+    "contract_version": "0.7",
     "phase_id": "commit_push",
     "status": "blocked",
     "summary": "Validation failed before commit.",
@@ -1635,7 +1635,7 @@ internal val COMMIT_PUSH_BLOCKED_OUTPUT: String =
 internal val VALIDATE_BLOCKED_OUTPUT: String =
   """
   {
-    "contract_version": "0.3",
+    "contract_version": "0.7",
     "phase_id": "validate",
     "status": "blocked",
     "summary": "Validation failed before finalization.",
@@ -1649,7 +1649,7 @@ internal val VALIDATE_BLOCKED_OUTPUT: String =
 internal val VALIDATE_BLOCKED_NEEDS_USER_ACTION_OUTPUT: String =
   """
   {
-    "contract_version": "0.3",
+    "contract_version": "0.7",
     "phase_id": "validate",
     "status": "blocked",
     "failure_disposition": "needs_user_action",
@@ -1664,7 +1664,7 @@ internal val VALIDATE_BLOCKED_NEEDS_USER_ACTION_OUTPUT: String =
 internal val BUILD_BLOCKED_NEEDS_USER_ACTION_OUTPUT: String =
   """
   {
-    "contract_version": "0.3",
+    "contract_version": "0.7",
     "phase_id": "build",
     "status": "blocked",
     "failure_disposition": "needs_user_action",

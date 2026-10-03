@@ -14,6 +14,8 @@ import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.testPhaseStrategies
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.featuretask.validation.repoLocalConfig
+import skillbill.engine.goalrunner.persist.planningMigrationForTest
+import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
@@ -99,7 +101,13 @@ class ExecutionPlanAdmissionFixture(
     )
   val encoded = codec.encodeExecution(plan, inputs)
 
-  val admission = FeatureTaskRuntimeExecutionAdmission(compatibility, NoopRuntimeDiagnostics)
+  val admission =
+    FeatureTaskRuntimeExecutionAdmission(
+      compatibility,
+      NoopRuntimeDiagnostics,
+      ContractFeatureTaskRuntimePhaseOutputMigration(),
+      planningMigrationForTest(),
+    )
 
   fun seed(
     states: WorkflowStateRepository,

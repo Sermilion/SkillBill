@@ -71,7 +71,7 @@ class FeatureTaskRuntimeQuarantineRegenerateTest {
     val harness = runnerHarness(RuntimeHarnessConfig(agentAssignment = phasePerAgentAssignment()))
     harness.seedPhase("preplan", "completed", 1, phaseAgent("preplan"), validJsonOutput("preplan"))
     harness.seedPhase("plan", "completed", 1, phaseAgent("plan"), validJsonOutput("plan"))
-    harness.seedPhase("implement", "completed", 1, phaseAgent("implement"), legacyImplement)
+    harness.seedPhase("implement", "completed", 1, phaseAgent("implement"), legacyImplement.replace("0.4", "0.7"))
     harness.seedPhase("simplify", "completed", 1, phaseAgent("simplify"), SIMPLIFY_OUTPUT)
 
     val records = harness.recorder.loadPhaseRecords(WORKFLOW_ID)

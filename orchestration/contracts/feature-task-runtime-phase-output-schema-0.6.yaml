@@ -1,0 +1,410 @@
+# Persisted phase-output 0.6 contract for bounded durable migration.
+# Historical source and converted target records validate against their pinned schemas.
+# Fresh runtime phase outputs retain their existing prose and projection gates.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://skill-bill.dev/contracts/feature-task-runtime-phase-output-schema.yaml"
+title: "Feature-task-runtime phase output"
+description: >
+  Version-pinned persisted phase-output envelope used for durable migration.
+  Historical source records and converted target records validate here.
+  Fresh phase outputs use the existing runtime prose and projection gates.
+type: object
+additionalProperties: false
+$defs:
+  phaseStatus:
+    type: string
+    enum:
+      - completed
+      - blocked
+      - failed
+  failureDisposition:
+    type: string
+    enum:
+      - retryable
+      - non_retryable_policy_conflict
+      - needs_user_action
+      - process_failure
+      - invalid_output
+  repairReceiptEntry:
+    type: object
+    description: >-
+      One carried finding's repair outcome. Identity is finding_id (canonical). Parsing accepts
+      finding_ref, id, and ref as aliases.
+    required: [outcome]
+    properties:
+      finding_id:
+        type: string
+        minLength: 1
+        maxLength: 256
+      finding_ref:
+        description: "Historical alias for finding_id; canonicalized at parse."
+        type: string
+        minLength: 1
+        maxLength: 256
+      id:
+        description: "Historical alias for finding_id; canonicalized at parse."
+        type: string
+        minLength: 1
+        maxLength: 256
+      ref:
+        description: "Historical alias for finding_id; canonicalized at parse."
+        type: string
+        minLength: 1
+        maxLength: 256
+      outcome:
+        description: >-
+          addressed: the round edited the named constructs and closed the finding. no_edit_required:
+          the finding needs no change, with the reason. attempted_unresolved: the round tried and the
+          finding is still open, with the reason and the constructs it touched. Additive and does not
+          bump contract_version; a producer written before it existed still validates. Omitting a
+          carried finding is never an outcome: the round is sent back for the omitted findings. A
+          finding reported attempted_unresolved gets one more fix attempt; reported unresolved twice,
+          it blocks for an operator carrying the reason instead of being lost silently.
+        type: string
+        enum: [addressed, no_edit_required, attempted_unresolved]
+    allOf:
+      - anyOf:
+          - required: [finding_id]
+          - required: [finding_ref]
+          - required: [id]
+          - required: [ref]
+  verificationBoundaryHeadingProvenance:
+    type: object
+    additionalProperties: false
+    required: [heading_id, source_path]
+    properties:
+      heading_id:
+        type: string
+        minLength: 1
+        maxLength: 256
+        pattern: "^[^\\n\\r`]*\\S[^\\n\\r`]*$"
+      source_path:
+        type: string
+        minLength: 1
+        maxLength: 256
+        pattern: "^[^\\n\\r`]*\\S[^\\n\\r`]*$"
+  repairDisturbedRemedy:
+    type: object
+    additionalProperties: false
+    description: >-
+      Declares that this round rewrote a construct the repair ledger records as another finding's
+      live remedy. finding_ref names that finding as the carried ledger states it. Silent removal
+      is a contract violation the runtime rejects, so the declaration is not optional for a round
+      that did disturb settled work.
+    required: [finding_ref, reason]
+    properties:
+      finding_ref:
+        type: string
+        minLength: 1
+        maxLength: 256
+      reason:
+        description: "One line on why the settled construct had to change. Never a diff hunk or source body."
+        type: string
+        minLength: 1
+        maxLength: 356
+        pattern: "^[^\\n\\r`]*\\S[^\\n\\r`]*$"
+  repairReceipt:
+    type: object
+    additionalProperties: false
+    required: [contract_version, entries]
+    properties:
+      contract_version:
+        type: string
+        const: "0.3"
+      round_number:
+        description: >-
+          Runtime-authored. Accepted when a producer still emits it and then overwritten with the
+          durable remediation round, which no briefing carries. Carries no value constraint: the
+          echo is discarded before the domain model is built, so validating it would fail a round
+          over a value nothing reads.
+        type: integer
+      pre_fix_checkpoint_sha:
+        description: >-
+          Runtime-authored. Accepted when a producer still emits it and then overwritten with the
+          durable remediation base sha. The most visible hash in the briefing is the
+          repository-checkpoint fingerprint, a content hash that satisfies a git-sha shape without
+          being a git commit, so a producer echo is never load-bearing and carries no value
+          constraint here.
+        type: string
+      entries:
+        type: array
+        maxItems: 50
+        items: { $ref: "#/$defs/repairReceiptEntry" }
+  repairPlanEntry:
+    type: object
+    additionalProperties: false
+    description: >-
+      One carried finding's root cause, the minimal change that addresses it, and whether the
+      finding is a local patch site or a symptom of a design defect an earlier remediation round
+      introduced. prior_round_remedy_ref names that earlier finding and is admissible only on a
+      design_symptom entry.
+    required: [finding_ref, root_cause, minimal_change, classification]
+    properties:
+      finding_ref:
+        type: string
+        minLength: 1
+        maxLength: 256
+      root_cause:
+        type: string
+        minLength: 1
+        maxLength: 512
+        pattern: "^[^\\n\\r`]*\\S[^\\n\\r`]*$"
+      minimal_change:
+        type: string
+        minLength: 1
+        maxLength: 512
+        pattern: "^[^\\n\\r`]*\\S[^\\n\\r`]*$"
+      classification:
+        type: string
+        enum: [local_patch_site, design_symptom]
+      prior_round_remedy_ref:
+        type: string
+        minLength: 1
+        maxLength: 256
+    allOf:
+      - if:
+          properties:
+            classification: { const: local_patch_site }
+          required: [classification]
+        then:
+          not: { required: [prior_round_remedy_ref] }
+  repairPlan:
+    type: object
+    additionalProperties: false
+    required: [contract_version, round_number, entries]
+    properties:
+      contract_version:
+        type: string
+        const: "0.1"
+      round_number:
+        type: integer
+        minimum: 1
+      entries:
+        type: array
+        minItems: 1
+        maxItems: 50
+        items: { $ref: "#/$defs/repairPlanEntry" }
+  phaseProseProducedOutputs:
+    type: object
+    required: [value]
+    properties:
+      value:
+        type: string
+        minLength: 1
+        pattern: ".*\\S.*"
+      prompt:
+        type: string
+        minLength: 1
+        pattern: ".*\\S.*"
+required:
+  - contract_version
+  - phase_id
+  - status
+  - summary
+  - produced_outputs
+properties:
+  contract_version:
+    type: string
+    const: "0.6"
+  phase_id:
+    type: string
+    minLength: 1
+  status:
+    $ref: "#/$defs/phaseStatus"
+  failure_disposition:
+    description: >
+      Typed failure behavior for blocked or failed phase output. Agents should
+      omit it for completed output. The runtime treats policy conflicts and
+      user-action requirements as durable non-retryable blocks; retryable,
+      process-failure, and invalid-output dispositions may be relaunched under
+      the applicable bounded retry policy. Optional for compatibility with
+      existing durable 0.1 outputs; absent blocked output defaults to
+      needs_user_action and absent failed output defaults to retryable.
+    $ref: "#/$defs/failureDisposition"
+  summary:
+    type: string
+    minLength: 1
+  produced_outputs:
+    type: object
+    description: >
+      Phase-specific structured payload forwarded to downstream phases as a
+      declared upstream output. Value shapes are phase-specific by contract
+      (strings, arrays, nested objects all occur), so they are left open; the
+      envelope requires the field as an object with only non-empty string keys.
+      An empty `{}` is valid when this phase has no structured payload. Phases
+      that declare a shape in the allOf branches below still require that shape.
+      Mutating phases (e.g. `implement`) MUST additionally carry a
+      reconciliation report as an entry *inside this `produced_outputs`
+      object* — a `reconciled_state` object (or a `reconciled` entry) with
+      `reconciled` set to true plus evidence that the changed files are at
+      their intended target state — so the runtime can verify (not assume)
+      the mutating-phase idempotency contract: the phase reconciled the
+      working tree to target rather than re-applying or silently skipping.
+      The report is a member of `produced_outputs`, never a sibling of it:
+      the output envelope is closed (`additionalProperties: false`), so a
+      root-level `reconciled_state` is rejected as an unknown property and
+      does not satisfy this requirement. The runtime enforces this per-phase
+      reconciliation check at the gate; it is documented here for authors.
+      This is a description-only clarification and adds no JSON-Schema
+      constraint.
+    propertyNames:
+      type: string
+      minLength: 1
+  derived_notes:
+    description: >
+      Optional free-text note. Either absent (not set) or a non-empty string;
+      `null` is not a valid value.
+    type: string
+    minLength: 1
+  verdict:
+    description: >
+      Optional structured verdict emitted by a verifying phase (e.g. `review`)
+      that the runtime reads to decide whether to advance or take a remediation
+      backward edge. For `review` the values are `approved` (no unresolved
+      advance-blocking findings) or `changes_requested` (one or more unresolved
+      Blocker or Major findings present); Blocker and Major both block advancing
+      and both reopen the remediation span, while Minor and Nit stay advisory. The
+      runtime classifies the verdict from the carried review
+      findings, which travel inside `produced_outputs` (e.g. a `findings` array
+      of severity/message entries) and are forwarded into the `implement_fix`
+      handoff. For completed `audit` output the remaining acceptance-criteria list lives in
+      `produced_outputs.value`; an explicit empty list `[]` completes audit after
+      same-session inspection and repair of every planned acceptance criterion.
+      Blocked or failed audit output omits verdict and carries
+      `failure_disposition` instead. Either absent (not set) or a non-empty
+      string; `null` is not a valid value. Completed audit may omit this field when
+      `produced_outputs.value` carries an explicit empty list; the runtime stamps
+      `satisfied` internally for review entry. Legacy `gaps_found` records must be regenerated.
+    type: string
+    minLength: 1
+allOf:
+  - if:
+      properties:
+        phase_id: { const: audit }
+        status: { const: completed }
+      required: [phase_id, status]
+    then:
+      properties:
+        verdict: { enum: [satisfied] }
+        produced_outputs:
+          allOf:
+            - { $ref: "#/$defs/phaseProseProducedOutputs" }
+  - if:
+      properties:
+        phase_id: { const: audit }
+        status:
+          enum: [blocked, failed]
+      required: [phase_id, status]
+    then:
+      required: [failure_disposition]
+      not:
+        required: [verdict]
+      properties:
+        produced_outputs:
+          allOf:
+            - { $ref: "#/$defs/phaseProseProducedOutputs" }
+  - if:
+      properties:
+        phase_id: { const: verify_findings }
+      required: [phase_id]
+    then:
+      required: [verdict]
+      properties:
+        verdict: { enum: [findings_verified, no_findings_verified] }
+        produced_outputs:
+          type: object
+          required: [finding_dispositions]
+          properties:
+            finding_dispositions:
+              type: array
+              maxItems: 100
+              items:
+                type: object
+                required: [finding_id, disposition]
+                properties:
+                  finding_id: { type: string, minLength: 1, pattern: ".*\\S.*" }
+                  disposition: { enum: [verified, rejected] }
+                  boundary_context_unavailable: { type: boolean }
+                  selected_boundary_headings:
+                    type: array
+                    maxItems: 12
+                    items: { $ref: "#/$defs/verificationBoundaryHeadingProvenance" }
+                allOf:
+                  - if:
+                      properties:
+                        boundary_context_unavailable: { const: true }
+                      required: [boundary_context_unavailable]
+                    then:
+                      properties:
+                        selected_boundary_headings:
+                          maxItems: 0
+  - if:
+      properties:
+        phase_id: { const: implement_fix }
+        status: { const: completed }
+      required: [phase_id, status]
+    then:
+      properties:
+        produced_outputs:
+          type: object
+          required: [repair_receipt]
+          properties:
+            repair_receipt: { $ref: "#/$defs/repairReceipt" }
+  - if:
+      properties:
+        phase_id: { const: preplan }
+        status: { const: completed }
+      required: [phase_id, status]
+    then:
+      properties:
+        produced_outputs:
+          allOf:
+            - { $ref: "#/$defs/phaseProseProducedOutputs" }
+  - if:
+      properties:
+        phase_id: { const: plan }
+        status: { const: completed }
+      required: [phase_id, status]
+    then:
+      properties:
+        produced_outputs:
+          allOf:
+            - { $ref: "#/$defs/phaseProseProducedOutputs" }
+  - if:
+      properties:
+        phase_id: { const: implement }
+        status: { const: completed }
+      required: [phase_id, status]
+    then:
+      properties:
+        produced_outputs:
+          allOf:
+            - { $ref: "#/$defs/phaseProseProducedOutputs" }
+  - if:
+      properties:
+        phase_id: { const: simplify }
+        status: { const: completed }
+      required: [phase_id, status]
+    then:
+      properties:
+        produced_outputs:
+          allOf:
+            - { $ref: "#/$defs/phaseProseProducedOutputs" }
+  - if:
+      properties:
+        phase_id: { const: validate }
+        status: { const: completed }
+      required: [phase_id, status]
+    then:
+      properties:
+        produced_outputs:
+          allOf:
+            - { $ref: "#/$defs/phaseProseProducedOutputs" }
+          required: [validation_passed]
+          properties:
+            validation_passed:
+              type: boolean
+              description: >-
+                Agent-reported result of project-discovered checks. True advances;
+                false consumes a bounded validation retry. This is not execution attestation.

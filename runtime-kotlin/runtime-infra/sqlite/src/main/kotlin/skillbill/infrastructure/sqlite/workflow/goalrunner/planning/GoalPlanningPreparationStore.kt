@@ -1,5 +1,8 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
+import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.workflow.goalrunner.shared.GoalSharedPreplanSql
 import skillbill.infrastructure.sqlite.workflow.goalrunner.subtask.GoalSubtaskPlanSql
 import skillbill.infrastructure.sqlite.workflow.goalrunner.subtask.GoalSubtaskPlanStore
@@ -8,12 +11,16 @@ import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalSubtaskPlanRepository
 import skillbill.ports.goalrunner.SharedGoalPreplanRepository
+import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
+import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
+import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import java.sql.Connection
 
 internal class GoalPlanningPreparationStore(
-  connection: Connection,
+  private val connection: Connection,
   diagnostics: RuntimeDiagnostics,
+  private val transactionActive: Boolean = false,
 ) : GoalPlanningPreparationRepository,
   SharedGoalPreplanRepository by SharedGoalPreplanStore(
     GoalPlanningStatusProjectionSql(connection),
@@ -26,6 +33,95 @@ internal class GoalPlanningPreparationStore(
   private val sharedPreplan = GoalSharedPreplanSql(connection, diagnostics)
   private val subtaskPlan = GoalSubtaskPlanSql(connection, sharedPreplan, diagnostics)
   internal val preparationRecord = GoalPlanningPreparationRecordSql(connection, diagnostics)
+
+  override fun listSubtaskPlansForMigration(identity: GoalPlanningIdentity): List<GoalSubtaskPlanCheckpoint> =
+    subtaskPlan.listSubtaskPlansForMigration(identity)
+
+  override fun migrateSharedPreplan(
+    source: SharedGoalPreplanCheckpoint,
+    target: SharedGoalPreplanCheckpoint,
+  ) {
+    requireMigrationTransaction()
+    if (target.provenance.copy(phaseOutputContractVersion = source.provenance.phaseOutputContractVersion) !=
+      source.provenance || sharedPreplan.findSharedPreplan(source.identity) != source ||
+      target.copy(
+        provenance = source.provenance,
+        payloadSha256 = source.payloadSha256,
+        preplanPayload = source.preplanPayload,
+      ) != source
+    ) {
+      staleMigration()
+    }
+    connection.prepareStatement(
+      """UPDATE goal_shared_preplans SET phase_output_contract_version = ?, payload_sha256 = ?,
+        preplan_payload_json = ? WHERE parent_goal_workflow_id = ? AND phase_output_contract_version = ?
+        AND payload_sha256 = ? AND preplan_payload_json = ?""",
+    ).use {
+      it.bindAll(
+        target.provenance.phaseOutputContractVersion,
+        target.payloadSha256,
+        target.preplanPayload,
+        source.identity.parentGoalWorkflowId,
+        source.provenance.phaseOutputContractVersion,
+        source.payloadSha256,
+        source.preplanPayload,
+      )
+      if (it.executeUpdate() != 1) staleMigration()
+    }
+  }
+
+  override fun migrateSubtaskPlan(
+    source: GoalSubtaskPlanCheckpoint,
+    target: GoalSubtaskPlanCheckpoint,
+  ) {
+    requireMigrationTransaction()
+    if (target.provenance.copy(phaseOutputContractVersion = source.provenance.phaseOutputContractVersion) !=
+      source.provenance || subtaskPlan.findSubtaskPlan(
+        source.identity,
+        source.subtaskId,
+        source.governedSubSpecPath,
+      ) != source ||
+      target.copy(
+        provenance = source.provenance,
+        payloadSha256 = source.payloadSha256,
+        planPayload = source.planPayload,
+      ) != source
+    ) {
+      staleMigration()
+    }
+    connection.prepareStatement(
+      """UPDATE goal_subtask_plans SET phase_output_contract_version = ?, payload_sha256 = ?,
+        plan_payload_json = ? WHERE parent_goal_workflow_id = ? AND subtask_id = ?
+        AND phase_output_contract_version = ? AND payload_sha256 = ? AND plan_payload_json = ?""",
+    ).use {
+      it.bindAll(
+        target.provenance.phaseOutputContractVersion,
+        target.payloadSha256,
+        target.planPayload,
+        source.identity.parentGoalWorkflowId,
+        source.subtaskId,
+        source.provenance.phaseOutputContractVersion,
+        source.payloadSha256,
+        source.planPayload,
+      )
+      if (it.executeUpdate() != 1) staleMigration()
+    }
+  }
+
+  private fun requireMigrationTransaction() {
+    if (!transactionActive) {
+      throw SkillBillRuntimeException(
+        FeatureTaskRuntimeMigrationFailureCode.WRITE_FAILURE,
+        "Planning migration requires its owning immediate transaction. Durable state was preserved.",
+      )
+    }
+  }
+
+  private fun staleMigration(): Nothing =
+    throw SkillBillRuntimeException(
+      FeatureTaskRuntimeMigrationFailureCode.STALE_SOURCE,
+      "Planning migration source changed. Retry admission without resetting durable state.",
+    )
 
   override fun markPrepared(record: GoalPlanningPreparationRecord) {
     preparationRecord.markPrepared(record)

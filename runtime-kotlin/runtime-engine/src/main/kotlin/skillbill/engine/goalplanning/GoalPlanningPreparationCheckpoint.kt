@@ -3,6 +3,8 @@ package skillbill.engine.goalplanning
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.goal.GOAL_SHARED_PREPLAN_DISCARDED_PAYLOAD
+import skillbill.contracts.workflow.goal.GoalPlanningPreparationPayloadKeys
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPreparationProgress
 import skillbill.engine.goalrunner.planning.model.GoalPlanningRecoveryProgress
 import skillbill.engine.goalrunner.planning.model.expectedProvenance
@@ -64,17 +66,15 @@ class GoalPlanningPreparationCheckpoint(
     database.selfManagedWrite { it.goalPlanningPreparations.checkpointSubtaskPlan(checkpoint) }
   }
 
-  fun recheckpointSharedPreplan(
-    checkpoint: SharedGoalPreplanCheckpoint,
-    cascadePlanSubtaskIds: List<Int> = emptyList(),
-  ) {
+  fun recheckpointSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) {
     gate.validateSharedPreplan(checkpoint)
     val stored = database.read { it.goalPlanningPreparations.findSharedPreplan(checkpoint.identity) }
-    if (stored != null && gate.sharedPreplanIsRegenerable(stored)) {
+    if (stored?.isExplicitlyDiscarded() == true) {
       database.selfManagedWrite {
-        it.goalPlanningPreparations.replaceSharedPreplan(checkpoint, stored.payloadSha256, cascadePlanSubtaskIds)
+        it.goalPlanningPreparations.replaceSharedPreplan(checkpoint, stored.payloadSha256, emptyList())
       }
     } else {
+      stored?.let(gate::validateSharedPreplan)
       database.selfManagedWrite { it.goalPlanningPreparations.checkpointSharedPreplan(checkpoint) }
     }
   }
@@ -90,11 +90,8 @@ class GoalPlanningPreparationCheckpoint(
         checkpoint.subtaskId,
         checkpoint.governedSubSpecPath,
       )
-    if (stored != null && gate.subtaskPlanIsRegenerable(stored)) {
-      database.selfManagedWrite { it.goalPlanningPreparations.replaceSubtaskPlan(checkpoint) }
-    } else {
-      database.selfManagedWrite { it.goalPlanningPreparations.checkpointSubtaskPlan(checkpoint) }
-    }
+    stored?.let(gate::validateSubtaskPlan)
+    database.selfManagedWrite { it.goalPlanningPreparations.checkpointSubtaskPlan(checkpoint) }
   }
 
   fun findStoredSubtaskPlan(
@@ -108,7 +105,8 @@ class GoalPlanningPreparationCheckpoint(
 
   fun findSharedPreplan(identity: GoalPlanningIdentity): SharedGoalPreplanCheckpoint? =
     database.read { it.goalPlanningPreparations.findSharedPreplan(identity) }
-      ?.takeIf { gate.sharedPreplanRejection(it) == null }
+      ?.takeUnless { it.isExplicitlyDiscarded() }
+      ?.also(gate::validateSharedPreplan)
 
   fun findSubtaskPlan(
     identity: GoalPlanningIdentity,
@@ -117,7 +115,7 @@ class GoalPlanningPreparationCheckpoint(
   ): GoalSubtaskPlanCheckpoint? =
     database.read {
       it.goalPlanningPreparations.findSubtaskPlan(identity, subtaskId, governedSubSpecPath)
-    }?.takeIf { plan -> gate.subtaskPlanRejection(plan) == null }
+    }?.also(gate::validateSubtaskPlan)
 
   private fun requireRecoverablePlan(
     identity: GoalPlanningIdentity,
@@ -187,9 +185,9 @@ class GoalPlanningPreparationCheckpoint(
       } ?: return PlanRecoveryRead.Absent
     requireRecoverablePlan(identity, plan, descriptor)
     val incompleteReason = nonCompletedPlanPayloadReason(plan.planPayload)
+    if (incompleteReason != null) return PlanRecoveryRead.Incomplete(plan.subtaskId, incompleteReason)
+    gate.validateSubtaskPlan(plan)
     return when {
-      incompleteReason != null -> PlanRecoveryRead.Incomplete(plan.subtaskId, incompleteReason)
-      gate.subtaskPlanRejection(plan) != null -> PlanRecoveryRead.Absent
       plan.provenance != expectedProvenance ->
         throw IncompatibleGoalPlanningPreparationRecoveryError(
           identity.parentGoalWorkflowId,
@@ -271,10 +269,6 @@ class GoalPlanningPreparationProjectionGate(
 
   fun subtaskPlanRejection(checkpoint: GoalSubtaskPlanCheckpoint): String? =
     planningRecordRejection { validateSubtaskPlan(checkpoint) }
-
-  fun sharedPreplanIsRegenerable(stored: SharedGoalPreplanCheckpoint): Boolean = sharedPreplanRejection(stored) != null
-
-  fun subtaskPlanIsRegenerable(stored: GoalSubtaskPlanCheckpoint): Boolean = subtaskPlanRejection(stored) != null
 }
 
 private fun requirePlanningPayloadHash(
@@ -301,44 +295,50 @@ private fun planningRecordRejection(compute: () -> Unit): String? =
     "stored record failed its durable contract: ${error.message.orEmpty()}"
   }
 
-private fun SharedGoalPreplanCheckpoint.toEnvelopeMap(): Map<String, Any?> =
+internal fun SharedGoalPreplanCheckpoint.toEnvelopeMap(): Map<String, Any?> =
   linkedMapOf(
     SharedPayloadKeys.CONTRACT_VERSION to contractVersion,
-    "record_type" to "shared_preplan",
-    "identity" to identity.asMap(),
-    "preparation_status" to preparationStatus.wireValue,
-    "provenance" to provenance.asMap(),
-    "payload_sha256" to payloadSha256,
-    "preplan_payload" to preplanPayload,
-    "repair_evidence" to repairEvidence?.asWorkflowArtifactEntry(),
+    GoalPlanningPreparationPayloadKeys.RECORD_TYPE to "shared_preplan",
+    GoalPlanningPreparationPayloadKeys.IDENTITY to identity.asMap(),
+    GoalPlanningPreparationPayloadKeys.PREPARATION_STATUS to preparationStatus.wireValue,
+    GoalPlanningPreparationPayloadKeys.PROVENANCE to provenance.asMap(),
+    GoalPlanningPreparationPayloadKeys.PAYLOAD_SHA256 to payloadSha256,
+    GoalPlanningPreparationPayloadKeys.PREPLAN_PAYLOAD to preplanPayload,
+    GoalPlanningPreparationPayloadKeys.REPAIR_EVIDENCE to repairEvidence?.asWorkflowArtifactEntry(),
   ).filterValues { it != null }
 
-private fun GoalSubtaskPlanCheckpoint.toEnvelopeMap(): Map<String, Any?> =
+internal fun GoalSubtaskPlanCheckpoint.toEnvelopeMap(): Map<String, Any?> =
   linkedMapOf(
     SharedPayloadKeys.CONTRACT_VERSION to contractVersion,
-    "record_type" to "subtask_plan",
-    "identity" to identity.asMap(),
+    GoalPlanningPreparationPayloadKeys.RECORD_TYPE to "subtask_plan",
+    GoalPlanningPreparationPayloadKeys.IDENTITY to identity.asMap(),
     SharedPayloadKeys.SUBTASK_ID to subtaskId,
-    "manifest_order" to manifestOrder,
-    "governed_sub_spec_path" to governedSubSpecPath,
-    "sub_spec_hash" to subSpecHash, "preparation_status" to preparationStatus.wireValue,
-    "provenance" to provenance.asMap(), "payload_sha256" to payloadSha256, "plan_payload" to planPayload,
-    "repair_evidence" to repairEvidence?.asWorkflowArtifactEntry(),
+    GoalPlanningPreparationPayloadKeys.MANIFEST_ORDER to manifestOrder,
+    GoalPlanningPreparationPayloadKeys.GOVERNED_SUB_SPEC_PATH to governedSubSpecPath,
+    GoalPlanningPreparationPayloadKeys.SUB_SPEC_HASH to subSpecHash,
+    GoalPlanningPreparationPayloadKeys.PREPARATION_STATUS to preparationStatus.wireValue,
+    GoalPlanningPreparationPayloadKeys.PROVENANCE to provenance.asMap(),
+    GoalPlanningPreparationPayloadKeys.PAYLOAD_SHA256 to payloadSha256,
+    GoalPlanningPreparationPayloadKeys.PLAN_PAYLOAD to planPayload,
+    GoalPlanningPreparationPayloadKeys.REPAIR_EVIDENCE to repairEvidence?.asWorkflowArtifactEntry(),
   ).filterValues { it != null }
 
 private fun GoalPlanningIdentity.asMap() =
   linkedMapOf(
-    "parent_goal_workflow_id" to parentGoalWorkflowId,
-    "normalized_issue_key" to normalizedIssueKey,
-    "repository_identity" to repositoryIdentity,
+    GoalPlanningPreparationPayloadKeys.PARENT_GOAL_WORKFLOW_ID to parentGoalWorkflowId,
+    GoalPlanningPreparationPayloadKeys.NORMALIZED_ISSUE_KEY to normalizedIssueKey,
+    GoalPlanningPreparationPayloadKeys.REPOSITORY_IDENTITY to repositoryIdentity,
   )
 
 private fun GoalPlanningContractProvenance.asMap() =
   linkedMapOf(
-    "parent_spec_hash" to parentSpecHash,
-    "decomposition_manifest_hash" to decompositionManifestHash,
-    "planning_contract_id" to planningContractId,
-    "planning_contract_version" to planningContractVersion,
-    "phase_output_contract_id" to phaseOutputContractId,
-    "phase_output_contract_version" to phaseOutputContractVersion,
+    GoalPlanningPreparationPayloadKeys.PARENT_SPEC_HASH to parentSpecHash,
+    GoalPlanningPreparationPayloadKeys.DECOMPOSITION_MANIFEST_HASH to decompositionManifestHash,
+    GoalPlanningPreparationPayloadKeys.PLANNING_CONTRACT_ID to planningContractId,
+    GoalPlanningPreparationPayloadKeys.PLANNING_CONTRACT_VERSION to planningContractVersion,
+    GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_ID to phaseOutputContractId,
+    GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_VERSION to phaseOutputContractVersion,
   )
+
+internal fun SharedGoalPreplanCheckpoint.isExplicitlyDiscarded(): Boolean =
+  preplanPayload == GOAL_SHARED_PREPLAN_DISCARDED_PAYLOAD && payloadSha256 == sha256HexUtf8(preplanPayload)

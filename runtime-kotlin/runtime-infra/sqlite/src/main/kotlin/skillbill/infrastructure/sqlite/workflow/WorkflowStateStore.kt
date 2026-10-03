@@ -1,6 +1,9 @@
 package skillbill.infrastructure.sqlite.workflow
 
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
+import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureTaskExecutionLookupStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureTaskRuntimeWorkerStore
 import skillbill.infrastructure.sqlite.workflow.featuretask.FeatureTaskWorkflowRowStore
@@ -20,6 +23,7 @@ import skillbill.ports.workflow.toRecord
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import java.sql.Connection
+import java.sql.SQLException
 import java.time.Clock
 
 internal const val DELETE_GOAL_CHILD_FIRST_STATUS_INDEX: Int = 2
@@ -31,6 +35,8 @@ internal class WorkflowStateStore private constructor(
   private val connection: Connection,
   private val featureTaskStore: FeatureTaskWorkflowStateStore,
   private val verifyStore: FeatureVerifyWorkflowStateStore,
+  private val workflowSnapshotValidator: WorkflowSnapshotValidator,
+  private val transactionActive: Boolean,
 ) : WorkflowStateRepository,
   FeatureTaskWorkflowStateRepository by featureTaskStore,
   GoalChildWorkflowStateRepository by featureTaskStore,
@@ -45,7 +51,50 @@ internal class WorkflowStateStore private constructor(
     connection,
     FeatureTaskWorkflowStateStore(connection, clock, workflowSnapshotValidator, diagnostics, transactionActive),
     FeatureVerifyWorkflowStateStore(connection, clock, workflowSnapshotValidator),
+    workflowSnapshotValidator,
+    transactionActive,
   )
+
+  override fun migrateFeatureTaskArtifacts(
+    source: WorkflowStateRecord,
+    targetArtifactsJson: String,
+  ) {
+    try {
+      if (!transactionActive) {
+        throw SkillBillRuntimeException(
+          FeatureTaskRuntimeMigrationFailureCode.WRITE_FAILURE,
+          "Durable output migration requires its owning immediate transaction.",
+        )
+      }
+      if (featureTaskStore.getFeatureTaskWorkflow(source.workflowId) != source) {
+        staleArtifactMigration()
+      }
+      workflowSnapshotValidator.validate(
+        source.copy(artifactsJson = targetArtifactsJson).toSnapshot(),
+        source.workflowName,
+      )
+      connection.prepareStatement(
+        "UPDATE feature_task_workflows SET artifacts_json = ? WHERE workflow_id = ? AND artifacts_json = ?",
+      ).use {
+        it.bindAll(targetArtifactsJson, source.workflowId, source.artifactsJson)
+        if (it.executeUpdate() != 1) {
+          staleArtifactMigration()
+        }
+      }
+    } catch (error: SQLException) {
+      throw SkillBillRuntimeException(
+        FeatureTaskRuntimeMigrationFailureCode.WRITE_FAILURE,
+        "Durable output publication failed. The owning transaction must roll back before retry.",
+        error,
+      )
+    }
+  }
+
+  private fun staleArtifactMigration(): Nothing =
+    throw SkillBillRuntimeException(
+      FeatureTaskRuntimeMigrationFailureCode.STALE_SOURCE,
+      "Durable output migration source changed. Retry without resetting saved state.",
+    )
 
   override fun save(
     family: WorkflowFamily,

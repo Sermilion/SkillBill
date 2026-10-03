@@ -41,7 +41,8 @@ internal fun Connection.rejectLegacy(workflowId: String) {
         throw IncompatibleGoalPlanningPreparationRecoveryError(
           workflowId,
           0,
-          "legacy 0.1 pair requires hard reset or operator migration",
+          "legacy 0.1 paired planning has no supported automatic conversion; preserve the original records " +
+            "and use a compatible runtime or an explicitly reviewed migration",
         )
       }
     }
@@ -94,8 +95,7 @@ internal fun normalizedProvenanceFailure(provenance: GoalPlanningContractProvena
       "provenance.phase_output_contract_id" to "phase_output_contract_id is incompatible"
     provenance.phaseOutputContractVersion != FEATURE_TASK_RUNTIME_CONTRACT_VERSION ->
       "provenance.phase_output_contract_version" to
-        "phase_output_contract_version is incompatible; hard-reset the workflow with " +
-        "'skill-bill goal reset <issue-key> --hard --yes'"
+        "phase_output_contract_version requires supported migration before checkpointing; preserve durable state"
     else -> null
   }
 

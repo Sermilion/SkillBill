@@ -44,10 +44,10 @@ class FeatureTaskRuntimeExecutionEntry(
         request.workflowId,
       )
     return database.transaction { unit ->
-      val accepted = admission.admit(unit.workflowStates, request.workflowId, inputs, expected)
+      val accepted = admission.admit(unit, request.workflowId, inputs, expected)
       requireMatchingRequest(request, accepted)
       accepted
-    }
+    }.also(admission::recordCommittedMigrations)
   }
 
   private fun requireMatchingRequest(

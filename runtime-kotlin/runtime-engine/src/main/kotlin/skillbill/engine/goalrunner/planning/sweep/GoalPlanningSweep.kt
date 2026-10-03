@@ -66,7 +66,9 @@ class DefaultGoalPlanningSweep(
         repositoryEnclosingRootPort.repositoryIdentity(request.repoRoot),
       )
     val existingShared =
-      runCatching { checkpoint.findSharedPreplan(identity) }
+      runCatching {
+        sharedPreplanProduction.findAdmittedSharedPreplan(identity)
+      }
         .getOrElse { error ->
           return preSweepStopped(request, preparationStateReadReason(error, request.issueKey, 0))
         }

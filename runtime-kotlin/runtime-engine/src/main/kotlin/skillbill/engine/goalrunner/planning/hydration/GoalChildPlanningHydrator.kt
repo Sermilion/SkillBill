@@ -313,14 +313,17 @@ private class GoalChildPlanningImportMatcher(
   ): IncompatibleGoalPlanningPreparationRecoveryError {
     val detail = error.message.orEmpty()
     val reason =
-      if (classifyGoalPlanningRecovery("", error) == GoalPlanningRecoveryKind.HARD_RESET) {
-        "stored goal planning '$phaseId' record for subtask ${request.descriptor.subtaskId} fails the " +
-          "installed phase-output contract and requires a hard reset. Projection failure: $detail"
-      } else {
-        "stored goal planning '$phaseId' record for subtask ${request.descriptor.subtaskId} was already " +
-          "imported by this child and the stored version now fails its projection contract. " +
-          "This occurs when the shared preplan or subtask plan was regenerated after the child was hydrated, " +
-          "making the previously-imported bytes stale. Projection failure: $detail"
+      when (classifyGoalPlanningRecovery(error)) {
+        GoalPlanningRecoveryKind.HARD_RESET ->
+          "stored goal planning '$phaseId' record for subtask ${request.descriptor.subtaskId} is unsupported " +
+            "by this runtime. Keep the workflow and checkpoints intact. Projection failure: $detail"
+        GoalPlanningRecoveryKind.SCOPED_REPLAN ->
+          "stored goal planning '$phaseId' record for subtask ${request.descriptor.subtaskId} was already " +
+            "imported by this child and no longer matches its parent checkpoint. Projection failure: $detail"
+        GoalPlanningRecoveryKind.BLOCKED ->
+          "stored goal planning '$phaseId' record for subtask ${request.descriptor.subtaskId} fails " +
+            "contract validation. Keep the workflow and checkpoints intact, then retry after migration " +
+            "support is available. Projection failure: $detail"
       }
     return IncompatibleGoalPlanningPreparationRecoveryError(
       request.identity.parentGoalWorkflowId,

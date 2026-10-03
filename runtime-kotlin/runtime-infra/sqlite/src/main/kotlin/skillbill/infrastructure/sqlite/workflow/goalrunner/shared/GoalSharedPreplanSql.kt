@@ -1,4 +1,5 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.shared
+import skillbill.contracts.workflow.goal.GOAL_SHARED_PREPLAN_DISCARDED_PAYLOAD
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
@@ -24,7 +25,7 @@ import java.security.MessageDigest
 import java.sql.Connection
 import java.sql.ResultSet
 
-internal const val INVALIDATED_SHARED_PREPLAN_PAYLOAD = "shared-preplan-discarded"
+internal const val INVALIDATED_SHARED_PREPLAN_PAYLOAD = GOAL_SHARED_PREPLAN_DISCARDED_PAYLOAD
 
 internal val INVALIDATED_SHARED_PREPLAN_PAYLOAD_SHA256: String =
   MessageDigest.getInstance("SHA-256")

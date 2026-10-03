@@ -3,15 +3,18 @@ package skillbill.infrastructure.contracts.workflow.goal
 import com.fasterxml.jackson.databind.JsonNode
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
+import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_CONTRACT_VERSION
+import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_HISTORICAL_PHASE_OUTPUT_VERSION
+import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
+import skillbill.contracts.workflow.goal.GoalPlanningPreparationPayloadKeys
 import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.GoalPlanningPreparationSchemaPaths
 import skillbill.infrastructure.contracts.locator.logSchemaLoadFailure
 import skillbill.infrastructure.contracts.review.dottedFieldPath
-import skillbill.infrastructure.contracts.review.formatValidationReason
-import skillbill.infrastructure.contracts.review.offendingValue
 import skillbill.infrastructure.contracts.review.violationOrdering
 import skillbill.infrastructure.contracts.workflow.issue.inlineIssueKeySchemaRefs
 import java.util.logging.Level
@@ -25,103 +28,96 @@ object GoalPlanningPreparationSchemaValidator {
     envelope: Map<String, Any?>,
     sourceLabel: String,
   ) {
-    val instance: JsonNode = ClasspathContractSchemaLoader.valueToTree(envelope)
-    val errors: Set<ValidationMessage> =
-      ClasspathContractSchemaLoader.validate(goalPlanningPreparationSchema(), instance)
-    if (errors.isNotEmpty()) {
-      val sorted = errors.sortedWith(violationOrdering)
-      val fieldPath = dottedFieldPath(sorted.first().instanceLocation?.toString().orEmpty())
-      val validationReason = formatValidationReason(sorted, instance)
-      val reason =
-        if (fieldPath == "provenance.phase_output_contract_version") {
-          "$validationReason Existing workflow state is incompatible; hard-reset it with " +
-            "'skill-bill goal reset <issue-key> --hard --yes'."
-        } else {
-          validationReason
-        }
-      goalPlanningPreparationLog.log(Level.WARNING, buildSchemaDriftLog(sourceLabel, sorted, instance))
+    validate(envelope, sourceLabel, goalPlanningPreparationSchema())
+  }
+
+  fun validateHistoricalPhaseOutput06(
+    envelope: Map<String, Any?>,
+    sourceLabel: String,
+  ) {
+    validateHistoricalPins(envelope, sourceLabel)
+    validate(
+      envelope,
+      sourceLabel,
+      goalPlanningPreparationSchema(
+        GoalPlanningPreparationSchemaPaths.HISTORICAL_0_2_PHASE_OUTPUT_0_6_CLASSPATH_RESOURCE,
+        GoalPlanningPreparationSchemaPaths.HISTORICAL_0_2_PHASE_OUTPUT_0_6_REPO_RELATIVE_PATH,
+        GOAL_PLANNING_PREPARATION_CONTRACT_VERSION,
+      ),
+    )
+  }
+
+  private fun validateHistoricalPins(
+    envelope: Map<String, Any?>,
+    sourceLabel: String,
+  ) {
+    val provenance = envelope[GoalPlanningPreparationPayloadKeys.PROVENANCE] as? Map<*, *>
+    val pins =
+      listOf(
+        HistoricalPin(
+          SharedPayloadKeys.CONTRACT_VERSION,
+          GOAL_PLANNING_PREPARATION_CONTRACT_VERSION,
+        ),
+        HistoricalPin(
+          GoalPlanningPreparationPayloadKeys.PLANNING_CONTRACT_ID,
+          GOAL_PLANNING_PREPARATION_SCHEMA_ID,
+          GoalPlanningPreparationPayloadKeys.PROVENANCE,
+        ),
+        HistoricalPin(
+          GoalPlanningPreparationPayloadKeys.PLANNING_CONTRACT_VERSION,
+          GOAL_PLANNING_PREPARATION_CONTRACT_VERSION,
+          GoalPlanningPreparationPayloadKeys.PROVENANCE,
+        ),
+        HistoricalPin(
+          GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_ID,
+          FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID,
+          GoalPlanningPreparationPayloadKeys.PROVENANCE,
+        ),
+        HistoricalPin(
+          GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_VERSION,
+          GOAL_PLANNING_PREPARATION_HISTORICAL_PHASE_OUTPUT_VERSION,
+          GoalPlanningPreparationPayloadKeys.PROVENANCE,
+        ),
+      )
+    val mismatch =
+      pins.firstOrNull { pin ->
+        val actual = if (pin.parentKey == null) envelope[pin.key] else provenance?.get(pin.key)
+        actual != pin.value
+      }
+    if (mismatch != null) {
       throw InvalidGoalPlanningPreparationSchemaError(
         sourceLabel = sourceLabel,
-        fieldPath = fieldPath,
-        reason = reason,
+        fieldPath = mismatch.parentKey?.let { "$it.${mismatch.key}" } ?: mismatch.key,
+        reason = "historical preparation pin is missing or does not match the declared source contract",
       )
     }
   }
 
-  private fun buildSchemaDriftLog(
+  private data class HistoricalPin(
+    val key: String,
+    val value: String,
+    val parentKey: String? = null,
+  )
+
+  private fun validate(
+    envelope: Map<String, Any?>,
     sourceLabel: String,
-    sorted: List<ValidationMessage>,
-    instance: JsonNode,
-  ): String {
-    val parts =
-      sorted.take(2).map { error ->
-        val location = error.instanceLocation?.toString().orEmpty()
-        val fieldPath = dottedFieldPath(location).ifBlank { "<root>" }
-        val offendingValue = offendingValue(instance, location)
-        if (offendingValue.isNotBlank()) "$fieldPath=$offendingValue" else fieldPath
-      }
-    return "Goal planning preparation failed schema validation: source='$sourceLabel' " +
-      "violations=${parts.joinToString(", ")} totalViolations=${sorted.size}"
-  }
-
-  private fun formatValidationReason(
-    sorted: List<ValidationMessage>,
-    instance: JsonNode,
-  ): String {
-    val firstError = sorted.first()
-    val instanceLocation = firstError.instanceLocation?.toString().orEmpty()
-    val offendingValue = offendingValue(instance, instanceLocation)
-    return buildString {
-      append(firstError.message)
-      if (offendingValue.isNotBlank()) {
-        append(" — offending value: ")
-        append(offendingValue)
-      }
-      sorted.drop(1).forEach { other ->
-        val otherLocation = other.instanceLocation?.toString().orEmpty()
-        val otherValue = offendingValue(instance, otherLocation)
-        append(" | ")
-        append(other.message)
-        if (otherValue.isNotBlank()) {
-          append(" — offending value: ")
-          append(otherValue)
-        }
-      }
+    schema: JsonSchema,
+  ) {
+    val instance: JsonNode = ClasspathContractSchemaLoader.valueToTree(envelope)
+    val errors: Set<ValidationMessage> = ClasspathContractSchemaLoader.validate(schema, instance)
+    if (errors.isNotEmpty()) {
+      val sorted = errors.sortedWith(violationOrdering)
+      val fieldPath = dottedFieldPath(sorted.first().instanceLocation?.toString().orEmpty())
+      val validationReason = "preparation contract validation failed at $fieldPath"
+      goalPlanningPreparationLog.log(Level.WARNING, "Planning preparation contract failed: violations=${sorted.size}")
+      throw InvalidGoalPlanningPreparationSchemaError(
+        sourceLabel = sourceLabel,
+        fieldPath = fieldPath,
+        reason = validationReason,
+      )
     }
   }
-
-  private val violationOrdering: Comparator<ValidationMessage> =
-    compareBy(
-      { it.instanceLocation?.toString().orEmpty().let { loc -> loc.isBlank() || loc == "$" || loc == "/" } },
-      { it.instanceLocation?.toString().orEmpty() },
-      { it.message.orEmpty() },
-    )
-
-  private fun offendingValue(
-    instance: JsonNode,
-    instanceLocation: String,
-  ): String {
-    val dotted = dottedFieldPath(instanceLocation)
-    if (dotted.isBlank()) return ""
-    var node: JsonNode = instance
-    dotted.split('.').forEach { segment ->
-      if (segment.isBlank()) return@forEach
-      node = node.path(segment)
-    }
-    return when {
-      node.isMissingNode -> ""
-      node.isValueNode -> node.asText()
-      else -> ""
-    }
-  }
-
-  private fun dottedFieldPath(instanceLocation: String): String =
-    when {
-      instanceLocation.isBlank() || instanceLocation == "/" || instanceLocation == "$" -> ""
-      instanceLocation.startsWith("$.") -> instanceLocation.removePrefix("$.")
-      instanceLocation.startsWith("$") -> instanceLocation.removePrefix("$").trimStart('.')
-      else -> instanceLocation.trimStart('/').replace('/', '.')
-    }
 }
 
 internal const val GOAL_PLANNING_PREPARATION_SCHEMA_CLASSPATH_RESOURCE: String =
@@ -130,24 +126,28 @@ internal const val GOAL_PLANNING_PREPARATION_SCHEMA_CLASSPATH_RESOURCE: String =
 internal const val GOAL_PLANNING_PREPARATION_SCHEMA_REPO_RELATIVE_PATH: String =
   GoalPlanningPreparationSchemaPaths.REPO_RELATIVE_PATH
 
-private fun goalPlanningPreparationSchema(): JsonSchema =
+private fun goalPlanningPreparationSchema(
+  resource: String = GOAL_PLANNING_PREPARATION_SCHEMA_CLASSPATH_RESOURCE,
+  repoRelativePath: String = GOAL_PLANNING_PREPARATION_SCHEMA_REPO_RELATIVE_PATH,
+  version: String = GOAL_PLANNING_PREPARATION_CONTRACT_VERSION,
+): JsonSchema =
   ClasspathContractSchemaLoader.compiledSchema(
     CompiledSchemaRequest(
-      cacheKey = GOAL_PLANNING_PREPARATION_SCHEMA_CLASSPATH_RESOURCE,
+      cacheKey = resource,
       classLoader = GoalPlanningPreparationSchemaValidator::class.java.classLoader,
-      classpathResource = GOAL_PLANNING_PREPARATION_SCHEMA_CLASSPATH_RESOURCE,
+      classpathResource = resource,
       missingResource = {
         InvalidGoalPlanningPreparationSchemaError(
-          sourceLabel = GOAL_PLANNING_PREPARATION_SCHEMA_CLASSPATH_RESOURCE,
+          sourceLabel = resource,
           fieldPath = "",
           reason =
             "Canonical goal planning preparation schema is missing. Expected classpath resource " +
-              "'$GOAL_PLANNING_PREPARATION_SCHEMA_CLASSPATH_RESOURCE'.",
+              "'$resource'.",
         )
       },
       processingFailure = { cause ->
         InvalidGoalPlanningPreparationSchemaError(
-          sourceLabel = GOAL_PLANNING_PREPARATION_SCHEMA_CLASSPATH_RESOURCE,
+          sourceLabel = resource,
           fieldPath = "",
           reason = cause.message ?: cause::class.simpleName.orEmpty(),
           cause = cause,
@@ -157,16 +157,16 @@ private fun goalPlanningPreparationSchema(): JsonSchema =
         logSchemaLoadFailure(
           goalPlanningPreparationLog,
           "goal planning preparation",
-          GOAL_PLANNING_PREPARATION_SCHEMA_CLASSPATH_RESOURCE,
-          GOAL_PLANNING_PREPARATION_SCHEMA_REPO_RELATIVE_PATH,
+          resource,
+          repoRelativePath,
           error,
         )
       },
       expectedSchemaId = GoalPlanningPreparationSchemaPaths.EXPECTED_SCHEMA_ID,
-      expectedContractVersion = GOAL_PLANNING_PREPARATION_CONTRACT_VERSION,
+      expectedContractVersion = version,
       identityFailure = { reason ->
         InvalidGoalPlanningPreparationSchemaError(
-          sourceLabel = GOAL_PLANNING_PREPARATION_SCHEMA_CLASSPATH_RESOURCE,
+          sourceLabel = resource,
           fieldPath = "<schema>",
           reason = reason,
         )

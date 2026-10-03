@@ -18,6 +18,7 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.slot.goalPlanningPhaseStrategies
+import skillbill.engine.goalplanning.GoalPlanningMigrationAdmission
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
@@ -28,6 +29,7 @@ import skillbill.engine.goalrunner.launch.GoalRunnerSubtaskLaunchPrepare
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.TestNoopGoalPlanningManifestStore
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.planningMigrationForTest
 import skillbill.engine.goalrunner.planning.attempt.GoalPlanningAttemptRecorder
 import skillbill.engine.goalrunner.planning.attempt.GoalPlanningPhaseAttemptGate
 import skillbill.engine.goalrunner.planning.attempt.NO_GOAL_PLANNING_ATTEMPT_RECORDER
@@ -244,6 +246,11 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         executionPlans,
         crashReconciler,
         testSpecDriftRecovery(wiring.manifestStore, wiring.outcomeStore),
+        GoalPlanningMigrationAdmission(
+          TestGoalActivityStampDatabase,
+          planningMigrationForTest(),
+          wiring.diagnostics,
+        ),
       ),
     perRunLoopAssembler = perRunLoopAssembler,
     pauseBoundary = pauseBoundary,
@@ -416,6 +423,12 @@ internal fun testGoalPlanningSweepPorts(params: GoalPlanningSweepPortsParams): D
       contextDiscovery = params.contextDiscovery,
       repositoryEnclosingRootPort = params.repositoryEnclosingRootPort,
       attemptGate = attemptGate,
+      migrationAdmission =
+        GoalPlanningMigrationAdmission(
+          TestGoalActivityStampDatabase,
+          planningMigrationForTest(),
+          NoopRuntimeDiagnostics,
+        ),
     )
   return DefaultGoalPlanningSweep(
     sharedPreplanProduction = sharedPreplanProduction,

@@ -284,7 +284,7 @@ internal class GoalRunnerRepairTest : GoalRunnerRepairFixtures() {
     assertTrue(applied.appliedRepairs.isEmpty())
     assertContains(
       applied.refusalReason.orEmpty(),
-      "skill-bill goal reset $ISSUE_KEY --hard --yes",
+      "Keep the workflow and checkpoints intact",
     )
   }
 

@@ -479,6 +479,7 @@ internal object InstallerShellFixtures {
     """
     |#!/usr/bin/env bash
     |set -euo pipefail
+    |if [[ "${'$'}{1:-}" == "--check-packaged-contracts" ]]; then exit 0; fi
     |$fakeRuntimeCliLoggingBlock
     |$homeInit
     |$fakeRuntimeCliHomeShiftBlock
@@ -851,6 +852,7 @@ internal object PrebuiltReleaseStager {
     """
     |#!/usr/bin/env bash
     |set -euo pipefail
+    |if [[ "${'$'}{1:-}" == "--check-packaged-contracts" ]]; then exit 0; fi
     |if [[ -n "${'$'}{SKILL_BILL_TEST_RUNTIME_LOG:-}" ]]; then
     |  {
     |    echo CALL

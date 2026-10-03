@@ -11,6 +11,7 @@ import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestStore
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
 import skillbill.engine.goalrunner.repair.WorkflowGoalRunnerChildRepairStore
+import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
@@ -76,7 +77,13 @@ fun engineWorkflowGoalRunnerManifestStore(
     repositoryRoot = repositoryRoot,
     planningHydrator = planningHydrator,
     repositoryEnclosingRootPort = repositoryEnclosingRootPort,
-    executionAdmission = FeatureTaskRuntimeExecutionAdmission(executionPlanCompatibility, NoopRuntimeDiagnostics),
+    executionAdmission =
+      FeatureTaskRuntimeExecutionAdmission(
+        executionPlanCompatibility,
+        NoopRuntimeDiagnostics,
+        ContractFeatureTaskRuntimePhaseOutputMigration(),
+        planningMigrationForTest(),
+      ),
   )
 
 private fun testExecutionPlanCompatibility(): FeatureTaskRuntimeExecutionPlanCompatibility {

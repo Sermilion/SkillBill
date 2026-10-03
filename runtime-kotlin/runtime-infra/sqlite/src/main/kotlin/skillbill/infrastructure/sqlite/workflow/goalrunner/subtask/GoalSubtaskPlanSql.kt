@@ -34,6 +34,19 @@ internal class GoalSubtaskPlanSql(
   private val sharedPreplan: GoalSharedPreplanSql,
   private val diagnostics: RuntimeDiagnostics,
 ) {
+  fun listSubtaskPlansForMigration(identity: GoalPlanningIdentity): List<GoalSubtaskPlanCheckpoint> =
+    connection.prepareStatement(
+      "SELECT * FROM goal_subtask_plans WHERE parent_goal_workflow_id = ? ORDER BY manifest_order, subtask_id",
+    ).use { statement ->
+      connection.rejectLegacy(identity.parentGoalWorkflowId)
+      statement.bindAll(identity.parentGoalWorkflowId)
+      statement.executeQuery().use { rows ->
+        buildList {
+          while (rows.next()) add(rows.toPlan(identity, rows.getString("governed_sub_spec_path")))
+        }
+      }
+    }
+
   fun checkpointSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) {
     requireNormalizedSubtaskPlan(checkpoint)
     connection.inNestedWriteTransaction(diagnostics) {

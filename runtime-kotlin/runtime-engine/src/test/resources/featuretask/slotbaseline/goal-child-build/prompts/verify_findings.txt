@@ -65,7 +65,7 @@ mandates_and_overrides:
 
 ## Upstream projections (layer 2, declared and validated)
 ### from: review
-value: {"contract_version":"0.3","produced_outputs":{"findings":[]}}
+value: {"contract_version":"0.7","produced_outputs":{"findings":[]}}
 repository_checkpoint: repository_checkpoint=slot-baseline-checkpoint+producer-claimed:slot-baseline-checkpoint
 ### run_invariant_spec_reference (run_invariant_field:spec_reference)
 spec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md

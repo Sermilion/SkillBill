@@ -49,7 +49,8 @@ fun projectionRejectedReason(
   error: Throwable,
 ): String =
   "Goal planning phase '$phaseId' rejected a declared bounded projection at the launch seam: " +
-    "${error.message.orEmpty()}. Migrate or delete the affected goal-planning preparation record."
+    "${error.message.orEmpty()}. Preserve the saved record. Use a runtime that supports its contract or " +
+    "restore or repair the identified record and its digest before resuming."
 
 fun preparationStateReadReason(
   error: Throwable,

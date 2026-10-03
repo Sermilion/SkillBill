@@ -10,6 +10,7 @@ class AdmittedFeatureTaskRuntimeExecution internal constructor(
   val plan: ResolvedPhaseExecutionPlan,
   val effectiveInputs: EffectiveGatePolicyInputs,
   descriptor: Any,
+  internal val migrationVersions: Set<Pair<String, String>> = emptySet(),
 ) {
   val reviewMode: CodeReviewExecutionMode?
     get() = plan.reviewSelection?.let { CodeReviewExecutionMode.valueOf(it.name) }

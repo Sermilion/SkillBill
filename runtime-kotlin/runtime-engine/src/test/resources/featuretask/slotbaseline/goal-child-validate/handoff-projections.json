@@ -502,7 +502,7 @@
                         {
                             "kind": "text",
                             "name": "value",
-                            "text": "{\"contract_version\":\"0.3\",\"produced_outputs\":{\"findings\":[]}}"
+                            "text": "{\"contract_version\":\"0.7\",\"produced_outputs\":{\"findings\":[]}}"
                         },
                         {
                             "kind": "compact_reference",

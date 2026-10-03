@@ -23,10 +23,8 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
 
 class GoalPlanningPreparationCheckpointTest {
@@ -130,59 +128,31 @@ class GoalPlanningPreparationCheckpointTest {
   }
 
   @Test
-  fun `a stored preplan failing its projection contract reads as regenerable rather than as a fatal read`() {
+  fun `projection-invalid shared preplan refuses reads and replacement without changing stored bytes`() {
     val harness = checkpointHarness()
-
-    harness.storeRawShared(
-      validShared(payload = payloadJson("preplan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS)),
-    )
-
-    assertNull(harness.checkpoint.findSharedPreplan(identity()))
+    val invalid = validShared(payload = payloadJson("preplan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS))
+    harness.storeRawShared(invalid)
+    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+      harness.checkpoint.findSharedPreplan(identity())
+    }
+    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+      harness.checkpoint.recheckpointSharedPreplan(validShared())
+    }
+    assertEquals(invalid.preplanPayload, harness.readShared()?.preplanPayload)
   }
 
   @Test
-  fun `a stored subtask plan failing its projection contract reads as regenerable rather than as a fatal read`() {
+  fun `projection-invalid subtask plan refuses reads and replacement without changing stored bytes`() {
     val harness = checkpointHarness().withShared()
-    harness.storeRawPlan(
-      validPlan(payload = payloadJson("plan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS)),
-    )
-
-    val recovered =
-      harness.checkpoint.findSubtaskPlan(
-        identity(),
-        subtaskId = 1,
-        governedSubSpecPath = descriptor().governedSubSpecPath,
-      )
-
-    assertNull(recovered)
-  }
-
-  @Test
-  fun `regenerating a projection-invalid stored preplan replaces it instead of loud-failing as immutable`() {
-    val harness = checkpointHarness()
-    harness.storeRawShared(
-      validShared(payload = payloadJson("preplan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS)),
-    )
-    val regenerated = validShared()
-
-    harness.checkpoint.recheckpointSharedPreplan(regenerated)
-
-    assertEquals(regenerated.preplanPayload, harness.readShared()?.preplanPayload)
-    val gated = harness.checkpoint.findSharedPreplan(identity())
-    assertEquals(regenerated.preplanPayload, gated?.preplanPayload)
-  }
-
-  @Test
-  fun `regenerating a projection-invalid stored subtask plan replaces it instead of loud-failing as immutable`() {
-    val harness = checkpointHarness().withShared()
-    harness.storeRawPlan(
-      validPlan(payload = payloadJson("plan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS)),
-    )
-    val regenerated = validPlan()
-
-    harness.checkpoint.recheckpointSubtaskPlan(regenerated)
-
-    assertEquals(regenerated.planPayload, harness.readPlan()?.planPayload)
+    val invalid = validPlan(payload = payloadJson("plan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS))
+    harness.storeRawPlan(invalid)
+    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+      harness.checkpoint.findSubtaskPlan(identity(), 1, descriptor().governedSubSpecPath)
+    }
+    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+      harness.checkpoint.recheckpointSubtaskPlan(validPlan())
+    }
+    assertEquals(invalid.planPayload, harness.readPlan()?.planPayload)
   }
 
   @Test
@@ -216,39 +186,17 @@ class GoalPlanningPreparationCheckpointTest {
   }
 
   @Test
-  fun `a goal wedged on legacy projection-invalid records recovers in band across the real store`() {
+  fun `recovery refuses corrupt saved planning and preserves both rows`() {
     val harness = checkpointHarness()
-    harness.storeRawShared(validShared(payload = payloadJson("preplan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS)))
-    harness.storeRawPlan(
-      validPlan(payload = payloadJson("plan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS)),
-    )
-
-    val wedged =
-      assertIs<GoalPlanningRecoveryProgress.Ready>(
-        harness.checkpoint.recoveryProgress(
-          identity(),
-          listOf(descriptor()),
-          provenance(),
-        ),
-      ).progress
-    assertFalse(wedged.sharedPreplanPrepared, "a projection-invalid preplan must read as not prepared")
-    assertEquals(0, wedged.preparedPlanCount)
-    assertEquals(1, wedged.firstMissingSubtaskId)
-
-    harness.checkpoint.recheckpointSharedPreplan(validShared())
-    harness.checkpoint.recheckpointSubtaskPlan(validPlan())
-
-    val recovered =
-      assertIs<GoalPlanningRecoveryProgress.Ready>(
-        harness.checkpoint.recoveryProgress(
-          identity(),
-          listOf(descriptor()),
-          provenance(),
-        ),
-      ).progress
-    assertTrue(recovered.sharedPreplanPrepared)
-    assertEquals(1, recovered.preparedPlanCount)
-    assertNull(recovered.firstMissingSubtaskId, "the goal must be fully prepared again with no operator surgery")
+    val shared = validShared(payload = payloadJson("preplan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS))
+    val plan = validPlan(payload = payloadJson("plan", producedOutputsJson = EMPTY_PRODUCED_OUTPUTS))
+    harness.storeRawShared(shared)
+    harness.storeRawPlan(plan)
+    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+      harness.checkpoint.recoveryProgress(identity(), listOf(descriptor()), provenance())
+    }
+    assertEquals(shared.preplanPayload, harness.readShared()?.preplanPayload)
+    assertEquals(plan.planPayload, harness.readPlan()?.planPayload)
   }
 
   @Test
