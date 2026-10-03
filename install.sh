@@ -1223,7 +1223,7 @@ run_selection_runtime_cli() {
     runtime_bin="$REPLAY_RUNTIME_CLI_BIN"
   elif runtime_cli_supports_selection_replay "$RUNTIME_CLI_BIN"; then
     runtime_bin="$RUNTIME_CLI_BIN"
-  elif build_selection_replay_runtime_cli && runtime_cli_supports_selection_replay "$RUNTIME_CLI_BUILD_BIN"; then
+  elif build_selection_replay_runtime_cli 1>&2 && runtime_cli_supports_selection_replay "$RUNTIME_CLI_BUILD_BIN"; then
     runtime_bin="$RUNTIME_CLI_BUILD_BIN"
   else
     err "Cannot reuse saved install selections: no Skill Bill runtime CLI is available before cleanup."

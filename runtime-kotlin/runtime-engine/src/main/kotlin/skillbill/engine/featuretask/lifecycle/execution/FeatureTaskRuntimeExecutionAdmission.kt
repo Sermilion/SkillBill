@@ -23,7 +23,9 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaEr
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
+import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimePhaseOutputMigrationResult
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowStateRecord
@@ -50,6 +52,7 @@ class FeatureTaskRuntimeExecutionAdmission(
   private val diagnostics: RuntimeDiagnostics,
   private val phaseOutputMigration: FeatureTaskRuntimePhaseOutputMigration,
   private val planningMigration: GoalPlanningMigration,
+  private val supervisor: FeatureTaskRuntimeWorkerSupervisor,
 ) {
   fun admit(
     states: WorkflowStateRepository,
@@ -109,6 +112,7 @@ class FeatureTaskRuntimeExecutionAdmission(
       requireCompletedGateOutputEvidence(artifacts, plan)
       val phaseOutputs = migratePhaseOutputs(request, initialSnapshot, ownsGoalPlanningImport)
       if (phaseOutputs.migratedVersions.isNotEmpty()) {
+        requireStoppedMigrationOwner(states, workflowId)
         val patch =
           mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(phaseOutputs.records))
         val migratedArtifacts = initialSnapshot.artifacts + patch
@@ -144,6 +148,20 @@ class FeatureTaskRuntimeExecutionAdmission(
       recordMigrationFailure(error, request.failureFacts)
       throw error
     }
+
+  private fun requireStoppedMigrationOwner(
+    states: WorkflowStateRepository,
+    workflowId: String,
+  ) {
+    val worker = states.getFeatureTaskRuntimeWorkerOwnership(workflowId) ?: return
+    if (supervisor.inspect(worker) != FeatureTaskRuntimeProcessInspection.NotRunning) {
+      throw SkillBillRuntimeException(
+        FeatureTaskRuntimeMigrationFailureCode.STALE_SOURCE,
+        "Phase-output migration requires the previous worker to have stopped. " +
+          "Stop the original worker and retry without resetting saved state.",
+      )
+    }
+  }
 
   private fun preferredReceipt(
     phaseReceipt: RuntimeMigrationReceipt?,
