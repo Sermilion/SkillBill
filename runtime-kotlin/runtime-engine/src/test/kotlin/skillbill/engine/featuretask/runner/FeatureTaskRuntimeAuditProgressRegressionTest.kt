@@ -17,14 +17,26 @@ import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeAuditProgressRegressionTest {
   @Test
-  fun `replaced and grown lists relaunch repair until two non-shrinking rounds then block`() {
-    val rounds = listOf("AC-001 remains", "AC-002 remains", "AC-002 remains; AC-003 remains", "AC-003 remains")
+  fun `repair audit rejects reopening a satisfied criterion before another repair`() {
     var audits = 0
     var repairs = 0
+    val prompts = mutableListOf<String>()
     val launcher =
       RuntimeRecordingLauncher { request ->
-        when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
-          "audit" -> facts(auditRemainingAcOutput(rounds.getOrElse(audits++) { "AC-004 remains" }))
+        val prompt = requireNotNull(request.skillRunRequest.promptOverride)
+        when (phaseIdFromPrompt(prompt)) {
+          "audit" -> {
+            prompts += prompt
+            facts(
+              auditRemainingAcOutput(
+                when (++audits) {
+                  1 -> "AC-001 remains"
+                  2 -> "AC-002 remains"
+                  else -> "No production criteria remain."
+                },
+              ),
+            )
+          }
           "audit_implement_fix" -> {
             repairs += 1
             facts(defaultPhaseOutput(request))
@@ -32,23 +44,11 @@ class FeatureTaskRuntimeAuditProgressRegressionTest {
           else -> facts(defaultPhaseOutput(request))
         }
       }
-    val harness =
-      runnerHarness(
-        RuntimeHarnessConfig(
-          acceptanceCriteria = CRITERIA,
-          launcher = launcher,
-        ),
-      )
-    val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
-    assertContains(report.blockedReason, "did not shrink")
-    assertContains(report.blockedReason, "AC-004")
-    assertEquals(5, audits)
-    assertEquals(4, repairs)
-    val markers =
-      harness.recorder.loadPhaseLedger(WORKFLOW_ID).orEmpty().count {
-        it.phaseId == "audit" && it.blockedReason == "continuation:audit_non_shrinking_round"
-      }
-    assertEquals(2, markers)
+    val harness = runnerHarness(RuntimeHarnessConfig(acceptanceCriteria = CRITERIA, launcher = launcher))
+    assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
+    assertEquals(2, audits)
+    assertEquals(1, repairs)
+    assertContains(prompts[1], "only these unresolved criterion IDs: AC-001")
     assertTrue("review" !in harness.launchOrder())
   }
 

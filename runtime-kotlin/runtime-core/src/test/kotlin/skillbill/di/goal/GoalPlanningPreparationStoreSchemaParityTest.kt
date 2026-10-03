@@ -165,7 +165,7 @@ class GoalPlanningPreparationStoreSchemaParityTest {
       identity = identity(),
       provenance = provenance(),
       payloadSha256 = "c".repeat(64),
-      preplanPayload = "preplan-payload",
+      preplanPayload = payload("preplan"),
     )
 
   private fun planCheckpoint(): GoalSubtaskPlanCheckpoint =
@@ -177,8 +177,12 @@ class GoalPlanningPreparationStoreSchemaParityTest {
       subSpecHash = "d".repeat(64),
       provenance = provenance(),
       payloadSha256 = "e".repeat(64),
-      planPayload = "plan-payload",
+      planPayload = payload("plan"),
     )
+
+  private fun payload(phase: String): String =
+    """{"contract_version":"0.7","phase_id":"$phase","status":"completed",
+    "summary":"planning", "produced_outputs":{"value":"planning prose"}}"""
 
   private fun tempDb(): Path =
     Files.createTempDirectory("runtime-kotlin-goal-planning-preparation-parity").resolve("metrics.db")

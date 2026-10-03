@@ -37,6 +37,29 @@ internal object AcceptanceAuditProgress {
       AcceptanceAuditRemainingCriteria.Complete
   }
 
+  fun reopeningReason(
+    criteria: List<String>,
+    text: String,
+    priorText: String?,
+  ): String? {
+    val catalog = AcceptanceAuditCatalog.create(criteria) as? AcceptanceAuditCatalog.Known ?: return null
+    val current =
+      AcceptanceAuditRemainingCriteriaParser.parse(text, catalog) as? AcceptanceAuditRemainingCriteria.Known
+        ?: return null
+    val prior = priorText?.let { AcceptanceAuditRemainingCriteriaParser.parse(it, catalog) } ?: return null
+    val previouslyOpen =
+      when (prior) {
+        is AcceptanceAuditRemainingCriteria.Known -> prior.identities
+        AcceptanceAuditRemainingCriteria.Complete -> emptySet()
+        is AcceptanceAuditRemainingCriteria.Unusable -> current.identities
+      }
+    val reopened = current.identities - previouslyOpen
+    return reopened.takeIf { it.isNotEmpty() }?.let {
+      "Previously satisfied criteria stay closed: ${it.sorted().joinToString(", ")}. " +
+        "Report only unresolved criteria from the last accepted audit."
+    }
+  }
+
   fun rejectionReason(
     criteria: List<String>,
     text: String,
@@ -66,6 +89,9 @@ internal object AcceptanceAuditProgress {
   }
 
   fun outcome(input: AcceptanceAuditProgressInput): AcceptanceAuditProgressOutcome {
+    reopeningReason(input.criteria, input.text, input.priorText)?.let {
+      return AcceptanceAuditProgressOutcome.Rejected(it)
+    }
     val catalog = AcceptanceAuditCatalog.create(input.criteria)
     if (catalog is AcceptanceAuditCatalog.Unusable) return AcceptanceAuditProgressOutcome.Rejected(catalog.reason)
     catalog as AcceptanceAuditCatalog.Known

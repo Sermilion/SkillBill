@@ -5,6 +5,7 @@ import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
@@ -140,8 +141,8 @@ data class FeatureTaskRuntimePhaseRecord(
       "attempt_count" to attemptCount,
       "started_at" to startedAt.toString(),
       "first_started_at" to firstStartedAt.toString(),
-      "resolved_agent_id" to resolvedAgentId,
-      "execution_origin" to executionOrigin.wireValue,
+      FeatureTaskRuntimePhasePayloadKeys.RESOLVED_AGENT_ID to resolvedAgentId,
+      FeatureTaskRuntimePhasePayloadKeys.EXECUTION_ORIGIN to executionOrigin.wireValue,
     ).apply {
       finishedAt?.let { put("finished_at", it.toString()) }
       durationMillis?.let { put("duration_millis", it) }
@@ -154,7 +155,7 @@ data class FeatureTaskRuntimePhaseRecord(
       loopId?.let { put("loop_id", it) }
       edgeIteration?.let { put("edge_iteration", it) }
       reviewPassNumber?.let { put("review_pass_number", it) }
-      repairEvidence?.let { put("repair_evidence", it.toArtifactMap()) }
+      repairEvidence?.let { put(FeatureTaskRuntimePhasePayloadKeys.REPAIR_EVIDENCE, it.toArtifactMap()) }
       putLaunchPair()
     }
 
@@ -184,10 +185,10 @@ data class FeatureTaskRuntimePhaseRecord(
           firstStartedAt = parsePersistedInstant(reader.requiredString("first_started_at")),
           finishedAt = reader.optionalString("finished_at")?.let(::parsePersistedInstant),
           durationMillis = reader.optionalLong("duration_millis"),
-          resolvedAgentId = reader.requiredString("resolved_agent_id"),
+          resolvedAgentId = reader.requiredString(FeatureTaskRuntimePhasePayloadKeys.RESOLVED_AGENT_ID),
           executionOrigin =
             FeatureTaskRuntimePhaseExecutionOrigin.fromWireValue(
-              reader.requiredString("execution_origin"),
+              reader.requiredString(FeatureTaskRuntimePhasePayloadKeys.EXECUTION_ORIGIN),
             ),
           outputArtifact = reader.optionalString("output_artifact"),
           rejectedOutput = null,
@@ -203,7 +204,7 @@ data class FeatureTaskRuntimePhaseRecord(
           edgeIteration = reader.optionalInt("edge_iteration"),
           reviewPassNumber = reader.optionalInt("review_pass_number"),
           repairEvidence =
-            raw["repair_evidence"]?.let { value ->
+            raw[FeatureTaskRuntimePhasePayloadKeys.REPAIR_EVIDENCE]?.let { value ->
               val evidence =
                 value as? Map<*, *>
                   ?: incompatiblePhaseRecord()
@@ -230,8 +231,8 @@ data class FeatureTaskRuntimePhaseRecord(
           "attempt_count",
           "started_at",
           "first_started_at",
-          "resolved_agent_id",
-          "execution_origin",
+          FeatureTaskRuntimePhasePayloadKeys.RESOLVED_AGENT_ID,
+          FeatureTaskRuntimePhasePayloadKeys.EXECUTION_ORIGIN,
         )
       val allowed =
         required +
@@ -248,7 +249,7 @@ data class FeatureTaskRuntimePhaseRecord(
             "edge_iteration",
             "review_pass_number",
             "rejected_output",
-            "repair_evidence",
+            FeatureTaskRuntimePhasePayloadKeys.REPAIR_EVIDENCE,
             "launched_model",
             "launched_effort",
             "review_run_id",

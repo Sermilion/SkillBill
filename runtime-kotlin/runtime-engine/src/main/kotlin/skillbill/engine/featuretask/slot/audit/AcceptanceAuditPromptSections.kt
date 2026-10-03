@@ -11,7 +11,7 @@ internal object AcceptanceAuditPromptSections {
       "gaps for audit_plan_fix."
 
   const val DIRECTIVE: String =
-    "Verify the production behavior required by every acceptance criterion in the briefing against the " +
+    "On the first audit, verify the production behavior required by every acceptance criterion against the " +
       "current implementation. Exclude all test requirements from audit, even when the plan or a criterion " +
       "explicitly requires tests. Missing tests, coverage, assertions, test quality, fixtures, and test results " +
       "never keep an acceptance criterion open. For a mixed criterion, evaluate only its production behavior. " +
@@ -27,8 +27,9 @@ internal object AcceptanceAuditPromptSections {
       "production gaps and let the runtime apply its durable repair policy. " +
       "A completed inspection with open criteria routes to audit_plan_fix. Downstream review requires " +
       "a report that no production criteria remain. " +
-      "After repairs, re-check the entire in-scope criterion list from the beginning, including previously " +
-      "satisfied criteria, applying the same test exclusion. When all required production behavior is " +
+      "After repairs, inspect only the unresolved criteria in the last accepted audit report. Previously " +
+      "satisfied criteria stay closed and must never be rechecked or reopened. Apply the same test exclusion. " +
+      "When all required production behavior is " +
       "implemented, including when only test requirements remain, report that no production criteria remain " +
       "with only the line \"${AcceptanceAuditRemainingCriteriaParser.COMPLETION_LINE}\" " +
       "Block with a concrete failure_disposition when the criterion list is missing or unreadable or an " +
@@ -36,9 +37,10 @@ internal object AcceptanceAuditPromptSections {
 
   fun sections(inputs: FeatureTaskRuntimePhasePromptComposeInputs): PhaseStepPromptSections =
     PhaseStepPromptSections(
-      taskDirective = DIRECTIVE,
+      taskDirective = DIRECTIVE + auditScope(inputs),
       ceremonyLine =
-        "Apply ${ceremonyScalingOf(inputs.briefing).auditCeremony.promptLabel}. Inspect every criterion without " +
+        "Apply ${ceremonyScalingOf(inputs.briefing).auditCeremony.promptLabel}. " +
+          "Inspect the unresolved criteria without " +
           "editing files. Exclude test requirements and report production gaps for the implementation repair step. " +
           "An enforcement guard or architecture check whose implementation a criterion requires counts as " +
           "production behavior even under a test source set; its example and regression cases stay excluded.",
@@ -51,7 +53,7 @@ internal object AcceptanceAuditPromptSections {
           "a satisfied criterion. " +
           "Open criteria route to audit_plan_fix. Do not repair gaps in audit. Only a report that no " +
           "criteria remain allows downstream review. Every audit " +
-          "checks the complete planned criterion list against the current tree. " +
+          "checks only the unresolved criterion list against the current tree after the first pass. " +
           "Original spec labels are accepted aliases. For capability " +
           "gaps, identify the actual consumer, helper or cast path, and reachable forbidden operation. A cast " +
           "inside an authorized review consumer alone does not prove a non-review access path. " +
@@ -59,4 +61,20 @@ internal object AcceptanceAuditPromptSections {
           "The runtime decides whether another repair is allowed. Reserve blocked status for a missing or " +
           "unreadable criterion list or an external dependency that prevents inspection.",
     )
+
+  private fun auditScope(inputs: FeatureTaskRuntimePhasePromptComposeInputs): String {
+    val prior = inputs.priorAcceptanceAudit ?: return ""
+    val catalog =
+      AcceptanceAuditCatalog.create(inputs.briefing.acceptanceCriteria) as? AcceptanceAuditCatalog.Known
+        ?: return ""
+    return when (val remaining = AcceptanceAuditRemainingCriteriaParser.parse(prior, catalog)) {
+      is AcceptanceAuditRemainingCriteria.Known ->
+        " This round may inspect only these unresolved criterion IDs: " +
+          remaining.identities.sorted().joinToString(", ") +
+          ". All other criteria are already satisfied and stay closed. Last accepted findings:\n" + prior
+      AcceptanceAuditRemainingCriteria.Complete ->
+        " All criteria were already satisfied. Carry completion forward without reopening any criterion."
+      is AcceptanceAuditRemainingCriteria.Unusable -> ""
+    }
+  }
 }

@@ -30,7 +30,17 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
   ): String? {
     removedVerdictRejection(outputMap)?.let { return it }
     val catalog = AcceptanceAuditCatalog.create(context.request.runInvariants.acceptanceCriteria)
-    if (catalog is AcceptanceAuditCatalog.Unusable) return catalog.reason
+    val scopeRejection =
+      if (catalog is AcceptanceAuditCatalog.Unusable) {
+        catalog.reason
+      } else {
+        AcceptanceAuditProgress.reopeningReason(
+          context.request.runInvariants.acceptanceCriteria,
+          auditProseValue(outputMap).orEmpty(),
+          auditProseValue(context.progress.phase(run.phaseId).output?.normalizedOutput?.envelopeWireMap()),
+        )
+      }
+    scopeRejection?.let { return it }
     if (outputMap[SharedPayloadKeys.VERDICT] == FeatureTaskRuntimeVerdict.SATISFIED.wireValue &&
       !AcceptanceAuditProgress.declaresComplete(
         context.request.runInvariants.acceptanceCriteria,

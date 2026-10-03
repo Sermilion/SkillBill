@@ -221,7 +221,7 @@ class GoalPlanningPreparationCheckpointTest {
         harness.checkpoint.checkpointSubtaskPlan(escape)
       }
 
-    assertContains(error.reason, "produced_outputs")
+    assertContains(error.fieldPath, "plan_payload")
     assertNull(harness.readPlan(), "a projection-invalid plan must leave no durable row behind")
   }
 

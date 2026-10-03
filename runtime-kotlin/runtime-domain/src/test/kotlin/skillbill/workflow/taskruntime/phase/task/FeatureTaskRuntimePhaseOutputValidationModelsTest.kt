@@ -1,7 +1,7 @@
 package skillbill.workflow.taskruntime.phase.task
 
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
-import skillbill.workflow.taskruntime.model.phase.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputFormat
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairOperation

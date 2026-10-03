@@ -72,7 +72,7 @@ fun goalPlanningPreparationStateReadStopReason(
   val recovery =
     error as? IncompatibleGoalPlanningPreparationRecoveryError
       ?: return "Goal planning preparation state could not be read: ${error.message.orEmpty()}"
-  return preparationStateReadStopReason(
+  return goalPlanningPreparationStateReadStopReason(
     recovery.reason,
     recovery.subtaskId,
     issueKey,
@@ -81,21 +81,7 @@ fun goalPlanningPreparationStateReadStopReason(
   )
 }
 
-fun goalPlanningPreparationStateReadStopReason(
-  reason: String,
-  recordedSubtaskId: Int,
-  issueKey: String,
-  subtaskId: Int?,
-): String =
-  preparationStateReadStopReason(
-    reason,
-    recordedSubtaskId,
-    issueKey,
-    subtaskId,
-    GoalPlanningRecoveryKind.SCOPED_REPLAN,
-  )
-
-private fun preparationStateReadStopReason(
+internal fun goalPlanningPreparationStateReadStopReason(
   reason: String,
   recordedSubtaskId: Int,
   issueKey: String,

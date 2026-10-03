@@ -7,6 +7,7 @@ import skillbill.engine.goalrunner.persist.planningMigrationForTest
 import skillbill.engine.goalrunner.planning.context.GoalPlanningSharedContextPacket
 import skillbill.engine.goalrunner.planning.context.GoalPlanningSharedContextPacketPayloadKeys
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
+import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
 import skillbill.infrastructure.contracts.workflow.featuretask.ContractFeatureTaskRuntimePhaseOutputMigration
@@ -22,6 +23,7 @@ import skillbill.ports.taskruntime.model.FeatureTaskRuntimePhaseOutputMigrationR
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
@@ -31,6 +33,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalPlanningImport
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseExecutionOrigin
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
@@ -182,7 +185,7 @@ private class MigrationFixture {
     )
   private val provenance =
     GoalPlanningContractProvenance(
-      "a".repeat(64),
+      sha256HexUtf8("requirements"),
       "b".repeat(64),
       GOAL_PLANNING_PREPARATION_SCHEMA_ID,
     )
@@ -336,6 +339,16 @@ private class MigrationFixture {
                   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(records),
                   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_LEDGER.entry(ledger),
                   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.entry(imported),
+                  DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION.entry(
+                    FeatureTaskRuntimeGoalContinuationArtifact(
+                      issueKey = identity.normalizedIssueKey,
+                      subtaskId = 1,
+                      suppressPr = true,
+                      goalBranch = "feat/SKILL-384",
+                      parentWorkflowId = identity.parentGoalWorkflowId,
+                      codeReviewMode = CodeReviewExecutionMode.INLINE,
+                    ).asWorkflowArtifactEntry(),
+                  ),
                 ),
             ),
         ),
@@ -356,7 +369,7 @@ private class MigrationFixture {
           identity.normalizedIssueKey,
         )
       if (interruptBeforeCommit) throw InterruptedException("injected before commit")
-      changed
+      changed.result == RuntimeMigrationReceipt.Result.CONVERTED
     }
 
   fun parent() =

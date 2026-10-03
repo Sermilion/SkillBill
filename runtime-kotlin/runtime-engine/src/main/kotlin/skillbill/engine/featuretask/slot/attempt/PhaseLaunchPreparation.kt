@@ -7,6 +7,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBri
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionRejection
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
+import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.phase.core.toMeasurementFailureClassification
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposer
@@ -40,6 +41,7 @@ import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranch
@@ -47,6 +49,7 @@ import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeH
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseHandoff
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionFailureClassification
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 object PhaseLaunchPreparation {
   internal fun PhaseAttemptLaunchPreparationContext.prepareLaunchForCapture(
@@ -398,6 +401,11 @@ object PhaseLaunchPreparation {
         priorReviewContext = null,
         priorTerminalFailure = priorCorrection?.retryableTerminalReason,
         priorFindingCoverage = priorCorrection?.findingCoverageReason,
+        priorAcceptanceAudit =
+          auditProseValue(
+            progress.phase(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT)
+              .output?.normalizedOutput?.envelopeWireMap(),
+          ),
         operatorBlockRetry =
           session.operatorBlockRetry
             ?.takeIf { it.phaseId == run.phaseId && !session.operatorBlockRetryCompleted },

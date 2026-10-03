@@ -30,17 +30,17 @@ internal fun classifyGoalPlanningProvenanceRecoverability(
       saved.planningContractVersion == current.planningContractVersion &&
       saved.phaseOutputContractId == current.phaseOutputContractId &&
       saved.phaseOutputContractVersion == current.phaseOutputContractVersion
-  if (!contractCompatible) {
+  val sourceValid =
+    savedParentSpec != null && sha256HexUtf8(savedParentSpec) == saved.parentSpecHash &&
+      sha256HexUtf8(existing.preplanPayload) == existing.payloadSha256
+  if (!contractCompatible || !sourceValid) {
     return GoalPlanningProvenanceRecoverability.Irrecoverable(GoalPlanningRecoveryKind.BLOCKED)
   }
-  val valid =
-    saved.decompositionManifestHash == current.decompositionManifestHash &&
-      savedParentSpec != null &&
-      sha256HexUtf8(savedParentSpec) == saved.parentSpecHash &&
-      sha256HexUtf8(existing.preplanPayload) == existing.payloadSha256
-  if (!valid) return GoalPlanningProvenanceRecoverability.Irrecoverable(GoalPlanningRecoveryKind.SCOPED_REPLAN)
+  if (saved.decompositionManifestHash != current.decompositionManifestHash) {
+    return GoalPlanningProvenanceRecoverability.Irrecoverable(GoalPlanningRecoveryKind.SCOPED_REPLAN)
+  }
   val fresh =
-    GoalPlanningSpecCanonicalization.canonical(savedParentSpec) ==
+    GoalPlanningSpecCanonicalization.canonical(requireNotNull(savedParentSpec)) ==
       GoalPlanningSpecCanonicalization.canonical(currentParentSpec)
   return if (fresh) {
     GoalPlanningProvenanceRecoverability.Reuse(saved)

@@ -7,6 +7,21 @@ import kotlin.test.assertTrue
 
 class AcceptanceAuditProgressParsingTest {
   @Test
+  fun `operator resume cannot reopen a previously satisfied criterion`() {
+    val input =
+      AcceptanceAuditProgressInput(
+        criteria = CRITERIA,
+        text = "AC-001: missing behavior",
+        priorText = "AC-002: missing behavior",
+        repaired = true,
+        operatorReopened = true,
+        nonShrinkingRounds = 0,
+      )
+    val result = assertIs<AcceptanceAuditProgressOutcome.Rejected>(AcceptanceAuditProgress.outcome(input))
+    assertTrue(result.reason.contains("Previously satisfied criteria stay closed"))
+  }
+
+  @Test
   fun `operator resume cannot bypass the second missing baseline event`() {
     val input =
       AcceptanceAuditProgressInput(

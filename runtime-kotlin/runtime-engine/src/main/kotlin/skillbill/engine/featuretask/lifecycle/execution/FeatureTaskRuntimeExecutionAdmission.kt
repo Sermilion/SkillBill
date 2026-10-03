@@ -10,6 +10,8 @@ import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeEx
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.goalplanning.GoalPlanningMigration
+import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
+import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
@@ -103,26 +105,22 @@ class FeatureTaskRuntimeExecutionAdmission(
           checkedInputs,
           onMapping = { recordMapping(workflowId) },
         )
-      if (requestedReviewSelection != null && plan.reviewSelection != requestedReviewSelection) {
-        throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
-      }
-      if (plan.definitionId != SkeletonDefinition.forRun(identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD).id) {
-        throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
-      }
+      requireMatchingPlan(plan, identity, requestedReviewSelection)
       requireCompletedGateOutputEvidence(artifacts, plan)
-      val phaseOutputs = migratePhaseOutputs(workflowId, initialSnapshot, ownsGoalPlanningImport)
+      val phaseOutputs = migratePhaseOutputs(request, initialSnapshot, ownsGoalPlanningImport)
       if (phaseOutputs.migratedVersions.isNotEmpty()) {
-        val migratedArtifacts =
-          initialSnapshot.artifacts +
-            DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(phaseOutputs.records)
+        val patch =
+          mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(phaseOutputs.records))
+        val migratedArtifacts = initialSnapshot.artifacts + patch
         states.migrateFeatureTaskArtifacts(row, JsonCodec.valueToJsonString(migratedArtifacts))
       }
+      val receipt = preferredReceipt(phaseOutputs.receipt, goalMigration)
       AdmittedFeatureTaskRuntimeExecution(
         identity,
         plan,
         checkedInputs,
         requireNotNull(descriptor),
-        phaseOutputs.migratedVersions + if (goalMigration) setOf("0.6" to "0.7") else emptySet(),
+        receipt,
       )
     } catch (error: FeatureTaskRuntimeExecutionPlanAdmissionError) {
       warn(request.workflowId, error.reasonCode)
@@ -133,18 +131,54 @@ class FeatureTaskRuntimeExecutionAdmission(
     } catch (error: UnsafeFeatureTaskRuntimeRegenerationError) {
       warn(request.workflowId, error.refusal.wireValue)
       throw error
+    } catch (error: InvalidFeatureTaskRuntimePhaseOutputSchemaError) {
+      val refusal =
+        SkillBillRuntimeException(
+          FeatureTaskRuntimeMigrationFailureCode.SOURCE_CORRUPT,
+          "Persisted phase output failed its declared contract. Restore or repair the identified record and retry.",
+          error,
+        )
+      recordMigrationFailure(refusal, null)
+      throw refusal
     } catch (error: SkillBillRuntimeException) {
-      recordMigrationFailure(error)
+      recordMigrationFailure(error, request.failureFacts)
       throw error
     }
 
-  private fun recordMigrationFailure(error: SkillBillRuntimeException) {
+  private fun preferredReceipt(
+    phaseReceipt: RuntimeMigrationReceipt?,
+    goalMigration: RuntimeMigrationReceipt,
+  ): RuntimeMigrationReceipt =
+    phaseReceipt?.takeIf { it.result == RuntimeMigrationReceipt.Result.CONVERTED }
+      ?: goalMigration.takeIf { it.result == RuntimeMigrationReceipt.Result.CONVERTED }
+      ?: phaseReceipt
+      ?: goalMigration
+
+  private fun requireMatchingPlan(
+    plan: ResolvedPhaseExecutionPlan,
+    identity: FeatureTaskExecutionIdentity,
+    requestedReviewSelection: RuntimeReviewSelection?,
+  ) {
+    if (requestedReviewSelection != null && plan.reviewSelection != requestedReviewSelection) {
+      throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+    }
+    if (plan.definitionId != SkeletonDefinition.forRun(identity.routeScope == FeatureTaskRouteScope.GOAL_CHILD).id) {
+      throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+    }
+  }
+
+  private fun recordMigrationFailure(
+    error: SkillBillRuntimeException,
+    facts: MigrationFailureFacts?,
+  ) {
     val migrationCode = error.code as? FeatureTaskRuntimeMigrationFailureCode
     if (migrationCode != null) {
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
-        "seam=feature_task_phase_output_migration source_version=unknown target_version=0.7 " +
-          "result=${migrationCode.name.lowercase()}",
+        "seam=feature_task_phase_output_migration " +
+          "source_version=${facts?.sourceVersion ?: "unknown"} " +
+          "target_version=${facts?.targetVersion ?: FEATURE_TASK_RUNTIME_CONTRACT_VERSION} " +
+          "result=${facts?.result ?: migrationCode.name.lowercase()}",
       )
     }
   }
@@ -154,40 +188,52 @@ class FeatureTaskRuntimeExecutionAdmission(
     val inputs: EffectiveGatePolicyInputs,
     val expectedIdentity: FeatureTaskExecutionIdentity?,
     val requestedReviewSelection: RuntimeReviewSelection?,
+  ) {
+    var failureFacts: MigrationFailureFacts? = null
+  }
+
+  private data class MigrationFailureFacts(
+    val sourceVersion: String,
+    val targetVersion: String,
+    val result: String,
   )
 
   private fun migrateGoalImport(
     states: WorkflowStateRepository,
     session: GoalRunnerPersistenceSession?,
     identity: FeatureTaskExecutionIdentity,
-  ): Boolean {
+  ): RuntimeMigrationReceipt {
     val before = states.getFeatureTaskWorkflowAsMode(identity.workflowId, FeatureTaskWorkflowMode.RUNTIME)
     val imported =
       before?.toSnapshot()?.artifacts?.let {
         DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_GOAL_PLANNING_IMPORT.value(it) as? Map<*, *>
       }
-    val importedVersion = imported?.get(GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_VERSION)
-    return if (imported != null && importedVersion != FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-    ) {
+    return if (imported != null) {
       val parentId =
         imported[GoalPlanningPreparationPayloadKeys.PARENT_GOAL_WORKFLOW_ID] as? String
-          ?: throw SkillBillRuntimeException(
-            FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT,
+          ?: refuseImport(
             "Goal import has no parent ownership. Restore the original import before resuming.",
           )
       planningMigration.migrate(
-        session ?: throw SkillBillRuntimeException(
-          FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT,
+        session ?: refuseImport(
           "Coupled planning migration requires the owning persistence session. Resume the parent goal.",
         ),
         parentId,
         identity.repositoryIdentity,
         identity.normalizedIssueKey,
+        requirePreparation = true,
       )
     } else {
-      false
+      RuntimeMigrationReceipt(
+        "unknown",
+        FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+        RuntimeMigrationReceipt.Result.CURRENT,
+      )
     }
   }
+
+  private fun refuseImport(reason: String): Nothing =
+    throw SkillBillRuntimeException(FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT, reason)
 
   private fun requireMatchingIdentity(
     identity: FeatureTaskExecutionIdentity,
@@ -208,16 +254,18 @@ class FeatureTaskRuntimeExecutionAdmission(
   }
 
   private fun migratePhaseOutputs(
-    workflowId: String,
+    request: AdmissionRequest,
     snapshot: WorkflowStateSnapshot,
     ownsGoalPlanningImport: Boolean,
   ): MigratedPhaseOutputs {
+    val workflowId = request.workflowId
     val records = decodePhaseRecords(snapshot.artifacts)
     val migratedVersions = linkedSetOf<Pair<String, String>>()
+    var hasCurrentOutput = false
     val rawRecords =
       DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.value(snapshot.artifacts) as? Map<*, *>
         ?: if (!DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.contains(snapshot.artifacts)) {
-          return MigratedPhaseOutputs(emptyMap(), emptySet())
+          return MigratedPhaseOutputs(emptyMap(), emptySet(), null)
         } else {
           throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
             workflowId,
@@ -228,27 +276,44 @@ class FeatureTaskRuntimeExecutionAdmission(
       rawRecords.entries.associate { (phase, record) -> phase.toString() to record }.toMutableMap()
     records.forEach { (phaseId, record) ->
       val output = record.outputArtifact ?: return@forEach
-      if (!requiresOutputMigration(output, record.phaseId, phaseId, workflowId)) return@forEach
+      if (!requiresOutputAdmission(output, record.phaseId, phaseId)) return@forEach
       when (val result = phaseOutputMigration.migrate(output)) {
-        is FeatureTaskRuntimePhaseOutputMigrationResult.Current -> Unit
+        is FeatureTaskRuntimePhaseOutputMigrationResult.Current -> hasCurrentOutput = true
         is FeatureTaskRuntimePhaseOutputMigrationResult.Migrated -> {
           val hydrated = record.executionOrigin == FeatureTaskRuntimePhaseExecutionOrigin.GOAL_PLANNING_HYDRATED
-          if (ownsGoalPlanningImport && hydrated) {
-            throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
-              "$workflowId#$phaseId",
-              "phase output is coupled to a goal-planning import; preserve this workflow until the owning " +
-                "goal-planning migration can update both records together",
+          if (ownsGoalPlanningImport && hydrated &&
+            phaseId in setOf(GoalPlanningSweepConstants.PHASE_PREPLAN, GoalPlanningSweepConstants.PHASE_PLAN)
+          ) {
+            throw SkillBillRuntimeException(
+              FeatureTaskRuntimeMigrationFailureCode.UNSAFE_IMPORT,
+              "Imported planning output is not coherent with its parent checkpoint. Resume the parent goal.",
             )
           }
           migratedVersions += result.sourceVersion to result.targetVersion
           migrated[phaseId] = patchOutput(rawRecords[phaseId], result.payload, "$workflowId#$phaseId")
         }
         is FeatureTaskRuntimePhaseOutputMigrationResult.Refused ->
-          refuseMigration(workflowId, phaseId, result)
+          refuseMigration(request, phaseId, result)
       }
     }
-    return MigratedPhaseOutputs(migrated, migratedVersions)
+    return MigratedPhaseOutputs(migrated, migratedVersions, phaseOutputReceipt(migratedVersions, hasCurrentOutput))
   }
+
+  private fun phaseOutputReceipt(
+    migratedVersions: Set<Pair<String, String>>,
+    hasCurrentOutput: Boolean,
+  ): RuntimeMigrationReceipt? =
+    migratedVersions.singleOrNull()?.let { (source, target) ->
+      RuntimeMigrationReceipt(source, target, RuntimeMigrationReceipt.Result.CONVERTED)
+    } ?: if (hasCurrentOutput) {
+      RuntimeMigrationReceipt(
+        FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+        FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+        RuntimeMigrationReceipt.Result.CURRENT,
+      )
+    } else {
+      null
+    }
 
   private fun patchOutput(
     raw: Any?,
@@ -264,40 +329,36 @@ class FeatureTaskRuntimeExecutionAdmission(
       (SharedPayloadKeys.OUTPUT_ARTIFACT to payload)
   }
 
-  private fun requiresOutputMigration(
+  private fun requiresOutputAdmission(
     output: String,
     storedPhase: String,
     phaseId: String,
-    workflowId: String,
   ): Boolean {
     if (storedPhase != phaseId) {
-      throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
-        "$workflowId#$phaseId",
-        "outer phase record identity does not match its owning phase key",
-      )
+      invalidPhaseOutputIdentity()
     }
-    if (!output.trimStart().startsWith("{")) return false
     val envelope = JsonCodec.parseObjectOrNull(output)
-    if (envelope?.get(SharedPayloadKeys.CONTRACT_VERSION)?.let(JsonCodec::jsonElementToValue) ==
-      FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-    ) {
-      return false
-    }
-    if (envelope == null && !output.contains("\"${SharedPayloadKeys.CONTRACT_VERSION}\"")) return false
+    val version = envelope?.get(SharedPayloadKeys.CONTRACT_VERSION)?.let(JsonCodec::jsonElementToValue)
+    if (version == FEATURE_TASK_RUNTIME_CONTRACT_VERSION) return false
+    if (version == null && !output.contains("\"${SharedPayloadKeys.CONTRACT_VERSION}\"")) return false
     if (envelope != null && envelope[SharedPayloadKeys.PHASE_ID]?.let(JsonCodec::jsonElementToValue) != phaseId) {
-      throw InvalidFeatureTaskRuntimePhaseOutputSchemaError(
-        "$workflowId#$phaseId",
-        "phase output identity does not match its owning phase record",
-      )
+      invalidPhaseOutputIdentity()
     }
     return true
   }
 
+  private fun invalidPhaseOutputIdentity(): Nothing =
+    throw SkillBillRuntimeException(
+      FeatureTaskRuntimeMigrationFailureCode.SOURCE_CORRUPT,
+      "Stored phase output identity does not match its owning phase record. Restore the original record and retry.",
+    )
+
   private fun refuseMigration(
-    workflowId: String,
+    request: AdmissionRequest,
     phaseId: String,
     refusal: FeatureTaskRuntimePhaseOutputMigrationResult.Refused,
   ): Nothing {
+    val workflowId = request.workflowId
     val code =
       when (refusal.result) {
         FeatureTaskRuntimePhaseOutputMigrationResult.Refusal.UNSUPPORTED ->
@@ -319,12 +380,12 @@ class FeatureTaskRuntimeExecutionAdmission(
         FeatureTaskRuntimePhaseOutputMigrationResult.Refusal.NON_CONVERTIBLE ->
           "Recover the original evidence or authorize recovery for unfinished work. Do not replay completed work."
       }
-    RuntimeDiagnosticsBestEffortWarning.record(
-      diagnostics,
-      "seam=feature_task_phase_output_migration workflow_id=${workflowId.take(ADMISSION_WORKFLOW_LABEL_LIMIT)} " +
-        "phase_id=$phaseId source_version=$sourceVersion " +
-        "target_version=${refusal.targetVersion ?: "unknown"} result=${refusal.result.name.lowercase()}",
-    )
+    request.failureFacts =
+      MigrationFailureFacts(
+        sourceVersion,
+        refusal.targetVersion ?: "unknown",
+        refusal.result.name.lowercase(),
+      )
     throw SkillBillRuntimeException(
       code,
       "Feature-task phase output '$workflowId#$phaseId' could not migrate from " +
@@ -335,6 +396,7 @@ class FeatureTaskRuntimeExecutionAdmission(
   private data class MigratedPhaseOutputs(
     val records: Map<String, Any?>,
     val migratedVersions: Set<Pair<String, String>>,
+    val receipt: RuntimeMigrationReceipt?,
   )
 
   fun requireCompatibleDescriptor(
@@ -357,13 +419,21 @@ class FeatureTaskRuntimeExecutionAdmission(
       throw error
     }
 
-  fun recordCommittedMigrations(execution: AdmittedFeatureTaskRuntimeExecution) {
-    execution.migrationVersions.forEach { (source, target) ->
-      RuntimeDiagnosticsBestEffortWarning.record(
-        diagnostics,
-        "seam=feature_task_phase_output_migration source_version=$source target_version=$target result=committed",
-      )
-    }
+  fun recordTransactionOutcome(
+    receipt: RuntimeMigrationReceipt,
+    committed: Boolean,
+  ) {
+    val result =
+      when {
+        receipt.result == RuntimeMigrationReceipt.Result.CURRENT -> "current_or_absent"
+        committed -> "committed"
+        else -> "rolled_back"
+      }
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "seam=feature_task_phase_output_migration source_version=${receipt.sourceVersion} " +
+        "target_version=${receipt.targetVersion} result=$result",
+    )
   }
 
   private fun recordMapping(workflowId: String) {

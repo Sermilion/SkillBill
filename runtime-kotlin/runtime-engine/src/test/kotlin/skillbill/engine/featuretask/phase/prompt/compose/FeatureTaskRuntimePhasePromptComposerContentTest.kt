@@ -388,7 +388,7 @@ class FeatureTaskRuntimePhasePromptComposerContentTest {
     assertContains(repairPrompt, "even when a persisted audit finding or the plan explicitly requests tests")
     assertContains(repairPrompt, "record test-only findings as excluded from audit")
     assertContains(prompt, "Audit is read-only: do not edit files or repair gaps")
-    assertContains(prompt, "re-check the entire in-scope criterion list from the beginning")
+    assertContains(prompt, "inspect only the unresolved criteria in the last accepted audit report")
     assertContains(prompt, "Do not spawn subagents or invoke repair skills")
     assertContains(prompt, "validate owns tests and failures")
     assertTrue(!prompt.contains("TEST EXCLUSION"))

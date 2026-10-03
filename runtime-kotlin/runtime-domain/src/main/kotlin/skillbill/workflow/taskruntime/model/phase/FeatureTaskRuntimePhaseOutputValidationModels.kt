@@ -1,12 +1,12 @@
 package skillbill.workflow.taskruntime.model.phase
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION
+import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhaseOutputRepairEvidencePayloadKeys
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.review.context.model.hunk.SHA256_HEX
 import skillbill.workflow.model.persistence.artifact.DurableArtifactMapReader
 import skillbill.workflow.model.persistence.artifact.toStringKeyedArtifactMap
-
-internal const val FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION: String = "0.1"
 
 enum class FeatureTaskRuntimePhaseOutputFormat(val wireValue: String) {
   JSON("json"),
@@ -96,7 +96,8 @@ data class FeatureTaskRuntimePhaseOutputRepairEvidence(
         DurableArtifactMapReader(location) { message -> phaseOutputRepairEvidenceSchemaError(message) }
       return FeatureTaskRuntimePhaseOutputRepairEvidence(
         contractVersion = reader.requiredString(SharedPayloadKeys.CONTRACT_VERSION),
-        validatorVersion = reader.requiredString("validator_version"),
+        validatorVersion =
+          reader.requiredString(FeatureTaskRuntimePhaseOutputRepairEvidencePayloadKeys.VALIDATOR_VERSION),
         format = FeatureTaskRuntimePhaseOutputFormat.fromWire(reader.requiredString("format")),
         originalDigest = reader.requiredString("original_digest"),
         repairedDigest = reader.requiredString("repaired_digest"),
@@ -115,7 +116,7 @@ data class FeatureTaskRuntimePhaseOutputRepairEvidence(
   internal fun toArtifactMap(): Map<String, Any?> =
     linkedMapOf(
       SharedPayloadKeys.CONTRACT_VERSION to contractVersion,
-      "validator_version" to validatorVersion,
+      FeatureTaskRuntimePhaseOutputRepairEvidencePayloadKeys.VALIDATOR_VERSION to validatorVersion,
       "format" to format.wireValue,
       "original_digest" to originalDigest,
       "repaired_digest" to repairedDigest,
@@ -141,7 +142,7 @@ private fun requireRepairEvidenceExactFields(raw: Map<String, Any?>) {
   val expectedFields =
     setOf(
       SharedPayloadKeys.CONTRACT_VERSION,
-      "validator_version",
+      FeatureTaskRuntimePhaseOutputRepairEvidencePayloadKeys.VALIDATOR_VERSION,
       "format",
       "original_digest",
       "repaired_digest",

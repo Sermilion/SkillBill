@@ -90,7 +90,8 @@ class GoalRunnerSpecDriftRecoveryTest {
 
 private const val ORIGINAL_SPEC = "original governed spec"
 private const val PLAN_PAYLOAD =
-  """{"phase_id":"plan","status":"completed","produced_outputs":{"plan":"implementation plan"}}"""
+  """{"contract_version":"0.7","phase_id":"plan","status":"completed","summary":"planning",
+  "produced_outputs":{"value":"implementation plan"}}"""
 
 private class SpecDriftFixture(
   currentSpec: String = "edited governed spec",

@@ -1,5 +1,6 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
+import skillbill.contracts.JsonCodec
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -11,13 +12,16 @@ class FeatureTaskRuntimePhaseOutputMigrationTest {
 
     val migrated =
       assertIs<FeatureTaskRuntimePhaseOutputMigration.Migrated>(
-        FeatureTaskRuntimePhaseOutputMigrator.migrate(source),
+        FeatureTaskRuntimePhaseOutputMigrator.migrate(JsonCodec.valueToJsonString(source)),
       )
 
     assertEquals("0.6", migrated.sourceVersion)
     assertEquals("0.7", migrated.targetVersion)
-    assertEquals("plan text", (migrated.payload["produced_outputs"] as Map<*, *>)["value"])
-    assertEquals("0.7", migrated.payload["contract_version"])
+    val payload =
+      requireNotNull(JsonCodec.parseObjectOrNull(migrated.payload))
+        .let(JsonCodec::jsonElementToValue).let(JsonCodec::anyToStringAnyMap)!!
+    assertEquals("plan text", (payload["produced_outputs"] as Map<*, *>)["value"])
+    assertEquals("0.7", payload["contract_version"])
   }
 
   @Test
@@ -25,7 +29,7 @@ class FeatureTaskRuntimePhaseOutputMigrationTest {
     val source = output(version = "0.6", status = "blocked", producedOutputs = mapOf("value" to "blocked"))
 
     assertIs<FeatureTaskRuntimePhaseOutputMigration.NonConvertible>(
-      FeatureTaskRuntimePhaseOutputMigrator.migrate(source),
+      FeatureTaskRuntimePhaseOutputMigrator.migrate(JsonCodec.valueToJsonString(source)),
     )
   }
 

@@ -67,7 +67,10 @@ existing recovery paths.
 
 ## Acceptance-audit repair planning
 
-The acceptance-audit slot inspects production criteria in `audit`. Open findings
+The first acceptance audit inspects all production criteria in `audit`. Later
+rounds inspect only the unresolved criteria in the last accepted report. Satisfied
+criteria stay closed across repairs and resumes. The runtime rejects reports that
+reopen them. Open findings
 enter `audit_plan_fix`, a read-only reasoning step that plans each independent
 gap before repair. Each plan item names the criterion, gap, production path,
 ordered changes and dependencies, and evidence needed to close it. The agent

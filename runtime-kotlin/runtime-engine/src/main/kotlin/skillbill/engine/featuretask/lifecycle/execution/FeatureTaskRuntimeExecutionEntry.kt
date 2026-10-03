@@ -5,6 +5,7 @@ import skillbill.application.workflow.model.FeatureTaskGovernedSpecPathResult
 import skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
+import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.ports.db.DatabaseSessionFactory
@@ -43,11 +44,17 @@ class FeatureTaskRuntimeExecutionEntry(
         request.timeout,
         request.workflowId,
       )
-    return database.transaction { unit ->
-      val accepted = admission.admit(unit, request.workflowId, inputs, expected)
-      requireMatchingRequest(request, accepted)
-      accepted
-    }.also(admission::recordCommittedMigrations)
+    var receipt: RuntimeMigrationReceipt? = null
+    return runCatching {
+      database.transaction { unit ->
+        val accepted = admission.admit(unit, request.workflowId, inputs, expected)
+        receipt = accepted.migrationReceipt
+        requireMatchingRequest(request, accepted)
+        accepted
+      }
+    }.onFailure {
+      receipt?.let { admission.recordTransactionOutcome(it, committed = false) }
+    }.getOrThrow().also { admission.recordTransactionOutcome(it.migrationReceipt, committed = true) }
   }
 
   private fun requireMatchingRequest(

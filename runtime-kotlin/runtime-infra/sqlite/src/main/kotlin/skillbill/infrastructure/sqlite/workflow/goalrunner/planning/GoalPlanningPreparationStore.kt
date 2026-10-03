@@ -16,6 +16,7 @@ import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import java.sql.Connection
+import java.sql.SQLException
 
 internal class GoalPlanningPreparationStore(
   private val connection: Connection,
@@ -52,21 +53,40 @@ internal class GoalPlanningPreparationStore(
     ) {
       staleMigration()
     }
-    connection.prepareStatement(
-      """UPDATE goal_shared_preplans SET phase_output_contract_version = ?, payload_sha256 = ?,
-        preplan_payload_json = ? WHERE parent_goal_workflow_id = ? AND phase_output_contract_version = ?
-        AND payload_sha256 = ? AND preplan_payload_json = ?""",
-    ).use {
-      it.bindAll(
-        target.provenance.phaseOutputContractVersion,
-        target.payloadSha256,
-        target.preplanPayload,
-        source.identity.parentGoalWorkflowId,
-        source.provenance.phaseOutputContractVersion,
-        source.payloadSha256,
-        source.preplanPayload,
-      )
-      if (it.executeUpdate() != 1) staleMigration()
+    try {
+      connection.prepareStatement(
+        """UPDATE goal_shared_preplans SET phase_output_contract_version = ?, payload_sha256 = ?,
+        preplan_payload_json = ? WHERE parent_goal_workflow_id = ? AND normalized_issue_key = ?
+        AND repository_identity = ? AND preparation_status = ? AND contract_version = ?
+        AND parent_spec_hash = ? AND decomposition_manifest_hash = ? AND planning_contract_id = ?
+        AND planning_contract_version = ? AND phase_output_contract_id = ?
+        AND phase_output_contract_version = ? AND payload_sha256 = ? AND preplan_payload_json = ?
+        AND repair_evidence_json IS ? AND created_at = ?""",
+      ).use {
+        it.bindAll(
+          target.provenance.phaseOutputContractVersion,
+          target.payloadSha256,
+          target.preplanPayload,
+          source.identity.parentGoalWorkflowId,
+          source.identity.normalizedIssueKey,
+          source.identity.repositoryIdentity,
+          source.preparationStatus.wireValue,
+          source.contractVersion,
+          source.provenance.parentSpecHash,
+          source.provenance.decompositionManifestHash,
+          source.provenance.planningContractId,
+          source.provenance.planningContractVersion,
+          source.provenance.phaseOutputContractId,
+          source.provenance.phaseOutputContractVersion,
+          source.payloadSha256,
+          source.preplanPayload,
+          source.repairEvidenceJson(),
+          source.createdAt,
+        )
+        if (it.executeUpdate() != 1) staleMigration()
+      }
+    } catch (error: SQLException) {
+      writeFailure(error)
     }
   }
 
@@ -89,22 +109,45 @@ internal class GoalPlanningPreparationStore(
     ) {
       staleMigration()
     }
-    connection.prepareStatement(
-      """UPDATE goal_subtask_plans SET phase_output_contract_version = ?, payload_sha256 = ?,
-        plan_payload_json = ? WHERE parent_goal_workflow_id = ? AND subtask_id = ?
-        AND phase_output_contract_version = ? AND payload_sha256 = ? AND plan_payload_json = ?""",
-    ).use {
-      it.bindAll(
-        target.provenance.phaseOutputContractVersion,
-        target.payloadSha256,
-        target.planPayload,
-        source.identity.parentGoalWorkflowId,
-        source.subtaskId,
-        source.provenance.phaseOutputContractVersion,
-        source.payloadSha256,
-        source.planPayload,
-      )
-      if (it.executeUpdate() != 1) staleMigration()
+    try {
+      connection.prepareStatement(
+        """UPDATE goal_subtask_plans SET phase_output_contract_version = ?, payload_sha256 = ?,
+        plan_payload_json = ? WHERE parent_goal_workflow_id = ? AND normalized_issue_key = ?
+        AND repository_identity = ? AND subtask_id = ? AND manifest_order = ? AND governed_sub_spec_path = ?
+        AND sub_spec_hash = ? AND preparation_status = ? AND contract_version = ?
+        AND parent_spec_hash = ? AND decomposition_manifest_hash = ? AND planning_contract_id = ?
+        AND planning_contract_version = ? AND phase_output_contract_id = ?
+        AND phase_output_contract_version = ? AND payload_sha256 = ? AND plan_payload_json = ?
+        AND repair_evidence_json IS ? AND created_at = ?""",
+      ).use {
+        it.bindAll(
+          target.provenance.phaseOutputContractVersion,
+          target.payloadSha256,
+          target.planPayload,
+          source.identity.parentGoalWorkflowId,
+          source.identity.normalizedIssueKey,
+          source.identity.repositoryIdentity,
+          source.subtaskId,
+          source.manifestOrder,
+          source.governedSubSpecPath,
+          source.subSpecHash,
+          source.preparationStatus.wireValue,
+          source.contractVersion,
+          source.provenance.parentSpecHash,
+          source.provenance.decompositionManifestHash,
+          source.provenance.planningContractId,
+          source.provenance.planningContractVersion,
+          source.provenance.phaseOutputContractId,
+          source.provenance.phaseOutputContractVersion,
+          source.payloadSha256,
+          source.planPayload,
+          source.repairEvidenceJson(),
+          source.createdAt,
+        )
+        if (it.executeUpdate() != 1) staleMigration()
+      }
+    } catch (error: SQLException) {
+      writeFailure(error)
     }
   }
 
@@ -121,6 +164,13 @@ internal class GoalPlanningPreparationStore(
     throw SkillBillRuntimeException(
       FeatureTaskRuntimeMigrationFailureCode.STALE_SOURCE,
       "Planning migration source changed. Retry admission without resetting durable state.",
+    )
+
+  private fun writeFailure(cause: SQLException): Nothing =
+    throw SkillBillRuntimeException(
+      FeatureTaskRuntimeMigrationFailureCode.WRITE_FAILURE,
+      "Planning migration publication failed. Roll back the owning transaction and retry.",
+      cause,
     )
 
   override fun markPrepared(record: GoalPlanningPreparationRecord) {

@@ -1,13 +1,15 @@
 package skillbill.infrastructure.contracts.system
 
 import com.fasterxml.jackson.databind.JsonNode
-import com.networknt.schema.JsonSchemaException
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_REPAIR_RECEIPT_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_SUPPORTED_PHASE_OUTPUT_MIGRATIONS
+import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhaseOutputRepairEvidencePayloadKeys
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_MIGRATION_PATHS
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
@@ -20,6 +22,7 @@ import skillbill.infrastructure.contracts.locator.GoalPlanningPreparationSchemaP
 import skillbill.infrastructure.contracts.workflow.issue.inlineIssueKeySchemaRefs
 import skillbill.ports.system.PackagedContractInspector
 import java.io.IOException
+import java.util.concurrent.CancellationException
 
 @Inject
 class ClasspathPackagedContractInspector : PackagedContractInspector {
@@ -32,17 +35,25 @@ class ClasspathPackagedContractInspector : PackagedContractInspector {
       loader,
       FeatureTaskRuntimePhaseOutputSchemaPaths.CURRENT_CLASSPATH_RESOURCE,
       FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+      FEATURE_TASK_RUNTIME_REPAIR_RECEIPT_CONTRACT_VERSION,
     )
     phaseOutput(
       loader,
       FeatureTaskRuntimePhaseOutputSchemaPaths.HISTORICAL_0_6_CLASSPATH_RESOURCE,
       FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION,
+      HISTORICAL_0_6_REPAIR_RECEIPT_CONTRACT_VERSION,
     )
-    preparation(loader, GoalPlanningPreparationSchemaPaths.CLASSPATH_RESOURCE, FEATURE_TASK_RUNTIME_CONTRACT_VERSION)
+    preparation(
+      loader,
+      GoalPlanningPreparationSchemaPaths.CLASSPATH_RESOURCE,
+      FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
+      FEATURE_TASK_RUNTIME_PHASE_OUTPUT_VALIDATION_VERSION,
+    )
     preparation(
       loader,
       GoalPlanningPreparationSchemaPaths.HISTORICAL_0_2_PHASE_OUTPUT_0_6_CLASSPATH_RESOURCE,
       FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION,
+      HISTORICAL_0_6_PHASE_OUTPUT_VALIDATION_VERSION,
     )
     if (FEATURE_TASK_RUNTIME_SUPPORTED_PHASE_OUTPUT_MIGRATIONS !=
       mapOf(FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION to FEATURE_TASK_RUNTIME_CONTRACT_VERSION)
@@ -69,6 +80,7 @@ class ClasspathPackagedContractInspector : PackagedContractInspector {
     loader: ClassLoader,
     resource: String,
     version: String,
+    repairReceiptVersion: String,
   ) {
     val schema = load(loader, resource)
     pin(schema, PackageSchemaKeys.ID, FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID, resource)
@@ -78,6 +90,13 @@ class ClasspathPackagedContractInspector : PackagedContractInspector {
       version,
       resource,
     )
+    pin(
+      schema.path(PackageSchemaKeys.DEFINITIONS).path(PackageSchemaKeys.REPAIR_RECEIPT)
+        .path(PackageSchemaKeys.PROPERTIES).path(SharedPayloadKeys.CONTRACT_VERSION),
+      PackageSchemaKeys.CONST,
+      repairReceiptVersion,
+      resource,
+    )
     compile(schema, resource)
   }
 
@@ -85,6 +104,7 @@ class ClasspathPackagedContractInspector : PackagedContractInspector {
     loader: ClassLoader,
     resource: String,
     phaseVersion: String,
+    repairEvidenceVersion: String,
   ) {
     val schema = load(loader, resource)
     pin(schema, PackageSchemaKeys.ID, GOAL_PLANNING_PREPARATION_SCHEMA_ID, resource)
@@ -95,6 +115,20 @@ class ClasspathPackagedContractInspector : PackagedContractInspector {
       resource,
     )
     val definitions = schema.path(PackageSchemaKeys.DEFINITIONS)
+    val repairEvidence = definitions.path(PackageSchemaKeys.PHASE_OUTPUT_REPAIR_EVIDENCE)
+    val repairEvidenceProperties = repairEvidence.path(PackageSchemaKeys.PROPERTIES)
+    pin(
+      repairEvidenceProperties.path(SharedPayloadKeys.CONTRACT_VERSION),
+      PackageSchemaKeys.CONST,
+      repairEvidenceVersion,
+      resource,
+    )
+    pin(
+      repairEvidenceProperties.path(FeatureTaskRuntimePhaseOutputRepairEvidencePayloadKeys.VALIDATOR_VERSION),
+      PackageSchemaKeys.CONST,
+      repairEvidenceVersion,
+      resource,
+    )
     listOf(PackageSchemaKeys.SHARED_PREPLAN, PackageSchemaKeys.SUBTASK_PLAN).forEach { variant ->
       val properties = definitions.path(variant).path(PackageSchemaKeys.PROPERTIES)
       pin(
@@ -128,6 +162,13 @@ class ClasspathPackagedContractInspector : PackagedContractInspector {
     try {
       val stream = loader.getResourceAsStream(resource.removePrefix("/")) ?: fail(resource)
       stream.use { ClasspathContractSchemaLoader.sharedYamlMapper().readTree(it) } ?: fail(resource)
+    } catch (error: SkillBillRuntimeException) {
+      throw error
+    } catch (error: CancellationException) {
+      throw error
+    } catch (error: InterruptedException) {
+      Thread.currentThread().interrupt()
+      throw error
     } catch (error: IOException) {
       fail(resource, error)
     }
@@ -136,12 +177,20 @@ class ClasspathPackagedContractInspector : PackagedContractInspector {
     schema: JsonNode,
     resource: String,
   ) {
-    try {
-      ClasspathContractSchemaLoader.compileUncachedYamlNode(schema)
-    } catch (error: JsonSchemaException) {
-      fail(resource, error)
+    runCatching { ClasspathContractSchemaLoader.compileUncachedYamlNode(schema) }.getOrElse { error ->
+      when (error) {
+        is SkillBillRuntimeException -> throw error
+        is CancellationException -> throw error
+        is InterruptedException -> {
+          Thread.currentThread().interrupt()
+          propagate(error)
+        }
+        else -> fail(resource, error)
+      }
     }
   }
+
+  private fun propagate(error: Throwable): Nothing = throw error
 
   private fun pin(
     node: JsonNode,
@@ -176,4 +225,9 @@ private object PackageSchemaKeys {
   const val CONST = "const"
   const val SHARED_PREPLAN = "sharedPreplan"
   const val SUBTASK_PLAN = "subtaskPlan"
+  const val REPAIR_RECEIPT = "repairReceipt"
+  const val PHASE_OUTPUT_REPAIR_EVIDENCE = "phaseOutputRepairEvidence"
 }
+
+private const val HISTORICAL_0_6_REPAIR_RECEIPT_CONTRACT_VERSION = "0.3"
+private const val HISTORICAL_0_6_PHASE_OUTPUT_VALIDATION_VERSION = "0.1"

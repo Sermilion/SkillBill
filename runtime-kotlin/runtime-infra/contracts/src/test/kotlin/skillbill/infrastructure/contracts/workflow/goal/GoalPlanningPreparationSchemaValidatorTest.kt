@@ -71,7 +71,7 @@ class GoalPlanningPreparationSchemaValidatorTest {
       "preparation_status" to "prepared",
       "provenance" to provenance(),
       "payload_sha256" to HASH,
-      "preplan_payload" to """{"phase_id":"preplan"}""",
+      "preplan_payload" to payload("preplan"),
     )
 
   private fun planEnvelope(): Map<String, Any?> =
@@ -86,8 +86,12 @@ class GoalPlanningPreparationSchemaValidatorTest {
       "preparation_status" to "prepared",
       "provenance" to provenance(),
       "payload_sha256" to HASH,
-      "plan_payload" to """{"phase_id":"plan"}""",
+      "plan_payload" to payload("plan"),
     )
+
+  private fun payload(phase: String): String =
+    """{"contract_version":"0.7","phase_id":"$phase","status":"completed",
+    "summary":"planning", "produced_outputs":{"value":"planning prose"}}"""
 
   private fun identity(normalizedIssueKey: String = "SKILL-128") =
     linkedMapOf(

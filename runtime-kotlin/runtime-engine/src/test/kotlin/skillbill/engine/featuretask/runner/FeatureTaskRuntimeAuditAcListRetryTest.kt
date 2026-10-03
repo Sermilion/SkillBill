@@ -320,7 +320,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
   }
 
   @Test
-  fun `audit blocks when the grown remaining criterion list stays unshrunk past the cap`() {
+  fun `audit refuses a report that reopens previously satisfied criteria`() {
     var auditLaunches = 0
     var repairLaunches = 0
     val launcher =
@@ -351,9 +351,9 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
 
     val report = assertIs<FeatureTaskRuntimeRunReport.Blocked>(harness.runner.run(harness.request()))
 
-    assertContains(report.toString(), "did not shrink")
-    assertEquals(4, auditLaunches)
-    assertEquals(3, repairLaunches)
+    assertContains(report.toString(), "schema-invalid output")
+    assertEquals(2, auditLaunches)
+    assertEquals(1, repairLaunches)
     assertTrue("review" !in harness.launchOrder())
   }
 
@@ -368,7 +368,7 @@ class FeatureTaskRuntimeAuditAcListRetryTest {
         .first { phaseIdFromPrompt(it) == "audit" }
     assertContains(auditPrompt, "remaining acceptance criteria")
     assertContains(auditPrompt, "no production criteria remain")
-    assertContains(auditPrompt, "re-check the entire in-scope criterion list from the beginning")
+    assertContains(auditPrompt, "inspect only the unresolved criteria in the last accepted audit report")
     assertContains(auditPrompt, "Do not spawn subagents")
   }
 

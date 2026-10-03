@@ -1,35 +1,41 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
-import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.ObjectNode
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.networknt.schema.JsonSchema
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import me.tatarka.inject.annotations.Inject
-import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_SUPPORTED_PHASE_OUTPUT_MIGRATIONS
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimePhaseOutputSchemaPaths
 import skillbill.infrastructure.contracts.locator.logSchemaLoadFailure
+import skillbill.infrastructure.contracts.packagedContractResourceFailure
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimePhaseOutputMigrationResult
 import java.util.logging.Logger
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration as FeatureTaskRuntimePhaseOutputMigrationPort
 
-sealed interface FeatureTaskRuntimePhaseOutputMigration {
-  data class Current(val payload: Map<String, Any?>) : FeatureTaskRuntimePhaseOutputMigration
+internal sealed interface FeatureTaskRuntimePhaseOutputMigration {
+  data class Current(
+    val payload: String,
+    val sourceVersion: String,
+  ) : FeatureTaskRuntimePhaseOutputMigration
 
   data class Migrated(
-    val payload: Map<String, Any?>,
+    val payload: String,
     val sourceVersion: String,
     val targetVersion: String,
   ) : FeatureTaskRuntimePhaseOutputMigration
 
-  data class Unsupported(val sourceVersion: String?) : FeatureTaskRuntimePhaseOutputMigration
+  data class Unsupported(val sourceVersion: String) : FeatureTaskRuntimePhaseOutputMigration
 
   data class Corrupt(val sourceVersion: String?) : FeatureTaskRuntimePhaseOutputMigration
 
@@ -39,30 +45,52 @@ sealed interface FeatureTaskRuntimePhaseOutputMigration {
   ) : FeatureTaskRuntimePhaseOutputMigration
 }
 
-object FeatureTaskRuntimePhaseOutputMigrator {
+internal object FeatureTaskRuntimePhaseOutputMigrator {
   private val logger = Logger.getLogger(FeatureTaskRuntimePhaseOutputMigrator::class.java.name)
+  private val validationMapper =
+    ObjectMapper()
+      .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+      .enable(DeserializationFeature.USE_BIG_INTEGER_FOR_INTS)
 
-  fun migrate(payload: Map<String, Any?>): FeatureTaskRuntimePhaseOutputMigration {
-    val instance = ClasspathContractSchemaLoader.valueToTree(payload)
-    val sourceVersion = instance.path(SharedPayloadKeys.CONTRACT_VERSION).takeIf(JsonNode::isTextual)?.asText()
-    if (sourceVersion == FEATURE_TASK_RUNTIME_CONTRACT_VERSION) {
-      return FeatureTaskRuntimePhaseOutputMigration.Current(payload)
+  fun migrate(payload: String): FeatureTaskRuntimePhaseOutputMigration {
+    val source = parseObject(payload) ?: return FeatureTaskRuntimePhaseOutputMigration.Corrupt(null)
+    val sourceVersion =
+      (source[SharedPayloadKeys.CONTRACT_VERSION] as? JsonPrimitive)
+        ?.takeIf(JsonPrimitive::isString)
+        ?.content
+        ?: return FeatureTaskRuntimePhaseOutputMigration.Corrupt(null)
+    return when {
+      sourceVersion == FEATURE_TASK_RUNTIME_CONTRACT_VERSION -> current(payload, sourceVersion)
+      sourceVersion in FEATURE_TASK_RUNTIME_SUPPORTED_PHASE_OUTPUT_MIGRATIONS ->
+        convert(
+          source,
+          payload,
+          sourceVersion,
+          FEATURE_TASK_RUNTIME_SUPPORTED_PHASE_OUTPUT_MIGRATIONS.getValue(sourceVersion),
+        )
+      else -> FeatureTaskRuntimePhaseOutputMigration.Unsupported(sourceVersion)
     }
-    if (sourceVersion == null) return FeatureTaskRuntimePhaseOutputMigration.Unsupported(null)
-    val targetVersion =
-      FEATURE_TASK_RUNTIME_SUPPORTED_PHASE_OUTPUT_MIGRATIONS[sourceVersion]
-        ?: return FeatureTaskRuntimePhaseOutputMigration.Unsupported(sourceVersion)
-    return convert(instance, sourceVersion, targetVersion)
   }
 
+  private fun current(
+    payload: String,
+    sourceVersion: String,
+  ): FeatureTaskRuntimePhaseOutputMigration =
+    if (validate(payload, schema(FeatureTaskRuntimePhaseOutputSchemaPaths.CURRENT_CLASSPATH_RESOURCE, sourceVersion))) {
+      FeatureTaskRuntimePhaseOutputMigration.Current(payload, sourceVersion)
+    } else {
+      FeatureTaskRuntimePhaseOutputMigration.Corrupt(sourceVersion)
+    }
+
   private fun convert(
-    instance: JsonNode,
+    source: JsonObject,
+    sourcePayload: String,
     sourceVersion: String,
     targetVersion: String,
   ): FeatureTaskRuntimePhaseOutputMigration {
     if (
       !validate(
-        instance,
+        sourcePayload,
         schema(
           resource = FeatureTaskRuntimePhaseOutputSchemaPaths.HISTORICAL_0_6_CLASSPATH_RESOURCE,
           version = FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION,
@@ -71,13 +99,14 @@ object FeatureTaskRuntimePhaseOutputMigrator {
     ) {
       return FeatureTaskRuntimePhaseOutputMigration.Corrupt(sourceVersion)
     }
-    val converted =
-      instance.deepCopy<ObjectNode>().apply {
-        put(SharedPayloadKeys.CONTRACT_VERSION, targetVersion)
-      }
+    val converted = JsonObject(source + (SharedPayloadKeys.CONTRACT_VERSION to JsonPrimitive(targetVersion)))
+    val convertedPayload = converted.toString()
+    val targetInstance =
+      validationView(convertedPayload)
+        ?: return FeatureTaskRuntimePhaseOutputMigration.NonConvertible(sourceVersion, targetVersion)
     if (
       !validate(
-        converted,
+        targetInstance,
         schema(
           resource = FeatureTaskRuntimePhaseOutputSchemaPaths.CURRENT_CLASSPATH_RESOURCE,
           version = FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
@@ -86,15 +115,27 @@ object FeatureTaskRuntimePhaseOutputMigrator {
     ) {
       return FeatureTaskRuntimePhaseOutputMigration.NonConvertible(sourceVersion, targetVersion)
     }
-    return FeatureTaskRuntimePhaseOutputMigration.Migrated(
-      ClasspathContractSchemaLoader.sharedObjectMapper().convertValue(
-        converted,
-        object : TypeReference<Map<String, Any?>>() {},
-      ),
-      sourceVersion,
-      targetVersion,
-    )
+    return FeatureTaskRuntimePhaseOutputMigration.Migrated(convertedPayload, sourceVersion, targetVersion)
   }
+
+  private fun parseObject(payload: String): JsonObject? =
+    try {
+      Json.parseToJsonElement(payload) as? JsonObject
+    } catch (_: SerializationException) {
+      null
+    }
+
+  private fun validationView(payload: String): JsonNode? =
+    try {
+      validationMapper.readTree(payload)
+    } catch (_: JsonProcessingException) {
+      null
+    }
+
+  private fun validate(
+    payload: String,
+    schema: JsonSchema,
+  ): Boolean = validationView(payload)?.let { validate(it, schema) } == true
 
   private fun validate(
     instance: JsonNode,
@@ -110,62 +151,28 @@ object FeatureTaskRuntimePhaseOutputMigrator {
         cacheKey = resource,
         classLoader = FeatureTaskRuntimePhaseOutputMigrator::class.java.classLoader,
         classpathResource = resource,
-        missingResource = {
-          InvalidFeatureTaskRuntimePhaseOutputSchemaError(
-            resource,
-            "required phase-output contract resource is missing",
-          )
-        },
-        processingFailure = { cause ->
-          InvalidFeatureTaskRuntimePhaseOutputSchemaError(
-            resource,
-            cause.message ?: cause::class.simpleName.orEmpty(),
-            cause,
-          )
-        },
+        missingResource = { packagedContractResourceFailure(resource) },
+        processingFailure = { cause -> packagedContractResourceFailure(resource, cause) },
         loadFailureLogger = { error ->
           logSchemaLoadFailure(logger, "phase output", resource, resource, error)
         },
         expectedSchemaId = FeatureTaskRuntimePhaseOutputSchemaPaths.EXPECTED_SCHEMA_ID,
         expectedContractVersion = version,
-        identityFailure = { reason ->
-          InvalidFeatureTaskRuntimePhaseOutputSchemaError(resource, reason)
-        },
+        identityFailure = { _ -> packagedContractResourceFailure(resource) },
       ),
     )
 }
 
 @Inject
 class ContractFeatureTaskRuntimePhaseOutputMigration : FeatureTaskRuntimePhaseOutputMigrationPort {
-  override fun migrate(payload: String): FeatureTaskRuntimePhaseOutputMigrationResult {
-    val parsed = JsonCodec.parseObjectOrNull(payload)
-    if (parsed == null) {
-      return FeatureTaskRuntimePhaseOutputMigrationResult.Refused(
-        null,
-        FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-        FeatureTaskRuntimePhaseOutputMigrationResult.Refusal.CORRUPT,
-      )
-    }
-    val sourceVersion =
-      parsed[SharedPayloadKeys.CONTRACT_VERSION]
-        ?.takeIf { it is JsonPrimitive && it.isString }
-        ?.let { it as JsonPrimitive }
-        ?.content
-    val fields = JsonCodec.anyToStringAnyMap(JsonCodec.jsonElementToValue(parsed))
-    if (fields == null) {
-      return FeatureTaskRuntimePhaseOutputMigrationResult.Refused(
-        sourceVersion,
-        FEATURE_TASK_RUNTIME_CONTRACT_VERSION,
-        FeatureTaskRuntimePhaseOutputMigrationResult.Refusal.CORRUPT,
-      )
-    }
-    return when (val result = FeatureTaskRuntimePhaseOutputMigrator.migrate(fields)) {
+  override fun migrate(payload: String): FeatureTaskRuntimePhaseOutputMigrationResult =
+    when (val result = FeatureTaskRuntimePhaseOutputMigrator.migrate(payload)) {
       is FeatureTaskRuntimePhaseOutputMigration.Current -> {
-        FeatureTaskRuntimePhaseOutputMigrationResult.Current(payload)
+        FeatureTaskRuntimePhaseOutputMigrationResult.Current(result.payload)
       }
       is FeatureTaskRuntimePhaseOutputMigration.Migrated -> {
         FeatureTaskRuntimePhaseOutputMigrationResult.Migrated(
-          JsonCodec.mapToJsonString(result.payload),
+          result.payload,
           result.sourceVersion,
           result.targetVersion,
         )
@@ -192,5 +199,4 @@ class ContractFeatureTaskRuntimePhaseOutputMigration : FeatureTaskRuntimePhaseOu
         )
       }
     }
-  }
 }

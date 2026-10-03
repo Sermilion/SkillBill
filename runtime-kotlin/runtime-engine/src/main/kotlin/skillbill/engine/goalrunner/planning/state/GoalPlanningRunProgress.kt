@@ -25,6 +25,7 @@ import skillbill.engine.goalrunner.planning.outcome.recoverySubtaskId
 import skillbill.engine.goalrunner.planning.outcome.resolvedSubSpecPath
 import skillbill.engine.goalrunner.planning.outcome.stopped
 import skillbill.engine.goalrunner.planning.outcome.unexpectedPlanningFailureReason
+import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRecoveryKind
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningPreparationStateReadStopReason
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
@@ -176,6 +177,7 @@ internal class GoalPlanningRunProgress(
                 recovery.subtaskId,
                 settled.shared.issueKey,
                 0,
+                GoalPlanningRecoveryKind.SCOPED_REPLAN,
               ),
               GoalPlanningSweepConstants.PHASE_PREPLAN,
             ),

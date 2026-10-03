@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_HISTORICAL_PHASE_OUTPUT_VERSION
@@ -14,8 +15,11 @@ import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.GoalPlanningPreparationSchemaPaths
 import skillbill.infrastructure.contracts.locator.logSchemaLoadFailure
+import skillbill.infrastructure.contracts.packagedContractResourceFailure
 import skillbill.infrastructure.contracts.review.dottedFieldPath
 import skillbill.infrastructure.contracts.review.violationOrdering
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimePhaseOutputMigration
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimePhaseOutputMigrator
 import skillbill.infrastructure.contracts.workflow.issue.inlineIssueKeySchemaRefs
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -29,6 +33,7 @@ object GoalPlanningPreparationSchemaValidator {
     sourceLabel: String,
   ) {
     validate(envelope, sourceLabel, goalPlanningPreparationSchema())
+    validateCurrentPhaseOutput(envelope, sourceLabel)
   }
 
   fun validateHistoricalPhaseOutput06(
@@ -93,6 +98,42 @@ object GoalPlanningPreparationSchemaValidator {
     }
   }
 
+  private fun validateCurrentPhaseOutput(
+    envelope: Map<String, Any?>,
+    sourceLabel: String,
+  ) {
+    val recordType =
+      envelope[GoalPlanningPreparationPayloadKeys.RECORD_TYPE] as? String
+        ?: invalidCurrentPayload(sourceLabel, GoalPlanningPreparationPayloadKeys.RECORD_TYPE)
+    val payloadKey =
+      when (recordType) {
+        "shared_preplan" -> GoalPlanningPreparationPayloadKeys.PREPLAN_PAYLOAD
+        "subtask_plan" -> GoalPlanningPreparationPayloadKeys.PLAN_PAYLOAD
+        else -> invalidCurrentPayload(sourceLabel, GoalPlanningPreparationPayloadKeys.RECORD_TYPE)
+      }
+    val payload =
+      envelope[payloadKey] as? String
+        ?: invalidCurrentPayload(sourceLabel, payloadKey)
+    val provenance = envelope[GoalPlanningPreparationPayloadKeys.PROVENANCE] as? Map<*, *>
+    val result = FeatureTaskRuntimePhaseOutputMigrator.migrate(payload)
+    if (result !is FeatureTaskRuntimePhaseOutputMigration.Current ||
+      result.sourceVersion != FEATURE_TASK_RUNTIME_CONTRACT_VERSION ||
+      provenance?.get(GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_VERSION) != result.sourceVersion
+    ) {
+      invalidCurrentPayload(sourceLabel, payloadKey)
+    }
+  }
+
+  private fun invalidCurrentPayload(
+    sourceLabel: String,
+    fieldPath: String,
+  ): Nothing =
+    throw InvalidGoalPlanningPreparationSchemaError(
+      sourceLabel,
+      fieldPath,
+      "stored current phase output failed its contract or provenance version check",
+    )
+
   private data class HistoricalPin(
     val key: String,
     val value: String,
@@ -136,23 +177,8 @@ private fun goalPlanningPreparationSchema(
       cacheKey = resource,
       classLoader = GoalPlanningPreparationSchemaValidator::class.java.classLoader,
       classpathResource = resource,
-      missingResource = {
-        InvalidGoalPlanningPreparationSchemaError(
-          sourceLabel = resource,
-          fieldPath = "",
-          reason =
-            "Canonical goal planning preparation schema is missing. Expected classpath resource " +
-              "'$resource'.",
-        )
-      },
-      processingFailure = { cause ->
-        InvalidGoalPlanningPreparationSchemaError(
-          sourceLabel = resource,
-          fieldPath = "",
-          reason = cause.message ?: cause::class.simpleName.orEmpty(),
-          cause = cause,
-        )
-      },
+      missingResource = { packagedContractResourceFailure(resource) },
+      processingFailure = { cause -> packagedContractResourceFailure(resource, cause) },
       loadFailureLogger = { error ->
         logSchemaLoadFailure(
           goalPlanningPreparationLog,
@@ -164,13 +190,7 @@ private fun goalPlanningPreparationSchema(
       },
       expectedSchemaId = GoalPlanningPreparationSchemaPaths.EXPECTED_SCHEMA_ID,
       expectedContractVersion = version,
-      identityFailure = { reason ->
-        InvalidGoalPlanningPreparationSchemaError(
-          sourceLabel = resource,
-          fieldPath = "<schema>",
-          reason = reason,
-        )
-      },
+      identityFailure = { _ -> packagedContractResourceFailure(resource) },
       prepareSchemaDocument = { yamlNode ->
         yamlNode.inlineIssueKeySchemaRefs()
       },

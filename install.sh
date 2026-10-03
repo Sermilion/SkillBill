@@ -796,11 +796,18 @@ install_packaged_runtime_pair() {
     rm -rf "$candidate_root"
     return 1
   fi
-  mkdir -p "$(dirname "$RUNTIME_CLI_INSTALL_DIR")" "$(dirname "$RUNTIME_MCP_INSTALL_DIR")" || return 1
-  rm -rf "$RUNTIME_CLI_INSTALL_DIR" || return 1
-  mv "$cli_target.tmp" "$RUNTIME_CLI_INSTALL_DIR" || return 1
-  rm -rf "$RUNTIME_MCP_INSTALL_DIR" || return 1
-  mv "$mcp_target.tmp" "$RUNTIME_MCP_INSTALL_DIR" || return 1
+  if ! mkdir -p "$(dirname "$RUNTIME_CLI_INSTALL_DIR")" "$(dirname "$RUNTIME_MCP_INSTALL_DIR")"; then
+    rm -rf "$candidate_root"
+    return 1
+  fi
+  if ! rm -rf "$RUNTIME_CLI_INSTALL_DIR" || ! mv "$cli_target.tmp" "$RUNTIME_CLI_INSTALL_DIR"; then
+    rm -rf "$candidate_root"
+    return 1
+  fi
+  if ! rm -rf "$RUNTIME_MCP_INSTALL_DIR" || ! mv "$mcp_target.tmp" "$RUNTIME_MCP_INSTALL_DIR"; then
+    rm -rf "$candidate_root"
+    return 1
+  fi
   rm -rf "$candidate_root"
 }
 
@@ -1091,7 +1098,7 @@ install_runtime_distributions() {
 
   INSTALL_SOURCE="source"
   warn "No prebuilt runtime artifact matched this host (token: ${HOST_TOKEN_UNSUPPORTED:-unknown}); falling back to a from-source Gradle build."
-  build_kotlin_runtime_distributions
+  build_kotlin_runtime_distributions || return 1
 }
 
 release_version_for_untracked_build_tree() {
@@ -1111,8 +1118,8 @@ build_kotlin_runtime_distributions() {
     if [[ -x "$RUNTIME_CLI_BUILD_BIN" && -x "$RUNTIME_MCP_BUILD_BIN" ]]; then
       install_packaged_runtime_distributions || return 1
     else
-      locate_packaged_runtime_bin "$RUNTIME_CLI_BIN" "CLI"
-      locate_packaged_runtime_bin "$RUNTIME_MCP_BIN" "MCP"
+      locate_packaged_runtime_bin "$RUNTIME_CLI_BIN" "CLI" || return 1
+      locate_packaged_runtime_bin "$RUNTIME_MCP_BIN" "MCP" || return 1
     fi
     return 0
   fi
@@ -1134,19 +1141,19 @@ build_kotlin_runtime_distributions() {
   info "Building packaged Kotlin runtime distributions..."
   rm -rf \
     "$RUNTIME_KOTLIN_DIR/runtime-cli/build/install/runtime-cli" \
-    "$RUNTIME_KOTLIN_DIR/runtime-mcp/build/install/runtime-mcp"
+    "$RUNTIME_KOTLIN_DIR/runtime-mcp/build/install/runtime-mcp" || return 1
   (
-    cd "$RUNTIME_KOTLIN_DIR"
+    cd "$RUNTIME_KOTLIN_DIR" || exit 1
     if [[ -n "$stamped_version" ]]; then
       RELEASE_VERSION="$stamped_version" ./gradlew -q :runtime-cli:installDist :runtime-mcp:installDist
     else
       ./gradlew -q :runtime-cli:installDist :runtime-mcp:installDist
     fi
-  )
-  locate_packaged_runtime_bin "$RUNTIME_CLI_BUILD_BIN" "CLI"
-  locate_packaged_runtime_bin "$RUNTIME_MCP_BUILD_BIN" "MCP"
+  ) || return 1
+  locate_packaged_runtime_bin "$RUNTIME_CLI_BUILD_BIN" "CLI" || return 1
+  locate_packaged_runtime_bin "$RUNTIME_MCP_BUILD_BIN" "MCP" || return 1
+  install_packaged_runtime_distributions || return 1
   ok "Kotlin runtime distributions ready"
-  install_packaged_runtime_distributions
 }
 
 run_runtime_cli() {
@@ -2132,7 +2139,7 @@ run_full_install() {
     replay_last_install_selection
   fi
   migrate_legacy_config_to_durable_path
-  install_runtime_distributions
+  install_runtime_distributions || return 1
   copy_in_authored_source
   reconcile_and_commit_authored_source_with_recovery
   if [[ "$REUSE_LAST_SELECTION" -ne 1 ]]; then
