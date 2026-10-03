@@ -1,6 +1,9 @@
 package skillbill.infrastructure.skills.install.apply
+
+import java.nio.file.Path
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
-import skillbill.error.shellcontent.SkillContentIdentityMismatchError
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.infrastructure.skills.install.plan.discoverPlatformManifests
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.infrastructure.skills.scaffold.platformpack.substanceaudit.FAILURE
@@ -25,7 +28,6 @@ import skillbill.ports.repository.toFileLocation
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
 import skillbill.scaffold.model.PlatformManifest
-import java.nio.file.Path
 
 internal fun applyInstallPlan(
   plan: InstallPlan,
@@ -193,7 +195,9 @@ private fun stagePlannedSkill(
     staging.toStagingOutcome(skill.sourceDir.toPath())
   }.getOrElse { error ->
 
-    if (error is SkillContentIdentityMismatchError) throw error
+    if (error is SkillBillRuntimeException && error.code == ReviewContextFailureCode.SKILL_CONTENT_IDENTITY_MISMATCH) {
+      throw error
+    }
     failedStagingOutcome(skill.sourceDir.toPath(), skill.name, error).also { outcome ->
       outcome.issue?.let(failures::add)
     }

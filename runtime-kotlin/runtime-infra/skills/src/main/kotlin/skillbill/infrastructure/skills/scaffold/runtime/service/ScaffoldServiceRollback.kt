@@ -1,7 +1,7 @@
 
 package skillbill.infrastructure.skills.scaffold.runtime.service
 
-import skillbill.error.shellcontent.ScaffoldRollbackError
+import skillbill.error.shellcontent.scaffoldRollbackError
 import skillbill.infrastructure.host.jvm.rollbackDeleteEmptyDirectory
 import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
 import skillbill.infrastructure.host.jvm.rollbackDeleteRegularFileOrSymlink
@@ -23,7 +23,7 @@ internal fun rollback(
   rollbackFiles(txn, errors)
   rollbackDirs(txn, errors)
   if (errors.isNotEmpty()) {
-    throw ScaffoldRollbackError(
+    throw scaffoldRollbackError(
       "Rollback encountered errors while reverting scaffold: ${errors.joinToString("; ")}",
     )
   }

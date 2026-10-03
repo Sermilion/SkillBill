@@ -8,7 +8,7 @@ import skillbill.application.review.packet.toParentPacketEnvelope
 import skillbill.application.review.parallel.planning.criteriaReferences
 import skillbill.application.review.preparation.model.ReviewPreparationFacts
 import skillbill.application.updatecheck.unknown
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPort
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
@@ -363,7 +363,7 @@ internal fun deriveSpecialistBudget(
 private fun reject(
   sourceLabel: String,
   reason: String,
-): Nothing = throw InvalidReviewContextSchemaError(sourceLabel = sourceLabel, reason = reason)
+): Nothing = throw invalidReviewContextSchemaError(sourceLabel = sourceLabel, reason = reason)
 
 private fun includedLanesForPacket(
   reviewId: String,

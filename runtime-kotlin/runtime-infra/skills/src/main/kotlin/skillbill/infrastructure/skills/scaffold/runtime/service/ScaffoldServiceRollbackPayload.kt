@@ -1,7 +1,7 @@
 
 package skillbill.infrastructure.skills.scaffold.runtime.service
 
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.displayNameFromSlug
@@ -15,7 +15,7 @@ internal fun canonicalName(
   val provided = payload["name"] as? String
   return when {
     provided.isNullOrBlank() -> defaultName
-    provided != defaultName -> throw InvalidScaffoldPayloadError(
+    provided != defaultName -> throw invalidScaffoldPayloadError(
       "Scaffold payload field 'name' must be '$defaultName' for this scaffold kind.",
     )
     else -> provided
@@ -29,11 +29,11 @@ internal fun optionalAddonLocationPath(
   if (!payload.containsKey("addon_location_path")) return null
   val rawPath =
     payload["addon_location_path"] as? String
-      ?: throw InvalidScaffoldPayloadError(
+      ?: throw invalidScaffoldPayloadError(
         "Scaffold payload field 'addon_location_path' must be a non-empty string when provided.",
       )
   if (rawPath.isBlank()) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field 'addon_location_path' must be a non-empty string when provided.",
     )
   }

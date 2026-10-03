@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.payload
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
 import skillbill.scaffold.policy.PLATFORM_PACK_PRESET_DESCRIPTORS
 import skillbill.scaffold.policy.displayNameFromSlug
@@ -17,7 +18,7 @@ private fun rejectLegacyPlatformPackSelector(
   field: String,
 ) {
   if (!payload.containsKey(field)) return
-  throw InvalidScaffoldPayloadError(
+  throw invalidScaffoldPayloadError(
     "Scaffold payload field '$field' is no longer supported for kind 'platform-pack'. " +
       "Create the full platform pack, then remove unwanted focus areas through governed removal paths.",
   )
@@ -96,5 +97,5 @@ private fun enforceRoutingSignalsStrongNonEmpty(
     } else {
       "Scaffold payload field 'routing_signals.strong' must contain at least one routing signal."
     }
-  throw InvalidScaffoldPayloadError(message)
+  throw invalidScaffoldPayloadError(message)
 }

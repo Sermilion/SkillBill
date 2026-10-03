@@ -11,6 +11,7 @@ fun Throwable.isShellContentContractFailure(): Boolean {
   return failureCode is FailureWireCode ||
     failureCode is ManifestFailureCode ||
     failureCode is SkillStagingFailureCode ||
+    failureCode is ReviewContextFailureCode ||
     failureCode is AgentAddonFailureCode ||
     failureCode is GovernedReviewFailureCode ||
     failureCode is GoalTelemetryRowFailureCode

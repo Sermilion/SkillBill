@@ -1,7 +1,7 @@
 
 package skillbill.infrastructure.skills.scaffold.manifest
 
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.infrastructure.skills.scaffold.runtime.service.areaFocus
 
 private val AREAS_EMPTY_INLINE_PATTERN =
@@ -29,7 +29,7 @@ internal fun appendAreaToList(
   }
   val match =
     AREAS_LIST_PATTERN.find(text)
-      ?: throw InvalidScaffoldPayloadError(
+      ?: throw invalidScaffoldPayloadError(
         "Manifest is missing required 'declared_code_review_areas:' block; refusing to edit.",
       )
   val body = match.groupValues[1]
@@ -55,7 +55,7 @@ internal fun appendAreaToDeclaredFiles(
   }
   val match =
     AREAS_FILES_PATTERN.find(text)
-      ?: throw InvalidScaffoldPayloadError("Manifest is missing 'declared_files.areas:' block; refusing to edit.")
+      ?: throw invalidScaffoldPayloadError("Manifest is missing 'declared_files.areas:' block; refusing to edit.")
   val prefix = match.groupValues[1]
   val header = match.groupValues[2]
   val body = match.groupValues[MANIFEST_AREAS_BODY_GROUP_INDEX]
@@ -85,7 +85,7 @@ internal fun appendAreaMetadata(
   }
   val match =
     AREA_METADATA_BLOCK_PATTERN.find(text)
-      ?: throw InvalidScaffoldPayloadError("Manifest is missing 'area_metadata:' block; refusing to edit.")
+      ?: throw invalidScaffoldPayloadError("Manifest is missing 'area_metadata:' block; refusing to edit.")
   val header = match.groupValues[1]
   val body = match.groupValues[2]
   val insertion = "  $area:\n    focus: ${yamlScalar(areaFocus)}\n"

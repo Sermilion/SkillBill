@@ -1,13 +1,5 @@
 package skillbill.infrastructure.skills.scaffold
 
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
-import skillbill.infrastructure.skills.scaffold.manifest.renderGovernedAddonManifestRegistration
-import skillbill.infrastructure.skills.scaffold.rendering.inferSkillDescription
-import skillbill.infrastructure.skills.scaffold.rendering.renderContentBody
-import skillbill.infrastructure.skills.scaffold.runtime.service.contract.TemplateContext
-import skillbill.infrastructure.skills.scaffold.runtime.service.scaffold
-import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestRenderRequest
-import skillbill.scaffold.policy.platformpack.renderPlatformPackManifest
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.isDirectory
@@ -16,6 +8,15 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ScaffoldFailureCode
+import skillbill.infrastructure.skills.scaffold.manifest.renderGovernedAddonManifestRegistration
+import skillbill.infrastructure.skills.scaffold.rendering.inferSkillDescription
+import skillbill.infrastructure.skills.scaffold.rendering.renderContentBody
+import skillbill.infrastructure.skills.scaffold.runtime.service.contract.TemplateContext
+import skillbill.infrastructure.skills.scaffold.runtime.service.scaffold
+import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestRenderRequest
+import skillbill.scaffold.policy.platformpack.renderPlatformPackManifest
 
 class ScaffoldAddonGovernanceTest {
   @Test
@@ -28,7 +29,7 @@ class ScaffoldAddonGovernanceTest {
       val beforeTree = snapshotRepoTree(repo)
 
       val error =
-        assertFailsWith<InvalidScaffoldPayloadError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(
               repo,
@@ -38,7 +39,7 @@ class ScaffoldAddonGovernanceTest {
               "consumer_skill_dirs" to listOf("code-review/not-a-declared-skill"),
             ),
           )
-        }
+        }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
 
       assertContains(error.message.orEmpty(), "not declared as a skill")
       assertFalse(Files.exists(repo.resolve("platform-packs/kotlin/addons/orphan-helper.md")))
@@ -55,7 +56,7 @@ class ScaffoldAddonGovernanceTest {
       val beforeTree = snapshotRepoTree(repo)
 
       val error =
-        assertFailsWith<InvalidScaffoldPayloadError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(
               repo,
@@ -65,7 +66,7 @@ class ScaffoldAddonGovernanceTest {
               "consumer_skill_dirs" to listOf("../code-review/bill-kotlin-code-review"),
             ),
           )
-        }
+        }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
 
       assertContains(error.message.orEmpty(), "must not contain '..' segments")
       assertFalse(Files.exists(repo.resolve("platform-packs/kotlin/addons/unsafe-helper.md")))
@@ -129,7 +130,7 @@ class ScaffoldAddonGovernanceTest {
       val beforeTree = snapshotRepoTree(repo)
 
       val error =
-        assertFailsWith<InvalidScaffoldPayloadError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(
               repo,
@@ -138,7 +139,7 @@ class ScaffoldAddonGovernanceTest {
               "name" to "orphan-helper",
             ),
           )
-        }
+        }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
 
       assertContains(error.message.orEmpty(), "omitted 'consumer_skill_dirs'")
       assertContains(error.message.orEmpty(), "no unambiguous default consumer")

@@ -1,6 +1,6 @@
 package skillbill.scaffold.model
 
-import skillbill.error.shellcontent.UnknownSkillKindError
+import skillbill.error.shellcontent.unknownSkillKindError
 
 enum class SkillKind(val wireValue: String) {
   HORIZONTAL("horizontal"),
@@ -14,7 +14,7 @@ enum class SkillKind(val wireValue: String) {
   companion object {
     fun fromWire(value: String): SkillKind =
       entries.firstOrNull { it.wireValue == value }
-        ?: throw UnknownSkillKindError(
+        ?: throw unknownSkillKindError(
           "Scaffold payload declares unsupported kind '$value'. " +
             "Supported kinds: ${entries.map(SkillKind::wireValue)}.",
         )

@@ -1,6 +1,9 @@
 package skillbill.infrastructure.workflow.review.specialists
 
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import java.nio.file.Files
+import java.nio.file.LinkOption.NOFOLLOW_LINKS
+import java.nio.file.Path
+import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.infrastructure.workflow.process.runGitCommand
 import skillbill.infrastructure.workflow.review.broker.FileSystemReviewEvidenceBrokerReadState
 import skillbill.infrastructure.workflow.review.broker.digest
@@ -9,9 +12,6 @@ import skillbill.infrastructure.workflow.review.broker.resolveRepositoryFile
 import skillbill.infrastructure.workflow.review.broker.validateRepositoryMapping
 import skillbill.ports.review.model.ReviewCheckpointFileIdentity
 import skillbill.ports.review.model.ReviewEvidenceCoordinates
-import java.nio.file.Files
-import java.nio.file.LinkOption.NOFOLLOW_LINKS
-import java.nio.file.Path
 
 internal fun bindReviewCoordinates(
   root: Path,
@@ -30,7 +30,7 @@ internal fun bindReviewCoordinates(
         )
       val revision = resolved.value.orEmpty().trim()
       if (!resolved.ok || !revision.matches(Regex("[a-f0-9]{40}|[a-f0-9]{64}"))) {
-        throw InvalidReviewContextSchemaError("review-source", "Committed evidence revision is unavailable.")
+        throw invalidReviewContextSchemaError("review-source", "Committed evidence revision is unavailable.")
       }
       ReviewEvidenceCoordinates.Committed(revision)
     }
@@ -47,7 +47,7 @@ internal fun validateReviewCoordinateFile(
       is ReviewEvidenceCoordinates.Checkpoint -> {
         val expected =
           coordinates.files[path] as? ReviewCheckpointFileIdentity.Regular
-            ?: throw InvalidReviewContextSchemaError(
+            ?: throw invalidReviewContextSchemaError(
               "review-source",
               "Expanded path was not a regular checkpoint file.",
             )
@@ -60,7 +60,7 @@ internal fun validateReviewCoordinateFile(
       }
     }
   if (!available) {
-    throw InvalidReviewContextSchemaError("review-expansion", "Expanded file is absent at the selected revision.")
+    throw invalidReviewContextSchemaError("review-expansion", "Expanded file is absent at the selected revision.")
   }
 }
 
@@ -81,11 +81,11 @@ private fun readCheckpointFile(
   path: String,
 ): ByteArray? {
   if (path !in coordinates.files) {
-    throw InvalidReviewContextSchemaError("review-source", "Expanded path was absent from the reviewed checkpoint.")
+    throw invalidReviewContextSchemaError("review-source", "Expanded path was absent from the reviewed checkpoint.")
   }
   val identity = coordinates.files.getValue(path)
   if (identity is ReviewCheckpointFileIdentity.Unavailable) {
-    throw InvalidReviewContextSchemaError(
+    throw invalidReviewContextSchemaError(
       "review-source",
       "Expanded path was unavailable in the reviewed checkpoint: ${identity.name}.",
     )
@@ -119,7 +119,7 @@ private fun readCheckpointIndex(
   val row = entry.value.orEmpty().trim()
   if (!entry.ok || row.split(' ').getOrNull(1) != expected) rejectCheckpointDrift(state, path)
   if (!row.startsWith("100644 ") && !row.startsWith("100755 ")) {
-    throw InvalidReviewContextSchemaError("review-source", "Index evidence is not a regular file.")
+    throw invalidReviewContextSchemaError("review-source", "Index evidence is not a regular file.")
   }
   return readImmutableReviewCommand(
     state.root,

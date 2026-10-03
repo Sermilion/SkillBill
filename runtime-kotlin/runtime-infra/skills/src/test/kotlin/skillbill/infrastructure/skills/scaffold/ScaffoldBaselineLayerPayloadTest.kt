@@ -1,6 +1,14 @@
 package skillbill.infrastructure.skills.scaffold
 
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ScaffoldFailureCode
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
 import skillbill.infrastructure.skills.scaffold.rendering.inferSkillDescription
 import skillbill.infrastructure.skills.scaffold.rendering.renderContentBody
@@ -13,13 +21,6 @@ import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestRenderRequest
 import skillbill.scaffold.policy.platformpack.renderPlatformPackManifest
 import skillbill.testsupport.SkillClassFixtures
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 
 class ScaffoldBaselineLayerPayloadTest {
   @Test
@@ -123,13 +124,13 @@ class ScaffoldBaselineLayerPayloadTest {
         val before = snapshotTree(repo)
         val platform = extraPayload["platform"] as? String ?: "androidx-$index"
         val error =
-          assertFailsWith<InvalidScaffoldPayloadError> {
+          assertFailsWith<SkillBillRuntimeException> {
             scaffold(
               payload(repo, "platform-pack", "platform" to platform) +
                 mapOf("routing_signals" to mapOf("strong" to listOf("marker-$index"))) +
                 extraPayload,
             )
-          }
+          }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
 
         assertContains(error.message.orEmpty(), expectedMessage)
         assertEquals(before, snapshotTree(repo))
@@ -172,13 +173,13 @@ class ScaffoldBaselineLayerPayloadTest {
         val before = snapshotTree(repo)
         val platform = "androidx-structural-$index"
         val error =
-          assertFailsWith<InvalidScaffoldPayloadError> {
+          assertFailsWith<SkillBillRuntimeException> {
             scaffold(
               payload(repo, "platform-pack", "platform" to platform) +
                 mapOf("routing_signals" to mapOf("strong" to listOf("marker-$index"))) +
                 extraPayload,
             )
-          }
+          }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
 
         assertContains(error.message.orEmpty(), expectedMessage)
         assertEquals(before, snapshotTree(repo))
@@ -197,9 +198,9 @@ class ScaffoldBaselineLayerPayloadTest {
         val before = snapshotTree(repo)
         val kind = basePayload.getValue("kind")
         val error =
-          assertFailsWith<InvalidScaffoldPayloadError> {
+          assertFailsWith<SkillBillRuntimeException> {
             scaffold(basePayload + mapOf("baseline_layers" to kotlinBaselinePayload()))
-          }
+          }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
 
         assertContains(error.message.orEmpty(), "only supported for kind 'platform-pack'")
         assertContains(error.message.orEmpty(), "got '$kind'")

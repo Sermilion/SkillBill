@@ -2,7 +2,7 @@ package skillbill.infrastructure.skills.scaffold.adapters
 
 import java.nio.file.Files
 import java.nio.file.Path
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.error.shellcontent.missingRequiredSection
 import skillbill.infrastructure.skills.agentaddon.discoverAgentAddons
 import skillbill.infrastructure.skills.scaffold.authoring.AuthoringTarget
@@ -144,12 +144,12 @@ class FileSystemScaffoldRepoValidation(
 }
 
 private fun failBaselineLayersNotAList(): Nothing =
-  throw InvalidScaffoldPayloadError(
+  throw invalidScaffoldPayloadError(
     "Scaffold payload field 'baseline_layers' must be a list of baseline layer objects.",
   )
 
 private fun failBaselineLayersEmpty(): Nothing =
-  throw InvalidScaffoldPayloadError(
+  throw invalidScaffoldPayloadError(
     "Scaffold payload field 'baseline_layers' must contain at least one layer when provided.",
   )
 
@@ -157,12 +157,12 @@ private fun failBaselineSelfReference(
   index: Int,
   targetLabel: String,
 ): Nothing =
-  throw InvalidScaffoldPayloadError(
+  throw invalidScaffoldPayloadError(
     "Scaffold payload field 'baseline_layers[$index]' self-references the new platform pack '$targetLabel'.",
   )
 
 private fun failBaselineDuplicate(targetLabel: String): Nothing =
-  throw InvalidScaffoldPayloadError(
+  throw invalidScaffoldPayloadError(
     "Scaffold payload field 'baseline_layers' contains duplicate layer '$targetLabel'.",
   )
 
@@ -170,7 +170,7 @@ private fun failBaselineMissingPack(
   index: Int,
   platform: String,
 ): Nothing =
-  throw InvalidScaffoldPayloadError(
+  throw invalidScaffoldPayloadError(
     "Scaffold payload field 'baseline_layers[$index]' references missing platform pack '$platform'.",
   )
 
@@ -179,7 +179,7 @@ private fun failBaselineMissingSkill(
   platform: String,
   skill: String,
 ): Nothing =
-  throw InvalidScaffoldPayloadError(
+  throw invalidScaffoldPayloadError(
     "Scaffold payload field 'baseline_layers[$index]' references missing code-review skill " +
       "'$skill' in platform pack '$platform'.",
   )
@@ -189,7 +189,7 @@ private fun failBaselineUnsupportedMode(
   layer: CodeReviewBaselineLayer,
   unsupportedReason: String,
 ): Nothing =
-  throw InvalidScaffoldPayloadError(
+  throw invalidScaffoldPayloadError(
     "Scaffold payload field 'baseline_layers[$index].mode' uses mode '${layer.mode.wireValue}' with " +
       "unsupported referenced skill '${layer.platform}/${layer.skill}'. $unsupportedReason",
   )

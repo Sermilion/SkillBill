@@ -1,11 +1,11 @@
 package skillbill.ports.diff
 
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import java.nio.file.Path
+import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.ports.diff.model.ReviewCommitMetadata
 import skillbill.ports.diff.model.ReviewDiffQuery
 import skillbill.ports.diff.model.ReviewIndexEntry
 import skillbill.ports.review.model.ReviewCheckpointFileIdentity
-import java.nio.file.Path
 
 abstract class DiffResolverPortDefaults : DiffResolverPort {
   open override fun resolveCommit(
@@ -46,7 +46,7 @@ abstract class DiffResolverPortDefaults : DiffResolverPort {
     root: Path,
     paths: List<String>,
   ): Map<String, ReviewCheckpointFileIdentity> =
-    throw InvalidReviewContextSchemaError(
+    throw invalidReviewContextSchemaError(
       "review-source",
       "This diff resolver cannot capture worktree evidence identities.",
     )

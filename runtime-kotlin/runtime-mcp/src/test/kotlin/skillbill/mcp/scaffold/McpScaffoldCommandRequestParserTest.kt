@@ -1,18 +1,16 @@
 package skillbill.mcp.scaffold
 
-import skillbill.application.scaffold.decodeScaffoldCommandRequest
-import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
-import skillbill.error.shellcontent.RetiredScaffoldKindError
-import skillbill.error.shellcontent.ScaffoldPayloadVersionMismatchError
-import skillbill.error.shellcontent.UnknownSkillKindError
-import skillbill.scaffold.model.CodeReviewCompositionMode
-import skillbill.scaffold.model.CodeReviewCompositionScope
-import skillbill.scaffold.model.command.ScaffoldCommandRequest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import skillbill.application.scaffold.decodeScaffoldCommandRequest
+import skillbill.contracts.JsonCodec
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ScaffoldFailureCode
+import skillbill.scaffold.model.CodeReviewCompositionMode
+import skillbill.scaffold.model.CodeReviewCompositionScope
+import skillbill.scaffold.model.command.ScaffoldCommandRequest
 
 private fun parseMcpScaffoldCommandRequest(payload: Map<String, Any?>): ScaffoldCommandRequest =
   decodeScaffoldCommandRequest(JsonCodec.mapToJsonString(payload))
@@ -103,7 +101,7 @@ class McpScaffoldCommandRequestParserTest {
   @Test
   fun `platform pack request rejects retired skeleton_mode with migration message`() {
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseMcpScaffoldCommandRequest(
           mapOf(
             "scaffold_payload_version" to "1.0",
@@ -112,7 +110,7 @@ class McpScaffoldCommandRequestParserTest {
             "skeleton_mode" to "starter",
           ),
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     val message = error.message.orEmpty()
     assertTrue("skeleton_mode" in message, "Got: $message")
     assertTrue("no longer supported" in message, "Got: $message")
@@ -122,7 +120,7 @@ class McpScaffoldCommandRequestParserTest {
   @Test
   fun `platform pack request rejects retired specialist_areas with migration message`() {
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseMcpScaffoldCommandRequest(
           mapOf(
             "scaffold_payload_version" to "1.0",
@@ -131,7 +129,7 @@ class McpScaffoldCommandRequestParserTest {
             "specialist_areas" to listOf("ui"),
           ),
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     val message = error.message.orEmpty()
     assertTrue("specialist_areas" in message, "Got: $message")
     assertTrue("no longer supported" in message, "Got: $message")
@@ -191,37 +189,37 @@ class McpScaffoldCommandRequestParserTest {
   }
 
   @Test
-  fun `version mismatch throws ScaffoldPayloadVersionMismatchError with version detail`() {
+  fun `version mismatch throws scaffoldPayloadVersionMismatchError with version detail`() {
     val error =
-      assertFailsWith<ScaffoldPayloadVersionMismatchError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseMcpScaffoldCommandRequest(
           mapOf("scaffold_payload_version" to "9.9", "kind" to "horizontal", "name" to "bill-foo"),
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.PAYLOAD_VERSION_MISMATCH, it.code) }
     assertTrue(error.message.orEmpty().contains("9.9"))
   }
 
   @Test
-  fun `unknown kind throws UnknownSkillKindError with kind detail`() {
+  fun `unknown kind throws unknownSkillKindError with kind detail`() {
     val error =
-      assertFailsWith<UnknownSkillKindError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseMcpScaffoldCommandRequest(
           mapOf("scaffold_payload_version" to "1.0", "kind" to "not-a-kind"),
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.UNKNOWN_SKILL_KIND, it.code) }
     assertTrue(error.message.orEmpty().contains("not-a-kind"))
   }
 
   @Test
-  fun `retired partial kind aliases throw RetiredScaffoldKindError`() {
+  fun `retired partial kind aliases throw retiredScaffoldKindError`() {
     listOf("platform-override-piloted", "platform-override", "override", "code-review-area", "area", "specialist")
       .forEach { kind ->
         val error =
-          assertFailsWith<RetiredScaffoldKindError> {
+          assertFailsWith<SkillBillRuntimeException> {
             parseMcpScaffoldCommandRequest(
               mapOf("scaffold_payload_version" to "1.0", "kind" to kind),
             )
-          }
+          }.also { assertEquals(ScaffoldFailureCode.RETIRED_KIND, it.code) }
         val message = error.message.orEmpty()
         assertTrue(kind in message, "Got: $message")
         assertTrue("platform-pack" in message, "Got: $message")
@@ -230,31 +228,31 @@ class McpScaffoldCommandRequestParserTest {
   }
 
   @Test
-  fun `missing required field throws InvalidScaffoldPayloadError with field path`() {
+  fun `missing required field throws invalidScaffoldPayloadError with field path`() {
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseMcpScaffoldCommandRequest(
           mapOf("scaffold_payload_version" to "1.0", "kind" to "horizontal"),
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     assertTrue(error.message.orEmpty().contains("'name'"))
   }
 
   @Test
-  fun `missing required add-on platform field throws InvalidScaffoldPayloadError`() {
+  fun `missing required add-on platform field throws invalidScaffoldPayloadError`() {
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseMcpScaffoldCommandRequest(
           mapOf("scaffold_payload_version" to "1.0", "kind" to "add-on", "name" to "bill-x"),
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     assertTrue(error.message.orEmpty().contains("'platform'"))
   }
 
   @Test
-  fun `wrong field type throws InvalidScaffoldPayloadError with field path`() {
+  fun `wrong field type throws invalidScaffoldPayloadError with field path`() {
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseMcpScaffoldCommandRequest(
           mapOf(
             "scaffold_payload_version" to "1.0",
@@ -263,14 +261,14 @@ class McpScaffoldCommandRequestParserTest {
             "no_subagents" to "true",
           ),
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     assertTrue(error.message.orEmpty().contains("'no_subagents'"))
   }
 
   @Test
-  fun `invalid baseline layer scope throws InvalidScaffoldPayloadError with field prefix`() {
+  fun `invalid baseline layer scope throws invalidScaffoldPayloadError with field prefix`() {
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseMcpScaffoldCommandRequest(
           mapOf(
             "scaffold_payload_version" to "1.0",
@@ -289,16 +287,16 @@ class McpScaffoldCommandRequestParserTest {
               ),
           ),
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     val message = error.message.orEmpty()
     assertTrue("baseline_layers[0].scope" in message, "Got: $message")
     assertTrue("bogus-scope" in message, "Got: $message")
   }
 
   @Test
-  fun `empty baseline_layers list loud-fails with InvalidScaffoldPayloadError`() {
+  fun `empty baseline_layers list loud-fails with invalidScaffoldPayloadError`() {
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseMcpScaffoldCommandRequest(
           mapOf(
             "scaffold_payload_version" to "1.0",
@@ -308,14 +306,14 @@ class McpScaffoldCommandRequestParserTest {
             "baseline_layers" to emptyList<Map<String, Any?>>(),
           ),
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     assertTrue("at least one layer" in error.message.orEmpty(), "Got: ${error.message}")
   }
 
   @Test
   fun `routing_signals strong field present but wrong type loud-fails`() {
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseMcpScaffoldCommandRequest(
           mapOf(
             "scaffold_payload_version" to "1.0",
@@ -324,7 +322,7 @@ class McpScaffoldCommandRequestParserTest {
             "routing_signals" to mapOf("strong" to "not-a-list"),
           ),
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     val message = error.message.orEmpty()
     assertTrue("routing_signals.strong" in message, "Got: $message")
     assertTrue("must be a list of strings" in message, "Got: $message")
@@ -333,7 +331,7 @@ class McpScaffoldCommandRequestParserTest {
   @Test
   fun `routing_signals tie_breakers field present but wrong type loud-fails`() {
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseMcpScaffoldCommandRequest(
           mapOf(
             "scaffold_payload_version" to "1.0",
@@ -346,7 +344,7 @@ class McpScaffoldCommandRequestParserTest {
               ),
           ),
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     val message = error.message.orEmpty()
     assertTrue("routing_signals.tie_breakers" in message, "Got: $message")
     assertTrue("must be a list of strings" in message, "Got: $message")

@@ -1,10 +1,12 @@
 package skillbill.infrastructure.skills.scaffold
 
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
-import skillbill.error.shellcontent.RetiredScaffoldKindError
-import skillbill.error.shellcontent.ScaffoldPayloadVersionMismatchError
-import skillbill.error.shellcontent.UnknownPreShellFamilyError
-import skillbill.error.shellcontent.UnknownSkillKindError
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ScaffoldFailureCode
 import skillbill.infrastructure.skills.scaffold.payload.detectKind
 import skillbill.infrastructure.skills.scaffold.payload.optionalSpecialistSubagents
 import skillbill.infrastructure.skills.scaffold.payload.rejectBaselineLayersForNonPlatformPack
@@ -18,11 +20,6 @@ import skillbill.scaffold.policy.SKILL_KIND_ADD_ON
 import skillbill.scaffold.policy.SKILL_KIND_CODE_REVIEW_AREA
 import skillbill.scaffold.policy.SKILL_KIND_HORIZONTAL
 import skillbill.scaffold.policy.SKILL_KIND_PLATFORM_PACK
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class ScaffoldPayloadMapPolicyTest {
   @Test
@@ -32,16 +29,16 @@ class ScaffoldPayloadMapPolicyTest {
 
   @Test
   fun `validatePayloadVersion throws when the version disagrees`() {
-    assertFailsWith<ScaffoldPayloadVersionMismatchError> {
+    assertFailsWith<SkillBillRuntimeException> {
       validatePayloadVersion(mapOf("scaffold_payload_version" to "9.9"))
-    }
+    }.also { assertEquals(ScaffoldFailureCode.PAYLOAD_VERSION_MISMATCH, it.code) }
   }
 
   @Test
   fun `validatePayloadVersion throws when the version field is missing`() {
-    assertFailsWith<InvalidScaffoldPayloadError> {
+    assertFailsWith<SkillBillRuntimeException> {
       validatePayloadVersion(mapOf("kind" to "horizontal"))
-    }
+    }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
   }
 
   @Test
@@ -50,20 +47,20 @@ class ScaffoldPayloadMapPolicyTest {
   }
 
   @Test
-  fun `detectKind throws UnknownSkillKindError for an unknown kind`() {
-    assertFailsWith<UnknownSkillKindError> {
+  fun `detectKind throws unknownSkillKindError for an unknown kind`() {
+    assertFailsWith<SkillBillRuntimeException> {
       detectKind(mapOf("kind" to "not-a-kind"))
-    }
+    }.also { assertEquals(ScaffoldFailureCode.UNKNOWN_SKILL_KIND, it.code) }
   }
 
   @Test
-  fun `detectKind throws RetiredScaffoldKindError for retired partial kind aliases`() {
+  fun `detectKind throws retiredScaffoldKindError for retired partial kind aliases`() {
     listOf("platform-override-piloted", "platform-override", "override", "code-review-area", "area", "specialist")
       .forEach { kind ->
         val error =
-          assertFailsWith<RetiredScaffoldKindError> {
+          assertFailsWith<SkillBillRuntimeException> {
             detectKind(mapOf("kind" to kind))
-          }
+          }.also { assertEquals(ScaffoldFailureCode.RETIRED_KIND, it.code) }
         val message = error.message.orEmpty()
         assertTrue(kind in message, "Got: $message")
         assertTrue("platform-pack" in message, "Got: $message")
@@ -75,9 +72,9 @@ class ScaffoldPayloadMapPolicyTest {
     val retiredFamily = "feature-" + "implement"
 
     val error =
-      assertFailsWith<UnknownPreShellFamilyError> {
+      assertFailsWith<SkillBillRuntimeException> {
         detectKind(mapOf("kind" to "platform-override-piloted", "family" to retiredFamily))
-      }
+      }.also { assertEquals(ScaffoldFailureCode.UNKNOWN_PRE_SHELL_FAMILY, it.code) }
 
     val message = error.message.orEmpty()
     assertTrue(retiredFamily in message, "Got: $message")
@@ -98,9 +95,9 @@ class ScaffoldPayloadMapPolicyTest {
   @Test
   fun `resolvePlatformPackSelection rejects retired skeleton_mode with migration message`() {
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         resolvePlatformPackSelection(mapOf("skeleton_mode" to "full"))
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     val message = error.message.orEmpty()
     assertTrue("skeleton_mode" in message, "Got: $message")
     assertTrue("no longer supported" in message, "Got: $message")
@@ -110,9 +107,9 @@ class ScaffoldPayloadMapPolicyTest {
   @Test
   fun `resolvePlatformPackSelection rejects retired specialist_areas with migration message`() {
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         resolvePlatformPackSelection(mapOf("specialist_areas" to listOf("ui")))
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     val message = error.message.orEmpty()
     assertTrue("specialist_areas" in message, "Got: $message")
     assertTrue("no longer supported" in message, "Got: $message")
@@ -212,9 +209,9 @@ class ScaffoldPayloadMapPolicyTest {
 
   @Test
   fun `resolvePlatformPackDefaults loud-fails when no preset and no routing signals are supplied`() {
-    assertFailsWith<InvalidScaffoldPayloadError> {
+    assertFailsWith<SkillBillRuntimeException> {
       resolvePlatformPackDefaults(emptyMap(), "no-such-preset")
-    }
+    }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
   }
 
   @Test
@@ -250,22 +247,22 @@ class ScaffoldPayloadMapPolicyTest {
 
   @Test
   fun `optionalSpecialistSubagents rejects specialists for leaf kinds`() {
-    assertFailsWith<InvalidScaffoldPayloadError> {
+    assertFailsWith<SkillBillRuntimeException> {
       optionalSpecialistSubagents(
         mapOf("subagent_specialists" to listOf("ui")),
         SKILL_KIND_CODE_REVIEW_AREA,
       )
-    }
+    }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
   }
 
   @Test
   fun `optionalSpecialistSubagents rejects duplicate specialist names`() {
-    assertFailsWith<InvalidScaffoldPayloadError> {
+    assertFailsWith<SkillBillRuntimeException> {
       optionalSpecialistSubagents(
         mapOf("subagent_specialists" to listOf("ui", "ui")),
         SKILL_KIND_HORIZONTAL,
       )
-    }
+    }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
   }
 
   @Test
@@ -275,18 +272,18 @@ class ScaffoldPayloadMapPolicyTest {
 
   @Test
   fun `rejectBaselineLayersForNonPlatformPack rejects baseline_layers on non-platform-pack kinds`() {
-    assertFailsWith<InvalidScaffoldPayloadError> {
+    assertFailsWith<SkillBillRuntimeException> {
       rejectBaselineLayersForNonPlatformPack(
         mapOf("baseline_layers" to listOf(emptyMap<String, Any?>())),
         SKILL_KIND_HORIZONTAL,
       )
-    }
+    }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
   }
 
   @Test
   fun `optionalSpecialistSubagents rejects no_subagents=true with non-empty subagent list`() {
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         optionalSpecialistSubagents(
           mapOf(
             "subagent_specialists" to listOf("ui"),
@@ -294,7 +291,7 @@ class ScaffoldPayloadMapPolicyTest {
           ),
           SKILL_KIND_HORIZONTAL,
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     val message = error.message.orEmpty()
     assertTrue("no_subagents=true" in message, "Got: $message")
     assertTrue("subagent_specialists" in message, "Got: $message")
@@ -304,12 +301,12 @@ class ScaffoldPayloadMapPolicyTest {
   fun `optionalSpecialistSubagents rejects subagent name that violates SUBAGENT_NAME_PATTERN`() {
     listOf("UPPER", "1starts-with-digit", "has/slash", "has space").forEach { invalidName ->
       val error =
-        assertFailsWith<InvalidScaffoldPayloadError> {
+        assertFailsWith<SkillBillRuntimeException> {
           optionalSpecialistSubagents(
             mapOf("subagent_specialists" to listOf(invalidName)),
             SKILL_KIND_HORIZONTAL,
           )
-        }
+        }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
       val message = error.message.orEmpty()
       assertTrue("invalid name '$invalidName'" in message, "Got: $message for input '$invalidName'")
     }
@@ -318,12 +315,12 @@ class ScaffoldPayloadMapPolicyTest {
   @Test
   fun `optionalSpecialistSubagents loud-fails when no_subagents is not a boolean`() {
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         optionalSpecialistSubagents(
           mapOf("no_subagents" to "true"),
           SKILL_KIND_HORIZONTAL,
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     val message = error.message.orEmpty()
     assertTrue("no_subagents" in message, "Got: $message")
     assertTrue("boolean" in message, "Got: $message")
@@ -332,12 +329,12 @@ class ScaffoldPayloadMapPolicyTest {
   @Test
   fun `optionalSpecialistSubagents loud-fails when subagent_specialists is not a list`() {
     val error =
-      assertFailsWith<InvalidScaffoldPayloadError> {
+      assertFailsWith<SkillBillRuntimeException> {
         optionalSpecialistSubagents(
           mapOf("subagent_specialists" to "ui"),
           SKILL_KIND_HORIZONTAL,
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
     val message = error.message.orEmpty()
     assertTrue("subagent_specialists" in message, "Got: $message")
     assertTrue("list of strings" in message, "Got: $message")

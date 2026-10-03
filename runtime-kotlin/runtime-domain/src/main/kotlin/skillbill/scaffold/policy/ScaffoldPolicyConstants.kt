@@ -1,6 +1,7 @@
 package skillbill.scaffold.policy
 
-import skillbill.error.shellcontent.RetiredScaffoldKindError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.retiredScaffoldKindError
 import skillbill.scaffold.model.SkillKind
 import skillbill.scaffold.policy.model.PlatformPackPreset
 
@@ -201,8 +202,8 @@ val PLATFORM_PACK_PRESETS: Map<String, String> =
 internal fun isRetiredPartialScaffoldKindAlias(kind: String): Boolean =
   kind.trim().lowercase() in RETIRED_PARTIAL_SCAFFOLD_KIND_ALIASES
 
-private fun retiredPartialScaffoldKindError(kind: String): RetiredScaffoldKindError =
-  RetiredScaffoldKindError(
+private fun retiredPartialScaffoldKindError(kind: String): SkillBillRuntimeException =
+  retiredScaffoldKindError(
     "Scaffold kind '$kind' is retired for new partial scaffold creation. " +
       "Create a full platform pack with kind '$SKILL_KIND_PLATFORM_PACK', or edit/remove existing " +
       "platform-pack content through normal authoring and removal commands instead of creating " +

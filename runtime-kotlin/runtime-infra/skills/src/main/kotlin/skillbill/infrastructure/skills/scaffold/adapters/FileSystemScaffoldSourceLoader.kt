@@ -1,16 +1,17 @@
 package skillbill.infrastructure.skills.scaffold.adapters
+
+import java.nio.file.Files
+import java.nio.file.InvalidPathException
+import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
+import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack as fsLoadPlatformPack
 import skillbill.infrastructure.skills.scaffold.platformpack.manifest.declaredSkillRelativeDirs
 import skillbill.model.toPath
 import skillbill.ports.scaffold.source.model.ScaffoldPlatformPackLoadRequest
 import skillbill.ports.scaffold.source.model.ScaffoldPlatformPackLoadResult
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.policy.requireStringList
-import java.nio.file.Files
-import java.nio.file.InvalidPathException
-import java.nio.file.Path
-import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack as fsLoadPlatformPack
 
 @Inject
 class FileSystemScaffoldSourceLoader {
@@ -66,7 +67,7 @@ class FileSystemScaffoldSourceLoader {
     try {
       Path.of(skillRelativeDir)
     } catch (error: InvalidPathException) {
-      throw InvalidScaffoldPayloadError(
+      throw invalidScaffoldPayloadError(
         "Scaffold payload field 'consumer_skill_dirs' contains invalid path '$skillRelativeDir': ${error.message}",
         error,
       )
@@ -83,7 +84,7 @@ class FileSystemScaffoldSourceLoader {
     if (declaredSkillDirs.size == 1) {
       return declaredSkillDirs
     }
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload for add-on platform '${pack.slug}' omitted 'consumer_skill_dirs', but the pack has " +
         "no unambiguous default consumer. Provide scripted 'consumer_skill_dirs'. Declared skill directories: " +
         "$declaredSkillDirs.",
@@ -92,17 +93,17 @@ class FileSystemScaffoldSourceLoader {
 }
 
 private fun failConsumerSkillDirsNotRelative(): Nothing =
-  throw InvalidScaffoldPayloadError(
+  throw invalidScaffoldPayloadError(
     "Scaffold payload field 'consumer_skill_dirs' entries must be relative skill directories.",
   )
 
 private fun failConsumerSkillDirsParentSegment(): Nothing =
-  throw InvalidScaffoldPayloadError(
+  throw invalidScaffoldPayloadError(
     "Scaffold payload field 'consumer_skill_dirs' entries must not contain '..' segments.",
   )
 
 private fun failConsumerSkillDirsMissing(skillRelativeDir: String): Nothing =
-  throw InvalidScaffoldPayloadError(
+  throw invalidScaffoldPayloadError(
     "Scaffold payload field 'consumer_skill_dirs' references missing skill directory '$skillRelativeDir'.",
   )
 
@@ -110,7 +111,7 @@ private fun failConsumerSkillDirsNotDeclared(
   pack: PlatformManifest,
   skillRelativeDir: String,
 ): Nothing =
-  throw InvalidScaffoldPayloadError(
+  throw invalidScaffoldPayloadError(
     "Scaffold payload field 'consumer_skill_dirs' references '$skillRelativeDir', but that directory is not " +
       "declared as a skill in platform pack '${pack.slug}'. Declared skill directories: " +
       "${pack.declaredSkillRelativeDirs().sorted()}.",

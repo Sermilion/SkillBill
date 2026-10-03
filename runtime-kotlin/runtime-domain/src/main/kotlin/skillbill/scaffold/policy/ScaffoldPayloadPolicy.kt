@@ -1,6 +1,6 @@
 package skillbill.scaffold.policy
 
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.scaffold.model.CodeReviewBaselineLayer
 import skillbill.scaffold.model.CodeReviewCompositionMode
 import skillbill.scaffold.model.CodeReviewCompositionScope
@@ -39,4 +39,4 @@ fun parseBaselineLayerPayload(
   )
 }
 
-private fun failBaselineLayerPayload(message: String): Nothing = throw InvalidScaffoldPayloadError(message)
+private fun failBaselineLayerPayload(message: String): Nothing = throw invalidScaffoldPayloadError(message)
