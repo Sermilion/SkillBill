@@ -3,6 +3,7 @@ package skillbill.infrastructure.contracts
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION
 import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeBuildReceiptSchemaError
@@ -13,9 +14,9 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaE
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeProjectionMeasurementSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeQuarantineSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeSharedEvidenceProjectionSchemaError
-import skillbill.error.shellcontent.InvalidGoalObservabilityEventSchemaError
+import skillbill.error.shellcontent.invalidGoalObservabilityEventSchemaError
 import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
-import skillbill.error.shellcontent.InvalidGoalProgressEventSchemaError
+import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeHandoffEnvelopeSchemaPaths
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -43,7 +44,7 @@ internal fun featureTaskRuntimeWireArtifactNonObjectError(
   kind: FeatureTaskRuntimeWireArtifactKind,
   sourceLabel: String,
   reason: String,
-): ShellContentContractException =
+): SkillBillRuntimeException =
   when (kind) {
     FeatureTaskRuntimeWireArtifactKind.QUARANTINE_RECORD ->
       InvalidFeatureTaskRuntimeQuarantineSchemaError(sourceLabel = sourceLabel, reason = reason)
@@ -77,13 +78,13 @@ internal fun featureTaskRuntimeWireArtifactNonObjectError(
           ),
       )
     FeatureTaskRuntimeWireArtifactKind.GOAL_PROGRESS_EVENT ->
-      InvalidGoalProgressEventSchemaError(
+      invalidGoalProgressEventSchemaError(
         sourceLabel = sourceLabel,
         fieldPath = "<root>",
         reason = reason,
       )
     FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT ->
-      InvalidGoalObservabilityEventSchemaError(
+      invalidGoalObservabilityEventSchemaError(
         sourceLabel = sourceLabel,
         fieldPath = "<root>",
         reason = reason,

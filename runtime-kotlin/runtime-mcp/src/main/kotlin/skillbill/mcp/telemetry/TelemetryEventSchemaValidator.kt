@@ -12,7 +12,8 @@ import com.networknt.schema.ValidationMessage
 import skillbill.contracts.telemetry.LifecycleSessionCompletion
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
-import skillbill.error.shellcontent.InvalidTelemetryEventSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.invalidTelemetryEventSchemaError
 import skillbill.mcp.shared.McpToolPayloadKeys
 import java.io.IOException
 import java.util.Locale
@@ -46,7 +47,7 @@ internal object TelemetryEventSchemaValidator {
     val instanceLocation = firstError.instanceLocation?.toString().orEmpty()
     val fieldPath = telemetryEventSchemaDottedFieldPath(instanceLocation)
     val reason = formatValidationReason(sorted, instance)
-    throw InvalidTelemetryEventSchemaError(
+    throw invalidTelemetryEventSchemaError(
       fieldPath = fieldPath,
       eventName = resolvedEventName,
       reason = reason,
@@ -56,7 +57,7 @@ internal object TelemetryEventSchemaValidator {
   fun assertIdentity(yamlNode: JsonNode) {
     val loadedId = yamlNode.path("\$id").asText("")
     if (loadedId != EXPECTED_SCHEMA_ID) {
-      throw InvalidTelemetryEventSchemaError(
+      throw invalidTelemetryEventSchemaError(
         fieldPath = "\$id",
         eventName = null,
         reason =
@@ -67,7 +68,7 @@ internal object TelemetryEventSchemaValidator {
     }
     val loadedConst = yamlNode.path("properties").path("contract_version").path("const").asText("")
     if (loadedConst != TELEMETRY_EVENT_CONTRACT_VERSION) {
-      throw InvalidTelemetryEventSchemaError(
+      throw invalidTelemetryEventSchemaError(
         fieldPath = "properties.contract_version.const",
         eventName = null,
         reason =
@@ -125,7 +126,7 @@ internal object TelemetryEventSchemaValidator {
     val reviewPlatform = envelope["review_platform"] as? String
     val detectedStack = envelope["detected_stack"] as? String
     if (platformSlug == reviewPlatform && platformSlug == detectedStack) return
-    throw InvalidTelemetryEventSchemaError(
+    throw invalidTelemetryEventSchemaError(
       fieldPath = "platform_slug",
       eventName = resolvedEventName,
       reason =
@@ -144,7 +145,7 @@ internal object TelemetryEventSchemaValidator {
     if (envelope[LifecycleTelemetryPayloadKeys.COMPLETION] == LifecycleSessionCompletion.RECONCILER_STALE.wireValue) {
       return
     }
-    throw InvalidTelemetryEventSchemaError(
+    throw invalidTelemetryEventSchemaError(
       fieldPath = LifecycleTelemetryPayloadKeys.FINAL_FAILURE_COUNT,
       eventName = resolvedEventName,
       reason =
@@ -180,8 +181,8 @@ private fun compileSchema(yamlNode: JsonNode): JsonSchema =
     throw schemaLoadFailure(error)
   }
 
-private fun schemaLoadFailure(error: IOException): InvalidTelemetryEventSchemaError =
-  InvalidTelemetryEventSchemaError(
+private fun schemaLoadFailure(error: IOException): SkillBillRuntimeException =
+  invalidTelemetryEventSchemaError(
     fieldPath = "",
     eventName = null,
     reason = "Canonical telemetry-event schema document failed to load: ${error.message.orEmpty()}",
@@ -193,7 +194,7 @@ private fun readSchemaText(): String {
     .getResourceAsStream(SCHEMA_CLASSPATH_RESOURCE)
     ?.use { return it.readBytes().toString(Charsets.UTF_8) }
 
-  throw InvalidTelemetryEventSchemaError(
+  throw invalidTelemetryEventSchemaError(
     fieldPath = "",
     eventName = null,
     reason =

@@ -14,7 +14,9 @@ import skillbill.engine.featuretask.model.subtask.RemediationReconciliationBlock
 import skillbill.engine.featuretask.model.subtask.RemediationReconciliationCoherent
 import skillbill.engine.featuretask.model.subtask.RemediationReconciliationHeal
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeCheckpointIdentityVersionError
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -80,7 +82,8 @@ class FeatureTaskRuntimeRemediationBaseReconciler(
           "Checkpoint identity semantics are unsupported. Retain the workflow and its checkpoint evidence; " +
             "inspect status with a compatible runtime or a separately reviewed semantic mapping before recovery.",
         )
-      } catch (_: InvalidGoalSubtaskReviewStateSchemaError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code == InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA)
         RemediationSnapshotRead.Absent
       }
     }

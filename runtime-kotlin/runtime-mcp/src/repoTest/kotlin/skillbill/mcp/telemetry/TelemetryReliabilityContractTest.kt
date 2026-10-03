@@ -2,7 +2,15 @@ package skillbill.mcp.telemetry
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
-import skillbill.error.shellcontent.InvalidTelemetryEventSchemaError
+import java.nio.file.Files
+import java.sql.Connection
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.infrastructure.sqlite.ageTelemetryReliabilitySession
 import skillbill.infrastructure.sqlite.telemetryReliabilityEmittedEnvelope
@@ -20,13 +28,6 @@ import skillbill.telemetry.model.GoalSubtaskFinishedRecord
 import skillbill.telemetry.model.QualityCheckFinishedRecord
 import skillbill.telemetry.model.QualityCheckStartedRecord
 import skillbill.testing.repoRootFromTest
-import java.nio.file.Files
-import java.sql.Connection
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 
 class TelemetryReliabilityContractTest {
   private val schemaNode: JsonNode by lazy {
@@ -109,19 +110,19 @@ class TelemetryReliabilityContractTest {
 
   @Test
   fun `schema rejects invalid status stop_reason and blank blocked reasons`() {
-    assertFailsWith<InvalidTelemetryEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       TelemetryEventSchemaValidator.validate(
         envelope = goalSubtaskFinishedEnvelope("status" to "finished"),
         eventName = "goal_subtask_finished",
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
 
-    assertFailsWith<InvalidTelemetryEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       TelemetryEventSchemaValidator.validate(
         envelope = goalFinishedEnvelope("stop_reason" to "NOT_A_STOP_REASON"),
         eventName = "goal_finished",
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
 
     assertFailsWith<AssertionError> {
       assertBlockedReason(goalSubtaskFinishedEnvelope("status" to "blocked", "blocked_reason" to "   "))

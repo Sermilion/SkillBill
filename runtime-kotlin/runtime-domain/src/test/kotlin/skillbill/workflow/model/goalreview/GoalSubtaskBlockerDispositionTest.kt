@@ -1,13 +1,14 @@
 package skillbill.workflow.model.goalreview
 
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
-import skillbill.review.context.model.execution.CodeReviewExecutionMode
-import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 
 class GoalSubtaskBlockerDispositionTest {
   private fun reservedPassOne(): GoalSubtaskReviewState =
@@ -81,12 +82,12 @@ class GoalSubtaskBlockerDispositionTest {
     assertFailsWith<IllegalArgumentException> {
       GoalSubtaskBlockerDisposition("F-001", GoalSubtaskReviewDispositionFixtures.RESOLVED, emptyList())
     }
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskBlockerDisposition.fromArtifactMap(
         mapOf("finding_id" to "F-001", "verdict" to "resolved"),
         "blocker_dispositions[0]",
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -125,9 +126,9 @@ class GoalSubtaskBlockerDispositionTest {
       setOf("retry_fix", "accept_and_advance", "abandon_subtask"),
       GoalSubtaskOperatorDecision.entries.map { it.wireValue }.toSet(),
     )
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskOperatorDecision.fromWire("skip_review")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
   }
 
   @Test

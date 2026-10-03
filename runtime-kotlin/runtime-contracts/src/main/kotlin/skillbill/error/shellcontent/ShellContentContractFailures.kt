@@ -14,5 +14,6 @@ fun Throwable.isShellContentContractFailure(): Boolean {
     failureCode is ReviewContextFailureCode ||
     failureCode is AgentAddonFailureCode ||
     failureCode is GovernedReviewFailureCode ||
-    failureCode is GoalTelemetryRowFailureCode
+    failureCode is GoalTelemetryRowFailureCode ||
+    failureCode is InstallFailureCode
 }

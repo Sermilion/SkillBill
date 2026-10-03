@@ -1,7 +1,7 @@
 package skillbill.goalrunner
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidGoalObservabilityEventSchemaError
+import skillbill.error.shellcontent.invalidGoalObservabilityEventSchemaError
 import skillbill.goalrunner.model.GoalObservabilityProgressInput
 import skillbill.goalrunner.model.GoalObservabilityRuntimeEventInput
 import skillbill.workflow.engine.model.GOAL_OBSERVABILITY_LATEST_EVENT_ARTIFACT_KEY
@@ -69,7 +69,7 @@ object GoalObservabilityArtifacts {
     val subtaskId =
       continuation?.get(SharedPayloadKeys.SUBTASK_ID)?.let { value ->
         value.asExactIntOrNull()
-          ?: throw InvalidGoalObservabilityEventSchemaError(
+          ?: throw invalidGoalObservabilityEventSchemaError(
             "goal observability progress input",
             SharedPayloadKeys.SUBTASK_ID,
             "must be an integer.",
@@ -116,7 +116,7 @@ object GoalObservabilityArtifacts {
   private fun requireIntegerChildSequence(progressEvent: Map<*, *>) {
     val sequence = progressEvent["sequence"] ?: return
     sequence.asExactIntOrNull()
-      ?: throw InvalidGoalObservabilityEventSchemaError(
+      ?: throw invalidGoalObservabilityEventSchemaError(
         "goal observability progress input",
         "sequence",
         "must be an integer.",

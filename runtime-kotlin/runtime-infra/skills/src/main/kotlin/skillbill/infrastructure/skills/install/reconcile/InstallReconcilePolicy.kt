@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.install.reconcile
 
-import skillbill.error.shellcontent.ReconciliationConflictError
+import skillbill.error.shellcontent.reconciliationConflictError
 import skillbill.infrastructure.contracts.newSha256Digest
 import skillbill.infrastructure.skills.agentaddon.discoverAgentAddons
 import skillbill.infrastructure.skills.install.plan.discoverPlatformManifests
@@ -108,7 +108,7 @@ private fun classifySkill(
   baselineHash: String?,
 ): SkillReconciliationOutcome =
   when {
-    upstreamHash == null && localHash == null -> throw ReconciliationConflictError(
+    upstreamHash == null && localHash == null -> throw reconciliationConflictError(
       skillRelativePath = skillRelativePath,
       reason = "skill is present in neither the upstream nor the local source tree.",
     )
@@ -137,7 +137,7 @@ private fun classifySkill(
         localHash = localHash,
         baselineHash = baselineHash,
       )
-    else -> throw ReconciliationConflictError(
+    else -> throw reconciliationConflictError(
       skillRelativePath = skillRelativePath,
       reason = "skill reconciliation reached an unreachable state.",
     )

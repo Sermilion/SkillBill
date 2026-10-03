@@ -2,18 +2,19 @@ package skillbill.mcp.telemetry
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
-import skillbill.application.decomposition.branchName
-import skillbill.error.shellcontent.InvalidTelemetryEventSchemaError
-import skillbill.goalrunner.model.GoalRunnerStopReason
-import skillbill.mcp.core.McpToolRegistry
-import skillbill.review.model.ReviewStageDegradationReason
-import skillbill.testing.repoRootFromTest
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import skillbill.application.decomposition.branchName
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.mcp.core.McpToolRegistry
+import skillbill.review.model.ReviewStageDegradationReason
+import skillbill.testing.repoRootFromTest
 
 class GoalTelemetryEmissionEventParityTest {
   private val schemaNode: JsonNode by lazy {
@@ -365,26 +366,26 @@ class GoalTelemetryEmissionEventParityTest {
 
   @Test
   fun `review_finished schema rejects unnormalized label fields`() {
-    assertFailsWith<InvalidTelemetryEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       TelemetryEventSchemaValidator.validate(
         envelope = validReviewFinishedEnvelope("routed_skill" to "skill-bill:bill-kotlin-code-review"),
         eventName = "skillbill_review_finished",
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
 
-    assertFailsWith<InvalidTelemetryEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       TelemetryEventSchemaValidator.validate(
         envelope = validReviewFinishedEnvelope("review_platform" to "Kotlin Gradle JVM"),
         eventName = "skillbill_review_finished",
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
 
-    assertFailsWith<InvalidTelemetryEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       TelemetryEventSchemaValidator.validate(
         envelope = validReviewFinishedEnvelope("detected_stack" to "kotlin"),
         eventName = "skillbill_review_finished",
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA, it.code) }
   }
 
   @Test

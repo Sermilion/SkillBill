@@ -1,9 +1,14 @@
 package skillbill.infrastructure.contracts.workflow.decomposition
 
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
-import skillbill.error.shellcontent.InvalidInstallPlanSchemaError
 import skillbill.infrastructure.contracts.install.InstallPlanSchemaValidator
 import skillbill.install.model.InstallPlanWireMap
 import skillbill.ports.install.InstallPlanWireValidator
@@ -19,9 +24,6 @@ import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import skillbill.workflow.decomposition.model.DecompositionStackBranch
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.requireAccepted
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertFailsWith
 
 class SchemaValidatorPortLoudFailTest {
   private val installValidator: InstallPlanWireValidator = InstallPlanSchemaValidator()
@@ -36,9 +38,9 @@ class SchemaValidatorPortLoudFailTest {
     mcpRegistration["runtime_mcp_bin"] = ""
 
     val error =
-      assertFailsWith<InvalidInstallPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         installValidator.validate(InstallPlanWireMap.from(wireMap))
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
     assertContains(error.message.orEmpty(), "mcp_registration.runtime_mcp_bin")
   }
 

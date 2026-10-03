@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.validation
 
+import java.nio.file.Path
 import skillbill.config.model.RepoLocalConfig
 import skillbill.config.model.ValidationGateRepoConfig
 import skillbill.contracts.JsonCodec
@@ -9,7 +10,8 @@ import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLa
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleRequest
 import skillbill.engine.featuretask.validation.model.ValidationGateProgressStore
-import skillbill.error.shellcontent.ContractVersionMismatchError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
@@ -35,7 +37,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunIn
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
-import java.nio.file.Path
 
 internal val validationGateTestRepoRoot: Path = Path.of(".").toAbsolutePath().normalize()
 
@@ -59,7 +60,7 @@ internal val validationGateTestDeclaration: ValidationGateDeclaration =
 
 internal fun outOfContractResolver(): ValidationGateResolver =
   ValidationGateResolver {
-    throw ContractVersionMismatchError(
+    throw SkillBillRuntimeException(InstallFailureCode.CONTRACT_VERSION_MISMATCH,
       "Platform pack 'fallback': declares contract_version '0.1' but the shell expects '1.8'.",
     )
   }

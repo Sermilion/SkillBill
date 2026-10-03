@@ -8,7 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.ContractVersionMismatchError
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
@@ -211,7 +211,7 @@ class PlatformPackSchemaViolationsTest {
   }
 
   @Test
-  fun `contract_version mismatch surfaces ContractVersionMismatchError`() {
+  fun `contract_version mismatch surfaces contractVersionMismatchError`() {
     val manifest =
       """
       platform: scenarioslug
@@ -221,9 +221,9 @@ class PlatformPackSchemaViolationsTest {
       declared_code_review_areas: []
       """.trimIndent()
     val error =
-      assertFailsWith<ContractVersionMismatchError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackThroughContractGate("scenarioslug", manifest)
-      }
+      }.also { assertEquals(InstallFailureCode.CONTRACT_VERSION_MISMATCH, it.code) }
     val message = error.message.orEmpty()
 
     assertContains(message, "contract_version")
@@ -231,7 +231,7 @@ class PlatformPackSchemaViolationsTest {
   }
 
   @Test
-  fun `contract_version mismatch surfaces ContractVersionMismatchError from loadPlatformManifest`() {
+  fun `contract_version mismatch surfaces contractVersionMismatchError from loadPlatformManifest`() {
     val manifest =
       """
       platform: scenarioslug
@@ -241,9 +241,9 @@ class PlatformPackSchemaViolationsTest {
       declared_code_review_areas: []
       """.trimIndent()
     val error =
-      assertFailsWith<ContractVersionMismatchError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
-      }
+      }.also { assertEquals(InstallFailureCode.CONTRACT_VERSION_MISMATCH, it.code) }
     val message = error.message.orEmpty()
     assertContains(message, "contract_version")
     assertContains(message, "9.99")
@@ -260,9 +260,9 @@ class PlatformPackSchemaViolationsTest {
       declared_code_review_areas: []
       """.trimIndent()
     val error =
-      assertFailsWith<ContractVersionMismatchError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPackFromInMemory("scenarioslug", manifest)
-      }
+      }.also { assertEquals(InstallFailureCode.CONTRACT_VERSION_MISMATCH, it.code) }
     val message = error.message.orEmpty()
     assertContains(message, "contract_version")
     assertContains(message, "1.1")

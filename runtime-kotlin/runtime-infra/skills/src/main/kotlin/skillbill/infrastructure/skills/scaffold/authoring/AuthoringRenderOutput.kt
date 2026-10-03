@@ -1,7 +1,11 @@
 package skillbill.infrastructure.skills.scaffold.authoring
 
+import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Path
 import skillbill.agentaddon.model.AgentAddonConsumer
-import skillbill.error.shellcontent.ContractVersionMismatchError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.agentaddon.AgentAddonDeliveryResolver
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackDiscoveryContext
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
@@ -10,9 +14,6 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_C
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.PointerSpec
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Path
 
 data class AuthoringRenderBlock(
   val header: String,
@@ -138,7 +139,7 @@ private fun targetPlatformPackRoot(target: AuthoringTarget): Path? =
 
 private fun requireMatchingRenderContractVersion(pack: PlatformManifest) {
   if (pack.contractVersion != SHELL_CONTRACT_VERSION) {
-    throw ContractVersionMismatchError(
+    throw SkillBillRuntimeException(InstallFailureCode.CONTRACT_VERSION_MISMATCH,
       "Platform pack '${pack.slug}': declares contract_version '${pack.contractVersion}' " +
         "but the shell expects '$SHELL_CONTRACT_VERSION'.",
     )

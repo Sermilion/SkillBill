@@ -1,79 +1,184 @@
 package skillbill.error.shellcontent
 
+import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
 
-class InvalidInstallPlanSchemaError(
-  val fieldPath: String,
-  val reason: String,
+enum class InstallFailureCode : RuntimeFailureCode {
+  INVALID_INSTALL_PLAN_SCHEMA,
+  INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA,
+  INVALID_TELEMETRY_EVENT_SCHEMA,
+  INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA,
+  INVALID_GOAL_PROGRESS_EVENT_SCHEMA,
+  INVALID_IDE_STATUS_SCHEMA,
+  INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA,
+  MISSING_INSTALL_SELECTION_RECORD,
+  UNREADABLE_INSTALL_SELECTION_RECORD,
+  MALFORMED_INSTALL_SELECTION_RECORD,
+  UNREADABLE_BASELINE_MANIFEST,
+  RECONCILIATION_CONFLICT,
+  MALFORMED_REPO_LOCAL_CONFIG,
+  REPO_LOCAL_CONFIG_FAILURE,
+  CONTRACT_VERSION_MISMATCH,
+}
+
+fun invalidInstallPlanSchemaError(
+  fieldPath: String,
+  reason: String,
   cause: Throwable? = null,
-) : ShellContentContractException(
-    "Install plan fails schema validation at '${fieldPath.ifBlank { "<root>" }}': $reason",
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA,
+  "Install plan fails schema validation at '${fieldPath.ifBlank { "<root>" }}': $reason",
+  cause,
+)
+
+fun invalidNativeAgentCompositionSchemaError(
+  sourceLabel: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA,
+  "Native agent composition source '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
+  cause,
+)
+
+fun invalidTelemetryEventSchemaError(
+  fieldPath: String,
+  eventName: String?,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.INVALID_TELEMETRY_EVENT_SCHEMA,
+  "Telemetry event '${eventName ?: "<unknown>"}' fails schema validation at " +
+    "'${fieldPath.ifBlank { "<root>" }}': $reason",
+  cause,
+)
+
+fun invalidGoalObservabilityEventSchemaError(
+  sourceLabel: String,
+  fieldPath: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA,
+  "Goal observability event '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation at " +
+    "'${fieldPath.ifBlank { "<root>" }}': $reason",
+  cause,
+)
+
+fun invalidGoalProgressEventSchemaError(
+  sourceLabel: String,
+  fieldPath: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA,
+  "Goal progress event '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation at " +
+    "'${fieldPath.ifBlank { "<root>" }}': $reason",
+  cause,
+)
+
+fun invalidIdeStatusSchemaError(
+  sourceLabel: String,
+  fieldPath: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.INVALID_IDE_STATUS_SCHEMA,
+  "IDE status '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation at " +
+    "'${fieldPath.ifBlank { "<root>" }}': $reason",
+  cause,
+)
+
+fun invalidGoalSubtaskReviewStateSchemaError(
+  sourceLabel: String,
+  fieldPath: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA,
+  "Goal subtask review state '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation at " +
+    "'${fieldPath.ifBlank { "<root>" }}': $reason",
+  cause,
+)
+
+fun missingInstallSelectionRecordError(path: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    InstallFailureCode.MISSING_INSTALL_SELECTION_RECORD,
+    "Install selection record is missing at '${path.ifBlank { "<unknown>" }}'.",
     cause,
   )
 
-class InvalidNativeAgentCompositionSchemaError(
-  val sourceLabel: String,
-  val reason: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(
-    "Native agent composition source '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
+fun unreadableInstallSelectionRecordError(path: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    InstallFailureCode.UNREADABLE_INSTALL_SELECTION_RECORD,
+    "Install selection record at '${path.ifBlank { "<unknown>" }}' cannot be read.",
     cause,
   )
 
-class InvalidTelemetryEventSchemaError(
-  val fieldPath: String,
-  val eventName: String?,
-  val reason: String,
+fun malformedInstallSelectionRecordError(
+  path: String,
+  reason: String,
   cause: Throwable? = null,
-) : ShellContentContractException(
-    "Telemetry event '${eventName ?: "<unknown>"}' fails schema validation at " +
-      "'${fieldPath.ifBlank { "<root>" }}': $reason",
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.MALFORMED_INSTALL_SELECTION_RECORD,
+  "Install selection record at '${path.ifBlank { "<unknown>" }}' is malformed: $reason",
+  cause,
+)
+
+fun unreadableBaselineManifestError(
+  path: String,
+  reason: String? = null,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.UNREADABLE_BASELINE_MANIFEST,
+  "Baseline manifest at '${path.ifBlank { "<unknown>" }}' cannot be read" +
+    (reason?.let { ": $it." } ?: "."),
+  cause,
+)
+
+fun reconciliationConflictError(
+  skillRelativePath: String,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.RECONCILIATION_CONFLICT,
+  "Reconciliation failed for skill '${skillRelativePath.ifBlank { "<unknown>" }}': $reason",
+  cause,
+)
+
+fun unreadableRepoLocalConfigError(path: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    InstallFailureCode.REPO_LOCAL_CONFIG_FAILURE,
+    "Repo-local config at '${path.ifBlank { "<unknown>" }}' cannot be read.",
     cause,
   )
 
-class InvalidGoalObservabilityEventSchemaError(
-  val sourceLabel: String,
-  val fieldPath: String,
-  val reason: String,
+fun malformedRepoLocalConfigError(
+  path: String,
+  key: String,
+  value: String,
+  reason: String,
   cause: Throwable? = null,
-) : ShellContentContractException(
-    "Goal observability event '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation at " +
-      "'${fieldPath.ifBlank { "<root>" }}': $reason",
-    cause,
-  )
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.MALFORMED_REPO_LOCAL_CONFIG,
+  "Repo-local config at '${path.ifBlank { "<unknown>" }}' is malformed: " +
+    "key '${key.ifBlank { "<root>" }}' value '$value' $reason",
+  cause,
+)
 
-class InvalidGoalProgressEventSchemaError(
-  val sourceLabel: String,
-  val fieldPath: String,
-  val reason: String,
+fun malformedMachineConfigError(
+  path: String,
+  key: String,
+  value: String,
+  reason: String,
   cause: Throwable? = null,
-) : ShellContentContractException(
-    "Goal progress event '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation at " +
-      "'${fieldPath.ifBlank { "<root>" }}': $reason",
-    cause,
-  )
-
-class InvalidIdeStatusSchemaError(
-  val sourceLabel: String,
-  val fieldPath: String,
-  val reason: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(
-    "IDE status '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation at " +
-      "'${fieldPath.ifBlank { "<root>" }}': $reason",
-    cause,
-  )
-
-class InvalidGoalSubtaskReviewStateSchemaError(
-  val sourceLabel: String,
-  val fieldPath: String,
-  val reason: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(
-    "Goal subtask review state '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation at " +
-      "'${fieldPath.ifBlank { "<root>" }}': $reason",
-    cause,
-  )
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.REPO_LOCAL_CONFIG_FAILURE,
+  "Machine config at '${path.ifBlank { "<unknown>" }}' is malformed: " +
+    "key '${key.ifBlank { "<root>" }}' value '$value' $reason",
+  cause,
+)
 
 class InvalidGoalPlanningPreparationSchemaError(
   val sourceLabel: String,
@@ -95,84 +200,3 @@ class IncompatibleGoalPlanningPreparationRecoveryError(
     "Goal planning preparation '$workflowId' subtask $subtaskId cannot be recovered: $reason",
     cause,
   )
-
-class MissingInstallSelectionRecordError(
-  val path: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(
-    "Install selection record is missing at '${path.ifBlank { "<unknown>" }}'.",
-    cause,
-  )
-
-class UnreadableInstallSelectionRecordError(
-  val path: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(
-    "Install selection record at '${path.ifBlank { "<unknown>" }}' cannot be read.",
-    cause,
-  )
-
-class MalformedInstallSelectionRecordError(
-  val path: String,
-  val reason: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(
-    "Install selection record at '${path.ifBlank { "<unknown>" }}' is malformed: $reason",
-    cause,
-  )
-
-class UnreadableBaselineManifestError(
-  val path: String,
-  val reason: String? = null,
-  cause: Throwable? = null,
-) : ShellContentContractException(
-    "Baseline manifest at '${path.ifBlank { "<unknown>" }}' cannot be read" +
-      (reason?.let { ": $it." } ?: "."),
-    cause,
-  )
-
-class ReconciliationConflictError(
-  val skillRelativePath: String,
-  val reason: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(
-    "Reconciliation failed for skill '${skillRelativePath.ifBlank { "<unknown>" }}': $reason",
-    cause,
-  )
-
-class UnreadableRepoLocalConfigError(
-  val path: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(
-    "Repo-local config at '${path.ifBlank { "<unknown>" }}' cannot be read.",
-    cause,
-  )
-
-class MalformedRepoLocalConfigError(
-  val path: String,
-  val key: String,
-  val value: String,
-  val reason: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(
-    "Repo-local config at '${path.ifBlank { "<unknown>" }}' is malformed: " +
-      "key '${key.ifBlank { "<root>" }}' value '$value' $reason",
-    cause,
-  )
-
-class MalformedMachineConfigError(
-  val path: String,
-  val key: String,
-  val value: String,
-  val reason: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(
-    "Machine config at '${path.ifBlank { "<unknown>" }}' is malformed: " +
-      "key '${key.ifBlank { "<root>" }}' value '$value' $reason",
-    cause,
-  )
-
-class ContractVersionMismatchError(
-  message: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(message, cause)

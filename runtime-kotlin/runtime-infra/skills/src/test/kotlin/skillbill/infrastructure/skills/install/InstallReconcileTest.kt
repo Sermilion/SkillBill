@@ -1,16 +1,5 @@
 package skillbill.infrastructure.skills.install
 
-import skillbill.error.shellcontent.ContractVersionMismatchError
-import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
-import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
-import skillbill.infrastructure.skills.install.reconcile.skillRelativePath
-import skillbill.infrastructure.skills.scaffold.platformpack.manifest.platformPackSchemaLog
-import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
-import skillbill.install.model.BaselineManifest
-import skillbill.install.model.ReconciliationPlan
-import skillbill.install.model.SkillReconciliationOutcome
-import skillbill.ports.install.baseline.model.ReadBaselineManifestRequest
-import skillbill.ports.install.baseline.model.WriteBaselineManifestRequest
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.logging.Handler
@@ -22,6 +11,18 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.infrastructure.skills.install.reconcile.ReconcileSourceRoots
+import skillbill.infrastructure.skills.install.reconcile.computeReconciliationPlan
+import skillbill.infrastructure.skills.install.reconcile.skillRelativePath
+import skillbill.infrastructure.skills.scaffold.platformpack.manifest.platformPackSchemaLog
+import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
+import skillbill.install.model.BaselineManifest
+import skillbill.install.model.ReconciliationPlan
+import skillbill.install.model.SkillReconciliationOutcome
+import skillbill.ports.install.baseline.model.ReadBaselineManifestRequest
+import skillbill.ports.install.baseline.model.WriteBaselineManifestRequest
 
 private const val STALE_CONTRACT_VERSION: String = "0.9"
 
@@ -235,9 +236,9 @@ class InstallReconcileTest : InstallApplyTestSupport() {
     seedPlatformPack(local, "generic")
     stalePackContractVersion(upstream)
 
-    assertFailsWith<ContractVersionMismatchError> {
+    assertFailsWith<SkillBillRuntimeException> {
       planWith(upstream, local, home, BaselineManifest.empty())
-    }
+    }.also { assertEquals(InstallFailureCode.CONTRACT_VERSION_MISMATCH, it.code) }
   }
 
   @Test

@@ -11,7 +11,7 @@ import skillbill.config.model.RepoLocalConfigResolution
 import skillbill.config.model.SpecType
 import skillbill.config.model.parseCompactionSettings
 import skillbill.config.model.parseExecutionMatrix
-import skillbill.error.shellcontent.MalformedMachineConfigError
+import skillbill.error.shellcontent.malformedMachineConfigError
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.telemetry.transport.TelemetryConfigStore
@@ -28,7 +28,7 @@ class ConfigResolutionService(
       try {
         machineConfigStore.read()?.payload
       } catch (error: IllegalArgumentException) {
-        throw MalformedMachineConfigError(
+        throw malformedMachineConfigError(
           path = configPath.toString(),
           key = "",
           value = "<document>",
@@ -39,7 +39,7 @@ class ConfigResolutionService(
     if (!payload.containsKey(EXECUTION_MATRIX_KEY)) return null
     return when (val parsed = parseExecutionMatrix(payload[EXECUTION_MATRIX_KEY])) {
       is ExecutionMatrixParse.Valid -> parsed.matrix
-      is ExecutionMatrixParse.Invalid -> throw MalformedMachineConfigError(
+      is ExecutionMatrixParse.Invalid -> throw malformedMachineConfigError(
         path = configPath.toString(),
         key = parsed.keyPath,
         value = parsed.value,
@@ -54,7 +54,7 @@ class ConfigResolutionService(
       try {
         machineConfigStore.read()?.payload
       } catch (error: IllegalArgumentException) {
-        throw MalformedMachineConfigError(
+        throw malformedMachineConfigError(
           path = configPath.toString(),
           key = "",
           value = "<document>",
@@ -65,7 +65,7 @@ class ConfigResolutionService(
     if (!payload.containsKey(COMPACTION_KEY)) return CompactionSettings.DEFAULT
     return when (val parsed = parseCompactionSettings(payload[COMPACTION_KEY])) {
       is CompactionSettingsParse.Valid -> parsed.settings
-      is CompactionSettingsParse.Invalid -> throw MalformedMachineConfigError(
+      is CompactionSettingsParse.Invalid -> throw malformedMachineConfigError(
         path = configPath.toString(),
         key = parsed.keyPath,
         value = parsed.value,

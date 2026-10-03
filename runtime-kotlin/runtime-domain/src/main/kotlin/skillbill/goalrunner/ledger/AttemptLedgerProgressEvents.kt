@@ -1,7 +1,7 @@
 package skillbill.goalrunner.ledger
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidGoalProgressEventSchemaError
+import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
 import skillbill.goalrunner.model.GoalObservabilityProgressEvent
 import skillbill.goalrunner.model.GoalRunnerProgressEvent
 import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
@@ -28,7 +28,7 @@ fun Map<*, *>.toGoalRunnerProgressEventOrNull(): GoalRunnerProgressEvent? {
 private fun Map<*, *>.requiredLegacyProgressInt(key: String): Int {
   val value = this[key] ?: return 0
   return value.asExactIntOrNull()
-    ?: throw InvalidGoalProgressEventSchemaError(
+    ?: throw invalidGoalProgressEventSchemaError(
       "progress_event",
       key,
       "must be an integer.",

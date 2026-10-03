@@ -1,10 +1,12 @@
 package skillbill.infrastructure.skills.nativeagent
 
-import skillbill.error.shellcontent.InvalidNativeAgentCompositionSchemaError
-import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionSchemaValidator
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionSchemaValidator
 
 class NativeAgentCompositionSchemaViolationsTest {
   private val validBundleYaml: String =
@@ -30,10 +32,10 @@ class NativeAgentCompositionSchemaViolationsTest {
       """.trimIndent()
 
     val error =
-      assertFailsWith<InvalidNativeAgentCompositionSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         NativeAgentCompositionSchemaValidator.validate(yaml, "missing-name")
-      }
-    assertContains(error.reason, "name")
+      }.also { assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, it.code) }
+    assertContains(error.message.orEmpty(), "name")
   }
 
   @Test
@@ -47,10 +49,10 @@ class NativeAgentCompositionSchemaViolationsTest {
       """.trimIndent()
 
     val error =
-      assertFailsWith<InvalidNativeAgentCompositionSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         NativeAgentCompositionSchemaValidator.validate(yaml, "bogus-compose")
-      }
-    assertContains(error.reason, "compose")
+      }.also { assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, it.code) }
+    assertContains(error.message.orEmpty(), "compose")
   }
 
   @Test
@@ -65,10 +67,10 @@ class NativeAgentCompositionSchemaViolationsTest {
       """.trimIndent()
 
     val error =
-      assertFailsWith<InvalidNativeAgentCompositionSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         NativeAgentCompositionSchemaValidator.validate(yaml, "unknown-top-level")
-      }
-    assertContains(error.reason, "bogus_extra")
+      }.also { assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, it.code) }
+    assertContains(error.message.orEmpty(), "bogus_extra")
   }
 
   @Test
@@ -83,10 +85,10 @@ class NativeAgentCompositionSchemaViolationsTest {
       """.trimIndent()
 
     val error =
-      assertFailsWith<InvalidNativeAgentCompositionSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         NativeAgentCompositionSchemaValidator.validate(yaml, "wrong-contract-version")
-      }
-    assertContains(error.reason, "contract_version")
+      }.also { assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, it.code) }
+    assertContains(error.message.orEmpty(), "contract_version")
   }
 
   @Test
@@ -101,9 +103,9 @@ class NativeAgentCompositionSchemaViolationsTest {
       """.trimIndent()
 
     val error =
-      assertFailsWith<InvalidNativeAgentCompositionSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         NativeAgentCompositionSchemaValidator.validate(yaml, "malformed-body")
-      }
-    assertContains(error.reason, "body")
+      }.also { assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, it.code) }
+    assertContains(error.message.orEmpty(), "body")
   }
 }

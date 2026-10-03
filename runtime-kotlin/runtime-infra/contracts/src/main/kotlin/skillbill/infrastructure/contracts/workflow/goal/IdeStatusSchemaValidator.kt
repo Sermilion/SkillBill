@@ -7,7 +7,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonPayloadContract
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.status.IDE_STATUS_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidIdeStatusSchemaError
+import skillbill.error.shellcontent.invalidIdeStatusSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.IdeStatusSchemaPaths
@@ -55,7 +55,7 @@ class IdeStatusSchemaValidator : IdeStatusValidator {
     if (errors.isEmpty()) return
     ideStatusLog.log(Level.WARNING, buildSchemaDriftLog(sourceLabel, errors, instance))
     val sortedErrors = errors.sortedWith(violationOrdering)
-    throw InvalidIdeStatusSchemaError(
+    throw invalidIdeStatusSchemaError(
       sourceLabel = sourceLabel,
       fieldPath =
         goalObservabilityDottedFieldPath(
@@ -238,7 +238,7 @@ private fun ideStatusSchema(): JsonSchema =
       classLoader = IdeStatusSchemaValidator::class.java.classLoader,
       classpathResource = IDE_STATUS_SCHEMA_CLASSPATH_RESOURCE,
       missingResource = {
-        InvalidIdeStatusSchemaError(
+        invalidIdeStatusSchemaError(
           sourceLabel = IDE_STATUS_SCHEMA_CLASSPATH_RESOURCE,
           fieldPath = "",
           reason =
@@ -247,7 +247,7 @@ private fun ideStatusSchema(): JsonSchema =
         )
       },
       processingFailure = { cause ->
-        InvalidIdeStatusSchemaError(
+        invalidIdeStatusSchemaError(
           sourceLabel = IDE_STATUS_SCHEMA_CLASSPATH_RESOURCE,
           fieldPath = "",
           reason = cause.message ?: cause::class.simpleName.orEmpty(),
@@ -266,7 +266,7 @@ private fun ideStatusSchema(): JsonSchema =
       expectedSchemaId = IdeStatusSchemaPaths.EXPECTED_SCHEMA_ID,
       expectedContractVersion = IDE_STATUS_CONTRACT_VERSION,
       identityFailure = { reason ->
-        InvalidIdeStatusSchemaError(
+        invalidIdeStatusSchemaError(
           sourceLabel = IDE_STATUS_SCHEMA_CLASSPATH_RESOURCE,
           fieldPath = "<schema>",
           reason = reason,

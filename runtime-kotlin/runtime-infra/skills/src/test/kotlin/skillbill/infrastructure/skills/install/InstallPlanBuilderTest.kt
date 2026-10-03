@@ -10,8 +10,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.ContractVersionMismatchError
-import skillbill.error.shellcontent.InvalidInstallPlanSchemaError
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.install.staging.applicablePointers
 import skillbill.infrastructure.skills.install.staging.authoredFilesFor
@@ -324,7 +323,7 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
     )
 
     val versionError =
-      assertFailsWith<ContractVersionMismatchError> {
+      assertFailsWith<SkillBillRuntimeException> {
         planInstallForTest(
           badVersion.request(
             platformPackSelection =
@@ -334,7 +333,7 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
               ),
           ),
         )
-      }
+      }.also { assertEquals(InstallFailureCode.CONTRACT_VERSION_MISMATCH, it.code) }
     assertContains(versionError.message.orEmpty(), "contract_version '9.9'")
 
     val missingContent = setupPlanFixture()
@@ -658,7 +657,7 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
     val fixture = setupPlanFixture()
 
     val error =
-      assertFailsWith<InvalidInstallPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         planInstallForTest(
           fixture.request().copy(
             mcpRegistrationChoice =
@@ -668,7 +667,7 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
               ),
           ),
         )
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "mcp_registration.runtime_mcp_bin")
   }
