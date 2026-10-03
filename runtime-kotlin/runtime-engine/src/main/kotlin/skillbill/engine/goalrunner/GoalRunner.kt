@@ -50,6 +50,7 @@ class GoalRunner(
     repoRoot: Path,
   ): String {
     val trimmed = intake.trim()
+    intakePreparation.issueKeyForExistingSpec(trimmed, repoRoot)?.let { return it }
     if (trimmed.isNotBlank() && trimmed.none(Char::isWhitespace) && !trimmed.contains('/')) {
       manifestStore.readByIssueKeyIfPresent(trimmed, repoRoot)?.let { return it.manifest.issueKey }
     }

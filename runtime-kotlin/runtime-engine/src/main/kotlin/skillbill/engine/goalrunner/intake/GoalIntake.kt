@@ -20,6 +20,7 @@ internal data class GoalIntake(val issueKey: String, val requirements: String) {
           first.contains(".feature-specs/") ->
             first.substringAfter(".feature-specs/").substringBefore('/')
               .let { issueAndFeature(it).first }.takeIf(ISSUE_KEY::matches)
+          !first.contains('/') -> issueAndFeature(first).first.takeIf(ISSUE_KEY::matches)
           else -> null
         } ?: "LOCAL-${sha256HexUtf8(intake).take(LOCAL_HASH_LENGTH).toLong(HEX_RADIX)}"
       return GoalIntake(key, intake)

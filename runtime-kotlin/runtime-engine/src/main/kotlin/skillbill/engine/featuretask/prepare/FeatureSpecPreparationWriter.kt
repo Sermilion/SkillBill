@@ -38,6 +38,7 @@ class FeatureSpecPreparationWriter(
   fun write(
     repoRoot: Path,
     request: FeatureSpecWriteRequest,
+    existingParentSpecPath: Path? = null,
   ): FeatureSpecWriteResult {
     val issueKey = request.decision.issueKey.trim()
     val featureName = normalizeFeatureName(request.featureName)
@@ -45,13 +46,17 @@ class FeatureSpecPreparationWriter(
       invalidRequest(DecompositionManifestPayloadKeys.FEATURE_NAME, "feature name is required.")
     }
     val specDirectory = repoRoot.resolve(".feature-specs/$issueKey-$featureName")
-    val parentSpecPath = specDirectory.resolve("spec.md")
+    val parentSpecPath = existingParentSpecPath ?: specDirectory.resolve("spec.md")
+    if (existingParentSpecPath != null) {
+      requireAcceptanceList("parent_spec.acceptance_criteria", authoredLines("parent_spec", parentSpecPath))
+    }
     val parentSpecRelativePath = repoRelativePath(repoRoot, parentSpecPath)
     return writePreparedFeature(
       repoRoot = repoRoot,
       request = request,
       parentSpecPath = parentSpecPath,
       parentSpecRelativePath = parentSpecRelativePath,
+      preserveParentSpec = existingParentSpecPath != null,
     )
   }
 
@@ -134,6 +139,7 @@ class FeatureSpecPreparationWriter(
     request: FeatureSpecWriteRequest,
     parentSpecPath: Path,
     parentSpecRelativePath: String,
+    preserveParentSpec: Boolean,
   ): FeatureSpecWriteResult {
     validateSubtasks(request.subtasks, request.specSource)
     val parentSpecText =
@@ -170,7 +176,7 @@ class FeatureSpecPreparationWriter(
       fileStore.writeBundleAtomically(
         writes =
           buildList {
-            add(parentSpecPath to parentSpecText)
+            if (!preserveParentSpec) add(parentSpecPath to parentSpecText)
             subtaskRecords.forEach { add(it.path to it.text) }
             add(preparedManifest.manifestPath to preparedManifest.yaml)
           },

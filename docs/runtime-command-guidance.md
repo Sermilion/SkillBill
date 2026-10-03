@@ -8,6 +8,8 @@ These instructions apply to runtime commands, planning, execution, and goal comm
 
 ## Phase and operation concepts
 
+An existing `spec.md` without a manifest is preparation intake. The full run reads its requirements and writes the manifest and executable subtask specs in the same folder, preserving the parent file and design assets. File paths, folder paths, bundle keys, and issue keys resolve to that existing bundle. Preparation uses the current branch as its base. Unrelated manifest bundles do not participate in its nested-decomposition check.
+
 Standalone phases and operations are operator tools. Agents may invoke
 `skill-bill phase` or `skill-bill operation` only when the operator explicitly
 requests the corresponding standalone task. A named `phase:` or `operation:`

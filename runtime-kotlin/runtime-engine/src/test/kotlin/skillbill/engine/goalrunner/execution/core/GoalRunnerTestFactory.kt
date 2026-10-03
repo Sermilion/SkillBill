@@ -46,6 +46,8 @@ import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
+import skillbill.ports.featurespec.FeatureSpecPathResolverPort
+import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.planning.EMPTY_GOAL_PLANNING_CONTEXT_DISCOVERY
@@ -284,6 +286,9 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
           UnavailableDecompositionManifestStore,
           DecompositionManifestWriter(),
         ),
+        FeatureSpecPathResolverPort { input -> FeatureSpecPathResolveResult.NoMatch(input.issueKey, input.repoRoot) },
+        UnavailableDecompositionManifestStore,
+        NoopWorkflowGitOperations,
       ),
   )
 }

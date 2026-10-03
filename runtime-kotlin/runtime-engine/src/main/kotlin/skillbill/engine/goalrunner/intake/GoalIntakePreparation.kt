@@ -1,23 +1,50 @@
 package skillbill.engine.goalrunner.intake
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.contracts.issuekey.issueAndFeature
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
 import skillbill.featurespec.model.FeatureSpecPreparationDecision
 import skillbill.featurespec.model.FeatureSpecPreparationMode
 import skillbill.featurespec.model.FeatureSpecSubtaskPreparation
 import skillbill.featurespec.model.FeatureSpecWriteRequest
+import skillbill.ports.featurespec.FeatureSpecPathResolverPort
+import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
+import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
+import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import java.nio.file.Path
 
 @Inject
 class GoalIntakePreparation(
   private val manifestStore: GoalRunnerManifestStore,
   private val specWriter: FeatureSpecPreparationWriter,
+  private val specPathResolver: FeatureSpecPathResolverPort,
+  private val fileStore: DecompositionManifestStore,
+  private val gitOperations: WorkflowGitOperations,
 ) {
+  fun issueKeyForExistingSpec(
+    intake: String,
+    repoRoot: Path,
+  ): String? = referencedSpecPath(intake, repoRoot)?.let { GoalIntake.parse(it.toString()).issueKey }
+
   fun prepare(request: GoalRunnerRunRequest): GoalRunnerManifestState? {
     manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)?.let { return it }
-    val intake = request.intake?.takeIf(String::isNotBlank) ?: return null
+    val suppliedIntake = request.intake?.takeIf(String::isNotBlank) ?: return null
+    val specPath = existingSpecPath(suppliedIntake, request)
+    val intake = specPath?.let(fileStore::readText) ?: suppliedIntake
+    val featureName = specPath?.parent?.fileName?.toString()?.let { issueAndFeature(it).second } ?: "intake"
+    val baseBranch =
+      if (specPath == null) {
+        "main"
+      } else {
+        val branch = gitOperations.currentBranch(request.repoRoot)
+        if (!branch.ok) invalidIntake("base_branch", branch.error)
+        branch.value.ifBlank { "main" }
+      }
     val criteria = acceptanceCriteria(intake)
     val constraints = listOf(TRACKER_RESOLUTION)
     specWriter.write(
@@ -32,7 +59,8 @@ class GoalIntakePreparation(
             emptyList(),
             FeatureSpecPreparationMode.SINGLE_SPEC,
           ),
-        featureName = "intake",
+        featureName = featureName,
+        baseBranch = baseBranch,
         parentSpecOverview = intake,
         validationStrategy = VALIDATION,
         subtasks =
@@ -49,9 +77,47 @@ class GoalIntakePreparation(
             ),
           ),
       ),
+      existingParentSpecPath = specPath,
     )
     return manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
   }
+
+  private fun existingSpecPath(
+    intake: String,
+    request: GoalRunnerRunRequest,
+  ): Path? {
+    referencedSpecPath(intake, request.repoRoot)?.let { return it }
+    val firstToken = intake.trim().substringBefore(' ').substringBefore('\n')
+    if (firstToken.endsWith(".md") || firstToken.contains(".feature-specs/")) {
+      invalidIntake("parent_spec", "the supplied spec path does not contain a readable spec.md.")
+    }
+    return when (
+      val resolved = specPathResolver.resolve(FeatureSpecPathResolveInput(request.issueKey, null, request.repoRoot))
+    ) {
+      is FeatureSpecPathResolveResult.Explicit -> Path.of(resolved.specPath)
+      is FeatureSpecPathResolveResult.SingleMatch -> Path.of(resolved.specPath)
+      is FeatureSpecPathResolveResult.NoMatch -> null
+      is FeatureSpecPathResolveResult.Ambiguous ->
+        invalidIntake("parent_spec", "multiple specs match ${request.issueKey}; supply the spec path.")
+    }
+  }
+
+  private fun referencedSpecPath(
+    intake: String,
+    repoRoot: Path,
+  ): Path? {
+    val reference = intake.trim()
+    val firstToken = reference.substringBefore(' ').substringBefore('\n')
+    return listOf(reference, firstToken).distinct().flatMap { token ->
+      val path = repoRoot.resolve(token).toAbsolutePath().normalize()
+      listOf(path, path.resolve("spec.md"), repoRoot.resolve(".feature-specs").resolve(token).resolve("spec.md"))
+    }.firstOrNull(fileStore::isRegularFile)
+  }
+
+  private fun invalidIntake(
+    field: String,
+    reason: String,
+  ): Nothing = throw InvalidFeatureSpecPreparationRequestError(fieldPath = field, reason = reason)
 
   private fun acceptanceCriteria(intake: String): List<String> {
     val lines = intake.lines()

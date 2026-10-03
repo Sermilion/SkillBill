@@ -272,6 +272,9 @@ private fun assertParentSpecIsNotDecomposedSubtask(
   val referringManifests =
     fileStore.findDecompositionManifestFiles(repoRoot)
       .filterNot { manifestPath -> archivedDecompositionManifest(repoRoot, manifestPath) }
+      .filter { manifestPath ->
+        normalizedParentSpec.startsWith(resolvedParentSpecPath(repoRoot, manifestPath).normalize().parent)
+      }
       .mapNotNull { manifestPath ->
         val manifest =
           try {
