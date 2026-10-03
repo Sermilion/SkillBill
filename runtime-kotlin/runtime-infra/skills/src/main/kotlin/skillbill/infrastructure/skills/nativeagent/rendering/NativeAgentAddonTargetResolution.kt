@@ -1,6 +1,9 @@
 package skillbill.infrastructure.skills.nativeagent.rendering
 
-import skillbill.error.shellcontent.MissingContentFileError
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.name
+import skillbill.error.shellcontent.missingContentFile
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTarget
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTargetSource
 import skillbill.infrastructure.skills.nativeagent.composition.displayPath
@@ -11,9 +14,6 @@ import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentGover
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPlatformPack
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPointerSpec
 import skillbill.scaffold.model.PlatformManifest
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.io.path.name
 
 internal const val NATIVE_AGENT_ADDON_ENTRYPOINT_SLOT = "entrypoint"
 
@@ -92,7 +92,7 @@ internal fun readAddonFile(
 ): String {
   val bytes =
     runCatching { Files.readAllBytes(addon.path) }.getOrElse { failure ->
-      throw MissingContentFileError(addonFailureMessage(root, addon, "is unreadable"), failure)
+      throw missingContentFile(addonFailureMessage(root, addon, "is unreadable"), failure)
     }
   return normalizeMarkdownLineEndings(String(bytes, Charsets.UTF_8))
 }
@@ -117,7 +117,7 @@ private fun resolveAddonTarget(
 ): ComposedAddonTarget {
   val pointer =
     lookup.declared[pointerName]
-      ?: throw MissingContentFileError(
+      ?: throw missingContentFile(
         "pack '${lookup.pack.slug}' add-on '${selection.slug}' slot '$slot': '$pointerName' is not declared in " +
           "platform.yaml pointers for '${lookup.skillRelativeDir}' at " +
           "'${lookup.pack.packRoot.resolve("platform.yaml").toAbsolutePath().normalize()}'",
@@ -132,7 +132,7 @@ private fun resolveAddonTarget(
       activation = selection.activation,
     )
   if (!Files.isRegularFile(path)) {
-    throw MissingContentFileError(addonFailureMessage(lookup.root, addon, "is missing"))
+    throw missingContentFile(addonFailureMessage(lookup.root, addon, "is missing"))
   }
   return addon
 }
@@ -151,13 +151,13 @@ private fun enforceResolvedAddonProjectionParity(
           addon.takeUnless { it.path in composedPaths }
         }
       if (missing != null) {
-        throw MissingContentFileError(addonFailureMessage(lookup.root, missing, "did not compose"))
+        throw missingContentFile(addonFailureMessage(lookup.root, missing, "did not compose"))
       }
       selection.slug
     }
   val extra = composedByPath.values.firstOrNull { addon -> addon.slug !in composedSlugs }
   if (extra != null) {
-    throw MissingContentFileError(addonFailureMessage(lookup.root, extra, "is unprojected"))
+    throw missingContentFile(addonFailureMessage(lookup.root, extra, "is unprojected"))
   }
   return composedSlugs
 }

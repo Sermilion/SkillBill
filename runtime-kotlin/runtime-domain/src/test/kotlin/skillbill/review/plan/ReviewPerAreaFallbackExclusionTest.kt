@@ -1,7 +1,11 @@
 package skillbill.review.plan
 
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
-import skillbill.error.shellcontent.InvalidFallbackCapabilityError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.model.FileLocation
 import skillbill.review.plan.model.ReviewLaunchLane
 import skillbill.review.plan.model.ReviewRootLanes
@@ -9,9 +13,6 @@ import skillbill.scaffold.model.DeclaredFiles
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.ReviewLaneCondition
 import skillbill.scaffold.model.RoutingSignals
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 
 class ReviewPerAreaFallbackExclusionTest {
   @Test
@@ -63,8 +64,10 @@ class ReviewPerAreaFallbackExclusionTest {
     val first = fallbackPack("generic-a", listOf("architecture"))
     val second = fallbackPack("generic-b", listOf("architecture"))
 
-    assertFailsWith<InvalidFallbackCapabilityError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewPerAreaFallbackExclusion.partition(emptyList(), listOf(first, second))
+    }.also { failure ->
+      assertEquals(SkillStagingFailureCode.INVALID_FALLBACK_CAPABILITY, failure.code)
     }
   }
 
@@ -75,8 +78,10 @@ class ReviewPerAreaFallbackExclusionTest {
         declaredFiles = DeclaredFiles(baseline = null, areas = emptyMap()),
       )
 
-    assertFailsWith<InvalidFallbackCapabilityError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewPerAreaFallbackExclusion.partition(emptyList(), listOf(owner))
+    }.also { failure ->
+      assertEquals(SkillStagingFailureCode.INVALID_FALLBACK_CAPABILITY, failure.code)
     }
   }
 

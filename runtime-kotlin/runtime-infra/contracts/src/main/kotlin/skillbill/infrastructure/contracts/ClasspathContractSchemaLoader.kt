@@ -8,38 +8,37 @@ import com.networknt.schema.JsonSchema
 import com.networknt.schema.JsonSchemaFactory
 import com.networknt.schema.SpecVersion
 import com.networknt.schema.ValidationMessage
-import skillbill.error.core.ShellContentContractException
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.core.rethrowUnless
-import skillbill.error.shellcontent.isShellContentContractFailure
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.coroutines.cancellation.CancellationException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 
 internal data class ValidatedClasspathYamlNodeRequest(
   val classLoader: ClassLoader,
   val resource: String,
-  val missingResource: () -> ShellContentContractException,
-  val processingFailure: (Throwable) -> ShellContentContractException,
+  val missingResource: () -> SkillBillRuntimeException,
+  val processingFailure: (Throwable) -> SkillBillRuntimeException,
   val expectedSchemaId: String,
   val expectedContractVersion: String,
   val contractVersionPath: List<String> = listOf("properties", "contract_version", "const"),
   val contractVersionMatches: ((JsonNode, String) -> Boolean)? = null,
-  val identityFailure: (String) -> ShellContentContractException,
+  val identityFailure: (String) -> SkillBillRuntimeException,
 )
 
 data class CompiledSchemaRequest(
   val cacheKey: String,
   val classLoader: ClassLoader,
   val classpathResource: String,
-  val missingResource: () -> ShellContentContractException,
-  val processingFailure: (Throwable) -> ShellContentContractException,
+  val missingResource: () -> SkillBillRuntimeException,
+  val processingFailure: (Throwable) -> SkillBillRuntimeException,
   val loadFailureLogger: (Throwable) -> Unit,
   val expectedSchemaId: String,
   val expectedContractVersion: String,
   val contractVersionPath: List<String> = listOf("properties", "contract_version", "const"),
   val contractVersionMatches: ((JsonNode, String) -> Boolean)? = null,
-  val identityFailure: (String) -> ShellContentContractException,
+  val identityFailure: (String) -> SkillBillRuntimeException,
   val prepareSchemaDocument: (JsonNode) -> Unit = {},
 )
 
@@ -67,7 +66,7 @@ object ClasspathContractSchemaLoader {
   fun readClasspathYamlText(
     classLoader: ClassLoader,
     resource: String,
-    missingError: () -> ShellContentContractException,
+    missingError: () -> SkillBillRuntimeException,
   ): String {
     val stream = classLoader.getResourceAsStream(resource.removePrefix("/")) ?: throw missingError()
     return stream.use { it.readBytes().toString(Charsets.UTF_8) }
@@ -76,7 +75,7 @@ object ClasspathContractSchemaLoader {
   fun readClasspathYamlNode(
     classLoader: ClassLoader,
     resource: String,
-    missingError: () -> ShellContentContractException,
+    missingError: () -> SkillBillRuntimeException,
   ): JsonNode {
     val text = readClasspathYamlText(classLoader, resource, missingError)
     return yamlMapper.readTree(text)

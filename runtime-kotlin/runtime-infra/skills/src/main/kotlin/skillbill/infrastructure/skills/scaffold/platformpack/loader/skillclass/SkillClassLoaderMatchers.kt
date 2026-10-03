@@ -1,16 +1,16 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass
 
-import org.yaml.snakeyaml.Yaml
-import org.yaml.snakeyaml.error.YAMLException
-import skillbill.error.shellcontent.InvalidManifestSchemaError
-import skillbill.ports.repository.toFileLocation
-import skillbill.scaffold.model.SkillClassManifest
-import skillbill.scaffold.model.SkillClassMatcher
-import skillbill.scaffold.model.SkillClassSection
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.coroutines.cancellation.CancellationException
+import org.yaml.snakeyaml.Yaml
+import org.yaml.snakeyaml.error.YAMLException
+import skillbill.error.shellcontent.invalidManifestSchema
+import skillbill.ports.repository.toFileLocation
+import skillbill.scaffold.model.SkillClassManifest
+import skillbill.scaffold.model.SkillClassMatcher
+import skillbill.scaffold.model.SkillClassSection
 
 internal fun SkillClassManifest.matchesSkillName(skillName: String): Boolean {
   if (matchers.any { matcher -> matcher.excludeExact.contains(skillName) }) {
@@ -35,12 +35,12 @@ internal fun readClassManifestYaml(
   } catch (error: CancellationException) {
     throw error
   } catch (error: IOException) {
-    throw InvalidManifestSchemaError(
+    throw invalidManifestSchema(
       "Skill class '$classId': manifest '$classFile' is not valid YAML: ${error.message}",
       error,
     )
   } catch (error: YAMLException) {
-    throw InvalidManifestSchemaError(
+    throw invalidManifestSchema(
       "Skill class '$classId': manifest '$classFile' is not valid YAML: ${error.message}",
       error,
     )
@@ -77,10 +77,10 @@ internal fun parseSkillClassMatchers(
 ): List<SkillClassMatcher> {
   val raw =
     manifest["matchers"]
-      ?: throw InvalidManifestSchemaError("Skill class '$classId': required field 'matchers' is missing.")
+      ?: throw invalidManifestSchema("Skill class '$classId': required field 'matchers' is missing.")
   val matchersList = requireSkillClassMatcherList(classId, raw)
   if (matchersList.isEmpty()) {
-    throw InvalidManifestSchemaError("Skill class '$classId': 'matchers' must declare at least one entry.")
+    throw invalidManifestSchema("Skill class '$classId': 'matchers' must declare at least one entry.")
   }
   return matchersList.mapIndexed { index, entry -> parseSkillClassMatcher(classId, index, entry) }
 }
@@ -92,7 +92,7 @@ internal fun parseSkillClassSections(
   val raw = manifest["sections"] ?: return emptyList()
   val list =
     raw as? List<*>
-      ?: throw InvalidManifestSchemaError("Skill class '$classId': 'sections' must be a list.")
+      ?: throw invalidManifestSchema("Skill class '$classId': 'sections' must be a list.")
   return list.mapIndexed { index, entry -> parseSkillClassSection(classId, index, entry) }
 }
 
@@ -105,13 +105,13 @@ internal fun parseSkillClassStringList(
   val raw = manifest[field]
   if (raw == null) {
     if (required) {
-      throw InvalidManifestSchemaError("Skill class '$classId': required field '$field' is missing.")
+      throw invalidManifestSchema("Skill class '$classId': required field '$field' is missing.")
     }
     return emptyList()
   }
   val list =
     raw as? List<*>
-      ?: throw InvalidManifestSchemaError("Skill class '$classId': '$field' must be a list of strings.")
+      ?: throw invalidManifestSchema("Skill class '$classId': '$field' must be a list of strings.")
   return list.mapIndexed { index, entry -> requireSkillClassStringEntry(classId, field, index, entry) }
 }
 
@@ -122,7 +122,7 @@ internal fun requireSkillClassString(
 ): String {
   val raw =
     manifest[field]
-      ?: throw InvalidManifestSchemaError("Skill class '$classId': required field '$field' is missing.")
+      ?: throw invalidManifestSchema("Skill class '$classId': required field '$field' is missing.")
   return raw as? String
-    ?: throw InvalidManifestSchemaError("Skill class '$classId': field '$field' must be a string.")
+    ?: throw invalidManifestSchema("Skill class '$classId': field '$field' must be a string.")
 }

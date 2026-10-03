@@ -1,7 +1,12 @@
 package skillbill.infrastructure.skills.install.staging
 
-import skillbill.error.shellcontent.InternalSkillSidecarCollisionError
-import skillbill.error.shellcontent.InvalidAuthoredSkillSidecarError
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.text.Normalizer
+import java.util.Locale
+import skillbill.error.shellcontent.internalSkillSidecarCollision
+import skillbill.error.shellcontent.invalidAuthoredSkillSidecar
 import skillbill.infrastructure.skills.scaffold.authoring.discoverTargets
 import skillbill.infrastructure.skills.scaffold.authoring.parseInternalForFrontmatter
 import skillbill.infrastructure.skills.scaffold.authoring.renderWrapper
@@ -11,11 +16,6 @@ import skillbill.infrastructure.skills.scaffold.platformpack.selectedPlatformMan
 import skillbill.install.model.InstallPlanSkill
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Path
-import java.text.Normalizer
-import java.util.Locale
 
 internal data class InternalSidecarTarget(
   val skillName: String,
@@ -117,7 +117,7 @@ private fun mergeInternalSupportPointers(
       existing.pointer.target.toAbsolutePath().normalize() !=
       candidate.pointer.target.toAbsolutePath().normalize()
     ) {
-      throw InternalSkillSidecarCollisionError(parentName, candidate.owner, candidate.pointer.name)
+      throw internalSkillSidecarCollision(parentName, candidate.owner, candidate.pointer.name)
     }
   }
   return merged.values.map(OwnedPointer::pointer).sortedBy { pointer -> portableFileName(pointer.name) }
@@ -203,7 +203,7 @@ private fun discoverAuthoredCompanions(sourceDir: Path): List<InternalSidecarCom
         .toList()
     }
   if (companions.size > 1) {
-    throw InvalidAuthoredSkillSidecarError(
+    throw invalidAuthoredSkillSidecar(
       "Internal skill '${sourceDir.fileName}' may declare at most one authored Markdown rubric sidecar; " +
         "found ${companions.joinToString { companion -> companion.name }}.",
     )
@@ -217,7 +217,7 @@ private fun validateAuthoredCompanion(
   companion: InternalSidecarCompanion,
 ) {
   if (portableFileName(companion.name) in reservedGeneratedSidecarNames.map(::portableFileName)) {
-    throw InvalidAuthoredSkillSidecarError(
+    throw invalidAuthoredSkillSidecar(
       "Internal skill '${sourceDir.fileName}' authored sidecar '${companion.name}' uses a reserved generated " +
         "filename.",
     )
@@ -225,7 +225,7 @@ private fun validateAuthoredCompanion(
   val content = Files.readString(sourceDir.resolve("content.md"))
   val link = Regex("\\]\\((?:\\./)?${Regex.escape(companion.name)}(?:[#?][^)]*)?\\)")
   if (!link.containsMatchIn(content)) {
-    throw InvalidAuthoredSkillSidecarError(
+    throw invalidAuthoredSkillSidecar(
       "Internal skill '${sourceDir.fileName}' authored sidecar '${companion.name}' must be explicitly linked " +
         "from content.md as its specialist rubric.",
     )
@@ -253,7 +253,7 @@ internal fun validateInternalSidecarFileNames(
       val priorOwner = claimed.putIfAbsent(key, child.skillName)
       val parentCollision = key in authoredNames
       if (priorOwner != null || parentCollision) {
-        throw InternalSkillSidecarCollisionError(
+        throw internalSkillSidecarCollision(
           parentSkillName = parentSourceDir.fileName.toString(),
           internalSkillName = child.skillName,
           sidecarRelativePath = name,

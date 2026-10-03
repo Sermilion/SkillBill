@@ -1,7 +1,9 @@
 
 package skillbill.infrastructure.skills.scaffold.platformpack.loader
 
-import skillbill.error.shellcontent.MissingManifestError
+import java.nio.file.Files
+import java.nio.file.Path
+import skillbill.error.shellcontent.missingManifest
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
 import skillbill.infrastructure.skills.scaffold.validation.review.ReviewSkillStructureValidator
 import skillbill.infrastructure.skills.scaffold.validation.review.validateReviewSkillStructure
@@ -9,8 +11,6 @@ import skillbill.model.toPath
 import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.model.GovernedAddonFile
 import skillbill.scaffold.model.PlatformManifest
-import java.nio.file.Files
-import java.nio.file.Path
 
 internal fun loadPlatformManifest(
   packRoot: Path,
@@ -20,7 +20,7 @@ internal fun loadPlatformManifest(
   val slug = resolvedPackRoot.fileName?.toString().orEmpty()
   val manifestPath = resolvedPackRoot.resolve("platform.yaml")
   if (!Files.isRegularFile(manifestPath)) {
-    throw MissingManifestError("Platform pack '$slug': expected manifest at '$manifestPath' but it is missing.")
+    throw missingManifest("Platform pack '$slug': expected manifest at '$manifestPath' but it is missing.")
   }
   val raw = readManifest(manifestPath, slug)
   return buildPack(slug, resolvedPackRoot, manifestPath, raw, enforceContractVersion)

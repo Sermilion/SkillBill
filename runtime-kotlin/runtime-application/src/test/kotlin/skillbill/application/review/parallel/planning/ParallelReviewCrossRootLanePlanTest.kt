@@ -1,5 +1,10 @@
 package skillbill.application.review.parallel.planning
 
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import skillbill.application.review.snapshot.ReviewHarnessConfig
 import skillbill.application.review.snapshot.ReviewRecorder
 import skillbill.application.review.snapshot.diffForChanges
@@ -8,15 +13,11 @@ import skillbill.application.review.snapshot.reviewHarness
 import skillbill.application.review.snapshot.reviewLayer
 import skillbill.application.review.snapshot.reviewPack
 import skillbill.application.review.snapshot.reviewed
-import skillbill.error.shellcontent.AmbiguousLaneOwnershipError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.plan.ReviewLaunchPlanPolicy
 import skillbill.scaffold.model.PlatformManifest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 
 class ParallelReviewCrossRootLanePlanTest {
   private val kotlinAreas = listOf("architecture", "security", "testing")
@@ -92,11 +93,13 @@ class ParallelReviewCrossRootLanePlanTest {
       )
 
     val error =
-      assertFailsWith<AmbiguousLaneOwnershipError> {
+      assertFailsWith<SkillBillRuntimeException> {
         reviewHarness(ReviewHarnessConfig(manifests = listOf(kotlin, swift), diff = diff), recorder)
           .reviewed(
             harnessRequest(reviewRunId = "cross-root-ambiguous", codeReviewMode = CodeReviewExecutionMode.DELEGATED),
           )
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.AMBIGUOUS_LANE_OWNERSHIP, failure.code)
       }
 
     assertTrue(

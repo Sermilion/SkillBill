@@ -1,14 +1,5 @@
 package skillbill.scaffold
 
-import skillbill.error.shellcontent.AmbiguousLaneOwnershipError
-import skillbill.error.shellcontent.InvalidManifestSchemaError
-import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlatformPackManifests
-import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
-import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
-import skillbill.scaffold.model.CodeReviewCompositionMode
-import skillbill.scaffold.model.CodeReviewCompositionScope
-import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
-import skillbill.testing.repoRootFromTest
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -17,6 +8,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlatformPackManifests
+import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
+import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
+import skillbill.scaffold.model.CodeReviewCompositionMode
+import skillbill.scaffold.model.CodeReviewCompositionScope
+import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
+import skillbill.testing.repoRootFromTest
 
 class PlatformPackCompositionTest {
   @Test
@@ -80,7 +80,7 @@ class PlatformPackCompositionTest {
   @Test
   fun `schema rejects unknown nested composition fields`() {
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPlatformManifest(
           newTempPackRoot(
             "kmp",
@@ -100,6 +100,8 @@ class PlatformPackCompositionTest {
             ),
           ),
         )
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
 
     val message = error.message.orEmpty()
@@ -110,7 +112,7 @@ class PlatformPackCompositionTest {
   @Test
   fun `schema rejects missing explicit required on baseline layer`() {
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPlatformManifest(
           newTempPackRoot(
             "kmp",
@@ -128,6 +130,8 @@ class PlatformPackCompositionTest {
             ),
           ),
         )
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
 
     val message = error.message.orEmpty()
@@ -138,7 +142,7 @@ class PlatformPackCompositionTest {
   @Test
   fun `schema rejects unsupported baseline layer scope`() {
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPlatformManifest(
           newTempPackRoot(
             "kmp",
@@ -157,6 +161,8 @@ class PlatformPackCompositionTest {
             ),
           ),
         )
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
 
     val message = error.message.orEmpty()
@@ -167,7 +173,7 @@ class PlatformPackCompositionTest {
   @Test
   fun `schema rejects unsupported baseline layer mode`() {
     val error =
-      assertFailsWith<InvalidManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPlatformManifest(
           newTempPackRoot(
             "kmp",
@@ -186,6 +192,8 @@ class PlatformPackCompositionTest {
             ),
           ),
         )
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
       }
 
     val message = error.message.orEmpty()
@@ -200,7 +208,12 @@ class PlatformPackCompositionTest {
         "kmp" to manifest(slug = "kmp", composition = kotlinBaselineComposition()),
       )
 
-    val error = assertFailsWith<InvalidManifestSchemaError> { loadPlatformPack(packsRoot.resolve("kmp")) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        loadPlatformPack(packsRoot.resolve("kmp"))
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
 
     val message = error.message.orEmpty()
     assertContains(message, "missing platform pack")
@@ -214,7 +227,12 @@ class PlatformPackCompositionTest {
         "kmp" to manifest(slug = "kmp", composition = kotlinBaselineComposition()),
       )
 
-    val error = assertFailsWith<InvalidManifestSchemaError> { discoverPlatformPackManifests(packsRoot) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        discoverPlatformPackManifests(packsRoot)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
 
     val message = error.message.orEmpty()
     assertContains(message, "missing platform pack")
@@ -242,7 +260,12 @@ class PlatformPackCompositionTest {
           ),
       )
 
-    val error = assertFailsWith<InvalidManifestSchemaError> { discoverPlatformPackManifests(packsRoot) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        discoverPlatformPackManifests(packsRoot)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
 
     val message = error.message.orEmpty()
     assertContains(message, "missing code-review skill")
@@ -269,7 +292,12 @@ class PlatformPackCompositionTest {
           ),
       )
 
-    val error = assertFailsWith<InvalidManifestSchemaError> { discoverPlatformPackManifests(packsRoot) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        discoverPlatformPackManifests(packsRoot)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
 
     val message = error.message.orEmpty()
     assertContains(message, "self-references")
@@ -302,7 +330,12 @@ class PlatformPackCompositionTest {
           ),
       )
 
-    val error = assertFailsWith<InvalidManifestSchemaError> { discoverPlatformPackManifests(packsRoot) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        discoverPlatformPackManifests(packsRoot)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
 
     val message = error.message.orEmpty()
     assertContains(message, "duplicate")
@@ -336,7 +369,12 @@ class PlatformPackCompositionTest {
           ),
       )
 
-    val error = assertFailsWith<InvalidManifestSchemaError> { discoverPlatformPackManifests(packsRoot) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        discoverPlatformPackManifests(packsRoot)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
 
     val message = error.message.orEmpty()
     assertContains(message, "composition cycle")
@@ -372,7 +410,12 @@ class PlatformPackCompositionTest {
         "right" to manifest(slug = "right", areas = sharedArea),
       )
 
-    val error = assertFailsWith<AmbiguousLaneOwnershipError> { discoverPlatformPackManifests(packsRoot) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        discoverPlatformPackManifests(packsRoot)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.AMBIGUOUS_LANE_OWNERSHIP, failure.code)
+      }
 
     assertContains(error.message.orEmpty(), "security")
     assertContains(error.message.orEmpty(), "left, right")
@@ -403,7 +446,12 @@ class PlatformPackCompositionTest {
           ),
       )
 
-    val error = assertFailsWith<InvalidManifestSchemaError> { discoverPlatformPackManifests(packsRoot) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        discoverPlatformPackManifests(packsRoot)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
 
     val message = error.message.orEmpty()
     assertContains(message, "unsupported referenced skill")
@@ -431,7 +479,12 @@ class PlatformPackCompositionTest {
           ),
       )
 
-    val error = assertFailsWith<InvalidManifestSchemaError> { discoverPlatformPackManifests(packsRoot) }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        discoverPlatformPackManifests(packsRoot)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
 
     val message = error.message.orEmpty()
     assertContains(message, "unsupported referenced skill")

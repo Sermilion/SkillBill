@@ -1,6 +1,14 @@
 package skillbill.infrastructure.skills.install.nativeagent.link
 
-import skillbill.error.shellcontent.MissingInstalledNativeAgentError
+import java.nio.file.FileSystemException
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import java.nio.file.attribute.DosFileAttributeView
+import java.nio.file.attribute.PosixFileAttributeView
+import java.nio.file.attribute.PosixFilePermission
+import kotlin.coroutines.cancellation.CancellationException
+import skillbill.error.shellcontent.missingInstalledNativeAgent
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.skills.install.nativeagent.installNativeAgentCompositionContext
@@ -14,14 +22,6 @@ import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
 import skillbill.infrastructure.skills.nativeagent.validation.validateNativeAgentArtifactsForInstall
 import skillbill.install.model.AgentTarget
 import skillbill.install.model.SupportedAgent
-import java.nio.file.FileSystemException
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Path
-import java.nio.file.attribute.DosFileAttributeView
-import java.nio.file.attribute.PosixFileAttributeView
-import java.nio.file.attribute.PosixFilePermission
-import kotlin.coroutines.cancellation.CancellationException
 
 internal fun linkProviderAgents(
   provider: NativeAgentProvider,
@@ -129,7 +129,7 @@ internal fun verifyInstalledNativeAgent(entry: NativeAgentLinkInventoryEntry) {
     reason: String,
     cause: Throwable? = null,
   ): Nothing =
-    throw MissingInstalledNativeAgentError(
+    throw missingInstalledNativeAgent(
       logicalName = entry.logicalName,
       provider = entry.provider,
       expectedPath = installed.toString(),

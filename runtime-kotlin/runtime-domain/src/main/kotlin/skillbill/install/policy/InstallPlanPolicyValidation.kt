@@ -1,6 +1,6 @@
 package skillbill.install.policy
 
-import skillbill.error.shellcontent.MissingBaselinePlatformSelectionError
+import skillbill.error.shellcontent.missingBaselinePlatformSelection
 import skillbill.install.model.InstallAgentSelectionMode
 import skillbill.install.model.InstallAgentTarget
 import skillbill.install.model.InstallPlanRequest
@@ -71,7 +71,7 @@ internal fun validateBaselineCoPresence(
     }
     pack.baselineLayers.forEach { layer ->
       if (layer.required && layer.platform !in selected) {
-        throw MissingBaselinePlatformSelectionError(
+        throw missingBaselinePlatformSelection(
           selectingSlug = pack.slug,
           requiredBaselineSlug = layer.platform,
           declaringManifestPath = pack.packRoot.resolve("platform.yaml").toString(),

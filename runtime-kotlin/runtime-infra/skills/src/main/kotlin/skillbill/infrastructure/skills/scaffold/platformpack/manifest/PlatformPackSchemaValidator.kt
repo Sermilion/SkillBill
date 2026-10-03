@@ -4,12 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
+import java.util.logging.Logger
 import skillbill.error.shellcontent.ContractVersionMismatchError
-import skillbill.error.shellcontent.InvalidManifestSchemaError
+import skillbill.error.shellcontent.invalidManifestSchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
-import java.util.logging.Logger
 
 internal val platformPackSchemaLog: Logger =
   Logger.getLogger("skillbill.scaffold.platformpack.PlatformPackSchemaValidator")
@@ -42,7 +42,7 @@ internal class PlatformPackSchemaValidator {
     if (remainingErrors.isEmpty()) {
       return
     }
-    throw InvalidManifestSchemaError(formatValidationMessage(slug, remainingErrors, instance))
+    throw invalidManifestSchema(formatValidationMessage(slug, remainingErrors, instance))
   }
 
   private fun recordToleratedContractVersion(
@@ -203,18 +203,18 @@ private fun loadSchema(): JsonSchema =
       classLoader = PlatformPackSchemaValidator::class.java.classLoader,
       classpathResource = PLATFORM_PACK_SCHEMA_CLASSPATH_RESOURCE,
       missingResource = {
-        InvalidManifestSchemaError(
+        invalidManifestSchema(
           "Canonical platform-pack schema is missing. Expected to find it on the JVM classpath at " +
             "'$PLATFORM_PACK_SCHEMA_CLASSPATH_RESOURCE'.",
         )
       },
       processingFailure = { cause ->
-        InvalidManifestSchemaError(cause.message ?: cause::class.simpleName.orEmpty())
+        invalidManifestSchema(cause.message ?: cause::class.simpleName.orEmpty())
       },
       loadFailureLogger = {},
       expectedSchemaId = PlatformPackSchemaPaths.EXPECTED_SCHEMA_ID,
       expectedContractVersion = SHELL_CONTRACT_VERSION,
-      identityFailure = { reason -> InvalidManifestSchemaError(reason) },
+      identityFailure = { reason -> invalidManifestSchema(reason) },
     ),
   )
 
@@ -227,7 +227,7 @@ private val ANCHORED_TOP_LEVEL_FIELD_NAMES: Set<String>
         classLoader = PlatformPackSchemaValidator::class.java.classLoader,
         resource = PLATFORM_PACK_SCHEMA_CLASSPATH_RESOURCE,
         missingError = {
-          InvalidManifestSchemaError(
+          invalidManifestSchema(
             "Canonical platform-pack schema is missing. Expected to find it on the JVM classpath at " +
               "'$PLATFORM_PACK_SCHEMA_CLASSPATH_RESOURCE'.",
           )
@@ -236,7 +236,7 @@ private val ANCHORED_TOP_LEVEL_FIELD_NAMES: Set<String>
     val yamlNode: JsonNode = ClasspathContractSchemaLoader.sharedYamlMapper().readTree(yamlText)
     val properties = yamlNode.path("properties")
     if (properties.isMissingNode || !properties.isObject) {
-      throw InvalidManifestSchemaError(
+      throw invalidManifestSchema(
         "Canonical platform-pack schema is missing a top-level 'properties' object; cannot derive " +
           "the anchored top-level field set.",
       )

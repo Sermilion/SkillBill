@@ -1,9 +1,9 @@
 
 package skillbill.infrastructure.skills.scaffold.platformpack.loader
 
-import skillbill.error.shellcontent.InvalidManifestSchemaError
-import skillbill.infrastructure.skills.scaffold.platformpack.manifest.PlatformPackSchemaValidator
 import java.nio.file.Path
+import skillbill.error.shellcontent.invalidManifestSchema
+import skillbill.infrastructure.skills.scaffold.platformpack.manifest.PlatformPackSchemaValidator
 
 internal fun guardAgainstAnchoredFieldTypos(
   slug: String,
@@ -15,7 +15,7 @@ internal fun guardAgainstAnchoredFieldTypos(
     for (anchored in anchoredKeys) {
       if (key == anchored) continue
       if (levenshtein1(key, anchored)) {
-        throw InvalidManifestSchemaError(
+        throw invalidManifestSchema(
           "Platform pack '$slug' ($manifestPath) has a top-level field '$key' that looks like a typo " +
             "of the anchored field '$anchored' (did you mean '$anchored'?). Remove or rename the field — " +
             "non-anchored fields flow through customFields, but anchored field names are reserved.",

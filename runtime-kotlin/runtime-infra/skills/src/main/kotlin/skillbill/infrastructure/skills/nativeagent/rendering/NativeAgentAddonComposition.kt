@@ -1,7 +1,8 @@
 package skillbill.infrastructure.skills.nativeagent.rendering
 
-import skillbill.error.shellcontent.ComposedNativeAgentBudgetExceededError
-import skillbill.error.shellcontent.MissingContentFileError
+import java.nio.file.Path
+import skillbill.error.shellcontent.composedNativeAgentBudgetExceeded
+import skillbill.error.shellcontent.missingContentFile
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTarget
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTargetSource
 import skillbill.infrastructure.skills.nativeagent.composition.displayPath
@@ -10,7 +11,6 @@ import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentAddon
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentGovernedAddonActivation
 import skillbill.infrastructure.skills.nativeagent.platformpack.NativeAgentPlatformPack
 import skillbill.scaffold.model.PlatformManifest
-import java.nio.file.Path
 
 internal fun composeGovernedAgentBody(
   repoRoot: Path,
@@ -68,7 +68,7 @@ internal fun enforceComposedAgentBudget(
         target.contentPath.toAbsolutePath().normalize(),
         additionalPackRoots,
       )
-    throw ComposedNativeAgentBudgetExceededError(
+    throw composedNativeAgentBudgetExceeded(
       "pack '${packRoot?.fileName ?: displayPath(root, target.contentPath)}' skill directory " +
         "'${nativeAgentSkillRelativeDir(packRoot, target.contentPath)}': rendered native agent is $bytes bytes, " +
         "over the $maxBytes byte review context launch budget",
@@ -97,7 +97,7 @@ internal fun enforceAddonProjectionParity(
     }
   val repoRoot = pack.packRoot.parent?.takeIf { parent -> parent.fileName.toString() == "platform-packs" }?.parent
   val path = pointer?.let { spec -> repoRoot?.resolve(spec.target)?.toAbsolutePath()?.normalize() }
-  throw MissingContentFileError(
+  throw missingContentFile(
     "pack '${pack.slug}' add-on '$slug' slot '$NATIVE_AGENT_ADDON_ENTRYPOINT_SLOT': declared target did not compose " +
       "at '${path ?: pointerName}'",
   )

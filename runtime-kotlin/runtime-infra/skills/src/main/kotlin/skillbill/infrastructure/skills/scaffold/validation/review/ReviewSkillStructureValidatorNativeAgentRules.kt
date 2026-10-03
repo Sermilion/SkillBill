@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.scaffold.validation.review
 
-import skillbill.error.shellcontent.InvalidReviewSkillStructureError
 import java.nio.file.Path
+import skillbill.error.shellcontent.invalidReviewSkillStructure
 
 internal fun violation(
   path: Path,
@@ -12,7 +12,7 @@ internal fun invalidNativeAgentBundle(
   path: Path,
   error: Exception,
 ): Nothing =
-  throw InvalidReviewSkillStructureError(
+  throw invalidReviewSkillStructure(
     "$path: invalid native-agent source bundle: ${error.message}",
     error,
   )

@@ -1,5 +1,14 @@
 package skillbill.di.workflow
 
+import java.lang.Boolean.TYPE
+import java.lang.Double.TYPE as DoubleTYPE
+import java.lang.Long.TYPE as LongTYPE
+import java.lang.reflect.Method
+import java.lang.reflect.Proxy
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Clock
+import kotlin.test.assertEquals
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.executionModel
@@ -29,7 +38,8 @@ import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
-import skillbill.error.shellcontent.MissingCompositionLayerError
+import skillbill.error.shellcontent.missingCompositionLayer
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
@@ -132,16 +142,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeShare
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
-import java.lang.Boolean.TYPE
-import java.lang.reflect.Method
-import java.lang.reflect.Proxy
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.Clock
-import kotlin.test.assertEquals
-import java.lang.Double.TYPE as DoubleTYPE
-import java.lang.Long.TYPE as LongTYPE
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
 
 internal fun <T> noopPort(type: Class<T>): T {
   @Suppress("UNCHECKED_CAST")
@@ -600,7 +600,7 @@ internal object ThrowingPlanReviewAttributionPort : ReviewAttributionPort {
   override fun routedSkillPlatformSlugs(): Map<String, String> = emptyMap()
 
   override fun composedLaunchPlan(routedPackSlug: String): ReviewLaunchPlan =
-    throw MissingCompositionLayerError("Baseline layer 'kotlin' is not installed.")
+    throw missingCompositionLayer("Baseline layer 'kotlin' is not installed.")
 }
 
 internal object NoopTelemetryOutboxRepository : TelemetryOutboxRepository {

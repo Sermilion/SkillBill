@@ -9,6 +9,8 @@ fun Throwable.isShellContentContractFailure(): Boolean {
   if (this is ShellContentContractException) return true
   val failureCode = (this as? SkillBillRuntimeException)?.code
   return failureCode is FailureWireCode ||
+    failureCode is ManifestFailureCode ||
+    failureCode is SkillStagingFailureCode ||
     failureCode is AgentAddonFailureCode ||
     failureCode is GovernedReviewFailureCode ||
     failureCode is GoalTelemetryRowFailureCode

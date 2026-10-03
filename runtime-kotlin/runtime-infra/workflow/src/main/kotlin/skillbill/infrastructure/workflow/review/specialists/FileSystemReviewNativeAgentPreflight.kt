@@ -1,8 +1,10 @@
 
 package skillbill.infrastructure.workflow.review.specialists
 
+import java.nio.file.Files
+import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.shellcontent.MissingInstalledNativeAgentError
+import skillbill.error.shellcontent.missingInstalledNativeAgent
 import skillbill.infrastructure.contracts.sha256HexOfFile
 import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventory
@@ -13,8 +15,6 @@ import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.ports.review.launch.ReviewNativeAgentPreflightPort
 import skillbill.ports.review.model.ReviewNativeAgentPreflightRequest
-import java.nio.file.Files
-import java.nio.file.Path
 
 @Inject
 class FileSystemReviewNativeAgentPreflight(
@@ -28,7 +28,7 @@ class FileSystemReviewNativeAgentPreflight(
       val agentId = assignment.agentId
       val logicalName = assignment.logicalName
       val provider =
-        provider(agentId) ?: throw MissingInstalledNativeAgentError(
+        provider(agentId) ?: throw missingInstalledNativeAgent(
           logicalName,
           agentId,
           environment.userHome.toString(),
@@ -121,7 +121,7 @@ class FileSystemReviewNativeAgentPreflight(
     reason: String,
     cause: Throwable? = null,
   ): Nothing =
-    throw MissingInstalledNativeAgentError(
+    throw missingInstalledNativeAgent(
       logicalName,
       provider.name.lowercase(),
       path.toString(),

@@ -3,8 +3,9 @@ package skillbill.scaffold.policy.platformpack
 import skillbill.contracts.config.ExternalPlatformPackTelemetryPayloadKeys
 import skillbill.error.core.AmbiguousExternalPlatformPackError
 import skillbill.error.core.ExternalPlatformPackConfigError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
-import skillbill.error.shellcontent.InvalidManifestSchemaError
+import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.scaffold.policy.platformpack.model.PlatformPackSourceKind
 
 fun externalPlatformPackTelemetryPayload(
@@ -24,7 +25,12 @@ fun externalPlatformPackTelemetryPayload(
       when (error) {
         is AmbiguousExternalPlatformPackError -> "ambiguous_external_platform_pack"
         is ExternalPlatformPackConfigError -> "external_platform_pack_config"
-        is InvalidManifestSchemaError -> "invalid_external_platform_pack_manifest"
+        is SkillBillRuntimeException ->
+          if (error.code == ManifestFailureCode.INVALID_MANIFEST_SCHEMA) {
+            "invalid_external_platform_pack_manifest"
+          } else {
+            "external_platform_pack"
+          }
         else -> "external_platform_pack"
       },
     )

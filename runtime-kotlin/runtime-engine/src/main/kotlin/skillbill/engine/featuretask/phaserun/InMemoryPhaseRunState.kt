@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
+import java.time.Clock
+import java.time.Instant
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
@@ -31,7 +33,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
-import skillbill.error.shellcontent.MissingValidationGateError
+import skillbill.error.shellcontent.missingValidationGate
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.review.model.ParallelReviewLaneOutcome
@@ -39,8 +41,6 @@ import skillbill.ports.review.model.ParallelReviewLaneRunResult
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
-import java.time.Clock
-import java.time.Instant
 
 internal class InMemoryPhaseRunState(
   private val facts: InMemoryPhaseRunFacts,
@@ -161,7 +161,7 @@ internal class InMemoryPhaseRunState(
     reviewTarget ?: resolve().also { reviewTarget = it }
 
   override fun qualityGateAbsent(stepName: String): Unit =
-    throw MissingValidationGateError(
+    throw missingValidationGate(
       "The dominant platform pack has no validation_gate declaration; quality gate '$stepName' cannot run.",
     )
 

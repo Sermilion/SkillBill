@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass
 
-import skillbill.error.shellcontent.InvalidManifestSchemaError
+import skillbill.error.shellcontent.invalidManifestSchema
 import skillbill.scaffold.model.SkillClassMatcher
 
 internal fun parseExcludeExactList(
@@ -13,11 +13,11 @@ internal fun parseExcludeExactList(
     is List<*> ->
       excludeExactRaw.map { value ->
         value as? String
-          ?: throw InvalidManifestSchemaError(
+          ?: throw invalidManifestSchema(
             "Skill class '$classId': matcher #$index 'exclude_exact' entries must be strings.",
           )
       }
-    else -> throw InvalidManifestSchemaError(
+    else -> throw invalidManifestSchema(
       "Skill class '$classId': matcher #$index 'exclude_exact' must be a list of strings.",
     )
   }
@@ -29,7 +29,7 @@ internal fun parseMatcherPattern(
 ): Regex? =
   patternString?.let { source ->
     runCatching { Regex(source) }.getOrElse { error ->
-      throw InvalidManifestSchemaError(
+      throw invalidManifestSchema(
         "Skill class '$classId': matcher #$index pattern '$source' is not a valid regex: ${error.message}",
       )
     }
@@ -54,7 +54,7 @@ private fun requireSkillClassMatcherMap(
   index: Int,
   raw: Any?,
 ): Map<*, *> =
-  raw as? Map<*, *> ?: throw InvalidManifestSchemaError(
+  raw as? Map<*, *> ?: throw invalidManifestSchema(
     "Skill class '$classId': matcher #$index must be a YAML mapping with 'exact' or 'pattern'.",
   )
 
@@ -65,7 +65,7 @@ private fun parseSkillClassMatcherExact(
 ): String? =
   entry["exact"]?.let { value ->
     value as? String
-      ?: throw InvalidManifestSchemaError("Skill class '$classId': matcher #$index field 'exact' must be a string.")
+      ?: throw invalidManifestSchema("Skill class '$classId': matcher #$index field 'exact' must be a string.")
   }
 
 private fun parseSkillClassMatcherPattern(
@@ -75,7 +75,7 @@ private fun parseSkillClassMatcherPattern(
 ): String? =
   entry["pattern"]?.let { value ->
     value as? String
-      ?: throw InvalidManifestSchemaError("Skill class '$classId': matcher #$index field 'pattern' must be a string.")
+      ?: throw invalidManifestSchema("Skill class '$classId': matcher #$index field 'pattern' must be a string.")
   }
 
 private fun validateSkillClassMatcherShape(
@@ -85,12 +85,12 @@ private fun validateSkillClassMatcherShape(
   patternString: String?,
 ) {
   if (exact == null && patternString == null) {
-    throw InvalidManifestSchemaError(
+    throw invalidManifestSchema(
       "Skill class '$classId': matcher #$index must declare either 'exact' or 'pattern'.",
     )
   }
   if (exact != null && patternString != null) {
-    throw InvalidManifestSchemaError(
+    throw invalidManifestSchema(
       "Skill class '$classId': matcher #$index must declare exactly one of 'exact' or 'pattern', not both.",
     )
   }

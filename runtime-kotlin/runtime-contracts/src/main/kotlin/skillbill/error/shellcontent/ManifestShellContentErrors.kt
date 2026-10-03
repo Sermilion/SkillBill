@@ -1,31 +1,39 @@
 package skillbill.error.shellcontent
 
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.RuntimeFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 
-class MissingManifestError(
-  message: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+enum class ManifestFailureCode : RuntimeFailureCode {
+  MISSING_MANIFEST,
+  INVALID_MANIFEST_SCHEMA,
+  INVALID_VALIDATION_GATE_DECLARATION,
+  REVIEW_COMPOSITION_CYCLE,
+  AMBIGUOUS_LANE_OWNERSHIP,
+  INCOMPATIBLE_COMPOSITION_CONTRACT,
+  MISSING_COMPOSITION_LAYER,
+  MANIFEST_FAILURE,
+}
 
-class InvalidManifestSchemaError(
-  message: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+fun missingManifest(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(ManifestFailureCode.MISSING_MANIFEST, message, cause)
 
-class InvalidValidationGateDeclarationError(
-  message: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+fun invalidManifestSchema(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, message, cause)
 
-class MissingValidationGateError(
-  message: String,
-  cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+fun invalidValidationGateDeclaration(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(ManifestFailureCode.INVALID_VALIDATION_GATE_DECLARATION, message, cause)
 
-class ReviewCompositionCycleError(message: String) : ShellContentContractException(message)
+fun missingValidationGate(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(ManifestFailureCode.MANIFEST_FAILURE, message, cause)
 
-class AmbiguousLaneOwnershipError(message: String) : ShellContentContractException(message)
+fun reviewCompositionCycle(message: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(ManifestFailureCode.REVIEW_COMPOSITION_CYCLE, message)
 
-class IncompatibleCompositionContractError(message: String) : ShellContentContractException(message)
+fun ambiguousLaneOwnership(message: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(ManifestFailureCode.AMBIGUOUS_LANE_OWNERSHIP, message)
 
-class MissingCompositionLayerError(message: String) : ShellContentContractException(message)
+fun incompatibleCompositionContract(message: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(ManifestFailureCode.INCOMPATIBLE_COMPOSITION_CONTRACT, message)
+
+fun missingCompositionLayer(message: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(ManifestFailureCode.MISSING_COMPOSITION_LAYER, message)

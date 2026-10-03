@@ -1,18 +1,21 @@
 package skillbill.infrastructure.skills.scaffold.runtime.validation
 
-import skillbill.error.shellcontent.InvalidSkillMdShapeError
-import skillbill.infrastructure.skills.nativeagent.composition.NATIVE_AGENT_SOURCE_DIR
-import skillbill.infrastructure.skills.scaffold.runtime.service.contract.supportingFileTargets
-import skillbill.infrastructure.skills.scaffold.runtime.service.support.requiredSupportingFilesForSkill
-import skillbill.infrastructure.skills.scaffold.validation.review.contentFiles
-import skillbill.infrastructure.skills.scaffold.validation.shape.validateAuthoredContent
-import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMdShape
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.relativeTo
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.SkillStagingFailureCode
+import skillbill.error.shellcontent.isShellContentContractFailure
+import skillbill.infrastructure.skills.nativeagent.composition.NATIVE_AGENT_SOURCE_DIR
+import skillbill.infrastructure.skills.scaffold.runtime.service.contract.supportingFileTargets
+import skillbill.infrastructure.skills.scaffold.runtime.service.support.requiredSupportingFilesForSkill
+import skillbill.infrastructure.skills.scaffold.validation.review.contentFiles
+import skillbill.infrastructure.skills.scaffold.validation.shape.validateAuthoredContent
+import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMdShape
 
 internal val repoValidationNonPortableReviewPatterns =
   listOf(
@@ -47,7 +50,10 @@ internal fun validateInstallableSkill(args: ValidateInstallableSkillArgs) {
   }
   try {
     validateSkillMdShape(args.contentFile, validateBodyShape = false)
-  } catch (error: InvalidSkillMdShapeError) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(
+      error.isShellContentContractFailure() && error.code == SkillStagingFailureCode.INVALID_SKILL_MD_SHAPE,
+    )
     args.issues += error.message.orEmpty()
   }
   requiredSupportingFilesForSkill(args.skillName, args.root).forEach { fileName ->
