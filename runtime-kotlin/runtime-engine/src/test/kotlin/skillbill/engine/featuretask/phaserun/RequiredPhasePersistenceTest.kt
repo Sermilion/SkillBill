@@ -5,6 +5,8 @@ import skillbill.engine.PLAN_OUTPUT
 import skillbill.engine.PREPLAN_OUTPUT
 import skillbill.engine.RuntimeHarnessConfig
 import skillbill.engine.SIMPLIFY_OUTPUT
+import skillbill.engine.TestFeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.withRunState
 import skillbill.engine.WORKFLOW_ID
 import skillbill.engine.committedRepoBranchSetup
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
@@ -12,11 +14,8 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBri
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopPlanningBranch
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
-import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptOnce
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
@@ -356,7 +355,7 @@ class RequiredPhasePersistenceTest {
     val wrapped =
       object : PhaseRunState by delegate {
         override val records = interceptedRecords
-        override val collaborators = delegate.collaborators.copy(diagnostics = diagnostics)
+        override val diagnostics = diagnostics
 
         override fun strategyFor(stepId: String): PhaseStrategy =
           selectedStrategy?.takeIf { stepId in it.steps } ?: delegate.strategyFor(stepId)
@@ -366,16 +365,10 @@ class RequiredPhasePersistenceTest {
 
         override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
           stepBinding.authorizeCoordinatorDispatch(run)
-          stepBinding.beginStepBinding(run)
-          return FeatureTaskRuntimeRunLoopStepBindings.create(
-            skillbill.engine.featuretask.slot.attempt.phaseAttemptCollaborationScope(
-              PhaseAttemptRunHost(run.request, this, run.phaseId, this),
-            ),
-            run,
-          )
+          return this@withRecords.withRunState(this).acceptedStep(run)
         }
       }
-    return copy(runState = wrapped)
+    return withRunState(wrapped)
   }
 
   private fun withCapturedContext(
@@ -403,7 +396,7 @@ class RequiredPhasePersistenceTest {
           ),
         )
       val entry =
-        object : FeatureTaskRuntimeRunLoopEntry() {
+        object : TestFeatureTaskRuntimeRunLoopEntry() {
           override fun run(
             context: FeatureTaskRuntimeRunLoopContext,
             beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit,
@@ -421,7 +414,7 @@ class RequiredPhasePersistenceTest {
             throw InspectionFinished()
           }
         }
-      assertFailsWith<InspectionFinished> { harness.runner.withEntry(entry).run(harness.request) }
+      assertFailsWith<InspectionFinished> { harness.withEntry(entry).run(harness.request) }
     } finally {
       repo.toFile().deleteRecursively()
     }
@@ -429,17 +422,3 @@ class RequiredPhasePersistenceTest {
 }
 
 private class InspectionFinished : RuntimeException()
-
-internal fun FeatureTaskRuntimeRunner.withEntry(entry: FeatureTaskRuntimeRunLoopEntry) =
-  FeatureTaskRuntimeRunner(
-    strategies,
-    recorder,
-    goalContinuationRecorder,
-    phaseGates,
-    startup,
-    phaseSettlementService,
-    diagnostics,
-    clock,
-    probeWriters,
-    entry,
-  )

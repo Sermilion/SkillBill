@@ -1,3 +1,17 @@
+## [2026-10-03] SKILL-390 subtask 2: feature-task-run collaborators and engine inject guard
+Areas: runtime-engine featuretask runner, lifecycle, phaserun, prepare, review, runloop and slot attempt/state; goalrunner planning and persistence; runtime-core architecture guards; engine test support
+
+- Deleted the phase-gate locator, both gate-boundary bags and the probe-writer bag. State, attempt and run-loop consumers now name the collaborator they use.
+- Runner execution, prepared execution, launch outcomes and durable launch use private injected owners. Durable run state no longer takes the runner; run state and session remain per-run.
+- Deleted runner receiver functions, both attempt aliases, the host-returning attemptRunHost accessor and the run-loop binding forwarders. Named injected constructors keep their collaborators private.
+- Goal outcome persistence takes one wire-artifact validator; its test fixture selects validation by artifact kind. Unread validation-runner wiring is gone.
+- reusable: The existing inject-constructor property scanner now covers runtime-engine through PrincipleEnforcementInventory.RUNTIME_ENGINE_MAIN with an empty baseline.
+- Existing runner, phase-run, persistence, gate and slot-baseline factories use the new constructors. No new module, architecture-test class, suppression or baseline row was added.
+- Limits: test-package moves remain subtask 3. This refactor introduces no intended persisted-byte, CLI or MCP contract change.
+
+Feature flag: N/A
+Acceptance criteria: 8/8 implemented in current source; execution proof remains owned by build and validate.
+
 ## [2026-10-02] SKILL-390 subtask 1: goal-runner collaborators and engine repairs
 Areas: runtime-engine goalrunner execution, launch, planning, status, reset, repair and recovery; featuretask branch policy and persistence; work status; runtime-domain workflow identity; runtime-core architecture guards; engine test factories
 

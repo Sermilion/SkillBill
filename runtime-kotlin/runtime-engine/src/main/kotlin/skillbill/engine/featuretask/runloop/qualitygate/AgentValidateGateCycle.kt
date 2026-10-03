@@ -8,7 +8,7 @@ import skillbill.engine.featuretask.slot.attempt.PhaseStepCall
 import skillbill.engine.featuretask.slot.attempt.RuntimeOwnedGateSettlement
 import skillbill.engine.featuretask.slot.attempt.blockGateStep
 import skillbill.engine.featuretask.slot.attempt.gateChangedPaths
-import skillbill.engine.featuretask.slot.attempt.qualityGateAttemptHost
+import skillbill.engine.featuretask.slot.attempt.runAcceptedAttemptLoop
 import skillbill.engine.featuretask.validation.ReadinessPostValidateCaptureRequest
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
@@ -29,7 +29,7 @@ internal class AgentValidateGateCycle(
     call.acceptedExecution.requireAcceptedStep(run, call.strategyId)
     val iteration = call.acceptedExecution.nextStepIteration()
     val cycle =
-      context.phaseGates.validationGateCoordinator.execute(
+      context.validationGateCoordinator.execute(
         ValidationGateAgentRepairLauncher { findings, _, _ ->
           repair(run, run.copy(validationGateFindings = findings))
         },
@@ -42,7 +42,7 @@ internal class AgentValidateGateCycle(
     run: PhaseRun,
   ): ValidationGateAgentRepairResult {
     val attemptCall = context.gateAttemptCall(call, acceptedRun, run)
-    val settled = context.qualityGateAttemptHost().runAcceptedAttemptLoop(run, attemptCall)
+    val settled = context.runAcceptedAttemptLoop(run, attemptCall)
     val completed = settled.completedOutput
     val paused = settled.pausedReason
     if (completed == null) stoppedAttempt = settled
@@ -85,14 +85,14 @@ internal class AgentValidateGateCycle(
 
   private fun captureReadinessFragment(run: PhaseRun) {
     if (context.request.skeletonDefinition?.runStateKind == SkeletonRunStateKind.IN_MEMORY) return
-    context.phaseGates.readinessGateCoordinator.capturePostValidateFragment(
+    context.readinessGateCoordinator.capturePostValidateFragment(
       ReadinessPostValidateCaptureRequest(
         workflowId = context.request.workflowId,
         repoRoot = context.request.repoRoot,
         baseBranch =
           context.recorder.loadResolvedBranch(context.request.workflowId)?.baseBranch ?: DEFAULT_BASE_BRANCH,
         changedPaths = context.gateChangedPaths(run),
-        gitOperations = context.phaseGates.gitOperations,
+        gitOperations = context.gitOperations,
       ),
     )
   }

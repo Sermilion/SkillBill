@@ -1,3 +1,14 @@
+## [2026-10-03] Keep gate rewiring behind accepted-step bindings
+Context: SKILL-390 subtask 2 removes the phase-gate locator across durable, in-memory and goal-planning execution while preserving strategy authority.
+Decision: Give runtime consumers the specific typed collaborator they use, keep gate cycles and finalization with their existing owners, and retain accepted-step bindings for strategies.
+Reason: Unpacking the locator must not give ordinary strategies Git writers or unrelated mutation authority. Renaming a bag or forwarding its host would preserve indirect access; replacing the run-loop framework would exceed this change's scope.
+Alternatives considered: Replacement dependency factories, broad context conversions and per-run DI subcomponents would retain indirect ownership or add another execution framework.
+
+## [2026-10-03] Extend the existing inject guard with an empty engine baseline
+Context: The injected-constructor property guard covered application and CLI but missed exposed engine collaborators.
+Decision: Add the engine scan beside the existing methods, use the inventory-owned main-source root and an empty baseline, and retain the scanner's rejection fixture.
+Reason: The same scanner can reject engine property exposure without another architecture-test class or an exemption. Forwarding getters and receiver locators still require source review because this guard does not detect them.
+
 ## [2026-10-02] Private behavior owners with call-scoped pending state
 Context: SKILL-390 found goalrunner dependency bags and receiver helpers that read exposed collaborators. Unpacking the per-run assembler alone would exceed the constructor limit.
 Decision: Inject private behavior owners in existing packages, move finalization and projection operations into their classes, and pass one run-owned pending state through execution calls.

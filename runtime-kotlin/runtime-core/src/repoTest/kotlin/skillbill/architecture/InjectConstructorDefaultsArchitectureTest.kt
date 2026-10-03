@@ -63,6 +63,16 @@ class InjectConstructorDefaultsArchitectureTest {
   }
 
   @Test
+  fun `runtime-engine inject classes expose no constructor property`() {
+    val violations =
+      ArchitectureScanSupport.injectConstructorPropertyViolations(
+        baseline = emptySet(),
+        scanRoot = PrincipleEnforcementInventory.RUNTIME_ENGINE_MAIN,
+      )
+    assertEquals(emptyList(), violations, violations.joinToString("\n"))
+  }
+
+  @Test
   fun `runtime-cli internal data classes carry no collaborator property`() {
     val violations =
       ArchitectureScanSupport.dataClassCollaboratorPropertyViolations(

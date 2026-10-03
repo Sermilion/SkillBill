@@ -49,7 +49,7 @@ internal object PlanDecompositionStop {
   ): NormalizedFeatureTaskRuntimePhaseOutput {
     val request = context.request
     val parentSpec =
-      context.phaseGates.decompositionPlanner.existingParentSpec(request.repoRoot, request.issueKey)
+      context.decompositionPlanner.existingParentSpec(request.repoRoot, request.issueKey)
         ?: return attested
     val parentPath = request.repoRoot.toAbsolutePath().normalize().relativize(parentSpec).toString()
     val envelope = attested.envelopeWireMap().toMutableMap()
@@ -78,10 +78,10 @@ internal object PlanDecompositionStop {
         request.repoRoot,
         request.issueKey,
         capture.fileManifest.introduced,
-        context.phaseGates.decompositionPlanner::bundleTree,
+        context.decompositionPlanner::bundleTree,
       )?.let { return notReadyReason(it) }
     return try {
-      context.phaseGates.decompositionPlanner.verifyAuthoredBundle(
+      context.decompositionPlanner.verifyAuthoredBundle(
         request.repoRoot,
         request.issueKey,
         request.runInvariants,
@@ -102,7 +102,7 @@ internal object PlanDecompositionStop {
     with(context) {
       val stopper =
         FeatureTaskRuntimePlanningStopper(
-          phaseGates.decompositionPlanner,
+          decompositionPlanner,
           recorder,
           diagnostics,
           coupledRunTransitions,

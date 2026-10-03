@@ -2,7 +2,6 @@ package skillbill.engine.goalrunner.planning.state
 
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.phaserun.InMemoryPhaseRunCheckpoints
 import skillbill.engine.featuretask.phaserun.InMemoryPhaseRunGoal
 import skillbill.engine.featuretask.phaserun.InMemoryPhaseRunRecords
@@ -16,7 +15,6 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepB
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
 import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaborationScope
@@ -31,13 +29,14 @@ import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.engine.goalrunner.planning.attempt.GoalPlanningStepAttempts
-import skillbill.error.featuretask.GoalPlanningPhaseGatesUnsupportedError
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
+import java.time.Clock
 
 internal class GoalPlanningPhaseRunState(
   internal val facts: GoalPlanningRunFacts,
@@ -45,23 +44,22 @@ internal class GoalPlanningPhaseRunState(
   private val planning: GoalPlanningRunProgress,
   private val strategies: PhaseStrategyLookup,
   private val executionPlan: ResolvedPhaseExecutionPlan,
-  override val collaborators: PhaseAttemptCollaborators,
+  override val clock: Clock,
+  override val diagnostics: RuntimeDiagnostics,
   override val specSource: SpecSource,
 ) : PhaseRunState {
   override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
     FeatureTaskRuntimeRunLoopStepBindingCoordinator()
   override val session: FeatureTaskRuntimeRunLoopSession =
     FeatureTaskRuntimeRunLoopSession(operatorBlockRetry = null, initialPendingReentry = null)
-  override val records: PhaseRunRecords = InMemoryPhaseRunRecords(collaborators.clock, null)
+  override val records: PhaseRunRecords = InMemoryPhaseRunRecords(clock, null)
   override val telemetry: FeatureTaskRuntimeRunObservability =
-    FeatureTaskRuntimeRunObservability(records, facts, collaborators.diagnostics)
+    FeatureTaskRuntimeRunObservability(records, facts, diagnostics)
   override val goal: PhaseRunGoal = InMemoryPhaseRunGoal
   override val settlements: PhaseRunSettlements = InMemoryPhaseRunSettlements
   override val checkpoints: PhaseRunCheckpoints = InMemoryPhaseRunCheckpoints
   override val transitions: FeatureTaskRuntimeTransitionDeclaration = progress.transitions
   override val attemptLoop: PhaseStepAttempts = GoalPlanningStepAttempts(planning)
-  override val phaseGates: FeatureTaskRuntimePhaseGates
-    get() = throw GoalPlanningPhaseGatesUnsupportedError()
 
   private val planFanOut = GoalPlanningPlanFanOut(planning, this)
 
@@ -129,16 +127,16 @@ private class GoalPlanningUnitRunState(
       resumeRulesFn = parent.progress.resumeRules,
     )
   override val session = FeatureTaskRuntimeRunLoopSession(operatorBlockRetry = null, initialPendingReentry = null)
-  override val records: PhaseRunRecords = InMemoryPhaseRunRecords(parent.collaborators.clock, null)
-  override val collaborators get() = parent.collaborators
+  override val clock get() = parent.clock
+  override val diagnostics get() = parent.diagnostics
+  override val records: PhaseRunRecords = InMemoryPhaseRunRecords(parent.clock, null)
   override val specSource get() = parent.specSource
   override val transitions get() = parent.transitions
   override val telemetry: FeatureTaskRuntimeRunObservability =
-    FeatureTaskRuntimeRunObservability(records, parent.facts, parent.collaborators.diagnostics)
+    FeatureTaskRuntimeRunObservability(records, parent.facts, parent.diagnostics)
   override val goal: PhaseRunGoal = InMemoryPhaseRunGoal
   override val settlements: PhaseRunSettlements = InMemoryPhaseRunSettlements
   override val checkpoints: PhaseRunCheckpoints = InMemoryPhaseRunCheckpoints
-  override val phaseGates get() = parent.phaseGates
   override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
     FeatureTaskRuntimeRunLoopStepBindingCoordinator()
 

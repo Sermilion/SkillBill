@@ -6,8 +6,9 @@ import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.contracts.JsonCodec
 import skillbill.engine.EnabledRuntimeTelemetrySettingsProvider
 import skillbill.engine.RecordingWorkflowGitOperations
+import skillbill.engine.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
-import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
+import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slotbaseline.SlotBaselineSqlite
 import skillbill.engine.featuretask.slotbaseline.SlotBaselineTestResources
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
@@ -17,6 +18,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.review.ReviewContextEnvelopeValidator
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -45,14 +47,15 @@ internal fun phaseRunDatabase(
   }
 
 internal fun phaseRunEntry(
-  runner: FeatureTaskRuntimeRunner,
+  strategies: PhaseStrategyLookup,
+  gitOperations: WorkflowGitOperations,
   database: DatabaseSessionFactory,
   clock: Clock,
-  runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+  runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
 ): PhaseRunEntry =
   PhaseRunEntry(
-    strategies = runner.strategies,
-    phaseGates = runner.phaseGates,
+    strategies = strategies,
+    gitOperations = gitOperations,
     reviewResultAssembly =
       ParallelCodeReviewRunnerResultAssembly(
         GoalRunnerSubtaskLauncher { error("A phase run must not launch an integration pass.") },

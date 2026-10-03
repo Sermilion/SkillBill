@@ -126,18 +126,19 @@ class PhasePlanRunTest {
     launcher.requests.map { request -> phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride)) }
 
   private fun entry(launcher: RuntimeRecordingLauncher): PhaseRunEntry {
-    val runner =
+    val config =
+      RuntimeHarnessConfig(
+        seedDurableWorkflow = false,
+        branchSetup = committedRepoBranchSetup(),
+        repoRoot = repoRoot,
+        launcher = launcher,
+      )
+    val harness =
       telemetryRunnerHarness(
-        runtimeConfig =
-          RuntimeHarnessConfig(
-            seedDurableWorkflow = false,
-            branchSetup = committedRepoBranchSetup(),
-            repoRoot = repoRoot,
-            launcher = launcher,
-          ),
+        runtimeConfig = config,
         databaseFactory = { database },
-      ).runner
-    return phaseRunEntry(runner, database, clock)
+      )
+    return phaseRunEntry(harness.strategies, config.harnessGitOperations, database, clock, harness.runLoopEntry)
   }
 
   private companion object {

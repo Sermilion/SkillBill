@@ -1,13 +1,16 @@
 package skillbill.engine.featuretask.slot.attempt
 
+import java.time.Clock
 import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.application.review.spec.SpecIntentProjectionResolver
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommitIdentity
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
-import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
+import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistInPhaseArgs
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
@@ -38,7 +41,16 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
+import skillbill.engine.featuretask.validation.FeatureTaskRuntimeReadinessGateCoordinator
+import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
+import skillbill.engine.featuretask.validation.ValidationGateResolver
+import skillbill.error.featuretask.GoalPlanningPhaseGatesUnsupportedError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
+import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
@@ -46,13 +58,24 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import java.time.Clock
 
 internal class PhaseAttemptRunHost(
   override val request: FeatureTaskRuntimeRunFacts,
   private val backingRunState: PhaseRunState,
   internal val boundPhaseId: String,
   private val acceptedLaunchState: PhaseLaunchState,
+  private val directGitOperations: WorkflowGitOperations? = null,
+  private val directDecompositionPlanner: FeatureTaskRuntimeDecompositionPlanner? = null,
+  private val directFindingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory? = null,
+  private val directSpecIntentProjectionResolver: SpecIntentProjectionResolver? = null,
+  private val directLifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry? = null,
+  private val directSharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort? = null,
+  private val directDiffResolver: DiffResolverPort? = null,
+  private val directBuildGateCoordinator: FeatureTaskRuntimeBuildGateCoordinator? = null,
+  private val directValidationGateResolver: ValidationGateResolver? = null,
+  private val directBuildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator? = null,
+  private val directValidationGateCoordinator: FeatureTaskRuntimeValidationGateCoordinator? = null,
+  private val directReadinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator? = null,
 ) : PhaseAttemptEnvironment,
   PhaseQualityGateReporting by backingRunState {
   val progress: FeatureTaskRuntimeProgressSnapshotAccess
@@ -79,8 +102,41 @@ internal class PhaseAttemptRunHost(
   val transitions: FeatureTaskRuntimeTransitionDeclaration
     get() = backingRunState.transitions
 
-  val phaseGates: FeatureTaskRuntimePhaseGates
-    get() = backingRunState.phaseGates
+  val gitOperations: WorkflowGitOperations
+    get() = directGitOperations ?: throw GoalPlanningPhaseGatesUnsupportedError()
+
+  val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner
+    get() = directDecompositionPlanner ?: throw GoalPlanningPhaseGatesUnsupportedError()
+
+  val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory
+    get() = directFindingVerificationBoundaryMemory ?: throw GoalPlanningPhaseGatesUnsupportedError()
+
+  val specIntentProjectionResolver: SpecIntentProjectionResolver
+    get() = directSpecIntentProjectionResolver ?: throw GoalPlanningPhaseGatesUnsupportedError()
+
+  val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry
+    get() = directLifecycleTelemetry ?: throw GoalPlanningPhaseGatesUnsupportedError()
+
+  val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort
+    get() = directSharedEvidenceResolver ?: throw GoalPlanningPhaseGatesUnsupportedError()
+
+  val diffResolver: DiffResolverPort
+    get() = directDiffResolver ?: throw GoalPlanningPhaseGatesUnsupportedError()
+
+  val buildGateCoordinator: FeatureTaskRuntimeBuildGateCoordinator
+    get() = directBuildGateCoordinator ?: throw GoalPlanningPhaseGatesUnsupportedError()
+
+  val validationGateResolver: ValidationGateResolver
+    get() = directValidationGateResolver ?: throw GoalPlanningPhaseGatesUnsupportedError()
+
+  fun requireBuildReceiptValidator(): FeatureTaskRuntimeWireArtifactValidator =
+    directBuildReceiptValidator ?: throw GoalPlanningPhaseGatesUnsupportedError()
+
+  val validationGateCoordinator: FeatureTaskRuntimeValidationGateCoordinator
+    get() = directValidationGateCoordinator ?: throw GoalPlanningPhaseGatesUnsupportedError()
+
+  val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator
+    get() = directReadinessGateCoordinator ?: throw GoalPlanningPhaseGatesUnsupportedError()
 
   val telemetry: FeatureTaskRuntimeRunObservability
     get() = backingRunState.telemetry
@@ -92,10 +148,10 @@ internal class PhaseAttemptRunHost(
     get() = backingRunState.stepBinding
 
   val clock: Clock
-    get() = backingRunState.collaborators.clock
+    get() = backingRunState.clock
 
   val diagnostics: RuntimeDiagnostics
-    get() = backingRunState.collaborators.diagnostics
+    get() = backingRunState.diagnostics
 
   fun selectedOwnerOf(stepId: String): PhaseStrategy? = backingRunState.selectedOwnerOf(stepId)
 
@@ -166,88 +222,7 @@ internal class PhaseAttemptRunHost(
       "Review persistence belongs to the accepted review step."
     }
   }
-}
 
-internal class PhaseQualityGateCycleScope(
-  private val boundRunHost: PhaseAttemptRunHost,
-) : PhaseQualityGateCycleContext,
-  PhaseQualityGateReporting by boundRunHost {
-  internal fun runLoopAttemptHost(): PhaseAttemptRunHost = boundRunHost
-
-  override val request: FeatureTaskRuntimeRunFacts
-    get() = boundRunHost.request
-
-  override val progress
-    get() = boundRunHost.progress
-
-  override val session
-    get() = boundRunHost.session
-
-  override val recorder
-    get() = boundRunHost.records
-
-  override val phaseGates
-    get() = boundRunHost.phaseGates
-
-  override val clock
-    get() = boundRunHost.clock
-
-  override val diagnostics
-    get() = boundRunHost.diagnostics
-
-  override val goalContinuationRecorder
-    get() = boundRunHost.goal
-
-  override val observability
-    get() = boundRunHost.telemetry
-
-  override val coupledRunTransitions
-    get() = boundRunHost.coupledRunTransitions
-
-  override val transitionDeclaration
-    get() = boundRunHost.transitions
-}
-
-internal class PhaseRuntimeFinalizationScope(
-  private val boundRunHost: PhaseAttemptRunHost,
-) : PhaseRuntimeFinalizationContext {
-  internal fun runLoopAttemptHost(): PhaseAttemptRunHost = boundRunHost
-
-  override val request: FeatureTaskRuntimeRunFacts
-    get() = boundRunHost.request
-
-  override val progress
-    get() = boundRunHost.progress
-
-  override val session
-    get() = boundRunHost.session
-
-  override val transitions: FeatureTaskRuntimeTransitionDeclaration
-    get() = boundRunHost.transitions
-
-  override val recorder
-    get() = boundRunHost.records
-
-  override val phaseGates
-    get() = boundRunHost.phaseGates
-
-  override val clock
-    get() = boundRunHost.clock
-
-  override val diagnostics
-    get() = boundRunHost.diagnostics
-
-  override val goalContinuationRecorder
-    get() = boundRunHost.goal
-
-  override val observability
-    get() = boundRunHost.telemetry
-
-  override val coupledRunTransitions
-    get() = boundRunHost.coupledRunTransitions
-
-  override val checkpoints
-    get() = boundRunHost.checkpoints
 }
 
 internal fun PhaseRuntimeFinalizationContext.blockAndPersistInPhase(args: BlockAndPersistInPhaseArgs): PhaseOutcome =
@@ -262,7 +237,13 @@ internal fun PhaseRuntimeFinalizationContext.blockAndPersistInPhase(args: BlockA
 internal fun PhaseRuntimeFinalizationContext.blockRequiredWriteRejection(
   run: PhaseRun,
   rejection: RequiredPhaseWrite.Rejected,
-): PhaseOutcome = PhaseAttemptOnce.blockRequiredWriteRejection(finalizationAttemptHost(), run, rejection)
+): PhaseOutcome =
+  PhaseAttemptOnce.blockRequiredWriteRejection(
+    this as? PhaseAttemptLaunchCollaborationScope
+      ?: error("Finalization context is not bound to a run-loop attempt."),
+    run,
+    rejection,
+  )
 
 internal fun PhaseRuntimeFinalizationContext.persistFinalizationRequiredRunning(
   run: PhaseRun,
@@ -332,19 +313,13 @@ internal fun PhaseRuntimeFinalizationContext.persistFinalizationCompleted(
 internal fun PhaseRuntimeFinalizationContext.finalizationCoupledProgress(): FeatureTaskRuntimeProgressSnapshotAccess =
   progress
 
-internal fun PhaseRuntimeFinalizationContext.finalizationAttemptHost(): PhaseAttemptRunHost =
-  when (this) {
-    is PhaseRuntimeFinalizationScope -> runLoopAttemptHost()
-    else -> error("Finalization context is not bound to a run-loop attempt host.")
-  }
-
 internal fun PhaseRuntimeFinalizationContext.writeRuntimeSubtaskCommit(
   branch: String,
   message: String,
   identity: FeatureTaskRuntimeSubtaskCommitIdentity,
 ): WorkflowGitOperationResult =
-  FeatureTaskRuntimeRunLoopCheckpoint.writeSubtaskCommit(
-    phaseAttemptCollaborationScope(finalizationAttemptHost()),
+  (this as? PhaseAttemptLaunchCollaborationScope
+    ?: error("Finalization context is not bound to a run-loop attempt.")).writeRuntimeSubtaskCommit(
     branch,
     message,
     identity,

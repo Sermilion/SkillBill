@@ -7,6 +7,7 @@ import skillbill.engine.REVIEW_BLOCKER_MESSAGE
 import skillbill.engine.REVIEW_FIX_BLOCKER_FINDING_ID
 import skillbill.engine.RuntimeHarnessConfig
 import skillbill.engine.RuntimeRecordingLauncher
+import skillbill.engine.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.committedRepoBranchSetup
 import skillbill.engine.defaultPhaseOutput
 import skillbill.engine.facts
@@ -18,7 +19,6 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDurableState
-import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
@@ -185,7 +185,7 @@ class PhaseReviewRunTest {
     val durable = telemetryRunnerHarness(RuntimeHarnessConfig(launcher = satisfiedAuditLauncher()))
 
     phaseEntry.run(reviewRequest(mode = null))
-    val durableReport = durable.runner.withRunLoopEntry(loopEntry).run(durable.request)
+    val durableReport = durable.withRunLoopEntry(loopEntry).run(durable.request)
 
     assertIs<FeatureTaskRuntimeRunReport.Completed>(durableReport, durableReport.toString())
     assertEquals(2, loopEntry.runStates.size, loopEntry.runStates.toString())
@@ -247,14 +247,14 @@ class PhaseReviewRunTest {
 
   private fun inlineEntry(
     launcher: RuntimeRecordingLauncher,
-    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
     review: () -> String,
   ): PhaseRunEntry = inlineEntryOver(launcher, scriptedReviewPhaseRunner(review), runLoopEntry)
 
   private fun inlineEntryOver(
     launcher: RuntimeRecordingLauncher,
     reviewRunner: PhaseRunner,
-    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
   ): PhaseRunEntry =
     entryFor(
       RuntimeHarnessConfig(
@@ -284,13 +284,19 @@ class PhaseReviewRunTest {
 
   private fun entryFor(
     config: RuntimeHarnessConfig,
-    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
   ): PhaseRunEntry {
-    val runner =
+    val harness =
       telemetryRunnerHarness(runtimeConfig = config.copy(seedDurableWorkflow = false), databaseFactory = {
         database
-      }).runner
-    return phaseRunEntry(runner, database, clock, runLoopEntry)
+      })
+    return phaseRunEntry(
+      harness.strategies,
+      config.harnessGitOperations,
+      database,
+      clock,
+      harness.runLoopEntry.delegateTo(runLoopEntry),
+    )
   }
 
   private fun launchedPhases(launcher: RuntimeRecordingLauncher): List<String> =
@@ -329,7 +335,7 @@ class PhaseReviewRunTest {
   private fun rowsOf(value: Any?): List<Map<String, Any?>> =
     (value as List<*>).map { row -> requireNotNull(JsonCodec.anyToStringAnyMap(row)) }
 
-  private class RecordingRunLoopEntry : FeatureTaskRuntimeRunLoopEntry() {
+  private class RecordingRunLoopEntry : TestFeatureTaskRuntimeRunLoopEntry() {
     val runStates = mutableListOf<PhaseRunState>()
 
     override fun run(
@@ -372,19 +378,3 @@ class PhaseReviewRunTest {
       )
   }
 }
-
-private fun FeatureTaskRuntimeRunner.withRunLoopEntry(
-  entry: FeatureTaskRuntimeRunLoopEntry,
-): FeatureTaskRuntimeRunner =
-  FeatureTaskRuntimeRunner(
-    strategies = strategies,
-    recorder = recorder,
-    goalContinuationRecorder = goalContinuationRecorder,
-    phaseGates = phaseGates,
-    startup = startup,
-    phaseSettlementService = phaseSettlementService,
-    diagnostics = diagnostics,
-    clock = clock,
-    probeWriters = probeWriters,
-    runLoopEntry = entry,
-  )

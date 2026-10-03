@@ -161,19 +161,20 @@ class PhasePullRequestRunTest {
     launcher.requests.map { request -> phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride)) }
 
   private fun entry(): PhaseRunEntry {
-    val runner =
+    val config =
+      RuntimeHarnessConfig(
+        seedDurableWorkflow = false,
+        repoRoot = repoRoot,
+        launcher = launcher,
+        pullRequestIdentityLookup = PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
+        gitOperationsOverride = GitWorkflowGitOperations(),
+      )
+    val harness =
       telemetryRunnerHarness(
-        runtimeConfig =
-          RuntimeHarnessConfig(
-            seedDurableWorkflow = false,
-            repoRoot = repoRoot,
-            launcher = launcher,
-            pullRequestIdentityLookup = PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
-            gitOperationsOverride = GitWorkflowGitOperations(),
-          ),
+        runtimeConfig = config,
         databaseFactory = { database },
-      ).runner
-    return phaseRunEntry(runner, database, clock)
+      )
+    return phaseRunEntry(harness.strategies, config.harnessGitOperations, database, clock, harness.runLoopEntry)
   }
 
   private companion object {

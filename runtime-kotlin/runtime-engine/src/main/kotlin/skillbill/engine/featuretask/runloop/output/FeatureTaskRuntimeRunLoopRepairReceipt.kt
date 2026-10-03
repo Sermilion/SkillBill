@@ -41,7 +41,7 @@ object FeatureTaskRuntimeRunLoopRepairReceipt {
         args.branch,
         FeatureTaskRuntimeRunLoopCheckpoint.withIndexRestoreOutcome(
           context.request,
-          context.phaseGates,
+          context.gitOperations,
           error,
           args.ownedPaths,
           indexSnapshot,
@@ -56,7 +56,7 @@ object FeatureTaskRuntimeRunLoopRepairReceipt {
   ): Boolean {
     with(context) {
       val indexSnapshot =
-        when (val snapshot = phaseGates.gitOperations.captureIndexState(request.repoRoot, args.ownedPaths)) {
+        when (val snapshot = gitOperations.captureIndexState(request.repoRoot, args.ownedPaths)) {
           is WorkflowGitIndexSnapshotResult.Captured -> snapshot.snapshot
           is WorkflowGitIndexSnapshotResult.Failed ->
             return with(FeatureTaskRuntimeRunLoopCheckpoint) {
@@ -70,7 +70,7 @@ object FeatureTaskRuntimeRunLoopRepairReceipt {
             }
         }
       val parentSha =
-        phaseGates.gitOperations.headCommitSha(request.repoRoot)
+        gitOperations.headCommitSha(request.repoRoot)
           .takeIf { it is WorkflowGitOperationResult.Ok }?.value?.trim()?.takeIf(String::isNotBlank)
       val attempt = FeatureTaskRuntimeRunLoopRepairReceipt.stageAndWriteCheckpoint(context, args)
       val commitSha =
@@ -103,7 +103,7 @@ object FeatureTaskRuntimeRunLoopRepairReceipt {
     args: CommitCheckpointArgs,
   ): CheckpointCommitAttempt {
     with(context) {
-      val staged = phaseGates.gitOperations.stagePaths(request.repoRoot, args.ownedPaths)
+      val staged = gitOperations.stagePaths(request.repoRoot, args.ownedPaths)
       if (staged !is WorkflowGitOperationResult.Ok) {
         return CheckpointCommitAttempt(commitSha = null, error = staged.error)
       }

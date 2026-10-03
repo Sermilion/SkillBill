@@ -59,7 +59,7 @@ internal class PackBuildGateCycle(
         context.recorder.buildGateProgressStore(commandFamily),
       )
     val cycle =
-      context.phaseGates.buildGateCoordinator.execute(
+      context.buildGateCoordinator.execute(
         cycle = cycleRequest(run, iteration, checkpoint, changedPaths, reporting),
         onGateRunCount = { count ->
           gateRuns = count
@@ -133,7 +133,7 @@ internal class PackBuildGateCycle(
           admitted.effectiveInputs.packSlug
         } else {
           (
-            context.phaseGates.validationGateResolver.resolve(
+            context.validationGateResolver.resolve(
               changedPaths,
             ) as? ValidationGateResolution.Declared
           )?.packSlug
@@ -241,7 +241,7 @@ internal class PackBuildGateCycle(
             accepted.envelopeWireMap()[SharedPayloadKeys.PRODUCED_OUTPUTS],
           )?.get(ValidationEvidencePayloadKeys.BUILD_RECEIPT),
       )
-    context.phaseGates.buildReceiptValidator.validate(
+    context.buildReceiptValidator.validate(
       FeatureTaskRuntimeWireArtifactKind.BUILD_RECEIPT,
       FeatureTaskRuntimeWorkflowArtifactMap.from(buildReceipt ?: emptyMap<String, Any?>()),
       run.phaseId,

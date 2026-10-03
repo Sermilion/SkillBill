@@ -83,8 +83,7 @@ internal class WorkflowGoalRunnerProgressRecording(
   private val database: DatabaseSessionFactory,
   private val engine: WorkflowEngine,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
-  private val goalObservabilityEventValidator: FeatureTaskRuntimeWireArtifactValidator,
-  private val goalProgressEventValidator: FeatureTaskRuntimeWireArtifactValidator,
+  private val wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
 ) : GoalRunnerWorkflowProgressStore,
   GoalRunnerWorkflowLedgerWriteStore,
   GoalRunnerAttemptLedgerStore {
@@ -145,7 +144,7 @@ internal class WorkflowGoalRunnerProgressRecording(
               request = request,
             ),
         )
-      validateGoalObservabilityPatch(goalObservabilityEventValidator, observabilityPatch)
+      validateGoalObservabilityPatch(wireArtifactValidator, observabilityPatch)
       val updated =
         engine.updateRecord(
           family.definition,
@@ -174,7 +173,7 @@ internal class WorkflowGoalRunnerProgressRecording(
         ),
     ) { sequenceNumber ->
       GoalRunnerWirePayload.from(request.draft.toEvent(sequenceNumber).toPersistenceWire()).payload.also { entryMap ->
-        goalProgressEventValidator.validate(
+        wireArtifactValidator.validate(
           FeatureTaskRuntimeWireArtifactKind.GOAL_PROGRESS_EVENT,
           FeatureTaskRuntimeWorkflowArtifactMap.from(entryMap),
           DurableWorkflowArtifactFamily.GOAL_PROGRESS_LATEST_EVENT.label(),

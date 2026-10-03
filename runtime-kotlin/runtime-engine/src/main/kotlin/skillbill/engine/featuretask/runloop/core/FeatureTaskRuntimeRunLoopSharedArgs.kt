@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.runloop.core
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommitIdentity
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
@@ -16,8 +15,10 @@ import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
+import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
@@ -118,7 +119,8 @@ internal data class CompletionProjectionRejectionArgs(
 internal data class RepositoryCheckpointResolutionArgs(
   val recorder: PhaseRunRecords,
   val goalContinuationRecorder: PhaseRunGoal,
-  val phaseGates: FeatureTaskRuntimePhaseGates,
+  val gitOperations: WorkflowGitOperations,
+  val validationGateResolver: ValidationGateResolver,
   val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner,
   val session: FeatureTaskRuntimeRunSessionObservations,
   val run: PhaseRun,
@@ -189,7 +191,7 @@ internal data class CapExhaustionReasonArgs(
 internal data class UnownedWorktreeCommitShaArgs(
   val request: FeatureTaskRuntimeRunFacts,
   val diagnostics: RuntimeDiagnostics,
-  val phaseGates: FeatureTaskRuntimePhaseGates,
+  val gitOperations: WorkflowGitOperations,
   val run: PhaseRun,
   val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
 )

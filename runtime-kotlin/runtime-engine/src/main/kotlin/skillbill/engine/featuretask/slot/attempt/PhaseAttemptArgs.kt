@@ -3,17 +3,24 @@ package skillbill.engine.featuretask.slot.attempt
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
+import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.CapturedPhaseOutput
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptAccumulatorContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptContext
 import skillbill.engine.featuretask.runloop.core.PhaseAttemptLoopState
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.slot.PhaseStepDescription
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
+import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
 /** Accepted-step launch surface exposed to one prepared step call; not a full step binding. */
 internal interface PhaseAcceptedStepCallTarget {
@@ -63,9 +70,14 @@ internal class GateOutput(
   val captured: CapturedPhaseOutput,
   val fileManifest: FeatureTaskRuntimePhaseFileManifest,
   val settledEnvelope: PhaseSettledEnvelopeRead,
-  val call: PhaseStepCall,
   val outputGateFailuresBefore: Int? = null,
-  val settlementContext: PhaseOutputSettlementContext,
+  val progress: FeatureTaskRuntimeProgressSnapshotAccess,
+  val recorder: PhaseRunRecords,
+  val phaseSettlementService: PhaseRunSettlements,
+  val observability: FeatureTaskRuntimeRunObservability,
+  val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner,
+  val settleAcceptedOutput:
+    (NormalizedFeatureTaskRuntimePhaseOutput, FeatureTaskRuntimeRunObservability) -> AttemptResult,
   val stepHooks: PhaseStepHooks,
 ) {
   val rejectionExhaustsFixLoop: Boolean?

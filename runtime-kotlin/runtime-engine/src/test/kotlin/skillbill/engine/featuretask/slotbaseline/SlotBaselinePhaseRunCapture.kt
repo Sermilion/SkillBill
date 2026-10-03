@@ -228,11 +228,17 @@ internal class SlotBaselinePhaseRunHarness private constructor(
   fun outboxRows(): List<Map<String, Any?>> = SlotBaselineSqlite.rows(database.resolveDbPath(), "telemetry_outbox")
 
   private fun entryFor(config: RuntimeHarnessConfig): PhaseRunEntry {
-    val runner =
+    val harness =
       telemetryRunnerHarness(runtimeConfig = config.copy(seedDurableWorkflow = false), databaseFactory = {
         database
-      }).runner
-    return phaseRunEntry(runner, database, SlotBaselineFullRunCapture.sqliteClock)
+      })
+    return phaseRunEntry(
+      harness.strategies,
+      config.harnessGitOperations,
+      database,
+      SlotBaselineFullRunCapture.sqliteClock,
+      harness.runLoopEntry,
+    )
   }
 
   private fun isFixed(): Boolean = Files.readString(source) == FIXED_SOURCE

@@ -7,7 +7,6 @@ import skillbill.engine.featuretask.runloop.observability.loopEdge
 import skillbill.engine.featuretask.runner.skeletonDefinitionFor
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunLoopCollaborators
 import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -120,7 +119,7 @@ object FeatureTaskRuntimeRunLoopTransitions {
     ).any { context.acceptedStepPolicy(it).mutating }
 
   internal fun establishForwardCheckpoint(
-    context: PhaseAttemptRunLoopCollaborators,
+    context: PhaseRunLoopAttemptCollaborators,
     precedingPhaseId: String,
     destinationPhaseId: String,
   ): Boolean {

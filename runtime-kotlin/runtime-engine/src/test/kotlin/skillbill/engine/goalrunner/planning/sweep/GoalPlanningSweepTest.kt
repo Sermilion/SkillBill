@@ -8,6 +8,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
 import skillbill.engine.PlanningProjectionFixtures
+import skillbill.engine.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
@@ -2944,7 +2945,7 @@ private class SweepHarness(
 
 private data class SweepHarnessConfig(
   val clock: Clock = Clock.systemUTC(),
-  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
   val markPreparedThrows: Boolean = false,
   val planCheckpointThrows: Boolean = false,
   val contextDiscovery: GoalPlanningContextDiscovery = fakeContextDiscovery,

@@ -87,19 +87,23 @@ internal fun phasePrRun(
     RuntimeRecordingLauncher { request ->
       facts(validJsonOutput(phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))))
     }
-  val runner =
+  val config =
+    RuntimeHarnessConfig(
+      repoRoot = repoRoot,
+      launcher = launcher,
+      pullRequestIdentityLookup = lookup,
+      gitOperationsOverride = GitWorkflowGitOperations(),
+    )
+  val harness =
     telemetryRunnerHarness(
-      runtimeConfig =
-        RuntimeHarnessConfig(
-          repoRoot = repoRoot,
-          launcher = launcher,
-          pullRequestIdentityLookup = lookup,
-          gitOperationsOverride = GitWorkflowGitOperations(),
-        ),
+      runtimeConfig = config,
       databaseFactory = { database },
-    ).runner
+    )
   val request = PhaseRunRequest(definitionId = SkeletonDefinition.PR.id, repoRoot = repoRoot, invokedAgentId = "claude")
-  return PhasePrRun(phaseRunEntry(runner, database, clock).run(request), launcher)
+  return PhasePrRun(
+    phaseRunEntry(harness.strategies, config.harnessGitOperations, database, clock, harness.runLoopEntry).run(request),
+    launcher,
+  )
 }
 
 internal class PrRunRepository(private val root: Path) {

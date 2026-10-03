@@ -23,6 +23,8 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import java.time.Clock
 import kotlin.random.Random
 
@@ -32,7 +34,24 @@ data class OutcomeStoreTestArtifactPorts(
   val goalProgressEventValidator: FeatureTaskRuntimeWireArtifactValidator =
     AcceptingFeatureTaskRuntimeWireArtifactValidator,
   val decompositionManifestStore: DecompositionManifestStore = UnavailableDecompositionManifestStore,
-)
+) {
+  fun wireArtifactValidator(): FeatureTaskRuntimeWireArtifactValidator =
+    object : FeatureTaskRuntimeWireArtifactValidator {
+      override fun validate(
+        kind: FeatureTaskRuntimeWireArtifactKind,
+        payload: FeatureTaskRuntimeWorkflowArtifactMap,
+        sourceLabel: String,
+      ) {
+        val validator =
+          when (kind) {
+            FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT -> goalObservabilityEventValidator
+            FeatureTaskRuntimeWireArtifactKind.GOAL_PROGRESS_EVENT -> goalProgressEventValidator
+            else -> AcceptingFeatureTaskRuntimeWireArtifactValidator
+          }
+        validator.validate(kind, payload, sourceLabel)
+      }
+    }
+}
 
 fun engineWorkflowGoalRunnerManifestStore(
   database: DatabaseSessionFactory,
@@ -79,8 +98,7 @@ fun engineWorkflowGoalRunnerOutcomeStore(
   WorkflowGoalRunnerOutcomeStore(
     database = database,
     workflowSnapshotValidator = workflowSnapshotValidator,
-    goalObservabilityEventValidator = artifactPorts.goalObservabilityEventValidator,
-    goalProgressEventValidator = artifactPorts.goalProgressEventValidator,
+    wireArtifactValidator = artifactPorts.wireArtifactValidator(),
     gitOperations = gitOperations,
     workerSupervisor = workerSupervisor,
     clock = clock,

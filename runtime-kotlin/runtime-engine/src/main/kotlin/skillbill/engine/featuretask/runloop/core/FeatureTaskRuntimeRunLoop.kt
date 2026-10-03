@@ -1,12 +1,16 @@
 package skillbill.engine.featuretask.runloop.core
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.review.spec.SpecIntentProjectionResolver
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
+import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunEvidenceOwnership
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.runloop.state.coupledProgress
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
@@ -14,43 +18,95 @@ import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunLoopCollaborators
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
+import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
+import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaborationScope
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
+import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
+import skillbill.engine.featuretask.validation.FeatureTaskRuntimeReadinessGateCoordinator
+import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
+import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
+import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import java.nio.file.Path
 
-internal data class FeatureTaskRuntimeRunLoopContext(
+internal class FeatureTaskRuntimeRunLoopContext(
   override val request: FeatureTaskRuntimeRunFacts,
   val runState: PhaseRunState,
   val strategies: PhaseStrategyLookup,
-) : PhaseAttemptRunLoopCollaborators {
+  override val gitOperations: WorkflowGitOperations,
+  override val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
+  override val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory,
+  override val specIntentProjectionResolver: SpecIntentProjectionResolver,
+  override val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
+  val validationGateResolver: ValidationGateResolver,
+  val buildGateCoordinator: FeatureTaskRuntimeBuildGateCoordinator,
+  val buildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator,
+  val validationGateCoordinator: FeatureTaskRuntimeValidationGateCoordinator,
+  val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator,
+  override val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
+  override val diffResolver: DiffResolverPort,
+) : PhaseRunLoopAttemptCollaborators {
   override val progress get() = runState.coupledProgress().progressSnapshot
 
   internal val state: FeatureTaskRuntimeRunState get() = runState.coupledProgress()
   override val session get() = runState.coupledSession().sessionSnapshot()
   override val observability: FeatureTaskRuntimeRunObservability get() = runState.telemetry
   override val recorder: PhaseRunRecords get() = runState.records
-  override val phaseGates: FeatureTaskRuntimePhaseGates get() = runState.phaseGates
   override val transitions: FeatureTaskRuntimeTransitionDeclaration get() = runState.transitions
 
   override val transitionDeclaration: FeatureTaskRuntimeTransitionDeclaration get() = runState.transitions
   override val goalContinuationRecorder: PhaseRunGoal get() = runState.goal
   override val phaseSettlementService: PhaseRunSettlements get() = runState.settlements
   override val checkpoints: PhaseRunCheckpoints get() = runState.checkpoints
-  override val diagnostics: RuntimeDiagnostics get() = runState.collaborators.diagnostics
-  override val clock get() = runState.collaborators.clock
+  override val diagnostics: RuntimeDiagnostics get() = runState.diagnostics
+  override val clock get() = runState.clock
   override val specSource: SpecSource get() = runState.specSource
 
   override val coupledRunTransitions get() = runState.coupledRunTransitions
+
+  fun acceptedStep(run: PhaseRun): PhaseAcceptedStepExecution {
+    require(run.request === request)
+    require(runState.selectedOwnerOf(run.phaseId) != null)
+    require(runState.strategyFor(run.phaseId).policyFor(run.phaseId) == run.policy)
+    runState.stepBinding.beginStepBinding(run)
+    return FeatureTaskRuntimeRunLoopStepBindings.create(
+      phaseAttemptLaunchCollaborationScope(
+        PhaseAttemptRunHost(
+          request = run.request,
+          backingRunState = runState,
+          boundPhaseId = run.phaseId,
+          acceptedLaunchState = runState,
+          directGitOperations = gitOperations,
+          directDecompositionPlanner = decompositionPlanner,
+          directFindingVerificationBoundaryMemory = findingVerificationBoundaryMemory,
+          directSpecIntentProjectionResolver = specIntentProjectionResolver,
+          directLifecycleTelemetry = lifecycleTelemetry,
+          directSharedEvidenceResolver = sharedEvidenceResolver,
+          directDiffResolver = diffResolver,
+          directBuildGateCoordinator = buildGateCoordinator,
+          directValidationGateResolver = validationGateResolver,
+          directBuildReceiptValidator = buildReceiptValidator,
+          directValidationGateCoordinator = validationGateCoordinator,
+          directReadinessGateCoordinator = readinessGateCoordinator,
+        ),
+      ),
+      run,
+    )
+  }
 
   override fun strategyFor(stepId: String): PhaseStrategy {
     if (runState.selectedOwnerOf(stepId) == null) {
@@ -148,7 +204,43 @@ fun resolveReviewPassNumber(
 }
 
 @Inject
-open class FeatureTaskRuntimeRunLoopEntry {
+open class FeatureTaskRuntimeRunLoopEntry(
+  private val gitOperations: WorkflowGitOperations,
+  private val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
+  private val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory,
+  private val specIntentProjectionResolver: SpecIntentProjectionResolver,
+  private val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
+  private val validationGateResolver: ValidationGateResolver,
+  private val buildGateCoordinator: FeatureTaskRuntimeBuildGateCoordinator,
+  private val buildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator,
+  private val validationGateCoordinator: FeatureTaskRuntimeValidationGateCoordinator,
+  private val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator,
+  private val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
+  private val diffResolver: DiffResolverPort,
+) {
+  internal fun context(
+    request: FeatureTaskRuntimeRunFacts,
+    runState: PhaseRunState,
+    strategies: PhaseStrategyLookup,
+  ): FeatureTaskRuntimeRunLoopContext =
+    FeatureTaskRuntimeRunLoopContext(
+      request,
+      runState,
+      strategies,
+      gitOperations,
+      decompositionPlanner,
+      findingVerificationBoundaryMemory,
+      specIntentProjectionResolver,
+      lifecycleTelemetry,
+      validationGateResolver,
+      buildGateCoordinator,
+      buildReceiptValidator,
+      validationGateCoordinator,
+      readinessGateCoordinator,
+      sharedEvidenceResolver,
+      diffResolver,
+    )
+
   internal open fun run(
     context: FeatureTaskRuntimeRunLoopContext,
     beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit = {},

@@ -52,8 +52,7 @@ class WorkflowGoalRunnerOutcomeStore
   constructor(
     private val database: DatabaseSessionFactory,
     workflowSnapshotValidator: WorkflowSnapshotValidator,
-    goalObservabilityEventValidator: FeatureTaskRuntimeWireArtifactValidator,
-    goalProgressEventValidator: FeatureTaskRuntimeWireArtifactValidator,
+    wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
     gitOperations: WorkflowGitOperations,
     workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
     clock: Clock,
@@ -81,8 +80,7 @@ class WorkflowGoalRunnerOutcomeStore
         database,
         engine,
         workflowSnapshotValidator,
-        goalObservabilityEventValidator,
-        goalProgressEventValidator,
+        wireArtifactValidator,
       )
     private val terminal = WorkflowGoalRunnerTerminalBridge(database, terminalPersistence, gitOperations)
     private val review = WorkflowGoalRunnerReviewBridge(database, engine)

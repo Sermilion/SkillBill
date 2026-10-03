@@ -1,14 +1,16 @@
 package skillbill.engine.goalrunner.planning.sweep
 
+import skillbill.engine.TestFeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.withRunState
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
+import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaborationScope
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
@@ -22,7 +24,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeShare
 internal class RejectingPlanningRunLoopEntry(
   private val phase: String,
   private val kind: RequiredPhaseWriteKind,
-) : FeatureTaskRuntimeRunLoopEntry() {
+) : TestFeatureTaskRuntimeRunLoopEntry() {
   val terminalReasons = mutableListOf<String?>()
 
   override fun run(
@@ -38,7 +40,7 @@ internal class RejectingPlanningRunLoopEntry(
         override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
           stepBinding.beginStepBinding(run)
           return FeatureTaskRuntimeRunLoopStepBindings.create(
-            skillbill.engine.featuretask.slot.attempt.phaseAttemptCollaborationScope(
+            phaseAttemptLaunchCollaborationScope(
               PhaseAttemptRunHost(run.request, this, run.phaseId, this),
             ),
             run,
@@ -60,7 +62,7 @@ internal class RejectingPlanningRunLoopEntry(
                 }
               delegate.stepBinding.beginStepBinding(run, unitId)
               return FeatureTaskRuntimeRunLoopStepBindings.create(
-                skillbill.engine.featuretask.slot.attempt.phaseAttemptCollaborationScope(
+                phaseAttemptLaunchCollaborationScope(
                   PhaseAttemptRunHost(run.request, interceptedUnit, run.phaseId, interceptedUnit),
                 ),
                 run,
@@ -71,7 +73,7 @@ internal class RejectingPlanningRunLoopEntry(
           }
         }
       }
-    return super.run(context.copy(runState = intercepted), beforeDrive)
+    return super.run(context.withRunState(intercepted), beforeDrive)
   }
 
   private fun rejecting(delegate: PhaseRunRecords): PhaseRunRecords =

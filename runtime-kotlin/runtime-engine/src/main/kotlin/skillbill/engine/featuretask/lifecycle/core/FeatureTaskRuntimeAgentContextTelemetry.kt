@@ -1,7 +1,8 @@
 package skillbill.engine.featuretask.lifecycle.core
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.application.telemetry.model.FeatureTaskRuntimeAgentContext
-import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 
 fun featureTaskRuntimeAgentContext(
@@ -22,5 +23,10 @@ private fun Collection<FeatureTaskRuntimePhaseRecord>.distinctNames(
     .sorted()
     .takeIf { it.isNotEmpty() }
 
-fun FeatureTaskRuntimeRunner.featureTaskRuntimeAgentContext(workflowId: String): FeatureTaskRuntimeAgentContext =
-  featureTaskRuntimeAgentContext(recorder.loadPhaseRecords(workflowId))
+@Inject
+class FeatureTaskRuntimeAgentContextTelemetry(
+  private val recorder: FeatureTaskRuntimePhaseRecorder,
+) {
+  fun context(workflowId: String): FeatureTaskRuntimeAgentContext =
+    featureTaskRuntimeAgentContext(recorder.loadPhaseRecords(workflowId))
+}

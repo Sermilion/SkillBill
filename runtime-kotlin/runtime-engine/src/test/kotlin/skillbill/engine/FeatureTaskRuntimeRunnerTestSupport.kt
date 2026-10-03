@@ -22,23 +22,21 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupRunner
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentContextTelemetry
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeProbeWriters
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionEntry
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEvent
+import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunEventSink
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGateBranchBoundaries
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGateValidationBoundaries
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.phase.core.InMemoryFeatureTaskPhaseSettlementRepository
 import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
@@ -48,13 +46,23 @@ import skillbill.engine.featuretask.prepare.FeatureSpecPreparationRuntime
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.featuretask.prepare.FeatureTaskRuntimeSpecGate
 import skillbill.engine.featuretask.prepare.SpecSourceResolver
+import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewFixBudget
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunLaunch
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
+import skillbill.engine.featuretask.runner.FeatureTaskRuntimeLaunchOutcomes
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunStartup
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
+import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunnerExecute
+import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunnerExecutePrepared
 import skillbill.engine.featuretask.slot.ApprovingReviewPhaseRunner
 import skillbill.engine.featuretask.slot.PhaseRunner
+import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
 import skillbill.engine.featuretask.slot.UnavailablePullRequestIdentityLookup
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
@@ -334,6 +342,9 @@ internal class RunnerHarness(
   val events: MutableList<FeatureTaskRuntimeRunEvent>,
   private val runRequest: FeatureTaskRuntimeRunRequest,
   val specScratchStore: RecordingSpecScratchStore,
+  val strategies: PhaseStrategyLookup,
+  val executePrepared: FeatureTaskRuntimeRunnerExecutePrepared,
+  private val runnerWithEntry: (FeatureTaskRuntimeRunLoopEntry) -> FeatureTaskRuntimeRunner,
 ) {
   val specStatusWriter: RecordingSpecStatusWriter get() = io.specStatusWriter
   val recorder: FeatureTaskRuntimePhaseRecorder get() = io.workflow.recorder
@@ -597,6 +608,9 @@ internal class RunnerHarness(
 
   fun request(transitionsOverride: FeatureTaskRuntimeTransitionDeclaration): FeatureTaskRuntimeRunRequest =
     runRequest.copy(transitionsOverride = transitionsOverride)
+
+  fun withEntry(entry: FeatureTaskRuntimeRunLoopEntry): FeatureTaskRuntimeRunner =
+    runnerWithEntry(entry)
 }
 
 internal const val BRANCH_SETUP_AGENT_ID = "branch-setup"
@@ -671,52 +685,39 @@ private data class RuntimePhaseGatesDeps(
   val validationGatePlatformManifests: List<PlatformManifest> = listOf(kotlinPackWithValidationGate()),
 )
 
-private fun runtimePhaseGates(deps: RuntimePhaseGatesDeps): FeatureTaskRuntimePhaseGates {
-  val validationGateResolver =
-    ValidationGateResolver { deps.validationGatePlatformManifests }
-  val validationGateRunner =
-    deps.validationGateRunnerOverride
-      ?: object : ValidationGateRunner {
-        override fun run(request: ValidationGateRunRequest) =
-          ValidationGateRunResult(
-            exitCode = 0,
-            durationMs = 1,
-            outcome = PASSED,
-            cacheMode = request.cacheMode,
-            executedWorkUnits = 1,
-            executedCheckIdentities = emptyList(),
-            findings = emptyList(),
-            command = request.argv.joinToString(" "),
-          )
-      }
-  return FeatureTaskRuntimePhaseGates(
-    FeatureTaskRuntimePhaseGateBranchBoundaries(
-      branchSetupRunner = deps.branchSetupRunner,
-      decompositionPlanner = testDecompositionPlanner(),
-      decomposeTerminalRecorder = deps.decomposeTerminalRecorder,
-      lifecycleTelemetry = deps.lifecycleTelemetry,
-      gitOperations = deps.gitOperations,
-      specGate = deps.specGate,
-    ),
-    validationGateBoundaries(deps, validationGateResolver, validationGateRunner),
-  )
-}
+private fun passingValidationGateRunner(): ValidationGateRunner =
+  object : ValidationGateRunner {
+    override fun run(request: ValidationGateRunRequest) =
+      ValidationGateRunResult(
+        exitCode = 0,
+        durationMs = 1,
+        outcome = PASSED,
+        cacheMode = request.cacheMode,
+        executedWorkUnits = 1,
+        executedCheckIdentities = emptyList(),
+        findings = emptyList(),
+        command = request.argv.joinToString(" "),
+      )
+  }
 
-private fun validationGateBoundaries(
-  deps: RuntimePhaseGatesDeps,
-  validationGateResolver: ValidationGateResolver,
-  validationGateRunner: ValidationGateRunner,
-): FeatureTaskRuntimePhaseGateValidationBoundaries =
-  FeatureTaskRuntimePhaseGateValidationBoundaries(
-    buildReceiptValidator = deps.buildReceiptValidator,
+private fun testRunLoopEntry(deps: RuntimePhaseGatesDeps): TestFeatureTaskRuntimeRunLoopEntry {
+  val validationGateResolver = ValidationGateResolver { deps.validationGatePlatformManifests }
+  val validationGateRunner = deps.validationGateRunnerOverride ?: passingValidationGateRunner()
+  return TestFeatureTaskRuntimeRunLoopEntry(
+    gitOperations = deps.gitOperations,
+    lifecycleTelemetry = deps.lifecycleTelemetry,
     validationGateResolver = validationGateResolver,
-    validationGateRunner = validationGateRunner,
-    validationGateCoordinator = FeatureTaskRuntimeValidationGateCoordinator(),
+    buildGateCoordinator =
+      FeatureTaskRuntimeBuildGateCoordinator(
+        validationGateResolver,
+        validationGateRunner,
+        deps.gateRepoLocalConfig,
+        NoopRuntimeDiagnostics,
+      ),
+    buildReceiptValidator = deps.buildReceiptValidator,
     readinessGateCoordinator =
       FeatureTaskRuntimeReadinessGateCoordinator(
-        ReadinessCheckSelection(
-          GitHubPullRequestCheckDiscovery(),
-        ),
+        ReadinessCheckSelection(GitHubPullRequestCheckDiscovery()),
         object : PrCheckProcessRunner {
           override fun run(
             command: String,
@@ -726,30 +727,10 @@ private fun validationGateBoundaries(
         deps.recorder,
         NoopRuntimeDiagnostics,
       ),
-    buildGateCoordinator =
-      FeatureTaskRuntimeBuildGateCoordinator(
-        validationGateResolver,
-        validationGateRunner,
-        deps.gateRepoLocalConfig,
-        NoopRuntimeDiagnostics,
-      ),
     sharedEvidenceResolver = deps.sharedEvidenceResolver,
     diffResolver = deps.diffResolver,
-    specIntentProjectionResolver =
-      SpecIntentProjectionResolver(
-        TestDecompositionManifestStore,
-        testDecompositionManifestValidator,
-        SpecIntentProjectionExtractor(
-          ReviewContextEnvelopeValidator { _, _ -> },
-          TestDecompositionManifestStore,
-        ),
-      ),
-    findingVerificationBoundaryMemory =
-      FeatureTaskRuntimeFindingVerificationBoundaryMemory(
-        FileSystemGoalPlanningContextDiscovery(JvmSystemClock),
-        FileSystemGoalPlanningBoundaryBodyResolver(),
-      ),
   )
+}
 
 private fun defaultRepoLocalConfigPort(): RepoLocalConfigPort =
   object : RepoLocalConfigPort {
@@ -906,22 +887,21 @@ internal fun runnerHarness(
   val specStatusWriter = RecordingSpecStatusWriter()
   val database = RuntimeFakeDatabaseSessionFactory(repository)
   val workflow = harnessWorkflowParts(database)
-  val runner =
-    harnessRunner(
-      HarnessRunnerDeps(
-        launcher = launcher,
-        recorder = workflow.recorder,
-        goalContinuationRecorder = workflow.goalContinuationRecorder,
-        runInvariantsStore = workflow.runInvariantsStore,
-        runtimeConfig = runtimeConfig,
-        database = database,
-        crashSupervisor = resolvedSupervision.crashSupervisor,
-        diagnostics = resolvedSupervision.diagnostics,
-        specScratchStore = specScratchStore,
-        specStatusWriter = specStatusWriter,
-        decomposeTerminalRecorder = workflow.decomposeTerminalRecorder,
-      ),
+  val deps =
+    HarnessRunnerDeps(
+      launcher = launcher,
+      recorder = workflow.recorder,
+      goalContinuationRecorder = workflow.goalContinuationRecorder,
+      runInvariantsStore = workflow.runInvariantsStore,
+      runtimeConfig = runtimeConfig,
+      database = database,
+      crashSupervisor = resolvedSupervision.crashSupervisor,
+      diagnostics = resolvedSupervision.diagnostics,
+      specScratchStore = specScratchStore,
+      specStatusWriter = specStatusWriter,
+      decomposeTerminalRecorder = workflow.decomposeTerminalRecorder,
     )
+  val assembled = harnessRunner(deps)
   val captured = mutableListOf<FeatureTaskRuntimeRunEvent>()
   val sink =
     FeatureTaskRuntimeRunEventSink { event ->
@@ -937,7 +917,17 @@ internal fun runnerHarness(
       specStatusWriter = specStatusWriter,
       database = database,
     )
-  return RunnerHarness(launcher, io, runner, captured, runRequest, specScratchStore)
+  return RunnerHarness(
+    launcher,
+    io,
+    assembled.runner,
+    captured,
+    runRequest,
+    specScratchStore,
+    assembled.strategies,
+    assembled.executePrepared,
+    { entry -> harnessRunner(deps, entry).runner },
+  )
 }
 
 private data class HarnessRunnerDeps(
@@ -955,73 +945,122 @@ private data class HarnessRunnerDeps(
   val settlement: FeatureTaskPhaseSettlementService = harnessPhaseSettlement().also { launcher.settlement = it },
 )
 
-private fun harnessRunner(deps: HarnessRunnerDeps): FeatureTaskRuntimeRunner {
-  val branchSetupRunner =
-    FeatureTaskRuntimeBranchSetupRunner(
-      deps.recorder,
-      deps.runtimeConfig.branchSetup.gitOperations,
-    )
-  return FeatureTaskRuntimeRunner(
-    strategies =
-      testPhaseStrategies(
-        deps.launcher,
-        deps.runtimeConfig.branchSetup.gitOperations,
-        harnessReviewRunner(deps.runtimeConfig, deps.launcher),
-        deps.runtimeConfig.pullRequestIdentityLookup,
-        deps.recorder,
-        deps.runtimeConfig.delegatedReviewRunner,
-      ),
-    recorder = deps.recorder,
-    goalContinuationRecorder = deps.goalContinuationRecorder,
-    phaseGates =
-      runtimePhaseGates(
-        RuntimePhaseGatesDeps(
-          branchSetupRunner = branchSetupRunner,
-          decomposeTerminalRecorder = deps.decomposeTerminalRecorder,
-          lifecycleTelemetry = disabledRuntimeLifecycleTelemetry(deps.database),
-          gitOperations = deps.runtimeConfig.branchSetup.gitOperations,
-          specGate = testSpecGate(deps.specScratchStore, deps.specStatusWriter),
-          buildReceiptValidator = deps.runtimeConfig.buildReceiptValidator,
-          sharedEvidenceResolver = deps.runtimeConfig.sharedEvidenceResolver,
-          diffResolver = deps.runtimeConfig.diffResolver,
-          recorder = deps.recorder,
-          validationGateRunnerOverride = deps.runtimeConfig.validationGateRunner,
-          validationGatePlatformManifests = deps.runtimeConfig.validationGatePlatformManifests,
-          gateRepoLocalConfig = deps.runtimeConfig.gateRepoLocalConfig,
+private fun harnessRunner(
+  deps: HarnessRunnerDeps,
+  runLoopEntry: FeatureTaskRuntimeRunLoopEntry? = null,
+): AssembledFeatureTaskRuntimeRunner {
+  val gitOperations = deps.runtimeConfig.branchSetup.gitOperations
+  val specGate = testSpecGate(deps.specScratchStore, deps.specStatusWriter)
+  val lifecycleTelemetry = disabledRuntimeLifecycleTelemetry(deps.database)
+  val gateDeps =
+    RuntimePhaseGatesDeps(
+      branchSetupRunner =
+        FeatureTaskRuntimeBranchSetupRunner(
+          deps.recorder,
+          gitOperations,
         ),
+      decomposeTerminalRecorder = deps.decomposeTerminalRecorder,
+      lifecycleTelemetry = lifecycleTelemetry,
+      gitOperations = gitOperations,
+      specGate = specGate,
+      buildReceiptValidator = deps.runtimeConfig.buildReceiptValidator,
+      sharedEvidenceResolver = deps.runtimeConfig.sharedEvidenceResolver,
+      diffResolver = deps.runtimeConfig.diffResolver,
+      recorder = deps.recorder,
+      validationGateRunnerOverride = deps.runtimeConfig.validationGateRunner,
+      validationGatePlatformManifests = deps.runtimeConfig.validationGatePlatformManifests,
+      gateRepoLocalConfig = deps.runtimeConfig.gateRepoLocalConfig,
+    )
+  val entry = testRunLoopEntry(gateDeps).delegateTo(runLoopEntry)
+  val strategies =
+    testPhaseStrategies(
+      deps.launcher,
+      gitOperations,
+      harnessReviewRunner(deps.runtimeConfig, deps.launcher),
+      deps.runtimeConfig.pullRequestIdentityLookup,
+      deps.recorder,
+      deps.runtimeConfig.delegatedReviewRunner,
+    )
+  val launchOutcomes =
+    FeatureTaskRuntimeLaunchOutcomes(
+      deps.recorder,
+      gitOperations,
+      deps.goalContinuationRecorder,
+    )
+  val executePrepared =
+    FeatureTaskRuntimeRunnerExecutePrepared(
+      deps.recorder,
+      deps.goalContinuationRecorder,
+      strategies,
+      testHarnessClock,
+      gitOperations,
+      specGate,
+      entry,
+      launchOutcomes,
+      deps.decomposeTerminalRecorder,
+      deps.settlement,
+      DurablePhaseRunLaunch(
+        gateDeps.branchSetupRunner,
+        AgentActivityStampWriter(deps.database, Clock.systemUTC(), deps.diagnostics, TimeSource.Monotonic),
+        WorktreeEditJournalWriter(
+          deps.database,
+          Clock.systemUTC(),
+          deps.diagnostics,
+          NoopWorkflowGitOperations,
+        ),
+        entry,
       ),
-    startup =
+    )
+  return AssembledFeatureTaskRuntimeRunner(
+    FeatureTaskRuntimeRunner(
       FeatureTaskRuntimeRunStartup(
-        crashReconciler = harnessCrashReconciler(deps.database, deps.crashSupervisor),
-        executionEntry = runnerExecutionEntry(deps.database, deps.runtimeConfig),
-        runInvariantsStore = deps.runInvariantsStore,
+        harnessCrashReconciler(deps.database, deps.crashSupervisor),
+        runnerExecutionEntry(deps.database, deps.runtimeConfig),
       ),
-    phaseSettlementService = deps.settlement,
-    diagnostics = deps.diagnostics,
-    clock = testHarnessClock,
-    probeWriters =
-      FeatureTaskRuntimeProbeWriters(
-        activityStampWriter =
-          AgentActivityStampWriter(deps.database, Clock.systemUTC(), deps.diagnostics, TimeSource.Monotonic),
-        worktreeEditJournalWriter =
-          WorktreeEditJournalWriter(
-            deps.database,
-            Clock.systemUTC(),
-            deps.diagnostics,
-            NoopWorkflowGitOperations,
-          ),
+      FeatureTaskRuntimeRunPreparation(
+        deps.recorder,
+        deps.goalContinuationRecorder,
+        deps.runInvariantsStore,
+        strategies,
       ),
-    runLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+      FeatureTaskRuntimeRunnerExecute(
+        runtimeSpecSourceResolver(),
+        deps.diagnostics,
+        lifecycleTelemetry,
+        deps.recorder,
+        deps.decomposeTerminalRecorder,
+        executePrepared,
+        FeatureTaskRuntimeReviewFixBudget(deps.recorder, deps.goalContinuationRecorder),
+        FeatureTaskRuntimeAgentContextTelemetry(deps.recorder),
+      ),
+    ),
+    strategies,
+    executePrepared,
+    entry,
   )
 }
 
+private data class AssembledFeatureTaskRuntimeRunner(
+  val runner: FeatureTaskRuntimeRunner,
+  val strategies: PhaseStrategyLookup,
+  val executePrepared: FeatureTaskRuntimeRunnerExecutePrepared,
+  val runLoopEntry: TestFeatureTaskRuntimeRunLoopEntry,
+)
+
 internal class TelemetryRunnerHarness(
   val runner: FeatureTaskRuntimeRunner,
+  val strategies: PhaseStrategyLookup,
   val lifecycle: RecordingLifecycleTelemetryRepository,
   val request: FeatureTaskRuntimeRunRequest,
   val database: DatabaseSessionFactory,
   val recorder: FeatureTaskRuntimePhaseRecorder,
+  val runLoopEntry: TestFeatureTaskRuntimeRunLoopEntry,
+  private val runnerWithEntry: (FeatureTaskRuntimeRunLoopEntry) -> FeatureTaskRuntimeRunner,
 ) {
+  fun withEntry(entry: FeatureTaskRuntimeRunLoopEntry): FeatureTaskRuntimeRunner = runnerWithEntry(entry)
+
+  fun withRunLoopEntry(entry: FeatureTaskRuntimeRunLoopEntry): FeatureTaskRuntimeRunner = runnerWithEntry(entry)
+
   fun seedPhase(
     phaseId: String,
     status: String,
@@ -1073,7 +1112,7 @@ internal fun telemetryRunnerHarness(
   val lifecycle = RecordingLifecycleTelemetryRepository()
   val database = databaseFactory?.invoke() ?: RuntimeFakeDatabaseSessionFactory(repository, lifecycle)
   val workflow = harnessWorkflowParts(database)
-  val runner =
+  val assembled =
     telemetryHarnessRunner(
       launcher = effectiveLauncher,
       runtimeConfig = runtimeConfig,
@@ -1081,11 +1120,22 @@ internal fun telemetryRunnerHarness(
       workflow = workflow,
     )
   return TelemetryRunnerHarness(
-    runner,
+    assembled.runner,
+    assembled.strategies,
     lifecycle,
     telemetryHarnessRequest(runtimeConfig),
     database,
     workflow.recorder,
+    assembled.runLoopEntry,
+    { entry ->
+      telemetryHarnessRunner(
+        launcher = effectiveLauncher,
+        runtimeConfig = runtimeConfig,
+        database = database,
+        workflow = workflow,
+        runLoopEntryOverride = entry,
+      ).runner
+    },
   )
 }
 
@@ -1094,42 +1144,112 @@ private fun telemetryHarnessRunner(
   runtimeConfig: RuntimeHarnessConfig,
   database: DatabaseSessionFactory,
   workflow: RunnerHarnessWorkflow,
-): FeatureTaskRuntimeRunner {
+  runLoopEntryOverride: FeatureTaskRuntimeRunLoopEntry? = null,
+): AssembledFeatureTaskRuntimeRunner {
   val branchSetupRunner =
     FeatureTaskRuntimeBranchSetupRunner(
       workflow.recorder,
       runtimeConfig.harnessGitOperations,
     )
-  return FeatureTaskRuntimeRunner(
-    strategies =
-      testPhaseStrategies(
-        launcher,
-        runtimeConfig.harnessGitOperations,
-        harnessReviewRunner(runtimeConfig, launcher),
-        runtimeConfig.pullRequestIdentityLookup,
-        workflow.recorder,
-        runtimeConfig.delegatedReviewRunner,
-      ),
-    recorder = workflow.recorder,
-    goalContinuationRecorder = workflow.goalContinuationRecorder,
-    phaseGates =
-      telemetryRunnerPhaseGates(
-        runtimeConfig,
+  val strategies =
+    testPhaseStrategies(
+      launcher,
+      runtimeConfig.harnessGitOperations,
+      harnessReviewRunner(runtimeConfig, launcher),
+      runtimeConfig.pullRequestIdentityLookup,
+      workflow.recorder,
+      runtimeConfig.delegatedReviewRunner,
+    )
+  val specGate = testSpecGate()
+  val lifecycleTelemetry =
+    FeatureTaskRuntimeLifecycleTelemetry(
+      LifecycleTelemetryService(
         database,
-        workflow,
+        EnabledRuntimeTelemetrySettingsProvider,
+        Clock.systemUTC(),
+        NoopRuntimeDiagnostics,
+      ),
+      NoopRuntimeDiagnostics,
+    )
+  val runLoopEntry =
+    testRunLoopEntry(
+      RuntimePhaseGatesDeps(
+        branchSetupRunner = branchSetupRunner,
+        decomposeTerminalRecorder = workflow.decomposeTerminalRecorder,
+        lifecycleTelemetry = lifecycleTelemetry,
+        gitOperations = runtimeConfig.harnessGitOperations,
+        specGate = specGate,
+        buildReceiptValidator = runtimeConfig.buildReceiptValidator,
+        sharedEvidenceResolver = runtimeConfig.sharedEvidenceResolver,
+        diffResolver = runtimeConfig.diffResolver,
+        recorder = workflow.recorder,
+        validationGateRunnerOverride = runtimeConfig.validationGateRunner,
+        gateRepoLocalConfig = runtimeConfig.gateRepoLocalConfig,
+        validationGatePlatformManifests = runtimeConfig.validationGatePlatformManifests,
+      ),
+    )
+  val configuredEntry = runLoopEntry.delegateTo(runLoopEntryOverride)
+  val launchOutcomes =
+    FeatureTaskRuntimeLaunchOutcomes(
+      workflow.recorder,
+      runtimeConfig.harnessGitOperations,
+      workflow.goalContinuationRecorder,
+    )
+  val reviewFixBudget = FeatureTaskRuntimeReviewFixBudget(workflow.recorder, workflow.goalContinuationRecorder)
+  val settlement = harnessPhaseSettlement().also { launcher.settlement = it }
+  val executePrepared =
+    FeatureTaskRuntimeRunnerExecutePrepared(
+      workflow.recorder,
+      workflow.goalContinuationRecorder,
+      strategies,
+      testHarnessClock,
+      runtimeConfig.harnessGitOperations,
+      specGate,
+      runLoopEntry,
+      launchOutcomes,
+      workflow.decomposeTerminalRecorder,
+      settlement,
+      DurablePhaseRunLaunch(
         branchSetupRunner,
+        AgentActivityStampWriter(database, Clock.systemUTC(), NoopRuntimeDiagnostics, TimeSource.Monotonic),
+        WorktreeEditJournalWriter(
+          database,
+          Clock.systemUTC(),
+          NoopRuntimeDiagnostics,
+          NoopWorkflowGitOperations,
+        ),
+        configuredEntry,
       ),
-    startup =
-      FeatureTaskRuntimeRunStartup(
-        crashReconciler = harnessCrashReconciler(database, NoopFeatureTaskRuntimeWorkerSupervisor),
-        executionEntry = runnerExecutionEntry(database, runtimeConfig),
-        runInvariantsStore = workflow.runInvariantsStore,
+    )
+  return AssembledFeatureTaskRuntimeRunner(
+    runner =
+      FeatureTaskRuntimeRunner(
+        startup = FeatureTaskRuntimeRunStartup(
+          harnessCrashReconciler(database, NoopFeatureTaskRuntimeWorkerSupervisor),
+          runnerExecutionEntry(database, runtimeConfig),
+        ),
+        preparation =
+          FeatureTaskRuntimeRunPreparation(
+            workflow.recorder,
+            workflow.goalContinuationRecorder,
+            workflow.runInvariantsStore,
+            strategies,
+          ),
+        execute =
+          FeatureTaskRuntimeRunnerExecute(
+            runtimeSpecSourceResolver(),
+            NoopRuntimeDiagnostics,
+            lifecycleTelemetry,
+            workflow.recorder,
+            workflow.decomposeTerminalRecorder,
+            executePrepared,
+            reviewFixBudget,
+            FeatureTaskRuntimeAgentContextTelemetry(workflow.recorder),
+          ),
       ),
-    phaseSettlementService = harnessPhaseSettlement().also { launcher.settlement = it },
-    diagnostics = NoopRuntimeDiagnostics,
-    clock = testHarnessClock,
-    probeWriters = telemetryRunnerProbeWriters(database),
-    runLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+    strategies = strategies,
+    executePrepared = executePrepared,
+    runLoopEntry = configuredEntry,
   )
 }
 
@@ -1214,48 +1334,82 @@ private fun runnerExecutionEntry(
   return FeatureTaskRuntimeExecutionEntry(database, fixture.admission, resolver, repositories)
 }
 
-private fun telemetryRunnerPhaseGates(
-  runtimeConfig: RuntimeHarnessConfig,
-  database: DatabaseSessionFactory,
-  workflow: RunnerHarnessWorkflow,
-  branchSetupRunner: FeatureTaskRuntimeBranchSetupRunner,
-): FeatureTaskRuntimePhaseGates =
-  runtimePhaseGates(
-    RuntimePhaseGatesDeps(
-      branchSetupRunner = branchSetupRunner,
-      decomposeTerminalRecorder = workflow.decomposeTerminalRecorder,
-      lifecycleTelemetry =
-        FeatureTaskRuntimeLifecycleTelemetry(
-          LifecycleTelemetryService(
-            database,
-            EnabledRuntimeTelemetrySettingsProvider,
-            Clock.systemUTC(),
-            NoopRuntimeDiagnostics,
-          ),
-          NoopRuntimeDiagnostics,
-        ),
-      gitOperations = runtimeConfig.harnessGitOperations,
-      sharedEvidenceResolver = runtimeConfig.sharedEvidenceResolver,
-      diffResolver = runtimeConfig.diffResolver,
-      recorder = workflow.recorder,
-      validationGateRunnerOverride = runtimeConfig.validationGateRunner,
-      validationGatePlatformManifests = runtimeConfig.validationGatePlatformManifests,
-      gateRepoLocalConfig = runtimeConfig.gateRepoLocalConfig,
+internal open class TestFeatureTaskRuntimeRunLoopEntry(
+  gitOperations: WorkflowGitOperations = NoopWorkflowGitOperations,
+  decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner = testDecompositionPlanner(),
+  findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory =
+    FeatureTaskRuntimeFindingVerificationBoundaryMemory(
+      FileSystemGoalPlanningContextDiscovery(JvmSystemClock),
+      FileSystemGoalPlanningBoundaryBodyResolver(),
     ),
-  )
-
-private fun telemetryRunnerProbeWriters(database: DatabaseSessionFactory): FeatureTaskRuntimeProbeWriters =
-  FeatureTaskRuntimeProbeWriters(
-    activityStampWriter =
-      AgentActivityStampWriter(database, Clock.systemUTC(), NoopRuntimeDiagnostics, TimeSource.Monotonic),
-    worktreeEditJournalWriter =
-      WorktreeEditJournalWriter(
-        database,
+  specIntentProjectionResolver: SpecIntentProjectionResolver =
+    SpecIntentProjectionResolver(
+      TestDecompositionManifestStore,
+      testDecompositionManifestValidator,
+      SpecIntentProjectionExtractor(
+        ReviewContextEnvelopeValidator { _, _ -> },
+        TestDecompositionManifestStore,
+      ),
+    ),
+  lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry =
+    FeatureTaskRuntimeLifecycleTelemetry(
+      LifecycleTelemetryService(
+        RuntimeFakeDatabaseSessionFactory(InMemoryRuntimeWorkflowRepository()),
+        DisabledRuntimeTelemetrySettingsProvider,
         Clock.systemUTC(),
         NoopRuntimeDiagnostics,
-        NoopWorkflowGitOperations,
       ),
-  )
+      NoopRuntimeDiagnostics,
+    ),
+  validationGateResolver: ValidationGateResolver = ValidationGateResolver { listOf(kotlinPackWithValidationGate()) },
+  buildGateCoordinator: FeatureTaskRuntimeBuildGateCoordinator =
+    FeatureTaskRuntimeBuildGateCoordinator(
+      validationGateResolver,
+      passingValidationGateRunner(),
+      defaultRepoLocalConfigPort(),
+      NoopRuntimeDiagnostics,
+    ),
+  buildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator,
+  validationGateCoordinator: FeatureTaskRuntimeValidationGateCoordinator =
+    FeatureTaskRuntimeValidationGateCoordinator(),
+  readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator =
+    FeatureTaskRuntimeReadinessGateCoordinator(
+      ReadinessCheckSelection(GitHubPullRequestCheckDiscovery()),
+      object : PrCheckProcessRunner {
+        override fun run(
+          command: String,
+          repoRoot: Path,
+        ): PrCheckRunResult = PrCheckRunResult(exitCode = 0, durationMs = 1)
+      },
+      harnessPhaseRecorder(RuntimeFakeDatabaseSessionFactory(InMemoryRuntimeWorkflowRepository())),
+      NoopRuntimeDiagnostics,
+    ),
+  sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort = DERIVING_SHARED_EVIDENCE_RESOLVER,
+  diffResolver: DiffResolverPort = object : DiffResolverPortDefaults() {},
+) : FeatureTaskRuntimeRunLoopEntry(
+    gitOperations,
+    decompositionPlanner,
+    findingVerificationBoundaryMemory,
+    specIntentProjectionResolver,
+    lifecycleTelemetry,
+    validationGateResolver,
+    buildGateCoordinator,
+    buildReceiptValidator,
+    validationGateCoordinator,
+    readinessGateCoordinator,
+    sharedEvidenceResolver,
+    diffResolver,
+  ) {
+  private var delegate: FeatureTaskRuntimeRunLoopEntry? = null
+
+  internal fun delegateTo(entry: FeatureTaskRuntimeRunLoopEntry?): TestFeatureTaskRuntimeRunLoopEntry =
+    apply { delegate = entry }
+
+  override fun run(
+    context: FeatureTaskRuntimeRunLoopContext,
+    beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit,
+  ): FeatureTaskRuntimeRunReport = delegate?.run(context, beforeDrive) ?: super.run(context, beforeDrive)
+}
 
 private fun testDecompositionPlanner(): FeatureTaskRuntimeDecompositionPlanner =
   FeatureTaskRuntimeDecompositionPlanner(
@@ -2288,3 +2442,22 @@ private fun runnerRepositoryPaths(repositoryIdentity: String): RepositoryEnclosi
 
     override fun repositoryIdentity(repoRoot: Path): String = repositoryIdentity
   }
+
+internal fun FeatureTaskRuntimeRunLoopContext.withRunState(state: PhaseRunState): FeatureTaskRuntimeRunLoopContext =
+  FeatureTaskRuntimeRunLoopContext(
+    request,
+    state,
+    strategies,
+    gitOperations,
+    decompositionPlanner,
+    findingVerificationBoundaryMemory,
+    specIntentProjectionResolver,
+    lifecycleTelemetry,
+    validationGateResolver,
+    buildGateCoordinator,
+    buildReceiptValidator,
+    validationGateCoordinator,
+    readinessGateCoordinator,
+    sharedEvidenceResolver,
+    diffResolver,
+  )

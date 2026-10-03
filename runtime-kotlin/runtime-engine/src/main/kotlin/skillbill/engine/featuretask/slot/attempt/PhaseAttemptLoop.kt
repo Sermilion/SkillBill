@@ -25,11 +25,6 @@ internal fun interface PhaseStepAttempts {
   ): PhaseOutcome
 }
 
-internal data class PhaseAttemptCollaborators(
-  val clock: Clock,
-  val diagnostics: RuntimeDiagnostics,
-)
-
 internal object PhaseAttemptLoop : PhaseStepAttempts {
   override fun run(
     run: PhaseRun,

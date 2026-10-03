@@ -2,13 +2,11 @@ package skillbill.engine.goalrunner.planning.sweep
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -127,10 +125,11 @@ class DefaultGoalPlanningSweep(
         planning = planning,
         strategies = phaseStrategies,
         executionPlan = executionPlan,
-        collaborators = PhaseAttemptCollaborators(clock, diagnostics),
+        clock = clock,
+        diagnostics = diagnostics,
         specSource = shared.specSource,
       )
-    val report = runLoopEntry.run(FeatureTaskRuntimeRunLoopContext(facts, runState, phaseStrategies))
+    val report = runLoopEntry.run(runLoopEntry.context(facts, runState, phaseStrategies))
     return when (report) {
       is FeatureTaskRuntimeRunReport.Blocked -> planning.outcome(report.blockedReason, report.lastIncompletePhase)
       is FeatureTaskRuntimeRunReport.Paused -> planning.outcome(report.pauseReason, report.pausedPhase)

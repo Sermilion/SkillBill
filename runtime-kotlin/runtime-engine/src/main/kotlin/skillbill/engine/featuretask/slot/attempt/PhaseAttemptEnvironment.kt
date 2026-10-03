@@ -1,25 +1,46 @@
 package skillbill.engine.featuretask.slot.attempt
 
+import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.application.review.spec.SpecIntentProjectionResolver
+import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeLifecycleTelemetry
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
+import skillbill.engine.featuretask.model.review.ReviewTarget
+import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskCommitIdentity
+import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositionPlanner
+import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
 import skillbill.engine.featuretask.runloop.attempt.remediationCoupling
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
+import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
+import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.PhaseStepInput
+import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseQualityGateReporting
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
+import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
+import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
+import skillbill.engine.featuretask.validation.FeatureTaskRuntimeReadinessGateCoordinator
+import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
+import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
+import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
@@ -40,13 +61,23 @@ internal interface PhaseAttemptEnvironment {
 internal interface PhaseOutputSettlementContext :
   PhaseAttemptEnvironment,
   PhaseAttemptTransitionDeclarationAccess {
+  val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner
+
   val progress: FeatureTaskRuntimeProgressSnapshotAccess
 
   val session: FeatureTaskRuntimeRunSessionObservations
 
   val recorder: PhaseRunRecords
 
-  val phaseGates: FeatureTaskRuntimePhaseGates
+  val gitOperations: WorkflowGitOperations
+
+  val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort
+
+  val diffResolver: DiffResolverPort
+
+  val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory
+
+  val specIntentProjectionResolver: SpecIntentProjectionResolver
 
   val clock: Clock
 
@@ -71,7 +102,7 @@ internal interface PhaseCheckpointRemediationContext :
 
   val session: FeatureTaskRuntimeRunSessionObservations
 
-  val phaseGates: FeatureTaskRuntimePhaseGates
+  val gitOperations: WorkflowGitOperations
 
   val goalContinuationRecorder: PhaseRunGoal
 
@@ -108,7 +139,15 @@ internal interface PhaseAttemptLaunchRuntimeContext : PhaseAttemptEnvironment {
 
   val session: FeatureTaskRuntimeRunSessionObservations
 
-  val phaseGates: FeatureTaskRuntimePhaseGates
+  val gitOperations: WorkflowGitOperations
+
+  val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner
+
+  val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory
+
+  val specIntentProjectionResolver: SpecIntentProjectionResolver
+
+  val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry
 
   val diagnostics: RuntimeDiagnostics
 
@@ -117,7 +156,7 @@ internal interface PhaseAttemptLaunchRuntimeContext : PhaseAttemptEnvironment {
   val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner
 
   fun pushLocalBranchIfAhead(branch: String): String? {
-    val git = phaseGates.gitOperations
+    val git = gitOperations
     val unpushed = git.localBranchHasUnpushedCommits(request.repoRoot, branch)
     if (unpushed !is WorkflowGitOperationResult.Ok) {
       return "Could not tell whether branch '$branch' has unpushed commits: ${unpushed.error}"
@@ -143,7 +182,17 @@ internal interface PhaseQualityGateCycleContext :
 
   val recorder: PhaseRunRecords
 
-  val phaseGates: FeatureTaskRuntimePhaseGates
+  val gitOperations: WorkflowGitOperations
+
+  val buildGateCoordinator: FeatureTaskRuntimeBuildGateCoordinator
+
+  val validationGateResolver: ValidationGateResolver
+
+  val buildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator
+
+  val validationGateCoordinator: FeatureTaskRuntimeValidationGateCoordinator
+
+  val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator
 
   val clock: Clock
 
@@ -166,7 +215,9 @@ internal interface PhaseRuntimeFinalizationContext : PhaseAttemptEnvironment {
 
   val recorder: PhaseRunRecords
 
-  val phaseGates: FeatureTaskRuntimePhaseGates
+  val gitOperations: WorkflowGitOperations
+
+  val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator
 
   val clock: Clock
 
@@ -193,7 +244,9 @@ internal interface PhaseAttemptTraversalRuntimeContext : PhaseAttemptEnvironment
 
   val diagnostics: RuntimeDiagnostics
 
-  val phaseGates: FeatureTaskRuntimePhaseGates
+  val gitOperations: WorkflowGitOperations
+
+  val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner
 
   val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner
 
@@ -205,6 +258,8 @@ internal interface PhaseAttemptLaunchPreparationContext :
   PhaseOutputSettlementContext,
   PhaseAttemptLaunchRuntimeContext,
   PhaseAttemptPlanAuthorization {
+  val validationGateResolver: ValidationGateResolver
+
   fun stepHooks(run: PhaseRun): PhaseStepHooks
 
   fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField>
@@ -221,105 +276,195 @@ internal interface PhaseRunLoopAttemptCollaborators :
   PhaseAttemptLaunchRuntimeContext,
   PhaseAttemptStrategyLookup
 
-internal typealias PhaseAttemptRunLoopCollaborators = PhaseRunLoopAttemptCollaborators
-
 internal open class PhaseAttemptSettlementScope(
   private val boundHost: PhaseAttemptRunHost,
 ) : PhaseOutputSettlementContext,
-  PhaseAttemptPlanAuthorization {
-  internal fun attemptRunHost(): PhaseAttemptRunHost = boundHost
+  PhaseAttemptPlanAuthorization,
+  PhaseAttemptLaunchRuntimeContext,
+  PhaseRuntimeFinalizationContext,
+  PhaseCheckpointRemediationContext,
+  PhaseAttemptTraversalRuntimeContext {
 
   override val request: FeatureTaskRuntimeRunFacts
-    get() = attemptRunHost().request
+    get() = boundHost.request
 
-  override val phaseGates: FeatureTaskRuntimePhaseGates
-    get() = attemptRunHost().phaseGates
+  override val gitOperations: WorkflowGitOperations
+    get() = boundHost.gitOperations
+
+  override val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort
+    get() = boundHost.sharedEvidenceResolver
+
+  override val diffResolver: DiffResolverPort
+    get() = boundHost.diffResolver
+
+  override val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner
+    get() = boundHost.decompositionPlanner
+
+  override val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory
+    get() = boundHost.findingVerificationBoundaryMemory
+
+  override val specIntentProjectionResolver: SpecIntentProjectionResolver
+    get() = boundHost.specIntentProjectionResolver
+
+  override val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry
+    get() = boundHost.lifecycleTelemetry
 
   override val clock
-    get() = attemptRunHost().clock
+    get() = boundHost.clock
 
   override val diagnostics: RuntimeDiagnostics
-    get() = attemptRunHost().diagnostics
+    get() = boundHost.diagnostics
 
   override val progress: FeatureTaskRuntimeProgressSnapshotAccess
-    get() = attemptRunHost().progress
+    get() = boundHost.progress
 
   override val session: FeatureTaskRuntimeRunSessionObservations
-    get() = attemptRunHost().session
+    get() = boundHost.session
 
   override val observability: FeatureTaskRuntimeRunObservability
-    get() = attemptRunHost().telemetry
+    get() = boundHost.telemetry
 
   override val recorder: PhaseRunRecords
-    get() = attemptRunHost().records
+    get() = boundHost.records
 
   override val goalContinuationRecorder: PhaseRunGoal
-    get() = attemptRunHost().goal
+    get() = boundHost.goal
 
   override val phaseSettlementService: PhaseRunSettlements
-    get() = attemptRunHost().settlements
+    get() = boundHost.settlements
 
   override val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner
-    get() = attemptRunHost().coupledRunTransitions
+    get() = boundHost.coupledRunTransitions
 
   override val specSource: SpecSource
-    get() = attemptRunHost().specSource
+    get() = boundHost.specSource
 
   override val transitionDeclaration: FeatureTaskRuntimeTransitionDeclaration
-    get() = attemptRunHost().transitions
+    get() = boundHost.transitions
+
+  override val transitions: FeatureTaskRuntimeTransitionDeclaration
+    get() = boundHost.transitions
+
+  override val checkpoints: PhaseRunCheckpoints
+    get() = boundHost.checkpoints
 
   override fun acceptedStepPolicy(stepId: String): PhaseStepPolicy =
-    attemptRunHost().selectedOwnerOf(stepId)?.policyFor(stepId)
+    boundHost.selectedOwnerOf(stepId)?.policyFor(stepId)
       ?: error("Step '$stepId' is not in the accepted execution plan.")
 
-  override fun unselectedStepIds(): Set<String> = attemptRunHost().unselectedStepIds()
+  override fun unselectedStepIds(): Set<String> = boundHost.unselectedStepIds()
 
   override fun extendsOwnedInventory(stepId: String): Boolean =
-    attemptRunHost().selectedOwnerOf(stepId)?.policyFor(stepId)?.extendsOwnedInventory == true
+    boundHost.selectedOwnerOf(stepId)?.policyFor(stepId)?.extendsOwnedInventory == true
 
   internal fun requireAcceptedBoundStep(stepId: String) {
-    check(stepId == attemptRunHost().boundPhaseId) {
+    check(stepId == boundHost.boundPhaseId) {
       "Step '$stepId' is not the accepted binding for this attempt; " +
-        "only '${attemptRunHost().boundPhaseId}' is authorized."
+        "only '${boundHost.boundPhaseId}' is authorized."
     }
   }
+
+  internal fun resolveAcceptedLaunchState(): PhaseLaunchState = boundHost.launchStateForAcceptedStep()
+
+  internal fun stepBindingCoordinator(): FeatureTaskRuntimeRunLoopStepBindingCoordinator = boundHost.stepBinding
+
+  internal fun ensureFeatureBranch(guardPhase: String): FeatureTaskRuntimeBranchSetupOutcome =
+    boundHost.ensureFeatureBranch(guardPhase)
+
+  internal fun selectedOwnerOf(stepId: String): PhaseStrategy? = boundHost.selectedOwnerOf(stepId)
+
+  internal fun resolveStrategyFor(stepId: String): PhaseStrategy = boundHost.strategyFor(stepId)
+
+  internal fun buildGateCoordinator(): FeatureTaskRuntimeBuildGateCoordinator = boundHost.buildGateCoordinator
+
+  internal open val validationGateResolver: ValidationGateResolver
+    get() = boundHost.validationGateResolver
+
+  internal fun buildReceiptValidator(): FeatureTaskRuntimeWireArtifactValidator =
+    boundHost.requireBuildReceiptValidator()
+
+  internal fun validationGateCoordinator(): FeatureTaskRuntimeValidationGateCoordinator =
+    boundHost.validationGateCoordinator
+
+  override val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator
+    get() = boundHost.readinessGateCoordinator
+
+  internal fun fanOut(stepId: String): PhaseRunFanOut = boundHost.fanOut(stepId)
+
+  internal fun resolvePhaseSettlementTarget(iteration: Int): FeatureTaskRuntimePhaseSettlementTarget? =
+    boundHost.settlementTarget(iteration)
+
+  internal fun runAcceptedAttemptLoop(run: PhaseRun, call: PhaseStepCall): PhaseOutcome =
+    boundHost.runAcceptedAttemptLoop(run, call)
+
+  internal fun runPreparedStep(
+    run: PhaseRun,
+    call: PhaseStepCall,
+    input: PhaseStepInput,
+    launchState: PhaseLaunchState,
+  ): PhaseStepOutput = boundHost.runPreparedStep(run, call, input, launchState)
+
+  internal fun recordReviewRunForAcceptedStep(
+    reviewRunId: String,
+    result: ParallelCodeReviewResult,
+    laneTelemetryRecorded: Boolean,
+  ) = boundHost.recordReviewRunForRunStatePorts(reviewRunId, result, laneTelemetryRecorded)
+
+  internal fun pinnedReviewTargetForAcceptedStep(resolve: () -> ReviewTarget): ReviewTarget =
+    boundHost.pinnedReviewTargetForRunStatePorts(resolve)
+
+  internal fun runnerForAcceptedAttempt(run: PhaseRun, call: PhaseStepCall) =
+    boundHost.runnerForAcceptedAttempt(run, call)
 }
 
 internal open class PhaseAttemptLaunchCollaborationScope(
   host: PhaseAttemptRunHost,
 ) : PhaseAttemptSettlementScope(host),
-  PhaseAttemptLaunchRuntimeContext,
+  PhaseQualityGateReporting by host,
+  PhaseQualityGateCycleContext,
   PhaseAttemptLaunchPreparationContext {
   internal val acceptedLaunchState: PhaseLaunchState
-    get() = attemptRunHost().launchStateForAcceptedStep()
+    get() = resolveAcceptedLaunchState()
+
+  internal val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator
+    get() = stepBindingCoordinator()
+
+  override val buildGateCoordinator: FeatureTaskRuntimeBuildGateCoordinator
+    get() = super.buildGateCoordinator()
+
+  override val validationGateResolver: ValidationGateResolver
+    get() = super.validationGateResolver
+
+  override val buildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator
+    get() = super.buildReceiptValidator()
+
+  override val validationGateCoordinator: FeatureTaskRuntimeValidationGateCoordinator
+    get() = super.validationGateCoordinator()
 
   override fun stepHooks(run: PhaseRun): PhaseStepHooks {
     requireAcceptedBoundStep(run.phaseId)
-    return attemptRunHost().strategyFor(run.phaseId).stepHooks(run.phaseId)
+    return resolveStrategyFor(run.phaseId).stepHooks(run.phaseId)
   }
 
   override fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField> {
     requireAcceptedBoundStep(stepId)
-    return attemptRunHost().strategyFor(stepId).briefingInvariantFields(stepId)
+    return resolveStrategyFor(stepId).briefingInvariantFields(stepId)
   }
 
   override fun phaseSettlementTarget(iteration: Int): FeatureTaskRuntimePhaseSettlementTarget? =
-    attemptRunHost().settlementTarget(iteration)
-}
+    resolvePhaseSettlementTarget(iteration)
 
-internal open class PhaseAttemptRemediationCollaborationScope(
-  host: PhaseAttemptRunHost,
-) : PhaseAttemptLaunchCollaborationScope(host),
-  PhaseCheckpointRemediationContext,
-  PhaseAttemptTraversalRuntimeContext {
-  override val specSource: SpecSource
-    get() = attemptRunHost().specSource
-
-  override val transitions: FeatureTaskRuntimeTransitionDeclaration
-    get() = attemptRunHost().transitions
-
-  override val checkpoints: PhaseRunCheckpoints
-    get() = attemptRunHost().checkpoints
+  internal fun writeRuntimeSubtaskCommit(
+    branch: String,
+    message: String,
+    identity: FeatureTaskRuntimeSubtaskCommitIdentity,
+  ): WorkflowGitOperationResult =
+    FeatureTaskRuntimeRunLoopCheckpoint.writeSubtaskCommit(
+      this,
+      branch,
+      message,
+      identity,
+    )
 }
 
 internal open class PhaseAttemptScope(
@@ -328,37 +473,19 @@ internal open class PhaseAttemptScope(
 
 internal class PhaseRunLoopAttemptScope(
   host: PhaseAttemptRunHost,
-) : PhaseAttemptRemediationCollaborationScope(host),
+) : PhaseAttemptLaunchCollaborationScope(host),
   PhaseRunLoopAttemptCollaborators {
   override fun strategyFor(stepId: String): PhaseStrategy {
     requireAcceptedBoundStep(stepId)
-    if (attemptRunHost().selectedOwnerOf(stepId) == null) {
+    if (selectedOwnerOf(stepId) == null) {
       error("Step '$stepId' is not in the accepted execution plan.")
     }
-    return attemptRunHost().strategyFor(stepId)
+    return resolveStrategyFor(stepId)
   }
-
-  internal fun runnerForAcceptedAttempt(
-    run: PhaseRun,
-    call: PhaseStepCall,
-  ) = attemptRunHost().runnerForAcceptedAttempt(run, call)
 }
 
 internal fun phaseAttemptLaunchCollaborationScope(host: PhaseAttemptRunHost): PhaseAttemptLaunchCollaborationScope =
   PhaseAttemptLaunchCollaborationScope(host)
-
-internal fun phaseAttemptCollaborationScope(host: PhaseAttemptRunHost): PhaseAttemptRemediationCollaborationScope =
-  PhaseAttemptRemediationCollaborationScope(host)
-
-internal fun remediationCollaborationScope(
-  launchEnvironment: PhaseAttemptLaunchCollaborationScope,
-): PhaseAttemptRemediationCollaborationScope =
-  when (launchEnvironment) {
-    is PhaseAttemptRemediationCollaborationScope -> launchEnvironment
-    else -> PhaseAttemptRemediationCollaborationScope(launchEnvironment.attemptRunHost())
-  }
-
-internal typealias PhaseAttemptRunCollaborationScope = PhaseAttemptRemediationCollaborationScope
 
 internal val PhaseRunLoopAttemptCollaborators.blockingSessionForPhaseEffects:
   FeatureTaskRuntimeRunSessionObservations

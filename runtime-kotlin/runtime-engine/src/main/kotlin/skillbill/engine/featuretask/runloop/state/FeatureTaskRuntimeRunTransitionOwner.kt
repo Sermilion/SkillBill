@@ -5,13 +5,13 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PendingReentry
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowPathContentIdentitiesResult
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -295,13 +295,13 @@ internal class FeatureTaskRuntimeRunTransitionOwner(
 
   fun recordPhaseContentIdentities(
     request: FeatureTaskRuntimeRunFacts,
-    phaseGates: FeatureTaskRuntimePhaseGates,
+    gitOperations: WorkflowGitOperations,
     phaseId: String,
   ) {
-    val owned = phaseGates.gitOperations.repositoryOwnedPaths(request.repoRoot)
+    val owned = gitOperations.repositoryOwnedPaths(request.repoRoot)
     if (owned !is WorkflowGitNameListResult.Listed) return
     val paths = owned.names.map(String::trim).filter(String::isNotBlank)
-    val identities = phaseGates.gitOperations.pathContentIdentities(request.repoRoot, paths)
+    val identities = gitOperations.pathContentIdentities(request.repoRoot, paths)
     if (identities !is WorkflowPathContentIdentitiesResult.Resolved) return
     session.recordPhaseContentIdentities(phaseId, identities.identities)
   }

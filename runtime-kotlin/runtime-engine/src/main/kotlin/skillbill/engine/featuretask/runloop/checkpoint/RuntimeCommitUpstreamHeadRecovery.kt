@@ -27,7 +27,7 @@ internal object RuntimeCommitUpstreamHeadRecovery {
     upstreamReceipt: (String, Int) -> FeatureTaskRuntimePhaseOutput?,
   ) {
     val headSha =
-      context.phaseGates.gitOperations
+      context.gitOperations
         .headCommitSha(context.request.repoRoot)
         .takeIf { it is WorkflowGitOperationResult.Ok }
         ?.value

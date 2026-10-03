@@ -22,6 +22,8 @@ import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
 import skillbill.engine.featuretask.runloop.core.PreparedLaunchReady
 import skillbill.engine.featuretask.runloop.core.RecordRejection
 import skillbill.engine.featuretask.runloop.core.SettleRecordRejectionArgs
+import skillbill.engine.featuretask.runloop.core.SettleValidatedOutput
+import skillbill.engine.featuretask.runloop.core.SettledOutputContext
 import skillbill.engine.featuretask.runloop.core.phaseBlockArgs
 import skillbill.engine.featuretask.runloop.core.withDisposition
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutputPersistence
@@ -91,23 +93,22 @@ object PhaseAttemptOnce {
   }
 
   internal fun blockRequiredWriteRejection(
-    host: PhaseAttemptRunHost,
+    context: PhaseAttemptLaunchCollaborationScope,
     run: PhaseRun,
     rejection: RequiredPhaseWrite.Rejected,
   ): PhaseOutcome {
     val reason = rejection.message
-    val scope = PhaseAttemptLaunchCollaborationScope(host)
-    val coupling = scope.settlementCoupling()
+    val coupling = context.settlementCoupling()
     return runCatching {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
         coupling.progress,
         coupling.transitions,
-        scope.recorder,
+        context.recorder,
         PhaseBlockRequest(
           run = run,
           attemptCount = rejection.attempt,
           reason = reason,
-          observability = scope.observability,
+          observability = context.observability,
           failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
           payload = BlockAndPersistPayload(childNeverLaunched = true),
         ),
@@ -118,7 +119,7 @@ object PhaseAttemptOnce {
         is InterruptedException -> throw secondary
       }
       RuntimeDiagnosticsBestEffortWarning.record(
-        scope.diagnostics,
+        context.diagnostics,
         "Required phase write rejection for '${run.phaseId}' could not be persisted; " +
           "the original ${rejection.writeKind.wireValue} rejection remains primary.",
         secondary,
@@ -126,12 +127,6 @@ object PhaseAttemptOnce {
       PhaseOutcome.blocked(reason)
     }
   }
-
-  internal fun blockRequiredWriteRejection(
-    context: PhaseAttemptLaunchCollaborationScope,
-    run: PhaseRun,
-    rejection: RequiredPhaseWrite.Rejected,
-  ): PhaseOutcome = blockRequiredWriteRejection(context.attemptRunHost(), run, rejection)
 
   internal fun launchAndCapture(
     context: PhaseAttemptLaunchCollaborationScope,
@@ -187,7 +182,7 @@ object PhaseAttemptOnce {
           }
       }
     val output =
-      context.attemptRunHost().runPreparedStep(
+      context.runPreparedStep(
         run,
         call,
         PhaseStepInput(
@@ -223,7 +218,7 @@ object PhaseAttemptOnce {
       FeatureTaskRuntimeRunLoopLaunch.capturePhaseContentIdentities(
         request,
         coupledRunTransitions,
-        phaseGates,
+        gitOperations,
         run.phaseId,
       )
     }
@@ -271,16 +266,39 @@ object PhaseAttemptOnce {
         return PhaseAttemptOnce.settleRecordRejection(context, args, rejection)
       }
       val fileManifest = requireNotNull(launch.fileManifest)
+      val captured = requireNotNull(launch.capturedPhaseOutput)
       return PhaseOutputGate.gateOutput(
         GateOutput(
           run = run,
           iteration = iteration,
-          captured = requireNotNull(launch.capturedPhaseOutput),
+          captured = captured,
           fileManifest = fileManifest,
           settledEnvelope = launch.capturedSettledEnvelope,
-          call = args.call,
           outputGateFailuresBefore = args.context.outputGateFailuresBefore,
-          settlementContext = context,
+          progress = context.progress,
+          recorder = context.recorder,
+          phaseSettlementService = context.phaseSettlementService,
+          observability = context.observability,
+          coupledRunTransitions = context.coupledRunTransitions,
+          settleAcceptedOutput = { normalized, observability ->
+            PhaseOutputGate.settleValidatedOutput(
+              SettleValidatedOutput(
+                run = run,
+                iteration = iteration,
+                output =
+                  SettledOutputContext(
+                    normalizedOutput = normalized,
+                    repairEvidence = null,
+                    observability = observability,
+                    fileManifest = fileManifest,
+                    captured = captured,
+                  ),
+                settlementContext = context,
+                boundStep = args.call.acceptedExecution,
+                stepHooks = context.stepHooks(run),
+              ),
+            )
+          },
           stepHooks = context.stepHooks(run),
         ),
       )

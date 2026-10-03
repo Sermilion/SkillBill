@@ -3,6 +3,8 @@ package skillbill.engine.featuretask.phaserun
 import skillbill.contracts.JsonCodec
 import skillbill.engine.RuntimeHarnessConfig
 import skillbill.engine.RuntimeRecordingLauncher
+import skillbill.engine.TestFeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.withRunState
 import skillbill.engine.committedRepoBranchSetup
 import skillbill.engine.facts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
@@ -14,6 +16,7 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
+import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaborationScope
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunState
@@ -270,7 +273,7 @@ class PhaseValidationRunTest {
     var original: RequiredPhaseWrite.Rejected? = null
     var terminalWrites = 0
     val loop =
-      object : FeatureTaskRuntimeRunLoopEntry() {
+      object : TestFeatureTaskRuntimeRunLoopEntry() {
         override fun run(
           context: FeatureTaskRuntimeRunLoopContext,
           beforeDrive: (FeatureTaskRuntimeRunLoop) -> Unit,
@@ -302,14 +305,14 @@ class PhaseValidationRunTest {
               override fun step(run: PhaseRun): PhaseAcceptedStepExecution {
                 stepBinding.beginStepBinding(run)
                 return FeatureTaskRuntimeRunLoopStepBindings.create(
-                  skillbill.engine.featuretask.slot.attempt.phaseAttemptCollaborationScope(
+                  phaseAttemptLaunchCollaborationScope(
                     PhaseAttemptRunHost(run.request, this, run.phaseId, this),
                   ),
                   run,
                 )
               }
             }
-          return super.run(context.copy(runState = state), beforeDrive)
+          return super.run(context.withRunState(state), beforeDrive)
         }
       }
 
@@ -356,43 +359,50 @@ class PhaseValidationRunTest {
     gateRequests: MutableList<ValidationGateRunRequest>,
     results: List<ValidationGateRunResult>,
     manifests: List<PlatformManifest> = listOf(validationPack()),
-    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
   ): PhaseRunEntry {
     var resultIndex = 0
-    val runner =
+    val config =
+      RuntimeHarnessConfig(
+        seedDurableWorkflow = false,
+        branchSetup =
+          branchSetup.also {
+            it.gitOperations.ownedPathsResult =
+              WorkflowGitNameListResult.Listed(listOf("src/Foo.kt"))
+          },
+        repoRoot = repoRoot,
+        launcher = launcher,
+        validationGatePlatformManifests = manifests,
+        gateRepoLocalConfig = repoLocalConfig("./tools/gradlew"),
+        validationGateRunner =
+          object : ValidationGateRunner {
+            override fun run(request: ValidationGateRunRequest): ValidationGateRunResult {
+              gateRequests += request
+              return results.getOrNull(resultIndex++)?.copy(command = request.argv.joinToString(" "))
+                ?: ValidationGateRunResult(
+                  exitCode = 0,
+                  durationMs = 1,
+                  outcome = ValidationGateRunOutcome.PASSED,
+                  cacheMode = request.cacheMode,
+                  executedWorkUnits = 1,
+                  executedCheckIdentities = emptyList(),
+                  findings = emptyList(),
+                  command = request.argv.joinToString(" "),
+                )
+            }
+          },
+      )
+    val harness =
       telemetryRunnerHarness(
-        runtimeConfig =
-          RuntimeHarnessConfig(
-            seedDurableWorkflow = false,
-            branchSetup =
-              branchSetup.also {
-                it.gitOperations.ownedPathsResult =
-                  WorkflowGitNameListResult.Listed(listOf("src/Foo.kt"))
-              },
-            repoRoot = repoRoot,
-            launcher = launcher,
-            validationGatePlatformManifests = manifests,
-            gateRepoLocalConfig = repoLocalConfig("./tools/gradlew"),
-            validationGateRunner =
-              object : ValidationGateRunner {
-                override fun run(request: ValidationGateRunRequest): ValidationGateRunResult {
-                  gateRequests += request
-                  return results.getOrNull(resultIndex++)?.copy(command = request.argv.joinToString(" "))
-                    ?: ValidationGateRunResult(
-                      exitCode = 0,
-                      durationMs = 1,
-                      outcome = ValidationGateRunOutcome.PASSED,
-                      cacheMode = request.cacheMode,
-                      executedWorkUnits = 1,
-                      executedCheckIdentities = emptyList(),
-                      findings = emptyList(),
-                      command = request.argv.joinToString(" "),
-                    )
-                }
-              },
-          ),
+        runtimeConfig = config,
         databaseFactory = { database },
-      ).runner
-    return phaseRunEntry(runner, database, clock, runLoopEntry)
+      )
+    return phaseRunEntry(
+      harness.strategies,
+      config.harnessGitOperations,
+      database,
+      clock,
+      harness.runLoopEntry.delegateTo(runLoopEntry),
+    )
   }
 }
