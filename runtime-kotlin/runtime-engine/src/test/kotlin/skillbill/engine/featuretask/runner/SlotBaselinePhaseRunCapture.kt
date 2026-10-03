@@ -183,6 +183,7 @@ internal class SlotBaselinePhaseRunHarness private constructor(
 
   fun validationEntry(): PhaseRunEntry {
     git.ownedPathsValue = listOf(DELEGATED_REVIEWED_PATH)
+    git.trackedPathsValue = listOf(DELEGATED_REVIEWED_PATH)
     return entryFor(
       RuntimeHarnessConfig(
         seedDurableWorkflow = false,

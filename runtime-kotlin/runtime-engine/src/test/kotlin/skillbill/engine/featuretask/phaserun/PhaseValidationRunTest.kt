@@ -57,6 +57,7 @@ class PhaseValidationRunTest {
   private val branchSetup =
     committedRepoBranchSetup().also {
       it.gitOperations.repositoryFingerprintValue = "validation-checkpoint"
+      it.gitOperations.trackedPathsValue = listOf("src/Foo.kt")
     }
   private val headBefore = branchSetup.gitOperations.headCommitShaValue
 
@@ -64,6 +65,35 @@ class PhaseValidationRunTest {
   fun cleanUp() {
     repoRoot.toFile().deleteRecursively()
     home.toFile().deleteRecursively()
+  }
+
+  @Test
+  fun `standalone validation selects the full branch gate regardless of changed files`() {
+    branchSetup.gitOperations.trackedPathsValue = listOf("README.md", "src/Foo.kt")
+    val requests = mutableListOf<ValidationGateRunRequest>()
+    val launcher = launcher { error("A passing branch gate needs no repair launch") }
+
+    val entry = entry(launcher, requests, emptyList())
+    val scopes = listOf(emptyList(), listOf("README.md"), listOf("ios/App.swift"))
+    val results =
+      scopes.map { changed ->
+        branchSetup.gitOperations.ownedPathsResult = WorkflowGitNameListResult.Listed(changed)
+        assertIs<PhaseRunResult.Completed>(entry.run(validationRequest()))
+      }
+
+    results.forEach { assertEquals(listOf(PHASE_VALIDATE), it.completedStepIds) }
+    assertEquals(
+      List(scopes.size) { listOf("./tools/gradlew", "-p", "./tools", "validation-discovery") },
+      requests.map { it.argv },
+    )
+    val envelope =
+      requireNotNull(JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(requireNotNull(results.last().value))))
+    val produced = assertIs<Map<*, *>>(envelope["produced_outputs"])
+    val evidence = assertIs<Map<*, *>>(produced["validation_result"])
+    val runs = assertIs<List<*>>(evidence["gate_runs"])
+    assertEquals(0L, (assertIs<Map<*, *>>(runs.single())["exit_code"] as Number).toLong())
+    database.assertNoDurableWorkflowState()
+    branchSetup.gitOperations.assertNoCommitOrCheckpointRef(headBefore)
   }
 
   @Test

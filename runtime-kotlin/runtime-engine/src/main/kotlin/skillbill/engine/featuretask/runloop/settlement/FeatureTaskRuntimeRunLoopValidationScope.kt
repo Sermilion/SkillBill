@@ -13,7 +13,7 @@ object FeatureTaskRuntimeRunLoopValidationScope {
     val run = args.run
     val gitOperations = args.gitOperations
     if (run.request.skeletonDefinition?.runStateKind == SkeletonRunStateKind.IN_MEMORY) {
-      return when (val paths = gitOperations.repositoryOwnedPaths(run.request.repoRoot)) {
+      return when (val paths = gitOperations.trackedPaths(run.request.repoRoot)) {
         is WorkflowGitNameListResult.Listed -> paths.names.distinct().sorted()
         is WorkflowGitNameListResult.Failed -> throw PhaseValidationScopeError(paths.error)
       }
