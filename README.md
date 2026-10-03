@@ -22,7 +22,7 @@ Install and authenticate your coding agent's CLI, then install Skill Bill:
 curl -fsSL https://raw.githubusercontent.com/Sermilion/SkillBill/main/install.sh | bash
 ```
 
-Choose your agents, platform packs, and telemetry level when prompted. The installer downloads a self-contained runtime, renders the selected skills, links them into agent directories, and registers the MCP server. Prebuilt installs need no system JDK or Gradle.
+Choose your agents, platform packs, and telemetry level when prompted. The installer downloads a self-contained runtime, renders `/skill-bill` with the selected packs' review specialists as its internal sidecars, links it into agent directories, and registers the MCP server. Prebuilt installs need no system JDK or Gradle. Installing over an older version removes the retired `bill-*` skills; see [Upgrading from the `bill-*` skills](#upgrading-from-the-bill--skills).
 
 Check the installation:
 
@@ -83,24 +83,33 @@ skill-bill update
 
 ## Feature workflow
 
-`/skill-bill <issue-key>` prepares the spec, asks for confirmation, and launches the goal runtime. A small feature uses one subtask. Larger work can use dependency-ordered subtasks, each with a fresh execution context and durable handoff artifacts.
+`/skill-bill <intake>` launches the goal runtime. The runtime prepares a missing spec, plans the work, and runs it. If a spec or goal already exists, it resumes that instead. A small feature uses one subtask. Larger work can use dependency-ordered subtasks, each with a fresh execution context and durable handoff artifacts.
 
-Each subtask follows these stages:
+Every run follows the same fixed sequence of nine phase slots:
 
-1. Pre-plan and plan the implementation using repository instructions and relevant durable artifacts.
-2. Implement the plan, then run a mandatory simplification pass scoped to the subtask's changes.
-3. Audit the acceptance criteria against the current code and tests, repairing gaps.
-4. Run inline code review, verify findings, and apply bounded repairs.
-5. Run the selected quality phase, then record relevant boundary history.
-6. Commit and push the subtask. The goal prepares the PR after its subtasks complete.
+| Slot | What happens |
+| --- | --- |
+| `preplan` | Collect repository instructions and relevant durable artifacts. For a goal, this runs once and every subtask shares it. |
+| `plan` | Plan the subtask's implementation. |
+| `implementation` | Implement the plan, then run a mandatory simplification pass scoped to the subtask's changes. |
+| `audit` | Check the acceptance criteria against the current code and tests, then plan and repair gaps. |
+| `code_review` | Review the subtask commit, verify findings, and fix them in bounded rounds. |
+| `quality_gate` | Run full project validation, or a compile-only build for goal subtasks before the last. |
+| `write_history` | Record boundary history and decisions in area-owned `agent/` files. |
+| `commit_push` | Commit and push the subtask: one commit per subtask on the feature branch. |
+| `pull_request` | Create or update the PR once every subtask is complete. |
+
+Each standalone phase runs a subset of these slots through the same run loop. For example, `phase:review` runs only `code_review`, and `phase:plan` runs `preplan` and `plan`. Runs differ in which slots they include and where they keep state, not in how a slot runs.
 
 The quality phases have different purposes:
 
 | Phase or command | Checks |
 | --- | --- |
 | `validate` | An agent discovers and runs the project's required checks from repository instructions, build configuration, scripts, and CI. The runtime advances only when the agent reports that those checks passed. |
-| `build` | Goal children selected for build run the dominant pack's declared build command and cache-bypassing confirmation. This proves buildability and does not run the full test suite. |
+| `build` | Every goal subtask except the last runs the dominant pack's declared build command, then a cache-bypassing confirmation. This proves buildability and does not run the full test suite. |
 | Standalone quality check | `/skill-bill phase:validation` runs the same full project checks and repair loop as goal validation. |
+
+An unknown quality-gate selection value fails as a usage error.
 
 Specs live under `.feature-specs/`, with a parent spec, executable subtask specs, and a decomposition manifest. Local specs are the default; optional Linear-backed preparation records issues and supports spec rehydration. The default commit model leaves one commit per completed subtask on the feature branch.
 
@@ -149,6 +158,8 @@ Name the work you want reviewed:
 
 Review also accepts `target:unstaged` or a commit sha. Without `target:`, it reviews uncommitted changes when the worktree is dirty and `HEAD` when it is clean.
 
+Review fixes what it finds. Both modes verify their findings, fix Blocker and Major ones in the working tree, and report the rest with a verdict. A standalone review creates no commit.
+
 `inline` is the default. It runs one review worker over the routed areas at reduced depth. `auto` also resolves to inline. `delegated` is the experimental full-depth mode, with separate specialist workers, and requires explicit `mode:delegated` on a standalone review. Feature and goal workflows accept `code-review:auto|inline` and use inline review. A required worker that cannot launch blocks the review rather than silently reducing its depth.
 
 For full project validation:
@@ -157,15 +168,21 @@ For full project validation:
 /skill-bill phase:validation
 ```
 
-The phase uses the same agent strategy as goal validate. It discovers required checks from repository instructions, build configuration, scripts, and CI, then runs those checks and repairs failures.
+The phase uses the same agent strategy as goal validate. It picks the platform gate from the branch's tracked files and validates the whole branch, not only the changed files. It discovers required checks from repository instructions, build configuration, scripts, and CI, then runs those checks and repairs failures. Ambiguous platform ownership or a missing gate declaration blocks the phase. It does not fall back to another pack's gate.
 
 ## Skills
 
 `/skill-bill` is the only listed skill. Phases and operations are forms of it, not separate commands. Stack-specific review skills install as its internal sidecars.
 
+There are three kinds of form:
+
+- The full run (`/skill-bill <intake>`) runs all nine slots with durable state, so it can pause and resume.
+- A phase (`phase:<name>`) runs a few slots in memory. It writes no workflow row, branch, or checkpoint commit, and it cannot be resumed. `commit_push` is not available as a standalone phase.
+- An operation (`operation:<name>`) is a standalone job outside the feature workflow. Operations that edit files, tag a release, or push stop at `awaiting_confirmation` and act only after you confirm.
+
 | Form | Purpose | Runs |
 |------|---------|------|
-| `/skill-bill` | Prepare or resume feature work from an `<intake>`, confirm the plan, and launch the goal runtime | `skill-bill goal` |
+| `/skill-bill` | Prepare new feature work from an `<intake>`, or resume an existing spec or goal, then run it | `skill-bill goal` |
 | `/skill-bill <intake> phase:plan` | Prepare a parent spec, executable subtask specs, and a manifest without implementing | `skill-bill phase plan` |
 | `/skill-bill phase:review` | Review a PR, commit, or working-tree change with inline or delegated depth | `skill-bill phase review` |
 | `/skill-bill phase:validation` | Run full project validation and repair findings, using the goal validation strategy | `skill-bill phase validation` |
@@ -194,6 +211,29 @@ the goal runtime, which prepares new work and resumes existing specs without
 invoking a standalone phase command.
 
 The full run forwards `code-review:inline|auto` as `--code-review-mode`; `phase:review` forwards `mode:` and `target:` unchanged. Release first prints the proposed version and changelog and exits `awaiting_confirmation`; confirming it with `confirm:<token>` creates and pushes the tag. `[<scope>] operation:unit-test-value-check` reviews unit tests without editing. `<intake> operation:feature-guard` and `<intake> operation:feature-guard-cleanup` print a plan and exit `awaiting_confirmation`. They edit only on `confirm:<token>`. `[<pr>] operation:pr-review-fix` prints a per-thread matrix for the PR's unresolved review threads and exits `awaiting_confirmation`; the dispatcher asks which threads to fix and re-runs it with `confirm:<token>` and `select:`. It pushes only with `push:on`.
+
+### Upgrading from the `bill-*` skills
+
+Earlier versions installed a separate listed skill for each job. Those skills are retired, and reinstalling removes their links and copies. Use the matching `/skill-bill` form instead:
+
+| Retired skill | Use instead |
+| --- | --- |
+| `bill-feature` | `/skill-bill <intake>` |
+| `bill-feature-spec` | `/skill-bill <intake> phase:plan` |
+| `bill-code-review` | `/skill-bill phase:review` |
+| `bill-code-check` | `/skill-bill phase:validation` |
+| `bill-pr-description` | `/skill-bill phase:pr` |
+| `bill-boundary-history`, `bill-boundary-decisions` | The goal's `write_history` slot |
+| `bill-feature-verify` | `/skill-bill operation:verify` |
+| `bill-feature-guard` | `/skill-bill <intake> operation:feature-guard` |
+| `bill-feature-guard-cleanup` | `/skill-bill <intake> operation:feature-guard-cleanup` |
+| `bill-pr-review-fix` | `/skill-bill operation:pr-review-fix` |
+| `bill-unit-test-value-check` | `/skill-bill operation:unit-test-value-check` |
+| `bill-release` | `/skill-bill operation:release bump:<patch\|minor\|major>` |
+| `bill-update-check` | `/skill-bill operation:update-check` |
+| `bill-monitor` | `skill-bill goal status <KEY>` from the CLI |
+
+Telemetry and stored workflow rows still use some retired names, such as `bill-code-check` as the quality-check `routed_skill`, so existing dashboards and in-flight workflows keep working.
 
 ## Platform packs
 
@@ -368,6 +408,7 @@ Some diagnostic events still queue locally while telemetry is off. [Telemetry Pr
 
 - [Getting Started](docs/getting-started.md): installation, CLI commands, MCP tools, and recovery.
 - [Getting Started for Teams](docs/getting-started-for-teams.md): rollout and project customization.
+- [Runtime Command Guidance](docs/runtime-command-guidance.md): full-run, phase, and operation behavior, plus goal commit rules.
 - [Capability Deep-dive](docs/capabilities.md): workflows, packs, memory, and governance.
 - [Token Economy](docs/token-economy.md): bounded context and durable handoffs for long goals.
 - [Review Telemetry](docs/review-telemetry.md): review measurements, learnings, and local statistics.
