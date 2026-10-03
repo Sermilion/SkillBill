@@ -2554,3 +2554,18 @@ Decision: Preplan is the feature's only discovery. It settles every question the
 Reason: Discovery done once is the point of preplan, and a plan that re-verifies pays for it twice, once per subtask in a fan-out. The fence keeps the digest readable while a heading inside it still cannot pass for a briefing section, which the escaping used to guarantee.
 
 Revisit when: Plans regularly record assumptions that implement finds wrong, which would mean preplan digests are too thin rather than plan too strict.
+
+## 2026-10-03: Resume revision-one audit workflows through a checked mapping
+
+Context: Adding `audit_plan_fix` bumped acceptance-audit to revision 2. Existing
+revision-one workflows refused admission even though their production edits and
+planning evidence remained usable.
+
+Decision: Map the exact previous composition at read time. Preserve the original
+descriptor and every persisted phase, ledger entry, and checkpoint. Check the old
+retry/resume digests and recompute only those affected by the new step. Keep full
+admission checks for the other effective policies. Emit a mapping diagnostic.
+Route resumed loop-only successors through an unfinished predecessor so repair
+plans run before old blocked repairs continue. Do not delete child workflows or
+reset their budgets to make them compatible. This keeps ownership in execution
+admission and the run loop, as required by A1, A2, A7, and A10.

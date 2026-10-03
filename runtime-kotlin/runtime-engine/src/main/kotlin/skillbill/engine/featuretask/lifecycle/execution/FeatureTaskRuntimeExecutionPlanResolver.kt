@@ -51,14 +51,15 @@ class FeatureTaskRuntimeExecutionPlanResolver(
     val workflowId = request.workflowId
 
     if (workflowId != null) {
-      val plan = recordedPlan(workflowId)
+      val recorded = recordedDescriptor(workflowId)
+      val plan = compatibility.requireSupportedComposition(recorded)
       val expectedReview = RuntimeReviewSelection.valueOf(reviewMode.name)
       if (plan.definitionId != definition.id || plan.reviewSelection != expectedReview) {
         incompatible()
       }
       requireRequestedSettings(plan, qualityGate, validationDepth, timeout)
       requireBuildGate(resolveRecordedInputs(repoRoot, plan), recorded = true)
-      return ValidatedFeatureTaskRuntimeExecutionPlan.read(codec.encode(plan), validator)
+      return ValidatedFeatureTaskRuntimeExecutionPlan.read(requireNotNull(recorded), validator)
     }
     val plan = strategies.executionPlan(PhaseStrategySelectionFacts(definition, setOfNotNull(reviewMode, qualityGate)))
     val inputs = resolveInputs(repoRoot, qualityGate, validationDepth, timeout)
@@ -158,16 +159,15 @@ class FeatureTaskRuntimeExecutionPlanResolver(
   }
 
   private fun recordedPlan(workflowId: String): ResolvedPhaseExecutionPlan =
+    compatibility.requireSupportedComposition(recordedDescriptor(workflowId))
+
+  private fun recordedDescriptor(workflowId: String): ByteArray? =
     database.read { unit ->
       val descriptor =
         unit.workflowStates.getFeatureTaskWorkflow(workflowId)?.toSnapshot()?.artifacts?.let {
           DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(it)
         }
-      compatibility.requireSupportedComposition(
-        descriptor?.let {
-          JsonCodec.valueToJsonString(it).toByteArray(Charsets.UTF_8)
-        },
-      )
+      descriptor?.let { JsonCodec.valueToJsonString(it).toByteArray(Charsets.UTF_8) }
     }
 
   private fun requireRequestedSettings(

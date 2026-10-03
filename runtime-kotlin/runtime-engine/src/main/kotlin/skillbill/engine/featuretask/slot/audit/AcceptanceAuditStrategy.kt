@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseExecutionPlanMapping
 import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
@@ -13,12 +14,14 @@ import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
 import skillbill.engine.featuretask.slot.audit.planning.AuditPlanFixPromptSections
 import skillbill.engine.featuretask.slot.audit.planning.AuditPlanFixStep
+import skillbill.engine.featuretask.slot.audit.planning.AuditPlanningExecutionPlanMapping
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 class AcceptanceAuditStrategy : PhaseStrategyStatusProjection() {
@@ -56,6 +59,11 @@ class AcceptanceAuditStrategy : PhaseStrategyStatusProjection() {
   override val semanticRevision: Int = 2
   override val steps: List<String> = policies.keys.toList()
   override val entryStep: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
+
+  override fun mapRecordedExecutionPlan(
+    recorded: ResolvedPhaseExecutionPlan,
+    current: ResolvedPhaseExecutionPlan,
+  ): PhaseExecutionPlanMapping? = AuditPlanningExecutionPlanMapping.map(recorded, current, this)
 
   override fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 

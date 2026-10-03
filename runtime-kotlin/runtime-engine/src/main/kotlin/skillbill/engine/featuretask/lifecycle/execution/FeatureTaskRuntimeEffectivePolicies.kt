@@ -7,6 +7,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_VALIDATION_
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeAttemptBudgets
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
+import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedExecutionPolicy
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
@@ -33,21 +34,11 @@ internal object FeatureTaskRuntimeEffectivePolicies {
       ),
       policy(
         "retry-budgets",
-        listOf(
-          FeatureTaskRuntimeAttemptBudgets.MAX_OUTPUT_GATE_RETRY_ATTEMPTS,
-          FeatureTaskRuntimeAttemptBudgets.MAX_PROCESS_FAILURE_ATTEMPTS,
-          FeatureTaskRuntimeBuildGateCoordinator.MAX_REPAIR_TURNS,
-          FeatureTaskRuntimePhaseWorkflowDefinition.MAX_RECORD_REGENERATION_ATTEMPTS,
-          plan.stepPolicyIdentities.toSortedMap(),
-        ),
+        retryInputs(plan),
       ),
       policy(
         "resume-budgets",
-        listOf(
-          "new-process-failure-budget-per-invocation",
-          "preserve-ordinary-attempt-attribution",
-          plan.resumeInterpretationIdentities.toSortedMap(),
-        ),
+        resumeInputs(plan),
       ),
       policy("acceptance-audit", listOf("stateless-full-scope", "empty-list-only", "unchanged-remaining-blocks")),
       policy("review-invalidation", listOf("generation-tombstone", "retain-review-baseline")),
@@ -61,6 +52,42 @@ internal object FeatureTaskRuntimeEffectivePolicies {
         ),
       ),
       policy("finalization", listOf("runtime-owned-commit-push", "retain-uncertain-effects", "terminal-refusal")),
+    )
+
+  fun mapStepIdentityPolicies(
+    recorded: ResolvedPhaseExecutionPlan,
+    mapped: ResolvedPhaseExecutionPlan,
+  ): List<ResolvedExecutionPolicy> {
+    val previous =
+      listOf(
+        policy("retry-budgets", retryInputs(recorded)),
+        policy("resume-budgets", resumeInputs(recorded)),
+      )
+    if (previous.any { expected -> recorded.effectivePolicies.singleOrNull { it.id == expected.id } != expected }) {
+      throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
+    }
+    val replacements =
+      listOf(
+        policy("retry-budgets", retryInputs(mapped)),
+        policy("resume-budgets", resumeInputs(mapped)),
+      )
+    return recorded.effectivePolicies.map { existing -> replacements.singleOrNull { it.id == existing.id } ?: existing }
+  }
+
+  private fun retryInputs(plan: ResolvedPhaseExecutionPlan): List<Any> =
+    listOf(
+      FeatureTaskRuntimeAttemptBudgets.MAX_OUTPUT_GATE_RETRY_ATTEMPTS,
+      FeatureTaskRuntimeAttemptBudgets.MAX_PROCESS_FAILURE_ATTEMPTS,
+      FeatureTaskRuntimeBuildGateCoordinator.MAX_REPAIR_TURNS,
+      FeatureTaskRuntimePhaseWorkflowDefinition.MAX_RECORD_REGENERATION_ATTEMPTS,
+      plan.stepPolicyIdentities.toSortedMap(),
+    )
+
+  private fun resumeInputs(plan: ResolvedPhaseExecutionPlan): List<Any> =
+    listOf(
+      "new-process-failure-budget-per-invocation",
+      "preserve-ordinary-attempt-attribution",
+      plan.resumeInterpretationIdentities.toSortedMap(),
     )
 
   private fun policy(

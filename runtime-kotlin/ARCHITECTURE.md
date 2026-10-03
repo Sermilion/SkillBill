@@ -1215,7 +1215,7 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   immutable domain data and checks policy digests. It does not select strategies
   or launch runners. `FeatureTaskRuntimeExecutionPlanCompatibility` compares
   recorded composition with supported definitions, registrations, and policies.
-  It returns the recorded plan and reports distinct missing, corrupt,
+  It returns the supported plan and reports distinct missing, corrupt,
   unsupported, and incompatible failures with payload-free recovery guidance.
   This composition check does not establish durable execution admission.
   `encodeExecution` adds revision-one descriptors for gate commands, receipt
@@ -1229,7 +1229,16 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   65536-byte limit. The combined policy families have a 256-descriptor limit.
   Semantic changes require a revision bump; cosmetic source changes do not.
   Durable traversal compatibility currently accepts the definition's exact
-  traversal. There are no cross-revision or traversal-override mappings.
+  traversal. `AuditPlanningExecutionPlanMapping` permits only the exact
+  acceptance-audit revision 1 composition to map to revision 2. It checks the
+  original step identities, traversal, and retry/resume policy digests, then
+  adds repair planning and derives the two affected effective-policy digests.
+  Other effective policies must still match admission inputs. The durable
+  descriptor stays unchanged, admission records a diagnostic, and existing-child
+  creation returns the original descriptor to preserve raw identity checks.
+  Resume routes through an unfinished loop-only predecessor before its successor.
+  Phase records, ledger entries, checkpoint evidence, and loop budgets stay intact.
+  There are no traversal-override mappings.
   In-memory override validation does not grant durable compatibility.
   The execution encoder rejects traversal overrides before producing a durable
   descriptor. `FeatureTaskContinuationLookupService.claim` re-reads the row,

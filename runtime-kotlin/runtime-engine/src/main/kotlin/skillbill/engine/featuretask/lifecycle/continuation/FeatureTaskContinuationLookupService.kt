@@ -76,6 +76,14 @@ class FeatureTaskContinuationLookupService(
           executionCompatibility.requireSupportedExecution(
             descriptor?.let { JsonCodec.valueToJsonString(it).toByteArray(Charsets.UTF_8) },
             effectiveInputs,
+            onMapping = {
+              RuntimeDiagnosticsBestEffortWarning.record(
+                diagnostics,
+                "Execution plan checked semantic mapping " +
+                  "workflow=${candidate.workflowId.take(ADMISSION_WORKFLOW_LABEL_LIMIT)}; " +
+                  "original descriptor and evidence retained",
+              )
+            },
           )
         if (plan.definitionId !=
           SkeletonDefinition.forRun(

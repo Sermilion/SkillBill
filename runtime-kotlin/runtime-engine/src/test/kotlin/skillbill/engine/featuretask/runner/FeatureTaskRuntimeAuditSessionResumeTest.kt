@@ -109,6 +109,72 @@ class FeatureTaskRuntimeAuditSessionResumeTest {
   }
 
   @Test
+  fun `legacy blocked repair plans before resuming and retains the saved repair attempt`() {
+    var repairs = 0
+    var audits = 0
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        when (phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))) {
+          "audit" ->
+            facts(
+              if (++audits == 1) auditRemainingAcOutput("AC-001: missing closure") else auditSatisfiedOutput(),
+            )
+          "audit_implement_fix" -> {
+            repairs++
+            if (repairs <= 3) {
+              facts(
+                """{
+            |"contract_version":"0.7",
+            |"phase_id":"audit_implement_fix",
+            |"status":"blocked",
+            |"summary":"Saved production edits.",
+            |"failure_disposition":"retryable",
+            |"produced_outputs":{"value":"Keep the repaired production path."}
+            |}
+                """.trimMargin(),
+              )
+            } else {
+              facts(defaultPhaseOutput(request))
+            }
+          }
+          else -> facts(defaultPhaseOutput(request))
+        }
+      }
+    val config = RuntimeHarnessConfig(launcher = launcher)
+    val first = runnerHarness(config)
+    assertIs<FeatureTaskRuntimeRunReport.Blocked>(first.runner.run(first.request()))
+    val originalRepair = first.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit_implement_fix")
+    val artifacts = first.repository.taskRuntimeArtifacts(WORKFLOW_ID).toMutableMap()
+    val records = requireNotNull(first.recorder.loadPhaseRecords(WORKFLOW_ID)) - "audit_plan_fix"
+    artifacts[DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.label()] =
+      records.mapValues { it.value.asWorkflowArtifactEntry() }
+    artifacts[DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_LEDGER.label()] =
+      first.recorder.loadPhaseLedger(WORKFLOW_ID).orEmpty()
+        .filter { it.phaseId != "audit_plan_fix" || it.action == FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE }
+        .map {
+          if (it.phaseId == "audit_plan_fix") {
+            it.copy(phaseId = "audit_implement_fix").asWorkflowArtifactEntry()
+          } else {
+            it.asWorkflowArtifactEntry()
+          }
+        }
+    first.repository.replaceTaskRuntimeArtifacts(WORKFLOW_ID, artifacts)
+    reopen(first, "audit_implement_fix")
+    val beforeResume = launcher.requests.size
+    val resumed = runnerHarness(config, repository = first.repository)
+
+    assertIs<FeatureTaskRuntimeRunReport.Completed>(resumed.runner.run(resumed.request()))
+
+    assertEquals(
+      listOf("audit_plan_fix", "audit_implement_fix", "audit"),
+      resumed.launchedPromptPhaseOrder().drop(beforeResume).filter { it.startsWith("audit") },
+    )
+    assertEquals(3, originalRepair?.attemptCount)
+    assertEquals(4, resumed.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit_implement_fix")?.attemptCount)
+    assertTrue("implement" !in resumed.launchedPromptPhaseOrder().drop(beforeResume))
+  }
+
+  @Test
   fun `operator resume still rejects unknown criteria before starting repair`() {
     var audits = 0
     val launcher =

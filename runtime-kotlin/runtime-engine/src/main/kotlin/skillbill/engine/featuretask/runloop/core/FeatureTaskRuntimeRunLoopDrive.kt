@@ -184,6 +184,12 @@ object FeatureTaskRuntimeRunLoopDrive {
       explicitResume?.phaseId
         ?: session.pendingReentry?.phaseId
         ?: traversal(this).forwardPhaseIds.first()
+    phaseId =
+      phaseId?.let { requested ->
+        traversal(this).loopOnlySuccessors.entries.singleOrNull { (predecessor, successor) ->
+          successor == requested && !state.phase(predecessor).completed
+        }?.key ?: requested
+      }
     while (phaseId != null) {
       val settled = advance(phaseId)
       val completedPhaseId = settled.completedPhaseId

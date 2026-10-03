@@ -15,6 +15,7 @@ import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 
 abstract class PhaseStrategy {
   abstract val slot: PhaseSlot
@@ -22,6 +23,11 @@ abstract class PhaseStrategy {
   abstract val strategyId: String
 
   open val semanticRevision: Int = 1
+
+  internal open fun mapRecordedExecutionPlan(
+    recorded: ResolvedPhaseExecutionPlan,
+    current: ResolvedPhaseExecutionPlan,
+  ): PhaseExecutionPlanMapping? = null
 
   open fun stepPolicyIdentity(stepId: String): String =
     policyFor(stepId).semanticIdentity(strategyId, semanticRevision, stepId)
@@ -98,3 +104,8 @@ internal sealed interface PhaseQualityGateOperation {
 }
 
 internal enum class PhaseExecutionBindingKind { AGENT, PLANNING, REVIEW, FINDING_VERIFICATION, REPAIR_RECEIPT }
+
+internal data class PhaseExecutionPlanMapping(
+  val previous: ResolvedPhaseExecutionPlan,
+  val supported: ResolvedPhaseExecutionPlan,
+)

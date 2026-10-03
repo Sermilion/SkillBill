@@ -23,6 +23,7 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
   fun requireSupportedExecution(
     encoded: ByteArray?,
     effectiveInputs: EffectiveGatePolicyInputs,
+    onMapping: (() -> Unit)? = null,
   ): ResolvedPhaseExecutionPlan {
     val plan = requireSupportedComposition(encoded)
     val supported = FeatureTaskRuntimeEffectivePolicies.resolve(plan, effectiveInputs).sortedBy { it.id }
@@ -31,6 +32,7 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
       throw UnsupportedFeatureTaskRuntimeExecutionPlanError()
     }
     if (plan.effectivePolicies != supported) incompatible()
+    if (!codec.encode(plan).contentEquals(codec.encode(decodePlan(requireNotNull(encoded))))) onMapping?.invoke()
     return plan
   }
 
@@ -42,7 +44,7 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
     val expected =
       expectedDescriptor
         ?: throw MissingFeatureTaskRuntimeExecutionPlanError()
-    val expectedPlan = codec.decode(expected.encoded())
+    val expectedPlan = requireSupportedComposition(expected.encoded())
     requireSupportedPolicies(expectedPlan.effectivePolicies)
     if (!codec.encode(plan).contentEquals(codec.encode(expectedPlan))) incompatible()
     return plan
@@ -65,7 +67,17 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
 
   fun requireSupportedComposition(encoded: ByteArray?): ResolvedPhaseExecutionPlan {
     if (encoded == null) throw MissingFeatureTaskRuntimeExecutionPlanError()
-    val plan = decodePlan(encoded)
+    val recorded = decodePlan(encoded)
+    val mapping = strategies.executionPlanMapping(recorded)
+    val plan =
+      if (mapping == null) {
+        recorded
+      } else {
+        if (!codec.encode(mapping.previous).contentEquals(codec.encode(recorded))) incompatible()
+        mapping.supported.withEffectivePolicies(
+          FeatureTaskRuntimeEffectivePolicies.mapStepIdentityPolicies(recorded, mapping.supported),
+        )
+      }
     val definition =
       SkeletonDefinition.entries.singleOrNull {
         it.id == plan.definitionId && it.semanticRevision == plan.definitionSemanticRevision

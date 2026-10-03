@@ -75,3 +75,11 @@ continuations reuse the saved plan. Each new audit round with open findings
 produces a new repair plan. A satisfied audit skips both repair steps. Audit,
 repair planning, and repair do not run builds or tests. Existing audit retry and
 non-shrinking limits still apply.
+
+Existing workflows with the exact acceptance-audit revision 1 composition can
+resume through a checked mapping to revision 2. The runtime retains their
+original execution descriptor, phase records, ledger entries, and checkpoint
+evidence. It verifies the old composition and retry/resume policy digests before
+adding repair planning. Other strategy, traversal, or effective-policy changes
+still refuse admission. A resumed repair without a completed repair plan starts
+at `audit_plan_fix`. A diagnostic records the mapping at execution admission.

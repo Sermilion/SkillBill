@@ -110,6 +110,26 @@ class PhaseStrategyLookup(
     }
   }
 
+  internal fun executionPlanMapping(recorded: ResolvedPhaseExecutionPlan): PhaseExecutionPlanMapping? {
+    val definition =
+      SkeletonDefinition.entries.singleOrNull {
+        it.id == recorded.definitionId && it.semanticRevision == recorded.definitionSemanticRevision
+      } ?: return null
+    val facts =
+      PhaseStrategySelectionFacts(
+        definition,
+        buildSet {
+          recorded.reviewSelection?.let { add(CodeReviewExecutionMode.valueOf(it.name)) }
+          recorded.qualityGateSelection?.let(::add)
+        },
+      )
+    val current = executionPlan(facts)
+    return recorded.selectedStrategies.mapNotNull { identity ->
+      if (!registry.contains(identity.slot, identity.strategyId)) return@mapNotNull null
+      registry.strategy(identity.slot, identity.strategyId).mapRecordedExecutionPlan(recorded, current)
+    }.singleOrNull()
+  }
+
   fun validateTraversalOverride(
     facts: PhaseStrategySelectionFacts,
     declaration: FeatureTaskRuntimeTransitionDeclaration,

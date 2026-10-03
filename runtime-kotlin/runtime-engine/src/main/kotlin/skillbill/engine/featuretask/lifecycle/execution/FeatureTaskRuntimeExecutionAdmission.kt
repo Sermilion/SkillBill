@@ -62,6 +62,7 @@ class FeatureTaskRuntimeExecutionAdmission(
         compatibility.requireSupportedExecution(
           descriptor?.let { JsonCodec.valueToJsonString(it).toByteArray(Charsets.UTF_8) },
           checkedInputs,
+          onMapping = { recordMapping(workflowId) },
         )
       if (requestedReviewSelection != null && plan.reviewSelection != requestedReviewSelection) {
         throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
@@ -116,6 +117,14 @@ class FeatureTaskRuntimeExecutionAdmission(
       warn(workflowId, error.reasonCode)
       throw error
     }
+
+  private fun recordMapping(workflowId: String) {
+    RuntimeDiagnosticsBestEffortWarning.record(
+      diagnostics,
+      "Execution plan checked semantic mapping workflow=${workflowId.take(ADMISSION_WORKFLOW_LABEL_LIMIT)}; " +
+        "original descriptor and evidence retained",
+    )
+  }
 
   private fun warn(
     workflowId: String,
