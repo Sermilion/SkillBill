@@ -70,55 +70,175 @@ skill-bill goal SKILL-399
 
 .feature-specs/SKILL-399-shell-content-error-codes/spec_subtask_4_goal-planning-preparation-results.md
 
-
 ## Implementation Details
 
-This plan uses only the upstream preplan digest. Its current symbols and ownership supersede the historical census and line anchors above. Implement confirms the assumptions below against the current tree, without waiting for another subtask. No new decomposition or dependency is required.
+All paths are under `runtime-kotlin/`. Line anchors come from the SKILL-399 preplan digest; apply each step to the code wherever it is now. Main sources live under `<module>/src/main/kotlin/skillbill/...`.
 
-### Ordered implementation tasks
+### Settled decisions
 
-1. Declare preparation outcomes at the ports boundary. Serves AC-002, AC-003 and AC-005.
+- **D1. Result scope.** Only repository methods that have a conflict producer return results: `checkpointSharedPreplan`, `replaceSharedPreplan`, `findSharedPreplan`, `checkpointSubtaskPlan`, `replaceSubtaskPlan`, `findSubtaskPlan`, `listSubtaskPlansOrdered` and `markPrepared`, plus whichever of `advanceSharedPreplanProvenance`, `deleteSharedPreplan` and `invalidateSharedPreplan` own the conflicts at `GoalSharedPreplanSql.kt:136, :180, :211`. **Assumption for implement to confirm:** those three lines belong to advance, delete and invalidate respectively. Count, status, list-id, hash, cascade and `deleteByGoal` methods keep their signatures, which limits churn in the ports test fixtures and test fakes. Where such a method only translates an `SQLException`, it keeps throwing, now the coded CONFLICT failure from the message function. That signals a SQL fault, not a conflicted stored plan, so AC-002 holds.
+- **D2. Contract-incompatible producers.** CONTRACT_INCOMPATIBLE goes on producers that reject a stored record for a contract mismatch. In sqlite these are `normalizedProvenanceFailure` (the four `provenance.*_contract_*` reasons, including the `phase_output_contract_version` hard-reset text), `normalizedEnvelopeFailure` (`"contract_version is incompatible"`), and `RecordSqlValidation.provenanceFailure` and `envelopeFailure` (the "must be '…'" reasons). Any other site the spec's census grep finds rejecting a stored record on one of those fields also gets it. JSON-schema "must be the constant value" reasons raised by the infra schema validators keep SCHEMA; the classifier's message branch (D3) still classifies them as HARD_RESET.
+- **D3. Classifier.** `causeIndicatesContractVersionHardReset` walks the cause chain and decides per element:
+  - code CONTRACT_INCOMPATIBLE: true;
+  - code SCHEMA, code CONFLICT, a `FeatureTaskRuntimePhaseOutputFailureCode` code, or `is InvalidFeatureTaskRuntimePhaseOutputSchemaError`: `reasonIndicatesContractVersionHardReset(message.orEmpty())`;
+  - anything else: false.
 
-   Update `runtime-kotlin/runtime-ports/src/main/kotlin/skillbill/ports/goalrunner/GoalPlanningPreparationRepository.kt`. Put `GoalPlanningPreparationConflict` and declaration-only sealed result families in its existing `skillbill.ports.goalrunner.model` package, following `WorkflowGitOperationResult`'s nested variant style. The conflict carries workflow ID, subtask ID, reason and nullable cause. Preserve the current identity types and nullability rather than inventing replacements.
+  The phase-output arm reads only `message`. Subtask 5 owns that class, so its `is` arm stays until subtask 5 replaces it; whichever of the two lands second keeps both edits. Every one of these messages embeds the fieldPath and reason, so the existing cases 3 and 5 of `GoalPlanningRecoveryClassificationTest` still classify as HARD_RESET with constructor-to-function edits only. The untyped `IllegalStateException` case still returns SCOPED_REPLAN. `reasonIndicatesContractVersionHardReset` stays unchanged. The classifier gets no new test.
+- **D4. Transition finish.** This subtask does not finish the transition. Legacy subclasses remain in FeatureTaskRuntime and Workflow shellcontent, `PhaseSlotContractErrors`, `DurableExternalDecodeErrors`, `MalformedJsonTextError`, `ExternalPlatformPackErrors`, `ExternalAddonErrors`, the execution-plan errors and `InvalidMcpToolArgumentError`. `ShellContentContractException`, `LegacyFailureCode`, the codeless constructor and the open base therefore stay. Implement re-checks this after its edits and records the result.
+- **D5. Burst cap.** `GoalPlanningPhaseAttemptGateBurstCap.kt` no longer exists, so that spec anchor drops out.
 
-   Give shared checkpoint, replacement and provenance advance an applied outcome; shared lookup a found outcome carrying its nullable value; shared deletion and invalidation an applied outcome carrying their existing count. Give subtask checkpoint and replacement an applied outcome, lookup a found outcome carrying its nullable value, and ordered listing an outcome carrying the existing ordered list. Every family also has `Conflicted(conflict)`. A successful lookup with null remains distinguishable from conflict. Ports contain no unwrapping extension, repository-driving function or new default body. Assumption for implement to confirm: operation-specific result declarations can share success shapes without losing existing return information; prefer the fewest narrow typed families that preserve those distinctions. Update implementations, consumers and existing test doubles together. Later validation runs `PortsDeclarationArchitectureTest`.
+### Task 1. Codes, message functions, deletions (AC-001, AC-004)
 
-2. Replace SQLite preparation conflicts with returned facts while preserving atomicity. Serves AC-002 and AC-003.
+- In `runtime-contracts/.../error/shellcontent/InstallShellContentErrors.kt`, add three `InstallFailureCode` entries: `INVALID_GOAL_PLANNING_PREPARATION_SCHEMA`, `GOAL_PLANNING_PREPARATION_CONFLICT` and `GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE`.
+- Add three message functions next to the enum. Each returns `SkillBillRuntimeException` and takes `cause: Throwable? = null`:
+  - `invalidGoalPlanningPreparationSchemaError(sourceLabel, fieldPath, reason, cause)`: SCHEMA code, text `"Goal planning preparation '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation at '${fieldPath.ifBlank { "<root>" }}': $reason"`.
+  - `incompatibleGoalPlanningPreparationContractError(sourceLabel, fieldPath, reason, cause)`: the same text with the CONTRACT_INCOMPATIBLE code. Producers pick this function explicitly; never derive the code from `fieldPath`.
+  - `incompatibleGoalPlanningPreparationRecoveryError(workflowId, subtaskId, reason, cause)`: CONFLICT code, text `"Goal planning preparation '$workflowId' subtask $subtaskId cannot be recovered: $reason"`.
+- Delete both classes (around lines 188 and 199).
+- In `runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt`, delete exactly the rows `runtime-contracts:IncompatibleGoalPlanningPreparationRecoveryError` and `runtime-contracts:InvalidGoalPlanningPreparationSchemaError`.
+- `isShellContentContractFailure()` already accepts `InstallFailureCode`, so the guarded catch sites keep absorbing these failures without a change.
+- Widen two function-type parameters from `ShellContentContractException` to `SkillBillRuntimeException`, because the new functions do not return a `ShellContentContractException`:
+  - `nonObjectError` at `ContractValidatorWireInput.kt:27`;
+  - `error: (String) -> …` at `FeatureTaskRuntimeHandoffFoundationSchemaValidators.kt:42`.
 
-   Update the stores `SharedGoalPreplanStore.kt`, `GoalSubtaskPlanStore.kt` and `GoalPlanningPreparationStore.kt`, and their SQL owners `GoalSharedPreplanSql.kt`, `GoalSubtaskPlanSql.kt` and `GoalPlanningPreparationSqlNormalize.kt` in the digest's `runtime-infra/sqlite` workflow packages. Carry immutable-checkpoint, compare-and-set, provenance, stale-discard, identity, legacy-row, descriptor, manifest-order, spec-hash and path conflicts into `Conflicted`, with the original workflow ID, subtask ID, reason and cause. Replace `rejectLegacy`'s throw with a conflict outcome. Preserve `translateSqlFailure`'s existing wrapping text and SQL cause at the preparation boundary; arbitrary SQL failure must never become found-null or a successful operation. Unrelated database failures keep their existing propagation.
+  Existing lambdas that return legacy subclasses still type-check.
 
-   Detect known conflicts before mutation. Keep shared replacement, sibling-plan deletion and provenance restamping under the existing `ConnectionTransactions.kt` `inNestedWriteTransaction` owner. A conflict must stop subsequent writes and must not commit preceding writes. Assumption for implement to confirm: pre-mutation checks cover ordinary stored-state conflicts, but a late compare-and-set or SQL failure can still follow mutation. If necessary, adapt the existing transaction boundary narrowly to rollback a rejected result before returning it, rather than throwing a preparation-conflict exception or creating a second transaction owner. Preserve nested transaction semantics, and never replay committed writes. Existing preparation-store tests become result assertions and retain persistence assertions. Add or strengthen one atomicity assertion only if those tests do not already prove that a late conflict leaves the prior shared record, sibling plans and provenance intact. This catches committing partial replacement after an exception becomes a normal return.
+### Task 2. Ports value and result families (AC-002, AC-003, AC-005)
 
-3. Carry conflicts through engine recovery and selected-child launch. Serves AC-002 and AC-003.
+- Add `data class GoalPlanningPreparationConflict(val workflowId: String, val subtaskId: Int, val reason: String, val cause: Throwable?)` under `runtime-ports/.../ports/goalrunner/model/`.
+- Add result families under `skillbill.ports.goalrunner.model`, shaped like `WorkflowGitOperationResult`. Each is a `sealed interface` with nested data variants and a `data class Conflicted(val conflict: GoalPlanningPreparationConflict)`. Copy the nested data-variant shape, not that type's `get()` bodies.
 
-   Update `runtime-engine`'s `goalplanning/GoalPlanningPreparationCheckpoint.kt` checkpoint, recheckpoint, lookup, recovery-progress, provenance-advance and refresh paths. Propagate conflict values through recovery consumers. Terminating callers that never inspect the conflict may use the engine-owned `GoalPlanningPreparationConflict.toFailure()` extension described in task 4. Such conversion must not replace the value boundary for a conflicted stored plan.
+  | Family | Success variant |
+  |---|---|
+  | write | `data object Applied`, or `data class Applied(val value: …)` when the current return is not `Unit` |
+  | shared lookup | `data class Found(val checkpoint: SharedGoalPreplanCheckpoint?)` |
+  | plan lookup | `data class Found(val plan: GoalSubtaskPlanCheckpoint?)` |
+  | plan list | `data class Found(val plans: List<GoalSubtaskPlanCheckpoint>)` |
+  | delete/invalidate | `Applied` carrying the current return value, if any |
 
-   Change `goalrunner/launch/GoalRunnerSubtaskLaunchPrepare.kt`, `goalrunner/planning/hydration/GoalChildPlanningHydrator.kt` and `goalrunner/reset/WorkflowGoalRunnerChildWorkflowPersistence.kt` to carry the conflict through hydration and persistence. `blockedOnRecoveryError` takes the value. Preserve the transaction containing child creation, planning hydration and `manifestStore.saveNewChildWorkflow`; a conflict cannot leave a child or attempted manifest partially persisted. Update `GoalPlanningSweepOutcomeDerivationTerminalClass.kt`, `GoalPlanningOperatorRemedies.kt`, `GoalPlanningRecoveryKind.kt` and `GoalPlanningRunProgress.kt` to consume the value. `pendingUnits` branches on the conflict's subtask ID; `requireStoredPlansReady` returns the unready subtask or a conflict. Sweep and child-import reasons use the recovery reason directly, without the failure factory's prefix. Remove obsolete conflict catches, merge remaining paired catches only with their original handled sets, and retarget `GoalPlanningPhaseAttemptGateBurstCap.kt` if it still discriminates either removed class.
+- Change the D1 methods in `runtime-ports/.../ports/goalrunner/GoalPlanningPreparationRepository.kt` to return the matching family. Leave every other method, and the existing default bodies on `boundedStatus` and `preparedPlanCount`, unchanged.
+- `PortsDeclarationArchitectureTest` constraints: no top-level object, no class with behaviour, no cast, no extension or unwrap function, and no new interface default body.
+- Update the ports testFixtures `GoalPlanningPreparationRepositoryDefaults` and `EmptyGoalPlanningPreparationRepository` so they return `Found(null)`, `Found(emptyList())` or `Applied`.
 
-   Preserve `GoalPlanningStatusReasonCoherenceTest`'s reason assertions. Convert existing sweep, persistence and `GoalPlanningPreparationCheckpointTest` conflict fixtures to values. Satisfy the existing selected-subtask launch obligation with one regression, reusing current engine planning fixtures and source sets, unless an existing converted test already proves both the conflicting child identity and its exact reason. Its concrete bug is dropping a returned conflict or blocking another child's subtask.
+### Task 3. SQLite stores return `Conflicted` (AC-002, AC-004)
 
-4. Replace the two Install throwable declarations with codes and factories. Serves AC-001 and supports AC-002 and AC-003.
+These files are under `runtime-infra/sqlite/.../infrastructure/sqlite/workflow/goalrunner/`.
 
-   Remove `IncompatibleGoalPlanningPreparationRecoveryError` and `InvalidGoalPlanningPreparationSchemaError` from `runtime-contracts`' `error/shellcontent/InstallShellContentErrors.kt`. Create or extend `InstallFailureCode` with the schema, conflict and contract-incompatible entries from this spec, retaining entries already introduced by other work. Keep shared structured failure factories next to the enum with the old parameters and cause. The engine extension builds the conflict failure through that factory and preserves `Goal planning preparation '<workflowId>' subtask <subtaskId> cannot be recovered: <reason>` byte-for-byte. Schema factories also preserve their original substitutions, suffixes and causes. Caught failures expose only code, message and cause.
+- `planning/GoalPlanningPreparationSqlNormalize.kt`:
+  - Next to `translateSqlFailure` (:26), add a result-producing sibling for the D1 result methods. It returns `Conflicted(GoalPlanningPreparationConflict(workflowId, subtaskId, "SQLite rejected the immutable planning checkpoint: …", sqlException))`.
+  - The throwing form stays for non-result methods and is built with `incompatibleGoalPlanningPreparationRecoveryError`.
+  - `rejectLegacy` (:41) yields a conflict value with the reason `"legacy 0.1 pair requires hard reset or operator migration"`.
+  - Schema throws at :53 and :66 use the SCHEMA function, except the D2 producers `normalizedProvenanceFailure` and `normalizedEnvelopeFailure`, which use the CONTRACT_INCOMPATIBLE function.
+- `shared/GoalSharedPreplanSql.kt` returns `Conflicted` instead of throwing at:
+  - :48, the immutable checkpoint, subtask 0, after a failed insert;
+  - :89, a replace UPDATE that matched 0 rows, before the cascade or restamp;
+  - :136, :180 and :211;
+  - :344, the `ResultSet.toShared` identity mismatch, which flows into `findSharedPreplan`.
+- `subtask/GoalSubtaskPlanSql.kt` returns `Conflicted` at :129, :143, :172, :185 and :280. :280 flows into find and list.
+- `GoalPlanningPreparationRecordSql.kt:22`: `recoveryIdentityFailure` inside `inNestedWriteTransaction` makes `markPrepared` return `Conflicted`.
+- **Implement must confirm:** `inDatabaseTransaction` commits any returned value. Each `Conflicted` return must therefore come before any statement in the same nested transaction has written. Check the replace and cascade path at `GoalSharedPreplanSql:89` and `markPrepared` at `RecordSql:22` in particular. Where a write precedes the conflict, move the conflict check ahead of the write into a pre-write helper returning `GoalPlanningPreparationConflict?`; that helper also keeps the code under detekt ReturnCount and ThrowsCount. SQL-fault translation keeps throwing, so a mid-cascade fault still rolls back.
+- The remaining schema throwers switch to the SCHEMA function with unchanged text:
+  - `GoalSubtaskPlanSql.kt` and `GoalSharedPreplanSql.kt`;
+  - `GoalPlanningStatusProjectionSql` (5 sites) and `GoalPlanningPreparationSqlHydrate` (5);
+  - `RecordSqlQueries:167` and `RecordSqlHydrate:14`;
+  - `RecordSqlValidation:13`, except its `provenanceFailure` and `envelopeFailure` (D2), which use CONTRACT_INCOMPATIBLE;
+  - `core/migration/area/GoalPlanningSchemaMigrations.kt:36`. It uses SCHEMA unless the census grep shows it rejects one of the four contract fields.
+- Update the store wrappers that delegate the D1 methods, and `SQLiteRepositories.kt`, to the new signatures.
 
-   Include `InstallFailureCode` in `ShellContentContractFailures.kt` without dropping `GoalTelemetryRowFailureCode` or broadening guarded catches. Preserve `failureCodeLabel() ?: existingExpression` at touched rendering seams. Remove only the two deleted classes' whole rows from `runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt`. Convert schema-parity and validator exception assertions to `SkillBillRuntimeException` plus the exact code, retaining message and payload assertions. Later validation runs `FailureCodeTotalityArchitectureTest` and preparation schema parity coverage.
+### Task 4. Infra-contracts and engine schema sites (AC-001, AC-004)
 
-5. Select contract incompatibility from producer facts and classify causes by code. Serves AC-003 and AC-004.
+- The infra-contracts schema sites move to the SCHEMA function with unchanged text: `ContractValidatorWireInput.kt:93` (the `GOAL_PLANNING_PREPARATION_ENVELOPE` kind, fieldPath `"<root>"`) and `workflow/goal/GoalPlanningPreparationSchemaValidator.kt:43, 140, 149, 168`. The JSON-schema const reasons stay SCHEMA (D2).
+- These engine sites also use SCHEMA:
+  - `goalplanning/GoalPlanningPreparationValidator.kt:29, 45`;
+  - `GoalPlanningPreparationCheckpoint.kt:286` (`requirePlanningPayloadHash`);
+  - `GoalPlanningStoredRecord.kt:20, 32` and `GoalPlanningPreparationRecordMapping.kt:35`;
+  - `hydration/GoalChildPlanningHydrator.kt:92, 102, 242`;
+  - `context/GoalPlanningSharedContextPacket.kt:53, 282`.
+- `goalrunner/planning/recovery/GoalPlanningProvenanceRecoverability.kt:54, 69, 86` use SCHEMA, except any site that rejects a stored record on one of the four contract fields; that site uses CONTRACT_INCOMPATIBLE (D2).
+- Implement re-runs the spec's census grep and applies D2 to every hit.
 
-   Update preparation producers named by the digest: `GoalPlanningPreparationValidator.kt`, `GoalPlanningStoredRecord.kt`, `GoalPlanningPreparationSqlNormalize.kt`, `GoalPlanningPreparationRecordSqlHydrate.kt`, shared and subtask normalization, `GoalPlanningSchemaMigrations.kt`, and infrastructure contracts' `workflow/goal/GoalPlanningPreparationSchemaValidator.kt`. Known planning or phase-output contract ID and version mismatches select the Install contract-incompatible code from structured fields or validation facts. Preserve ordered violations, the phase-output-version hard-reset instruction and logger behavior. For sites formerly using another slice's throwable, change only the producer and receiving handled sets required by this conversion; leave that class's ownership intact.
+### Task 5. Engine conversion helper and the checkpoint (AC-002, AC-003)
 
-   Make `GoalPlanningRecoveryKind.kt`'s `causeIndicatesContractVersionHardReset` walk causes and match that exact code. Remove preparation and phase-output exception-property reads, without parsing a completed message to recover fields. Preserve the generic reason classifier and its four contract-key tokens, hard-reset wording and contract-version incompatibility wording. Retain existing hard-reset behavior for wrapped failures and unrelated causes. Use `GoalPlanningRecoveryClassificationTest`, `GoalPlanningPreparationValidatorTest` and schema-parity tests for code and recovery assertions. If existing coverage lacks it, add one boundary case proving a wrapped incompatible code triggers hard reset without a typed property or recognizable message; an unrelated code must retain its existing classification. This catches misclassifying coded version rejection after typed fields disappear.
+- Add `fun GoalPlanningPreparationConflict.toFailure(): SkillBillRuntimeException = incompatibleGoalPlanningPreparationRecoveryError(workflowId, subtaskId, reason, cause)` in a new small file under `runtime-engine/.../engine/goalplanning/`.
+- In `GoalPlanningPreparationCheckpoint.kt`, callers that never inspected the conflict unwrap the results and `throw conflict.toFailure()` on `Conflicted`, which keeps today's behaviour. They are the `markPrepared` checkpoint, the shared and subtask checkpoint and recheckpoint paths, and the shared refresh advance and replace.
+- `requireRecoverablePlan` (:135) and `readPlanForRecovery` (:194) produce conflict values instead of throwing ("provenance differs"):
+  - add `Conflicted(conflict)` to the existing `GoalPlanningRecoveryProgress` and to the private `PlanRecoveryRead`;
+  - `recoveryProgress` returns `GoalPlanningRecoveryProgress.Conflicted` for these and for repository `Conflicted` lookups;
+  - update every exhaustive `when` over `GoalPlanningRecoveryProgress`.
+- `planningRecordRejection` (:294–302) merges its paired catches into one `catch (error: SkillBillRuntimeException)` guarded by `rethrowUnless(code == INVALID_GOAL_PLANNING_PREPARATION_SCHEMA || code == GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE || error is InvalidFeatureTaskRuntimePhaseOutputSchemaError)`. It keeps returning `"stored record failed its durable contract: ${error.message}"`. Subtask 5 later retargets the phase-output arm.
+- `reset/WorkflowGoalRunnerScopedReplanPersistence` throws `conflict.toFailure()` on `Conflicted`, so its transaction still rolls back on the throw.
 
-6. Complete integration, transition checks and the later-phase handoff. Serves all criteria and common acceptance criteria.
+### Task 6. Launch reader path (AC-002, AC-003, test obligation)
 
-   Implement checks the remaining subclass and codeless-construction condition after its changes. The digest proves external legacy users remain, so assume the open exception, codeless constructor and legacy base must stay. Finish their removal only if intervening work has removed every remaining use under the supplied parent transition rule. Preserve every guarded rethrow and coded classifier branch; do not remove the legacy classifier term prematurely while legacy failures still need recognition.
+- **Hydrator.** In `hydration/GoalChildPlanningHydrator.kt`:
+  - `hydrate` returns an engine sealed result: `Hydrated(GoalChildPlanningHydrationResult)` or `Conflicted(conflict)`.
+  - Its conflict sources are repository `Conflicted` lookups, `requireMatchingPreparation` (:122) and `requireImportedPayloadValid`.
+  - `requireMatchingImport` (:77) returns `GoalPlanningPreparationConflict?`.
+  - `requireImportedPayloadValid` merges its paired catches (:301/:303) into one catch with the Task 5 guard, and returns the conflict value that `importedPayloadRecoveryError` (~:313) now builds, with its cause kept.
+  - The phase-output throw at :229 stays for subtask 5.
+  - Update `GoalChildPlanningHydratorPort`, `GoalChildPlanningHydratorPortAdapter` and the test no-ops.
+- **Child persistence.** In `reset/WorkflowGoalRunnerChildWorkflowPersistence.kt`:
+  - `saveInTransaction` returns `Saved(…)` or `Conflicted(conflict)`.
+  - Its conflict sources are `requireConsistentChildSetup`, the persisted-identity mismatch (:71), `requireMatchingGoalContinuation` (:186), `requireMatchingImport` and hydration.
+  - **Required end state:** no write precedes a returned conflict. For a new child, run the read-only hydration before `updateParentForChildWorkflow` and pass its result into `openGoalChildWorkflow`.
+  - **Implement must confirm** that `engine.openRecord` performs no write that hydration depends on.
+  - Non-conflict failures keep throwing and roll back. Extract a pre-write check returning `GoalPlanningPreparationConflict?` to stay within the detekt limits.
+- **Manifest store.** In `manifest/WorkflowGoalRunnerManifestStore.kt`, `saveNewChildWorkflow` (:354) returns `Saved(state)` or `Conflicted(conflict)`. On `Conflicted`, the transaction commits nothing and the projection file is not written. Update the `GoalRunnerManifestStore` declaration and its fakes.
+- **Launch prepare.** In `launch/GoalRunnerSubtaskLaunchPrepare.kt`:
+  - `prepareAttemptedLaunch` (:191) returns `Prepared(…)` or `Conflicted(conflict)`.
+  - `blockedOnRecoveryError` (:137) becomes `blockedOnPreparationConflict(state, conflict, request)`. It targets `conflict.subtaskId`, which keeps 0 for shared-preplan conflicts, and builds its reason with `goalPlanningChildImportConflictBlockedReason(issueKey, conflict.subtaskId, conflict)`.
+  - The `else -> throw error` arm goes away. The existing `runCatching` around `markBlocked` and `blockedReviewBaselineIteration` stay.
+- **Selected-subtask loop.** In `execution/core/GoalRunnerSelectedSubtaskLoop.kt:160`, replace `runCatching { prepareAttemptedLaunch(...) }.fold(...)` with a `when` over the result, so non-conflict failures propagate as they do today. This removes a `runCatching` and adds none.
+- File sizes are 341, 441, 444 and 429 lines. Split a file where the line-ceiling guard or detekt requires it, keeping it in the same package.
 
-   Keep recovery, quarantine, telemetry, diagnostic payloads, persisted schemas, resource paths and bytes unchanged. Review and audit apply A1 through A12 and G1 through G7, with attention to A4 declaration-only ports, A6 wire ownership, A7 handled sets, A9 package cycles and A10 test placement. No new modules, dependencies, aliases, public raw-map results, locator accessors, bags, suppressions or `runCatching`. Core cannot import shellcontent, domain cannot import ports or `java.nio`, and contracts cannot depend on engine or infrastructure. Preserve the phase-generic SKILL-380 attempt boundary and accepted-step authority. Stay within the stated detekt limits; do not add authored Kotlin line comments or non-interface KDoc, grow `ArchitectureScanSupport.kt`, loosen architecture guards or move test setup into production.
+### Task 7. Run-progress, sweep, remedies and classifier readers (AC-003, AC-004)
 
-   Implement adds or adapts the boundary tests described above. Test execution belongs to validate, and build proof belongs to build. Later validation covers the preparation-store, checkpoint, schema-parity, recovery-classification, status-reason, selected-launch, sweep and persistence tests, then the full project validation strategy including unit tests, detekt, formatting, failure totality, ports declarations, typed parse boundaries, package cycles, wire vocabulary and comment guards. The digest identifies the full Kotlin gate as `./gradlew check --continue --parallel -q --warning-mode none`, with JDK 21 and strict agnix required by CI. Spotless runs in a plain clone. Validation and review may repair required production wiring, test setup, formatting and lint while preserving behavior and architecture rules. History, commits, PR work and runtime settlement stay with their owning phases. No installer or generated-artifact work is planned.
+- `planning/state/GoalPlanningRunProgress.kt`:
+  - `pendingUnits` and `recoveredPendingUnits` branch on `GoalPlanningRecoveryProgress.Conflicted`. They stop on `conflict.subtaskId` with `preparationStateReadReason(conflict, issueKey, subtaskId)`.
+  - The existing `runCatching` stays for non-conflict failures, which stop on subtask 0 with `"Goal planning preparation state could not be read: ${error.message}"`.
+  - `requireStoredPlansReady` (~:253) returns the unready subtask id (`Int?`) instead of throwing. Its caller stops through the existing `goalPlanningPreparationStateReadStopReason(reason, recordedSubtaskId, issueKey, subtaskId)` overload with the reason `"stored plan's governed sub-spec has no ready implementation details; replan this subtask"`.
+  - :158 uses the conflict overload.
+- Delete `recoverySubtaskId` from `outcome/GoalPlanningSweepOutcomeDerivationTerminalClass.kt:45`.
+- In `outcome/GoalPlanningSweepOutcomeDerivation.kt:54`, `preparationStateReadReason` takes the conflict value. A `Throwable` overload returns the generic text only.
+- `sweep/GoalPlanningSweep.kt:71` and `context/GoalPlanningSharedPreplanSettlement.kt:182` branch on the shared lookup result: `Conflicted` stops with the conflict-overload reason, and their existing `runCatching` stays for coded schema and SQL faults.
+- `remedies/GoalPlanningOperatorRemedies.kt`:
+  - `goalPlanningPreparationStateReadStopReason(conflict: GoalPlanningPreparationConflict, issueKey, subtaskId)` replaces the `Throwable` version with its `as?` cast.
+  - The generic `Throwable` fallback text stays available for non-conflict failures.
+  - `statusRecoverabilityOrRefuse` drops its `as?` arm. Lookup `Conflicted` results classify through `classifyGoalPlanningRecovery(conflict)`, and anything else through `classifyGoalPlanningRecovery("", error)`.
+- `recovery/GoalPlanningRecoveryKind.kt`:
+  - `classifyGoalPlanningRecovery(conflict: GoalPlanningPreparationConflict)` calls `classify(conflict.reason, conflict.cause)`.
+  - `goalPlanningChildImportConflictBlockedReason(issueKey, subtaskId, conflict)` uses `conflict.reason.ifBlank { conflict.toFailure().message.orEmpty() }`.
+  - `causeIndicatesContractVersionHardReset` follows D3, with no reads of `fieldPath`, `reason` or `payloadFreeReason`.
 
-### Test obligations and phase limits
+### Task 8. Test conversions (common acceptance criteria)
 
-Reuse existing regression coverage before adding a test. The required selected-child conflict outcome serves AC-002 and AC-003. Atomic rollback coverage serves AC-002, and wrapped-code hard-reset coverage serves AC-004; add either only if the existing suites do not already prove that behavior. Governed parity and architecture coverage remain mandatory. No trivial result-constructor or forwarding tests are needed.
+Convert type assertions to `assertFailsWith<SkillBillRuntimeException>` plus `assertEquals(InstallFailureCode.<ENTRY>, error.code)`. Where a method now returns a result, assert on `Conflicted.conflict` instead. Keep every message, `contains`, payload and persistence assertion byte-for-byte. Constructions of the deleted classes switch to the message functions or `GoalPlanningPreparationConflict`.
 
-This phase changes only this sub-spec. No source discovery, build, test execution, full validation or installation occurs during planning. There is no missing input that prevents implementation; assumptions about result family shape, current identity types and late-conflict rollback are recorded in their affected tasks for implement to confirm.
+- **Classes asserted:** `GoalPlanningPreparationStoreTest`, `GoalPlanningSweepTest`, `GoalPlanningPreparationCheckpointTest`, `WorkflowServiceTest`, `GoalPlanningRecoveryClassificationTest` (constructor-to-function edits only, D3), `GoalPlanningPreparationSchemaValidatorTest`, `GoalPlanningPreplanProseReadTest`, `GoalPlanningPreparationValidatorTest`, `GoalPlanningSharedContextPacketTypedErrorTest`, `GoalPlanningPreparationStoreSchemaParityTest` (:89, :100), `GoalPlanningPhaseOutputMigrationTest`, `GoalPlanningPreparationSchemaContractVersionTest`, `GoalRunnerReplanTest`, `GoalPlanningPreparationRecordMappingTest` and `GoalRunnerTest`.
+- **`GoalPlanningStatusReasonCoherenceTest`:** only fixture construction changes. Every assertion stays, including the one that "cannot be recovered" is absent.
+- **`FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest`:** the pinned `GOAL_PLANNING_PREPARATION_ENVELOPE` label becomes `"InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA"`.
+- **Fakes and supports:** update every one that implements the changed ports, the hydrator port or the manifest store. Among them are `ApplicationPersistencePortTestSupport`, `GoalRunnerTestFactory`, `FeatureTaskRuntimeRunnerTestSupport`, `FeatureTaskGitIntegrationTestSupport`, `IdeStatusServiceTestSupport`, `WorkflowStateTestFixtures` and `SqliteTestDatabaseFixtures`. These edits only change return shapes; they add no behaviour.
+
+### Task 9. New regression (test obligation)
+
+Add one test in `GoalRunnerTest`, reusing its in-memory manifest store and runner factory.
+
+- **Setup:** the store's `saveNewChildWorkflow` returns `Conflicted` for subtask 2 with a distinctive reason, in a manifest where subtask 1 is already done.
+- **Assertions:**
+  - the run blocks subtask 2;
+  - the blocked reason contains the distinctive reason;
+  - the blocked reason does not contain "cannot be recovered";
+  - no phase agent was launched.
+- **Bugs caught:** the returned conflict is dropped, or it is routed to the wrong subtask id.
+
+No other new test is planned. The other converted tests already cover the classifier and the sweep and status readers.
+
+### Constraints
+
+- Messages stay byte-identical, including the `<unknown>` and `<root>` handling.
+- Pass enum entries, never wire strings.
+- Add no new `runCatching`, typealias, `@Suppress`, relaxed mock, module, `//` or non-KDoc comment, or property on `SkillBillRuntimeException`.
+- `skillbill.error.core` does not import shellcontent. runtime-domain is untouched.
+- detekt limits: ThrowsCount 2, ReturnCount 4, LongMethod 70, CyclomaticComplexMethod 15. `ArchitectureScanSupport.kt` must not grow.
+- No installer or install-sync step, and no persisted schema, payload, flag or dependency change.
+- Implement runs no build, tests or checks. The build phase owns compile proof. The validate phase owns the full gate, including `PortsDeclarationArchitectureTest`, `FailureCodeTotalityArchitectureTest`, the package-cycle, wire-vocabulary and comment guards, and Spotless in a plain clone.

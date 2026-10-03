@@ -2601,3 +2601,12 @@ ordinary phase output and deliver it to repair. Bump acceptance-audit to revisio
 3 and extend the checked mapping to the exact revision 1 and 2 compositions. Keep
 the original descriptors and evidence. This removes the restrictive parser rather
 than moving it, as required by A5. No architecture guard changes.
+## [2026-10-03] One-shot process success does not wait on leftover descendants
+
+Context: SKILL-399 build-gate `compileKotlin` printed `BUILD SUCCESSFUL` and every compile task came from cache. `BoundedExternalProcessRunner.settleOwnedDescendants` then remapped exit 0 to 1 because the Gradle client had started a daemon that was still alive. Parsers found no `e:` lines and minted `unparseable_gate_failure`. Cleanup already destroys the captured tree after the wait.
+
+Decision: After a client exits, do not treat a still-running owned descendant as `readFailure`. Cleanup remains the owner of tearing that tree down. Gradle and Kotlin daemons are leftover children by design; waiting five seconds and then failing the command turned a successful compile into a synthetic gate failure. `runtime-kotlin/gradle.properties` also sets `org.gradle.daemon.idletimeout=1000` and `kotlin.compiler.execution.strategy=in-process` so an already-installed runner that still has the old wait sees those children exit inside its five-second budget. `org.gradle.daemon=false` did not stop Gradle 9.3 from starting a daemon in this tree.
+
+Reason: The one-shot runner's contract is complete-or-killed, not "every descendant must exit on its own before the parent's code is trusted." Killing leftover children is teardown. Publishing the client's exit code is the result.
+
+Revisit when: A caller needs to distinguish a leaked child from an intentional daemon without adding process-identity branches to the shared runner.

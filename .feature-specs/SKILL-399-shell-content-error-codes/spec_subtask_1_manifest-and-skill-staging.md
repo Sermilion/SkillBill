@@ -53,55 +53,37 @@ skill-bill goal SKILL-399
 
 .feature-specs/SKILL-399-shell-content-error-codes/spec_subtask_1_manifest-and-skill-staging.md
 
-
 ## Implementation Details
 
-This plan uses only the upstream preplan digest and this sub-spec. Discovery at `8527efaee41cfc2beb316be9b6eec4be017f9deb` found eight Manifest classes and twelve SkillStaging classes. This subtask remains independent of the other seven slices. Implement applies the plan to the current symbols without changing another slice's ownership.
+The preplan digest records this subtask as already on `feat/SKILL-399-shell-content-error-codes` (history entry `runtime-kotlin/runtime-contracts/agent/history.md#1a51faace563`, decision `runtime-kotlin/runtime-contracts/agent/decisions.md#292a459e575d`). `ManifestShellContentErrors.kt` and `SkillStagingShellContentErrors.kt` already declare only `ManifestFailureCode`, `SkillStagingFailureCode` and message functions. `ShellContentContractFailures.kt` already registers both enums. This plan is therefore verify-only. Implement confirms the landed end state and repairs only a gap it actually finds. It does not redo the conversion. All paths are relative to `runtime-kotlin/`.
 
-1. Replace the two owned class declarations with owner codes and message functions. Serves AC-001 and AC-002.
+1. Confirm the two files hold no class. Serves AC-001.
+   - Inspect `runtime-contracts/src/main/kotlin/skillbill/error/shellcontent/ManifestShellContentErrors.kt` and `SkillStagingShellContentErrors.kt`. Each must contain only its enum (implementing `skillbill.error.core.RuntimeFailureCode`) and top-level functions returning `SkillBillRuntimeException`. There must be no `class`, `object`, typealias or subclass of `ShellContentContractException`.
+   - Confirm that no main source declares a typealias named after any of the 20 deleted classes. Examples are `InvalidManifestSchemaError` and `InternalSkillSidecarCollisionError`.
+   - Repair if needed: if a class survives, convert it under the parent spec's "Conversion rules". Use an entry of the owning enum (Manifest family entry: missing validation gate; SkillStaging family entry: native agent link inventory), keep the message byte-identical, and convert its throw and catch sites.
 
-   Work in `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/shellcontent/ManifestShellContentErrors.kt` and `SkillStagingShellContentErrors.kt`. Both enums implement the existing `RuntimeFailureCode` marker. Manifest gets seven distinct entries for missing manifest, manifest schema, invalid validation-gate declaration, composition cycle, ambiguous lane ownership, incompatible composition contract and missing composition layer. Missing validation gate uses the Manifest family entry. SkillStaging gets eleven distinct entries for sidecar collision, authored sidecar, review skill structure, missing content file, composed budget exceeded, missing required section, SKILL.md shape, missing installed native agent, internal skill classification, missing baseline platform selection and fallback capability. Native-agent link inventory uses its family entry.
+2. Confirm every former failure is coded. Serves AC-002.
+   - Search main sources across all modules for the 20 former class names. No reference may remain outside test fixtures that were already converted.
+   - Each former producer must construct `SkillBillRuntimeException` with an entry of `ManifestFailureCode` or `SkillStagingFailureCode`, or call the message function beside the enum. The only exception is a `require`/`check`/`error()` defect that the landed subtask already justified.
+   - Per decision `#292a459e575d`, input-driven manifest and staging failures stay coded. Do not turn any of them into a defect during verification.
 
-   All Manifest conditions remain coded failures because manifests, routing and selected composition can trigger them. Keep SkillStaging failures coded too. The digest identifies input-driven staging failures and provides no evidence that any is exclusively a code defect. Do not introduce defect checks merely to reduce enum entries.
+3. Confirm that catches read no typed property. Serves AC-003.
+   - Check the known discrimination sites. `ExternalPlatformPackTelemetryPolicy.kt` must check the manifest-schema code through `(error as? SkillBillRuntimeException)?.code`. The manifest-schema catch in `FileSystemExternalAddonOverlayCollisions.kt` must be guarded with `rethrowUnless` on the exact code. The `RepoValidationRuntimeSkillValidation.kt` SKILL.md-shape catch must be guarded the same way.
+   - Every reader of a caught Manifest or SkillStaging failure may use only `code`, `message` and `cause`.
+   - Confirm that `isShellContentContractFailure()` still lists both enums and still excludes `ScaffoldFailureCode`.
 
-   Message-only constructors become direct `SkillBillRuntimeException(code, message, cause)` constructions at their producers. Keep optional causes on the first four Manifest failures. Structured constructors used at multiple sites become functions beside their enum, returning `SkillBillRuntimeException` with the original parameters and cause where supported. Preserve the collision's parent, internal skill and sidecar path, native-agent preflight's logical name, provider, expected path, reason and repair command, and baseline selection's selecting slug, required baseline slug and declaring manifest path. Copy every message expression unchanged, including blank substitutions and punctuation. No removed fields become exception properties or message-parsing inputs.
+4. Confirm that the baseline is clean and the pinned labels are converted. Serves AC-001 and AC-002, plus the common baseline and message criteria.
+   - `runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt` must contain none of the 20 owned class rows. Remove any stale row by hand, and edit no other row.
+   - `ConfigExternalPlatformPackCommandTest` (`ERROR_TYPE`) and `InternalSkillCompanionInstallApplyTest` (`causeClass`) must assert the code labels from `failureCodeLabel()`, not class names.
+   - Assumption for implement to confirm: subtask 3 left the goal-planning classes in `InstallShellContentErrors.kt` on purpose. They belong to subtask 4 and are not this subtask's concern.
 
-   Planning assumption for implement to confirm: enum token spelling and message-function names follow the existing AgentAddon and GovernedReview convention. The digest supplies semantic entries rather than exact token spellings. That naming choice must not change the mapping or observable messages.
+5. Check the transition condition. This is required by the Shared Rules.
+   - The digest lists remaining `ShellContentContractException` subclasses outside this slice. They include `PhaseSlotContractErrors.kt`, `DurableExternalDecodeErrors.kt`, `MalformedJsonTextError.kt`, `ExternalPlatformPackErrors.kt`, `ExternalAddonErrors.kt`, `FailureWireCodeContract.kt`, the execution-plan errors, and `InvalidMcpToolArgumentError.kt`. Shell-content classes owned by subtasks 4–8 also remain.
+   - The expected result is that the transition cannot finish. Keep the open `SkillBillRuntimeException`, its codeless secondary constructor, `ShellContentContractException`, `LegacyFailureCode` and the predicate's `is ShellContentContractException` term.
 
-2. Convert Manifest producers and the two discrimination boundaries. Serves AC-002 and AC-003.
+6. Hand off to the owning phases.
+   - Test obligations stay empty. The converted assertions already cover wrong-code classification and drift in messages and labels, and no new behaviour is introduced.
+   - If verification finds nothing to repair, the implement phase produces no source diff and says so.
+   - Validate owns every compile, test, detekt, Spotless (plain clone) and runtime-core repoTest run, including `FailureCodeTotalityArchitectureTest`. This phase and implement run none of them.
 
-   Update producers under `runtime-infra/skills/src/main/kotlin/skillbill/infrastructure/skills/scaffold/platformpack/loader/`, its `skillclass/` package, and `platformpack/manifest/PlatformPackSchemaValidator.kt`. Keep the loader helpers in `ShellContentLoaderErrors.kt` returning `Nothing`. Update `runtime-domain/src/main/kotlin/skillbill/review/plan/ReviewLaunchPlanComposition.kt`, `ReviewCrossRootLaneReconciliation.kt`, and engine build-gate and execution-plan resolution producers. The digest does not name the latter files. Implement resolves their current references while preserving their existing owners and control flow.
-
-   In `runtime-infra/skills/src/main/kotlin/skillbill/infrastructure/skills/externaladdon/FileSystemExternalAddonOverlayCollisions.kt`, replace the manifest-schema catch with a `SkillBillRuntimeException` catch guarded by the exact manifest-schema code and `rethrowUnless`. In `runtime-domain/src/main/kotlin/skillbill/scaffold/policy/platformpack/ExternalPlatformPackTelemetryPolicy.kt`, discriminate that same code and preserve `invalid_external_platform_pack_manifest`. Retain its existing `failureCodeLabel` rendering of `ERROR_TYPE`. Unrelated coded failures, database failures, cancellation and interruption must continue to propagate.
-
-   Convert existing Manifest exception assertions in `PlatformPackSchemaViolationsTest.kt`, `ShellContentLoaderValidationGateTest.kt`, `PointerManifestParsingTest.kt`, `PlatformPackFallbackTest.kt` and composition/loader parity repository tests to the runtime exception plus exact owner-code assertions. Preserve messages, inputs, fallback results and parity assertions.
-
-3. Convert SkillStaging producers and the shape-validation catch. Serves AC-002 and AC-003.
-
-   Update the producers under `runtime-infra/skills/src/main/kotlin/skillbill/infrastructure/skills/`, including `install/staging/InternalSidecarTarget.kt`, `install/plan/InstallPrimitives.kt`, `install/nativeagent/inventory/NativeAgentLinkInventory.kt`, `install/nativeagent/link/InstallNativeAgentOperationsLink.kt`, native-agent rendering, review-skill validation, shape validation and internal-skill declaration. Update `runtime-infra/workflow/src/main/kotlin/skillbill/infrastructure/workflow/review/specialists/FileSystemReviewNativeAgentPreflight.kt` to use the native-agent factory or coded construction.
-
-   In `scaffold/runtime/validation/RepoValidationRuntimeSkillValidation.kt`, replace the `InvalidSkillMdShapeError` catch with a runtime-exception catch guarded by the exact shape code. Preserve its existing handled result and rethrow every other code. Change any producer callback or return type that names a removed class to `SkillBillRuntimeException`. Readers use only `code`, `message` and `cause`; preserve context at the producer instead of extracting it from a caught failure.
-
-   Convert assertions in `SkillMdShapeValidatorTest.kt` and the existing `install/InternalSkillStaging*Test.kt` family. Keep the native-agent repair guidance and staging outcomes unchanged.
-
-4. Integrate classification and preserve output boundaries. Serves AC-002, AC-003 and the common message/payload criteria.
-
-   Add both new enums to `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/shellcontent/ShellContentContractFailures.kt`. Preserve its existing `FailureWireCode`, AgentAddon, GovernedReview and `GoalTelemetryRowFailureCode` classifications. Keep Scaffold excluded. The digest confirms `rethrowUnless`, `failureCodeLabel` and the transitional exception already exist in `error/core/RuntimeExceptionBases.kt`; reuse them. Core must never import shellcontent.
-
-   Retain existing `failureCodeLabel() ?: existingExpression` rendering and every guarded shell-content catch. Where a shared catch needs adjustment to accept a new enum, preserve its handled set and rethrow. No unrelated legacy failure's label, payload or message changes. Update `runtime-cli/src/test/kotlin/skillbill/cli/config/ConfigExternalPlatformPackCommandTest.kt` only so its converted `ERROR_TYPE` is the manifest-schema code label. Update `runtime-infra/skills/src/test/kotlin/skillbill/infrastructure/skills/install/InternalSkillCompanionInstallApplyTest.kt` only so `causeClass` is the sidecar-collision code label. Preserve all other telemetry and failure-payload assertions.
-
-5. Remove obsolete baseline rows and inspect the transition condition. Serves AC-001 through AC-003 and the common baseline criterion.
-
-   Remove only the twenty whole rows for the deleted owned classes from `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/baselines/custom-throwable-baseline.txt`. Do not alter another row or weaken `FailureCodeTotalityArchitectureTest.kt`, its synthetic fixtures, or `ArchitectureScanSupport.kt`.
-
-   After implementation, check for remaining main subclasses of `SkillBillRuntimeException` and `ShellContentContractException` and for codeless constructions. Preplan found external uses in core, featuretask and MCP, so the expected result is to retain the open exception, legacy base and secondary constructor. Existing external uses are outside this slice. If intervening work removed every use, finish the shared transition under the supplied parent rule, remove the legacy classifier term, and preserve coded classification and guarded rethrows. Do not remove transition support while any use remains.
-
-6. Hand off end-state inspection and validation to their owning phases. Serves all acceptance criteria and the unchanged Validation Strategy.
-
-   Audit inspects both files for absence of classes, verifies each former producer's code or justified defect outcome, checks that catches read only `code`, `message` and `cause`, and checks byte-identical messages and unchanged handled sets. Review applies A1 through A12 and G1 through G7, especially A7 handled sets, A6 wire ownership, A9 package cycles and A10 test placement. Keep ports declaration-only under A4. Preserve phase-generic SKILL-380 attempt handling and accepted-step authority.
-
-   Test obligations remain empty. Existing assertions cover this slice, and preplan prescribes no new behavior test. Convert exception assertions without removing regression or governed parity coverage. The realistic regressions those existing checks must continue to catch are a manifest failure receiving the wrong classification, altered user guidance or telemetry payload, and a staging failure losing its specific code or output.
-
-   Build proof belongs only to the build owner. Validate runs the existing unit tests named above, detekt, formatting and runtime-core repository architecture suites, including `FailureCodeTotalityArchitectureTest`, ports declarations, typed parse boundaries, package cycles, wire vocabulary and comment guards. The full pack gate is `./gradlew check --continue --parallel -q --warning-mode none`; only validate runs it. Spotless runs in a plain clone. Required production-wiring, test-setup, formatting and lint repairs remain authorized in their owning later phases.
-
-Throughout implementation, preserve the current package and module ownership. Add no module, dependency, deleted-class alias, exception field, family metadata, raw-map public result, locator accessor, new `runCatching` or suppression. Respect the supplied detekt limits, add no authored Kotlin line comments or non-interface KDoc, and keep existing test source sets and persisted resource paths. No persisted schema, payload, dependency, feature flag, authored skill or generated artifact change is needed. History, commit and PR work remain with their owning phases. This plan phase edits only this section and runs no builds, tests or repository checks.
+Constraints: if a repair is needed, add no module, dependency, typealias, exception property, `@Suppress`, new `runCatching` or `//` comment. `skillbill.error.core` must not import `shellcontent`. Respect detekt limits (ThrowsCount 2, ReturnCount 4, LongMethod 70, CyclomaticComplexMethod 15). Do not let `ArchitectureScanSupport.kt` grow.
