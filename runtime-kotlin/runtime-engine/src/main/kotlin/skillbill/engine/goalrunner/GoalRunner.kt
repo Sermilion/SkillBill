@@ -20,6 +20,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
+import skillbill.engine.goalrunner.planning.recovery.GoalRunnerSpecDriftRecovery
 import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.status.unknownGoal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
@@ -35,6 +36,7 @@ class GoalRunner(
   private val perRunLoopAssembler: GoalRunnerPerRunLoopAssembler,
   private val pauseBoundary: GoalRunnerPauseBoundary,
   private val intakePreparation: GoalIntakePreparation,
+  private val specDriftRecovery: GoalRunnerSpecDriftRecovery,
 ) {
   private val manifestStore = runBoundaries.manifestStore
   private val outcomeStore = runBoundaries.outcomeStore
@@ -55,10 +57,11 @@ class GoalRunner(
   }
 
   fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport {
-    val loadedState =
+    val admittedState =
       manifestStore.loadDurableByIssueKey(request.issueKey)?.copy(repoRoot = request.repoRoot)
         ?: intakePreparation.prepare(request)
         ?: return unknownGoal(request.issueKey)
+    val loadedState = specDriftRecovery.refresh(admittedState, request)
     val childAdmission = runPreparation.existingChildExecutionPlanAdmission(loadedState, request)
     val execute = {
       val state = reconcileStateBeforeRun(loadedState)

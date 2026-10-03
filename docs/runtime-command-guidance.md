@@ -46,3 +46,14 @@ Decomposed goal runs use `same_branch_commit_per_subtask`: each completed subtas
 - Before review, the runtime creates the active subtask commit or amends its proven owned HEAD, records the exact reviewed target/tree identities, and launches review only after durable identity persistence. A message-only amend with the same tree may carry approval forward. `write_history` and `commit_push` never reopen earlier phases. After the bounded `review_fix` round, `commit_push` does not launch an agent. The runtime stages every non-runtime-private dirty path as this subtask's work, including files written after implement or by another process, commits with a subject from the issue key and subtask name, pushes, and records `commit_sha` into the decomposition manifest. Extra dirty content does not block and does not re-enter audit or review.
 - Checkpoint history lives under `refs/skill-bill/checkpoints/<issue-key>/<subtask-id>/<sequence>`. Those refs preserve pre-amend commits the branch no longer names; they are not reachable through `git log` on the branch without an explicit ref argument.
 - Pruning deletes a subtask's checkpoint refs only after that subtask's commit is pushed and its manifest entry records a non-blank `commit_sha`. Pruning is idempotent; a hard manifest reset prunes the refs of the subtasks it reset. Blocked or abandoned subtasks keep their refs for recovery.
+
+## Edited subtask specs on resume
+
+A full goal launch checks unfinished subtask specs against their saved planning hashes
+before admitting an existing child. When a readable spec has changed and its saved
+plan still satisfies the durable contract, the runtime applies scoped replan with
+shared preplan refresh and continues through planning. It records the repair with
+the subtask ID and both hashes. Completed and skipped subtasks retain their planning
+records and commits. The existing scoped-replan liveness and digest checks still
+refuse unsafe changes. Missing specs and invalid planning records stay with their
+existing recovery paths.

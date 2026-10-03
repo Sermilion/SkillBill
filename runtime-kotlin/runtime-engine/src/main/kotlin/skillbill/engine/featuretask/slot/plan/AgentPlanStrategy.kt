@@ -65,7 +65,7 @@ class AgentPlanStrategy : PhaseStrategy() {
       testValueDiscipline = true,
       stepContext =
         when {
-          inputs.suppressDecomposition -> GOAL_CONTINUATION_CONSTRAINT
+          inputs.suppressDecomposition -> "$GOAL_CONTINUATION_CONSTRAINT\n\n$PHASE_FEASIBILITY_CONSTRAINT"
           inputs.specBundleRequired -> "$featureSpecDirective\n\n$SPEC_BUNDLE_REQUIREMENT"
           else -> featureSpecDirective
         },
@@ -163,6 +163,18 @@ class AgentPlanStrategy : PhaseStrategy() {
         "as prose the implement phase can follow: the ordered tasks, the acceptance criteria each one serves, " +
         "the paths or symbols it touches, the tests to add or run, constraints, and how the plan is validated. " +
         "Do not forward progress diagnostics or a generic summary. " + PREPLAN_DIGEST_AUTHORITY
+
+    private val PHASE_FEASIBILITY_CONSTRAINT: String =
+      """
+      ## Phase feasibility
+      Check every planned requirement, constraint, non-goal, and task against the authority of the
+      phase that must perform it. Implement produces repository end states; audit inspects them.
+      Validation owns commands and their evidence. Review, commit, PR, history, and install work
+      stays with its owning phase or parent runtime. Never invent a scope restriction that prevents
+      required review or validation repairs to production wiring, test setup, formatting, or lint.
+      Preserve behavior, assertions, and architecture rules instead. Preserve explicit operator
+      constraints; report any conflict with required phase work during planning, before execution.
+      """.trimIndent()
 
     private val GOAL_CONTINUATION_CONSTRAINT: String =
       """

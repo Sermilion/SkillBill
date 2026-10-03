@@ -30,6 +30,7 @@ import skillbill.engine.goalrunner.planning.attempt.GoalPlanningAttemptRecorder
 import skillbill.engine.goalrunner.planning.attempt.NO_GOAL_PLANNING_ATTEMPT_RECORDER
 import skillbill.engine.goalrunner.planning.model.GoalPlanningBurstSchedule
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRefreshLiveness
+import skillbill.engine.goalrunner.planning.recovery.GoalRunnerSpecDriftRecovery
 import skillbill.engine.goalrunner.planning.recovery.IDLE_GOAL_PLANNING_REFRESH_LIVENESS
 import skillbill.engine.goalrunner.planning.remedies.GoalPlanningRejectionRecorder
 import skillbill.engine.goalrunner.planning.remedies.NO_GOAL_PLANNING_REJECTION_RECORDER
@@ -40,6 +41,7 @@ import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepLaunchBoundar
 import skillbill.engine.goalrunner.planning.sweep.PREPARE_ALL_GOAL_PLANNING_SWEEP
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.ports.db.DatabaseSessionFactory
@@ -209,6 +211,20 @@ internal fun goalRunnerDeps(
 
 internal fun testGoalRunner(deps: GoalRunnerTestInputs): GoalRunner = testGoalRunner(deps.toWiring())
 
+private fun testSpecDriftRecovery(wiring: GoalRunnerTestWiring): GoalRunnerSpecDriftRecovery =
+  GoalRunnerSpecDriftRecovery(
+    GoalPlanningPreparationCheckpoint(
+      TestGoalActivityStampDatabase,
+      FeatureTaskRuntimeWireArtifactValidator(),
+    ),
+    wiring.runBoundaries.manifestStore,
+    UnavailableDecompositionManifestStore,
+    TestRepositoryEnclosingRoot,
+    testGoalRunnerStatusService(wiring.runBoundaries.manifestStore, wiring.runBoundaries.outcomeStore),
+    FeatureTaskRuntimeWireArtifactValidator(),
+    NoopRuntimeDiagnostics,
+  )
+
 internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
   val (executionPlans, crashReconciler) = goalRunnerExecutionPlans(wiring)
   val progressReader = GoalRunnerProgressReader(wiring.runBoundaries.outcomeStore)
@@ -249,6 +265,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
       finalization = finalization,
     )
   return GoalRunner(
+    specDriftRecovery = testSpecDriftRecovery(wiring),
     runBoundaries = wiring.runBoundaries,
     runPreparation =
       GoalRunnerRunPreparation(

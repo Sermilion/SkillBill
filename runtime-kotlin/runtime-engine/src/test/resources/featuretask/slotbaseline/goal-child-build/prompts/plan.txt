@@ -80,6 +80,15 @@ happened. Never block planning merely because a later implementation or validati
 yet complete. A blocked plan requires a genuinely missing input or an irreconcilable constraint
 that prevents an implementable plan from being produced.
 
+## Phase feasibility
+Check every planned requirement, constraint, non-goal, and task against the authority of the
+phase that must perform it. Implement produces repository end states; audit inspects them.
+Validation owns commands and their evidence. Review, commit, PR, history, and install work
+stays with its owning phase or parent runtime. Never invent a scope restriction that prevents
+required review or validation repairs to production wiring, test setup, formatting, or lint.
+Preserve behavior, assertions, and architecture rules instead. Preserve explicit operator
+constraints; report any conflict with required phase work during planning, before execution.
+
 # Feature-task-runtime phase briefing
 phase: plan
 
