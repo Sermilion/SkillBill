@@ -27,6 +27,7 @@ class BoundedExternalProcessRunnerLifetimeTest {
         )
       assertEquals(0, result.exitCode, result.output)
       assertEquals(null, result.readFailure)
+      assertTrue(Files.exists(childPidFile) && Files.size(childPidFile) > 0L, "expected descendant pid file")
       assertTrue(awaitDead(processHandleFrom(childPidFile)))
     } finally {
       destroyProcessFrom(childPidFile)
@@ -34,13 +35,13 @@ class BoundedExternalProcessRunnerLifetimeTest {
     }
   }
 
-  private fun processHandleFrom(pidFile: Path): ProcessHandle? {
-    if (!Files.exists(pidFile) || Files.size(pidFile) == 0L) return null
-    return ProcessHandle.of(Files.readString(pidFile).trim().toLong()).orElse(null)
-  }
+  private fun processHandleFrom(pidFile: Path): ProcessHandle? =
+    ProcessHandle.of(Files.readString(pidFile).trim().toLong()).orElse(null)
 
   private fun destroyProcessFrom(pidFile: Path) {
-    processHandleFrom(pidFile)?.destroyForcibly()
+    if (Files.exists(pidFile) && Files.size(pidFile) > 0L) {
+      processHandleFrom(pidFile)?.destroyForcibly()
+    }
   }
 
   private fun awaitDead(handle: ProcessHandle?): Boolean {

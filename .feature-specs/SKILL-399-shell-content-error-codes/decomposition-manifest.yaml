@@ -9,18 +9,18 @@ base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feat/SKILL-399-shell-content-error-codes"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 1
+  subtask_id: 2
   action: "resume"
 subtasks:
 - id: 1
   name: "manifest-and-skill-staging"
   spec_path: ".feature-specs/SKILL-399-shell-content-error-codes/spec_subtask_1_manifest-and-skill-staging.md"
-  status: "in_progress"
+  status: "complete"
   branch: null
   commit_sha: null
   workflow_id: "wftr-20261003-195217-ycw4"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
@@ -28,10 +28,10 @@ subtasks:
 - id: 2
   name: "scaffold-and-review-context"
   spec_path: ".feature-specs/SKILL-399-shell-content-error-codes/spec_subtask_2_scaffold-and-review-context.md"
-  status: "pending"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261003-202732-jrxm"
   blocked_reason: null
   last_resumable_step: null
   linear_issue_id: null

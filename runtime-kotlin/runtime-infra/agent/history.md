@@ -1,11 +1,11 @@
 # Boundary History — runtime-kotlin/runtime-infra
 
 ## [2026-10-03] One-shot process success ignores leftover descendants
-Areas: runtime-infra/host process, runtime-kotlin gradle.properties
+Areas: runtime-infra/host process
 - A client exit of 0 stays 0 when an owned descendant is still alive. The runner no longer waits on that descendant or records a read failure for it. Cleanup still destroys the captured tree.
-- A lifetime test checks that a zero exit with a leftover child publishes zero and that cleanup reaps the child.
+- A lifetime test checks that a zero exit with a leftover child publishes zero and that cleanup reaps the child. The test fails when the child pid file was never written.
 - Pattern: one-shot success is the client's exit code. Killing leftover children is teardown.
-- gradle.properties sets the daemon idle timeout to 1 second and the Kotlin compiler to in-process, so an older runner that still waits sees those children exit inside its five-second budget. Setting the daemon off did not stop Gradle 9.3 from starting one.
+- gradle.properties keeps the previous daemon and compiler settings. A one-second idle timeout and in-process Kotlin compilation would apply to every Gradle invocation, and this runner no longer waits on those children. Setting the daemon off did not stop Gradle 9.3 from starting one. An older installed runner that still waits can still false-fail until it includes this change.
 - Reusable: BoundedExternalProcessRunner stays the single one-shot process owner for gates, git, and install.
 - Limit: a leaked child and an intentional daemon are not distinguished.
 Feature flag: N/A
