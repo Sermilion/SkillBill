@@ -1,3 +1,14 @@
+## [2026-10-03] LOCAL-274870733146662 automatic durable schema migration
+Areas: runtime-kotlin/runtime-{engine,contracts,domain,ports,core,cli,mcp}, runtime-kotlin/runtime-infra/{contracts,sqlite}, orchestration/contracts, docs, install.sh, scripts, .github/workflows
+- Preparation 0.2 with planning provenance 0.2 now admits phase-output 0.6 and converts it to 0.7 before recovery or child execution. Independent feature-task admission uses the same conversion.
+- Source and target validation use separately packaged historical and current schemas. Conversion preserves supplied evidence and refuses missing target evidence without inventing prose or dispositions.
+- One owning transaction publishes coupled payloads, UTF-8 hashes, provenance, and child imports with source guards. Completed/skipped state, commits, descriptors, ledgers, checkpoints, and terminal workflows retain their meaning.
+- The bounded phase-output converter, migration receipt, and database-free packaged-contract inspector are reusable. Current-valid records remain unchanged on repeated admission.
+- CLI and MCP candidates check their own bundled producer/schema pins before either install image is promoted. Rejected packages preserve installed images and durable state.
+- Limits: legacy preparation 0.1 and undeclared transitions remain unsupported. Corrupt, stale, mismatched, or non-convertible records block with typed diagnostics that omit payload content; this transition reuses planning without refresh.
+Feature flag: N/A
+Acceptance criteria: 1/1 implemented
+
 ## [2026-10-02] SKILL-398 subtask 6 — defect exceptions stop driving control flow at parse edges
 Areas: runtime-kotlin/runtime-{domain,ports,application,cli,core}, runtime-infra/skills
 - Four domain validators (execution mode, repository-relative path, validation depth, persisted instant) now fail with plain require/check defects; RuntimeOwnedReviewMode.parse and the scaffold payload-object decoder return null for bad input and callers branch on the value. reusable
@@ -1858,7 +1869,7 @@ Areas: runtime-kotlin/runtime-{application,contracts,core,domain,infra-fs,infra-
 - Goal-scoped planning preparation persists one shared preplan and ordered per-subtask plans with normalized issue/repository identity, governed spec descriptors, prepared status, and immutable parent-spec, sub-spec, decomposition, and output-contract provenance.
 - Stored preplan and plan envelopes reuse the feature-task phase-output validator and require the normalized 0.2 phase, version, completed status, and produced-output contracts; malformed, legacy, cross-goal, cross-repository, wrong-spec, and incompatible records loud-fail with typed errors.
 - Atomic checkpointing is immutable and idempotent: prepared payloads cannot be overwritten, ordered reads/count/recovery validate every governed descriptor, and the first missing plan is recovered without leaking SQLite types outside infrastructure. reusable
-- Hard reset transactionally deletes shared-preplan, subtask-plan, hydration, and continuation preparation state before manifest reset; soft reset preserves schema-valid checkpoints while provenance drift requires hard reset or operator migration.
+- Explicit hard reset transactionally deletes shared-preplan, subtask-plan, hydration, and continuation preparation state before manifest reset; soft reset preserves schema-valid checkpoints. The 2026-10-03 automatic durable schema migration supersedes the hard-reset/operator-migration requirement for the supported phase-output 0.6-to-0.7 transition.
 - Pattern: treat governed subtask descriptors plus stable provenance as the recovery key, validate opaque phase payloads at persistence seams, and reject unexpected rows or manifest-order drift instead of interpreting corruption as pending. reusable
 - Real-SQLite restart, migration, rollback, ordering, uniqueness, malformed-row, reset, and provenance tests cover durable acceptance and rejection behavior; standalone feature-task queries remain isolated from the goal-scoped store.
 Feature flag: N/A

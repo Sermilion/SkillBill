@@ -1,0 +1,27 @@
+---
+contract_version: "0.5"
+issue_key: "LOCAL-274870733146662"
+feature_name: "intake"
+parent_spec_path: ".feature-specs/LOCAL-274870733146662-intake/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "base/SKILL-380-phase-slot-strategies"
+feature_branch: "feat/LOCAL-274870733146662-intake"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "Implement the requested change"
+  spec_path: ".feature-specs/LOCAL-274870733146662-intake/spec_subtask_1_implement-the-requested-change.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261003-103301-z4ob"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []

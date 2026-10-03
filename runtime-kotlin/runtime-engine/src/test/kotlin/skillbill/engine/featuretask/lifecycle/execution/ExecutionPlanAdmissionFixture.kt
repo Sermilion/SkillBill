@@ -23,6 +23,8 @@ import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
+import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
+import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -49,6 +51,7 @@ class ExecutionPlanAdmissionFixture(
   qualityGate: FeatureTaskRuntimeQualityGateSelection? =
     FeatureTaskRuntimeQualityGateSelection.VALIDATE.takeIf { definition == SkeletonDefinition.GOAL_CHILD },
   selectedStrategies: PhaseStrategyLookup? = null,
+  supervisor: FeatureTaskRuntimeWorkerSupervisor = NoopFeatureTaskRuntimeWorkerSupervisor,
 ) {
   private val routeScope =
     if (definition == SkeletonDefinition.GOAL_CHILD) {
@@ -107,6 +110,7 @@ class ExecutionPlanAdmissionFixture(
       NoopRuntimeDiagnostics,
       ContractFeatureTaskRuntimePhaseOutputMigration(),
       planningMigrationForTest(),
+      supervisor,
     )
 
   fun seed(

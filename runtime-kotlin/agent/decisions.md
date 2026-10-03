@@ -1,5 +1,24 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-03] Reject mixed runtime packages before install promotion
+Context: A packaged producer and its bundled schema disagreed on version pins. Checksums alone did not detect the mismatch that prompted LOCAL-274870733146662.
+Decision: Check both staged CLI and MCP images against their own current and historical resource pins through database-free runtime-core composition before promoting either image.
+Reason: A mixed package is an installation failure, so durable-state migration cannot repair it. Checking both candidates before promotion preserves the installed pair and avoids opening durable databases during package inspection.
+Alternatives considered: Reuse doctor without proving database independence, or accept checksum-valid artifacts without schema parity. Neither establishes the required package contract.
+
+## [2026-10-03] Publish planning migration with coupled child imports
+Context: Shared preparation, subtask plans, and imported child outputs carry matching bytes, hashes, and provenance. Partial publication or a stale source would make resumed planning inconsistent.
+Decision: Engine admission validates and converts the complete coupled set inside the existing immediate transaction, then publishes through guarded SQLite writes. Independent feature-task conversion joins execution admission and respects parent import ownership.
+Reason: One transaction exposes either unchanged source or the complete target after interruption. Keeping conversion at readiness/resume preserves completed work and ownership without rehydrating children, appending completion events, or replaying finalization.
+Alternatives considered: Provenance-only restamping, nested replacement transactions, and conversion during hydration, status reads, or installation do not preserve this publication boundary.
+
+## [2026-10-03] Migrate only evidence-complete phase-output 0.6 records
+Context: Exact version equality forced hard reset after schema upgrades even when retained planning remained usable. Historical readers and structural database migrations did not establish conversion safety.
+Decision: Support preparation 0.2 with planning provenance 0.2 and phase-output 0.6-to-0.7, plus independent feature-task 0.6 outputs. Validate immutable source and target schemas separately, preserve supplied semantics, and refuse unsupported, corrupt, or source-valid non-convertible records.
+Reason: Explicit support lets operators resume without discarding completed subtasks or commits. Missing target prose or failure evidence cannot be inferred from summaries or decoder defaults. This transition reuses planning without refresh and replaces blanket historical-version hard-reset guidance.
+Alternatives considered: Version-token-only acceptance, automatic hard reset, speculative planning refresh, and a framework for unrelated schema families were excluded by the spec. Fresh agent prose retains its existing settlement behavior.
+Revisit when: Another concrete transition has an evidenced conversion or requires scoped refresh of unfinished planning.
+
 ## [2026-10-02] Refuse incomplete build gates at admission and retire the active blocker on resume
 
 A saved SKILL-390 child selected the generic review fallback before implementation.

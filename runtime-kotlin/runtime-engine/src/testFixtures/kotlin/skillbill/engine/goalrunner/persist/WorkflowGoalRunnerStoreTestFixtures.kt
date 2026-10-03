@@ -19,6 +19,7 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
+import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -83,6 +84,7 @@ fun engineWorkflowGoalRunnerManifestStore(
         NoopRuntimeDiagnostics,
         ContractFeatureTaskRuntimePhaseOutputMigration(),
         planningMigrationForTest(),
+        NoopFeatureTaskRuntimeWorkerSupervisor,
       ),
   )
 
