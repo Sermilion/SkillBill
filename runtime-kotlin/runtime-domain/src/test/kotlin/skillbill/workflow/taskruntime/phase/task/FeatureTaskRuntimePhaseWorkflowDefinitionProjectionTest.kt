@@ -280,7 +280,7 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionProjectionTest {
     val semantic = transitions.backwardEdges.filterNot { def.isRegenerationLoopId(it.loopId) }
     assertEquals(
       listOf(
-        Triple(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.ADVANCE, def.PHASE_AUDIT_IMPLEMENT_FIX),
+        Triple(def.PHASE_AUDIT, FeatureTaskRuntimeVerdict.ADVANCE, def.PHASE_AUDIT_PLAN_FIX),
         Triple(def.PHASE_VERIFY_FINDINGS, FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED, def.PHASE_IMPLEMENT_FIX),
       ),
       semantic.map { Triple(it.fromPhaseId, it.triggeringVerdict, it.destinationPhaseId) },

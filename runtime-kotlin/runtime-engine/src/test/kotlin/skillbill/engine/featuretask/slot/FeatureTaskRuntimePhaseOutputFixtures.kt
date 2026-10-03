@@ -191,6 +191,9 @@ private val STATIC_PRODUCED_OUTPUTS: Map<String, String> =
     "simplify" to PlanningProjectionFixtures.SIMPLIFY_PROSE,
     "implement_fix" to implementFixProducedOutputs(),
     "review" to """{"findings": []}""",
+    "audit_plan_fix" to
+      """{"value":"### AC-001\nGap: Missing admission.\nProduction path: src/Foo.kt.\n""" +
+      """Changes: Guard the mutation.\nClosure evidence: Mutation follows admission."}""",
     "audit_implement_fix" to
       """{"value": "Repaired the reported audit criteria.\naudit_repair_complete: true"}""",
     "audit" to """{"value": "[]"}""",

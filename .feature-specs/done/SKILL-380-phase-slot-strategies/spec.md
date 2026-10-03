@@ -317,7 +317,7 @@ Follow-up bundles, each its own PR that leaves main usable:
 ## Fixture ledger
 
 Subtask 1 captures every skeleton fixture. Every later subtask diffs against the
-latest baseline. Only the subtasks below may change a fixture. Each of them commits the
+latest baseline. Only the subtasks and authorized follow-up changes below may change a fixture. Each of them commits the
 re-baselined fixture in the same commit, and the fixture diff contains only the
 listed change.
 
@@ -329,6 +329,7 @@ listed change.
 | `skill-bill code-review` output | 8 | both modes now run the whole `code_review` slot and fix: inline through `InlineReviewStrategy`, delegated through verify_findings and implement_fix after the multi-agent review |
 | pr and write_history step prompts | 11 | the "Invoke bill-pr-description …" and "Invoke bill-boundary-history inline …" directives replaced by strategy-owned rules |
 | Phase-run outputs | first captured by the subtask that adds the program | none in this bundle; SKILL-383 replaces retired skill names |
+| full-run workflow execution descriptors and audit prompts | 2026-10-03 operator-requested audit repair planning | add read-only `audit_plan_fix` before repair, require its saved output, route the audit edge through it, and record acceptance-audit strategy revision 2 |
 
 ## Self-sufficient execution
 

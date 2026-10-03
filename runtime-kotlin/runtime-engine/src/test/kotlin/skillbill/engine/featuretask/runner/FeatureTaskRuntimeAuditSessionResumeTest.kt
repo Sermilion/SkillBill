@@ -94,6 +94,7 @@ class FeatureTaskRuntimeAuditSessionResumeTest {
     val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(first.runner.run(first.request()))
     assertEquals("audit_implement_fix", blocked.lastIncompletePhase)
     assertEquals(3, repairs)
+    val savedPlan = first.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit_plan_fix")?.outputArtifact
     reopen(first, "audit_implement_fix")
     val beforeResume = launcher.requests.size
 
@@ -102,6 +103,8 @@ class FeatureTaskRuntimeAuditSessionResumeTest {
 
     assertEquals(4, repairs)
     assertEquals(2, audits)
+    assertEquals(savedPlan, resumed.recorder.loadPhaseRecords(WORKFLOW_ID)?.get("audit_plan_fix")?.outputArtifact)
+    assertTrue("audit_plan_fix" !in resumed.launchedPromptPhaseOrder().drop(beforeResume))
     assertTrue("implement" !in resumed.launchedPromptPhaseOrder().drop(beforeResume))
   }
 

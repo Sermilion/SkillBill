@@ -126,8 +126,23 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
             ),
           ),
         ),
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX to
+        listOf(
+          phaseProseDeclaration(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+          ),
+          phaseProseDeclaration(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+          ),
+        ),
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to
         listOf(
+          phaseProseDeclaration(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
+          ),
           phaseProseDeclaration(
             FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
             FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,

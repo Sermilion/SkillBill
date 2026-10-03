@@ -874,15 +874,21 @@
             },
             "dispatch_ownership": [
                 {
-                    "semantic_revision": 1,
+                    "semantic_revision": 2,
                     "slot": "audit",
                     "step": "audit",
                     "strategy_id": "acceptance-audit"
                 },
                 {
-                    "semantic_revision": 1,
+                    "semantic_revision": 2,
                     "slot": "audit",
                     "step": "audit_implement_fix",
+                    "strategy_id": "acceptance-audit"
+                },
+                {
+                    "semantic_revision": 2,
+                    "slot": "audit",
+                    "step": "audit_plan_fix",
                     "strategy_id": "acceptance-audit"
                 },
                 {
@@ -995,14 +1001,19 @@
             "quality_gate_selection": "validate",
             "resume_interpretations": [
                 {
-                    "identity": "acceptance-audit/1:audit",
+                    "identity": "acceptance-audit/2:audit",
                     "semantic_digest": "__NORMALIZED_SHA64__",
                     "step": "audit"
                 },
                 {
-                    "identity": "acceptance-audit/1:audit_implement_fix",
+                    "identity": "acceptance-audit/2:audit_implement_fix",
                     "semantic_digest": "__NORMALIZED_SHA64__",
                     "step": "audit_implement_fix"
+                },
+                {
+                    "identity": "acceptance-audit/2:audit_plan_fix",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "audit_plan_fix"
                 },
                 {
                     "identity": "runtime-commit/1:commit_push",
@@ -1060,10 +1071,11 @@
                 {
                     "entry_step": "audit",
                     "selected_steps": [
+                        "audit_plan_fix",
                         "audit_implement_fix",
                         "audit"
                     ],
-                    "semantic_revision": 1,
+                    "semantic_revision": 2,
                     "slot": "audit",
                     "strategy_id": "acceptance-audit"
                 },
@@ -1148,6 +1160,11 @@
                 {
                     "identity": "step-policy-v2:__NORMALIZED_SHA64__",
                     "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "audit_plan_fix"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
                     "step": "commit_push"
                 },
                 {
@@ -1201,7 +1218,7 @@
                     {
                         "cap_exhaustion_behavior": "BLOCK",
                         "cap_scope": "PER_SUBTASK",
-                        "destination_step": "audit_implement_fix",
+                        "destination_step": "audit_plan_fix",
                         "from_step": "audit",
                         "loop_id": "audit_repair",
                         "per_edge_cap": null,
@@ -1246,6 +1263,7 @@
                     "plan",
                     "implement",
                     "simplify",
+                    "audit_plan_fix",
                     "audit_implement_fix",
                     "audit",
                     "review",
@@ -1257,9 +1275,15 @@
                 ],
                 "loop_only_steps": [
                     "audit_implement_fix",
+                    "audit_plan_fix",
                     "implement_fix"
                 ],
-                "loop_only_successors": []
+                "loop_only_successors": [
+                    {
+                        "step": "audit_plan_fix",
+                        "successor": "audit_implement_fix"
+                    }
+                ]
             }
         },
         "feature_task_runtime_finding_verification_boundary_selection": null,
@@ -2628,6 +2652,11 @@
             "attempt_count": 1,
             "status": "completed",
             "step_id": "simplify"
+        },
+        {
+            "attempt_count": 0,
+            "status": "pending",
+            "step_id": "audit_plan_fix"
         },
         {
             "attempt_count": 0,

@@ -198,7 +198,7 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
     harness.seedPhase("plan", "completed", 1, INVOKED_AGENT, validJsonOutput("plan"))
     harness.seedPhase("implement", "completed", 1, INVOKED_AGENT, validJsonOutput("implement"))
     harness.seedPhase("simplify", "completed", 1, INVOKED_AGENT, SIMPLIFY_OUTPUT)
-    harness.seedPhase("audit", "completed", 1, INVOKED_AGENT, auditSatisfiedOutput())
+    harness.seedPhase("audit", "completed", 1, INVOKED_AGENT, settledAuditSatisfiedRecord())
     harness.seedReviewPhase("completed", 1, seededReviewFinding(), 1)
     harnessPendingVerifyFindingIds = listOf(REVIEW_FIX_BLOCKER_FINDING_ID)
     return harness
@@ -249,7 +249,7 @@ class FeatureTaskRuntimeCensusPhaseIoRunnerTest {
       harness.seedPhase("plan", "completed", 1, INVOKED_AGENT, validJsonOutput("plan"))
       harness.seedPhase("implement", "completed", 1, INVOKED_AGENT, validJsonOutput("implement"))
       harness.seedPhase("simplify", "completed", 1, INVOKED_AGENT, SIMPLIFY_OUTPUT)
-      harness.seedPhase("audit", "completed", 1, INVOKED_AGENT, auditSatisfiedOutput())
+      harness.seedPhase("audit", "completed", 1, INVOKED_AGENT, settledAuditSatisfiedRecord())
     }
   }
 }
@@ -268,6 +268,7 @@ private fun seededReviewFinding(): String =
     "status": "completed",
     "summary": "Review produced a validated output.",
     "produced_outputs": {
+      "value": "${blockerFinding(REVIEW_FIX_BLOCKER_FINDING_ID)}",
       "findings": [{
         "severity": "blocker",
         "finding_id": "$REVIEW_FIX_BLOCKER_FINDING_ID",

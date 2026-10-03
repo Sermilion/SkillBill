@@ -17,7 +17,12 @@ internal object AuditImplementFixPromptSections {
       .lastOrNull() == COMPLETION_MARKER
 
   const val DIRECTIVE: String =
-    "Repair every finding about production behavior reported by the latest audit in the supplied upstream output. " +
+    "Execute the persisted audit_plan_fix repair plan in its declared order. The supplied upstream output " +
+      "contains that plan and the latest audit findings. Reconcile each planned item against the current " +
+      "tree before editing, preserve work already completed, and implement its proposed production changes. " +
+      "Report closure evidence for every plan item and explain any source-backed adjustment. Do not " +
+      "replace the repair plan with the original feature plan or silently omit a planned gap. " +
+      "Repair every finding about production behavior reported by the latest audit in the supplied upstream output. " +
       "Exclude test requirements, even when a persisted audit finding or the plan explicitly requests tests. " +
       "Do not add or repair tests to close an audit criterion. For mixed findings, repair only production " +
       "behavior; record test-only findings as excluded from audit and leave test work to its owning phases. " +

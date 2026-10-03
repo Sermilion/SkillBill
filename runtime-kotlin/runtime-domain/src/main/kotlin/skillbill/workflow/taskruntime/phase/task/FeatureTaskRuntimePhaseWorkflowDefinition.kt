@@ -17,6 +17,7 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
   const val PHASE_REVIEW: String = FeatureTaskRuntimePhaseIds.REVIEW
   const val PHASE_BUILD: String = FeatureTaskRuntimePhaseIds.BUILD
   const val PHASE_VERIFY_FINDINGS: String = FeatureTaskRuntimePhaseIds.VERIFY_FINDINGS
+  const val PHASE_AUDIT_PLAN_FIX: String = FeatureTaskRuntimePhaseIds.AUDIT_PLAN_FIX
   const val PHASE_AUDIT_IMPLEMENT_FIX: String = FeatureTaskRuntimePhaseIds.AUDIT_IMPLEMENT_FIX
   const val PHASE_AUDIT: String = FeatureTaskRuntimePhaseIds.AUDIT
   const val PHASE_VALIDATE: String = FeatureTaskRuntimePhaseIds.VALIDATE

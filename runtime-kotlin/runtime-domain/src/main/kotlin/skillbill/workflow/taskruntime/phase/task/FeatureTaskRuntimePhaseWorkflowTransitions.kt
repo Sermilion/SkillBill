@@ -30,7 +30,7 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
           FeatureTaskRuntimeBackwardEdge(
             fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
             triggeringVerdict = FeatureTaskRuntimeVerdict.ADVANCE,
-            destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
+            destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
             loopId = FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_REPAIR_LOOP_ID,
             perEdgeCap = null,
             warnAfterIterations = FeatureTaskRuntimePhaseWorkflowDefinition.SEMANTIC_LOOP_WARNING_THRESHOLD,
@@ -58,11 +58,16 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
           },
       loopOnlyPhaseIds =
         setOf(
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
         ),
-      loopOnlySuccessors = emptyMap(),
+      loopOnlySuccessors =
+        mapOf(
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX to
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
+        ),
     )
 
   fun backwardEdgeForLoop(

@@ -27,6 +27,7 @@ internal val DEFAULT_PHASE_TIERS: Map<String, ExecutionTier> =
     FeatureTaskRuntimePhaseIds.REVIEW to ExecutionTier.REASONING,
     FeatureTaskRuntimePhaseIds.VERIFY_FINDINGS to ExecutionTier.REASONING,
     FeatureTaskRuntimePhaseIds.BUILD to ExecutionTier.IMPLEMENTATION,
+    FeatureTaskRuntimePhaseIds.AUDIT_PLAN_FIX to ExecutionTier.REASONING,
     FeatureTaskRuntimePhaseIds.AUDIT_IMPLEMENT_FIX to ExecutionTier.IMPLEMENTATION,
     FeatureTaskRuntimePhaseIds.AUDIT to ExecutionTier.REASONING,
     FeatureTaskRuntimePhaseIds.VALIDATE to ExecutionTier.REASONING,

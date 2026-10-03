@@ -1498,6 +1498,7 @@ internal fun defaultPhaseOutput(request: GoalRunnerSubtaskLaunchRequest): String
   return when {
     phaseId == "review" -> VALID_REVIEW_OUTPUT
     phaseId == "audit" -> VALID_AUDIT_OUTPUT
+    phaseId == "audit_plan_fix" -> auditRepairPlanOutput(requireNotNull(request.skillRunRequest.promptOverride))
     phaseId == "verify_findings" -> verifyFindingsOutput()
     else -> validJsonOutput(phaseId)
   }

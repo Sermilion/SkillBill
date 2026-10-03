@@ -68,7 +68,7 @@ class UnboundedRemediationLoopRegressionTest {
         iteration = 1,
       )
     assertIs<FeatureTaskRuntimeNextPhase.Next>(next)
-    assertEquals(def.PHASE_AUDIT_IMPLEMENT_FIX, next.phaseId)
+    assertEquals(def.PHASE_AUDIT_PLAN_FIX, next.phaseId)
   }
 
   @Test

@@ -59,3 +59,19 @@ the subtask ID and both hashes. Completed and skipped subtasks retain their plan
 records and commits. The existing scoped-replan liveness and digest checks still
 refuse unsafe changes. Missing specs and invalid planning records stay with their
 existing recovery paths.
+
+## Acceptance-audit repair planning
+
+The acceptance-audit slot inspects production criteria in `audit`. Open findings
+enter `audit_plan_fix`, a read-only reasoning step that plans each independent
+gap before repair. Each plan item names the criterion, gap, production path,
+ordered changes and dependencies, and evidence needed to close it. The runtime
+rejects incomplete criterion coverage or missing item fields and persists the
+accepted plan as an ordinary phase output.
+
+`audit_implement_fix` consumes that saved plan and the latest audit findings,
+reconciles completed edits, and executes the remaining planned changes. Repair
+continuations reuse the saved plan. Each new audit round with open findings
+produces a new repair plan. A satisfied audit skips both repair steps. Audit,
+repair planning, and repair do not run builds or tests. Existing audit retry and
+non-shrinking limits still apply.

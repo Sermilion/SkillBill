@@ -186,7 +186,7 @@ class FeatureTaskRuntimePhasePromptComposerTest {
 
     assertContains(prompt, "Report status completed when inspection finishes")
     assertContains(prompt, "The runtime owns repair retries and progress limits")
-    assertContains(prompt, "A completed inspection with open criteria routes to audit_implement_fix")
+    assertContains(prompt, "A completed inspection with open criteria routes to audit_plan_fix")
     assertFalse(prompt.contains("Another automatic repair requires fewer open criterion IDs"))
     assertFalse(prompt.contains("equal or larger counts block for operator intervention"))
   }

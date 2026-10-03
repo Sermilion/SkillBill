@@ -22,6 +22,7 @@ class SkeletonDefinitionTest {
       "plan",
       "implement",
       "simplify",
+      "audit_plan_fix",
       "audit_implement_fix",
       "audit",
       "review",
@@ -50,7 +51,7 @@ class SkeletonDefinitionTest {
           FeatureTaskRuntimeBackwardEdge(
             "audit",
             FeatureTaskRuntimeVerdict.ADVANCE,
-            "audit_implement_fix",
+            "audit_plan_fix",
             "audit_repair",
             perEdgeCap = null,
             warnAfterIterations = 3,
@@ -77,8 +78,8 @@ class SkeletonDefinitionTest {
               capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
             )
           },
-      loopOnlyPhaseIds = setOf("audit_implement_fix", "implement_fix", "build"),
-      loopOnlySuccessors = emptyMap(),
+      loopOnlyPhaseIds = setOf("audit_plan_fix", "audit_implement_fix", "implement_fix", "build"),
+      loopOnlySuccessors = mapOf("audit_plan_fix" to "audit_implement_fix"),
     )
 
   @Test
@@ -168,6 +169,7 @@ class SkeletonDefinitionTest {
 
     assertEquals(
       setOf(
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
       ),

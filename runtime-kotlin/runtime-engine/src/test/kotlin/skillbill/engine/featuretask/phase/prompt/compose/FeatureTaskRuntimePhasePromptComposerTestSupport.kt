@@ -98,6 +98,7 @@ internal fun promptComposerBriefingFor(
             recordedPromptComposerOutput("implement", IMPLEMENT_OUTPUT),
             recordedPromptComposerOutput("simplify", SIMPLIFY_OUTPUT),
             recordedPromptComposerOutput("audit", options.auditOutput),
+            recordedPromptComposerOutput("audit_plan_fix", validJsonOutput("audit_plan_fix")),
             FeatureTaskRuntimePhaseOutput("review", 1, validJsonOutput("review")),
             verifyFindingsPhaseOutput(),
             recordedPromptComposerOutput("validate", validJsonOutput("validate")),

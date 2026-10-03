@@ -136,6 +136,7 @@ $defs:
           - review
           - verify_findings
           - build
+          - audit_plan_fix
           - audit_implement_fix
           - audit
           - validate
@@ -159,6 +160,7 @@ $defs:
                     - review
                     - verify_findings
                     - build
+                    - audit_plan_fix
                     - audit_implement_fix
                     - audit
                     - validate

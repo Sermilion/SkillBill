@@ -52,6 +52,7 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
@@ -455,6 +456,7 @@ class PhaseStrategyCompositionTest {
         PHASE_SIMPLIFY to
           policy(MUTATING, SINGLE, FILE_MUTATING).extendingInventory(),
         PHASE_AUDIT to policy(SINGLE, READ_ONLY_IDLE),
+        PHASE_AUDIT_PLAN_FIX to policy(SINGLE, READ_ONLY_IDLE),
         PHASE_AUDIT_IMPLEMENT_FIX to policy(MUTATING, FILE_MUTATING).extendingInventory(),
         PHASE_REVIEW to policy(FILE_MUTATING, GENERATION_SCOPED),
         PHASE_VERIFY_FINDINGS to policy(READ_ONLY_IDLE, FILE_MUTATING),

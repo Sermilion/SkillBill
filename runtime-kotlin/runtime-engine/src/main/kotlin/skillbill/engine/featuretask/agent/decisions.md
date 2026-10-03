@@ -273,3 +273,25 @@ A completed inspection with open criteria routes to repair. Review admission sti
 Reason: A criterion can require repairs at several consumers before its count decreases. Agent instructions must not replace the runtime's bounded repair policy with a second stopping rule. The existing ledger and progress owner continue to enforce the limit without new durable state.
 
 Evidence: Historical session blocks and local telemetry include SKILL-384's one-edge cap and growing criterion list, SKILL-389's satisfied rationale rejected as an open finding, SKILL-352's repeated remaining text, schema-invalid audit output, lost durable recovery authority, and checkpoint refusal before review. The change retains progress, parsing, recovery, checkpoint and process-failure enforcement. Existing audit regression tests exercise those boundaries, including captured SKILL-389 and SKILL-393 reports.
+
+## 2026-10-03: Plan acceptance-criteria repairs before execution
+
+Context: A repair session can receive several independent production gaps under
+one criterion and spend its attempts on incidental changes while leaving the
+required behavior missing.
+
+Decision: The acceptance-audit slot now owns read-only `audit_plan_fix` between
+inspection and implementation repair. Its reasoning session plans each reported
+gap with production paths, ordered changes, dependencies, and closure evidence.
+The runtime validates criterion coverage and item fields before persisting the
+plan. `audit_implement_fix` executes that persisted plan. Ordinary phase outputs,
+handoffs, and the existing audit repair ledger own persistence and resume. The
+audit strategy revision changes to 2 so admission cannot silently reinterpret an
+older execution descriptor. The historical interpreter retains the original audit and repair
+rules and recognizes repair planning as a loop-only step.
+
+Reason: Planning must finish before repair mutates source, and interruption must
+retain the plan that justified the repair. This changes the repair loop, not its
+retry budget, test exclusion, or full-list re-audit requirement. It follows A1,
+A2, A6, and A7 by keeping audit behavior in its slot and reusing owned contracts
+and expected rejection results.

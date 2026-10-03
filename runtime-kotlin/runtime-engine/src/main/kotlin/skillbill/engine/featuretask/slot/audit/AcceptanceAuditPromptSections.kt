@@ -8,7 +8,7 @@ internal object AcceptanceAuditPromptSections {
   const val AUDIT_READONLY_EVIDENCE_SENTENCE: String =
     "Inspect production code without editing it. Run no compile, build, test, format, lint, or full-check " +
       "command: build owns compilation and build proof, validate owns tests and failures, and audit reports " +
-      "gaps for audit_implement_fix."
+      "gaps for audit_plan_fix."
 
   const val DIRECTIVE: String =
     "Verify the production behavior required by every acceptance criterion in the briefing against the " +
@@ -20,12 +20,12 @@ internal object AcceptanceAuditPromptSections {
       "Treat upstream receipts as claims and inspect current production code. Audit is read-only: do not edit " +
       "files or repair gaps. Do not spawn subagents or invoke repair skills. Report remaining acceptance " +
       "criteria with criterion identifiers, concrete missing production behavior, and relevant production " +
-      "paths. The runtime passes those findings to audit_implement_fix using the configured implementation " +
+      "paths. The runtime passes those findings to audit_plan_fix using the configured reasoning " +
       "model. Report status completed when inspection finishes, including when production criteria remain " +
       "open. The runtime owns repair retries and progress limits. Do not block because finding IDs or counts " +
       "repeat or grow, or because a previous report claimed another repair was prohibited. Report the current " +
       "production gaps and let the runtime apply its durable repair policy. " +
-      "A completed inspection with open criteria routes to audit_implement_fix. Downstream review requires " +
+      "A completed inspection with open criteria routes to audit_plan_fix. Downstream review requires " +
       "a report that no production criteria remain. " +
       "After repairs, re-check the entire in-scope criterion list from the beginning, including previously " +
       "satisfied criteria, applying the same test exclusion. When all required production behavior is " +
@@ -49,7 +49,7 @@ internal object AcceptanceAuditPromptSections {
           "mixed criteria. Otherwise list only the open criteria: start each on its own line with its briefing " +
           "criterion ID, then give the missing production behavior and relevant production paths. Never name " +
           "a satisfied criterion. " +
-          "Open criteria route to audit_implement_fix. Do not repair gaps in audit. Only a report that no " +
+          "Open criteria route to audit_plan_fix. Do not repair gaps in audit. Only a report that no " +
           "criteria remain allows downstream review. Every audit " +
           "checks the complete planned criterion list against the current tree. " +
           "Original spec labels are accepted aliases. For capability " +
