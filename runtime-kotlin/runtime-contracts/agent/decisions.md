@@ -1,3 +1,14 @@
+## [2026-10-03] Preserve scaffold and review classification boundaries
+Context: SKILL-399 subtask 2 replaces Scaffold and ReviewContext throwable hierarchies with the same shared exception type.
+Decision: Include ReviewContextFailureCode in isShellContentContractFailure and exclude ScaffoldFailureCode. Converted review catches retain exact handled codes and rethrow other failures.
+Reason: ReviewContext failures previously extended ShellContentContractException. Scaffold failures extended SkillBillRuntimeException directly, so including them would widen shell-content handling and change propagation.
+
+## [2026-10-03] Keep input-driven scaffold and review failures coded
+Context: SKILL-399 subtask 2 removes twenty exception classes while preserving scaffold output and review failure behavior.
+Decision: Use ScaffoldFailureCode and ReviewContextFailureCode with SkillBillRuntimeException. Message functions retain context and causes without adding typed exception properties.
+Reason: Payloads, authored skill identity, review evidence and spec input can trigger these failures. The plan permits defect assertions only when external input cannot trigger a condition; this slice establishes no such condition.
+Alternatives considered: Replace failures with require, check or error. Input-driven conditions do not justify defect classification.
+
 ## [2026-10-03] Keep input-driven manifest and staging failures coded
 Context: SKILL-399 subtask 1 removes twenty exception classes while preserving messages and failure classification across manifest loading, review composition and skill staging.
 Decision: Use ManifestFailureCode and SkillStagingFailureCode with SkillBillRuntimeException. Preserve context and causes in message functions without adding exception properties.

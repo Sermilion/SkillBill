@@ -1,12 +1,13 @@
 package skillbill.application.review.packet
 
+import java.nio.file.Path
 import skillbill.application.reviewevidence.SharedReviewEvidenceCodec
 import skillbill.application.reviewevidence.SharedReviewEvidenceCommits
 import skillbill.application.reviewevidence.SharedReviewEvidenceRecord
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
-import skillbill.error.shellcontent.ReviewHunkEvidenceIntegrityError
-import skillbill.error.shellcontent.ReviewHunkEvidenceLocatorMissingError
-import skillbill.error.shellcontent.ReviewHunkEvidenceLocatorUnreadableError
+import skillbill.error.shellcontent.reviewHunkEvidenceIntegrityError
+import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
+import skillbill.error.shellcontent.reviewHunkEvidenceLocatorUnreadableError
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPort
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceLocatorReadRequest
 import skillbill.review.context.model.commit.ReviewCommitSource
@@ -14,7 +15,6 @@ import skillbill.review.context.model.commit.ReviewCommitUnit
 import skillbill.review.context.model.hunk.ReviewChangedHunk
 import skillbill.review.context.model.hunk.ReviewHunkEvidenceLocator
 import skillbill.text.RECORD_FIELD_SEPARATOR
-import java.nio.file.Path
 
 internal data class IndexedReviewHunks(
   val hunks: List<ReviewChangedHunk>,
@@ -31,7 +31,7 @@ internal object ReviewHunkStoreIndexing {
   ): IndexedReviewHunks {
     if (storePath.isNullOrBlank()) {
       if (locatorReader != null) {
-        throw ReviewHunkEvidenceLocatorMissingError(storePath.orEmpty())
+        throw reviewHunkEvidenceLocatorMissingError(storePath.orEmpty())
       }
       return IndexedReviewHunks(
         hunks = hunks.map { it.asIndex(it.evidenceLocator, it.content) },
@@ -65,13 +65,13 @@ internal object ReviewHunkStoreIndexing {
     locatorReader: FeatureTaskRuntimeSharedEvidenceLocatorReadPort?,
   ): String {
     val root =
-      repoRoot ?: throw ReviewHunkEvidenceLocatorUnreadableError(
+      repoRoot ?: throw reviewHunkEvidenceLocatorUnreadableError(
         storePath,
         "compose-time locator dereference requires a repository root",
       )
     return locatorReader?.readDiffPayload(
       FeatureTaskRuntimeSharedEvidenceLocatorReadRequest(root, storePath),
-    ) ?: throw ReviewHunkEvidenceLocatorMissingError(storePath)
+    ) ?: throw reviewHunkEvidenceLocatorMissingError(storePath)
   }
 
   private fun rawRecord(
@@ -79,7 +79,7 @@ internal object ReviewHunkStoreIndexing {
     storePath: String,
   ): SharedReviewEvidenceRecord {
     runCatching { ReviewDiffEvidence.parse(payload) }.getOrNull()
-      ?: throw ReviewHunkEvidenceLocatorUnreadableError(
+      ?: throw reviewHunkEvidenceLocatorUnreadableError(
         storePath,
         "payload is not a shared-evidence or git-diff body",
       )
@@ -105,7 +105,7 @@ internal object ReviewHunkStoreIndexing {
     val storedDigest = ReviewChangedHunk.digestOfBody(storedBody)
     val expectedDigest = claimedDigest(hunk, storePath)
     if (expectedDigest != null && expectedDigest != storedDigest) {
-      throw ReviewHunkEvidenceIntegrityError(storePath, expectedDigest, storedDigest)
+      throw reviewHunkEvidenceIntegrityError(storePath, expectedDigest, storedDigest)
     }
     val locator =
       ReviewHunkEvidenceLocator.atStore(
@@ -140,7 +140,7 @@ internal object ReviewHunkStoreIndexing {
       } else {
         hunkBodyIn(record.aggregateDiff, hunk)
       }
-    return body ?: throw ReviewHunkEvidenceLocatorUnreadableError(
+    return body ?: throw reviewHunkEvidenceLocatorUnreadableError(
       storePath,
       "stored payload has no hunk at ${hunk.path} " +
         ReviewHunkEvidenceLocator.header(hunk.oldStart, hunk.oldCount, hunk.newStart, hunk.newCount),

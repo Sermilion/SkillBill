@@ -3,7 +3,8 @@ package skillbill.review.context.model.packet
 import skillbill.contracts.JsonCodec
 import skillbill.error.core.JsonWrongRootTypeError
 import skillbill.error.core.MalformedJsonTextError
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
 import skillbill.workflow.model.persistence.artifact.asExactLongOrNull
 
@@ -90,8 +91,8 @@ object ReviewRunLaneSegmentAccountingJson {
   private fun segmentAccountingSchemaError(
     reason: String,
     cause: Throwable? = null,
-  ): InvalidReviewContextSchemaError =
-    InvalidReviewContextSchemaError(
+  ): SkillBillRuntimeException =
+    invalidReviewContextSchemaError(
       sourceLabel = "review_run_lane_segment_accounting",
       reason = reason,
       cause = cause,

@@ -5,12 +5,15 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
+import java.util.logging.Level
+import java.util.logging.Logger
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.review.REVIEW_CONTEXT_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.shellcontent.ReviewContextFailureCode
+import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.ValidatedClasspathYamlNodeRequest
@@ -18,8 +21,6 @@ import skillbill.infrastructure.contracts.locator.ReviewContextSchemaPaths
 import skillbill.infrastructure.contracts.locator.logSchemaLoadFailure
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.review.context.ReviewContextWireMap
-import java.util.logging.Level
-import java.util.logging.Logger
 
 internal const val MAX_REPORTED_VIOLATIONS: Int = 4
 
@@ -163,7 +164,7 @@ private fun validateExpectedKind(
 ) {
   val kind = envelope["kind"]
   if (kind != expectedKind) {
-    throw InvalidReviewContextSchemaError(
+    throw invalidReviewContextSchemaError(
       sourceLabel = sourceLabel,
       reason = "Expected a '$expectedKind' envelope but the payload declares kind='${kind ?: "<missing>"}'.",
       definitionName = expectedKind,
@@ -180,7 +181,7 @@ private fun requireMatchingContractVersion(
   val declared = payload[SharedPayloadKeys.CONTRACT_VERSION] ?: return
   val declaredText = declared as? String ?: declared.toString()
   if (declaredText == REVIEW_CONTEXT_CONTRACT_VERSION) return
-  throw InvalidReviewContextSchemaError(
+  throw invalidReviewContextSchemaError(
     sourceLabel = sourceLabel,
     reason =
       "contract_version mismatch: envelope declares '$declaredText' but the runtime requires " +
@@ -202,7 +203,7 @@ private fun validatePayloadAgainst(
   if (errors.isNotEmpty()) {
     val sorted = errors.sortedWith(violationOrdering)
     reviewContextLog.log(Level.WARNING, buildSchemaDriftLog(sourceLabel, sorted, instance))
-    throw InvalidReviewContextSchemaError(
+    throw invalidReviewContextSchemaError(
       sourceLabel = sourceLabel,
       reason = formatValidationReason(sorted, instance),
       definitionName = definitionName,
@@ -302,7 +303,7 @@ internal class ReviewContextSchemas(private val envelope: JsonSchema, private va
 
   fun forDefinition(name: String): JsonSchema =
     branches[name]
-      ?: throw InvalidReviewContextSchemaError(
+      ?: throw invalidReviewContextSchemaError(
         sourceLabel = ReviewContextSchemaPaths.CLASSPATH_RESOURCE,
         reason = "Canonical review context schema has no compiled definition '$name'.",
         definitionName = name,
@@ -331,13 +332,13 @@ private fun readReviewContextSchemaNode(): JsonNode {
         classLoader = ReviewContextSchemaValidator::class.java.classLoader,
         resource = REVIEW_CONTEXT_SCHEMA_CLASSPATH_RESOURCE,
         missingResource = {
-          InvalidReviewContextSchemaError(
+          invalidReviewContextSchemaError(
             sourceLabel = REVIEW_CONTEXT_SCHEMA_CLASSPATH_RESOURCE,
             reason = "Canonical review context schema is missing from the classpath.",
           )
         },
         processingFailure = { cause ->
-          InvalidReviewContextSchemaError(
+          invalidReviewContextSchemaError(
             sourceLabel = REVIEW_CONTEXT_SCHEMA_CLASSPATH_RESOURCE,
             reason = cause.message ?: cause::class.simpleName.orEmpty(),
             cause = cause,
@@ -347,7 +348,7 @@ private fun readReviewContextSchemaNode(): JsonNode {
         expectedContractVersion = REVIEW_CONTEXT_CONTRACT_VERSION,
         contractVersionMatches = ::reviewContextContractVersionMatches,
         identityFailure = { reason ->
-          InvalidReviewContextSchemaError(
+          invalidReviewContextSchemaError(
             sourceLabel = REVIEW_CONTEXT_SCHEMA_CLASSPATH_RESOURCE,
             reason = reason,
           )
@@ -379,7 +380,7 @@ private fun compileReviewContextSchemas(yamlNode: JsonNode): ReviewContextSchema
         cacheKey = REVIEW_CONTEXT_SCHEMA_CLASSPATH_RESOURCE,
         yamlNode = yamlNode,
         processingFailure = { cause ->
-          InvalidReviewContextSchemaError(
+          invalidReviewContextSchemaError(
             sourceLabel = REVIEW_CONTEXT_SCHEMA_CLASSPATH_RESOURCE,
             reason = cause.message ?: cause::class.simpleName.orEmpty(),
             cause = cause,
@@ -398,7 +399,7 @@ private fun compileReviewContextSchemas(yamlNode: JsonNode): ReviewContextSchema
     val branches =
       definitionNames.associateWith { name ->
         if (defs.path(name).isMissingNode) {
-          throw InvalidReviewContextSchemaError(
+          throw invalidReviewContextSchemaError(
             sourceLabel = REVIEW_CONTEXT_SCHEMA_CLASSPATH_RESOURCE,
             reason = "Canonical review context schema is missing definition '$name'.",
             definitionName = name,
@@ -412,7 +413,7 @@ private fun compileReviewContextSchemas(yamlNode: JsonNode): ReviewContextSchema
           cacheKey = "$REVIEW_CONTEXT_SCHEMA_CLASSPATH_RESOURCE#$name",
           yamlNode = wrapper,
           processingFailure = { cause ->
-            InvalidReviewContextSchemaError(
+            invalidReviewContextSchemaError(
               sourceLabel = REVIEW_CONTEXT_SCHEMA_CLASSPATH_RESOURCE,
               reason = cause.message ?: cause::class.simpleName.orEmpty(),
               definitionName = name,
@@ -422,7 +423,8 @@ private fun compileReviewContextSchemas(yamlNode: JsonNode): ReviewContextSchema
         )
       }
     return ReviewContextSchemas(envelopeSchema, branches)
-  } catch (error: InvalidReviewContextSchemaError) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.code == ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA)
     throw logReviewContextSchemaFailure(error)
   }
 }

@@ -1,12 +1,12 @@
 package skillbill.engine.featuretask.lifecycle.core
 
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import java.nio.file.Path
+import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.diff.model.ReviewCommitMetadata
 import skillbill.ports.diff.model.ReviewDiffQuery
 import skillbill.ports.diff.model.ReviewIndexEntry
 import skillbill.ports.review.model.ReviewCheckpointFileIdentity
-import java.nio.file.Path
 
 object FeatureTaskRuntimeUnreadableDiffResolver : DiffResolverPort {
   override fun resolveCommit(
@@ -47,7 +47,7 @@ object FeatureTaskRuntimeUnreadableDiffResolver : DiffResolverPort {
     root: Path,
     paths: List<String>,
   ): Map<String, ReviewCheckpointFileIdentity> =
-    throw InvalidReviewContextSchemaError(
+    throw invalidReviewContextSchemaError(
       "review-source",
       "This diff resolver cannot capture worktree evidence identities.",
     )

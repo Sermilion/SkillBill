@@ -1,5 +1,12 @@
 package skillbill.application.review.preparation
 
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 import skillbill.application.review.model.ReviewPreparationRequest
 import skillbill.application.review.model.ReviewPreparationResult
 import skillbill.application.review.parallel.planning.criteriaReferences
@@ -12,12 +19,11 @@ import skillbill.application.reviewevidence.SharedReviewEvidenceCodec
 import skillbill.application.reviewevidence.SharedReviewEvidenceCommits
 import skillbill.application.reviewevidence.SharedReviewEvidenceRecord
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
 import skillbill.error.shellcontent.REVIEW_HUNK_EVIDENCE_INTEGRITY
-import skillbill.error.shellcontent.ReviewHunkEvidenceIntegrityError
-import skillbill.error.shellcontent.ReviewHunkEvidenceLocatorMissingError
-import skillbill.error.shellcontent.ReviewHunkEvidenceLocatorUnreadableError
+import skillbill.error.shellcontent.ReviewContextFailureCode
+import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPort
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceLocatorReadRequest
@@ -43,13 +49,6 @@ import skillbill.review.context.model.hunk.ReviewRevision
 import skillbill.review.context.model.hunk.ReviewRuleReference
 import skillbill.review.context.model.launch.GovernedReviewLaunch
 import skillbill.review.model.ReviewLaneReviewDisposition
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
 
 private fun focusedMatrix(
   scope: ReviewScopeFacts,
@@ -87,7 +86,7 @@ private class PayloadLocatorReader(private val payloadByPath: Map<String, String
   FeatureTaskRuntimeSharedEvidenceLocatorReadPort {
   override fun readDiffPayload(request: FeatureTaskRuntimeSharedEvidenceLocatorReadRequest): String =
     payloadByPath[request.storePath]
-      ?: throw ReviewHunkEvidenceLocatorMissingError(request.storePath)
+      ?: throw reviewHunkEvidenceLocatorMissingError(request.storePath)
 }
 
 private class ThrowingLocatorReader(private val error: () -> Nothing) :
@@ -278,21 +277,27 @@ class ReviewPreparationServiceTest {
             includedDecision("testing", "test sources changed", "src/Absent.kt"),
           ),
       )
-    val failure = assertFailsWith<InvalidReviewContextSchemaError> { service(supplied).prepare(request()) }
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        service(supplied).prepare(request())
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("claims paths the packet does not own" in failure.message.orEmpty())
   }
 
   @Test fun `no included lane is rejected before launch`() {
     val supplied = facts(decisions = listOf(ReviewLaneDecision("ui", false, "no UI files changed")))
-    val failure = assertFailsWith<InvalidReviewContextSchemaError> { service(supplied).prepare(request()) }
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        service(supplied).prepare(request())
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("no included lane" in failure.message.orEmpty())
   }
 
   @Test fun `dependency allowlist overlapping a changed path is rejected`() {
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         service(facts()).prepare(request(ReviewDependencyAllowlist(listOf("src/A.kt"))))
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("overlap changed paths" in failure.message.orEmpty())
   }
 
@@ -300,9 +305,9 @@ class ReviewPreparationServiceTest {
     val prepared = service(facts()).prepare(request())
     val foreign = prepared.assignments.first().copy(assignedPaths = listOf("src/Elsewhere.kt"))
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         service(facts()).validateAgainstPacket(prepared.packet, listOf(foreign) + prepared.assignments.drop(1))
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("paths not owned by the packet" in failure.message.orEmpty())
   }
 
@@ -317,9 +322,9 @@ class ReviewPreparationServiceTest {
         assignedBundle = ReviewLaneBundle(listOf(owning.copy(hunkIds = listOf(forged)))),
       )
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         service(facts()).validateAgainstPacket(prepared.packet, listOf(foreign) + prepared.assignments.drop(1))
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("hunk ids not owned by the packet" in failure.message.orEmpty())
   }
 
@@ -328,16 +333,16 @@ class ReviewPreparationServiceTest {
     val staleDigest = prepared.assignments.first().copy(packetDigest = "a".repeat(64))
     assertTrue(
       "different review revision" in
-        assertFailsWith<InvalidReviewContextSchemaError> {
+        assertFailsWith<SkillBillRuntimeException> {
           service(facts()).validateAgainstPacket(prepared.packet, listOf(staleDigest) + prepared.assignments.drop(1))
-        }.message.orEmpty(),
+        }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }.message.orEmpty(),
     )
     val staleRevision = prepared.assignments.first().copy(reviewRevision = ReviewRevision("rvs-1", 9))
     assertTrue(
       "does not match packet revision" in
-        assertFailsWith<InvalidReviewContextSchemaError> {
+        assertFailsWith<SkillBillRuntimeException> {
           service(facts()).validateAgainstPacket(prepared.packet, listOf(staleRevision) + prepared.assignments.drop(1))
-        }.message.orEmpty(),
+        }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }.message.orEmpty(),
     )
   }
 
@@ -348,9 +353,9 @@ class ReviewPreparationServiceTest {
         baselineUntrackedPolicy = ReviewBaselineUntrackedPolicy(includedPaths = listOf("src/New.kt")),
       )
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         service(facts()).validateAgainstPacket(prepared.packet, listOf(forged) + prepared.assignments.drop(1))
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("baseline-untracked policy differs" in failure.message.orEmpty())
   }
 
@@ -358,18 +363,18 @@ class ReviewPreparationServiceTest {
     val prepared = service(facts()).prepare(request())
     val duplicated: List<ReviewAssignment> = listOf(prepared.assignments.first(), prepared.assignments.first())
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         service(facts()).validateAgainstPacket(prepared.packet, duplicated)
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("duplicate lanes" in failure.message.orEmpty())
   }
 
   @Test fun `missing selected lane assignment is rejected`() {
     val prepared = service(facts()).prepare(request())
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         service(facts()).validateAgainstPacket(prepared.packet, prepared.assignments.dropLast(1))
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
 
     assertTrue("exactly one specialist lane per selected lane" in failure.message.orEmpty(), failure.message.orEmpty())
   }
@@ -381,23 +386,23 @@ class ReviewPreparationServiceTest {
     val changedDecision = first.copy(laneDecision = first.laneDecision.copy(reason = "forged"))
     assertTrue(
       "lane decision differs" in
-        assertFailsWith<InvalidReviewContextSchemaError> {
+        assertFailsWith<SkillBillRuntimeException> {
           service(facts()).validateAgainstPacket(prepared.packet, listOf(changedDecision, other))
-        }.message.orEmpty(),
+        }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }.message.orEmpty(),
     )
     val crossLaneHunk = first.copy(assignedHunks = other.assignedHunks, assignedBundle = other.assignedBundle)
     assertTrue(
       "focused-commit hunks" in
-        assertFailsWith<InvalidReviewContextSchemaError> {
+        assertFailsWith<SkillBillRuntimeException> {
           service(facts()).validateAgainstPacket(prepared.packet, listOf(crossLaneHunk, other))
-        }.message.orEmpty(),
+        }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }.message.orEmpty(),
     )
     val missingRules = first.copy(matchedRules = emptyList())
     assertTrue(
       "matched rules differ" in
-        assertFailsWith<InvalidReviewContextSchemaError> {
+        assertFailsWith<SkillBillRuntimeException> {
           service(facts()).validateAgainstPacket(prepared.packet, listOf(missingRules, other))
-        }.message.orEmpty(),
+        }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }.message.orEmpty(),
     )
   }
 
@@ -407,9 +412,9 @@ class ReviewPreparationServiceTest {
       prepared.assignments.first()
         .copy(dependencyAllowlist = ReviewDependencyAllowlist(listOf("src/Other.kt")))
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         service(facts()).validateAgainstPacket(prepared.packet, listOf(escaping) + prepared.assignments.drop(1))
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("escapes the packet allowlist" in failure.message.orEmpty())
   }
 
@@ -464,12 +469,12 @@ class ReviewPreparationServiceTest {
   @Test fun `a packet ledger entry referencing an unknown assignment digest is rejected`() {
     val prepared = service(facts()).prepare(request())
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         service(facts()).validateAgainstPacket(
           prepared.packet.copy(expansionLedger = listOf(expansion("e".repeat(64)))),
           prepared.assignments,
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("Packet expansion ledger records" in failure.message.orEmpty())
   }
 
@@ -522,7 +527,7 @@ class ReviewPreparationServiceTest {
     val hunk = hunkA
     var workerLaunches = 0
     val failure =
-      assertFailsWith<ReviewHunkEvidenceLocatorMissingError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewPreparationService(
           facts(
             hunks = listOf(hunk),
@@ -531,7 +536,7 @@ class ReviewPreparationServiceTest {
           RecordingValidator(),
           hunkLocatorReader = PayloadLocatorReader(emptyMap()),
         ).prepare(request().copy(evidenceStorePath = "", repoRoot = Path.of(".")))
-      }
+      }.also { assertEquals(ReviewContextFailureCode.HUNK_EVIDENCE_LOCATOR_MISSING, it.code) }
     assertTrue(failure.message.orEmpty().contains("review_hunk_evidence_locator_missing"))
     assertEquals(0, workerLaunches)
   }
@@ -540,14 +545,14 @@ class ReviewPreparationServiceTest {
     val hunk = hunkA
     var workerLaunches = 0
     val failure =
-      assertFailsWith<ReviewHunkEvidenceLocatorMissingError> {
+      assertFailsWith<SkillBillRuntimeException> {
         storePrepare(
           listOf(hunk),
           "unused",
           storePath = ".skill-bill/run-evidence/code-review/missing",
           reader = PayloadLocatorReader(emptyMap()),
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.HUNK_EVIDENCE_LOCATOR_MISSING, it.code) }
     assertTrue(failure.message.orEmpty().contains("review_hunk_evidence_locator_missing"))
     assertEquals(0, workerLaunches)
   }
@@ -556,7 +561,7 @@ class ReviewPreparationServiceTest {
     val hunk = hunkA
     val storePath = ".skill-bill/run-evidence/code-review/fp-no-reader"
     val failure =
-      assertFailsWith<ReviewHunkEvidenceLocatorMissingError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewPreparationService(
           facts(
             hunks = listOf(hunk),
@@ -565,8 +570,8 @@ class ReviewPreparationServiceTest {
           RecordingValidator(),
           hunkLocatorReader = null,
         ).prepare(request().copy(evidenceStorePath = storePath, repoRoot = Path.of(".")))
-      }
-    assertEquals(storePath, failure.storePath)
+      }.also { assertEquals(ReviewContextFailureCode.HUNK_EVIDENCE_LOCATOR_MISSING, it.code) }
+    assertTrue("store_path '$storePath'" in failure.message.orEmpty())
   }
 
   @Test fun `unreadable stored payload fails compose without launching workers`() {
@@ -574,14 +579,14 @@ class ReviewPreparationServiceTest {
     var workerLaunches = 0
     val storePath = ".skill-bill/run-evidence/code-review/fp-unreadable"
     val failure =
-      assertFailsWith<ReviewHunkEvidenceLocatorUnreadableError> {
+      assertFailsWith<SkillBillRuntimeException> {
         storePrepare(
           listOf(hunk),
           "not-a-diff",
           storePath,
           reader = PayloadLocatorReader(mapOf(storePath to "not-a-diff")),
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.HUNK_EVIDENCE_LOCATOR_UNREADABLE, it.code) }
     assertTrue(failure.message.orEmpty().contains("review_hunk_evidence_locator_unreadable"))
     assertEquals(0, workerLaunches)
   }
@@ -630,12 +635,12 @@ class ReviewPreparationServiceTest {
     val expected = indexed.contentDigest
     val observed = ReviewChangedHunk.digestOfBody(ReviewDiffEvidence.parse(overwritten).hunks.single().content)
     val failure =
-      assertFailsWith<ReviewHunkEvidenceIntegrityError> {
+      assertFailsWith<SkillBillRuntimeException> {
         storePrepare(listOf(indexed), overwritten, storePath)
-      }
-    assertEquals(storePath, failure.storePath)
-    assertEquals(expected, failure.expectedDigest)
-    assertEquals(observed, failure.observedDigest)
+      }.also { assertEquals(ReviewContextFailureCode.HUNK_EVIDENCE_INTEGRITY, it.code) }
+    assertTrue("store_path '$storePath'" in failure.message.orEmpty())
+    assertTrue("locator digest '$expected'" in failure.message.orEmpty())
+    assertTrue("body digest '$observed'" in failure.message.orEmpty())
     assertTrue(failure.message.orEmpty().contains(REVIEW_HUNK_EVIDENCE_INTEGRITY))
     val expectedId = ReviewChangedHunk.idFor(hunk)
     assertEquals(indexed.hunkId, expectedId)
@@ -666,10 +671,10 @@ class ReviewPreparationServiceTest {
         ),
       )
     val failure =
-      assertFailsWith<ReviewHunkEvidenceLocatorUnreadableError> {
+      assertFailsWith<SkillBillRuntimeException> {
         storePrepare(listOf(hunk), payload, storePath)
-      }
-    assertEquals(storePath, failure.storePath)
+      }.also { assertEquals(ReviewContextFailureCode.HUNK_EVIDENCE_LOCATOR_UNREADABLE, it.code) }
+    assertTrue("store_path '$storePath'" in failure.message.orEmpty())
     assertTrue(failure.message.orEmpty().contains("review_hunk_evidence_locator_unreadable"))
   }
 

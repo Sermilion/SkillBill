@@ -1,7 +1,16 @@
 package skillbill.infrastructure.skills.scaffold
 
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.SkillAlreadyExistsError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ScaffoldFailureCode
 import skillbill.infrastructure.skills.externalplatformpack.FileExternalPlatformPackSourceConfigStore
 import skillbill.infrastructure.skills.install.scaffold.performScaffoldInstall
 import skillbill.infrastructure.skills.scaffold.adapters.FileSystemScaffoldRepoValidation
@@ -18,14 +27,6 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.scaffoldWithAdap
 import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestRenderRequest
 import skillbill.scaffold.policy.platformpack.renderPlatformPackManifest
 import skillbill.testsupport.SkillClassFixtures
-import java.nio.file.Files
-import java.nio.file.LinkOption
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class ScaffoldExternalPlatformPackTest {
   @Test
@@ -70,13 +71,13 @@ class ScaffoldExternalPlatformPackTest {
       val destination = Path.of(System.getProperty("user.home")).resolve("packs/acme")
       Files.createDirectories(destination)
       Files.writeString(destination.resolve("keep.txt"), "user-bytes")
-      assertFailsWith<SkillAlreadyExistsError> {
+      assertFailsWith<SkillBillRuntimeException> {
         scaffoldExternal(
           payload(repo, destination.toString(), "create"),
           dryRun = false,
           seams(validate = { _, _ -> }),
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.SKILL_ALREADY_EXISTS, it.code) }
       assertEquals("user-bytes", Files.readString(destination.resolve("keep.txt")))
       assertFalse(Files.exists(configPath(), LinkOption.NOFOLLOW_LINKS))
     }

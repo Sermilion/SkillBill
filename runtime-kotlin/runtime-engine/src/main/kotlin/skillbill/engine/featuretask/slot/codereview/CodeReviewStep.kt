@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.codereview
 
+import kotlin.coroutines.cancellation.CancellationException
 import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelCodeReviewRunOutcome
@@ -20,8 +21,7 @@ import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
-import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
@@ -32,7 +32,6 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewPassSequence
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import kotlin.coroutines.cancellation.CancellationException
 
 internal class CodeReviewStep(
   private val runner: PhaseRunner,
@@ -406,9 +405,9 @@ private fun launchFailure(error: Throwable): ReviewPassLaunch.Failed? {
   val message = error.message.orEmpty()
   return when {
     error is CancellationException -> null
-    error is UnreadableSpecIntentProjectionError ->
+    error is SkillBillRuntimeException && error.code == ReviewContextFailureCode.UNREADABLE_SPEC_INTENT ->
       ReviewPassLaunch.Failed("Runtime-owned review could not read the spec intent projection: $message")
-    error is InvalidReviewContextSchemaError ->
+    error is SkillBillRuntimeException && error.code == ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA ->
       ReviewPassLaunch.Failed("Runtime-owned review produced an invalid review-context envelope: $message")
     error is SkillBillRuntimeException && error.code == RuntimeOwnedPersistenceFailureCode.FACT_UNAVAILABLE ->
       ReviewPassLaunch.Failed(

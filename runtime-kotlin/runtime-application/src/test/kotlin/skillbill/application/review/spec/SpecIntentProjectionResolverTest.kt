@@ -1,5 +1,13 @@
 package skillbill.application.review.spec
 
+import java.nio.file.Files
+import java.nio.file.Path
+import java.security.MessageDigest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.branchName
@@ -13,7 +21,8 @@ import skillbill.application.review.parallel.planning.criteriaReferences
 import skillbill.application.reviewevidence.ResolvedCommitSequence
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.application.testDecompositionManifestValidator
-import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -35,14 +44,6 @@ import skillbill.workflow.decomposition.model.DecompositionManifestRepairOperati
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationFormat
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationResult
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationSourceLocation
-import java.nio.file.Files
-import java.nio.file.Path
-import java.security.MessageDigest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertTrue
 
 class SpecIntentProjectionResolverTest {
   @Test
@@ -244,7 +245,7 @@ class SpecIntentProjectionResolverTest {
     val repo = tempRepo()
     val missing = repo.resolve("missing-spec.md")
     val error =
-      assertFailsWith<UnreadableSpecIntentProjectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         resolver().resolve(
           SpecIntentProjectionResolveRequest(
             repoRoot = repo.toFileLocation(),
@@ -252,9 +253,9 @@ class SpecIntentProjectionResolverTest {
             branchName = "feat/SKILL-191-runtime",
           ),
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.UNREADABLE_SPEC_INTENT, it.code) }
     assertTrue("spec_intent_projection" in error.message.orEmpty())
-    assertTrue(missing.toString() in error.specPath)
+    assertTrue(missing.toString() in error.message.orEmpty())
   }
 
   @Test

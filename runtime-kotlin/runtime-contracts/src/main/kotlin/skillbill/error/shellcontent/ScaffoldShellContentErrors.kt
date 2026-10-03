@@ -1,53 +1,46 @@
 package skillbill.error.shellcontent
 
+import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 
-open class ScaffoldError(
-  message: String,
-  cause: Throwable? = null,
-) : SkillBillRuntimeException(message, cause)
+enum class ScaffoldFailureCode : RuntimeFailureCode {
+  SCAFFOLD_FAILURE,
+  PAYLOAD_VERSION_MISMATCH,
+  INVALID_PAYLOAD,
+  RETIRED_KIND,
+  UNKNOWN_SKILL_KIND,
+  UNKNOWN_PRE_SHELL_FAMILY,
+  SKILL_ALREADY_EXISTS,
+}
 
-class ScaffoldPayloadVersionMismatchError(
-  message: String,
-  cause: Throwable? = null,
-) : ScaffoldError(message, cause)
+fun scaffoldFailure(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(ScaffoldFailureCode.SCAFFOLD_FAILURE, message, cause)
 
-class InvalidScaffoldPayloadError(
+fun scaffoldPayloadVersionMismatchError(
   message: String,
   cause: Throwable? = null,
-) : ScaffoldError(message, cause)
+): SkillBillRuntimeException = SkillBillRuntimeException(ScaffoldFailureCode.PAYLOAD_VERSION_MISMATCH, message, cause)
 
-class RetiredScaffoldKindError(
-  message: String,
-  cause: Throwable? = null,
-) : ScaffoldError(message, cause)
+fun invalidScaffoldPayloadError(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(ScaffoldFailureCode.INVALID_PAYLOAD, message, cause)
 
-class UnknownSkillKindError(
-  message: String,
-  cause: Throwable? = null,
-) : ScaffoldError(message, cause)
+fun retiredScaffoldKindError(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(ScaffoldFailureCode.RETIRED_KIND, message, cause)
 
-class UnknownPreShellFamilyError(
-  message: String,
-  cause: Throwable? = null,
-) : ScaffoldError(message, cause)
+fun unknownSkillKindError(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(ScaffoldFailureCode.UNKNOWN_SKILL_KIND, message, cause)
 
-class MissingPlatformPackError(
-  message: String,
-  cause: Throwable? = null,
-) : ScaffoldError(message, cause)
+fun unknownPreShellFamilyError(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(ScaffoldFailureCode.UNKNOWN_PRE_SHELL_FAMILY, message, cause)
 
-class MissingSupportingFileTargetError(
-  message: String,
-  cause: Throwable? = null,
-) : ScaffoldError(message, cause)
+fun missingPlatformPackError(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(ScaffoldFailureCode.SCAFFOLD_FAILURE, message, cause)
 
-class SkillAlreadyExistsError(
-  message: String,
-  cause: Throwable? = null,
-) : ScaffoldError(message, cause)
+fun missingSupportingFileTargetError(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(ScaffoldFailureCode.SCAFFOLD_FAILURE, message, cause)
 
-class ScaffoldRollbackError(
-  message: String,
-  cause: Throwable? = null,
-) : ScaffoldError(message, cause)
+fun skillAlreadyExistsError(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(ScaffoldFailureCode.SKILL_ALREADY_EXISTS, message, cause)
+
+fun scaffoldRollbackError(message: String, cause: Throwable? = null): SkillBillRuntimeException =
+  SkillBillRuntimeException(ScaffoldFailureCode.SCAFFOLD_FAILURE, message, cause)

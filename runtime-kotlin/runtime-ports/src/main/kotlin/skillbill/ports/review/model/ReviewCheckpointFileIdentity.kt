@@ -1,12 +1,12 @@
 package skillbill.ports.review.model
 
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.shellcontent.invalidReviewContextSchemaError
 
 sealed interface ReviewCheckpointFileIdentity {
   data class Regular(val digest: String) : ReviewCheckpointFileIdentity {
     init {
       if (!digest.matches(Regex("[a-f0-9]{40}|[a-f0-9]{64}"))) {
-        throw InvalidReviewContextSchemaError("review-source", "Checkpoint file identity is invalid.")
+        throw invalidReviewContextSchemaError("review-source", "Checkpoint file identity is invalid.")
       }
     }
   }

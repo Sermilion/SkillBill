@@ -1,3 +1,15 @@
+## [2026-10-03] SKILL-399 scaffold and review-context failure codes
+Areas: runtime-contracts/error/shellcontent/scaffold, runtime-domain/scaffold/review, runtime-application/scaffold/review, runtime-engine/featuretask, runtime-ports/review, runtime-infra/skills/contracts/workflow, runtime-cli, runtime-core architecture baseline, runtime-mcp and runtime-infra/sqlite tests
+- Replaced ten Scaffold and ten ReviewContext exception classes with owner failure-code enums and message functions. Producers across the affected modules now construct coded SkillBillRuntimeException failures.
+- Review schema extraction, launch handling and aggregation branch on exact codes. Install staging still rethrows skill-content identity mismatches before converting other staging failures into issues.
+- Followed narrow code-based handling with rethrowUnless. ReviewContextFailureCode joins shell-content classification; ScaffoldFailureCode remains outside it.
+- Reusable: ScaffoldFailureCode, ReviewContextFailureCode and message functions preserve producer context, message text and causes across modules.
+- Converted existing exception assertions to exact code assertions and removed the twenty owned custom-throwable baseline rows.
+- Compatibility: scaffold stdout, stderr and exit code remain unchanged. Deleted exception types have no aliases; converted diagnostic class labels use failureCodeLabel.
+- Limit: this entry covers subtask 2 only. Legacy transition support remains while other subclasses or codeless callers exist; persisted contracts and payloads do not change.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-03] SKILL-399 manifest and skill-staging failure codes
 Areas: runtime-contracts/error/shellcontent, runtime-domain/install/review/scaffold, runtime-engine/featuretask, runtime-infra/skills/contracts/launcher/workflow, runtime-cli, runtime-application tests, runtime-core architecture baseline
 - Replaced eight Manifest and twelve SkillStaging exception classes with owner failure-code enums and message functions. Producers now construct coded SkillBillRuntimeException failures.

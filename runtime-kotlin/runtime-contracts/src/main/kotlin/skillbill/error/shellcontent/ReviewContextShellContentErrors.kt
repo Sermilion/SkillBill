@@ -1,100 +1,118 @@
 package skillbill.error.shellcontent
 
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.RuntimeFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 
-class InvalidSkillContentIdentityError(
-  val sourceLabel: String,
-  val reason: String,
+enum class ReviewContextFailureCode : RuntimeFailureCode {
+  INVALID_SKILL_CONTENT_IDENTITY,
+  SKILL_CONTENT_IDENTITY_MISMATCH,
+  REVIEW_CONTEXT_SCHEMA,
+  LEARNING_RULE_TEXT_TOO_LONG,
+  LEARNING_TITLE_TOO_LONG,
+  HUNK_EVIDENCE_LOCATOR_MISSING,
+  HUNK_EVIDENCE_LOCATOR_UNREADABLE,
+  HUNK_EVIDENCE_INTEGRITY,
+  UNREADABLE_SPEC_INTENT,
+  REVIEW_AGGREGATION_INTEGRITY,
+}
+
+fun invalidSkillContentIdentityError(
+  sourceLabel: String,
+  reason: String,
   cause: Throwable? = null,
-) : ShellContentContractException(
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    ReviewContextFailureCode.INVALID_SKILL_CONTENT_IDENTITY,
     "Skill content identity '${sourceLabel.ifBlank { "<unknown>" }}' is invalid: $reason",
     cause,
   )
 
-class SkillContentIdentityMismatchError(
-  val suppliedIdentity: String,
-  val installedIdentity: String,
-) : ShellContentContractException(
+fun skillContentIdentityMismatchError(
+  suppliedIdentity: String,
+  installedIdentity: String,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    ReviewContextFailureCode.SKILL_CONTENT_IDENTITY_MISMATCH,
     "Skill content identity mismatch: supplied source '$suppliedIdentity'; " +
       "installed source '$installedIdentity'.",
   )
 
-class InvalidReviewContextSchemaError(
-  val sourceLabel: String,
-  val reason: String,
-  val definitionName: String? = null,
+fun invalidReviewContextSchemaError(
+  sourceLabel: String,
+  reason: String,
+  definitionName: String? = null,
   cause: Throwable? = null,
-) : ShellContentContractException(
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA,
     "Review context '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation" +
       definitionName?.takeIf { it.isNotBlank() }?.let { " for definition '$it'" }.orEmpty() +
       ": $reason",
     cause,
   )
 
-private const val REVIEW_HUNK_EVIDENCE_LOCATOR_MISSING: String = "review_hunk_evidence_locator_missing"
-
-private const val REVIEW_HUNK_EVIDENCE_LOCATOR_UNREADABLE: String = "review_hunk_evidence_locator_unreadable"
-
 const val REVIEW_HUNK_EVIDENCE_INTEGRITY: String = "review_hunk_evidence_integrity"
 
-private const val REVIEW_LEARNING_RULE_TEXT_TOO_LONG: String = "review_learning_rule_text_too_long"
-
-class ReviewLearningRuleTextTooLongError(
-  val learningId: String,
-  val ruleTextLength: Int,
-  val maxChars: Int,
-) : ShellContentContractException(
-    "$REVIEW_LEARNING_RULE_TEXT_TOO_LONG: learning '$learningId' rule text is $ruleTextLength characters, " +
+fun reviewLearningRuleTextTooLongError(
+  learningId: String,
+  ruleTextLength: Int,
+  maxChars: Int,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    ReviewContextFailureCode.LEARNING_RULE_TEXT_TOO_LONG,
+    "review_learning_rule_text_too_long: learning '$learningId' rule text is $ruleTextLength characters, " +
       "over the bounded projection limit of $maxChars; refusing to truncate.",
   )
 
-private const val REVIEW_LEARNING_TITLE_TOO_LONG: String = "review_learning_title_too_long"
-
-class ReviewLearningTitleTooLongError(
-  val learningId: String,
-  val titleLength: Int,
-  val maxChars: Int,
-) : ShellContentContractException(
-    "$REVIEW_LEARNING_TITLE_TOO_LONG: learning '$learningId' title is $titleLength characters, " +
+fun reviewLearningTitleTooLongError(
+  learningId: String,
+  titleLength: Int,
+  maxChars: Int,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    ReviewContextFailureCode.LEARNING_TITLE_TOO_LONG,
+    "review_learning_title_too_long: learning '$learningId' title is $titleLength characters, " +
       "over the bounded projection limit of $maxChars; refusing to truncate.",
   )
 
-class ReviewHunkEvidenceLocatorMissingError(
-  val storePath: String,
-) : ShellContentContractException(
-    "$REVIEW_HUNK_EVIDENCE_LOCATOR_MISSING: store_path '$storePath' is missing; refusing to compose or launch.",
+fun reviewHunkEvidenceLocatorMissingError(storePath: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    ReviewContextFailureCode.HUNK_EVIDENCE_LOCATOR_MISSING,
+    "review_hunk_evidence_locator_missing: store_path '$storePath' is missing; refusing to compose or launch.",
   )
 
-class ReviewHunkEvidenceLocatorUnreadableError(
-  val storePath: String,
-  val reason: String,
-) : ShellContentContractException(
-    "$REVIEW_HUNK_EVIDENCE_LOCATOR_UNREADABLE: store_path '$storePath' is unreadable ($reason); " +
+fun reviewHunkEvidenceLocatorUnreadableError(storePath: String, reason: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    ReviewContextFailureCode.HUNK_EVIDENCE_LOCATOR_UNREADABLE,
+    "review_hunk_evidence_locator_unreadable: store_path '$storePath' is unreadable ($reason); " +
       "refusing to compose or launch.",
   )
 
-class ReviewHunkEvidenceIntegrityError(
-  val storePath: String,
-  val expectedDigest: String,
-  val observedDigest: String,
-) : ShellContentContractException(
+fun reviewHunkEvidenceIntegrityError(
+  storePath: String,
+  expectedDigest: String,
+  observedDigest: String,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    ReviewContextFailureCode.HUNK_EVIDENCE_INTEGRITY,
     "$REVIEW_HUNK_EVIDENCE_INTEGRITY: store_path '$storePath' body digest '$observedDigest' does not match " +
       "locator digest '$expectedDigest'; refusing to compose or launch.",
   )
 
-class UnreadableSpecIntentProjectionError(
-  val specPath: String,
-  val reason: String,
+fun unreadableSpecIntentProjectionError(
+  specPath: String,
+  reason: String,
   cause: Throwable? = null,
-) : ShellContentContractException(
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    ReviewContextFailureCode.UNREADABLE_SPEC_INTENT,
     "Projection 'spec_intent_projection' could not be read from '${specPath.ifBlank { "<unknown>" }}': $reason",
     cause,
   )
 
-class ReviewAggregationIntegrityError(
-  val reason: String,
-  val lanes: List<String> = emptyList(),
-) : ShellContentContractException(
+fun reviewAggregationIntegrityError(reason: String, lanes: List<String> = emptyList()): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    ReviewContextFailureCode.REVIEW_AGGREGATION_INTEGRITY,
     "Delegated review aggregation rejected the lane results: $reason" +
       lanes.takeIf { it.isNotEmpty() }?.let { " (${it.sorted().joinToString(", ")})" }.orEmpty(),
   )

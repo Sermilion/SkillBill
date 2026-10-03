@@ -1,5 +1,7 @@
 package skillbill.application.review.spec
 
+import java.io.IOException
+import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.branchName
 import skillbill.application.decomposition.parentSpecPath
@@ -7,7 +9,7 @@ import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
-import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
+import skillbill.error.shellcontent.unreadableSpecIntentProjectionError
 import skillbill.model.toPath
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
@@ -20,8 +22,6 @@ import skillbill.review.context.model.execution.SpecIntentSurroundingContext
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationResult
 import skillbill.workflow.decomposition.model.DecompositionSubtask
-import java.io.IOException
-import java.nio.file.Path
 
 @Inject
 class SpecIntentProjectionResolver(
@@ -38,7 +38,7 @@ class SpecIntentProjectionResolver(
       ) {
         is SpecIntentSourceRead.Read -> SpecIntentResolution.Resolved(read.value)
         is SpecIntentSourceRead.Unavailable ->
-          throw UnreadableSpecIntentProjectionError(read.specPath, read.reason, read.cause)
+          throw unreadableSpecIntentProjectionError(read.specPath, read.reason, read.cause)
       }
     }
     val issueKey = TRACKER_STYLE_ISSUE_KEY.find(request.branchName)?.value?.uppercase()

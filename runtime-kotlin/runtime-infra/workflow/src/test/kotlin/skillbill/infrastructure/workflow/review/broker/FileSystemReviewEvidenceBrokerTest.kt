@@ -1,6 +1,14 @@
 package skillbill.infrastructure.workflow.review.broker
 
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.ports.review.model.ReviewEvidenceBatchRequest
 import skillbill.ports.review.model.ReviewEvidenceBrokerBinding
 import skillbill.ports.review.model.ReviewEvidenceRequest
@@ -16,13 +24,6 @@ import skillbill.review.context.model.hunk.ReviewChangedHunk
 import skillbill.review.context.model.hunk.ReviewDependencyAllowlist
 import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import skillbill.review.context.model.hunk.ReviewRevision
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class FileSystemReviewEvidenceBrokerTest {
   @Test fun `an unchanged assigned target read twice is served again and charged once`() {
@@ -294,15 +295,15 @@ class FileSystemReviewEvidenceBrokerTest {
     Files.writeString(root.resolve("A.kt"), "newer working-tree content")
 
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         broker.readBatch(
           ReviewEvidenceBatchRequest.of(
             ReviewEvidenceRequest("security", "A.kt", expansion.reachabilityReason, expansion),
           ),
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
 
-    assertTrue(failure.reason.contains("changed after the immutable launch checkpoint"))
+    assertTrue("changed after the immutable launch checkpoint" in failure.message.orEmpty())
     assertEquals(0, broker.accounting().evidenceBytes)
   }
 

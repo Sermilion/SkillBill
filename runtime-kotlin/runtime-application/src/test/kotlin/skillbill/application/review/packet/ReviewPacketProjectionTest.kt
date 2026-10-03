@@ -1,8 +1,14 @@
 package skillbill.application.review.packet
 
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.REVIEW_CONTEXT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.bundle.ReviewLaneBundle
 import skillbill.review.context.model.bundle.ReviewLaneBundleEntry
@@ -29,11 +35,6 @@ import skillbill.review.context.model.launch.ReviewSpecialistSummary
 import skillbill.review.context.model.packet.ReviewContextPacket
 import skillbill.review.context.model.packet.ReviewPacketConsumerContract
 import skillbill.review.model.ReviewLaneReviewDisposition
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNotEquals
-import kotlin.test.assertTrue
 
 class ReviewPacketProjectionTest {
   private fun includedDecision(
@@ -181,9 +182,9 @@ class ReviewPacketProjectionTest {
   }
 
   @Test fun `expansion records require a reachability reason`() {
-    assertFailsWith<InvalidReviewContextSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewExpansionRecord("exp-1", "d".repeat(64), "src/C.kt", " ", true, 0)
-    }
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `rule excerpts are bounded and digested`() {

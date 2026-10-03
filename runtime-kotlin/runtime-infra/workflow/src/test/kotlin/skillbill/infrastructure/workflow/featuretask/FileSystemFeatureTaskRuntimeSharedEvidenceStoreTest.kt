@@ -1,11 +1,5 @@
 package skillbill.infrastructure.workflow.featuretask
 
-import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
-import skillbill.error.shellcontent.ReviewHunkEvidenceLocatorMissingError
-import skillbill.error.shellcontent.ReviewHunkEvidenceLocatorUnreadableError
-import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceLocatorReadRequest
-import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceRequest
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -17,6 +11,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
+import skillbill.error.shellcontent.ReviewContextFailureCode
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceLocatorReadRequest
+import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceRequest
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 
 class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
   private val repoRoot: Path = createTempDirectory("shared-evidence-store")
@@ -209,15 +209,15 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
   @Test
   fun `compose-time locator read of a missing store path fails closed without deriving`() {
     val error =
-      assertFailsWith<ReviewHunkEvidenceLocatorMissingError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.readDiffPayload(
           FeatureTaskRuntimeSharedEvidenceLocatorReadRequest(
             repoRoot,
             ".skill-bill/run-evidence/wf-1/fp-absent",
           ),
         )
-      }
-    assertEquals(".skill-bill/run-evidence/wf-1/fp-absent", error.storePath)
+      }.also { assertEquals(ReviewContextFailureCode.HUNK_EVIDENCE_LOCATOR_MISSING, it.code) }
+    assertTrue("store_path '.skill-bill/run-evidence/wf-1/fp-absent'" in error.message.orEmpty())
   }
 
   @Test
@@ -228,12 +228,12 @@ class FileSystemFeatureTaskRuntimeSharedEvidenceStoreTest {
         .resolve(FileSystemFeatureTaskRuntimeSharedEvidenceStore.PAYLOAD_FILE_NAME)
     Files.delete(payload)
     val error =
-      assertFailsWith<ReviewHunkEvidenceLocatorUnreadableError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.readDiffPayload(
           FeatureTaskRuntimeSharedEvidenceLocatorReadRequest(repoRoot, resolution.storePath!!),
         )
-      }
-    assertEquals(resolution.storePath, error.storePath)
+      }.also { assertEquals(ReviewContextFailureCode.HUNK_EVIDENCE_LOCATOR_UNREADABLE, it.code) }
+    assertTrue("store_path '${resolution.storePath}'" in error.message.orEmpty())
   }
 
   private fun request(fingerprint: String) =

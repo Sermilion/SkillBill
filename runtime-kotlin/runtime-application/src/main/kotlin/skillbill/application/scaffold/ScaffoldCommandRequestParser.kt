@@ -3,9 +3,9 @@ package skillbill.application.scaffold
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.scaffold.wire.requireString
 import skillbill.contracts.scaffold.wire.requireStringOrDefault
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
-import skillbill.error.shellcontent.ScaffoldPayloadVersionMismatchError
-import skillbill.error.shellcontent.UnknownSkillKindError
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
+import skillbill.error.shellcontent.scaffoldPayloadVersionMismatchError
+import skillbill.error.shellcontent.unknownSkillKindError
 import skillbill.scaffold.model.command.ACTIVE_SCAFFOLD_COMMAND_KINDS
 import skillbill.scaffold.model.command.RoutingSignalsInput
 import skillbill.scaffold.model.command.SCAFFOLD_COMMAND_KIND_ADD_ON
@@ -25,14 +25,14 @@ internal fun parseScaffoldCommandRequest(payload: Map<String, Any?>): ScaffoldCo
     SCAFFOLD_COMMAND_KIND_PLATFORM_PACK -> parsePlatformPack(payload, version, repoRoot)
     SCAFFOLD_COMMAND_KIND_ADD_ON -> parseAddOn(payload, version, repoRoot)
     SCAFFOLD_COMMAND_KIND_AGENT_ADDON -> parseAgentAddon(payload, version, repoRoot)
-    else -> throw UnknownSkillKindError("Scaffold payload declares unsupported kind '$kind'.")
+    else -> throw unknownSkillKindError("Scaffold payload declares unsupported kind '$kind'.")
   }
 }
 
 private fun validateVersionAndKind(payload: Map<String, Any?>): Pair<String, String> {
   val version = requireString(payload, "scaffold_payload_version")
   if (version != SCAFFOLD_COMMAND_PAYLOAD_VERSION) {
-    throw ScaffoldPayloadVersionMismatchError(
+    throw scaffoldPayloadVersionMismatchError(
       "Scaffold payload declares 'scaffold_payload_version' '$version' " +
         "but the scaffolder expects '$SCAFFOLD_COMMAND_PAYLOAD_VERSION'.",
     )
@@ -42,7 +42,7 @@ private fun validateVersionAndKind(payload: Map<String, Any?>): Pair<String, Str
     rejectRetiredPartialScaffoldCommandKind(kind)
   }
   if (kind !in ACTIVE_SCAFFOLD_COMMAND_KINDS) {
-    throw UnknownSkillKindError(
+    throw unknownSkillKindError(
       "Scaffold payload declares unsupported kind '$kind'. Supported kinds: $ACTIVE_SCAFFOLD_COMMAND_KINDS.",
     )
   }
@@ -99,7 +99,7 @@ private fun rejectLegacyPlatformPackSelector(
   field: String,
 ) {
   if (!payload.containsKey(field)) return
-  throw InvalidScaffoldPayloadError(
+  throw invalidScaffoldPayloadError(
     "Scaffold payload field '$field' is no longer supported for kind 'platform-pack'. " +
       "Create the full platform pack, then remove unwanted focus areas through governed removal paths.",
   )
@@ -113,7 +113,7 @@ private fun parseRoutingSignalsInput(routing: Any?): RoutingSignalsInput? =
         strong = parseRoutingSignalList(routing, "strong", "routing_signals.strong"),
         tieBreakers = parseRoutingSignalList(routing, "tie_breakers", "routing_signals.tie_breakers"),
       )
-    else -> throw InvalidScaffoldPayloadError(
+    else -> throw invalidScaffoldPayloadError(
       "Scaffold payload field 'routing_signals' must be an object when provided.",
     )
   }

@@ -1,6 +1,6 @@
 package skillbill.scaffold.policy
 
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
 
 fun requireStringList(
   value: Any?,
@@ -19,7 +19,7 @@ fun requireStringList(
 private fun failNonBlankString(fieldName: String): Nothing =
   failInvalidScaffoldPayload("Scaffold payload field '$fieldName' must contain only non-empty strings.")
 
-private fun failInvalidScaffoldPayload(message: String): Nothing = throw InvalidScaffoldPayloadError(message)
+private fun failInvalidScaffoldPayload(message: String): Nothing = throw invalidScaffoldPayloadError(message)
 
 internal fun requireStringInPayloadMap(
   map: Map<*, *>,
@@ -28,9 +28,9 @@ internal fun requireStringInPayloadMap(
 ): String {
   val value =
     map[key] as? String
-      ?: throw InvalidScaffoldPayloadError("Scaffold payload field '$fieldLabel' must be a non-empty string.")
+      ?: throw invalidScaffoldPayloadError("Scaffold payload field '$fieldLabel' must be a non-empty string.")
   if (value.isBlank()) {
-    throw InvalidScaffoldPayloadError("Scaffold payload field '$fieldLabel' must be a non-empty string.")
+    throw invalidScaffoldPayloadError("Scaffold payload field '$fieldLabel' must be a non-empty string.")
   }
   return value
 }

@@ -1,5 +1,6 @@
 package skillbill.application.review.parallel.planning
 
+import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.branchName
 import skillbill.application.review.learnings.ReviewLearningsResolver
@@ -20,7 +21,7 @@ import skillbill.application.reviewevidence.SharedReviewEvidenceRecord
 import skillbill.application.reviewevidence.SharedReviewEvidenceResolution
 import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
-import skillbill.error.shellcontent.ReviewHunkEvidenceLocatorMissingError
+import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
@@ -42,7 +43,6 @@ import skillbill.review.context.model.execution.toCodeReviewExecutionMode
 import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.scaffold.model.PlatformManifest
-import java.nio.file.Path
 
 @Inject
 class ParallelCodeReviewRunnerPlanning(
@@ -196,7 +196,7 @@ class ParallelCodeReviewRunnerPlanning(
       sharedEvidenceLocatorReader != null &&
       args.evidenceStorePath.isNullOrBlank()
     ) {
-      throw ReviewHunkEvidenceLocatorMissingError(args.evidenceStorePath.orEmpty())
+      throw reviewHunkEvidenceLocatorMissingError(args.evidenceStorePath.orEmpty())
     }
     val plannedRubrics =
       rubricPlanning.resolvePlannedRubrics(

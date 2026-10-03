@@ -8,6 +8,8 @@ import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.choice
 import com.github.ajalt.clikt.parameters.types.long
+import java.nio.file.Path
+import kotlin.time.Duration.Companion.minutes
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
@@ -31,12 +33,10 @@ import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
-import skillbill.error.shellcontent.ReviewAggregationIntegrityError
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.workflow.model.goalreview.toReviewAccountingBoundedJson
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
-import java.nio.file.Path
-import kotlin.time.Duration.Companion.minutes
 
 @Inject
 class CodeReviewCommand(
@@ -260,11 +260,13 @@ private fun runPhaseReview(
   try {
     entry.run(request)
   } catch (error: SkillBillRuntimeException) {
-    error.rethrowUnless(error.isShellContentContractFailure())
-    usageError(error)
-  } catch (error: ReviewAggregationIntegrityError) {
-    state.completeText(error.message.orEmpty(), emptyMap(), exitCode = 1)
-    null
+    if (error.code == ReviewContextFailureCode.REVIEW_AGGREGATION_INTEGRITY) {
+      state.completeText(error.message.orEmpty(), emptyMap(), exitCode = 1)
+      null
+    } else {
+      error.rethrowUnless(error.isShellContentContractFailure())
+      usageError(error)
+    }
   }
 
 private fun writePhaseReviewResult(
