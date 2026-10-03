@@ -260,8 +260,11 @@ standalone `skills_dir` path.
 ### Worked example: the single listed skill
 
 The catalog has one listed skill, `skill-bill`. Its full-run form calls the goal
-runtime directly with tracker references resolved through the connected tracker,
-raw requirements, or an existing spec key or path. The runtime prepares a missing
+runtime directly with raw requirements, an existing spec key or path, or a
+tracker reference. The dispatcher searches local specs including ignored files
+and checks repository-matched persisted workflows before fetching a new tracker
+reference through its connected tracker. Existing work resumes without replacing
+its requirements. The runtime prepares a missing
 spec and parent workflow before durable planning; the dispatcher never invokes
 `skill-bill phase plan` on its own.
 Standalone phases and operations are operator tools and require an explicit

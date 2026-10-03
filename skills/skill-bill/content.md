@@ -121,9 +121,32 @@ Stop without running any CLI command when:
 
 ## Issue resolution
 
-For a tracker link or issue key, first check whether it names an existing local
-spec. Reuse an existing spec without fetching replacement requirements. Otherwise
-fetch the exact referenced issue through its connected tracker. This applies to
+For a tracker link or issue key, check local specs and persisted workflow state
+before contacting the tracker. Search `.feature-specs/` in the current repository,
+including ignored and untracked files. Use
+`rg --files --hidden --no-ignore .feature-specs` or inspect the directory directly.
+Match the issue key and read the matching `spec.md`. A filename search that
+honors ignore rules does not prove that a spec is absent. If several bundles match, ask for the intended spec path.
+
+For a full run, also read the local workflow database through
+`skill-bill work status --repo-root <repo-root> --format json`. Match both the
+issue key and repository identity. If the snapshot selects a different issue or
+reports no matching work, use `skill-bill work list --format json` and correlate
+matching workflow IDs with the current repository's spec and decomposition
+manifest. Do not resume work from another repository just because its issue key
+matches. A database inspection error is not evidence that no workflow exists;
+report it rather than falling through to a tracker lookup.
+
+When a readable local spec or matching persisted goal exists, launch the full
+runtime with the existing spec path or original issue reference. Let the runtime
+resume its durable state. Do not fetch replacement requirements, create another
+workflow, or edit database rows. If the persisted workflow references a missing
+spec, launch with the issue reference so the runtime can report its recovery
+requirements. An explicit `phase:plan` reuses a readable local spec but does not
+resume a goal or inspect workflow state.
+
+Only when neither a local spec nor a matching persisted workflow exists, fetch
+the exact referenced issue through its connected tracker. This applies to
 Linear, Jira, and any other connected tracker; do not hard-code a provider. A
 URL slug or issue key alone does not supply requirements. Raw requirements and
 readable local specs need no tracker lookup.
@@ -146,9 +169,9 @@ acceptance criteria, constraints, affected areas, and non-goals in the intake.
 Do not require an issue key for raw text or create a tracker issue. The runtime
 assigns a local workflow identity when the intake has no issue key.
 
-An existing spec selects or resumes its goal. New requirements start preparation
-and durable planning inside the full runtime. A missing spec is normal for new
-work; never route it to an individual phase or report it as a launch prerequisite.
+An existing spec or matching persisted goal selects or resumes its goal.
+New requirements start preparation and durable planning inside the full runtime.
+A missing spec is normal for new work; never route it to an individual phase or report it as a launch prerequisite.
 Do not run `goal preflight` or assemble the workflow in this session. Launch the
 full runtime once with the resolved intake.
 
