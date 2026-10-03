@@ -166,6 +166,25 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
             FeatureTaskRuntimeContinuationKind.AUDIT_NON_SHRINKING_ROUND
         }
 
+    override val missingBaselineRounds: Int
+      get() =
+        remediation.recorder.loadPhaseLedger(request.workflowId).orEmpty().count { entry ->
+          entry.phaseId == acceptedRun.phaseId &&
+            FeatureTaskRuntimeContinuationKind.fromLedgerDetail(entry.blockedReason) ==
+            FeatureTaskRuntimeContinuationKind.AUDIT_MISSING_BASELINE
+        }
+
+    override fun recordMissingBaselineRound(capture: ValidatedOutputCapture) {
+      check(capture.run === acceptedRun)
+      remediation.observability.continuation(
+        acceptedRun.phaseId,
+        acceptedRun.resolvedAgent.resolvedAgentId,
+        capture.iteration,
+        missingBaselineRounds + 1,
+        FeatureTaskRuntimeContinuationKind.AUDIT_MISSING_BASELINE,
+      )
+    }
+
     override fun recordNonShrinkingRound(capture: ValidatedOutputCapture) {
       check(capture.run === acceptedRun)
       remediation.observability.continuation(

@@ -79,7 +79,10 @@ reconciles completed edits, and executes the remaining planned changes. Repair
 continuations reuse the saved plan. Each new audit round with open findings
 produces a new repair plan. A satisfied audit skips both repair steps. Audit,
 repair planning, and repair do not run builds or tests. Existing audit retry and
-non-shrinking limits still apply.
+non-shrinking limits still apply. If the comparison baseline is missing after
+repair, the completed audit becomes a fresh baseline and restarts repair planning.
+The second missing-baseline event in the workflow blocks. The phase ledger retains
+this count across process restarts and operator resumes.
 
 Existing workflows with the exact acceptance-audit revision 1 or 2 composition
 can resume through a checked mapping to revision 3. The runtime retains their

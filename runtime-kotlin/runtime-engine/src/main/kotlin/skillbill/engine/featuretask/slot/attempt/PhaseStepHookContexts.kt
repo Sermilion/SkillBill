@@ -47,6 +47,10 @@ internal interface PhaseAuditOutputContext : PhaseStepOutputContext {
   /** Recorded audit rounds whose remaining list did not shrink after repair. */
   val nonShrinkingRounds: Int
 
+  val missingBaselineRounds: Int
+
+  fun recordMissingBaselineRound(capture: ValidatedOutputCapture)
+
   /** Records that the accepted audit round in [capture] did not shrink its remaining list. */
   fun recordNonShrinkingRound(capture: ValidatedOutputCapture)
 

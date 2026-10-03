@@ -3,6 +3,10 @@ package skillbill.engine.featuretask.slot.audit
 internal sealed interface AcceptanceAuditProgressOutcome {
   data object Advance : AcceptanceAuditProgressOutcome
 
+  data object RestartBaseline : AcceptanceAuditProgressOutcome
+
+  data object MissingBaselineLimitReached : AcceptanceAuditProgressOutcome
+
   data object NonShrinking : AcceptanceAuditProgressOutcome
 
   data class Rejected(val reason: String) : AcceptanceAuditProgressOutcome
@@ -15,10 +19,14 @@ internal data class AcceptanceAuditProgressInput(
   val repaired: Boolean,
   val operatorReopened: Boolean,
   val nonShrinkingRounds: Int,
+  val missingBaselineRounds: Int = 0,
 )
 
 internal object AcceptanceAuditProgress {
   const val MAX_NON_SHRINKING_ROUNDS: Int = 2
+  const val MAX_MISSING_BASELINE_EVENTS: Int = 2
+  const val MISSING_BASELINE_LIMIT_REASON: String =
+    "Audit comparison baseline is missing after repair for the second time; automatic restart limit reached."
 
   fun declaresComplete(
     criteria: List<String>,
@@ -50,7 +58,9 @@ internal object AcceptanceAuditProgress {
     return when (result) {
       AcceptanceAuditProgressOutcome.Advance,
       AcceptanceAuditProgressOutcome.NonShrinking,
+      AcceptanceAuditProgressOutcome.RestartBaseline,
       -> null
+      AcceptanceAuditProgressOutcome.MissingBaselineLimitReached -> MISSING_BASELINE_LIMIT_REASON
       is AcceptanceAuditProgressOutcome.Rejected -> result.reason
     }
   }
@@ -71,16 +81,16 @@ internal object AcceptanceAuditProgress {
     current: AcceptanceAuditRemainingCriteria.Known,
     input: AcceptanceAuditProgressInput,
   ): AcceptanceAuditProgressOutcome {
+    val priorText = input.priorText
+    if (priorText == null) {
+      return when {
+        !input.repaired -> AcceptanceAuditProgressOutcome.Advance
+        input.missingBaselineRounds < MAX_MISSING_BASELINE_EVENTS - 1 ->
+          AcceptanceAuditProgressOutcome.RestartBaseline
+        else -> AcceptanceAuditProgressOutcome.MissingBaselineLimitReached
+      }
+    }
     if (input.operatorReopened) return AcceptanceAuditProgressOutcome.Advance
-    val priorText =
-      input.priorText
-        ?: return if (input.repaired) {
-          AcceptanceAuditProgressOutcome.Rejected(
-            "Audit comparison baseline is missing after repair; refusing another automatic repair.",
-          )
-        } else {
-          AcceptanceAuditProgressOutcome.Advance
-        }
     return when (val prior = AcceptanceAuditRemainingCriteriaParser.parse(priorText, catalog)) {
       is AcceptanceAuditRemainingCriteria.Unusable ->
         AcceptanceAuditProgressOutcome.Rejected("Audit comparison baseline is unusable: ${prior.reason}")

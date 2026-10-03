@@ -74,10 +74,23 @@ internal object AcceptanceAuditRound : PhaseStepHooks {
           repaired = repaired,
           operatorReopened = context.operatorReopened,
           nonShrinkingRounds = context.nonShrinkingRounds,
+          missingBaselineRounds = context.missingBaselineRounds,
         ),
       )
     return when (outcome) {
       AcceptanceAuditProgressOutcome.Advance -> null
+      AcceptanceAuditProgressOutcome.RestartBaseline -> {
+        if ((outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() == WorkflowStepStatus.COMPLETED) {
+          context.recordMissingBaselineRound(capture)
+        }
+        null
+      }
+      AcceptanceAuditProgressOutcome.MissingBaselineLimitReached -> {
+        if ((outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() == WorkflowStepStatus.COMPLETED) {
+          context.recordMissingBaselineRound(capture)
+        }
+        AcceptanceAuditProgress.MISSING_BASELINE_LIMIT_REASON
+      }
       AcceptanceAuditProgressOutcome.NonShrinking -> {
         if ((outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() == WorkflowStepStatus.COMPLETED) {
           context.recordNonShrinkingRound(capture)

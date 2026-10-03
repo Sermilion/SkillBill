@@ -7,6 +7,21 @@ import kotlin.test.assertTrue
 
 class AcceptanceAuditProgressParsingTest {
   @Test
+  fun `operator resume cannot bypass the second missing baseline event`() {
+    val input =
+      AcceptanceAuditProgressInput(
+        criteria = CRITERIA,
+        text = "AC-001: missing",
+        priorText = null,
+        repaired = true,
+        operatorReopened = true,
+        nonShrinkingRounds = 0,
+        missingBaselineRounds = 1,
+      )
+    assertEquals(AcceptanceAuditProgressOutcome.MissingBaselineLimitReached, AcceptanceAuditProgress.outcome(input))
+  }
+
+  @Test
   fun `aliases deduplicate and explanation references do not invent open criteria`() {
     val catalog = assertIs<AcceptanceAuditCatalog.Known>(AcceptanceAuditCatalog.create(CRITERIA))
     val reports =

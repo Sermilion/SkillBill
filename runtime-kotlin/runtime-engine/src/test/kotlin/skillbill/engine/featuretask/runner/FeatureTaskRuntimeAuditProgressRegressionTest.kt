@@ -2,6 +2,9 @@ package skillbill.engine.featuretask.runner
 
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
+import skillbill.engine.featuretask.phase.record.openTestWorkflow
+import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -123,6 +126,67 @@ class FeatureTaskRuntimeAuditProgressRegressionTest {
   @Test
   fun `recreated repair cannot reset a missing audit baseline`() {
     assertRecreatedComparison(missingBaseline = true)
+  }
+
+  @Test
+  fun `missing baseline restarts repair once and its second loss blocks after recreation`() {
+    var audits = 0
+    var recreated = false
+    val launcher =
+      RuntimeRecordingLauncher { request ->
+        val phase = phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))
+        val output =
+          facts(if (phase == "audit") auditRemainingAcOutput("AC-001: missing") else defaultPhaseOutput(request))
+        if (phase == "audit") audits += 1
+        if (!recreated && phase == "audit" && audits > 1) {
+          (output as AgentRunLaunchFacts).copy(termination = AgentRunTermination.Exited(1))
+        } else {
+          output
+        }
+      }
+    val config = RuntimeHarnessConfig(acceptanceCriteria = CRITERIA, launcher = launcher)
+    val first = runnerHarness(config)
+    first.recorder.openTestWorkflow(WORKFLOW_ID, SESSION_ID)
+    first.recorder.recordPhaseState(
+      FeatureTaskRuntimePhaseStateRequest(
+        workflowId = WORKFLOW_ID,
+        phaseId = "audit_implement_fix",
+        status = "completed",
+        attemptCount = 1,
+        resolvedAgentId = INVOKED_AGENT,
+        finished = true,
+        outputArtifact = validJsonOutput("audit_implement_fix"),
+      ),
+    )
+    val interrupted = assertIs<FeatureTaskRuntimeRunReport.Blocked>(first.runner.run(first.request()))
+    assertEquals("audit", interrupted.lastIncompletePhase)
+    val auditsBeforeResume = audits
+    assertTrue("audit_plan_fix" in first.launchedPromptPhaseOrder())
+    assertEquals(
+      1,
+      first.recorder.loadPhaseLedger(WORKFLOW_ID).orEmpty().count {
+        it.blockedReason == "continuation:audit_missing_baseline"
+      },
+    )
+
+    val key = DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.label()
+    val artifacts = first.repository.taskRuntimeArtifacts(WORKFLOW_ID).toMutableMap()
+    val records = requireNotNull(JsonCodec.anyToStringAnyMap(artifacts[key])).toMutableMap()
+    records.remove("audit")
+    artifacts[key] = records
+    first.repository.replaceTaskRuntimeArtifacts(WORKFLOW_ID, artifacts)
+    recreated = true
+    val restarted = runnerHarness(config, repository = first.repository)
+    val blocked = assertIs<FeatureTaskRuntimeRunReport.Blocked>(restarted.runner.run(restarted.request()))
+    assertEquals("audit", blocked.lastIncompletePhase)
+    assertContains(blocked.blockedReason, "second time")
+    assertEquals(auditsBeforeResume + 1, audits)
+    assertEquals(
+      2,
+      restarted.recorder.loadPhaseLedger(WORKFLOW_ID).orEmpty().count {
+        it.blockedReason == "continuation:audit_missing_baseline"
+      },
+    )
   }
 
   private fun assertRecreatedComparison(missingBaseline: Boolean) {
