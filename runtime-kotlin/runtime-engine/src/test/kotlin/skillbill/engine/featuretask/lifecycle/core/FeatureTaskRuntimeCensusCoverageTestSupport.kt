@@ -1,6 +1,6 @@
 package skillbill.engine.featuretask.lifecycle.core
 
-import skillbill.engine.disposition
+import skillbill.engine.featuretask.runner.disposition
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairOutcome
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding

@@ -1,6 +1,8 @@
 package skillbill.engine.featuretask.phaserun
 
 import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResultAssembly
+import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.application.telemetry.model.QualityCheckFinishedRequest
 import skillbill.application.telemetry.model.QualityCheckStartedRequest
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
@@ -8,7 +10,7 @@ import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.model.review.ReviewTarget
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSession
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
@@ -16,7 +18,7 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepB
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategy
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
+import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLoop
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
@@ -37,6 +39,7 @@ import skillbill.ports.review.model.ParallelReviewLaneRunResult
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
+import java.time.Clock
 import java.time.Instant
 
 internal class InMemoryPhaseRunState(
@@ -46,8 +49,14 @@ internal class InMemoryPhaseRunState(
   override val records: PhaseRunRecords,
   override val telemetry: FeatureTaskRuntimeRunObservability,
   val invocationId: String,
-  private val entry: PhaseRunEntry,
+  private val strategies: PhaseStrategyLookup,
+  private val reviewResultAssembly: ParallelCodeReviewRunnerResultAssembly,
+  private val lifecycleTelemetry: LifecycleTelemetryService,
+  override val clock: Clock,
+  private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) : PhaseRunState {
+  override val diagnostics get() = telemetry.diagnostics
+
   override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
     FeatureTaskRuntimeRunLoopStepBindingCoordinator()
   override val session: FeatureTaskRuntimeRunLoopSession =
@@ -59,9 +68,6 @@ internal class InMemoryPhaseRunState(
   override val transitions: FeatureTaskRuntimeTransitionDeclaration
     get() = progress.transitions
   override val attemptLoop: PhaseStepAttempts = PhaseAttemptLoop
-  override val collaborators: PhaseAttemptCollaborators =
-    PhaseAttemptCollaborators(entry.clock, entry.diagnostics)
-  override val phaseGates: FeatureTaskRuntimePhaseGates = entry.phaseGates
 
   var reviewResult: ParallelCodeReviewResult? = null
     private set
@@ -70,11 +76,11 @@ internal class InMemoryPhaseRunState(
 
   private var reviewTarget: ReviewTarget? = null
 
-  override fun strategyFor(stepId: String): PhaseStrategy = entry.strategies.strategyFor(stepId, executionPlan)
+  override fun strategyFor(stepId: String): PhaseStrategy = strategies.strategyFor(stepId, executionPlan)
 
-  override fun runnerFor(stepId: String) = entry.strategies.runnerFor(stepId, executionPlan)
+  override fun runnerFor(stepId: String) = strategies.runnerFor(stepId, executionPlan)
 
-  override fun selectedOwnerOf(stepId: String): PhaseStrategy? = entry.strategies.selectedOwnerOf(stepId, executionPlan)
+  override fun selectedOwnerOf(stepId: String): PhaseStrategy? = strategies.selectedOwnerOf(stepId, executionPlan)
 
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 
@@ -83,8 +89,23 @@ internal class InMemoryPhaseRunState(
     require(run.phaseId in executionPlan.selectedStepIds)
     require(strategyFor(run.phaseId).policyFor(run.phaseId) == run.policy)
     stepBinding.beginStepBinding(run)
+    val runLoopContext = runLoopEntry.context(facts, this)
     return FeatureTaskRuntimeRunLoopStepBindings.create(
-      phaseAttemptLaunchCollaborationScope(PhaseAttemptRunHost(run.request, this, run.phaseId, this)),
+      phaseAttemptLaunchCollaborationScope(
+        PhaseAttemptRunHost(
+          run,
+          this,
+          runLoopContext.gitOperations,
+          runLoopContext.decompositionPlanner,
+          runLoopContext.findingVerificationBoundaryMemory,
+          runLoopContext.specIntentProjectionResolver,
+          runLoopContext.lifecycleTelemetry,
+          runLoopContext.sharedEvidenceResolver,
+          runLoopContext.diffResolver,
+          runLoopContext.qualityGateCycles,
+          runLoopContext.readinessGateCoordinator,
+        ),
+      ),
       run,
     )
   }
@@ -116,7 +137,7 @@ internal class InMemoryPhaseRunState(
     laneTelemetryRecorded: Boolean,
   ) {
     reviewResult = result
-    val assembly = entry.reviewResultAssembly
+    val assembly = reviewResultAssembly
     assembly.persistReviewPassClaims(reviewRunId, result.mergeResult.findings, persistEmpty = true)
     if (laneTelemetryRecorded) return
     runCatching {
@@ -129,7 +150,7 @@ internal class InMemoryPhaseRunState(
       )
     }.onFailure { error ->
       RuntimeDiagnosticsBestEffortWarning.record(
-        entry.diagnostics,
+        diagnostics,
         "Phase run $invocationId could not report review run $reviewRunId.",
         error,
       )
@@ -151,7 +172,7 @@ internal class InMemoryPhaseRunState(
   ) {
     val sessionId =
       emitQualityCheck(stepName) {
-        entry.lifecycleTelemetry
+        lifecycleTelemetry
           .qualityCheckStarted(
             QualityCheckStartedRequest(
               routedSkill = QUALITY_CHECK_ROUTED_SKILL,
@@ -164,7 +185,7 @@ internal class InMemoryPhaseRunState(
       }
     qualityCheck =
       sessionId?.takeIf(String::isNotBlank)?.let { id ->
-        QualityCheckSession(id, entry.clock.instant(), detectedStack, initialFailureCount)
+        QualityCheckSession(id, clock.instant(), detectedStack, initialFailureCount)
       }
   }
 
@@ -178,7 +199,7 @@ internal class InMemoryPhaseRunState(
     qualityCheck = null
     val result = if (finalFailureCount == 0) QualityCheckResult.PASS else QualityCheckResult.FAIL
     emitQualityCheck(stepName) {
-      entry.lifecycleTelemetry.qualityCheckFinished(
+      lifecycleTelemetry.qualityCheckFinished(
         QualityCheckFinishedRequest(
           finalFailureCount = finalFailureCount,
           iterations = iterations,
@@ -191,7 +212,7 @@ internal class InMemoryPhaseRunState(
           detectedStack = started.detectedStack,
           scopeType = QUALITY_CHECK_SCOPE_TYPE,
           initialFailureCount = started.initialFailureCount,
-          durationSeconds = (entry.clock.instant().epochSecond - started.startedAt.epochSecond).toInt(),
+          durationSeconds = (clock.instant().epochSecond - started.startedAt.epochSecond).toInt(),
         ),
       )
     }
@@ -204,7 +225,7 @@ internal class InMemoryPhaseRunState(
     runCatching(emit)
       .onFailure { error ->
         RuntimeDiagnosticsBestEffortWarning.record(
-          entry.diagnostics,
+          diagnostics,
           "Phase run $invocationId could not report quality check of '$stepName'.",
           error,
         )

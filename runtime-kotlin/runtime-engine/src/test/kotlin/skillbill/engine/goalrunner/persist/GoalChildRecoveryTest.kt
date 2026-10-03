@@ -4,6 +4,9 @@ import skillbill.engine.goalrunner.execution.support.recoverySafeAction
 import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.planning.recovery.goalPlanningHardResetRemedy
 import skillbill.engine.recovery.DurableChildRecoveryClass
+import skillbill.engine.recovery.classifyDurableChild
+import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
+import skillbill.engine.recovery.scopedChildRecoveryCommand
 import skillbill.workflow.model.DecompositionStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -1,3 +1,43 @@
+## [2026-10-03] SKILL-390 subtask 3: engine test packages mirror main
+Areas: runtime-engine featuretask lifecycle, phaserun, prepare, review, runloop, runner, slot and persistence; goalrunner execution, planning, status, repair and persistence; operation tests and engine testFixtures; runtime-core architecture inventory, test composition and build configuration; runtime-cli test inputs
+- Moved 91 engine test files into their production owners' packages. The tree retains 252 Kotlin files across 58 packages, with no forbidden declarations or path/package mismatches.
+- Updated both PrincipleEnforcementInventory pins to the runner test-support path without changing exemption meaning.
+- Repaired shared harness construction, imports and stale calls across existing engine tests and fixtures. Existing assertions remain; repeated recovery-case setup uses a helper.
+- reusable: RuntimeQualityGateCycles owns pack-gate execution, agent validation and gate resolution with four private dependencies. Resolution uses admitted effective inputs when present; pack execution retains receipt validation.
+- reusable: GateCapturedEvidence groups captured settlement facts, and GoalPlanningSpecAdmission groups launched-spec and sibling facts. Neither value carries services.
+- Run-loop context takes request and run state; PhaseRunState retains strategy ownership. GoalRunnerStatusService uses eight private dependencies, with operation owners wired directly.
+- Core registry tests use an internal test component and kspTest generation. CLI tests use statusProjectionPhaseStrategies for execution-plan access instead of exposed runner collaborators.
+- Limits: no intended persisted-byte, CLI or MCP behavior change. Slotbaseline resource contents and lookup paths remain unchanged; no tests or orphan-package guard were added, and guards and baselines remain intact.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
+## [2026-10-03] SKILL-390 subtask 2: feature-task-run collaborators and engine inject guard
+Areas: runtime-engine featuretask runner, lifecycle, phaserun, prepare, review, runloop and slot attempt/state; goalrunner planning and persistence; runtime-core architecture guards; engine test support
+
+- Deleted the phase-gate locator, both gate-boundary bags and the probe-writer bag. State, attempt and run-loop consumers now name the collaborator they use.
+- Runner execution, prepared execution, launch outcomes and durable launch use private injected owners. Durable run state no longer takes the runner; run state and session remain per-run.
+- Deleted runner receiver functions, both attempt aliases, the host-returning attemptRunHost accessor and the run-loop binding forwarders. Named injected constructors keep their collaborators private.
+- Goal outcome persistence takes one wire-artifact validator; its test fixture selects validation by artifact kind. Unread validation-runner wiring is gone.
+- reusable: The existing inject-constructor property scanner now covers runtime-engine through PrincipleEnforcementInventory.RUNTIME_ENGINE_MAIN with an empty baseline.
+- Existing runner, phase-run, persistence, gate and slot-baseline factories use the new constructors. No new module, architecture-test class, suppression or baseline row was added.
+- Limits: test-package moves remain subtask 3. This refactor introduces no intended persisted-byte, CLI or MCP contract change.
+
+Feature flag: N/A
+Acceptance criteria: 8/8 implemented in current source; execution proof remains owned by build and validate.
+
+## [2026-10-02] SKILL-390 subtask 1: goal-runner collaborators and engine repairs
+Areas: runtime-engine goalrunner execution, launch, planning, status, reset, repair and recovery; featuretask branch policy and persistence; work status; runtime-domain workflow identity; runtime-core architecture guards; engine test factories
+
+- Goal execution, launch preparation, finalization and status projection now keep direct private collaborators; iteration and selected-subtask owners receive the run's pending state through calls.
+- Planning production, settlement and attempt control own their operations in existing packages. The execution and planning boundary bags and status data-source bags are deleted.
+- reusable: `FeatureTaskExecutionIdentityPolicy.canonicalIssueKey` supplies non-validating canonicalization to engine callers; validated normalization delegates to the same function.
+- Planning duration and the 200 ms tick-progress cache use the injected Clock. Rollback refreshes the cache; a new regression asserts 137 ms in empty-provider-turn rejection evidence.
+- Recovery consumers call the recovery owner directly. Featuretask owns protected-branch policy and child-repair evidence vocabulary; reverse imports are removed and the engine cycle baseline is empty.
+- Removed the inert producer-side visibility check and its fixtures; consumer-side inbound API pins and live run-loop guards remain.
+- Limitation: AC-001's remaining featuretask boundary bags and the engine inject-property guard belong to subtask 2; test-package moves belong to subtask 3. This refactor introduces no intended wire or recovery-text change.
+Feature flag: N/A
+Acceptance criteria: 10/11 implemented; AC-001 remains partial until subtask 2 removes the featuretask bags.
+
 ## [2026-10-01] SKILL-392 subtask 2 — Engine owns the feature-task run entry
 Areas: runtime-kotlin/runtime-engine/skillbill/engine/featuretask/{runner,lifecycle/execution,model/core}, runtime-kotlin/runtime-cli/{featuretask,goal/core,model}, runtime-kotlin/runtime-ports/system, runtime-kotlin/runtime-infra/host, runtime-kotlin/runtime-core/repoTest/architecture
 - New engine `FeatureTaskRuntimeRunEntry` opens the workflow, resolves inputs, derives the execution identity and runs inside the worker coordinator's lease wrapper; the CLI now only builds a `FeatureTaskRuntimeRunInput` and calls it.

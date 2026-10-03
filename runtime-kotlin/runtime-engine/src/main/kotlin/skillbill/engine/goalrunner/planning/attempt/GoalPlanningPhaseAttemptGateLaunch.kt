@@ -9,20 +9,21 @@ import skillbill.engine.featuretask.slot.PhaseStepFacts
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.state.PhasePlanningBriefingBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.planning.context.GoalPlanningContextPromptFormatter
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProduceAttemptArgs
 import skillbill.engine.goalrunner.planning.outcome.planningProgressMessage
-import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffAssemblyRequest
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 
-internal fun DefaultGoalPlanningSweep.launchPlanningAttempt(
+internal fun launchPlanningAttempt(
   phase: GoalPlanningPhaseContext,
   prompt: String,
+  manifestStore: GoalRunnerManifestStore,
 ): AgentRunLaunchOutcome {
   val shared = phase.shared
   val request = phase.request
@@ -56,7 +57,7 @@ internal fun DefaultGoalPlanningSweep.launchPlanningAttempt(
   return requireNotNull(output.launchOutcome) { output.launchFailure?.reason.orEmpty() }
 }
 
-internal inline fun DefaultGoalPlanningSweep.composePlanningPrompt(
+internal inline fun composePlanningPrompt(
   args: GoalPlanningProduceAttemptArgs,
   onRejected: (RequiredPhaseWrite.Rejected) -> Nothing,
 ): String {

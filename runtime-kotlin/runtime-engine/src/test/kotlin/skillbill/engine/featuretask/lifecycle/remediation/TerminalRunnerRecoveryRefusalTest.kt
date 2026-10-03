@@ -1,12 +1,12 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
-import skillbill.engine.ExecutionPlanAdmissionFixture
 import skillbill.engine.RecordingWorkflowGitOperations
-import skillbill.engine.WORKFLOW_ID
-import skillbill.engine.defaultPhaseAwareLauncher
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.engine.goalContinuationHarness
-import skillbill.engine.validJsonOutput
+import skillbill.engine.featuretask.runner.WORKFLOW_ID
+import skillbill.engine.featuretask.runner.defaultPhaseAwareLauncher
+import skillbill.engine.featuretask.runner.goalContinuationHarness
+import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition

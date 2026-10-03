@@ -105,7 +105,8 @@ object PhaseLaunchPreparation {
                   RepositoryCheckpointResolutionArgs(
                     recorder = recorder,
                     goalContinuationRecorder = goalContinuationRecorder,
-                    phaseGates = phaseGates,
+                    gitOperations = gitOperations,
+                    qualityGateCycles = qualityGateCycles,
                     coupledRunTransitions = coupledRunTransitions,
                     session = session,
                     run = run,
@@ -271,7 +272,8 @@ object PhaseLaunchPreparation {
       recorder.validateHandoffDeclarations(handoff.projectionDeclarations)
       val sharedEvidence =
         FeatureTaskRuntimeRunLoopOutputVerification.resolveSharedReviewEvidence(
-          phaseGates,
+          sharedEvidenceResolver,
+          diffResolver,
           run,
           repositoryCheckpoint,
         )
@@ -375,7 +377,8 @@ object PhaseLaunchPreparation {
         RepositoryCheckpointResolutionArgs(
           recorder,
           goalContinuationRecorder,
-          phaseGates,
+          gitOperations,
+          qualityGateCycles,
           coupledRunTransitions,
           session,
           run,

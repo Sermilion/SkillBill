@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.runloop.state
 import skillbill.engine.featuretask.runloop.core.ReconstructFixLoopBudgetBasesArgs
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.isRetiredAuditGapLoop
-import skillbill.engine.goalrunner.status.completed
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.model.workflowStepStatus

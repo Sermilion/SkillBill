@@ -1,3 +1,51 @@
+## [2026-10-03] Preserve slotbaseline resource paths during test relocation
+Context: SKILL-390 subtask 3 moves slotbaseline capture tests into featuretask.runner while requiring resource and persisted-byte preservation.
+Decision: Keep the featuretask/slotbaseline resource tree, module-root resolution and absolute audit-resource lookups unchanged while relocating capture tests and repairing their setup.
+Reason: Existing resource lookups are independent of the Kotlin package. The relocation does not require moving goldens or regenerating captures, and existing byte-comparison coverage must retain its original evidence.
+
+## [2026-10-03] Keep composition access in test source sets
+Context: SKILL-390's private collaborator ownership leaves existing engine, CLI and core tests with stale construction and strategy-access calls.
+Decision: Repair engine test factories, use the CLI's status-projection strategy seam, and give core registry tests an internal generated test component with kspTest wiring.
+Reason: Restoring production collaborator accessors would undo the ownership repair. Existing behavioral and registry assertions cover these changes, so the plan calls for setup repairs without constructor-shape or setup-mirroring tests.
+
+## [2026-10-03] Keep gate rewiring behind accepted-step bindings
+Context: SKILL-390 subtask 2 removes the phase-gate locator across durable, in-memory and goal-planning execution while preserving strategy authority.
+Decision: Give runtime consumers the specific typed collaborator they use, keep gate cycles and finalization with their existing owners, and retain accepted-step bindings for strategies.
+Reason: Unpacking the locator must not give ordinary strategies Git writers or unrelated mutation authority. Renaming a bag or forwarding its host would preserve indirect access; replacing the run-loop framework would exceed this change's scope.
+Alternatives considered: Replacement dependency factories, broad context conversions and per-run DI subcomponents would retain indirect ownership or add another execution framework.
+
+## [2026-10-03] Extend the existing inject guard with an empty engine baseline
+Context: The injected-constructor property guard covered application and CLI but missed exposed engine collaborators.
+Decision: Add the engine scan beside the existing methods, use the inventory-owned main-source root and an empty baseline, and retain the scanner's rejection fixture.
+Reason: The same scanner can reject engine property exposure without another architecture-test class or an exemption. Forwarding getters and receiver locators still require source review because this guard does not detect them.
+
+## [2026-10-02] Private behavior owners with call-scoped pending state
+Context: SKILL-390 found goalrunner dependency bags and receiver helpers that read exposed collaborators. Unpacking the per-run assembler alone would exceed the constructor limit.
+Decision: Inject private behavior owners in existing packages, move finalization and projection operations into their classes, and pass one run-owned pending state through execution calls.
+Reason: Each owner takes the dependencies its operations read. Moving dependencies into another bag would preserve the locator problem; storing pending state in injected owners would lose its per-run lifetime.
+Alternatives considered: Unpacking all dependencies into the planning sweep or adding a replacement collaborator factory would retain oversized or indirect ownership.
+
+## [2026-10-02] Canonicalize issue keys without adding validation
+Context: Engine issue-key sites repeated trimming and uppercasing, while domain normalization also validates the original input.
+Decision: Use `FeatureTaskExecutionIdentityPolicy.canonicalIssueKey` for non-validating derivation and have validated normalization delegate after its existing checks.
+Reason: Replacing derivation with validated normalization would reject inputs that existing callers accepted and could change nullable behavior. The contracts-level normalizer has a different rule and remains separate.
+
+## [2026-10-02] Inject timing and refresh tick progress after rollback
+Context: Planning duration and tick-progress memoization read ambient monotonic time. SKILL-390 requires both to use the existing injected Clock.
+Decision: Measure planning launch between two reads of that Clock and refresh the 200 ms tick cache when its time moves backwards.
+Reason: A start read after launch or a different clock records zero for the planned 137 ms rejection-evidence regression. Rollback must not keep a cached result indefinitely; cached absence still follows the same memo interval.
+
+## [2026-10-02] Featuretask owns branch policy and child-repair vocabulary
+Context: Featuretask imported goalrunner for protected-branch policy and the persisted child-repair evidence key, creating the remaining engine package cycle.
+Decision: Put both declarations in existing featuretask owner files, remove unused reverse imports, and empty the engine cycle baseline.
+Reason: Goalrunner already depends on featuretask execution. Keeping shared execution policy in goalrunner preserves the reverse edge; moving ownership breaks it without changing branch matching or persisted artifact bytes.
+
+## [2026-10-02] Remove the inert producer-side visibility census
+Context: The engine visibility rule scanned only explicit public declarations, while its fixtures exercised default-public scanning that production never enabled.
+Decision: Delete that rule, its two fixtures and its helper. Retain consumer-side inbound API pins and the carrier class's live run-loop guards.
+Reason: The existing rule could not catch default-public declarations. Enabling that scan conflicts with generated runtime-core injection code that must name engine classes and constructor types; the consumer-side guard already enforces inbound imports.
+Alternatives considered: Flipping the producer scan to include default-public declarations was rejected in the SKILL-390 investigation. This replaces SKILL-378 AC-11's producer-side conclusion.
+
 ## [2026-09-29] Admission precedes parent mutation and preserves recovery evidence, SKILL-384 subtask 2
 
 Parent lease acquisition rechecks the current child link and its execution descriptor inside the lease transaction. A stale owner, changed child link, or incompatible descriptor leaves parent controls and child records unchanged. Descriptor admission compares the complete canonical plan. Ports carry validated canonical bytes; maps stay in serialization code.

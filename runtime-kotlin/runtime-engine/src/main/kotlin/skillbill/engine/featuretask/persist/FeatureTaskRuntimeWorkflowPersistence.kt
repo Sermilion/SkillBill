@@ -5,7 +5,6 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.issuekey.normalizeIssueKey
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStepWireUpdate
-import skillbill.engine.goalrunner.repair.GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanConflictError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
@@ -39,6 +38,8 @@ import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import java.security.MessageDigest
 import java.time.Duration
 import java.time.Instant
+
+const val GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY: String = "goal_child_repair_evidence"
 
 internal data class WorkflowRowAdvance(
   val currentStepId: String,

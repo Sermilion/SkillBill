@@ -160,7 +160,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     run: PhaseRun,
   ): PhaseOutcome {
     context.runState.stepBinding.authorizeCoordinatorDispatch(run)
-    val state = context.runState.step(run)
+    val state = context.acceptedStep(run)
     return try {
       context.runState.strategyFor(run.phaseId).runStep(run, state)
     } finally {
@@ -215,7 +215,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
         reentry = null,
       )
     context.runState.stepBinding.authorizeCoordinatorDispatch(run)
-    val state = context.runState.step(run)
+    val state = context.acceptedStep(run)
     return try {
       use(state)
     } finally {

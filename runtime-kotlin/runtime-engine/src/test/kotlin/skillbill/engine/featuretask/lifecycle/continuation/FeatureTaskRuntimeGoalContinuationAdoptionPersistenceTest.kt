@@ -3,10 +3,8 @@ package skillbill.engine.featuretask.lifecycle.continuation
 import skillbill.application.testHarnessClock
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.contracts.JsonCodec
-import skillbill.engine.ExecutionPlanAdmissionFixture
-import skillbill.engine.InMemoryRuntimeWorkflowRepository
-import skillbill.engine.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePreparation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
@@ -15,6 +13,8 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
 import skillbill.engine.featuretask.runloop.observability.continuation
+import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
+import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics

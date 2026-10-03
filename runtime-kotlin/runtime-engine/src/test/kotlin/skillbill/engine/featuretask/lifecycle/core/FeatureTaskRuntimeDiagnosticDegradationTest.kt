@@ -5,13 +5,13 @@ import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
-import skillbill.engine.InMemoryRuntimeWorkflowRepository
-import skillbill.engine.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProducerOutputRead
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
-import skillbill.engine.openTestWorkflow
+import skillbill.engine.featuretask.phase.record.openTestWorkflow
+import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
+import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.error.core.RejectedOutputDiagnosticFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rejectedOutputDiagnosticPersistenceMessage

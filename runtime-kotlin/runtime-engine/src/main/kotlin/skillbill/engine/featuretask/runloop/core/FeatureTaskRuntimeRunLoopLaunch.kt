@@ -2,9 +2,9 @@ package skillbill.engine.featuretask.runloop.core
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
@@ -13,10 +13,10 @@ object FeatureTaskRuntimeRunLoopLaunch {
   internal fun capturePhaseContentIdentities(
     request: FeatureTaskRuntimeRunFacts,
     coupledTransitions: FeatureTaskRuntimeRunTransitionOwner,
-    phaseGates: FeatureTaskRuntimePhaseGates,
+    gitOperations: WorkflowGitOperations,
     phaseId: String,
   ) {
-    coupledTransitions.recordPhaseContentIdentities(request, phaseGates, phaseId)
+    coupledTransitions.recordPhaseContentIdentities(request, gitOperations, phaseId)
   }
 
   internal fun launchedModelDirective(run: PhaseRun): LaunchedModelDirective {

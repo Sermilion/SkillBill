@@ -8,7 +8,6 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationC
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeImplementationObligations
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.phase.core.featureTaskRuntimeImplementationContinuationFrom
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeSharedReviewEvidenceResolver
@@ -41,8 +40,10 @@ import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptPlanAuthorization
 import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.engine.goalrunner.status.completed
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -125,7 +126,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       val sessionObservations = settlementCoupling().sessionObservations
       val resolvedFingerprint =
         repositoryFingerprint?.takeIf(String::isNotBlank)
-          ?: phaseGates.gitOperations
+          ?: gitOperations
             .repositoryFingerprint(run.request.repoRoot)
             .value
             .takeIf(String::isNotBlank)
@@ -163,7 +164,8 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
   }
 
   internal fun resolveSharedReviewEvidence(
-    phaseGates: FeatureTaskRuntimePhaseGates,
+    sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
+    diffResolver: DiffResolverPort,
     run: PhaseRun,
     checkpoint: FeatureTaskRuntimeRepositoryCheckpoint?,
   ): FeatureTaskRuntimeSharedReviewEvidenceResolved? {
@@ -173,8 +175,8 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       }
     if (!declared) return null
     return FeatureTaskRuntimeSharedReviewEvidenceResolver(
-      phaseGates.sharedEvidenceResolver,
-      phaseGates.diffResolver,
+      sharedEvidenceResolver,
+      diffResolver,
     ).resolve(run.request.repoRoot, run.request.workflowId, checkpoint, run.phaseId)
   }
 
@@ -286,7 +288,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     val goalReviewState = args.goalContinuationRecorder.reviewState(run.request.workflowId)
     val revisions =
       FeatureTaskRuntimeRunLoopOutputVerification.resolveCheckpointRevisions(
-        args.phaseGates,
+        args.gitOperations,
         run = run,
         headRevision = resolvedBranchRecord?.branch?.takeIf(String::isNotBlank) ?: "HEAD",
         baseRevision = goalReviewState?.reviewBaseSha ?: resolvedBranchRecord?.reviewBaseSha,
@@ -305,7 +307,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         revisions = revisions,
       ) ?: return null
     val fingerprint =
-      args.phaseGates.gitOperations
+      args.gitOperations
         .repositoryCheckpointFingerprint(
           run.request.repoRoot,
           revisions.base,
@@ -331,7 +333,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     val run = args.run
     val workingTreePaths =
       FeatureTaskRuntimeRunLoopOutputVerification.checkpointOwnedPaths(
-        args.phaseGates,
+        args.gitOperations,
         run,
         baselineOwnedPaths,
       ) ?: return null
@@ -339,7 +341,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       revisions.base
         ?.let { base ->
           (
-            args.phaseGates.gitOperations
+            args.gitOperations
               .runtimePhaseChangedPathsBetweenCommits(run.request.repoRoot, base, revisions.head)
               as? WorkflowGitNameListResult.Listed
           )?.names
@@ -371,18 +373,18 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
   }
 
   internal fun resolveCheckpointRevisions(
-    phaseGates: FeatureTaskRuntimePhaseGates,
+    gitOperations: WorkflowGitOperations,
     run: PhaseRun,
     headRevision: String,
     baseRevision: String?,
   ): CheckpointRevisions? {
     val immutableHead =
-      phaseGates.gitOperations
+      gitOperations
         .resolveCommit(run.request.repoRoot, headRevision)
         .takeIf { it is WorkflowGitOperationResult.Ok }
         ?.value
         ?.takeIf(String::isNotBlank)
-        ?: phaseGates.gitOperations
+        ?: gitOperations
           .headCommitSha(run.request.repoRoot)
           .takeIf { it is WorkflowGitOperationResult.Ok }
           ?.value
@@ -390,7 +392,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         ?: return null
     val immutableBase =
       baseRevision?.let { revision ->
-        phaseGates.gitOperations
+        gitOperations
           .resolveCommit(run.request.repoRoot, revision)
           .takeIf { it is WorkflowGitOperationResult.Ok }
           ?.value
@@ -402,11 +404,11 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
   }
 
   internal fun checkpointOwnedPaths(
-    phaseGates: FeatureTaskRuntimePhaseGates,
+    gitOperations: WorkflowGitOperations,
     run: PhaseRun,
     baselineOwnedPaths: List<String>,
   ): List<String>? {
-    val owned = phaseGates.gitOperations.repositoryOwnedPaths(run.request.repoRoot)
+    val owned = gitOperations.repositoryOwnedPaths(run.request.repoRoot)
     if (owned !is WorkflowGitNameListResult.Listed) return null
     val baseline = baselineOwnedPaths.toSet()
     val paths =

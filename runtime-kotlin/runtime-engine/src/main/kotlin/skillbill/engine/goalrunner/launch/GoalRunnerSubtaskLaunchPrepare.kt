@@ -5,17 +5,18 @@ import skillbill.application.decomposition.baseBranch
 import skillbill.application.workflow.persist.generateWorkflowId
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
-import skillbill.engine.goalrunner.execution.core.GoalRunnerSubtaskLaunchBoundaries
 import skillbill.engine.goalrunner.execution.core.StoppedReportArgs
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationResult
 import skillbill.engine.goalrunner.execution.support.PreparedLaunch
 import skillbill.engine.goalrunner.execution.support.RUNTIME_WORKFLOW_ID_PREFIX
 import skillbill.engine.goalrunner.execution.support.branchPlanFor
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
 import skillbill.engine.goalrunner.planning.recovery.goalPlanningChildImportConflictBlockedReason
@@ -29,6 +30,7 @@ import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaselineResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -38,6 +40,7 @@ import skillbill.workflow.decomposition.withAttemptedSubtask
 import skillbill.workflow.decomposition.withBranchSetupBlockedSubtask
 import skillbill.workflow.decomposition.withWorkflowId
 import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -48,16 +51,14 @@ import kotlin.random.Random
 
 @Inject
 class GoalRunnerSubtaskLaunchPrepare(
-  private val launchBoundaries: GoalRunnerSubtaskLaunchBoundaries,
+  private val manifestStore: GoalRunnerManifestStore,
+  private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  private val gitOperations: WorkflowGitOperations,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val clock: Clock,
   private val random: Random,
   private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
 ) {
-  private val manifestStore get() = launchBoundaries.manifestStore
-  private val outcomeStore get() = launchBoundaries.outcomeStore
-  private val gitOperations get() = launchBoundaries.gitOperations
-
   fun goalReviewBaseline(
     state: GoalRunnerManifestState,
     subtaskId: Int,
@@ -231,7 +232,7 @@ class GoalRunnerSubtaskLaunchPrepare(
             subtaskId = subtaskId,
             workflowId = assignedWorkflowId,
             goalBranch = branch,
-            normalizedIssueKey = state.manifest.issueKey.trim().uppercase(),
+            normalizedIssueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(state.manifest.issueKey),
             repositoryIdentity = repositoryEnclosingRootPort.repositoryIdentity(canonicalRepository),
             governedSpecPath = governedSpecPath,
             reviewBaseline = reviewBaseline,

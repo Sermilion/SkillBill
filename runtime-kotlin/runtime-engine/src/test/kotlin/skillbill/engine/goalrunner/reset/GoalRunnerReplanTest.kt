@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.reset
 
-import skillbill.engine.DeadProcessSupervisor
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
@@ -9,6 +8,7 @@ import skillbill.engine.goalrunner.goalTestPhaseRecorder
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerReplanRequest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
+import skillbill.engine.goalrunner.persist.DeadProcessSupervisor
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.model.GoalPlanningStatusState.NOT_STARTED
 import skillbill.goalrunner.model.GoalRunnerExecutionLease

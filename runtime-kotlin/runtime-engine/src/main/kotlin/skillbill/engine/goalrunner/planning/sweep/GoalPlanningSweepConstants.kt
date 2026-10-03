@@ -7,5 +7,4 @@ object GoalPlanningSweepConstants {
   const val PHASE_PLAN: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN
   const val SHARED_CONTEXT_FIELD = "_goal_planning_shared_context"
   const val EMPTY_PLANNING_HARVEST_RULE = "empty-planning-harvest"
-  const val NANOS_PER_MILLI = 1_000_000L
 }

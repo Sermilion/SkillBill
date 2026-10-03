@@ -5,9 +5,8 @@ import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRemediationCollaborationScope
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchCollaborationScope
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
-import skillbill.engine.featuretask.slot.attempt.runLoopBinding
 import skillbill.engine.featuretask.slot.state.PhaseFindingVerificationState
 import skillbill.engine.featuretask.slot.state.PhaseRepairReceiptState
 import skillbill.goalrunner.model.UnaddressedFinding
@@ -19,7 +18,7 @@ import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificati
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 
 internal class FeatureTaskRuntimeRunLoopFindingVerificationState(
-  private val environment: PhaseAttemptRemediationCollaborationScope,
+  private val environment: PhaseAttemptLaunchCollaborationScope,
   private val run: PhaseRun,
   private val fanOutUnitId: Int?,
   private val bindingCoordinator: FeatureTaskRuntimeRunLoopStepBindingCoordinator,
@@ -75,7 +74,7 @@ internal class FeatureTaskRuntimeRunLoopFindingVerificationState(
 
   private fun requireAcceptedWriter(kind: PhaseExecutionBindingKind) {
     bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
-    check(environment.runLoopBinding.selectedOwnerOf(run.phaseId)?.executionBindingKind(run.phaseId) == kind) {
+    check(environment.selectedOwnerOf(run.phaseId)?.executionBindingKind(run.phaseId) == kind) {
       "Finding write belongs to the accepted binding kind '$kind'."
     }
   }

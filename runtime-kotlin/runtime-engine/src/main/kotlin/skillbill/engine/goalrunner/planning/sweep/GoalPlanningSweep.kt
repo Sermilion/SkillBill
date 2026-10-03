@@ -2,18 +2,21 @@ package skillbill.engine.goalrunner.planning.sweep
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
+import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.planning.attempt.GoalPlanningPhaseAttemptGate
 import skillbill.engine.goalrunner.planning.context.GoalPlanningSharedContextPacket
-import skillbill.engine.goalrunner.planning.context.gatherSharedContext
-import skillbill.engine.goalrunner.planning.context.planningPacketFrom
+import skillbill.engine.goalrunner.planning.context.GoalPlanningSharedPreplanProduction
+import skillbill.engine.goalrunner.planning.context.GoalPlanningSharedPreplanSettlement
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
+import skillbill.engine.goalrunner.planning.outcome.GoalPlanningSubtaskPlanProduction
 import skillbill.engine.goalrunner.planning.outcome.preSweepStopped
 import skillbill.engine.goalrunner.planning.outcome.preparationStateReadReason
 import skillbill.engine.goalrunner.planning.outcome.sharedContextReason
@@ -23,9 +26,13 @@ import skillbill.engine.goalrunner.planning.state.GoalPlanningPhaseRunState
 import skillbill.engine.goalrunner.planning.state.GoalPlanningRunFacts
 import skillbill.engine.goalrunner.planning.state.GoalPlanningRunProgress
 import skillbill.engine.goalrunner.planning.state.GoalPlanningRunScope
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import java.time.Clock
 
 fun interface GoalPlanningSweep {
   fun prepare(
@@ -36,25 +43,18 @@ fun interface GoalPlanningSweep {
 
 @Inject
 class DefaultGoalPlanningSweep(
-  checkpointBoundaries: GoalPlanningSweepCheckpointBoundaries,
-  launchBoundaries: GoalPlanningSweepLaunchBoundaries,
-  val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val sharedPreplanProduction: GoalPlanningSharedPreplanProduction,
+  private val sharedPreplanSettlement: GoalPlanningSharedPreplanSettlement,
+  private val planProduction: GoalPlanningSubtaskPlanProduction,
+  private val attemptGate: GoalPlanningPhaseAttemptGate,
+  private val checkpoint: GoalPlanningPreparationCheckpoint,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+  private val phaseStrategies: PhaseStrategyLookup,
+  private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
+  private val clock: Clock,
+  private val diagnostics: RuntimeDiagnostics,
+  private val manifestFileStore: DecompositionManifestStore,
 ) : GoalPlanningSweep {
-  val checkpoint = checkpointBoundaries.checkpoint
-  val invariantsSource = checkpointBoundaries.invariantsSource
-  val manifestFileStore = checkpointBoundaries.manifestFileStore
-  val contextDiscovery = checkpointBoundaries.contextDiscovery
-  val manifestStore = launchBoundaries.manifestStore
-  val planningAttemptRecorder = launchBoundaries.planningAttemptRecorder
-  val planningRejectionRecorder = launchBoundaries.planningRejectionRecorder
-  val timingPort = launchBoundaries.timingPort
-  val burstSchedule = launchBoundaries.burstSchedule
-  val refreshLiveness = launchBoundaries.refreshLiveness
-  val phaseStrategies = launchBoundaries.phaseStrategies
-  private val runLoopEntry = launchBoundaries.runLoopEntry
-  private val clock = launchBoundaries.clock
-  private val diagnostics = launchBoundaries.diagnostics
-
   override fun prepare(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
@@ -62,7 +62,7 @@ class DefaultGoalPlanningSweep(
     val identity =
       GoalPlanningIdentity(
         state.parentWorkflowId,
-        state.manifest.issueKey.trim().uppercase(),
+        FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(state.manifest.issueKey),
         repositoryEnclosingRootPort.repositoryIdentity(request.repoRoot),
       )
     val existingShared =
@@ -70,7 +70,7 @@ class DefaultGoalPlanningSweep(
         .getOrElse { error ->
           return preSweepStopped(request, preparationStateReadReason(error, request.issueKey, 0))
         }
-    val recoveredPacket = existingShared?.let(::planningPacketFrom)
+    val recoveredPacket = existingShared?.let(sharedPreplanProduction::planningPacketFrom)
     if (existingShared != null && recoveredPacket == null) {
       return preSweepStopped(
         request,
@@ -81,7 +81,7 @@ class DefaultGoalPlanningSweep(
       )
     }
     val gathered =
-      runCatching { gatherSharedContext(this, state, request, recoveredPacket) }
+      runCatching { sharedPreplanProduction.gatherSharedContext(state, request, recoveredPacket) }
         .getOrElse { error -> return preSweepStopped(request, sharedContextReason(error)) }
     return continueAfterSharedContext(state, request, identity, existingShared, gathered)
   }
@@ -99,7 +99,12 @@ class DefaultGoalPlanningSweep(
       }
     val planning =
       GoalPlanningRunProgress(
-        this,
+        sharedPreplanSettlement,
+        planProduction,
+        attemptGate,
+        checkpoint,
+        repositoryEnclosingRootPort,
+        manifestFileStore,
         GoalPlanningRunScope(state, request, identity, existingShared, shared, activeSubtasks),
       )
     val facts = GoalPlanningRunFacts(shared, request)
@@ -119,10 +124,11 @@ class DefaultGoalPlanningSweep(
         planning = planning,
         strategies = phaseStrategies,
         executionPlan = executionPlan,
-        collaborators = PhaseAttemptCollaborators(clock, diagnostics),
+        clock = clock,
+        diagnostics = diagnostics,
         specSource = shared.specSource,
       )
-    val report = runLoopEntry.run(FeatureTaskRuntimeRunLoopContext(facts, runState, phaseStrategies))
+    val report = runLoopEntry.run(runLoopEntry.context(facts, runState))
     return when (report) {
       is FeatureTaskRuntimeRunReport.Blocked -> planning.outcome(report.blockedReason, report.lastIncompletePhase)
       is FeatureTaskRuntimeRunReport.Paused -> planning.outcome(report.pauseReason, report.pausedPhase)

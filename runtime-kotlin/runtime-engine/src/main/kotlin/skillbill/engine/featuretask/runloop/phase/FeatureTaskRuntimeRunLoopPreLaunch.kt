@@ -15,7 +15,7 @@ import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunO
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.missingUpstream
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunLoopCollaborators
+import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
 import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -23,7 +23,7 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
 
 object FeatureTaskRuntimeRunLoopPreLaunch {
   internal fun preLaunchBlock(
-    context: PhaseAttemptRunLoopCollaborators,
+    context: PhaseRunLoopAttemptCollaborators,
     run: PhaseRun,
     state: FeatureTaskRuntimeProgressSnapshotAccess,
     observability: FeatureTaskRuntimeRunObservability,
@@ -70,7 +70,7 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
   }
 
   private fun persistPreLaunchBlock(
-    context: PhaseAttemptRunLoopCollaborators,
+    context: PhaseRunLoopAttemptCollaborators,
     run: PhaseRun,
     observability: FeatureTaskRuntimeRunObservability,
     preLaunch: PreLaunchBlock,
@@ -130,7 +130,7 @@ object FeatureTaskRuntimeRunLoopPreLaunch {
       state.legacyLaunchSeamRejectionConsumedBudget(phaseId, reason)
 
   internal fun shouldRelaunchPersistedBlock(
-    context: PhaseAttemptRunLoopCollaborators,
+    context: PhaseRunLoopAttemptCollaborators,
     run: PhaseRun,
     durable: FeatureTaskRuntimePhaseRecord?,
     persistedReason: String,

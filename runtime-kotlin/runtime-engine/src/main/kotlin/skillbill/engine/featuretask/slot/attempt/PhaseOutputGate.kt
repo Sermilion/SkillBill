@@ -18,7 +18,6 @@ import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinal
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinalisationResult
 import skillbill.engine.featuretask.model.subtask.FeatureTaskRuntimeSubtaskFinalised
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.attempt.FeatureTaskRuntimeRunLoopHookViews.stepOutputContext
 import skillbill.engine.featuretask.runloop.attempt.phaseAttemptContext
 import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
@@ -46,7 +45,6 @@ import skillbill.engine.featuretask.runloop.core.RejectedOutputTargetingOverride
 import skillbill.engine.featuretask.runloop.core.SettleValidatedOutput
 import skillbill.engine.featuretask.runloop.core.SettleValidatedOutputAfterFingerprintArgs
 import skillbill.engine.featuretask.runloop.core.SettleValidatedOutputPauseArgs
-import skillbill.engine.featuretask.runloop.core.SettledOutputContext
 import skillbill.engine.featuretask.runloop.core.SubtaskCommitLedgerState
 import skillbill.engine.featuretask.runloop.core.TerminalOutputAttemptArgs
 import skillbill.engine.featuretask.runloop.core.UnownedWorktreeCommitShaArgs
@@ -80,6 +78,7 @@ import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
@@ -97,7 +96,7 @@ internal data class SettleValidatedOutputCommitArgs(
   val progress: FeatureTaskRuntimeProgressSnapshotAccess,
   val recorder: PhaseRunRecords,
   val diagnostics: RuntimeDiagnostics,
-  val phaseGates: FeatureTaskRuntimePhaseGates,
+  val gitOperations: WorkflowGitOperations,
   val goalContinuationRecorder: PhaseRunGoal,
   val session: FeatureTaskRuntimeRunSessionObservations,
   val run: PhaseRun,
@@ -111,7 +110,7 @@ internal data class FinaliseSubtaskCommitArgs(
   val progress: FeatureTaskRuntimeProgressSnapshotAccess,
   val recorder: PhaseRunRecords,
   val diagnostics: RuntimeDiagnostics,
-  val phaseGates: FeatureTaskRuntimePhaseGates,
+  val gitOperations: WorkflowGitOperations,
   val session: FeatureTaskRuntimeRunSessionObservations,
   val run: PhaseRun,
   val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
@@ -134,24 +133,7 @@ object PhaseOutputGate {
       settledRecord(args)
         ?: proseOutput(args)
         ?: return blankOutputProcessFailure(args)
-    val context = args.settlementContext
-    return settleValidatedOutput(
-      SettleValidatedOutput(
-        run = args.run,
-        iteration = args.iteration,
-        output =
-          SettledOutputContext(
-            normalizedOutput = normalized,
-            repairEvidence = null,
-            observability = context.observability,
-            fileManifest = args.fileManifest,
-            captured = args.captured,
-          ),
-        settlementContext = context,
-        boundStep = args.call.acceptedExecution,
-        stepHooks = args.stepHooks,
-      ),
-    )
+    return args.settleAcceptedOutput(normalized, args.observability)
   }
 
   private fun settledRecord(args: GateOutput): NormalizedFeatureTaskRuntimePhaseOutput? =
@@ -159,11 +141,10 @@ object PhaseOutputGate {
       PhaseSettledEnvelopeRead.None -> null
       is PhaseSettledEnvelopeRead.Found -> NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(settled.envelope)
       is PhaseSettledEnvelopeRead.Failed -> {
-        val context = args.settlementContext
         clearAndRecordPersistedEvidenceFailure(
-          context.progress,
-          context.recorder,
-          context.phaseSettlementService,
+          args.progress,
+          args.recorder,
+          args.phaseSettlementService,
           args,
           settled.error,
         )
@@ -204,18 +185,16 @@ object PhaseOutputGate {
     args: GateOutput,
     reason: String,
   ): AttemptResult {
-    val context = args.settlementContext
-    val coupling = context.settlementCoupling()
     return AttemptResult.settled(
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-        coupling.progress,
-        coupling.transitions,
-        context.recorder,
+        args.progress,
+        args.coupledRunTransitions,
+        args.recorder,
         PhaseBlockRequest(
           run = args.run,
           attemptCount = args.iteration,
           reason = reason,
-          observability = context.observability,
+          observability = args.observability,
           payload = BlockAndPersistPayload(fileManifest = args.fileManifest),
           failureDisposition = FeatureTaskRuntimeFailureDisposition.PROCESS_FAILURE,
         ),
@@ -312,7 +291,7 @@ object PhaseOutputGate {
   ): AttemptResult {
     val state = args.progress
     val recorder = args.recorder
-    val phaseGates = args.phaseGates
+    val gitOperations = args.gitOperations
     val observability = args.observability
     val outputMap = attested.envelopeWireMap()
 
@@ -350,7 +329,7 @@ object PhaseOutputGate {
           observability = observability,
         ),
         recorder,
-        phaseGates,
+        gitOperations,
         capture.fileManifest,
         hooks.fingerprintsCompletedRepository,
       )
@@ -415,13 +394,13 @@ object PhaseOutputGate {
   internal fun resolveRepositoryFingerprint(
     context: PhaseAttemptContext,
     recorder: PhaseRunRecords,
-    phaseGates: FeatureTaskRuntimePhaseGates,
+    gitOperations: WorkflowGitOperations,
     fileManifest: FeatureTaskRuntimePhaseFileManifest,
     fingerprintsCompletedRepository: Boolean,
   ): RepositoryFingerprintResolution {
     if (!fingerprintsCompletedRepository) return RepositoryFingerprintResolution(null, null)
     val request = context.run.request
-    val result = phaseGates.gitOperations.repositoryFingerprint(request.repoRoot)
+    val result = gitOperations.repositoryFingerprint(request.repoRoot)
     if (result !is WorkflowGitOperationResult.Ok) {
       val blocked =
         AttemptResult.settled(
@@ -524,7 +503,7 @@ object PhaseOutputGate {
             progress = args.progress,
             recorder = args.recorder,
             diagnostics = args.diagnostics,
-            phaseGates = args.phaseGates,
+            gitOperations = args.gitOperations,
             session = args.session,
             run = args.run,
             normalizedOutput = args.attested,
@@ -664,7 +643,7 @@ object PhaseOutputGate {
           progress = progress,
           recorder = recorder,
           diagnostics = diagnostics,
-          phaseGates = phaseGates,
+          gitOperations = gitOperations,
           goalContinuationRecorder = goalContinuationRecorder,
           session = blockingSessionForPhaseEffects,
           run = run,
@@ -773,12 +752,12 @@ object PhaseOutputGate {
     }
     val subtaskCommit = FeatureTaskRuntimeRunLoopSubtaskCommit
     val branch =
-      subtaskCommit.finalisationBranch(args.request, args.session, args.phaseGates)
+      subtaskCommit.finalisationBranch(args.request, args.session, args.gitOperations)
         ?: return subtaskCommit.unownedWorktreeCommitSha(
           UnownedWorktreeCommitShaArgs(
             args.request,
             args.diagnostics,
-            args.phaseGates,
+            args.gitOperations,
             args.run,
             args.normalizedOutput,
           ),
@@ -815,7 +794,7 @@ object PhaseOutputGate {
           progress = args.progress,
           recorder = args.recorder,
           diagnostics = args.diagnostics,
-          phaseGates = args.phaseGates,
+          gitOperations = args.gitOperations,
           phase = args.run,
           branch = branch,
           handoff = handoff,
@@ -844,9 +823,9 @@ object PhaseOutputGate {
     val state = args.progress
     val recorder = args.recorder
     val diagnostics = args.diagnostics
-    val phaseGates = args.phaseGates
+    val gitOperations = args.gitOperations
     return FeatureTaskRuntimeSubtaskFinalisation(
-      gitOperations = phaseGates.gitOperations,
+      gitOperations = gitOperations,
       repoRoot = request.repoRoot,
       record = { record -> RuntimeDiagnosticsBestEffortWarning.record(diagnostics, record) },
       recordCommit = { commitSha, stagedPaths ->
@@ -889,7 +868,7 @@ private data class FinaliseSubtaskCommitOutcomeArgs(
   val progress: FeatureTaskRuntimeProgressSnapshotAccess,
   val recorder: PhaseRunRecords,
   val diagnostics: RuntimeDiagnostics,
-  val phaseGates: FeatureTaskRuntimePhaseGates,
+  val gitOperations: WorkflowGitOperations,
   val phase: PhaseRun,
   val branch: String,
   val handoff: FeatureTaskRuntimeCommitPushHandoff,

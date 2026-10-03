@@ -11,6 +11,7 @@ import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecut
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
+import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.ports.system.HostPlatformPort
@@ -153,7 +154,7 @@ class CliRunInputsRuntimeTest {
     val component = RuntimeComponent::class.create(context.toRuntimeContext(dbPathOverride = db.toString()))
     val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
     val plan =
-      component.featureTaskRuntimeRunner.strategies.executionPlan(
+      statusProjectionPhaseStrategies().executionPlan(
         PhaseStrategySelectionFacts(SkeletonDefinition.STANDALONE, setOf(CodeReviewExecutionMode.DEFAULT)),
       )
     val descriptor =

@@ -183,7 +183,7 @@ internal class SettleValidatedOutput(
   val request get() = settlementContext.request
   val progress get() = settlementContext.progress
   val recorder get() = settlementContext.recorder
-  val phaseGates get() = settlementContext.phaseGates
+  val gitOperations get() = settlementContext.gitOperations
   val clock get() = settlementContext.clock
   val diagnostics get() = settlementContext.diagnostics
   val goalContinuationRecorder get() = settlementContext.goalContinuationRecorder

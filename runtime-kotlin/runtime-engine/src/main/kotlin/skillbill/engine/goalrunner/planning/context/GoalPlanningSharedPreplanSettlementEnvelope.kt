@@ -11,12 +11,17 @@ import skillbill.engine.goalrunner.planning.outcome.stopped
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRecoveryKind
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningIncompatibleProvenanceStopReason
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningRemedySubtaskId
-import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
+import skillbill.ports.goalrunner.planning.GoalPlanningContextDiscovery
+import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 
-internal fun DefaultGoalPlanningSweep.freshPlanningPacket(
+internal fun freshPlanningPacket(
   shared: GoalPlanningSharedContext,
   state: GoalRunnerManifestState,
+  contextDiscovery: GoalPlanningContextDiscovery,
+  manifestFileStore: DecompositionManifestStore,
+  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ): Map<String, Any?> {
   val discovered = contextDiscovery.loadPlanningContext(shared.repoRoot)
   val decomposition =

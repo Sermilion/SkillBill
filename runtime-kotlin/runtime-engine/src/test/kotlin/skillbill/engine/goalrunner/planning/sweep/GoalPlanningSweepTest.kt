@@ -7,8 +7,9 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
-import skillbill.engine.PlanningProjectionFixtures
+import skillbill.engine.featuretask.phase.briefing.PlanningProjectionFixtures
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
@@ -93,6 +94,9 @@ import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.goalobservability.GoalProgressEventKind
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneId
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -109,6 +113,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
+import java.time.Duration as JavaDuration
 
 class GoalPlanningRequiredPersistenceTest {
   @Test
@@ -1531,6 +1536,34 @@ class GoalPlanningSweepPrepareAndResumeTest {
       "an operator must not be told the schema rejected output that was never produced",
     )
   }
+
+  @Test
+  fun `empty provider turn duration uses the injected clock across launch`() {
+    val clock = AdvancingClock(Instant.parse("2026-01-01T00:00:00Z"))
+    var launches = 0
+    val recorded = mutableListOf<GoalPlanningRejectionRecord>()
+    val harness =
+      sweepHarness(
+        SweepHarnessConfig(
+          clock = clock,
+          planningRejectionRecorder = { recorded += it },
+        ),
+      ) { phase, _, _ ->
+        launches += 1
+        if (launches == 1) {
+          clock.advance(JavaDuration.ofMillis(137))
+          emptyProviderTurnOutcome()
+        } else {
+          validPhaseOutcome(phase)
+        }
+      }
+
+    assertIs<GoalPlanningSweepOutcome.PreparedAll>(
+      harness.sweep.prepare(harness.stateFor(manifest(subtaskCount = 1)), harness.request()),
+    )
+
+    assertContains(recorded.first().reason, "durationMs=137")
+  }
 }
 
 class GoalPlanningSweepRejectionTest {
@@ -2911,7 +2944,8 @@ private class SweepHarness(
 }
 
 private data class SweepHarnessConfig(
-  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+  val clock: Clock = Clock.systemUTC(),
+  val runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
   val markPreparedThrows: Boolean = false,
   val planCheckpointThrows: Boolean = false,
   val contextDiscovery: GoalPlanningContextDiscovery = fakeContextDiscovery,
@@ -2930,6 +2964,20 @@ private data class SweepHarnessConfig(
   val refreshLiveness: GoalPlanningRefreshLiveness = IDLE_GOAL_PLANNING_REFRESH_LIVENESS,
 )
 
+private class AdvancingClock(
+  private var current: Instant,
+) : Clock() {
+  override fun getZone(): ZoneId = ZoneId.of("UTC")
+
+  override fun withZone(zone: ZoneId): Clock = this
+
+  override fun instant(): Instant = current
+
+  fun advance(duration: JavaDuration) {
+    current = current.plus(duration)
+  }
+}
+
 private fun sweepFromFixtures(
   fixtures: SweepFixtures,
   launcher: SweepPlanningLauncher,
@@ -2937,6 +2985,7 @@ private fun sweepFromFixtures(
   testGoalPlanningSweepPorts(
     GoalPlanningSweepPortsParams(
       checkpoint = fixtures.checkpoint,
+      clock = Clock.systemUTC(),
       subtaskLauncher = launcher,
       invariantsSource = fixtures.invariantsSource,
       manifestFileStore = fixtures.manifestFileStore,
@@ -2998,6 +3047,7 @@ private fun sweepHarness(
     testGoalPlanningSweepPorts(
       GoalPlanningSweepPortsParams(
         checkpoint = fixtures.checkpoint,
+        clock = config.clock,
         subtaskLauncher = launcher,
         invariantsSource = fixtures.invariantsSource,
         manifestFileStore = fixtures.manifestFileStore,

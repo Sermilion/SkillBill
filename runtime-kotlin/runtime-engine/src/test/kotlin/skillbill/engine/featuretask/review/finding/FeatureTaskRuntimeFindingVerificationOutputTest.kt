@@ -1,7 +1,7 @@
 package skillbill.engine.featuretask.review.finding
 
-import skillbill.engine.disposition
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
+import skillbill.engine.featuretask.runner.disposition
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeFindingVerificationRecordError
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry

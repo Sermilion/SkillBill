@@ -14,8 +14,6 @@ import skillbill.workflow.engine.WorkflowEngine
 import java.nio.file.Path
 import java.time.Clock
 
-const val GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY: String = "goal_child_repair_evidence"
-
 @Inject
 class GoalRunnerChildRepairOperations(
   database: DatabaseSessionFactory,

@@ -1,7 +1,6 @@
 package skillbill.engine.featuretask.review.goal
 
 import skillbill.contracts.JsonCodec
-import skillbill.engine.disposition
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.continuation.reconcileRemediationBaseCoherence
 import skillbill.engine.featuretask.lifecycle.continuation.reviewState
@@ -14,6 +13,7 @@ import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassInFlight
 import skillbill.engine.featuretask.model.subtask.RemediationBaseBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationBaseCoherent
 import skillbill.engine.featuretask.runloop.observability.paused
+import skillbill.engine.featuretask.runner.disposition
 import skillbill.engine.goalrunner.status.completed
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics

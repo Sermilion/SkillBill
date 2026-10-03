@@ -15,6 +15,7 @@ import skillbill.engine.featuretask.slot.attempt.gateChangedPaths
 import skillbill.engine.featuretask.slot.attempt.gateCheckpoint
 import skillbill.engine.featuretask.slot.attempt.persistGateRequiredRunning
 import skillbill.engine.featuretask.slot.attempt.runGateAttemptOnce
+import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.PackBuildTriagePlan
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
@@ -26,6 +27,7 @@ import skillbill.engine.featuretask.validation.model.ValidationGateProgressStore
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult
 import skillbill.engine.featuretask.validation.repairSegmentOutput
+import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
@@ -39,7 +41,9 @@ private const val RULE_OR_TEST_ID_KEY = "rule_or_test_id"
 internal class PackBuildGateCycle(
   private val context: PhaseQualityGateCycleContext,
   private val call: PhaseStepCall,
-  private val commandFamily: ValidationGateCommandFamily = ValidationGateCommandFamily.BUILD,
+  private val commandFamily: ValidationGateCommandFamily,
+  private val buildCoordinator: FeatureTaskRuntimeBuildGateCoordinator,
+  private val receiptValidator: FeatureTaskRuntimeWireArtifactValidator,
 ) {
   private var stoppedAttempt: PhaseOutcome? = null
 
@@ -59,7 +63,7 @@ internal class PackBuildGateCycle(
         context.recorder.buildGateProgressStore(commandFamily),
       )
     val cycle =
-      context.phaseGates.buildGateCoordinator.execute(
+      buildCoordinator.execute(
         cycle = cycleRequest(run, iteration, checkpoint, changedPaths, reporting),
         onGateRunCount = { count ->
           gateRuns = count
@@ -133,7 +137,8 @@ internal class PackBuildGateCycle(
           admitted.effectiveInputs.packSlug
         } else {
           (
-            context.phaseGates.validationGateResolver.resolve(
+            context.qualityGateCycles.resolve(
+              run.request,
               changedPaths,
             ) as? ValidationGateResolution.Declared
           )?.packSlug
@@ -241,7 +246,7 @@ internal class PackBuildGateCycle(
             accepted.envelopeWireMap()[SharedPayloadKeys.PRODUCED_OUTPUTS],
           )?.get(ValidationEvidencePayloadKeys.BUILD_RECEIPT),
       )
-    context.phaseGates.buildReceiptValidator.validate(
+    receiptValidator.validate(
       FeatureTaskRuntimeWireArtifactKind.BUILD_RECEIPT,
       FeatureTaskRuntimeWorkflowArtifactMap.from(buildReceipt ?: emptyMap<String, Any?>()),
       run.phaseId,

@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.lifecycle.remediation.featureSizeFromArtifac
 import skillbill.engine.featuretask.model.subtask.CompletedUpstreamRepairRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowArtifactPatches
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
+import skillbill.engine.featuretask.persist.GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.goalrunner.model.GoalRunnerAppliedRepair

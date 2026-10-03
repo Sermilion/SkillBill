@@ -2,14 +2,6 @@ package skillbill.engine.featuretask.phaserun
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
-import skillbill.engine.BranchSetupTestConfig
-import skillbill.engine.REVIEW_BLOCKER_MESSAGE
-import skillbill.engine.REVIEW_FIX_BLOCKER_FINDING_ID
-import skillbill.engine.RuntimeHarnessConfig
-import skillbill.engine.RuntimeRecordingLauncher
-import skillbill.engine.committedRepoBranchSetup
-import skillbill.engine.defaultPhaseOutput
-import skillbill.engine.facts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.review.ReviewInvocation
@@ -18,10 +10,22 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDurableState
-import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
+import skillbill.engine.featuretask.runner.BranchSetupTestConfig
+import skillbill.engine.featuretask.runner.REVIEW_BLOCKER_MESSAGE
+import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
+import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
+import skillbill.engine.featuretask.runner.SlotBaselineSqlite
+import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.runner.committedRepoBranchSetup
+import skillbill.engine.featuretask.runner.defaultPhaseOutput
+import skillbill.engine.featuretask.runner.facts
+import skillbill.engine.featuretask.runner.phaseIdFromPrompt
+import skillbill.engine.featuretask.runner.satisfiedAuditLauncher
+import skillbill.engine.featuretask.runner.telemetryRunnerHarness
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStepOutput
+import skillbill.engine.featuretask.slot.REVIEW_FIX_BLOCKER_FINDING_ID
 import skillbill.engine.featuretask.slot.codereview.DELEGATED_REVIEWED_PATH
 import skillbill.engine.featuretask.slot.codereview.DELEGATED_SPECIALIST_ISSUE_KEY
 import skillbill.engine.featuretask.slot.codereview.LaneScript
@@ -30,12 +34,8 @@ import skillbill.engine.featuretask.slot.reviewStepOutput
 import skillbill.engine.featuretask.slot.scriptedReviewPhaseRunner
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseRunState
-import skillbill.engine.featuretask.slotbaseline.SlotBaselineSqlite
-import skillbill.engine.phaseIdFromPrompt
-import skillbill.engine.satisfiedAuditLauncher
-import skillbill.engine.telemetryRunnerHarness
-import skillbill.engine.validJsonOutput
-import skillbill.engine.verifyFindingsOutput
+import skillbill.engine.featuretask.slot.validJsonOutput
+import skillbill.engine.featuretask.slot.verifyFindingsOutput
 import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -185,7 +185,7 @@ class PhaseReviewRunTest {
     val durable = telemetryRunnerHarness(RuntimeHarnessConfig(launcher = satisfiedAuditLauncher()))
 
     phaseEntry.run(reviewRequest(mode = null))
-    val durableReport = durable.runner.withRunLoopEntry(loopEntry).run(durable.request)
+    val durableReport = durable.withRunLoopEntry(loopEntry).run(durable.request)
 
     assertIs<FeatureTaskRuntimeRunReport.Completed>(durableReport, durableReport.toString())
     assertEquals(2, loopEntry.runStates.size, loopEntry.runStates.toString())
@@ -247,14 +247,14 @@ class PhaseReviewRunTest {
 
   private fun inlineEntry(
     launcher: RuntimeRecordingLauncher,
-    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
     review: () -> String,
   ): PhaseRunEntry = inlineEntryOver(launcher, scriptedReviewPhaseRunner(review), runLoopEntry)
 
   private fun inlineEntryOver(
     launcher: RuntimeRecordingLauncher,
     reviewRunner: PhaseRunner,
-    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
   ): PhaseRunEntry =
     entryFor(
       RuntimeHarnessConfig(
@@ -284,13 +284,19 @@ class PhaseReviewRunTest {
 
   private fun entryFor(
     config: RuntimeHarnessConfig,
-    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+    runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
   ): PhaseRunEntry {
-    val runner =
+    val harness =
       telemetryRunnerHarness(runtimeConfig = config.copy(seedDurableWorkflow = false), databaseFactory = {
         database
-      }).runner
-    return phaseRunEntry(runner, database, clock, runLoopEntry)
+      })
+    return phaseRunEntry(
+      harness.strategies,
+      config.harnessGitOperations,
+      database,
+      clock,
+      harness.runLoopEntry.delegateTo(runLoopEntry),
+    )
   }
 
   private fun launchedPhases(launcher: RuntimeRecordingLauncher): List<String> =
@@ -329,7 +335,7 @@ class PhaseReviewRunTest {
   private fun rowsOf(value: Any?): List<Map<String, Any?>> =
     (value as List<*>).map { row -> requireNotNull(JsonCodec.anyToStringAnyMap(row)) }
 
-  private class RecordingRunLoopEntry : FeatureTaskRuntimeRunLoopEntry() {
+  private class RecordingRunLoopEntry : TestFeatureTaskRuntimeRunLoopEntry() {
     val runStates = mutableListOf<PhaseRunState>()
 
     override fun run(
@@ -372,19 +378,3 @@ class PhaseReviewRunTest {
       )
   }
 }
-
-private fun FeatureTaskRuntimeRunner.withRunLoopEntry(
-  entry: FeatureTaskRuntimeRunLoopEntry,
-): FeatureTaskRuntimeRunner =
-  FeatureTaskRuntimeRunner(
-    strategies = strategies,
-    recorder = recorder,
-    goalContinuationRecorder = goalContinuationRecorder,
-    phaseGates = phaseGates,
-    startup = startup,
-    phaseSettlementService = phaseSettlementService,
-    diagnostics = diagnostics,
-    clock = clock,
-    probeWriters = probeWriters,
-    runLoopEntry = entry,
-  )

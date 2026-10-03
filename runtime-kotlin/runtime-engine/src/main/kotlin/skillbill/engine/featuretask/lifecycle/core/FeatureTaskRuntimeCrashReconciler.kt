@@ -124,7 +124,7 @@ class FeatureTaskRuntimeCrashReconciler(
       FeatureTaskExecutionIdentityPolicy.validate(identity)
       if (
         identity.workflowId != row.workflowId || identity.mode != FeatureTaskWorkflowMode.RUNTIME ||
-        identity.normalizedIssueKey != row.issueKey?.trim()?.uppercase()
+        identity.normalizedIssueKey != row.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey)
       ) {
         throw InvalidFeatureTaskExecutionIdentitySchemaError(
           candidate.ownership.workflowId,
@@ -182,7 +182,7 @@ class FeatureTaskRuntimeCrashReconciler(
       if (identity != admission.identity) return@transaction false
       if (
         identity.workflowId != row.workflowId || identity.mode != FeatureTaskWorkflowMode.RUNTIME ||
-        identity.normalizedIssueKey != row.issueKey?.trim()?.uppercase()
+        identity.normalizedIssueKey != row.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey)
       ) {
         return@transaction false
       }

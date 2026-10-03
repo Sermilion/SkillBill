@@ -6,9 +6,9 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.outboxPayloads
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
-import skillbill.engine.featuretask.slotbaseline.SlotBaselineJson
-import skillbill.engine.featuretask.slotbaseline.SlotBaselinePaths
-import skillbill.engine.featuretask.slotbaseline.SlotBaselineTestResources
+import skillbill.engine.featuretask.runner.SlotBaselineJson
+import skillbill.engine.featuretask.runner.SlotBaselinePaths
+import skillbill.engine.featuretask.runner.SlotBaselineTestResources
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import java.nio.file.Files

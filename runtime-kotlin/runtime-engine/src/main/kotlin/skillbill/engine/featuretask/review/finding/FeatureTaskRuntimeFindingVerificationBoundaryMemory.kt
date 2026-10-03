@@ -12,8 +12,8 @@ import java.nio.file.Path
 
 @Inject
 class FeatureTaskRuntimeFindingVerificationBoundaryMemory(
-  val contextDiscovery: GoalPlanningContextDiscovery,
-  val boundaryBodyResolver: GoalPlanningBoundaryBodyResolver,
+  private val contextDiscovery: GoalPlanningContextDiscovery,
+  private val boundaryBodyResolver: GoalPlanningBoundaryBodyResolver,
 ) {
   fun sectionsForFindings(
     repoRoot: Path,

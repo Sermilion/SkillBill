@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.execution.core
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.goalrunner.execution.support.CHILD_WORKFLOW_BLOCK_REASONS
 import skillbill.engine.goalrunner.execution.support.CompletedIterationArgs
@@ -49,7 +50,8 @@ import skillbill.workflow.engine.blockedStepId
 import skillbill.workflow.model.decompositionStatus
 import java.time.Clock
 
-internal class GoalRunnerIterationOutcome(
+@Inject
+class GoalRunnerIterationOutcome(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val finalization: GoalRunnerFinalization,
@@ -57,11 +59,12 @@ internal class GoalRunnerIterationOutcome(
   private val progressReader: GoalRunnerProgressReader,
   private val clock: Clock,
   private val phaseQuery: FeatureTaskRuntimePhaseQuery?,
-  pendingState: GoalRunnerIterationPendingState,
 ) {
-  private val validationQualityState = pendingState.validationQualityState
-
-  internal fun stoppedIteration(args: StoppedIterationArgs): GoalRunnerIterationResult {
+  internal fun stoppedIteration(
+    args: StoppedIterationArgs,
+    pendingState: GoalRunnerIterationPendingState,
+  ): GoalRunnerIterationResult {
+    val validationQualityState = pendingState.validationQualityState
     val state = args.state
     val subtaskId = args.subtaskId
     val reconciled = args.reconciled
@@ -88,6 +91,7 @@ internal class GoalRunnerIterationOutcome(
           ledger = ledger,
           request = request,
         ),
+        pendingState,
       )
     }
     val blocked =
@@ -99,7 +103,7 @@ internal class GoalRunnerIterationOutcome(
     val blockedState = state.copy(manifest = blocked)
     val control = manifestStore.controlState(state.parentWorkflowId)
     if (!control.pauseRequested && !control.paused) {
-      validationRetryIteration(blocked, stoppedOutcome, subtaskId, state)
+      validationRetryIteration(blocked, stoppedOutcome, subtaskId, state, pendingState)
         ?.let { retry -> return retry }
     }
     val saved = persistStoppedBoundary(blockedState, control)
@@ -238,7 +242,11 @@ internal class GoalRunnerIterationOutcome(
 
   fun safeProgress(workflowId: String): GoalRunnerWorkflowProgress? = progressReader.safeProgress(workflowId)
 
-  private fun recordStoppedLedgerEntries(args: RecordStoppedLedgerEntriesArgs) {
+  private fun recordStoppedLedgerEntries(
+    args: RecordStoppedLedgerEntriesArgs,
+    pendingState: GoalRunnerIterationPendingState,
+  ) {
+    val validationQualityState = pendingState.validationQualityState
     val workflowId = args.workflowId
     val state = args.state
     val subtaskId = args.subtaskId
@@ -331,7 +339,9 @@ internal class GoalRunnerIterationOutcome(
     stoppedOutcome: GoalRunnerReconciledOutcome.Stop,
     subtaskId: Int,
     state: GoalRunnerManifestState,
+    pendingState: GoalRunnerIterationPendingState,
   ): GoalRunnerIterationResult? {
+    val validationQualityState = pendingState.validationQualityState
     if (!stoppedOutcome.isRecoverableValidationBlock(phaseQuery)) {
       return null
     }

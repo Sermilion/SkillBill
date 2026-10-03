@@ -123,7 +123,7 @@ class FeatureTaskContinuationLookupService(
       identity == candidate.executionIdentity && identity.governedSpecPath == candidate.governedSpecPath
     val matchingRow =
       identity.workflowId == row.workflowId && identity.mode == candidate.mode &&
-        identity.normalizedIssueKey == row.issueKey?.trim()?.uppercase()
+        identity.normalizedIssueKey == row.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey)
     if (!unchangedRoute || !matchingRow) {
       throw InvalidFeatureTaskExecutionIdentitySchemaError(candidate.workflowId, "identity changed before claim")
     }
@@ -258,7 +258,7 @@ class FeatureTaskContinuationLookupService(
     val modeConflicts = workflow.mode?.let { it != identity.mode } ?: false
     return identity.workflowId != workflow.workflowId ||
       modeConflicts ||
-      identity.normalizedIssueKey != workflow.issueKey?.trim()?.uppercase()
+      identity.normalizedIssueKey != workflow.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey)
   }
 
   private fun invalidIdentity(

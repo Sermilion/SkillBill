@@ -2,14 +2,14 @@ package skillbill.engine.featuretask.lifecycle.remediation
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.engine.ExecutionPlanAdmissionFixture
-import skillbill.engine.NoopWorkflowSnapshotValidator
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
-import skillbill.engine.openTestWorkflow
+import skillbill.engine.featuretask.runner.NoopWorkflowSnapshotValidator
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeCheckpointIdentityVersionError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics

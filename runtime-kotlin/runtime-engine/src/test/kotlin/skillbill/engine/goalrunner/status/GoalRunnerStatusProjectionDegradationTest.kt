@@ -4,6 +4,7 @@ import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
+import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
@@ -13,7 +14,6 @@ import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
-import skillbill.engine.openTestWorkflow
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.idestatus.model.WorktreeEditSource
 import skillbill.idestatus.model.WorktreeEditTick

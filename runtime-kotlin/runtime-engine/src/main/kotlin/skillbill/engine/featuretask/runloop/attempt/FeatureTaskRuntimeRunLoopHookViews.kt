@@ -52,7 +52,7 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
   ) : LaunchView(context),
     PhasePlanningLaunchContext {
     override fun existingBundleReason(): String? =
-      context.phaseGates.decompositionPlanner
+      context.decompositionPlanner
         .existingParentSpec(request.repoRoot, request.issueKey)
         ?.let { PlanDecompositionStop.existingBundleReason(request.issueKey, it) }
   }
@@ -93,8 +93,8 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
     private val context: PhaseAttemptLaunchRuntimeContext,
   ) : LaunchView(context),
     PhaseFindingEvidenceContext {
-    override val findingVerificationBoundaryMemory get() = context.phaseGates.findingVerificationBoundaryMemory
-    override val specIntentProjectionResolver get() = context.phaseGates.specIntentProjectionResolver
+    override val findingVerificationBoundaryMemory get() = context.findingVerificationBoundaryMemory
+    override val specIntentProjectionResolver get() = context.specIntentProjectionResolver
   }
 
   internal fun PhaseOutputSettlementContext.stepOutputContext(
@@ -195,8 +195,8 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
     private val context: PhaseOutputSettlementContext,
   ) : OutputView(context),
     PhaseFindingEvidenceContext {
-    override val findingVerificationBoundaryMemory get() = context.phaseGates.findingVerificationBoundaryMemory
-    override val specIntentProjectionResolver get() = context.phaseGates.specIntentProjectionResolver
+    override val findingVerificationBoundaryMemory get() = context.findingVerificationBoundaryMemory
+    override val specIntentProjectionResolver get() = context.specIntentProjectionResolver
   }
 
   internal fun PhaseAttemptTraversalRuntimeContext.traversalHookContext(
@@ -227,5 +227,5 @@ internal object FeatureTaskRuntimeRunLoopHookViews {
   }
 
   internal fun PhaseCheckpointRemediationContext.phaseLoopContext(): PhaseLoopContext =
-    PhaseLoopContext(request, phaseGates.gitOperations.repositoryObservations())
+    PhaseLoopContext(request, gitOperations.repositoryObservations())
 }

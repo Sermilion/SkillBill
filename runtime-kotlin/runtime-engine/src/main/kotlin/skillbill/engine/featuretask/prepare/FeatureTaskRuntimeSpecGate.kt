@@ -6,7 +6,6 @@ import skillbill.application.decomposition.specSource
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
-import skillbill.engine.featuretask.runner.finalizingAgentId
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSpecStatusWriter
 import skillbill.ports.workflow.specscratch.SpecScratchStore
@@ -15,8 +14,7 @@ import java.nio.file.Path
 
 @Inject
 class FeatureTaskRuntimeSpecGate(
-  val specSourceResolver: SpecSourceResolver,
-  val specScratchStore: SpecScratchStore,
+  private val specScratchStore: SpecScratchStore,
   private val specStatusWriter: FeatureTaskRuntimeSpecStatusWriter,
   private val diagnostics: RuntimeDiagnostics,
 ) {

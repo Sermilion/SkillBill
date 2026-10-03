@@ -2,7 +2,6 @@ package skillbill.engine.featuretask.slot
 
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
-import skillbill.engine.PROMPT_COMPOSER_ISSUE_KEY
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCompatibility
 import skillbill.engine.featuretask.lifecycle.execution.executionPolicyDigest
@@ -10,6 +9,8 @@ import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
+import skillbill.engine.featuretask.phase.prompt.compose.PROMPT_COMPOSER_ISSUE_KEY
+import skillbill.engine.featuretask.phase.prompt.compose.promptComposerBriefingFor
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.FILE_MUTATING
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.GENERATION_SCOPED
 import skillbill.engine.featuretask.slot.PhaseStrategyCompositionTest.PolicyTrait.MUTATING
@@ -33,7 +34,6 @@ import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidati
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
-import skillbill.engine.promptComposerBriefingFor
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError

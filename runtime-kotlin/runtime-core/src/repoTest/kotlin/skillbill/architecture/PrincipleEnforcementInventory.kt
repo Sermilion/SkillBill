@@ -5,6 +5,7 @@ import kotlin.reflect.KClass
 object PrincipleEnforcementInventory {
   const val RUNTIME_APPLICATION_MAIN: String = "runtime-kotlin/runtime-application/src/main/kotlin"
   const val RUNTIME_CLI_MAIN: String = "runtime-kotlin/runtime-cli/src/main/kotlin"
+  const val RUNTIME_ENGINE_MAIN: String = "runtime-kotlin/runtime-engine/src/main/kotlin"
   const val APPLICATION_PACKAGE_PREFIX: String = "skillbill.application."
   const val CLI_PACKAGE_PREFIX: String = "skillbill.cli."
   const val SPILLOVER_FILE_NAME_BASELINE: String = "spillover-file-name-baseline.txt"
@@ -142,13 +143,13 @@ object PrincipleEnforcementInventory {
         "Dynamic port proxy returns typed facade from erased invoke",
       ),
       SuppressionAllowListRow(
-        "runtime-engine/src/test/kotlin/skillbill/engine/FeatureTaskRuntimeRunnerTestSupport.kt",
+        "runtime-engine/src/test/kotlin/skillbill/engine/featuretask/runner/FeatureTaskRuntimeRunnerTestSupport.kt",
         "noopPort",
         "UNCHECKED_CAST",
         "Dynamic port proxy returns typed facade from erased invoke",
       ),
       SuppressionAllowListRow(
-        "runtime-engine/src/test/kotlin/skillbill/engine/FeatureTaskRuntimeRunnerTestSupport.kt",
+        "runtime-engine/src/test/kotlin/skillbill/engine/featuretask/runner/FeatureTaskRuntimeRunnerTestSupport.kt",
         "recordHarnessFindingVerdicts",
         "UNCHECKED_CAST",
         "Dynamic ReviewRepository proxy passes typed verdict list through erased invoke",

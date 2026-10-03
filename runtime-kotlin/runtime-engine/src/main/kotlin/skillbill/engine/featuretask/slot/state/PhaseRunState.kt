@@ -3,7 +3,6 @@ package skillbill.engine.featuretask.slot.state
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
 import skillbill.engine.featuretask.model.review.ReviewTarget
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
@@ -11,11 +10,12 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnap
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptCollaborators
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
 import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
+import java.time.Clock
 
 /**
  * The state one run of the run loop reads and writes, built once per run by the entry that drives the loop. The loop,
@@ -58,11 +58,9 @@ internal interface PhaseRunState :
   /** The attempts the run's strategies launch their steps through. */
   val attemptLoop: PhaseStepAttempts
 
-  /** The validator, clock, and diagnostics the run's attempts and loop read. */
-  val collaborators: PhaseAttemptCollaborators
+  val clock: Clock
 
-  /** The branch, git, and validation gates the run's steps consult. */
-  val phaseGates: FeatureTaskRuntimePhaseGates
+  val diagnostics: RuntimeDiagnostics
 
   /**
    * The units the fan-out step [stepId] runs. Only a state that keeps fan-out units supports it; the default fails

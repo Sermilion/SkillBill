@@ -2,10 +2,10 @@ package skillbill.engine.goalrunner.execution.core
 
 import skillbill.application.decomposition.executionModel
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
+import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.goalrunner.execution.support.GoalRunnerAttemptState
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationResult
 import skillbill.engine.goalrunner.execution.support.branchPlanFor
-import skillbill.engine.goalrunner.execution.support.protectedBranchName
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
@@ -138,6 +138,7 @@ internal class GoalRunnerGoalLoop(
           telemetryEmitter = args.telemetryEmitter,
           planning = planning,
         ),
+        args.pendingState,
       )
     return RunSelectionAdvance(result.state, planning, result.report)
   }

@@ -11,6 +11,7 @@ import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.planning.recovery.GoalRunnerSpecDriftRecovery
 import skillbill.engine.goalrunner.review.effectiveGoalRunnerReviewPolicy
 import skillbill.engine.goalrunner.review.goalRunnerReviewPolicyMismatch
 import skillbill.engine.goalrunner.status.stopped
@@ -28,7 +29,13 @@ class GoalRunnerRunPreparation(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
   private val crashReconciler: FeatureTaskRuntimeCrashReconciler,
+  private val specDriftRecovery: GoalRunnerSpecDriftRecovery,
 ) {
+  internal fun refreshSpecPlanning(
+    state: GoalRunnerManifestState,
+    request: GoalRunnerRunRequest,
+  ): GoalRunnerManifestState = specDriftRecovery.refresh(state, request)
+
   fun prepareRun(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,

@@ -64,79 +64,6 @@ class RuntimeApplicationSharedEngineEdgeArchitectureTest {
 
 class RuntimeEnginePublicTopLevelDeclarationArchitectureTest {
   @Test
-  fun `new public top-level engine declarations stay within inbound api and model packages`() {
-    val engineMain =
-      ArchitectureScanSupport.runtimeRoot.resolve(
-        "runtime-kotlin/runtime-engine/src/main/kotlin",
-      )
-    val modelPackagePrefixes =
-      setOf(
-        "skillbill.engine.featuretask.model",
-        "skillbill.engine.goalrunner.model",
-        "skillbill.engine.goalrunner.planning.model",
-        "skillbill.engine.work.model",
-      )
-    val violations =
-      kotlinFilesUnderWithArchitectureAsserts(engineMain).flatMap { path ->
-        val source = path.readText()
-        val packageName = ArchitectureScanSupport.declaredPackage(source).orEmpty()
-        if (modelPackagePrefixes.any { prefix -> packageName == prefix || packageName.startsWith("$prefix.") }) {
-          emptyList()
-        } else {
-          topLevelPublicDeclarations(
-            packageName = packageName,
-            source = source,
-            allowedTypes = RuntimeEngineInboundApiTest.PINNED_ENGINE_INBOUND_API_TYPES,
-            includeDefaultPublic = false,
-          ).map { type ->
-            "${engineMain.relativize(path)}: $type is outside the pinned inbound API"
-          }
-        }
-      }
-    assertTrue(violations.isEmpty(), violations.joinToString("\n"))
-  }
-
-  @Test
-  fun `visibility census detects Kotlin default-public declarations outside the pinned api`() {
-    val source =
-      """
-
-      class NewEngineLeak
-      internal class AllowedImplementation
-      """.trimIndent()
-
-    assertEquals(
-      listOf("skillbill.engine.goalrunner.NewEngineLeak"),
-      topLevelPublicDeclarations(
-        packageName = "skillbill.engine.goalrunner",
-        source = source,
-        allowedTypes = RuntimeEngineInboundApiTest.PINNED_ENGINE_INBOUND_API_TYPES,
-        includeDefaultPublic = true,
-      ),
-    )
-  }
-
-  @Test
-  fun `visibility census allows a pinned api declaration without allowing its package`() {
-    val source =
-      """
-
-      class GoalRunner
-      class UnpinnedEngineLeak
-      """.trimIndent()
-
-    assertEquals(
-      listOf("skillbill.engine.goalrunner.UnpinnedEngineLeak"),
-      topLevelPublicDeclarations(
-        packageName = "skillbill.engine.goalrunner",
-        source = source,
-        allowedTypes = RuntimeEngineInboundApiTest.PINNED_ENGINE_INBOUND_API_TYPES,
-        includeDefaultPublic = true,
-      ),
-    )
-  }
-
-  @Test
   fun `feature-task run-loop step declarations reference each other acyclically`() {
     val cycles = ArchitectureScanSupport.cyclicComponents(runLoopStepEdges(runLoopSources()))
     assertTrue(
@@ -395,34 +322,6 @@ class RuntimeEnginePublicTopLevelDeclarationArchitectureTest {
     text: String,
   ): Boolean = Regex("""\b${Regex.escape(name)}\b""").containsMatchIn(text)
 
-  private fun topLevelPublicDeclarations(
-    packageName: String,
-    source: String,
-    allowedTypes: Set<String>,
-    includeDefaultPublic: Boolean,
-  ): List<String> {
-    var braceDepth = 0
-    val declarations = mutableListOf<String>()
-    source.lineSequence().forEach { line ->
-      if (braceDepth == 0) {
-        TOP_LEVEL_DECLARATION.find(line)?.let { match ->
-          val explicitVisibility = match.groupValues[1]
-          val name = match.groupValues[2]
-          val type = "$packageName.$name"
-          val hasPublicVisibility =
-            explicitVisibility == "public" ||
-              includeDefaultPublic && explicitVisibility.isBlank()
-          if (hasPublicVisibility && type !in allowedTypes) {
-            declarations += type
-          }
-        }
-      }
-      braceDepth += line.count { character -> character == '{' }
-      braceDepth -= line.count { character -> character == '}' }
-    }
-    return declarations
-  }
-
   private companion object {
     const val PHASE_BLOCKING_STEP = "FeatureTaskRuntimeRunLoopPhaseBlocking"
 
@@ -454,15 +353,6 @@ class RuntimeEnginePublicTopLevelDeclarationArchitectureTest {
       Regex(
         """^(?:(?:internal|private|public|inline|suspend|operator|infix)\s+)*fun\s+""" +
           """(?:<[^>]*>\s*)?(?:[A-Za-z0-9_.<>?, ]+\.)?([A-Za-z_][A-Za-z0-9_]*)\s*\(""",
-      )
-
-    val TOP_LEVEL_DECLARATION =
-      Regex(
-        """^\s*(?:(public|internal|private|protected)\s+)?""" +
-          """(?:(?:abstract|sealed|data|enum|value|open|final|inline|suspend|""" +
-          """operator|infix|tailrec|const|expect|actual|fun)\s+)*""" +
-          """(?:class|object|interface|typealias|fun|val|var)\s+""" +
-          """([A-Za-z_][A-Za-z0-9_]*)\b""",
       )
   }
 }

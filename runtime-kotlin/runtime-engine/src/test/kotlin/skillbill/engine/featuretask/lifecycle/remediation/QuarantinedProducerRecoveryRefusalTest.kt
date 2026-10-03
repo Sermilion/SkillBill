@@ -2,17 +2,17 @@ package skillbill.engine.featuretask.lifecycle.remediation
 
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
-import skillbill.engine.ExecutionPlanAdmissionFixture
-import skillbill.engine.NoopWorkflowSnapshotValidator
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
+import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
-import skillbill.engine.featuretask.slotbaseline.SlotBaselineSqlite
-import skillbill.engine.openTestWorkflow
+import skillbill.engine.featuretask.runner.NoopWorkflowSnapshotValidator
+import skillbill.engine.featuretask.runner.SlotBaselineSqlite
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError

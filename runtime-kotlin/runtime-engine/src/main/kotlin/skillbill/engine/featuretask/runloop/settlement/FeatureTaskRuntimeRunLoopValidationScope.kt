@@ -11,9 +11,9 @@ import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 object FeatureTaskRuntimeRunLoopValidationScope {
   internal fun validationChangedPaths(args: RepositoryCheckpointResolutionArgs): List<String>? {
     val run = args.run
-    val phaseGates = args.phaseGates
+    val gitOperations = args.gitOperations
     if (run.request.skeletonDefinition?.runStateKind == SkeletonRunStateKind.IN_MEMORY) {
-      return when (val paths = phaseGates.gitOperations.repositoryOwnedPaths(run.request.repoRoot)) {
+      return when (val paths = gitOperations.repositoryOwnedPaths(run.request.repoRoot)) {
         is WorkflowGitNameListResult.Listed -> paths.names.distinct().sorted()
         is WorkflowGitNameListResult.Failed -> throw PhaseValidationScopeError(paths.error)
       }
@@ -30,14 +30,14 @@ object FeatureTaskRuntimeRunLoopValidationScope {
 
   internal fun packBuildCommand(args: RepositoryCheckpointResolutionArgs): String? {
     val run = args.run
-    val phaseGates = args.phaseGates
+    val gitOperations = args.gitOperations
     run.request.admittedExecution?.let {
       return it.effectiveInputs.commandArgv(ValidationGateCyclePhase.INITIAL_DISCOVERY)?.joinToString(" ")
     }
     val validationChangedPaths =
       validationChangedPaths(args)
     return when (
-      val resolution = phaseGates.validationGateResolver.resolve(validationChangedPaths.orEmpty())
+      val resolution = args.qualityGateCycles.resolve(run.request, validationChangedPaths.orEmpty())
     ) {
       is ValidationGateResolution.Declared -> resolution.declaration.buildCommand?.joinToString(" ")
       is ValidationGateResolution.Absent -> null
@@ -47,13 +47,13 @@ object FeatureTaskRuntimeRunLoopValidationScope {
 
   internal fun packCollectAllCommand(args: RepositoryCheckpointResolutionArgs): String? {
     val run = args.run
-    val phaseGates = args.phaseGates
+    val gitOperations = args.gitOperations
     run.request.admittedExecution?.let {
       return it.effectiveInputs.commandArgv(ValidationGateCyclePhase.INITIAL_DISCOVERY)?.joinToString(" ")
     }
     val paths =
       validationChangedPaths(args)
-    return (phaseGates.validationGateResolver.resolve(paths.orEmpty()) as? ValidationGateResolution.Declared)
+    return (args.qualityGateCycles.resolve(run.request, paths.orEmpty()) as? ValidationGateResolution.Declared)
       ?.declaration
       ?.collectAllFullGateCommand
       ?.joinToString(" ")

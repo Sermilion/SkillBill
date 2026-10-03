@@ -25,7 +25,7 @@ import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRu
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 
 internal fun PhaseQualityGateCycleContext.gateCheckpoint(run: PhaseRun): String? =
-  phaseGates.gitOperations
+  gitOperations
     .repositoryFingerprint(run.request.repoRoot)
     .value
     .takeIf(String::isNotBlank)
@@ -34,7 +34,8 @@ internal fun PhaseQualityGateCycleContext.gateChangedPaths(run: PhaseRun): List<
   FeatureTaskRuntimeRunLoopValidationScope
     .validationChangedPaths(
       RepositoryCheckpointResolutionArgs(
-        phaseGates = phaseGates,
+        gitOperations = gitOperations,
+        qualityGateCycles = qualityGateCycles,
         recorder = recorder,
         goalContinuationRecorder = goalContinuationRecorder,
         coupledRunTransitions = coupledRunTransitions,
@@ -234,7 +235,8 @@ internal fun PhaseQualityGateCycleContext.runGateAttemptOnce(
 ): PhaseOutcome? =
   PhaseAttemptOnce
     .attemptOnce(
-      PhaseAttemptLaunchCollaborationScope(qualityGateAttemptHost()),
+      this as? PhaseAttemptLaunchCollaborationScope
+        ?: error("Quality-gate context is not bound to a run-loop attempt."),
       recordRejectionAttemptArgs(
         gateAttemptContext(run, iteration, observability),
         gateAttemptCall(call, acceptedRun, run),
@@ -245,17 +247,21 @@ internal fun PhaseQualityGateCycleContext.blockGateRequiredWriteRejection(
   run: PhaseRun,
   rejection: RequiredPhaseWrite.Rejected,
 ): PhaseOutcome =
-  when (this) {
-    is PhaseQualityGateCycleScope ->
-      PhaseAttemptOnce.blockRequiredWriteRejection(runLoopAttemptHost(), run, rejection)
-    else -> error("Quality-gate context is not bound to a run-loop attempt host.")
-  }
+  PhaseAttemptOnce.blockRequiredWriteRejection(
+    this as? PhaseAttemptLaunchCollaborationScope
+      ?: error("Quality-gate context is not bound to a run-loop attempt."),
+    run,
+    rejection,
+  )
 
-internal fun PhaseQualityGateCycleContext.qualityGateAttemptHost(): PhaseAttemptRunHost =
-  when (this) {
-    is PhaseQualityGateCycleScope -> runLoopAttemptHost()
-    else -> error("Quality-gate context is not bound to a run-loop attempt host.")
-  }
+internal fun PhaseQualityGateCycleContext.runAcceptedAttemptLoop(
+  run: PhaseRun,
+  call: PhaseStepCall,
+): PhaseOutcome =
+  (
+    this as? PhaseAttemptLaunchCollaborationScope
+      ?: error("Quality-gate context is not bound to a run-loop attempt.")
+  ).runAcceptedAttemptLoop(run, call)
 
 private fun PhaseQualityGateCycleContext.gateSettlementCoupling(): RunLoopSettlementCoupling =
   RunLoopSettlementCoupling(progress, session, session, coupledRunTransitions)

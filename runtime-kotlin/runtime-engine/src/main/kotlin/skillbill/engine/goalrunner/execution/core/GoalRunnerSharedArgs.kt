@@ -1,6 +1,7 @@
 package skillbill.engine.goalrunner.execution.core
 
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
+import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationPendingState
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchDiagnostics
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchReconciliation
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
@@ -28,6 +29,7 @@ internal data class DriveGoalLoopArgs(
   val ledger: GoalRunnerLedgerRecorder,
   val telemetryEmitter: GoalRunnerTelemetryEmitter,
   val planning: GoalPlanningSweepOutcome.PreparedAll,
+  val pendingState: GoalRunnerIterationPendingState,
 )
 
 internal data class BlockedSelectionIterationArgs(

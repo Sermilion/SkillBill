@@ -124,7 +124,7 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
       FeatureTaskRuntimeRunLoopSubtaskCommit.finalisationBranch(
         request,
         session,
-        phaseGates,
+        gitOperations,
       )
         ?: return settleUnownedHead(run, iteration)
     val baseBranch = recorder.loadResolvedBranch(request.workflowId)?.baseBranch ?: "main"
@@ -145,7 +145,7 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
     val resolved = recorder.loadResolvedBranch(request.workflowId)
     val baseBranch = resolved?.baseBranch ?: "main"
     val branch = requirePublishableBranch(resolved?.branch, baseBranch)
-    val result = InMemoryCommitPush(phaseGates.gitOperations, request.repoRoot).run(branch, request.issueKey)
+    val result = InMemoryCommitPush(gitOperations, request.repoRoot).run(branch, request.issueKey)
     if (result !is WorkflowGitOperationResult.Ok) return block(run, iteration, result.error)
     return complete(
       run,
@@ -165,10 +165,10 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
     val changedPaths =
       FeatureTaskRuntimeRunLoopSubtaskCommit.commitPushChangedPaths(
         context.request,
-        context.phaseGates,
+        context.gitOperations,
         baseBranch,
       )
-    return context.phaseGates.readinessGateCoordinator.settleBeforeCommitPush(
+    return context.readinessGateCoordinator.settleBeforeCommitPush(
       ReadinessCommitPushSettleRequest(
         workflowId = context.request.workflowId,
         stepId = stepId,
@@ -176,7 +176,7 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
         baseBranch = baseBranch,
         changedPaths = changedPaths.paths,
         changedPathsError = changedPaths.error,
-        gitOperations = context.phaseGates.gitOperations,
+        gitOperations = context.gitOperations,
       ),
     )
   }
@@ -217,13 +217,13 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
     args: BindCommittedHeadArgs,
   ): PhaseOutcome {
     val rebound =
-      context.phaseGates.readinessGateCoordinator.bindCommittedHead(
+      context.readinessGateCoordinator.bindCommittedHead(
         ReadinessCommittedHeadBindRequest(
           workflowId = context.request.workflowId,
           stepId = args.run.phaseId,
           repoRoot = context.request.repoRoot,
           baseBranch = args.baseBranch,
-          gitOperations = context.phaseGates.gitOperations,
+          gitOperations = context.gitOperations,
           commitSha = args.outcome.commitSha,
         ),
       )
@@ -251,7 +251,7 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
     run: PhaseRun,
     args: FinaliseSubtaskArgs,
   ) = FeatureTaskRuntimeSubtaskFinalisation(
-    gitOperations = context.phaseGates.gitOperations,
+    gitOperations = context.gitOperations,
     repoRoot = context.request.repoRoot,
     record = { record -> RuntimeDiagnosticsBestEffortWarning.record(context.diagnostics, record) },
     recordCommit = { commitSha, stagedPaths ->
@@ -322,7 +322,7 @@ internal object FeatureTaskRuntimeRunLoopCommitCycle {
           UnownedWorktreeCommitShaArgs(
             request,
             diagnostics,
-            phaseGates,
+            gitOperations,
             run,
             accepted,
           ),

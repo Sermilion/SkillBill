@@ -2,16 +2,15 @@ package skillbill.engine.featuretask.runloop.core
 
 import skillbill.application.decomposition.baseBranch
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetup
+import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinalisation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.engine.goalrunner.execution.support.protectedBranchName
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
@@ -23,9 +22,9 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
   internal fun unownedWorktreeCommitSha(args: UnownedWorktreeCommitShaArgs): CommitPushFinalisation {
     val request = args.request
     val diagnostics = args.diagnostics
-    val phaseGates = args.phaseGates
+    val gitOperations = args.gitOperations
     val normalizedOutput = args.normalizedOutput
-    val head = phaseGates.gitOperations.headCommitSha(request.repoRoot)
+    val head = gitOperations.headCommitSha(request.repoRoot)
     val sha =
       head.value.orEmpty().trim().takeIf { head is WorkflowGitOperationResult.Ok && it.isNotBlank() }
         ?: return CommitPushNotApplicable
@@ -48,11 +47,11 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
 
   internal fun commitPushChangedPaths(
     request: FeatureTaskRuntimeRunFacts,
-    phaseGates: FeatureTaskRuntimePhaseGates,
+    gitOperations: WorkflowGitOperations,
     baseBranch: String,
   ): ReadinessChangedPaths {
     return when (
-      val changed = phaseGates.gitOperations.readinessChangedPathsAgainstBase(request.repoRoot, baseBranch)
+      val changed = gitOperations.readinessChangedPathsAgainstBase(request.repoRoot, baseBranch)
     ) {
       is WorkflowGitNameListResult.Listed -> ReadinessChangedPaths(paths = changed.names, error = null)
       is WorkflowGitNameListResult.Failed -> ReadinessChangedPaths(emptyList(), changed.error)
@@ -62,13 +61,13 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
   internal fun finalisationBranch(
     request: FeatureTaskRuntimeRunFacts,
     session: FeatureTaskRuntimeRunSessionObservations,
-    phaseGates: FeatureTaskRuntimePhaseGates,
+    gitOperations: WorkflowGitOperations,
   ): String? {
     val branch =
       session.resolvedBranch
-        ?.takeIf { FeatureTaskRuntimeBranchSetup.protectedBranchName(it) == null }
+        ?.takeIf { protectedBranchName(it) == null }
         ?: return null
-    val head = phaseGates.gitOperations.currentBranch(request.repoRoot)
+    val head = gitOperations.currentBranch(request.repoRoot)
     return branch.takeIf { head is WorkflowGitOperationResult.Ok && head.value.trim() == branch.trim() }
   }
 
