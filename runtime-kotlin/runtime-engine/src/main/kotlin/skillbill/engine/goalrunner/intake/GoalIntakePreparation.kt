@@ -4,6 +4,7 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.issueAndFeature
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalIntakeMissingInput
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
@@ -31,15 +32,15 @@ class GoalIntakePreparation(
     repoRoot: Path,
   ): String? = referencedSpecPath(intake, repoRoot)?.let { GoalIntake.parse(it.toString()).issueKey }
 
-  fun admitNewWorkIntake(
-    intake: String,
-    issueKey: String,
+  internal fun missingNewWorkInput(
+    intake: GoalIntake,
     repoRoot: Path,
-  ) {
-    if (existingSpecPath(intake, issueKey, repoRoot) == null) {
-      newWorkFeatureName(GoalIntake.parse(intake))
+  ): GoalIntakeMissingInput? =
+    if (existingSpecPath(intake.requirements, intake.issueKey, repoRoot) == null) {
+      newWorkGap(intake)
+    } else {
+      null
     }
-  }
 
   fun prepare(request: GoalRunnerRunRequest): GoalRunnerManifestState? {
     manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)?.let { return it }
@@ -95,12 +96,19 @@ class GoalIntakePreparation(
   }
 
   private fun newWorkFeatureName(intake: GoalIntake): String {
-    if (!intake.hasRequirements) {
+    if (newWorkGap(intake) == GoalIntakeMissingInput.REQUIREMENTS) {
       invalidIntake("requirements", "supply the requirements after the tracker issue key or link.")
     }
     return intake.featureName
       ?: invalidIntake("feature_name", "supply a short description after the tracker issue key.")
   }
+
+  private fun newWorkGap(intake: GoalIntake): GoalIntakeMissingInput? =
+    when {
+      !intake.hasRequirements -> GoalIntakeMissingInput.REQUIREMENTS
+      intake.featureName == null -> GoalIntakeMissingInput.DESCRIPTION
+      else -> null
+    }
 
   private fun existingSpecPath(
     intake: String,

@@ -16,6 +16,8 @@ import skillbill.engine.goalrunner.intake.GoalIntake
 import skillbill.engine.goalrunner.intake.GoalIntakePreparation
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
+import skillbill.engine.goalrunner.model.GoalIntakeAdmission
+import skillbill.engine.goalrunner.model.GoalIntakeMissingInput
 import skillbill.engine.goalrunner.model.GoalRunPreparation
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
@@ -48,20 +50,28 @@ class GoalRunner(
   private val pauseBoundary: GoalRunnerPauseBoundary,
   private val intakePreparation: GoalIntakePreparation,
 ) {
-  fun issueKeyForIntake(
+  fun admitIntake(
     intake: String,
     repoRoot: Path,
-  ): String {
+  ): GoalIntakeAdmission {
     val trimmed = intake.trim()
-    intakePreparation.issueKeyForExistingSpec(trimmed, repoRoot)?.let { return it }
+    intakePreparation.issueKeyForExistingSpec(trimmed, repoRoot)?.let { return GoalIntakeAdmission.Admitted(it) }
     if (trimmed.isNotBlank() && trimmed.none(Char::isWhitespace) && !trimmed.contains('/')) {
-      manifestStore.readByIssueKeyIfPresent(trimmed, repoRoot)?.let { return it.manifest.issueKey }
+      manifestStore.readByIssueKeyIfPresent(trimmed, repoRoot)?.let {
+        return GoalIntakeAdmission.Admitted(it.manifest.issueKey)
+      }
     }
-    val issueKey = GoalIntake.parse(trimmed).issueKey
-    if (manifestStore.readByIssueKeyIfPresent(issueKey, repoRoot) == null) {
-      intakePreparation.admitNewWorkIntake(trimmed, issueKey, repoRoot)
-    }
-    return issueKey
+    val parsed =
+      GoalIntake.parseOrNull(trimmed)
+        ?: return GoalIntakeAdmission.NeedsInput(GoalIntakeMissingInput.ISSUE_KEY, issueKey = null)
+    val missing =
+      if (manifestStore.readByIssueKeyIfPresent(parsed.issueKey, repoRoot) == null) {
+        intakePreparation.missingNewWorkInput(parsed, repoRoot)
+      } else {
+        null
+      }
+    return missing?.let { GoalIntakeAdmission.NeedsInput(it, parsed.issueKey) }
+      ?: GoalIntakeAdmission.Admitted(parsed.issueKey)
   }
 
   fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport {

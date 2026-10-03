@@ -33,6 +33,7 @@ import skillbill.cli.goal.run.GoalRunPresenter
 import skillbill.cli.goal.run.RUNTIME_CLASSPATH_ENV
 import skillbill.cli.goal.run.RUNTIME_EXECUTABLE_ENV
 import skillbill.cli.goal.run.RUNTIME_PATH_SEPARATOR_ENV
+import skillbill.cli.goal.run.goalIntakeRequestText
 import skillbill.cli.goal.run.goalRunText
 import skillbill.cli.goal.run.parseCodeReviewMode
 import skillbill.cli.goal.run.resolveInvokedAgentId
@@ -49,6 +50,7 @@ import skillbill.cli.model.DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.model.DEFAULT_GOAL_PLANNING_BUDGET
+import skillbill.engine.goalrunner.model.GoalIntakeAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.system.HostPlatformPort
@@ -196,7 +198,15 @@ class GoalRunCommand(
       ),
     )
     val intake = intakeTokens.joinToString(" ").trim()
-    val runIssueKey = goalRunner.issueKeyForIntake(intake, effectiveRepoRoot)
+    val runIssueKey =
+      when (val admission = goalRunner.admitIntake(intake, effectiveRepoRoot)) {
+        is GoalIntakeAdmission.Admitted -> admission.issueKey
+        is GoalIntakeAdmission.NeedsInput -> {
+          state.appendStderr(goalIntakeRequestText(admission))
+          state.completeEmpty(exitCode = 1)
+          return
+        }
+      }
     val receivingAgents =
       listOfNotNull(
         invokedAgentId,

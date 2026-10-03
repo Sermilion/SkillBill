@@ -11,18 +11,20 @@ internal data class GoalIntake(
   val hasRequirements: Boolean,
 ) {
   companion object {
-    fun parse(text: String): GoalIntake {
+    fun parse(text: String): GoalIntake =
+      parseOrNull(text)
+        ?: invalid(
+          "issue_key",
+          "supply a tracker issue key or link. A local workflow identity is not assigned.",
+        )
+
+    fun parseOrNull(text: String): GoalIntake? {
       val intake = text.trim()
       if (intake.isBlank()) {
-        invalid("issue_key", "Goal intake is required.")
+        return null
       }
       val first = intake.split(Regex("\\s+")).first()
-      val (key, fromReference) =
-        reference(first)
-          ?: invalid(
-            "issue_key",
-            "supply a tracker issue key or link. A local workflow identity is not assigned.",
-          )
+      val (key, fromReference) = reference(first) ?: return null
       val contentLine = firstContentLine(intake, first)
       return GoalIntake(key, intake, fromReference ?: slug(contentLine), contentLine != null)
     }

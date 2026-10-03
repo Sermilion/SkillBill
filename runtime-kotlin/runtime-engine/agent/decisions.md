@@ -12,7 +12,7 @@ Alternatives considered: Keeping LOCAL minting for CLI-only raw text still creat
 
 Context: A bare tracker URL with a slug started a new goal whose spec held only the link, and a bare key printed launch output before preparation refused it.
 
-Decision: New work needs both a tracker key or link and requirements text after it; a URL slug names the folder but is not requirements. `GoalRunner.issueKeyForIntake` checks this before the CLI prints launch output, unless a persisted goal or existing spec matches the key. The dispatcher asks the operator for the missing key or requirements.
+Decision: New work needs both a tracker key or link and requirements text after it; a URL slug names the folder but is not requirements. `GoalRunner.admitIntake` checks this before the CLI prints launch output, unless a persisted goal or existing spec matches the key. A gap returns `GoalIntakeAdmission.NeedsInput`, not an exception, because missing input is an expected outcome; the CLI phrases it as a request ("To start new work on APP-123, add the requirements…"), writes no state, and exits 1. The dispatcher asks the operator for the missing key or requirements.
 
 Reason: The tracker reference names the work and the requirements define it. Refusing before launch output keeps a missing part a question for the operator rather than something that looks like a started run.
 

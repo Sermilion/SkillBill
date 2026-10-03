@@ -34,16 +34,16 @@ class CliGoalIntakeTest {
   fun `raw requirements do not mint a local workflow key`() {
     refuseNewGoal(
       "Allow export.\n\n## Acceptance criteria\n\n- [ ] Export preserves Czech characters.",
-      "tracker issue key",
+      "To start new work, add a tracker issue key or link",
     )
-    refuseNewGoal("https://tracker.example/tasks/opaque-id", "tracker issue key")
+    refuseNewGoal("https://tracker.example/tasks/opaque-id", "To start new work, add a tracker issue key or link")
   }
 
   @Test
   fun `a tracker key or link without requirements does not start new work`() {
-    refuseNewGoal("APP-123", "supply the requirements")
-    refuseNewGoal("https://team.atlassian.net/browse/APP-123", "supply the requirements")
-    refuseNewGoal("https://linear.app/capmo/issue/WE-5018/update", "supply the requirements")
+    refuseNewGoal("APP-123", "To start new work on APP-123, add the requirements")
+    refuseNewGoal("https://team.atlassian.net/browse/APP-123", "To start new work on APP-123, add the requirements")
+    refuseNewGoal("https://linear.app/capmo/issue/WE-5018/update", "To start new work on WE-5018, add the requirements")
   }
 
   @Test
@@ -202,6 +202,7 @@ class CliGoalIntakeTest {
       val result = CliRuntime.run(command, fixture.context(launcher = launcher).copy(repositoryRoot = root))
       assertEquals(1, result.exitCode, result.stderr + result.stdout)
       assertContains(result.stderr, message)
+      assertFalse(result.stderr.contains("invalid", ignoreCase = true), result.stderr)
       assertFalse(result.stdout.contains("launched runtime"), result.stdout)
       val specs = root.resolve(".feature-specs")
       assertTrue(!Files.exists(specs) || Files.list(specs).use { it.count() } == 0L)
