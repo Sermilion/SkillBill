@@ -1,3 +1,9 @@
+## [2026-10-03] Keep input-driven install, schema and configuration failures coded
+Context: SKILL-399 subtask 3 removes sixteen Install exception classes while preserving their messages, causes and handling boundaries.
+Decision: Use InstallFailureCode with SkillBillRuntimeException for all sixteen conditions. Shared message factories retain producer context without typed exception properties.
+Reason: Configuration, persisted records, schema input and selected install state can trigger these failures. The plan reserves defect assertions for conditions that external input cannot trigger, so this slice retains coded failures.
+Alternatives considered: Replace failures with require, check or error. These input-driven conditions do not justify defect classification.
+
 ## [2026-10-03] Preserve scaffold and review classification boundaries
 Context: SKILL-399 subtask 2 replaces Scaffold and ReviewContext throwable hierarchies with the same shared exception type.
 Decision: Include ReviewContextFailureCode in isShellContentContractFailure and exclude ScaffoldFailureCode. Converted review catches retain exact handled codes and rethrow other failures.

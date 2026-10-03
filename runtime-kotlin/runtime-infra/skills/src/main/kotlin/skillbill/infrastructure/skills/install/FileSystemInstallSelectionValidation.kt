@@ -1,7 +1,9 @@
 package skillbill.infrastructure.skills.install
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.MalformedInstallSelectionRecordError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.error.shellcontent.malformedInstallSelectionRecordError
 import java.nio.file.Path
 
 internal fun requireExactKeys(
@@ -51,16 +53,17 @@ internal fun Map<String, Any?>.requireBoolean(
   get(key) as? Boolean
     ?: throw malformedInstallSelection(path, "Field '$key' must be a boolean.")
 
-internal fun Throwable.toMalformedInstallSelection(path: Path): MalformedInstallSelectionRecordError =
-  this as? MalformedInstallSelectionRecordError
+internal fun Throwable.toMalformedInstallSelection(path: Path): SkillBillRuntimeException =
+  (this as? SkillBillRuntimeException)
+    ?.takeIf { it.code == InstallFailureCode.MALFORMED_INSTALL_SELECTION_RECORD }
     ?: malformedInstallSelection(path, message.orEmpty(), this)
 
 internal fun malformedInstallSelection(
   path: Path,
   reason: String,
   cause: Throwable? = null,
-): MalformedInstallSelectionRecordError =
-  MalformedInstallSelectionRecordError(
+): SkillBillRuntimeException =
+  malformedInstallSelectionRecordError(
     path = path.toString(),
     reason = reason.ifBlank { "No reason provided." },
     cause = cause,

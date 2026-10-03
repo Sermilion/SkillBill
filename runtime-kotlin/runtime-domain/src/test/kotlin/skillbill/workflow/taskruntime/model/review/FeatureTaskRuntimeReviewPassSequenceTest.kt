@@ -1,11 +1,12 @@
 package skillbill.workflow.taskruntime.model.review
 
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
-import skillbill.review.context.model.execution.CodeReviewExecutionMode
-import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 
 class FeatureTaskRuntimeReviewPassSequenceTest {
   @Test
@@ -27,9 +28,9 @@ class FeatureTaskRuntimeReviewPassSequenceTest {
   @Test
   fun `pass two and later fail loudly instead of reserving remediation review`() {
     listOf(2, 3, 7).forEach { passNumber ->
-      assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeReviewPassSequence.resolveForPass(CodeReviewExecutionMode.INLINE, passNumber)
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
     }
   }
 
@@ -61,9 +62,9 @@ class FeatureTaskRuntimeReviewPassSequenceTest {
         baselineUntrackedPaths = emptyList(),
         codeReviewMode = CodeReviewExecutionMode.AUTO,
       )
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeReviewPassSequence.resolveForPass(state.codeReviewMode, 2)
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
     assertEquals(CodeReviewExecutionMode.AUTO, state.codeReviewMode)
     assertEquals("auto", state.toArtifactMap()["code_review_mode"])
   }
@@ -71,9 +72,9 @@ class FeatureTaskRuntimeReviewPassSequenceTest {
   @Test
   fun `a non-positive pass number fails loudly`() {
     listOf(0, -1, -7).forEach { passNumber ->
-      assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeReviewPassSequence.modeForPass(CodeReviewExecutionMode.INLINE, passNumber)
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
     }
   }
 }

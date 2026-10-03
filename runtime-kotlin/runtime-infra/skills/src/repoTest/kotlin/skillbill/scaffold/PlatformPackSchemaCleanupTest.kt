@@ -11,11 +11,12 @@ import kotlin.test.assertFailsWith
 import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.InvalidInstallPlanSchemaError
-import skillbill.error.shellcontent.InvalidNativeAgentCompositionSchemaError
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.error.shellcontent.invalidInstallPlanSchemaError
 import skillbill.error.shellcontent.invalidManifestSchema
+import skillbill.error.shellcontent.invalidNativeAgentCompositionSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.SchemaIdentityRequest
 import skillbill.infrastructure.contracts.locator.InstallPlanSchemaPaths
@@ -166,16 +167,16 @@ class PlatformPackSchemaCleanupTest {
       """.trimIndent()
 
     val error =
-      assertFailsWith<InvalidInstallPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateIdentity(
           YAMLMapper().readTree(mismatchedIdYaml),
           InstallPlanSchemaPaths.EXPECTED_SCHEMA_ID,
           INSTALL_PLAN_CONTRACT_VERSION,
         ) {
-          InvalidInstallPlanSchemaError(fieldPath = "<schema>", reason = it)
+          invalidInstallPlanSchemaError(fieldPath = "<schema>", reason = it)
         }
-      }
-    val reason = error.reason
+      }.also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
+    val reason = error.message.orEmpty()
     assertContains(reason, "https://malicious.example/shadow-install-plan.yaml")
     assertContains(reason, InstallPlanSchemaPaths.EXPECTED_SCHEMA_ID)
   }
@@ -193,16 +194,16 @@ class PlatformPackSchemaCleanupTest {
       """.trimIndent()
 
     val error =
-      assertFailsWith<InvalidInstallPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateIdentity(
           YAMLMapper().readTree(mismatchedConstYaml),
           InstallPlanSchemaPaths.EXPECTED_SCHEMA_ID,
           INSTALL_PLAN_CONTRACT_VERSION,
         ) {
-          InvalidInstallPlanSchemaError(fieldPath = "<schema>", reason = it)
+          invalidInstallPlanSchemaError(fieldPath = "<schema>", reason = it)
         }
-      }
-    val reason = error.reason
+      }.also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
+    val reason = error.message.orEmpty()
     assertContains(reason, "9.99")
     assertContains(reason, INSTALL_PLAN_CONTRACT_VERSION)
   }
@@ -219,7 +220,7 @@ class PlatformPackSchemaCleanupTest {
       InstallPlanSchemaPaths.EXPECTED_SCHEMA_ID,
       INSTALL_PLAN_CONTRACT_VERSION,
     ) {
-      InvalidInstallPlanSchemaError(fieldPath = "<schema>", reason = it)
+      invalidInstallPlanSchemaError(fieldPath = "<schema>", reason = it)
     }
   }
 
@@ -235,15 +236,15 @@ class PlatformPackSchemaCleanupTest {
       """.trimIndent()
 
     val error =
-      assertFailsWith<InvalidNativeAgentCompositionSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateIdentity(
           YAMLMapper().readTree(mismatchedIdYaml),
           NativeAgentCompositionSchemaPaths.EXPECTED_SCHEMA_ID,
           NATIVE_AGENT_COMPOSITION_CONTRACT_VERSION,
           listOf("\$defs", "contractVersion", "const"),
-        ) { InvalidNativeAgentCompositionSchemaError(sourceLabel = "<schema>", reason = it) }
-      }
-    val reason = error.reason
+        ) { invalidNativeAgentCompositionSchemaError(sourceLabel = "<schema>", reason = it) }
+      }.also { assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, it.code) }
+    val reason = error.message.orEmpty()
     assertContains(reason, "https://malicious.example/shadow-native-agent-composition.yaml")
     assertContains(reason, NativeAgentCompositionSchemaPaths.EXPECTED_SCHEMA_ID)
   }
@@ -260,15 +261,15 @@ class PlatformPackSchemaCleanupTest {
       """.trimIndent()
 
     val error =
-      assertFailsWith<InvalidNativeAgentCompositionSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateIdentity(
           YAMLMapper().readTree(mismatchedConstYaml),
           NativeAgentCompositionSchemaPaths.EXPECTED_SCHEMA_ID,
           NATIVE_AGENT_COMPOSITION_CONTRACT_VERSION,
           listOf("\$defs", "contractVersion", "const"),
-        ) { InvalidNativeAgentCompositionSchemaError(sourceLabel = "<schema>", reason = it) }
-      }
-    val reason = error.reason
+        ) { invalidNativeAgentCompositionSchemaError(sourceLabel = "<schema>", reason = it) }
+      }.also { assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, it.code) }
+    val reason = error.message.orEmpty()
     assertContains(reason, "9.99")
     assertContains(reason, NATIVE_AGENT_COMPOSITION_CONTRACT_VERSION)
   }
@@ -285,7 +286,7 @@ class PlatformPackSchemaCleanupTest {
       NativeAgentCompositionSchemaPaths.EXPECTED_SCHEMA_ID,
       NATIVE_AGENT_COMPOSITION_CONTRACT_VERSION,
       listOf("\$defs", "contractVersion", "const"),
-    ) { InvalidNativeAgentCompositionSchemaError(sourceLabel = "<schema>", reason = it) }
+    ) { invalidNativeAgentCompositionSchemaError(sourceLabel = "<schema>", reason = it) }
   }
 
   @Test

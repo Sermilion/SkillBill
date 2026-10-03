@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
 import skillbill.contracts.workflow.goal.GOAL_OBSERVABILITY_EVENT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidGoalObservabilityEventSchemaError
+import skillbill.error.shellcontent.invalidGoalObservabilityEventSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.GoalObservabilityEventSchemaPaths
@@ -28,7 +28,7 @@ object GoalObservabilityEventSchemaValidator {
     if (errors.isEmpty()) return
     goalObservabilityLog.log(Level.WARNING, buildSchemaDriftLog(sourceLabel, errors, instance))
     val sortedErrors = errors.sortedWith(violationOrdering)
-    throw InvalidGoalObservabilityEventSchemaError(
+    throw invalidGoalObservabilityEventSchemaError(
       sourceLabel = sourceLabel,
       fieldPath =
         goalObservabilityDottedFieldPath(
@@ -94,7 +94,7 @@ private fun goalObservabilityEventSchema(): JsonSchema =
       classLoader = GoalObservabilityEventSchemaValidator::class.java.classLoader,
       classpathResource = GOAL_OBSERVABILITY_EVENT_SCHEMA_CLASSPATH_RESOURCE,
       missingResource = {
-        InvalidGoalObservabilityEventSchemaError(
+        invalidGoalObservabilityEventSchemaError(
           sourceLabel = GOAL_OBSERVABILITY_EVENT_SCHEMA_CLASSPATH_RESOURCE,
           fieldPath = "",
           reason =
@@ -103,7 +103,7 @@ private fun goalObservabilityEventSchema(): JsonSchema =
         )
       },
       processingFailure = { cause ->
-        InvalidGoalObservabilityEventSchemaError(
+        invalidGoalObservabilityEventSchemaError(
           sourceLabel = GOAL_OBSERVABILITY_EVENT_SCHEMA_CLASSPATH_RESOURCE,
           fieldPath = "",
           reason = cause.message ?: cause::class.simpleName.orEmpty(),
@@ -122,7 +122,7 @@ private fun goalObservabilityEventSchema(): JsonSchema =
       expectedSchemaId = GoalObservabilityEventSchemaPaths.EXPECTED_SCHEMA_ID,
       expectedContractVersion = GOAL_OBSERVABILITY_EVENT_CONTRACT_VERSION,
       identityFailure = { reason ->
-        InvalidGoalObservabilityEventSchemaError(
+        invalidGoalObservabilityEventSchemaError(
           sourceLabel = GOAL_OBSERVABILITY_EVENT_SCHEMA_CLASSPATH_RESOURCE,
           fieldPath = "<schema>",
           reason = reason,

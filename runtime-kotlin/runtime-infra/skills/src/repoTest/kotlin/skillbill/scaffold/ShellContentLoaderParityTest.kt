@@ -10,7 +10,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.ContractVersionMismatchError
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
@@ -355,9 +355,9 @@ private fun assertNamedContractVersionFailure(
   expectedMessage: String,
 ) {
   val error =
-    assertFailsWith<ContractVersionMismatchError> {
+    assertFailsWith<SkillBillRuntimeException> {
       loadPlatformPack(fixture(fixtureName))
-    }
+    }.also { assertEquals(InstallFailureCode.CONTRACT_VERSION_MISMATCH, it.code) }
   assertContains(error.message.orEmpty(), fixtureName)
   assertContains(error.message.orEmpty(), expectedMessage)
 }

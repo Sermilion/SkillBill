@@ -16,7 +16,7 @@ import skillbill.error.core.AmbiguousExternalPlatformPackError
 import skillbill.error.core.ExternalPlatformPackConfigError
 import skillbill.error.core.ExternalPlatformPackPublishError
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.ContractVersionMismatchError
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.install.nativeagent.installNativeAgentCompositionContext
@@ -225,9 +225,9 @@ class ExternalPlatformPackCatalogIntegrationTest {
       PackFixtureOptions(gate = "version-gate", contractVersion = "0.0"),
     )
     writeSources(config, wrongVersion)
-    assertFailsWith<ContractVersionMismatchError> {
+    assertFailsWith<SkillBillRuntimeException> {
       loader().loadEffectiveCatalog(context(repo, home, config))
-    }
+    }.also { assertEquals(InstallFailureCode.CONTRACT_VERSION_MISMATCH, it.code) }
 
     val missingContent = root.resolve("external/empty/kotlin")
     writePack(missingContent, "kotlin", "MISSING_MARKER", listOf(".kt"), "missing-gate")

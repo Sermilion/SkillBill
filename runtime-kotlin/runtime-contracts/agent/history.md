@@ -1,3 +1,15 @@
+## [2026-10-03] SKILL-399 install, schema and configuration failure codes
+Areas: runtime-contracts/error/shellcontent, runtime-infra/skills/contracts/host, runtime-application/config, runtime-domain/goalrunner/workflow, runtime-engine/featuretask, runtime-cli, runtime-mcp, runtime-core architecture baseline and install tests
+- Replaced sixteen Install exception classes with InstallFailureCode and SkillBillRuntimeException construction. Producers retain message text and causes across schema validation, configuration, install persistence and reconciliation.
+- Unreadable repo-local config and malformed machine config share REPO_LOCAL_CONFIG_FAILURE. Malformed repo-local config retains its own code.
+- Followed exact code checks and rethrowUnless at converted handling boundaries. InstallFailureCode joins shell-content classification; record and baseline wrapping reuse failures only when their codes match.
+- Reusable: InstallFailureCode and message factories provide shared failure vocabulary for infrastructure producers, domain decoders and application consumers.
+- Converted existing exception assertions to exact code assertions and removed only the sixteen owned custom-throwable baseline rows.
+- Compatibility: deleted exception types have no aliases; converted diagnostic class labels use failureCodeLabel. Persisted schemas, payloads, recovery and quarantine behavior retain their current contracts.
+- Limit: this entry covers subtask 3 only. Goal-planning preparation declarations remain for subtask 4, receipt re-wrap cleanup belongs to subtask 6, and legacy transition support remains while other subclasses or codeless callers exist.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-03] SKILL-399 scaffold and review-context failure codes
 Areas: runtime-contracts/error/shellcontent/scaffold, runtime-domain/scaffold/review, runtime-application/scaffold/review, runtime-engine/featuretask, runtime-ports/review, runtime-infra/skills/contracts/workflow, runtime-cli, runtime-core architecture baseline, runtime-mcp and runtime-infra/sqlite tests
 - Replaced ten Scaffold and ten ReviewContext exception classes with owner failure-code enums and message functions. Producers across the affected modules now construct coded SkillBillRuntimeException failures.

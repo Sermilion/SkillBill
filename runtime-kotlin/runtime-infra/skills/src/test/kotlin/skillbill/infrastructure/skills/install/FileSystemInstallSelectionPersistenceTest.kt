@@ -1,9 +1,15 @@
 package skillbill.infrastructure.skills.install
 
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.MalformedInstallSelectionRecordError
-import skillbill.error.shellcontent.MissingInstallSelectionRecordError
-import skillbill.error.shellcontent.UnreadableInstallSelectionRecordError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.install.model.InstallTelemetryLevel
 import skillbill.install.model.McpRegistrationChoice
 import skillbill.install.model.PlatformPackSelection
@@ -14,13 +20,6 @@ import skillbill.model.toPath
 import skillbill.ports.install.selection.model.ReadLatestSuccessfulInstallSelectionRequest
 import skillbill.ports.install.selection.model.WriteLatestSuccessfulInstallSelectionRequest
 import skillbill.ports.repository.toFileLocation
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 
 class FileSystemInstallSelectionPersistenceTest {
   @Test
@@ -135,9 +134,9 @@ class FileSystemInstallSelectionPersistenceTest {
       selection,
       store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(alternateHome)).selection,
     )
-    assertFailsWith<MissingInstallSelectionRecordError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(firstHome))
-    }
+    }.also { assertEquals(InstallFailureCode.MISSING_INSTALL_SELECTION_RECORD, it.code) }
   }
 
   @Test
@@ -205,11 +204,11 @@ class FileSystemInstallSelectionPersistenceTest {
       )
 
     invalidSelections.forEach { (caseName, invalidSelection) ->
-      assertFailsWith<MalformedInstallSelectionRecordError>(caseName) {
+      assertFailsWith<SkillBillRuntimeException>(caseName) {
         store.writeLatestSuccessfulSelection(
           WriteLatestSuccessfulInstallSelectionRequest(installHome = home, selection = invalidSelection),
         )
-      }
+      }.also { assertEquals(InstallFailureCode.MALFORMED_INSTALL_SELECTION_RECORD, it.code) }
     }
     assertEquals(
       validSelection,
@@ -301,9 +300,9 @@ class FileSystemInstallSelectionPersistenceTest {
     val store = FileSystemInstallSelectionPersistence()
 
     val error =
-      assertFailsWith<MissingInstallSelectionRecordError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home))
-      }
+      }.also { assertEquals(InstallFailureCode.MISSING_INSTALL_SELECTION_RECORD, it.code) }
 
     assertContains(error.message.orEmpty(), "install-selection.json")
   }
@@ -317,9 +316,9 @@ class FileSystemInstallSelectionPersistenceTest {
     val store = FileSystemInstallSelectionPersistence()
 
     val error =
-      assertFailsWith<MalformedInstallSelectionRecordError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home))
-      }
+      }.also { assertEquals(InstallFailureCode.MALFORMED_INSTALL_SELECTION_RECORD, it.code) }
 
     assertContains(error.message.orEmpty(), "unknown keys")
     assertContains(error.message.orEmpty(), "recentRepoPath")
@@ -333,9 +332,9 @@ class FileSystemInstallSelectionPersistenceTest {
     Files.writeString(path, "x".repeat(64 * 1024 + 1))
     val store = FileSystemInstallSelectionPersistence()
 
-    assertFailsWith<UnreadableInstallSelectionRecordError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home))
-    }
+    }.also { assertEquals(InstallFailureCode.UNREADABLE_INSTALL_SELECTION_RECORD, it.code) }
   }
 
   @Test
@@ -355,11 +354,11 @@ class FileSystemInstallSelectionPersistenceTest {
           ),
       )
 
-    assertFailsWith<UnreadableInstallSelectionRecordError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.writeLatestSuccessfulSelection(
         WriteLatestSuccessfulInstallSelectionRequest(installHome = home, selection = oversizedSelection),
       )
-    }
+    }.also { assertEquals(InstallFailureCode.UNREADABLE_INSTALL_SELECTION_RECORD, it.code) }
 
     assertEquals(
       previousSelection,
@@ -412,9 +411,9 @@ class FileSystemInstallSelectionPersistenceTest {
       Files.createDirectories(path.parent)
       Files.writeString(path, payload)
 
-      assertFailsWith<MalformedInstallSelectionRecordError>(caseName) {
+      assertFailsWith<SkillBillRuntimeException>(caseName) {
         store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home))
-      }
+      }.also { assertEquals(InstallFailureCode.MALFORMED_INSTALL_SELECTION_RECORD, it.code) }
     }
   }
 
@@ -425,9 +424,9 @@ class FileSystemInstallSelectionPersistenceTest {
     Files.createDirectories(path)
     val store = FileSystemInstallSelectionPersistence()
 
-    assertFailsWith<UnreadableInstallSelectionRecordError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.readLatestSuccessfulSelection(ReadLatestSuccessfulInstallSelectionRequest(home))
-    }
+    }.also { assertEquals(InstallFailureCode.UNREADABLE_INSTALL_SELECTION_RECORD, it.code) }
   }
 
   private fun selection(

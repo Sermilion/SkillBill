@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.loader
 
-import skillbill.error.shellcontent.ContractVersionMismatchError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidFallbackCapability as codedInvalidFallbackCapability
 import skillbill.error.shellcontent.invalidManifestSchema as codedInvalidManifestSchema
 import skillbill.error.shellcontent.invalidValidationGateDeclaration as codedInvalidValidationGateDeclaration
@@ -24,7 +25,7 @@ internal fun invalidFallbackCapability(message: String): Nothing {
 }
 
 internal fun contractVersionMismatch(message: String): Nothing {
-  throw ContractVersionMismatchError(message)
+  throw SkillBillRuntimeException(InstallFailureCode.CONTRACT_VERSION_MISMATCH, message)
 }
 
 internal fun invalidValidationGateDeclaration(message: String): Nothing {

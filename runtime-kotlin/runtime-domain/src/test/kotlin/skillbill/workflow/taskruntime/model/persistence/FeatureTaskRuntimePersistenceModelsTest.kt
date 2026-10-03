@@ -1,12 +1,22 @@
 package skillbill.workflow.taskruntime.model.persistence
 
+import java.math.BigDecimal
+import java.math.BigInteger
+import java.time.Instant
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_RUN_INVARIANTS_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.goalrunner.FeatureTaskRuntimeCommitPushResultArtifact
 import skillbill.goalrunner.commitPushResultArtifact
@@ -62,15 +72,6 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.BUILD
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.VALIDATE
-import java.math.BigDecimal
-import java.math.BigInteger
-import java.time.Instant
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class FeatureTaskRuntimePersistenceModelsTest {
   @Test
@@ -1004,11 +1005,11 @@ class FeatureTaskRuntimeGoalContinuationPersistenceModelsTest {
   @Test
   fun `goal review accessor distinguishes absent state from an incomplete artifact family`() {
     assertNull(DurableWorkflowArtifacts.EMPTY.goalSubtaskReviewArtifacts())
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       DurableWorkflowArtifacts.fromMap(
         mapOf(GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY to emptyMap<String, Any?>()),
       ).goalSubtaskReviewArtifacts()
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
   }
 
   @Test

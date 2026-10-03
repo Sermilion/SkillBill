@@ -1,5 +1,20 @@
 package skillbill.engine.featuretask.persist
 
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset.UTC
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestDecompositionManifestStore
@@ -52,12 +67,14 @@ import skillbill.engine.goalrunner.persist.OutcomeStoreTestArtifactPorts
 import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
-import skillbill.error.shellcontent.InvalidGoalObservabilityEventSchemaError
-import skillbill.error.shellcontent.InvalidGoalProgressEventSchemaError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidGoalObservabilityEventSchemaError
+import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
 import skillbill.goalrunner.model.GOAL_ATTEMPT_LEDGER_LIMIT
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.goalrunner.model.GoalRunnerControlState
@@ -121,21 +138,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactK
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneOffset.UTC
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 private fun WorkflowService.openTestRuntime(
   sessionId: String = "",
@@ -2919,7 +2921,7 @@ class WorkflowGoalRunnerProgressStoreTest {
                   payload: FeatureTaskRuntimeWorkflowArtifactMap,
                   sourceLabel: String,
                 ) {
-                  throw InvalidGoalObservabilityEventSchemaError(sourceLabel, "subtask_id", "subtask_id is required.")
+                  throw invalidGoalObservabilityEventSchemaError(sourceLabel, "subtask_id", "subtask_id is required.")
                 }
               },
           ),
@@ -3117,7 +3119,7 @@ class WorkflowGoalRunnerProgressStoreTest {
                   payload: FeatureTaskRuntimeWorkflowArtifactMap,
                   sourceLabel: String,
                 ) {
-                  throw InvalidGoalProgressEventSchemaError(
+                  throw invalidGoalProgressEventSchemaError(
                     sourceLabel,
                     "operation_name",
                     "operation_name is required.",
@@ -3127,9 +3129,9 @@ class WorkflowGoalRunnerProgressStoreTest {
           ),
       )
 
-    assertFailsWith<InvalidGoalProgressEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.recordProgressEvent(progressEventRequest("wfl-child", tick = 0))
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA, it.code) }
     val artifacts = requireNotNull(workflows.getFeatureTaskWorkflow("wfl-child")).toSnapshot().artifacts
     assertFalse(artifacts.containsKey("goal_progress_run_history"))
     assertFalse(artifacts.containsKey("goal_progress_latest_event"))

@@ -1,5 +1,14 @@
 package skillbill.engine.goalrunner.persist
 
+import java.nio.file.Path
+import java.time.Instant
+import java.time.temporal.ChronoUnit
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.testWorkflowSnapshotValidator
@@ -11,7 +20,8 @@ import skillbill.engine.goalrunner.model.GoalAttemptLedgerEntryDraft
 import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.status.liveLease
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
@@ -25,15 +35,6 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.phaseRecordsFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
-import java.nio.file.Path
-import java.time.Instant
-import java.time.temporal.ChronoUnit
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
   @Test
@@ -150,12 +151,12 @@ class WorkflowGoalRunnerOutcomeStoreTaskRuntimeTest {
         workflowSnapshotValidator = testWorkflowSnapshotValidator,
       )
 
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.unemittedGoalReviewPasses("wftr-goal-review")
-    }
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       store.acknowledgeGoalReviewPass("wftr-goal-review", 1)
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
   }
 
   @Test

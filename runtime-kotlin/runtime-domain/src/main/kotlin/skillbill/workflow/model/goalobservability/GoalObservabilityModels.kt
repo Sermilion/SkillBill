@@ -3,7 +3,7 @@ package skillbill.workflow.model.goalobservability
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.goal.GOAL_OBSERVABILITY_EVENT_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GOAL_PROGRESS_EVENT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidGoalProgressEventSchemaError
+import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.time.parsePersistedInstant
 import java.time.Instant
@@ -39,7 +39,7 @@ enum class GoalProgressEventKind(val wireValue: String) {
   companion object {
     fun fromWire(value: String): GoalProgressEventKind =
       entries.firstOrNull { it.wireValue == value }
-        ?: throw InvalidGoalProgressEventSchemaError("<wire>", "event_kind", "unrecognized value '$value'.")
+        ?: throw invalidGoalProgressEventSchemaError("<wire>", "event_kind", "unrecognized value '$value'.")
   }
 }
 
@@ -54,7 +54,7 @@ enum class GoalProgressOutcome(val wireValue: String) {
   companion object {
     fun fromWire(value: String): GoalProgressOutcome =
       entries.firstOrNull { it.wireValue == value }
-        ?: throw InvalidGoalProgressEventSchemaError("<wire>", "outcome", "unrecognized value '$value'.")
+        ?: throw invalidGoalProgressEventSchemaError("<wire>", "outcome", "unrecognized value '$value'.")
   }
 }
 

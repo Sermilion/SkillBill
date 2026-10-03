@@ -2,7 +2,7 @@ package skillbill.goalrunner.ledger
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
-import skillbill.error.shellcontent.InvalidGoalProgressEventSchemaError
+import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
 import skillbill.goalrunner.model.GoalRunnerProgressEvent
 import skillbill.workflow.engine.model.GOAL_PROGRESS_LATEST_EVENT_ARTIFACT_KEY
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
@@ -24,7 +24,7 @@ fun declaredProgressEventFrom(artifacts: Any): GoalProgressEvent? {
   return when (val raw = wire[GOAL_PROGRESS_LATEST_EVENT_ARTIFACT_KEY]) {
     null -> null
     is Map<*, *> -> raw.decodeDeclaredGoalProgressEvent(GOAL_PROGRESS_LATEST_EVENT_ARTIFACT_KEY)
-    else -> throw InvalidGoalProgressEventSchemaError(
+    else -> throw invalidGoalProgressEventSchemaError(
       GOAL_PROGRESS_LATEST_EVENT_ARTIFACT_KEY,
       "<root>",
       "must be an object.",
@@ -47,7 +47,7 @@ fun Map<*, *>.decodeDeclaredGoalProgressEvent(sourceLabel: String): GoalProgress
   val timestamp =
     runCatching { parsePersistedInstant(reader.requiredString("timestamp")) }
       .getOrElse { error ->
-        throw InvalidGoalProgressEventSchemaError(sourceLabel, "timestamp", "must be an RFC 3339 instant.", error)
+        throw invalidGoalProgressEventSchemaError(sourceLabel, "timestamp", "must be an RFC 3339 instant.", error)
       }
   val sequenceNumber =
     reader.requiredInt("sequence_number").also { value ->
@@ -71,7 +71,7 @@ fun Map<*, *>.decodeDeclaredGoalProgressEvent(sourceLabel: String): GoalProgress
       outcome = outcome,
     )
   } catch (error: IllegalArgumentException) {
-    throw InvalidGoalProgressEventSchemaError(sourceLabel, "<root>", error.message ?: "invalid event.", error)
+    throw invalidGoalProgressEventSchemaError(sourceLabel, "<root>", error.message ?: "invalid event.", error)
   }
 }
 
@@ -79,7 +79,7 @@ private fun invalidDeclaredGoalProgressEvent(
   sourceLabel: String,
   field: String,
   detail: String,
-): Nothing = throw InvalidGoalProgressEventSchemaError(sourceLabel, field, detail)
+): Nothing = throw invalidGoalProgressEventSchemaError(sourceLabel, field, detail)
 
 private fun requiredProgressEventKind(
   reader: DurableArtifactMapReader,
@@ -87,7 +87,7 @@ private fun requiredProgressEventKind(
 ): GoalProgressEventKind {
   val wire = reader.requiredString("event_kind")
   return GoalProgressEventKind.entries.firstOrNull { it.wireValue == wire }
-    ?: throw InvalidGoalProgressEventSchemaError(sourceLabel, "event_kind", "unrecognized value '$wire'.")
+    ?: throw invalidGoalProgressEventSchemaError(sourceLabel, "event_kind", "unrecognized value '$wire'.")
 }
 
 private fun optionalProgressOutcome(
@@ -96,5 +96,5 @@ private fun optionalProgressOutcome(
 ): GoalProgressOutcome {
   val outcomeWire = reader.optionalString("outcome") ?: return GoalProgressOutcome.NONE
   return GoalProgressOutcome.entries.firstOrNull { it.wireValue == outcomeWire }
-    ?: throw InvalidGoalProgressEventSchemaError(sourceLabel, "outcome", "unrecognized value '$outcomeWire'.")
+    ?: throw invalidGoalProgressEventSchemaError(sourceLabel, "outcome", "unrecognized value '$outcomeWire'.")
 }

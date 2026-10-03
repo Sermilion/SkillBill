@@ -1,6 +1,6 @@
 package skillbill.workflow.taskruntime.model.review
 
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
+import skillbill.error.shellcontent.invalidGoalSubtaskReviewStateSchemaError
 import skillbill.review.context.ReviewExecutionModePolicy
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.context.model.execution.toCodeReviewExecutionMode
@@ -17,14 +17,14 @@ object FeatureTaskRuntimeReviewPassSequence {
     passNumber: Int,
   ): ReviewPassResolution {
     if (passNumber < 1) {
-      throw InvalidGoalSubtaskReviewStateSchemaError(
+      throw invalidGoalSubtaskReviewStateSchemaError(
         sourceLabel = GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY,
         fieldPath = "review_pass_number",
         reason = "must be a positive integer.",
       )
     }
     if (passNumber > ReviewExecutionModePolicy.FIRST_REVIEW_PASS) {
-      throw InvalidGoalSubtaskReviewStateSchemaError(
+      throw invalidGoalSubtaskReviewStateSchemaError(
         sourceLabel = GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY,
         fieldPath = "review_pass_number",
         reason = "review runs exactly once; pass $passNumber is not allowed.",

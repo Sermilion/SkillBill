@@ -1,5 +1,14 @@
 package skillbill.cli
 
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Instant
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import skillbill.application.workflow.model.WorkflowContinueResult
 import skillbill.application.workflow.model.WorkflowGetResult
 import skillbill.application.workflow.model.WorkflowUpdateResult
@@ -10,7 +19,8 @@ import skillbill.cli.kernel.payload.toPayload
 import skillbill.cli.workflow.toCliMap
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
-import skillbill.error.shellcontent.InvalidGoalObservabilityEventSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowSnapshotView
@@ -25,14 +35,6 @@ import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffH
 import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffHunks
 import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.Instant
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class WorkflowCliResultMappersTest {
   @Test
@@ -211,7 +213,7 @@ class WorkflowCliResultMappersTest {
   @Test
   fun `workflow mapper loud-fails malformed goal observability latest event`() {
     val error =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
@@ -230,29 +232,29 @@ class WorkflowCliResultMappersTest {
                 ),
             ),
         ).withDecodedGoalObservability().toCliMap()
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
-    assertEquals("", error.fieldPath)
+    assertContains(error.message.orEmpty(), "at '<root>'")
   }
 
   @Test
   fun `workflow mapper loud-fails schema-invalid extra goal observability field`() {
     val error =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("unknown" to true)),
         ).withDecodedGoalObservability().toCliMap()
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
-    assertEquals("", error.fieldPath)
+    assertContains(error.message.orEmpty(), "at '<root>'")
   }
 
   @Test
   fun `workflow mapper loud-fails malformed optional goal observability summary`() {
     val error =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
@@ -261,15 +263,15 @@ class WorkflowCliResultMappersTest {
               event = snapshotWithObservabilityEvent() + ("changed_file_summary" to "not-an-object"),
             ),
         ).withDecodedGoalObservability().toCliMap()
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
-    assertEquals("changed_file_summary", error.fieldPath)
+    assertContains(error.message.orEmpty(), "changed_file_summary")
   }
 
   @Test
   fun `workflow mapper loud-fails malformed optional goal observability arrays`() {
     val changedFilesError =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
@@ -278,11 +280,11 @@ class WorkflowCliResultMappersTest {
               event = snapshotWithObservabilityEvent() + ("changed_files" to listOf(123)),
             ),
         ).withDecodedGoalObservability().toCliMap()
-      }
-    assertEquals("changed_files[0]", changedFilesError.fieldPath)
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
+    assertContains(changedFilesError.message.orEmpty(), "changed_files[0]")
 
     val samplePathsError =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
@@ -303,47 +305,47 @@ class WorkflowCliResultMappersTest {
                 ),
             ),
         ).withDecodedGoalObservability().toCliMap()
-      }
-    assertEquals("changed_file_summary.sample_paths", samplePathsError.fieldPath)
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
+    assertContains(samplePathsError.message.orEmpty(), "changed_file_summary.sample_paths")
   }
 
   @Test
   fun `workflow mapper loud-fails schema-invalid scalar coercion`() {
     val issueKeyError =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("issue_key" to 61)),
         ).withDecodedGoalObservability().toCliMap()
-      }
-    assertEquals("issue_key", issueKeyError.fieldPath)
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
+    assertContains(issueKeyError.message.orEmpty(), "issue_key")
 
     val subtaskIdError =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("subtask_id" to "1")),
         ).withDecodedGoalObservability().toCliMap()
-      }
-    assertEquals("subtask_id", subtaskIdError.fieldPath)
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
+    assertContains(subtaskIdError.message.orEmpty(), "subtask_id")
 
     val timestampError =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
           snapshot = snapshotWithObservability(event = snapshotWithObservabilityEvent() + ("timestamp" to 20260601)),
         ).withDecodedGoalObservability().toCliMap()
-      }
-    assertEquals("timestamp", timestampError.fieldPath)
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
+    assertContains(timestampError.message.orEmpty(), "timestamp")
   }
 
   @Test
   fun `workflow mapper loud-fails schema-only invalid heavy goal observability fields`() {
     val error =
-      assertFailsWith<InvalidGoalObservabilityEventSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         WorkflowGetResult.Ok(
           workflowId = "wfl-1",
           dbPath = "/tmp/metrics.db",
@@ -352,9 +354,9 @@ class WorkflowCliResultMappersTest {
               event = snapshotWithObservabilityEvent() + ("changed_files" to List(501) { "file-$it.kt" }),
             ),
         ).withDecodedGoalObservability().toCliMap()
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA, it.code) }
 
-    assertEquals("changed_files", error.fieldPath)
+    assertContains(error.message.orEmpty(), "changed_files")
   }
 
   private fun snapshotWithObservability(

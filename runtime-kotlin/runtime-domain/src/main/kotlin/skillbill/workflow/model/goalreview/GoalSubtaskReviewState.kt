@@ -5,7 +5,10 @@ import skillbill.contracts.scaffold.wire.optionalList
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.identity.subtask.GOAL_SUBTASK_REVIEW_STATE_CONTRACT_VERSION
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeRepairReceiptError
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
+import skillbill.error.shellcontent.invalidGoalSubtaskReviewStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -310,7 +313,8 @@ data class GoalSubtaskReviewState(
           remediationBaseSha = reader.optionalString("remediation_base_sha"),
           repairReceipts = decodeRepairReceipts(raw, sourceLabel),
         )
-      } catch (error: InvalidGoalSubtaskReviewStateSchemaError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code == InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA)
         throw error
       } catch (error: IllegalArgumentException) {
         reviewStateError(sourceLabel, error.message.orEmpty(), error)
@@ -379,7 +383,7 @@ internal fun reviewStateError(
   reason: String,
   cause: Throwable? = null,
 ): Nothing =
-  throw InvalidGoalSubtaskReviewStateSchemaError(
+  throw invalidGoalSubtaskReviewStateSchemaError(
     sourceLabel = GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY,
     fieldPath = fieldPath,
     reason = reason,

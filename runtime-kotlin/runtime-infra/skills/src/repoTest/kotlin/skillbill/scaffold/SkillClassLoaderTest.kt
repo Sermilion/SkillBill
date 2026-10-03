@@ -9,7 +9,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.ContractVersionMismatchError
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass.SKILL_CLASSES_DIR
@@ -184,7 +184,8 @@ class SkillClassLoaderTest {
         - exact: bill-widget
       """.trimIndent() + "\n",
     )
-    assertFailsWith<ContractVersionMismatchError> { discoverSkillClasses(repoRoot) }
+    assertFailsWith<SkillBillRuntimeException> { discoverSkillClasses(repoRoot) }
+      .also { assertEquals(InstallFailureCode.CONTRACT_VERSION_MISMATCH, it.code) }
   }
 
   @Test

@@ -1,6 +1,7 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION
+import skillbill.error.core.failureCodeLabel
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
@@ -35,9 +36,9 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
         FeatureTaskRuntimeWireArtifactKind.HANDOFF_ENVELOPE to
           "InvalidFeatureTaskRuntimeHandoffProjectionError",
         FeatureTaskRuntimeWireArtifactKind.GOAL_PROGRESS_EVENT to
-          "InvalidGoalProgressEventSchemaError",
+          "InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT to
-          "InvalidGoalObservabilityEventSchemaError",
+          "InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE to
           "InvalidGoalPlanningPreparationSchemaError",
       )
@@ -47,7 +48,7 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
         assertFailsWith<RuntimeException> {
           validator.validate(kind, FeatureTaskRuntimeWorkflowArtifactMap.from(emptyMap<String, Any?>()), kind.name)
         }
-      assertEquals(expectedErrors.getValue(kind), error::class.simpleName)
+      assertEquals(expectedErrors.getValue(kind), error.failureCodeLabel() ?: error::class.simpleName)
     }
   }
 

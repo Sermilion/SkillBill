@@ -1,6 +1,12 @@
 package skillbill.infrastructure.skills.nativeagent
 
-import skillbill.error.shellcontent.InvalidNativeAgentCompositionSchemaError
+import java.nio.file.Files
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionDirective
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionKind
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentSource
@@ -8,11 +14,6 @@ import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentB
 import skillbill.infrastructure.skills.nativeagent.composition.parseNativeAgentSourceText
 import skillbill.infrastructure.skills.nativeagent.composition.renderNativeAgentBundle
 import skillbill.infrastructure.skills.nativeagent.composition.renderNativeAgentSource
-import java.nio.file.Files
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 class NativeAgentSourceParserTest {
   @Test
@@ -109,9 +110,9 @@ class NativeAgentSourceParserTest {
     )
 
     val error =
-      assertFailsWith<InvalidNativeAgentCompositionSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseNativeAgentBundle(bundlePath)
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "property 'mode' is not defined")
   }
@@ -130,9 +131,9 @@ class NativeAgentSourceParserTest {
     )
 
     val error =
-      assertFailsWith<InvalidNativeAgentCompositionSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseNativeAgentBundle(bundlePath)
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "required property 'compose' not found")
   }
@@ -152,12 +153,12 @@ class NativeAgentSourceParserTest {
     )
 
     val error =
-      assertFailsWith<InvalidNativeAgentCompositionSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseNativeAgentBundle(bundlePath)
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, it.code) }
 
-    assertContains(error.sourceLabel, bundlePath.toString())
-    assertContains(error.reason, "native agent body is required")
+    assertContains(error.message.orEmpty(), bundlePath.toString())
+    assertContains(error.message.orEmpty(), "native agent body is required")
   }
 
   @Test
@@ -167,12 +168,12 @@ class NativeAgentSourceParserTest {
     Files.writeString(bundlePath, "agents:\n  - name: [unterminated\n")
 
     val error =
-      assertFailsWith<InvalidNativeAgentCompositionSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         parseNativeAgentBundle(bundlePath)
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_NATIVE_AGENT_COMPOSITION_SCHEMA, it.code) }
 
-    assertContains(error.sourceLabel, bundlePath.toString())
-    assertContains(error.reason, "could not parse YAML")
+    assertContains(error.message.orEmpty(), bundlePath.toString())
+    assertContains(error.message.orEmpty(), "could not parse YAML")
   }
 
   @Test

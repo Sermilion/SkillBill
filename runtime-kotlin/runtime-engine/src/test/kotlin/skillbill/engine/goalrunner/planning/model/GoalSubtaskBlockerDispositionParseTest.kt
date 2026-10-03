@@ -1,12 +1,13 @@
 package skillbill.engine.goalrunner.planning.model
 
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
-import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
-import skillbill.workflow.model.goalreview.GoalSubtaskBlockerDispositionVerdict
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
+import skillbill.workflow.model.goalreview.GoalSubtaskBlockerDispositionVerdict
 
 class GoalSubtaskBlockerDispositionParseTest {
   private fun output(vararg dispositions: Map<String, Any?>): Map<String, Any?> =
@@ -33,40 +34,40 @@ class GoalSubtaskBlockerDispositionParseTest {
   @Test
   fun `superseded verdict loud-fails at the parse seam`() {
     val error =
-      assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         GoalSubtaskReviewSummaryReducer.blockerDispositions(
           output(
             mapOf("finding_id" to "F-001", "verdict" to "superseded", "evidence" to listOf("call site deleted")),
           ),
         )
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
     assertTrue(error.message.orEmpty().contains("superseded"))
   }
 
   @Test
   fun `an unevidenced disposition is rejected at the parse seam`() {
     val error =
-      assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         GoalSubtaskReviewSummaryReducer.blockerDispositions(
           output(mapOf("finding_id" to "F-001", "verdict" to "resolved")),
         )
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
     assertTrue(error.message.orEmpty().contains("evidence"))
 
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskReviewSummaryReducer.blockerDispositions(
         output(mapOf("finding_id" to "F-001", "verdict" to "resolved", "evidence" to listOf("   "))),
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
   }
 
   @Test
   fun `an unknown verdict is rejected rather than coerced`() {
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskReviewSummaryReducer.blockerDispositions(
         output(mapOf("finding_id" to "F-001", "verdict" to "probably_fine", "evidence" to listOf("line 3"))),
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -89,12 +90,12 @@ class GoalSubtaskBlockerDispositionParseTest {
     assertEquals(introducedByPassFour, parsed.map { it.findingId })
 
     val error =
-      assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         GoalSubtaskReviewSummaryReducer.blockerDispositions(
           output(mapOf("finding_id" to "F-001", "verdict" to "resolved", "evidence" to listOf("stale round"))),
           priorBlockerFindingIds = introducedByPassFour,
         )
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
     assertTrue(
       error.message.orEmpty().contains("F-001"),
       "A disposition against an older round's Blocker must be rejected by name.",

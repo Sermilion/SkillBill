@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass
 
-import skillbill.error.shellcontent.ContractVersionMismatchError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.invalidManifestSchema
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
 import skillbill.scaffold.model.SkillClassSection
@@ -30,7 +31,7 @@ internal fun validateSkillClassContractVersion(
   contractVersion: String,
 ) {
   if (contractVersion != SHELL_CONTRACT_VERSION) {
-    throw ContractVersionMismatchError(
+    throw SkillBillRuntimeException(InstallFailureCode.CONTRACT_VERSION_MISMATCH,
       "Skill class '$classId': declares contract_version '$contractVersion' " +
         "but the shell expects '$SHELL_CONTRACT_VERSION'.",
     )

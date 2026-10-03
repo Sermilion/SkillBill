@@ -1,7 +1,15 @@
 package skillbill.application
 
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertSame
 import skillbill.application.install.InstallService
-import skillbill.error.shellcontent.InvalidInstallPlanSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.error.shellcontent.invalidInstallPlanSchemaError
 import skillbill.install.model.InstallAgentDefaultTarget
 import skillbill.install.model.InstallAgentLinkStatus
 import skillbill.install.model.InstallAgentSelection
@@ -78,12 +86,6 @@ import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.model.DeclaredFiles
 import skillbill.scaffold.model.PlatformManifest
 import skillbill.scaffold.model.RoutingSignals
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertSame
 
 class InstallServiceTest {
   @Test
@@ -134,19 +136,19 @@ class InstallServiceTest {
     val loudFailValidator =
       object : InstallPlanWireValidator {
         override fun validate(plan: InstallPlanWireMap): Unit =
-          throw InvalidInstallPlanSchemaError(
+          throw invalidInstallPlanSchemaError(
             fieldPath = "mcp_registration.runtime_mcp_bin",
             reason = "must be a non-empty string when register is true.",
           )
       }
     val error =
-      assertFailsWith<InvalidInstallPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         serviceForApply(
           result = successfulApplyResult(plan, resolvedAgent = SupportedAgent.CODEX),
           selectionPort = NoopInstallSelectionPersistencePort,
           wireValidator = loudFailValidator,
         ).validateInstallPlanWire(plan)
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
     assertContains(error.message.orEmpty(), "mcp_registration.runtime_mcp_bin")
   }
 
