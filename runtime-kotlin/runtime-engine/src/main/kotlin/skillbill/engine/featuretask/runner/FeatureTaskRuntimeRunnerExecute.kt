@@ -121,7 +121,6 @@ class FeatureTaskRuntimeRunnerExecute(
           executionPlan,
           observability,
           state,
-          diagnostics,
         )
       }.onFailure { error ->
         lifecycleTelemetry.finishedError(
@@ -155,7 +154,6 @@ class FeatureTaskRuntimeRunnerExecute(
     phaseTokenData = { serializeTokenData(state.phaseTokenView) },
     crashReconciliation = { reconciliation },
   )
-
 
   internal fun loadReviewFixIterationCount(request: FeatureTaskRuntimeRunRequest): Int =
     recorder.loadPhaseLedger(request.workflowId)

@@ -88,7 +88,7 @@ internal class GoalPlanningPhaseRunState(
     authorizeSelectedStepRun(run)
     stepBinding.beginStepBinding(run)
     return FeatureTaskRuntimeRunLoopStepBindings.create(
-      phaseAttemptLaunchCollaborationScope(PhaseAttemptRunHost(run.request, this, run.phaseId, this)),
+      phaseAttemptLaunchCollaborationScope(PhaseAttemptRunHost(run, this)),
       run,
     )
   }
@@ -154,7 +154,7 @@ private class GoalPlanningUnitRunState(
     parent.authorizeSelectedStepRun(run)
     parent.stepBinding.beginStepBinding(run, unitId)
     return FeatureTaskRuntimeRunLoopStepBindings.create(
-      phaseAttemptLaunchCollaborationScope(PhaseAttemptRunHost(run.request, this, run.phaseId, this)),
+      phaseAttemptLaunchCollaborationScope(PhaseAttemptRunHost(run, this)),
       run,
       unitId,
       bindingCoordinator = parent.stepBinding,

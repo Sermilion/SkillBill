@@ -26,9 +26,11 @@ import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorP
 import skillbill.engine.goalrunner.planning.recovery.NO_GOAL_PLANNING_STATUS_REASON_COHERENCE
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairStore
+import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
 import skillbill.engine.goalrunner.repair.NoopGoalRunnerChildRepairStore
 import skillbill.engine.goalrunner.reset.GoalRunnerPurgeCoordinator
 import skillbill.engine.goalrunner.reset.GoalRunnerResetReplanCoordinator
+import skillbill.engine.goalrunner.status.GoalRunnerStatusControlVerbs
 import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.ports.config.RepoLocalConfigPort
@@ -87,7 +89,6 @@ fun testGoalRunnerStatusService(
       attemptLedgerStore = ports.attemptLedgerStore,
       database = database,
       gitOperations = ports.gitOperations,
-      clock = clock,
       workerSupervisor = ports.workerSupervisor,
       planningStatusReasonCoherence = NO_GOAL_PLANNING_STATUS_REASON_COHERENCE,
       diagnostics = ports.diagnostics,
@@ -96,13 +97,20 @@ fun testGoalRunnerStatusService(
     )
   return GoalRunnerStatusService(
     manifestStore = manifestStore,
-    outcomeStore = outcomeStore,
-    phaseQuery = phaseRecorder.phaseQuery,
-    gitOperations = ports.gitOperations,
-    clock = clock,
-    workerSupervisor = ports.workerSupervisor,
-    childRepairStore = ports.childRepairStore,
-    repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+    controlVerbs =
+      GoalRunnerStatusControlVerbs(
+        manifestStore,
+        clock,
+        ports.workerSupervisor,
+        TestRepositoryEnclosingRoot,
+      ),
+    repairCoordinator =
+      GoalRunnerRepairCoordinator(
+        manifestStore, phaseRecorder.phaseQuery, ports.workerSupervisor,
+        ports.childRepairStore, outcomeStore, testRepositoryRoot, TestRepositoryEnclosingRoot, clock, ports.diagnostics,
+      ),
+    acceptanceCoordinator = GoalRunnerAcceptanceCoordinator(manifestStore, outcomeStore, ports.gitOperations, clock),
+    repositoryRoot = testRepositoryRoot,
     projectionAssembler = projectionAssembler,
     resetReplanCoordinator =
       GoalRunnerResetReplanCoordinator(

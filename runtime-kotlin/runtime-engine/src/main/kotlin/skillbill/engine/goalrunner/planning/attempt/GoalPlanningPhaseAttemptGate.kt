@@ -18,9 +18,9 @@ import skillbill.engine.goalrunner.planning.outcome.stdoutFor
 import skillbill.engine.goalrunner.planning.outcome.stopped
 import skillbill.engine.goalrunner.planning.outcome.unexpectedPlanningFailureReason
 import skillbill.engine.goalrunner.planning.remedies.GoalPlanningRejectionRecorder
-import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.time.RuntimeTimingPort
 import skillbill.ports.time.model.RuntimeWaitResult
 import skillbill.workflow.model.goalobservability.GoalProgressOutcome

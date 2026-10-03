@@ -3,8 +3,10 @@ package skillbill.engine.featuretask.lifecycle.core
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
-import skillbill.engine.ExecutionPlanAdmissionFixture
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
+import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerRunPreparation
+import skillbill.engine.goalrunner.execution.core.testSpecDriftRecovery
 import skillbill.engine.goalrunner.manifest.TestNoopGoalPlanningManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -57,6 +59,7 @@ class BlockedWorkerCrashRecoveryTest {
           TestRepositoryEnclosingRoot,
           execution.recoveryResolver(),
           reconciler,
+          testSpecDriftRecovery(TestNoopGoalPlanningManifestStore, RecordingOutcomeStore()),
         )
       val manifest =
         DecompositionManifest(

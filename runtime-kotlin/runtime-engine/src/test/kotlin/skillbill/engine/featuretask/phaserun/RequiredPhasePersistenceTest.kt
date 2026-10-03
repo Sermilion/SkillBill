@@ -1,14 +1,5 @@
 package skillbill.engine.featuretask.phaserun
 
-import skillbill.engine.IMPLEMENT_OUTPUT
-import skillbill.engine.PLAN_OUTPUT
-import skillbill.engine.PREPLAN_OUTPUT
-import skillbill.engine.RuntimeHarnessConfig
-import skillbill.engine.SIMPLIFY_OUTPUT
-import skillbill.engine.TestFeatureTaskRuntimeRunLoopEntry
-import skillbill.engine.withRunState
-import skillbill.engine.WORKFLOW_ID
-import skillbill.engine.committedRepoBranchSetup
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
@@ -16,6 +7,17 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoop
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContext
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopPlanningBranch
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.runner.IMPLEMENT_OUTPUT
+import skillbill.engine.featuretask.runner.PLAN_OUTPUT
+import skillbill.engine.featuretask.runner.PREPLAN_OUTPUT
+import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
+import skillbill.engine.featuretask.runner.SIMPLIFY_OUTPUT
+import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.runner.WORKFLOW_ID
+import skillbill.engine.featuretask.runner.committedRepoBranchSetup
+import skillbill.engine.featuretask.runner.satisfiedAuditLauncher
+import skillbill.engine.featuretask.runner.telemetryRunnerHarness
+import skillbill.engine.featuretask.runner.withRunState
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptOnce
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
@@ -34,8 +36,6 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
-import skillbill.engine.satisfiedAuditLauncher
-import skillbill.engine.telemetryRunnerHarness
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateRunRequest
@@ -203,9 +203,7 @@ class RequiredPhasePersistenceTest {
       val scope =
         PhaseAttemptScope(
           PhaseAttemptRunHost(
-            run.request,
-            context.runState,
-            run.phaseId,
+            run,
             context.runState,
           ),
         )

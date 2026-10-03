@@ -1,12 +1,12 @@
 package skillbill.engine.featuretask.slot
 
 import skillbill.application.FakeDatabaseSessionFactory
-import skillbill.engine.ExecutionPlanAdmissionFixture
-import skillbill.engine.InMemoryRuntimeWorkflowRepository
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
+import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.featuretask.validation.kotlinPackWithoutGate
 import skillbill.engine.featuretask.validation.repoLocalConfig

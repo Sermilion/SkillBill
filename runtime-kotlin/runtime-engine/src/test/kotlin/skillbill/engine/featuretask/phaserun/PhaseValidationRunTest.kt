@@ -1,12 +1,6 @@
 package skillbill.engine.featuretask.phaserun
 
 import skillbill.contracts.JsonCodec
-import skillbill.engine.RuntimeHarnessConfig
-import skillbill.engine.RuntimeRecordingLauncher
-import skillbill.engine.TestFeatureTaskRuntimeRunLoopEntry
-import skillbill.engine.withRunState
-import skillbill.engine.committedRepoBranchSetup
-import skillbill.engine.facts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
@@ -15,6 +9,15 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopContex
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
+import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
+import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
+import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.runner.committedRepoBranchSetup
+import skillbill.engine.featuretask.runner.facts
+import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
+import skillbill.engine.featuretask.runner.phaseIdFromPrompt
+import skillbill.engine.featuretask.runner.telemetryRunnerHarness
+import skillbill.engine.featuretask.runner.withRunState
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaborationScope
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
@@ -22,11 +25,8 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
+import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.validation.repoLocalConfig
-import skillbill.engine.kotlinPackWithValidationGate
-import skillbill.engine.phaseIdFromPrompt
-import skillbill.engine.telemetryRunnerHarness
-import skillbill.engine.validJsonOutput
 import skillbill.ports.validation.ValidationGateRunner
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateRunRequest
@@ -306,7 +306,7 @@ class PhaseValidationRunTest {
                 stepBinding.beginStepBinding(run)
                 return FeatureTaskRuntimeRunLoopStepBindings.create(
                   phaseAttemptLaunchCollaborationScope(
-                    PhaseAttemptRunHost(run.request, this, run.phaseId, this),
+                    PhaseAttemptRunHost(run, this),
                   ),
                   run,
                 )

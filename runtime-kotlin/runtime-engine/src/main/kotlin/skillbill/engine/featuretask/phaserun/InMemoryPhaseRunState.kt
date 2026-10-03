@@ -34,7 +34,6 @@ import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.error.shellcontent.MissingValidationGateError
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
-import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.model.ParallelReviewLaneOutcome
 import skillbill.ports.review.model.ParallelReviewLaneRunResult
 import skillbill.workflow.decomposition.model.SpecSource
@@ -53,10 +52,11 @@ internal class InMemoryPhaseRunState(
   private val strategies: PhaseStrategyLookup,
   private val reviewResultAssembly: ParallelCodeReviewRunnerResultAssembly,
   private val lifecycleTelemetry: LifecycleTelemetryService,
-  override val diagnostics: RuntimeDiagnostics,
   override val clock: Clock,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
 ) : PhaseRunState {
+  override val diagnostics get() = telemetry.diagnostics
+
   override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
     FeatureTaskRuntimeRunLoopStepBindingCoordinator()
   override val session: FeatureTaskRuntimeRunLoopSession =
@@ -89,13 +89,11 @@ internal class InMemoryPhaseRunState(
     require(run.phaseId in executionPlan.selectedStepIds)
     require(strategyFor(run.phaseId).policyFor(run.phaseId) == run.policy)
     stepBinding.beginStepBinding(run)
-    val runLoopContext = runLoopEntry.context(facts, this, strategies)
+    val runLoopContext = runLoopEntry.context(facts, this)
     return FeatureTaskRuntimeRunLoopStepBindings.create(
       phaseAttemptLaunchCollaborationScope(
         PhaseAttemptRunHost(
-          run.request,
-          this,
-          run.phaseId,
+          run,
           this,
           runLoopContext.gitOperations,
           runLoopContext.decompositionPlanner,
@@ -104,10 +102,7 @@ internal class InMemoryPhaseRunState(
           runLoopContext.lifecycleTelemetry,
           runLoopContext.sharedEvidenceResolver,
           runLoopContext.diffResolver,
-          runLoopContext.buildGateCoordinator,
-          runLoopContext.validationGateResolver,
-          runLoopContext.buildReceiptValidator,
-          runLoopContext.validationGateCoordinator,
+          runLoopContext.qualityGateCycles,
           runLoopContext.readinessGateCoordinator,
         ),
       ),

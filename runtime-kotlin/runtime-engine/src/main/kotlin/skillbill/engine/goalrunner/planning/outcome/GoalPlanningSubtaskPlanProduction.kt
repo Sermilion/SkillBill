@@ -1,12 +1,10 @@
 package skillbill.engine.goalrunner.planning.outcome
 
-import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalplanning.readStoredPlanningRecord
 import skillbill.engine.goalrunner.execution.core.ProduceMissingPlansArgs
 import skillbill.engine.goalrunner.planning.attempt.GoalPlanningPhaseAttemptGate
-import skillbill.engine.goalrunner.planning.attempt.producePhase
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLaunch
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseProduction
@@ -26,6 +24,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
+import java.nio.file.Path
 
 @Inject
 class GoalPlanningSubtaskPlanProduction(
@@ -51,7 +50,9 @@ class GoalPlanningSubtaskPlanProduction(
         )
     val (runInvariants, snapshot) =
       runCatching {
-        invariantsSource.read(resolvedSpecPath) to snapshotSubSpecs(shared, subtask, resolvedSpecPath, manifestFileStore, repositoryEnclosingRootPort)
+        invariantsSource.read(
+          resolvedSpecPath,
+        ) to snapshotSubSpecs(shared, subtask, resolvedSpecPath, manifestFileStore, repositoryEnclosingRootPort)
       }.getOrElse { error ->
         return SubtaskPlanProduction.Stopped(
           stopped(shared, subtask.id, invariantReadReason(subtask, error), GoalPlanningSweepConstants.PHASE_PLAN),
@@ -105,7 +106,13 @@ class GoalPlanningSubtaskPlanProduction(
     val shared = args.shared
     val (launchedSpecPath, snapshot) = launchedSpec
     val persistedSpec =
-      admitPersistedSubSpec(shared, subtask, launchedSpecPath to snapshot, args.startedPlanIds, manifestFileStore, repositoryEnclosingRootPort).getOrElse { error ->
+      admitPersistedSubSpec(
+        shared,
+        subtask,
+        GoalPlanningSpecAdmission(launchedSpec, args.startedPlanIds),
+        manifestFileStore,
+        repositoryEnclosingRootPort,
+      ).getOrElse { error ->
         return stopped(shared, subtask.id, error.message.orEmpty(), GoalPlanningSweepConstants.PHASE_PLAN)
       }
     val planPayload = proseRecordPayload(GoalPlanningSweepConstants.PHASE_PLAN, capturedPayload)
@@ -151,7 +158,8 @@ class GoalPlanningSubtaskPlanProduction(
       )
     val subSpecHash =
       when {
-        recovered != null && subtask.status.decompositionStatus() == DecompositionStatus.COMPLETE -> recovered.subSpecHash
+        recovered != null && subtask.status.decompositionStatus() == DecompositionStatus.COMPLETE ->
+          recovered.subSpecHash
         manifestFileStore.isRegularFile(path) -> sha256HexUtf8(manifestFileStore.readText(path))
         else -> error(unresolvedSpecReason(subtask))
       }

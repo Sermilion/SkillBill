@@ -35,7 +35,7 @@ internal fun PhaseQualityGateCycleContext.gateChangedPaths(run: PhaseRun): List<
     .validationChangedPaths(
       RepositoryCheckpointResolutionArgs(
         gitOperations = gitOperations,
-        validationGateResolver = validationGateResolver,
+        qualityGateCycles = qualityGateCycles,
         recorder = recorder,
         goalContinuationRecorder = goalContinuationRecorder,
         coupledRunTransitions = coupledRunTransitions,
@@ -258,8 +258,10 @@ internal fun PhaseQualityGateCycleContext.runAcceptedAttemptLoop(
   run: PhaseRun,
   call: PhaseStepCall,
 ): PhaseOutcome =
-  (this as? PhaseAttemptLaunchCollaborationScope
-    ?: error("Quality-gate context is not bound to a run-loop attempt.")).runAcceptedAttemptLoop(run, call)
+  (
+    this as? PhaseAttemptLaunchCollaborationScope
+      ?: error("Quality-gate context is not bound to a run-loop attempt.")
+  ).runAcceptedAttemptLoop(run, call)
 
 private fun PhaseQualityGateCycleContext.gateSettlementCoupling(): RunLoopSettlementCoupling =
   RunLoopSettlementCoupling(progress, session, session, coupledRunTransitions)

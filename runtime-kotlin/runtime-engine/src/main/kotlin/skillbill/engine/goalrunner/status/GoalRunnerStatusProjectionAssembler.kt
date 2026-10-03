@@ -52,7 +52,6 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.io.IOException
-import java.time.Clock
 
 @Inject
 class GoalRunnerStatusProjectionAssembler(
@@ -62,14 +61,12 @@ class GoalRunnerStatusProjectionAssembler(
   private val attemptLedgerStore: GoalRunnerAttemptLedgerStore,
   private val database: DatabaseSessionFactory,
   private val gitOperations: WorkflowGitOperations,
-  private val clock: Clock,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
   private val planningStatusReasonCoherence: GoalPlanningStatusReasonCoherence,
   private val diagnostics: RuntimeDiagnostics,
   private val runtimeStatusService: FeatureTaskRuntimeStatusService?,
   private val repositoryRoot: RepositoryRoot,
 ) {
-
   fun project(
     loadedState: GoalRunnerManifestState,
     request: GoalRunnerStatusRequest,
@@ -266,16 +263,12 @@ class GoalRunnerStatusProjectionAssembler(
     }?.takeIf { count -> count > 0 }
   }
 
-  private fun completedSubtaskValidation(
-    manifest: DecompositionManifest,
-  ): List<GoalRunnerSubtaskValidationEvidence> =
+  private fun completedSubtaskValidation(manifest: DecompositionManifest): List<GoalRunnerSubtaskValidationEvidence> =
     manifest.subtasks
       .filter { it.status.decompositionStatus() == DecompositionStatus.COMPLETE }
       .map { subtask -> completedSubtaskValidationFor(subtask) }
 
-  private fun completedSubtaskValidationFor(
-    subtask: DecompositionSubtask,
-  ): GoalRunnerSubtaskValidationEvidence {
+  private fun completedSubtaskValidationFor(subtask: DecompositionSubtask): GoalRunnerSubtaskValidationEvidence {
     val workflowId = subtask.workflowId?.takeIf(String::isNotBlank)
     val record =
       workflowId?.let { phaseQuery.loadPhaseRecords(it) }
@@ -421,9 +414,7 @@ class GoalRunnerStatusProjectionAssembler(
       ExecutionLiveness.UNKNOWN
     }
 
-  private fun livenessOfLeaseOwner(
-    ownership: FeatureTaskRuntimeWorkerOwnership,
-  ): ExecutionLiveness =
+  private fun livenessOfLeaseOwner(ownership: FeatureTaskRuntimeWorkerOwnership): ExecutionLiveness =
     when (workerSupervisor.inspect(ownership)) {
       FeatureTaskRuntimeProcessInspection.NotRunning -> ExecutionLiveness.IDLE
       FeatureTaskRuntimeProcessInspection.ExactLive,

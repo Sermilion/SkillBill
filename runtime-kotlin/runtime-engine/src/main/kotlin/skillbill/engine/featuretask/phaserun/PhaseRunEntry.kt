@@ -59,11 +59,10 @@ class PhaseRunEntry(
         strategies = strategies,
         reviewResultAssembly = reviewResultAssembly,
         lifecycleTelemetry = lifecycleTelemetry,
-        diagnostics = diagnostics,
         clock = clock,
         runLoopEntry = runLoopEntry,
       )
-    val report = runLoopEntry.run(runLoopEntry.context(facts, state, strategies))
+    val report = runLoopEntry.run(runLoopEntry.context(facts, state))
     return resultOf(report, state, records)
   }
 

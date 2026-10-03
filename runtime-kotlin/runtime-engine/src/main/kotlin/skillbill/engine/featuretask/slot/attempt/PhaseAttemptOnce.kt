@@ -271,9 +271,7 @@ object PhaseAttemptOnce {
         GateOutput(
           run = run,
           iteration = iteration,
-          captured = captured,
-          fileManifest = fileManifest,
-          settledEnvelope = launch.capturedSettledEnvelope,
+          evidence = GateCapturedEvidence(captured, fileManifest, launch.capturedSettledEnvelope),
           outputGateFailuresBefore = args.context.outputGateFailuresBefore,
           progress = context.progress,
           recorder = context.recorder,

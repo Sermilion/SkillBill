@@ -14,7 +14,6 @@ import java.nio.file.Path
 
 @Inject
 class FeatureTaskRuntimeSpecGate(
-  private val specSourceResolver: SpecSourceResolver,
   private val specScratchStore: SpecScratchStore,
   private val specStatusWriter: FeatureTaskRuntimeSpecStatusWriter,
   private val diagnostics: RuntimeDiagnostics,

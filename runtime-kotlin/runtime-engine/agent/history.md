@@ -1,3 +1,16 @@
+## [2026-10-03] SKILL-390 subtask 3: engine test packages mirror main
+Areas: runtime-engine featuretask lifecycle, phaserun, prepare, review, runloop, runner, slot and persistence; goalrunner execution, planning, status, repair and persistence; operation tests and engine testFixtures; runtime-core architecture inventory, test composition and build configuration; runtime-cli test inputs
+- Moved 91 engine test files into their production owners' packages. The tree retains 252 Kotlin files across 58 packages, with no forbidden declarations or path/package mismatches.
+- Updated both PrincipleEnforcementInventory pins to the runner test-support path without changing exemption meaning.
+- Repaired shared harness construction, imports and stale calls across existing engine tests and fixtures. Existing assertions remain; repeated recovery-case setup uses a helper.
+- reusable: RuntimeQualityGateCycles owns pack-gate execution, agent validation and gate resolution with four private dependencies. Resolution uses admitted effective inputs when present; pack execution retains receipt validation.
+- reusable: GateCapturedEvidence groups captured settlement facts, and GoalPlanningSpecAdmission groups launched-spec and sibling facts. Neither value carries services.
+- Run-loop context takes request and run state; PhaseRunState retains strategy ownership. GoalRunnerStatusService uses eight private dependencies, with operation owners wired directly.
+- Core registry tests use an internal test component and kspTest generation. CLI tests use statusProjectionPhaseStrategies for execution-plan access instead of exposed runner collaborators.
+- Limits: no intended persisted-byte, CLI or MCP behavior change. Slotbaseline resource contents and lookup paths remain unchanged; no tests or orphan-package guard were added, and guards and baselines remain intact.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-03] SKILL-390 subtask 2: feature-task-run collaborators and engine inject guard
 Areas: runtime-engine featuretask runner, lifecycle, phaserun, prepare, review, runloop and slot attempt/state; goalrunner planning and persistence; runtime-core architecture guards; engine test support
 

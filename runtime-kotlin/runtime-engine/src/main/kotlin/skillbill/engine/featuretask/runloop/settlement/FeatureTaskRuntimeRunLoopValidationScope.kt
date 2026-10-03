@@ -37,7 +37,7 @@ object FeatureTaskRuntimeRunLoopValidationScope {
     val validationChangedPaths =
       validationChangedPaths(args)
     return when (
-      val resolution = args.validationGateResolver.resolve(validationChangedPaths.orEmpty())
+      val resolution = args.qualityGateCycles.resolve(run.request, validationChangedPaths.orEmpty())
     ) {
       is ValidationGateResolution.Declared -> resolution.declaration.buildCommand?.joinToString(" ")
       is ValidationGateResolution.Absent -> null
@@ -53,7 +53,7 @@ object FeatureTaskRuntimeRunLoopValidationScope {
     }
     val paths =
       validationChangedPaths(args)
-    return (args.validationGateResolver.resolve(paths.orEmpty()) as? ValidationGateResolution.Declared)
+    return (args.qualityGateCycles.resolve(run.request, paths.orEmpty()) as? ValidationGateResolution.Declared)
       ?.declaration
       ?.collectAllFullGateCommand
       ?.joinToString(" ")

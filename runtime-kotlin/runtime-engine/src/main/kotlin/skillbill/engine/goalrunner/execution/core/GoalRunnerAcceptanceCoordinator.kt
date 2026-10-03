@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.execution.core
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.manifest.toResetSnapshot
@@ -18,6 +19,7 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.ZoneOffset
 
+@Inject
 class GoalRunnerAcceptanceCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,

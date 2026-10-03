@@ -2,7 +2,7 @@ package skillbill.engine.featuretask.validation
 
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
-import skillbill.engine.ExecutionPlanAdmissionFixture
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily

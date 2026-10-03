@@ -1,9 +1,9 @@
 package skillbill.engine.featuretask.review.finding
 
 import skillbill.contracts.time.JvmSystemClock
-import skillbill.engine.disposition
 import skillbill.engine.featuretask.lifecycle.checkpoint.sanitized
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFindingBoundaryMemoryRequest
+import skillbill.engine.featuretask.runner.disposition
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningBoundaryBodyResolver
 import skillbill.infrastructure.workflow.goalplanning.FileSystemGoalPlanningContextDiscovery
 import skillbill.ports.goalrunner.planning.model.GoalPlanningContext

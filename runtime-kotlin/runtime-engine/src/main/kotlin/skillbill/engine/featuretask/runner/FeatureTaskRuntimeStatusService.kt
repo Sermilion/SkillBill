@@ -107,9 +107,7 @@ class FeatureTaskRuntimeStatusService(
     )
   }
 
-  private fun statusProjectionFrom(
-    parts: StatusProjectionParts,
-  ): FeatureTaskRuntimeStatusProjection {
+  private fun statusProjectionFrom(parts: StatusProjectionParts): FeatureTaskRuntimeStatusProjection {
     val request = parts.request
     val phases = parts.phases
     val terminalDecomposeRecorded = parts.terminalDecomposeRecorded
@@ -177,9 +175,7 @@ class FeatureTaskRuntimeStatusService(
     }
   }
 
-  fun degradedDiagnosticStatus(
-    workflowId: String,
-  ): FeatureTaskRuntimeDegradedDiagnosticStatus? {
+  fun degradedDiagnosticStatus(workflowId: String): FeatureTaskRuntimeDegradedDiagnosticStatus? {
     val diagnosticSignals = recorder.loadDiagnosticSignals(workflowId)
     val latest = diagnosticSignals.lastOrNull() ?: return null
     return FeatureTaskRuntimeDegradedDiagnosticStatus(

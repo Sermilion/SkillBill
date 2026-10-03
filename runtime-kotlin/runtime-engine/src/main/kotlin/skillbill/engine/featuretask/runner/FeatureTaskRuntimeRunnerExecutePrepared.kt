@@ -10,7 +10,6 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.subtask.RemediationBaseBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationBaseCoherent
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
-import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeDecomposeTerminalRecorder
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.prepare.FeatureTaskRuntimeSpecGate
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopDrive
@@ -19,9 +18,8 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopSessio
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
 import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunCheckpoints
 import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunGoal
-import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunLaunch
-import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunRecords
 import skillbill.engine.featuretask.runloop.durable.DurablePhaseRunSettlements
+import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDurableLaunch
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDurableState
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
@@ -46,9 +44,8 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
   private val specGate: FeatureTaskRuntimeSpecGate,
   private val runLoopEntry: FeatureTaskRuntimeRunLoopEntry,
   private val launchOutcomes: FeatureTaskRuntimeLaunchOutcomes,
-  private val decomposeTerminalRecorder: FeatureTaskRuntimeDecomposeTerminalRecorder,
   private val phaseSettlementService: FeatureTaskPhaseSettlementService,
-  private val durableLaunch: DurablePhaseRunLaunch,
+  private val durableLaunch: FeatureTaskRuntimeRunLoopDurableLaunch,
 ) {
   internal fun driveExecutePreparedRunLoop(
     runRequest: FeatureTaskRuntimeRunRequest,
@@ -56,7 +53,6 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
     executionPlan: ResolvedPhaseExecutionPlan,
     observability: FeatureTaskRuntimeRunObservability,
     state: FeatureTaskRuntimeRunState,
-    diagnostics: RuntimeDiagnostics,
   ): FeatureTaskRuntimeRunReport {
     val session =
       FeatureTaskRuntimeRunLoopSession(
@@ -72,22 +68,19 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
       )
     val runState =
       FeatureTaskRuntimeRunLoopDurableState(
-        runRequest,
         state,
         session,
         observability,
         specSource,
         executionPlan,
         strategies,
-        DurablePhaseRunRecords(recorder, decomposeTerminalRecorder, runRequest.admittedExecution),
         DurablePhaseRunGoal(goalContinuationRecorder),
         DurablePhaseRunSettlements(phaseSettlementService),
         DurablePhaseRunCheckpoints(gitOperations),
         durableLaunch,
         clock,
-        diagnostics,
       )
-    val context = runLoopEntry.context(runRequest, runState, strategies)
+    val context = runLoopEntry.context(runRequest, runState)
     if (isGoalContinuationRun(runRequest)) {
       when (
         val remediation =

@@ -50,6 +50,7 @@ dependencies {
   implementation(project(":runtime-infra:sqlite"))
   implementation(libs.kotlin.inject.runtime)
   ksp(libs.kotlin.inject.compiler)
+  kspTest(libs.kotlin.inject.compiler)
 
   testImplementation(testFixtures(project(":runtime-application")))
   testImplementation(testFixtures(project(":runtime-engine")))

@@ -6,6 +6,7 @@ import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManife
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSource
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
+import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
@@ -15,7 +16,6 @@ import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
-import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -120,7 +120,7 @@ internal data class RepositoryCheckpointResolutionArgs(
   val recorder: PhaseRunRecords,
   val goalContinuationRecorder: PhaseRunGoal,
   val gitOperations: WorkflowGitOperations,
-  val validationGateResolver: ValidationGateResolver,
+  val qualityGateCycles: RuntimeQualityGateCycles,
   val coupledRunTransitions: FeatureTaskRuntimeRunTransitionOwner,
   val session: FeatureTaskRuntimeRunSessionObservations,
   val run: PhaseRun,

@@ -32,8 +32,6 @@ import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopRevi
 import skillbill.engine.featuretask.runloop.output.ReviewOutputPersistenceContext
 import skillbill.engine.featuretask.runloop.output.isGoalReviewRun
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.qualitygate.AgentValidateGateCycle
-import skillbill.engine.featuretask.runloop.qualitygate.PackBuildGateCycle
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.STATUS_RUNNING
 import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
@@ -243,8 +241,14 @@ private class FeatureTaskRuntimeRunLoopQualityGateStepBinding(
     val operation = requireNotNull(environment.selectedOwnerOf(run.phaseId)?.qualityGateOperation)
     val context = environment
     return when (operation) {
-      is PhaseQualityGateOperation.PackGate -> PackBuildGateCycle(context, call, operation.commandFamily).run(run)
-      PhaseQualityGateOperation.AgentValidation -> AgentValidateGateCycle(context, call).run(run)
+      is PhaseQualityGateOperation.PackGate ->
+        context.qualityGateCycles.runPackGate(
+          context,
+          call,
+          run,
+          operation.commandFamily,
+        )
+      PhaseQualityGateOperation.AgentValidation -> context.qualityGateCycles.runAgentValidation(context, call, run)
     }
   }
 }
@@ -293,7 +297,6 @@ private class FeatureTaskRuntimeRunLoopPlanningStepBinding(
     environment.stepBinding,
 ) : FeatureTaskRuntimeRunLoopPlanningAgentStepBinding(environment, run, fanOutUnitId, bindingCoordinator),
   PhasePlanningStepBinding {
-
   override fun fanOut(stepId: String): PhaseRunFanOut {
     check(stepId == acceptedPhaseId) { "Fan-out belongs to the accepted planning step '$acceptedPhaseId'." }
     bindingCoordinator.requireActiveStepBinding(run, fanOutUnitId)
@@ -323,7 +326,6 @@ private class FeatureTaskRuntimeRunLoopReviewStepBinding(
     fanOutUnitId,
     bindingCoordinator,
   ) {
-
   override fun startReviewStep(
     run: PhaseRun,
     iteration: Int,

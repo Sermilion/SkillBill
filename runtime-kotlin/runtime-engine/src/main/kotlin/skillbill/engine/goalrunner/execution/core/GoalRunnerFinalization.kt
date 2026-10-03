@@ -13,8 +13,8 @@ import skillbill.engine.goalrunner.execution.support.MAX_REPORTED_FINALIZE_DIRTY
 import skillbill.engine.goalrunner.execution.support.isFeatureSpecPath
 import skillbill.engine.goalrunner.execution.support.parseGitPorcelainPaths
 import skillbill.engine.goalrunner.execution.support.toPullRequestRequest
-import skillbill.engine.goalrunner.findings.resolveUnaddressedFindingsLedger
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
+import skillbill.engine.goalrunner.findings.resolveUnaddressedFindingsLedger
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
@@ -57,7 +57,6 @@ class GoalRunnerFinalization(
   private val unaddressedFindingsLedgerService: UnaddressedFindingsLedgerService?,
   private val progressReader: GoalRunnerProgressReader,
 ) {
-
   fun finalizeGoal(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,

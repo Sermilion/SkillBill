@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.planning.context
 
-import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
 import skillbill.application.decomposition.parentSpecPath
@@ -14,7 +13,6 @@ import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.planning.attempt.GoalPlanningPhaseAttemptGate
-import skillbill.engine.goalrunner.planning.attempt.producePhase
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLaunch
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseProduction
@@ -32,7 +30,7 @@ import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.text.sha256HexUtf8
-import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import java.nio.file.Path
 
 @Inject
 class GoalPlanningSharedPreplanProduction(
@@ -220,7 +218,10 @@ class GoalPlanningSharedPreplanProduction(
           inputs.parentSpec.take(GoalPlanningSharedContextPacket.MAX_GOVERNED_CONTEXT_CHARS),
         GoalPlanningSharedContextPacketPayloadKeys.DECOMPOSITION_MANIFEST to
           inputs.decomposition.take(GoalPlanningSharedContextPacket.MAX_GOVERNED_CONTEXT_CHARS),
-        GoalPlanningSharedContextPacketPayloadKeys.BOUNDARY_MEMORY to GoalPlanningSharedContextPacket.catalog(discovered),
+        GoalPlanningSharedContextPacketPayloadKeys.BOUNDARY_MEMORY to
+          GoalPlanningSharedContextPacket.catalog(
+            discovered,
+          ),
         GoalPlanningSharedContextPacketPayloadKeys.VALIDATION_GUIDANCE to
           discovered.validationGuidance.take(GoalPlanningSharedContextPacket.MAX_GOVERNED_CONTEXT_CHARS),
         GoalPlanningSharedContextPacketPayloadKeys.ORDERED_SUBTASKS to

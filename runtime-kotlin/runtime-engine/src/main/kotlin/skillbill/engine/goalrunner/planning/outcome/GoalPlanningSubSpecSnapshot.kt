@@ -40,16 +40,20 @@ internal fun snapshotSubSpecs(
   )
 }
 
+internal data class GoalPlanningSpecAdmission(
+  val launchedSpec: Pair<Path, GoalPlanningSubSpecSnapshot>,
+  val startedSiblingIds: Set<Int>,
+)
+
 internal fun admitPersistedSubSpec(
   shared: GoalPlanningSharedContext,
   subtask: DecompositionSubtask,
-  launchedSpec: Pair<Path, GoalPlanningSubSpecSnapshot>,
-  startedSiblingIds: Set<Int>,
+  admission: GoalPlanningSpecAdmission,
   manifestFileStore: DecompositionManifestStore,
   repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ): Result<String> =
   runCatching {
-    val (launchedSpecPath, snapshot) = launchedSpec
+    val (launchedSpecPath, snapshot) = admission.launchedSpec
     val path = resolvedSubSpecPath(shared.repoRoot, subtask.specPath, repositoryEnclosingRootPort)
     require(path != null && path == launchedSpecPath) {
       "the governed sub-spec no longer resolves to its assigned path inside the repository"
@@ -68,7 +72,7 @@ internal fun admitPersistedSubSpec(
     }
     val modifiedSibling =
       snapshot.siblingHashes.entries.firstOrNull { (id, hash) ->
-        id !in startedSiblingIds &&
+        id !in admission.startedSiblingIds &&
           shared.manifest.subtasks.firstOrNull { it.id == id }?.let {
             siblingHash(shared, it, manifestFileStore, repositoryEnclosingRootPort)
           } != hash

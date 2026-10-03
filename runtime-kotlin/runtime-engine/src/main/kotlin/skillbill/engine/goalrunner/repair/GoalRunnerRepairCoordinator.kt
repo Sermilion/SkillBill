@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.repair
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.goalrunner.execution.core.asWorkerOwnership
 import skillbill.engine.goalrunner.goalRepositoryIdentity
@@ -29,7 +30,8 @@ import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
 import java.time.Clock
 
-internal class GoalRunnerRepairCoordinator(
+@Inject
+class GoalRunnerRepairCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
   private val phaseQuery: FeatureTaskRuntimePhaseQuery,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,

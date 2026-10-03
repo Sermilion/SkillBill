@@ -2,12 +2,11 @@ package skillbill.engine.featuretask.lifecycle.core
 
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
-import skillbill.engine.ExecutionPlanAdmissionFixture
-import skillbill.engine.NoopWorkflowSnapshotValidator
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
-import skillbill.engine.ownership
+import skillbill.engine.featuretask.runner.NoopWorkflowSnapshotValidator
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError

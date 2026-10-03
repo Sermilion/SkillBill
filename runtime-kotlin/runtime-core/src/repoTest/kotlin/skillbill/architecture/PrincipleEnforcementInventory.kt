@@ -143,13 +143,13 @@ object PrincipleEnforcementInventory {
         "Dynamic port proxy returns typed facade from erased invoke",
       ),
       SuppressionAllowListRow(
-        "runtime-engine/src/test/kotlin/skillbill/engine/FeatureTaskRuntimeRunnerTestSupport.kt",
+        "runtime-engine/src/test/kotlin/skillbill/engine/featuretask/runner/FeatureTaskRuntimeRunnerTestSupport.kt",
         "noopPort",
         "UNCHECKED_CAST",
         "Dynamic port proxy returns typed facade from erased invoke",
       ),
       SuppressionAllowListRow(
-        "runtime-engine/src/test/kotlin/skillbill/engine/FeatureTaskRuntimeRunnerTestSupport.kt",
+        "runtime-engine/src/test/kotlin/skillbill/engine/featuretask/runner/FeatureTaskRuntimeRunnerTestSupport.kt",
         "recordHarnessFindingVerdicts",
         "UNCHECKED_CAST",
         "Dynamic ReviewRepository proxy passes typed verdict list through erased invoke",

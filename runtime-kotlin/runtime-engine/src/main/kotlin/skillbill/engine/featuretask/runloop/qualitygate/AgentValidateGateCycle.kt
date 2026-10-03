@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.slot.attempt.RuntimeOwnedGateSettlement
 import skillbill.engine.featuretask.slot.attempt.blockGateStep
 import skillbill.engine.featuretask.slot.attempt.gateChangedPaths
 import skillbill.engine.featuretask.slot.attempt.runAcceptedAttemptLoop
+import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
 import skillbill.engine.featuretask.validation.ReadinessPostValidateCaptureRequest
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
@@ -22,6 +23,7 @@ private const val DEFAULT_BASE_BRANCH = "main"
 internal class AgentValidateGateCycle(
   private val context: PhaseQualityGateCycleContext,
   private val call: PhaseStepCall,
+  private val validationCoordinator: FeatureTaskRuntimeValidationGateCoordinator,
 ) {
   private var stoppedAttempt: PhaseOutcome? = null
 
@@ -29,7 +31,7 @@ internal class AgentValidateGateCycle(
     call.acceptedExecution.requireAcceptedStep(run, call.strategyId)
     val iteration = call.acceptedExecution.nextStepIteration()
     val cycle =
-      context.validationGateCoordinator.execute(
+      validationCoordinator.execute(
         ValidationGateAgentRepairLauncher { findings, _, _ ->
           repair(run, run.copy(validationGateFindings = findings))
         },

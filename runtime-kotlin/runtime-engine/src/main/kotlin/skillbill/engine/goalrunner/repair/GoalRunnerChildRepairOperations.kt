@@ -14,7 +14,6 @@ import skillbill.workflow.engine.WorkflowEngine
 import java.nio.file.Path
 import java.time.Clock
 
-
 @Inject
 class GoalRunnerChildRepairOperations(
   database: DatabaseSessionFactory,

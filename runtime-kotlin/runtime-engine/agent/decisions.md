@@ -1,3 +1,13 @@
+## [2026-10-03] Preserve slotbaseline resource paths during test relocation
+Context: SKILL-390 subtask 3 moves slotbaseline capture tests into featuretask.runner while requiring resource and persisted-byte preservation.
+Decision: Keep the featuretask/slotbaseline resource tree, module-root resolution and absolute audit-resource lookups unchanged while relocating capture tests and repairing their setup.
+Reason: Existing resource lookups are independent of the Kotlin package. The relocation does not require moving goldens or regenerating captures, and existing byte-comparison coverage must retain its original evidence.
+
+## [2026-10-03] Keep composition access in test source sets
+Context: SKILL-390's private collaborator ownership leaves existing engine, CLI and core tests with stale construction and strategy-access calls.
+Decision: Repair engine test factories, use the CLI's status-projection strategy seam, and give core registry tests an internal generated test component with kspTest wiring.
+Reason: Restoring production collaborator accessors would undo the ownership repair. Existing behavioral and registry assertions cover these changes, so the plan calls for setup repairs without constructor-shape or setup-mirroring tests.
+
 ## [2026-10-03] Keep gate rewiring behind accepted-step bindings
 Context: SKILL-390 subtask 2 removes the phase-gate locator across durable, in-memory and goal-planning execution while preserving strategy authority.
 Decision: Give runtime consumers the specific typed collaborator they use, keep gate cycles and finalization with their existing owners, and retain accepted-step bindings for strategies.

@@ -5,6 +5,7 @@ import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.model.RefreshStaleSharedPreplanArgs
@@ -96,7 +97,7 @@ class GoalPlanningSharedPreplanSettlement(
   ): SharedPreplanSettlement {
     val working = args.shared
     val production =
-      sharedPreplanProduction.produceSharedPreplan( working, args.request, provenance, args.launch).getOrElse { error ->
+      sharedPreplanProduction.produceSharedPreplan(working, args.request, provenance, args.launch).getOrElse { error ->
         return SharedPreplanSettlement.Halt(
           stopped(working, 0, error.message.orEmpty(), GoalPlanningSweepConstants.PHASE_PREPLAN),
         )
@@ -121,9 +122,7 @@ class GoalPlanningSharedPreplanSettlement(
         SharedPreplanSettlement.Halt(stopped(working, 0, reason, GoalPlanningSweepConstants.PHASE_PREPLAN))
     }
 
-  internal fun settleStaleValidSharedPreplan(
-    args: StaleSharedPreplanSettlementArgs,
-  ): SharedPreplanSettlement {
+  internal fun settleStaleValidSharedPreplan(args: StaleSharedPreplanSettlementArgs): SharedPreplanSettlement {
     val working = args.shared
     val refresh =
       refreshStaleSharedPreplan(
@@ -194,9 +193,7 @@ class GoalPlanningSharedPreplanSettlement(
     val alreadyRefreshed: Boolean,
   )
 
-  private fun reclassifyAfterStaleRefresh(
-    args: StaleRefreshReclassifyArgs,
-  ): SharedPreplanSettlement {
+  private fun reclassifyAfterStaleRefresh(args: StaleRefreshReclassifyArgs): SharedPreplanSettlement {
     val working = args.working
     val afterRefresh = args.afterRefresh
     return when (
@@ -257,14 +254,11 @@ class GoalPlanningSharedPreplanSettlement(
     )
   }
 
-  internal fun refreshStaleSharedPreplan(
-    args: RefreshStaleSharedPreplanArgs,
-  ): Result<SharedPreplanRefresh> =
+  internal fun refreshStaleSharedPreplan(args: RefreshStaleSharedPreplanArgs): Result<SharedPreplanRefresh> =
     runCatching {
       val existing = args.existing
       val shared = args.shared
       val state = args.state
-      val request = args.request
       val currentProvenance = args.currentProvenance
       if (args.refreshedThisPrepare) {
         return@runCatching SharedPreplanRefresh.Refreshed(existing.provenance, existing)
@@ -272,11 +266,26 @@ class GoalPlanningSharedPreplanSettlement(
       refuseRefreshReason(shared.issueKey, refreshLiveness.resolve(state))?.let { reason ->
         return@runCatching SharedPreplanRefresh.Refused(reason)
       }
-      val refreshShared = shared.copy(planningPacket = freshPlanningPacket(shared, state, contextDiscovery, manifestFileStore, repositoryEnclosingRootPort))
+      val refreshShared =
+        shared.copy(
+          planningPacket =
+            freshPlanningPacket(
+              shared,
+              state,
+              contextDiscovery,
+              manifestFileStore,
+              repositoryEnclosingRootPort,
+            ),
+        )
       val produced =
         when (
           val production =
-            sharedPreplanProduction.produceSharedPreplanCheckpoint( refreshShared, request, currentProvenance, args.launch)
+            sharedPreplanProduction.produceSharedPreplanCheckpoint(
+              refreshShared,
+              args.request,
+              currentProvenance,
+              args.launch,
+            )
               .getOrElse { throw it }
         ) {
           is SharedPreplanProduction.Produced -> production.checkpoint
@@ -284,36 +293,45 @@ class GoalPlanningSharedPreplanSettlement(
           is SharedPreplanProduction.RequiredWriteRejected ->
             return@runCatching SharedPreplanRefresh.RequiredWriteRejected(production.rejection)
         }
-      val savedValueHash = preplanProseValueHash(existing.preplanPayload)
-      val newValueHash = preplanProseValueHash(produced.preplanPayload)
-      val savedPromptHash = preplanProsePromptHash(existing.preplanPayload)
-      val newPromptHash = preplanProsePromptHash(produced.preplanPayload)
-      if (savedValueHash == newValueHash && savedPromptHash == newPromptHash) {
-        checkpoint.sharedPreplanRefresh.advanceSharedPreplanProvenance(
-          identity = existing.identity,
-          expectedPayloadSha256 = existing.payloadSha256,
-          provenance = currentProvenance,
-        )
-        val advanced = existing.copy(provenance = currentProvenance)
-        SharedPreplanRefresh.Refreshed(currentProvenance, advanced)
-      } else {
-        val cascadeIds =
-          cascadeEligiblePlanSubtaskIds(
-            plannedIds =
-              checkpoint.sharedPreplanRefresh.listPreparedPlanSubtaskIds(
-                state.parentWorkflowId,
-              ),
-            subtasks = state.manifest.subtasks,
-          )
-        val replaced =
-          checkpoint.sharedPreplanRefresh.replaceSharedPreplanForRefresh(
-            checkpoint = produced,
-            expectedPayloadSha256 = existing.payloadSha256,
-            cascadePlanSubtaskIds = cascadeIds,
-          )
-        SharedPreplanRefresh.Refreshed(currentProvenance, replaced)
-      }
+      checkpointRefreshedPreplan(existing, produced, currentProvenance, state)
     }.onFailure { error ->
       error.rethrowIfCooperativeCancellationOrInterruption()
     }
+
+  private fun checkpointRefreshedPreplan(
+    existing: SharedGoalPreplanCheckpoint,
+    produced: SharedGoalPreplanCheckpoint,
+    currentProvenance: GoalPlanningContractProvenance,
+    state: GoalRunnerManifestState,
+  ): SharedPreplanRefresh.Refreshed {
+    val savedValueHash = preplanProseValueHash(existing.preplanPayload)
+    val newValueHash = preplanProseValueHash(produced.preplanPayload)
+    val savedPromptHash = preplanProsePromptHash(existing.preplanPayload)
+    val newPromptHash = preplanProsePromptHash(produced.preplanPayload)
+    return if (savedValueHash == newValueHash && savedPromptHash == newPromptHash) {
+      checkpoint.sharedPreplanRefresh.advanceSharedPreplanProvenance(
+        identity = existing.identity,
+        expectedPayloadSha256 = existing.payloadSha256,
+        provenance = currentProvenance,
+      )
+      val advanced = existing.copy(provenance = currentProvenance)
+      SharedPreplanRefresh.Refreshed(currentProvenance, advanced)
+    } else {
+      val cascadeIds =
+        cascadeEligiblePlanSubtaskIds(
+          plannedIds =
+            checkpoint.sharedPreplanRefresh.listPreparedPlanSubtaskIds(
+              state.parentWorkflowId,
+            ),
+          subtasks = state.manifest.subtasks,
+        )
+      val replaced =
+        checkpoint.sharedPreplanRefresh.replaceSharedPreplanForRefresh(
+          checkpoint = produced,
+          expectedPayloadSha256 = existing.payloadSha256,
+          cascadePlanSubtaskIds = cascadeIds,
+        )
+      SharedPreplanRefresh.Refreshed(currentProvenance, replaced)
+    }
+  }
 }

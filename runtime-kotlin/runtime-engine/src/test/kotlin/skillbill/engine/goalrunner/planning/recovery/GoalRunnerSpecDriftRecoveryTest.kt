@@ -5,8 +5,6 @@ import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
-import skillbill.engine.DeadProcessSupervisor
-import skillbill.engine.LiveProcessSupervisor
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
@@ -15,6 +13,8 @@ import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.persist.DeadProcessSupervisor
+import skillbill.engine.goalrunner.persist.LiveProcessSupervisor
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.diagnostics.RuntimeDiagnostics

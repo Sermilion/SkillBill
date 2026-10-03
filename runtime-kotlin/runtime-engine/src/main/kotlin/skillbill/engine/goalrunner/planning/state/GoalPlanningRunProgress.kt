@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.planning.state
 
-import java.util.concurrent.ConcurrentHashMap
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.slot.state.PhaseFanOutUnits
@@ -41,6 +40,7 @@ import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import java.util.concurrent.ConcurrentHashMap
 
 internal data class GoalPlanningRunScope(
   val state: GoalRunnerManifestState,

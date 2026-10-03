@@ -1,10 +1,5 @@
 package skillbill.engine.goalrunner.execution.core
 
-import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
-import skillbill.ports.featurespec.FeatureSpecPathResolverPort
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.engine.goalrunner.planning.recovery.GoalRunnerSpecDriftRecovery
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.DecompositionManifestWriter
@@ -12,15 +7,16 @@ import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
 import skillbill.application.telemetry.lifecycle.noopGoalLifecycleTelemetryEmitter
 import skillbill.application.testDecompositionManifestValidator
-import skillbill.engine.ExecutionPlanAdmissionFixture
-import skillbill.engine.InMemoryRuntimeWorkflowRepository
+import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeCrashReconciler
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.prepare.FeatureSpecPreparationWriter
-import skillbill.engine.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
+import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.slot.goalPlanningPhaseStrategies
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.GoalRunner
@@ -40,6 +36,7 @@ import skillbill.engine.goalrunner.planning.context.GoalPlanningSharedPreplanSet
 import skillbill.engine.goalrunner.planning.model.GoalPlanningBurstSchedule
 import skillbill.engine.goalrunner.planning.outcome.GoalPlanningSubtaskPlanProduction
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRefreshLiveness
+import skillbill.engine.goalrunner.planning.recovery.GoalRunnerSpecDriftRecovery
 import skillbill.engine.goalrunner.planning.recovery.IDLE_GOAL_PLANNING_REFRESH_LIVENESS
 import skillbill.engine.goalrunner.planning.remedies.GoalPlanningRejectionRecorder
 import skillbill.engine.goalrunner.planning.remedies.NO_GOAL_PLANNING_REJECTION_RECORDER
@@ -48,11 +45,14 @@ import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweep
 import skillbill.engine.goalrunner.planning.sweep.PREPARE_ALL_GOAL_PLANNING_SWEEP
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.concurrency.SequentialBoundedWorkFanOutPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.featurespec.FeatureSpecPathResolverPort
+import skillbill.ports.featurespec.model.FeatureSpecPathResolveResult
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.planning.EMPTY_GOAL_PLANNING_CONTEXT_DISCOVERY
@@ -66,6 +66,7 @@ import skillbill.ports.persistence.UnitOfWorkDefaults
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.review.repository.ReviewRepository
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
+import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.telemetry.lifecycle.LifecycleTelemetryRepository
 import skillbill.ports.telemetry.transport.TelemetryOutboxRepository
 import skillbill.ports.telemetry.transport.TelemetryReconciliationRepository
@@ -194,16 +195,19 @@ internal fun goalRunnerDeps(
 
 internal fun testGoalRunner(deps: GoalRunnerTestInputs): GoalRunner = testGoalRunner(deps.toWiring())
 
-private fun testSpecDriftRecovery(wiring: GoalRunnerTestWiring): GoalRunnerSpecDriftRecovery =
+internal fun testSpecDriftRecovery(
+  manifestStore: GoalRunnerManifestStore,
+  outcomeStore: GoalRunnerWorkflowOutcomeStore,
+): GoalRunnerSpecDriftRecovery =
   GoalRunnerSpecDriftRecovery(
     GoalPlanningPreparationCheckpoint(
       TestGoalActivityStampDatabase,
       FeatureTaskRuntimeWireArtifactValidator(),
     ),
-    wiring.manifestStore,
+    manifestStore,
     UnavailableDecompositionManifestStore,
     TestRepositoryEnclosingRoot,
-    testGoalRunnerStatusService(wiring.manifestStore, wiring.outcomeStore),
+    testGoalRunnerStatusService(manifestStore, outcomeStore),
     FeatureTaskRuntimeWireArtifactValidator(),
     NoopRuntimeDiagnostics,
   )
@@ -239,7 +243,7 @@ internal fun testGoalRunner(wiring: GoalRunnerTestWiring): GoalRunner {
         TestRepositoryEnclosingRoot,
         executionPlans,
         crashReconciler,
-        testSpecDriftRecovery(wiring),
+        testSpecDriftRecovery(wiring.manifestStore, wiring.outcomeStore),
       ),
     perRunLoopAssembler = perRunLoopAssembler,
     pauseBoundary = pauseBoundary,

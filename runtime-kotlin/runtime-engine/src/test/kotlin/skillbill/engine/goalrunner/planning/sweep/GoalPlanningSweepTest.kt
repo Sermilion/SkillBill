@@ -7,9 +7,9 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
-import skillbill.engine.PlanningProjectionFixtures
-import skillbill.engine.TestFeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.phase.briefing.PlanningProjectionFixtures
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore

@@ -17,6 +17,7 @@ import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObs
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
+import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindingCoordinator
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
@@ -32,14 +33,10 @@ import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeReadinessGateCoordinator
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
-import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
-import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.model.SpecSource
@@ -184,13 +181,7 @@ internal interface PhaseQualityGateCycleContext :
 
   val gitOperations: WorkflowGitOperations
 
-  val buildGateCoordinator: FeatureTaskRuntimeBuildGateCoordinator
-
-  val validationGateResolver: ValidationGateResolver
-
-  val buildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator
-
-  val validationGateCoordinator: FeatureTaskRuntimeValidationGateCoordinator
+  val qualityGateCycles: RuntimeQualityGateCycles
 
   val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator
 
@@ -258,7 +249,7 @@ internal interface PhaseAttemptLaunchPreparationContext :
   PhaseOutputSettlementContext,
   PhaseAttemptLaunchRuntimeContext,
   PhaseAttemptPlanAuthorization {
-  val validationGateResolver: ValidationGateResolver
+  val qualityGateCycles: RuntimeQualityGateCycles
 
   fun stepHooks(run: PhaseRun): PhaseStepHooks
 
@@ -284,7 +275,6 @@ internal open class PhaseAttemptSettlementScope(
   PhaseRuntimeFinalizationContext,
   PhaseCheckpointRemediationContext,
   PhaseAttemptTraversalRuntimeContext {
-
   override val request: FeatureTaskRuntimeRunFacts
     get() = boundHost.request
 
@@ -375,16 +365,8 @@ internal open class PhaseAttemptSettlementScope(
 
   internal fun resolveStrategyFor(stepId: String): PhaseStrategy = boundHost.strategyFor(stepId)
 
-  internal fun buildGateCoordinator(): FeatureTaskRuntimeBuildGateCoordinator = boundHost.buildGateCoordinator
-
-  internal open val validationGateResolver: ValidationGateResolver
-    get() = boundHost.validationGateResolver
-
-  internal fun buildReceiptValidator(): FeatureTaskRuntimeWireArtifactValidator =
-    boundHost.requireBuildReceiptValidator()
-
-  internal fun validationGateCoordinator(): FeatureTaskRuntimeValidationGateCoordinator =
-    boundHost.validationGateCoordinator
+  internal open val qualityGateCycles: RuntimeQualityGateCycles
+    get() = boundHost.qualityGateCycles
 
   override val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator
     get() = boundHost.readinessGateCoordinator
@@ -394,8 +376,10 @@ internal open class PhaseAttemptSettlementScope(
   internal fun resolvePhaseSettlementTarget(iteration: Int): FeatureTaskRuntimePhaseSettlementTarget? =
     boundHost.settlementTarget(iteration)
 
-  internal fun runAcceptedAttemptLoop(run: PhaseRun, call: PhaseStepCall): PhaseOutcome =
-    boundHost.runAcceptedAttemptLoop(run, call)
+  internal fun runAcceptedAttemptLoop(
+    run: PhaseRun,
+    call: PhaseStepCall,
+  ): PhaseOutcome = boundHost.runAcceptedAttemptLoop(run, call)
 
   internal fun runPreparedStep(
     run: PhaseRun,
@@ -413,8 +397,10 @@ internal open class PhaseAttemptSettlementScope(
   internal fun pinnedReviewTargetForAcceptedStep(resolve: () -> ReviewTarget): ReviewTarget =
     boundHost.pinnedReviewTargetForRunStatePorts(resolve)
 
-  internal fun runnerForAcceptedAttempt(run: PhaseRun, call: PhaseStepCall) =
-    boundHost.runnerForAcceptedAttempt(run, call)
+  internal fun runnerForAcceptedAttempt(
+    run: PhaseRun,
+    call: PhaseStepCall,
+  ) = boundHost.runnerForAcceptedAttempt(run, call)
 }
 
 internal open class PhaseAttemptLaunchCollaborationScope(
@@ -429,17 +415,8 @@ internal open class PhaseAttemptLaunchCollaborationScope(
   internal val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator
     get() = stepBindingCoordinator()
 
-  override val buildGateCoordinator: FeatureTaskRuntimeBuildGateCoordinator
-    get() = super.buildGateCoordinator()
-
-  override val validationGateResolver: ValidationGateResolver
-    get() = super.validationGateResolver
-
-  override val buildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator
-    get() = super.buildReceiptValidator()
-
-  override val validationGateCoordinator: FeatureTaskRuntimeValidationGateCoordinator
-    get() = super.validationGateCoordinator()
+  override val qualityGateCycles: RuntimeQualityGateCycles
+    get() = super.qualityGateCycles
 
   override fun stepHooks(run: PhaseRun): PhaseStepHooks {
     requireAcceptedBoundStep(run.phaseId)

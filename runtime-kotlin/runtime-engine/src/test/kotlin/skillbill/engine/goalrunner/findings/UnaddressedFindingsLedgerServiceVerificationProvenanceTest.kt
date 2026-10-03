@@ -1,8 +1,8 @@
 package skillbill.engine.goalrunner.findings
 
-import skillbill.engine.InMemoryRuntimeWorkflowRepository
-import skillbill.engine.RuntimeFakeDatabaseSessionFactory
-import skillbill.engine.decodeWorkflowArtifactsForTest
+import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
+import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
+import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.model.WorkflowFamily

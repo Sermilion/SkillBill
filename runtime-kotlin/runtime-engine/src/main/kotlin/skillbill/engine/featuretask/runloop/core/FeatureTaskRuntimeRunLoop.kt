@@ -9,6 +9,7 @@ import skillbill.engine.featuretask.phase.planning.FeatureTaskRuntimeDecompositi
 import skillbill.engine.featuretask.review.finding.FeatureTaskRuntimeFindingVerificationBoundaryMemory
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
+import skillbill.engine.featuretask.runloop.qualitygate.RuntimeQualityGateCycles
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunEvidenceOwnership
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepBindings
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
@@ -17,7 +18,6 @@ import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
-import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.attempt.PhaseAttemptRunHost
 import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
 import skillbill.engine.featuretask.slot.attempt.phaseAttemptLaunchCollaborationScope
@@ -27,15 +27,11 @@ import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeBuildGateCoordinator
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeReadinessGateCoordinator
-import skillbill.engine.featuretask.validation.FeatureTaskRuntimeValidationGateCoordinator
-import skillbill.engine.featuretask.validation.ValidationGateResolver
 import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
-import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
@@ -46,16 +42,12 @@ import java.nio.file.Path
 internal class FeatureTaskRuntimeRunLoopContext(
   override val request: FeatureTaskRuntimeRunFacts,
   val runState: PhaseRunState,
-  val strategies: PhaseStrategyLookup,
   override val gitOperations: WorkflowGitOperations,
   override val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner,
   override val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory,
   override val specIntentProjectionResolver: SpecIntentProjectionResolver,
   override val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
-  val validationGateResolver: ValidationGateResolver,
-  val buildGateCoordinator: FeatureTaskRuntimeBuildGateCoordinator,
-  val buildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator,
-  val validationGateCoordinator: FeatureTaskRuntimeValidationGateCoordinator,
+  val qualityGateCycles: RuntimeQualityGateCycles,
   val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator,
   override val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
   override val diffResolver: DiffResolverPort,
@@ -86,10 +78,8 @@ internal class FeatureTaskRuntimeRunLoopContext(
     return FeatureTaskRuntimeRunLoopStepBindings.create(
       phaseAttemptLaunchCollaborationScope(
         PhaseAttemptRunHost(
-          request = run.request,
+          acceptedRun = run,
           backingRunState = runState,
-          boundPhaseId = run.phaseId,
-          acceptedLaunchState = runState,
           directGitOperations = gitOperations,
           directDecompositionPlanner = decompositionPlanner,
           directFindingVerificationBoundaryMemory = findingVerificationBoundaryMemory,
@@ -97,10 +87,7 @@ internal class FeatureTaskRuntimeRunLoopContext(
           directLifecycleTelemetry = lifecycleTelemetry,
           directSharedEvidenceResolver = sharedEvidenceResolver,
           directDiffResolver = diffResolver,
-          directBuildGateCoordinator = buildGateCoordinator,
-          directValidationGateResolver = validationGateResolver,
-          directBuildReceiptValidator = buildReceiptValidator,
-          directValidationGateCoordinator = validationGateCoordinator,
+          directQualityGateCycles = qualityGateCycles,
           directReadinessGateCoordinator = readinessGateCoordinator,
         ),
       ),
@@ -210,10 +197,7 @@ open class FeatureTaskRuntimeRunLoopEntry(
   private val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory,
   private val specIntentProjectionResolver: SpecIntentProjectionResolver,
   private val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry,
-  private val validationGateResolver: ValidationGateResolver,
-  private val buildGateCoordinator: FeatureTaskRuntimeBuildGateCoordinator,
-  private val buildReceiptValidator: FeatureTaskRuntimeWireArtifactValidator,
-  private val validationGateCoordinator: FeatureTaskRuntimeValidationGateCoordinator,
+  private val qualityGateCycles: RuntimeQualityGateCycles,
   private val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator,
   private val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
   private val diffResolver: DiffResolverPort,
@@ -221,21 +205,16 @@ open class FeatureTaskRuntimeRunLoopEntry(
   internal fun context(
     request: FeatureTaskRuntimeRunFacts,
     runState: PhaseRunState,
-    strategies: PhaseStrategyLookup,
   ): FeatureTaskRuntimeRunLoopContext =
     FeatureTaskRuntimeRunLoopContext(
       request,
       runState,
-      strategies,
       gitOperations,
       decompositionPlanner,
       findingVerificationBoundaryMemory,
       specIntentProjectionResolver,
       lifecycleTelemetry,
-      validationGateResolver,
-      buildGateCoordinator,
-      buildReceiptValidator,
-      validationGateCoordinator,
+      qualityGateCycles,
       readinessGateCoordinator,
       sharedEvidenceResolver,
       diffResolver,

@@ -6,10 +6,10 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelectionEntry
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.engine.featuretask.model.review.ReviewTarget
+import skillbill.engine.featuretask.runner.SlotBaselineFullRunCapture
+import skillbill.engine.featuretask.runner.SlotBaselinePaths
+import skillbill.engine.featuretask.runner.SlotBaselineTestResources
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
-import skillbill.engine.featuretask.slotbaseline.SlotBaselineFullRunCapture
-import skillbill.engine.featuretask.slotbaseline.SlotBaselinePaths
-import skillbill.engine.featuretask.slotbaseline.SlotBaselineTestResources
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations

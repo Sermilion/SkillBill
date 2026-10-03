@@ -55,7 +55,6 @@ class DefaultGoalPlanningSweep(
   private val diagnostics: RuntimeDiagnostics,
   private val manifestFileStore: DecompositionManifestStore,
 ) : GoalPlanningSweep {
-
   override fun prepare(
     state: GoalRunnerManifestState,
     request: GoalRunnerRunRequest,
@@ -129,7 +128,7 @@ class DefaultGoalPlanningSweep(
         diagnostics = diagnostics,
         specSource = shared.specSource,
       )
-    val report = runLoopEntry.run(runLoopEntry.context(facts, runState, phaseStrategies))
+    val report = runLoopEntry.run(runLoopEntry.context(facts, runState))
     return when (report) {
       is FeatureTaskRuntimeRunReport.Blocked -> planning.outcome(report.blockedReason, report.lastIncompletePhase)
       is FeatureTaskRuntimeRunReport.Paused -> planning.outcome(report.pauseReason, report.pausedPhase)

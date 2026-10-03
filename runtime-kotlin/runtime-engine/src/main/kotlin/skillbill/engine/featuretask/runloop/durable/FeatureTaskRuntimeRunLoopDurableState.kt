@@ -20,34 +20,33 @@ import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
-import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
-import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 import java.time.Clock
 
 internal class FeatureTaskRuntimeRunLoopDurableState(
-  private val facts: FeatureTaskRuntimeRunFacts,
   override val progress: FeatureTaskRuntimeRunState,
   override val session: FeatureTaskRuntimeRunLoopSession,
   override val telemetry: FeatureTaskRuntimeRunObservability,
   override val specSource: SpecSource,
   private val executionPlan: ResolvedPhaseExecutionPlan,
   private val strategies: PhaseStrategyLookup,
-  override val records: PhaseRunRecords,
   override val goal: PhaseRunGoal,
   override val settlements: PhaseRunSettlements,
   override val checkpoints: PhaseRunCheckpoints,
-  private val launch: DurablePhaseRunLaunch,
+  private val launch: FeatureTaskRuntimeRunLoopDurableLaunch,
   override val clock: Clock,
-  override val diagnostics: RuntimeDiagnostics,
 ) : PhaseRunState {
+  private val facts get() = telemetry.request
+  override val records get() = telemetry.recorder
+  override val diagnostics get() = telemetry.diagnostics
+
   override val stepBinding: FeatureTaskRuntimeRunLoopStepBindingCoordinator =
     FeatureTaskRuntimeRunLoopStepBindingCoordinator()
   override val transitions: FeatureTaskRuntimeTransitionDeclaration = executionPlan.traversal
@@ -61,7 +60,7 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
 
   override fun unselectedStepIds(): Set<String> = executionPlan.unselectedStepIds
 
-  override fun step(run: PhaseRun): PhaseAcceptedStepExecution = launch.step(facts, this, strategies, run)
+  override fun step(run: PhaseRun): PhaseAcceptedStepExecution = launch.step(facts, this, run)
 
   override fun ensureFeatureBranch(guardPhase: String): FeatureTaskRuntimeBranchSetupOutcome =
     launch.ensureFeatureBranch(facts, telemetry, guardPhase)
@@ -94,7 +93,7 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
 }
 
 @Inject
-class DurablePhaseRunLaunch(
+class FeatureTaskRuntimeRunLoopDurableLaunch(
   private val branchSetupRunner: FeatureTaskRuntimeBranchSetupRunner,
   private val activityStampWriter: AgentActivityStampWriter,
   private val worktreeEditJournalWriter: WorktreeEditJournalWriter,
@@ -103,9 +102,8 @@ class DurablePhaseRunLaunch(
   internal fun step(
     facts: FeatureTaskRuntimeRunFacts,
     state: PhaseRunState,
-    strategies: PhaseStrategyLookup,
     run: PhaseRun,
-  ): PhaseAcceptedStepExecution = runLoopEntry.context(facts, state, strategies).acceptedStep(run)
+  ): PhaseAcceptedStepExecution = runLoopEntry.context(facts, state).acceptedStep(run)
 
   internal fun ensureFeatureBranch(
     facts: FeatureTaskRuntimeRunFacts,

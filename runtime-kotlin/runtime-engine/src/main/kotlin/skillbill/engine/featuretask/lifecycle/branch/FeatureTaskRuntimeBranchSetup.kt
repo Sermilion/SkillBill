@@ -67,7 +67,6 @@ object FeatureTaskRuntimeBranchSetup {
       else -> FeatureTaskRuntimeBranchDecision.resolved(branch = normalized, baseBranch = null, create = false)
     }
   }
-
 }
 
 internal sealed interface FeatureTaskRuntimeTargetBranch {

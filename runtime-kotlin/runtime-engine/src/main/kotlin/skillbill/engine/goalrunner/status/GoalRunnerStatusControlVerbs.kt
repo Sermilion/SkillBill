@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.status
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goalrunner.execution.core.asWorkerOwnership
 import skillbill.engine.goalrunner.goalRepositoryIdentity
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
@@ -23,6 +24,7 @@ private const val GRACEFUL_TERMINATION_POLL_MILLIS: Long = 250
 private const val GRACEFUL_TERMINATION_POLLS: Int =
   (GRACEFUL_TERMINATION_WAIT_MILLIS / GRACEFUL_TERMINATION_POLL_MILLIS).toInt()
 
+@Inject
 class GoalRunnerStatusControlVerbs(
   private val manifestStore: GoalRunnerManifestStore,
   private val clock: Clock,

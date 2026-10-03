@@ -64,12 +64,16 @@ internal data class FixLoopOutcomeArgs(
   val call: PhaseStepCall,
 )
 
-internal class GateOutput(
-  val run: PhaseRun,
-  val iteration: Int,
+internal data class GateCapturedEvidence(
   val captured: CapturedPhaseOutput,
   val fileManifest: FeatureTaskRuntimePhaseFileManifest,
   val settledEnvelope: PhaseSettledEnvelopeRead,
+)
+
+internal class GateOutput(
+  val run: PhaseRun,
+  val iteration: Int,
+  private val evidence: GateCapturedEvidence,
   val outputGateFailuresBefore: Int? = null,
   val progress: FeatureTaskRuntimeProgressSnapshotAccess,
   val recorder: PhaseRunRecords,
@@ -80,6 +84,10 @@ internal class GateOutput(
     (NormalizedFeatureTaskRuntimePhaseOutput, FeatureTaskRuntimeRunObservability) -> AttemptResult,
   val stepHooks: PhaseStepHooks,
 ) {
+  val captured get() = evidence.captured
+  val fileManifest get() = evidence.fileManifest
+  val settledEnvelope get() = evidence.settledEnvelope
+
   val rejectionExhaustsFixLoop: Boolean?
     get() =
       outputGateFailuresBefore?.let {

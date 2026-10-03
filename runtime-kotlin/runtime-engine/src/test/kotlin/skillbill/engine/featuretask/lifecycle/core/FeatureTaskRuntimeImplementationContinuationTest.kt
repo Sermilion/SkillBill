@@ -3,9 +3,9 @@ package skillbill.engine.featuretask.lifecycle.core
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeImplementationObligations
 import skillbill.engine.featuretask.phase.core.featureTaskRuntimeImplementationContinuationFrom
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
+import skillbill.engine.featuretask.phase.prompt.compose.promptComposerBriefingFor
 import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections
 import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections.SegmentKind
-import skillbill.engine.promptComposerBriefingFor
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptFromArtifact
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
