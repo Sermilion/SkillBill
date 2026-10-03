@@ -125,7 +125,7 @@ class CliRuntimeShellCommandsTest {
     assertEquals(0, workflowHelp.exitCode)
     assertContains(workflowHelp.stdout, "Usage: skill-bill")
     assertEquals(1, workflowContinue.exitCode)
-    assertContains(workflowContinue.stderr, "Error:")
+    assertContains(workflowContinue.stderr, "tracker issue key")
     assertEquals(0, verifyWorkflowHelp.exitCode)
     assertContains(verifyWorkflowHelp.stdout, "show")
     assertFalse(verifyWorkflowHelp.stdout.contains("--subtask-id"))
