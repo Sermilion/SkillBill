@@ -37,7 +37,7 @@ Open your coding agent in the target repository and start a feature:
 /skill-bill APP-123 Add CSV export for the filtered orders list
 ```
 
-Provide a connected tracker link or key, raw requirements, or an existing spec key. Skill Bill launches the full workflow, prepares missing spec artifacts, and resumes existing work. Include observable acceptance criteria and constraints in raw requirements. Use `/skill-bill APP-123 phase:plan` to prepare a spec without starting implementation, or `/skill-bill phase:review target:uncommitted` to review existing changes. These examples use slash notation; use your agent's skill invocation syntax.
+New work needs a connected tracker link or issue key plus a short description, which names the spec folder (for example `APP-123-add-csv-export`). A link's URL slug can supply the description; a bare key needs a title after it. Raw requirements without a key are refused, and Skill Bill does not invent a local identity. Add observable acceptance criteria and constraints after the key. To resume, pass the key or path of an existing spec. Skill Bill launches the full workflow, prepares missing spec artifacts, and resumes existing work. Use `/skill-bill APP-123 phase:plan` to prepare a spec without starting implementation, or `/skill-bill phase:review target:uncommitted` to review existing changes. These examples use slash notation; use your agent's skill invocation syntax.
 
 <details>
 <summary>Install requirements, PATH setup, and source builds</summary>
@@ -205,8 +205,8 @@ Boundary history and decisions are written by the goal's `write_history` phase. 
 
 Standalone phases and operations are operator tools. Agents invoke them only
 when explicitly requested and never select them as full-run steps or recovery
-actions. Full-run intake accepts connected tracker links or keys, raw
-requirements, and existing spec keys or paths. `skill-bill <intake>` routes to
+actions. Full-run intake requires a connected tracker link or issue key, or the
+key or path of an existing spec. `skill-bill <intake>` routes to
 the goal runtime, which prepares new work and resumes existing specs without
 invoking a standalone phase command.
 
