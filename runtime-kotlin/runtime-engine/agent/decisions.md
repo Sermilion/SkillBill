@@ -1,3 +1,13 @@
+## [2026-10-03] Require a tracker issue key for new goal intake
+
+Context: Goal intake minted `LOCAL-<hash>` and defaulted the spec folder to `KEY-intake` when the operator supplied raw requirements or a key without a description.
+
+Decision: Refuse new work that has no tracker issue key or link, and refuse a new spec folder that has no short description from the URL slug, remaining title, or existing bundle name. Resume of an existing spec or persisted key still works without inventing either value.
+
+Reason: Spec identity is `KEY-short-description`. A hashed local key and an `intake` fallback hide the missing tracker reference instead of asking for it.
+
+Alternatives considered: Keeping LOCAL minting for CLI-only raw text still creates untracked folders and a second identity scheme. Fetching the tracker title during prepare would hide a missing description on key-only CLI launches.
+
 ## [2026-10-03] Canonicalize governed spec paths before planning-import admission
 
 Context: A new goal child's implement admission refused `unsafe_import` with `source_version=unknown` even though planning had just written 0.7 payloads. Launch stores a repository-relative identity path; decomposition can still carry an absolute `spec_path` for the same file.

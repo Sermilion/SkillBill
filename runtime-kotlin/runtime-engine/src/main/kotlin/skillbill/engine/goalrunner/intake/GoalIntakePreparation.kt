@@ -36,7 +36,10 @@ class GoalIntakePreparation(
     val suppliedIntake = request.intake?.takeIf(String::isNotBlank) ?: return null
     val specPath = existingSpecPath(suppliedIntake, request)
     val intake = specPath?.let(fileStore::readText) ?: suppliedIntake
-    val featureName = specPath?.parent?.fileName?.toString()?.let { issueAndFeature(it).second } ?: "intake"
+    val featureName =
+      specPath?.parent?.fileName?.toString()?.let { issueAndFeature(it).second }
+        ?: GoalIntake.parse(suppliedIntake).featureName
+        ?: invalidIntake("feature_name", "supply a short description after the tracker issue key.")
     val baseBranch =
       if (specPath == null) {
         "main"
@@ -141,7 +144,6 @@ class GoalIntakePreparation(
       "If the intake contains an unresolved tracker link or issue key, fetch that exact issue through its " +
         "connected tracker before planning. Linear, Jira, and other connected trackers use the same rule. " +
         "Use the returned requirements, not the URL title. If lookup fails or the connection is unavailable, " +
-        "block with the returned reason before implementation; never infer or substitute requirements. " +
-        "A LOCAL key identifies this workflow and is not a claim that a tracker issue exists."
+        "block with the returned reason before implementation; never infer or substitute requirements."
   }
 }

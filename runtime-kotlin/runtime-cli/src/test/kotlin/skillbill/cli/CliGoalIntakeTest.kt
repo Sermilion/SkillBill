@@ -1,6 +1,7 @@
 package skillbill.cli
 
 import skillbill.cli.core.CliRuntime
+import skillbill.contracts.issuekey.issueAndFeature
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.AgentRunLauncher
 import skillbill.ports.agentrun.agentRunLaunchFacts
@@ -21,14 +22,27 @@ import kotlin.test.assertTrue
 class CliGoalIntakeTest {
   @Test
   fun `a tracker URL starts durable planning without a prepared workflow`() {
-    startNewGoal("https://linear.app/capmo/issue/WE-5018/update", "WE-5018")
-    startNewGoal("https://team.atlassian.net/browse/APP-123", "APP-123")
-    startNewGoal("https://tracker.example/tasks/opaque-id", null)
+    startNewGoal("https://linear.app/capmo/issue/WE-5018/update", "WE-5018", "update")
+    startNewGoal(
+      "https://team.atlassian.net/browse/APP-123\n\n# Board cache",
+      "APP-123",
+      "board-cache",
+    )
   }
 
   @Test
-  fun `raw requirements survive startup and reuse the same goal identity`() {
-    startNewGoal("Allow export.\n\n## Acceptance criteria\n\n- [ ] Export preserves Czech characters.", null)
+  fun `raw requirements do not mint a local workflow key`() {
+    refuseNewGoal(
+      "Allow export.\n\n## Acceptance criteria\n\n- [ ] Export preserves Czech characters.",
+      "tracker issue key",
+    )
+    refuseNewGoal("https://tracker.example/tasks/opaque-id", "tracker issue key")
+  }
+
+  @Test
+  fun `a tracker key without a description does not default a feature name`() {
+    refuseNewGoal("APP-123", "short description")
+    refuseNewGoal("https://team.atlassian.net/browse/APP-123", "short description")
   }
 
   @Test
@@ -140,7 +154,8 @@ class CliGoalIntakeTest {
 
   private fun startNewGoal(
     text: String,
-    expectedKey: String?,
+    expectedKey: String,
+    expectedFeature: String,
   ) {
     val root = Files.createTempDirectory("goal-intake")
     val db = root.resolve("metrics.db")
@@ -150,22 +165,45 @@ class CliGoalIntakeTest {
     try {
       val first = CliRuntime.run(command, fixture.context(launcher = launcher).copy(repositoryRoot = root))
       assertEquals(3, first.exitCode, first.stderr + first.stdout)
-      val key =
+      val folder =
         Files.list(root.resolve(".feature-specs")).use { paths ->
-          paths.findFirst().orElseThrow().fileName.toString().removeSuffix("-intake")
+          paths.findFirst().orElseThrow().fileName.toString()
         }
-      expectedKey?.let { assertEquals(it, key) }
+      val (key, feature) = issueAndFeature(folder)
+      assertEquals(expectedKey, key)
+      assertEquals(expectedFeature, feature)
       assertContains(first.stdout, "goal $key:")
       assertFalse(first.stdout.contains("No decomposed parent workflow"))
       assertTrue(launcher.prompts.isNotEmpty())
       assertTrue(launcher.prompts.all { it.contains("Phase: preplan") })
-      val spec = root.resolve(".feature-specs/$key-intake/spec.md")
+      val spec = root.resolve(".feature-specs/$folder/spec.md")
       assertContains(Files.readString(spec), text)
       val before = Files.readString(spec)
       val second = CliRuntime.run(command, fixture.context(launcher = launcher).copy(repositoryRoot = root))
       assertEquals(3, second.exitCode, second.stderr + second.stdout)
       assertEquals(before, Files.readString(spec))
       assertEquals(1, parentCount(db))
+    } finally {
+      root.toFile().deleteRecursively()
+    }
+  }
+
+  private fun refuseNewGoal(
+    text: String,
+    message: String,
+  ) {
+    val root = Files.createTempDirectory("goal-intake")
+    val db = root.resolve("metrics.db")
+    val fixture = GoalCliFixture(root, db, root.resolve("unused.md"), emptyList())
+    val launcher = StoppedPlanningLauncher(db)
+    val command = listOf("--db", db.toString(), text, "--agent", "codex", "--repo-root", root.toString())
+    try {
+      val result = CliRuntime.run(command, fixture.context(launcher = launcher).copy(repositoryRoot = root))
+      assertEquals(1, result.exitCode, result.stderr + result.stdout)
+      assertContains(result.stderr, message)
+      val specs = root.resolve(".feature-specs")
+      assertTrue(!Files.exists(specs) || Files.list(specs).use { it.count() } == 0L)
+      assertTrue(launcher.prompts.isEmpty())
     } finally {
       root.toFile().deleteRecursively()
     }

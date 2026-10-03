@@ -113,7 +113,7 @@ class GoalRunCommand(
     "Run a decomposed goal in the foreground. Exit codes: complete=0, failed=1, paused=2, blocked=3.",
   ) {
   private val intakeTokens by argument(
-    help = "Tracker link or issue key, raw requirements, or an existing spec key or path.",
+    help = "Tracker link or issue key, or an existing spec key or path.",
   ).multiple()
   private val agent by option(
     "--agent",

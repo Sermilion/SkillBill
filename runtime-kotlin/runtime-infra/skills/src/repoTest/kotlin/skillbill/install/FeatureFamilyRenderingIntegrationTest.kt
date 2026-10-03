@@ -49,7 +49,7 @@ class FeatureFamilyRenderingIntegrationTest {
     assertContains(feature, "skill-bill <intake> --agent <currently-executing-agent> --no-live-output")
     assertContains(feature, "The runtime creates missing specs and the parent workflow before")
     assertContains(feature, "Linear, Jira, and any other connected tracker")
-    assertContains(feature, "Do not require an issue key for raw text")
+    assertContains(feature, "ask for the tracker issue key")
     assertFalse(feature.contains("skill-bill goal preflight <issue-key>"))
     assertFalse(feature.contains("Do not launch while unconfirmed"))
     assertContains(feature, "For each entry in `rehydrate_targets`")
