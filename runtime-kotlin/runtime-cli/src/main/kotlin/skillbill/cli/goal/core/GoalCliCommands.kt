@@ -186,6 +186,16 @@ class GoalRunCommand(
       return
     }
     val effectiveRepoRoot = resolveCliRepositoryRoot(repoRoot, inputs)
+    val intake = intakeTokens.joinToString(" ").trim()
+    val runIssueKey =
+      when (val admission = goalRunner.admitIntake(intake, effectiveRepoRoot)) {
+        is GoalIntakeAdmission.Admitted -> admission.issueKey
+        is GoalIntakeAdmission.NeedsInput -> {
+          state.appendStderr(goalIntakeRequestText(admission))
+          state.completeEmpty(exitCode = 1)
+          return
+        }
+      }
     val invokedAgentId = resolveInvokedAgentId(agent, inputs.environment)
     inputPreparation.validate(
       GoalRunInputValidationArgs(
@@ -197,16 +207,6 @@ class GoalRunCommand(
         agentOverride = agentOverride,
       ),
     )
-    val intake = intakeTokens.joinToString(" ").trim()
-    val runIssueKey =
-      when (val admission = goalRunner.admitIntake(intake, effectiveRepoRoot)) {
-        is GoalIntakeAdmission.Admitted -> admission.issueKey
-        is GoalIntakeAdmission.NeedsInput -> {
-          state.appendStderr(goalIntakeRequestText(admission))
-          state.completeEmpty(exitCode = 1)
-          return
-        }
-      }
     val receivingAgents =
       listOfNotNull(
         invokedAgentId,

@@ -47,6 +47,27 @@ class CliGoalIntakeTest {
   }
 
   @Test
+  fun `admitted intake still requires an invoking agent before creating work`() {
+    val root = Files.createTempDirectory("goal-intake-no-agent")
+    val db = root.resolve("metrics.db")
+    val fixture = GoalCliFixture(root, db, root.resolve("unused.md"), emptyList())
+    val launcher = StoppedPlanningLauncher(db)
+    try {
+      val result =
+        CliRuntime.run(
+          listOf("--db", db.toString(), "APP-123 Refresh the board filters.", "--repo-root", root.toString()),
+          fixture.context(launcher = launcher).copy(environment = emptyMap(), repositoryRoot = root),
+        )
+      assertEquals(1, result.exitCode, result.stderr + result.stdout)
+      assertContains(result.stderr, "Cannot determine the invoking agent")
+      assertFalse(Files.exists(root.resolve(".feature-specs")))
+      assertTrue(launcher.prompts.isEmpty())
+    } finally {
+      root.toFile().deleteRecursively()
+    }
+  }
+
+  @Test
   fun `an existing spec key resumes without creating a second bundle`() {
     val fixture = goalFixture(subtaskCount = 1)
     try {

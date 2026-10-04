@@ -119,7 +119,8 @@ class CliRuntimeShellCommandsTest {
       "root help must not list the removed workflow command",
     )
     val workflowHelp = CliRuntime.run(listOf("workflow", "--help"))
-    val workflowContinue = CliRuntime.run(listOf("workflow", "continue"))
+    val workflowContinue =
+      CliRuntime.run(listOf("workflow", "continue"), CliRuntimeContext(environment = emptyMap()))
     val verifyWorkflowHelp = CliRuntime.run(listOf("verify-workflow", "--help"))
 
     assertEquals(0, workflowHelp.exitCode)
