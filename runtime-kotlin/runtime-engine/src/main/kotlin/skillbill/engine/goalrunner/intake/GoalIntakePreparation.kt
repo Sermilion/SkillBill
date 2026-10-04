@@ -167,9 +167,10 @@ class GoalIntakePreparation(
     val ITEM = Regex("\\s*(?:[-*]|[0-9]+[.)])\\s+(?:\\[[ xX]\\]\\s+)?(.+)")
     const val VALIDATION = "Run the repository's required checks and verify every supplied acceptance criterion."
     const val TRACKER_RESOLUTION =
-      "If the intake contains an unresolved tracker link or issue key, fetch that exact issue through its " +
-        "connected tracker before planning. Linear, Jira, and other connected trackers use the same rule. " +
-        "Use the returned requirements, not the URL title. If lookup fails or the connection is unavailable, " +
-        "block with the returned reason before implementation; never infer or substitute requirements."
+      "Supplied requirements are authoritative and need no tracker lookup. Locally allocated issue keys " +
+        "do not require a tracker connection. Only an explicit unresolved tracker reference without " +
+        "requirements needs lookup through its connected tracker before planning. Use the returned " +
+        "requirements, not the URL title. If that lookup fails, block with the returned reason before " +
+        "implementation; never infer or substitute requirements."
   }
 }

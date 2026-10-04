@@ -260,8 +260,10 @@ standalone `skills_dir` path.
 ### Worked example: the single listed skill
 
 The catalog has one listed skill, `skill-bill`. Its full-run form calls the goal
-runtime directly with raw requirements, an existing spec key or path, or a
-tracker reference. The dispatcher searches local specs including ignored files
+runtime with requirements prefixed by a supplied key or the next local key
+from `.feature-specs/`, an existing spec key or path, or a tracker reference.
+Local key allocation is the default for requirements without a key and needs
+no tracker connection. The dispatcher searches local specs including ignored files
 and checks repository-matched persisted workflows before fetching a new tracker
 reference through its connected tracker. Existing work resumes without replacing
 its requirements. The runtime prepares a missing

@@ -1,3 +1,19 @@
+## [2026-10-04] Default to the next local issue key for new requirements
+
+Context: The dispatcher required a connected tracker even when the operator
+supplied requirements and requested the next local key.
+
+Decision: The dispatcher derives the next project key from `.feature-specs/`
+bundle identities, including ignored, untracked, completed, and archived work.
+It prepends that key to the requirements before launching the runtime. Explicit
+keys still override allocation. Supplied requirements and locally allocated
+keys require no tracker lookup. The CLI continues to require resolved intake.
+
+This supersedes the tracker-only dispatcher requirement recorded on 2026-10-03.
+The runtime still owns spec and workflow creation. Local allocation creates no
+tracker issue and reserves no identity through a placeholder spec or database
+write. Prefix ambiguity asks for a local prefix.
+
 ## [2026-10-03] Require a tracker issue key for new goal intake
 
 Context: Goal intake minted `LOCAL-<hash>` and defaulted the spec folder to `KEY-intake` when the operator supplied raw requirements or a key without a description.

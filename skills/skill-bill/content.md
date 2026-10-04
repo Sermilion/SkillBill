@@ -145,12 +145,13 @@ spec, launch with the issue reference so the runtime can report its recovery
 requirements. An explicit `phase:plan` reuses a readable local spec but does not
 resume a goal or inspect workflow state.
 
-Only when neither a local spec nor a matching persisted workflow exists, fetch
+Only when neither a local spec nor a matching persisted workflow exists and
+the operator supplied a tracker reference without requirements, fetch
 the exact referenced issue through its connected tracker. This applies to
 Linear, Jira, and any other connected tracker; do not hard-code a provider. A
 URL slug or issue key alone does not supply requirements. Readable local specs
-need no tracker lookup. If the operator supplies only raw requirements,
-ask for the tracker issue key before launch.
+need no tracker lookup. Supplied requirements need no tracker lookup either.
+For requirements without a key, follow Local key allocation before launch.
 
 If lookup fails, report the reference and returned error, then ask the operator
 for the requirements before launch. Do not search substitute sources, retry
@@ -166,19 +167,54 @@ intake or launch ceremony.
 
 ## Intake
 
-New work requires both a connected tracker link or issue key and its
-requirements. An existing spec key or path needs neither. Preserve the
-operator's requirements, acceptance criteria, constraints, affected areas, and
-non-goals in the intake. If new work has no tracker issue key or link,
-ask for the tracker issue key. If it has a key but no requirements and tracker
-lookup supplies none, ask for the requirements. Do not invent a local workflow
-identity, and do not launch until both are present.
+New work requires a key and requirements. A connected tracker is optional.
+An existing spec key or path needs neither. Preserve the operator's
+requirements, acceptance criteria, constraints, affected areas, and non-goals
+in the intake. When new requirements have no key, allocate the next local key
+by default using Local key allocation. The explicit instruction "next available
+key" uses the same rule. Never require a tracker connection or create a tracker
+issue to allocate a local key. A supplied key with requirements launches without
+tracker lookup. If a supplied tracker reference has no requirements and lookup
+supplies none, ask for the requirements.
+
+A design reference such as an HTML file is requirements input, not an existing
+spec. Read it and preserve its path and implementation instructions in the
+intake after the allocated key and a short title. Only an existing spec bundle
+selects the spec-resume route.
 
 An existing spec or matching persisted goal selects or resumes its goal.
 New requirements start preparation and durable planning inside the full runtime.
 A missing spec is normal for new work; never route it to an individual phase or report it as a launch prerequisite.
 Do not run `goal preflight` or assemble the workflow in this session. Launch the
 full runtime once with the resolved intake.
+
+## Local key allocation
+
+For new requirements without a key, inspect `.feature-specs/` in the current
+repository, including ignored and untracked files and archived folders such as
+`done/`. Use `rg --files --hidden --no-ignore .feature-specs` or inspect the
+directory directly. Read bundle directory names, parent `spec.md` identities,
+and `decomposition-manifest.yaml` issue keys. Count bundle identities, not keys
+mentioned as dependencies or examples inside requirements.
+
+Use an operator-supplied prefix when present. Otherwise use the sole project
+prefix found in those local identities, excluding generated `LOCAL-` hash keys.
+If several project prefixes exist, ask only which prefix to use. If no project
+prefix exists, ask for a local prefix or key, without requiring a tracker.
+
+For the selected prefix, take the highest integer issue number and add one.
+Include completed and archived bundles, and treat a decimal suffix such as
+`NEWS-144.1` as occupying integer number 144. Do not fill gaps or use timestamps
+or hashes. For example, local bundles through `NEWS-151` select `NEWS-152`.
+A supplied prefix with no existing keys starts at 1. Recheck the local inventory
+immediately before launch and advance if another bundle now occupies the key.
+
+Prepend the allocated key and a short title to the preserved requirements and
+launch the full runtime once. The runtime owns spec and workflow creation;
+do not write a placeholder spec, run a standalone phase, or mutate workflow
+rows to reserve the key. Local allocation does not inspect the workflow
+database or contact a tracker. Existing-work resolution keeps its separate
+repository-matched database checks.
 
 ## Rehydrate
 

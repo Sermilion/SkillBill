@@ -37,7 +37,7 @@ Open your coding agent in the target repository and start a feature:
 /skill-bill APP-123 Add CSV export for the filtered orders list
 ```
 
-New work needs both a connected tracker link or issue key and the requirements after it. The first line of the requirements, or a link's URL slug, names the spec folder (for example `APP-123-add-csv-export`). If either part is missing, `/skill-bill` asks for it before it launches: the tracker key for raw requirements, or the requirements for a bare key when tracker lookup returns none. Include observable acceptance criteria and constraints in the requirements. To resume, pass the key or path of an existing spec. Skill Bill launches the full workflow, prepares missing spec artifacts, and resumes existing work. Use `/skill-bill APP-123 phase:plan` to prepare a spec without starting implementation, or `/skill-bill phase:review target:uncommitted` to review existing changes. These examples use slash notation; use your agent's skill invocation syntax.
+New requirements without a key use the next local key by default. `/skill-bill` reads `.feature-specs/`, including ignored, untracked, completed, and archived bundles, and increments the highest issue number for the project's prefix. For example, bundles through `NEWS-151` select `NEWS-152`. "Next available key" uses the same rule. If the local prefix is missing or ambiguous, it asks for a prefix, not a tracker connection. Supply a key yourself to override allocation. Include observable acceptance criteria, constraints, and any design reference in the requirements. A tracker reference without requirements uses the connected tracker after local existing-work checks. To resume, pass the key or path of an existing spec. The runtime prepares missing spec artifacts and resumes existing work. Direct CLI launches require the resolved key and requirements. Use `/skill-bill APP-123 phase:plan` to prepare a spec without starting implementation, or `/skill-bill phase:review target:uncommitted` to review existing changes. These examples use slash notation; use your agent's skill invocation syntax.
 
 <details>
 <summary>Install requirements, PATH setup, and source builds</summary>
@@ -205,9 +205,9 @@ Boundary history and decisions are written by the goal's `write_history` phase. 
 
 Standalone phases and operations are operator tools. Agents invoke them only
 when explicitly requested and never select them as full-run steps or recovery
-actions. New full-run work needs both a connected tracker link or issue key and
-its requirements; `/skill-bill` asks for whichever is missing before launch. An
-existing spec key or path resumes that spec. `skill-bill <intake>` routes to
+actions. New full-run work uses supplied requirements and defaults to the next
+local key from `.feature-specs/` when no key is given. A tracker connection is
+optional. An existing spec key or path resumes that spec. `skill-bill <intake>` routes to
 the goal runtime, which prepares new work and resumes existing specs without
 invoking a standalone phase command.
 

@@ -21,7 +21,12 @@ import kotlin.test.assertTrue
 
 class CliGoalIntakeTest {
   @Test
-  fun `a tracker URL starts durable planning without a prepared workflow`() {
+  fun `supplied tracker and local keys start durable planning without a prepared workflow`() {
+    startNewGoal(
+      "NEWS-152 Implement topic onboarding design.\n\nUse design/topics-onboarding.html.",
+      "NEWS-152",
+      "implement-topic-onboarding-design",
+    )
     startNewGoal("https://linear.app/capmo/issue/WE-5018/update\n\nRefresh the board filters.", "WE-5018", "update")
     startNewGoal(
       "https://team.atlassian.net/browse/APP-123\n\n# Board cache",
@@ -200,6 +205,8 @@ class CliGoalIntakeTest {
       assertTrue(launcher.prompts.all { it.contains("Phase: preplan") })
       val spec = root.resolve(".feature-specs/$folder/spec.md")
       assertContains(Files.readString(spec), text)
+      assertContains(Files.readString(spec), "Supplied requirements are authoritative and need no tracker lookup")
+      assertContains(Files.readString(spec), "Locally allocated issue keys do not require a tracker connection")
       val before = Files.readString(spec)
       val second = CliRuntime.run(command, fixture.context(launcher = launcher).copy(repositoryRoot = root))
       assertEquals(3, second.exitCode, second.stderr + second.stdout)

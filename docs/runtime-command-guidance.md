@@ -4,7 +4,36 @@ These instructions apply to runtime commands, planning, execution, and goal comm
 
 ## Product Intent
 
-`/skill-bill` is the only listed skill. Its full-run form (`/skill-bill <intake>`) resolves the supplied requirements and launches `skill-bill <intake>` through the foreground goal runtime with durable state, telemetry, packs, add-ons, and native subagents. New work requires both a connected tracker link or issue key and requirements text after it; the key or path of an existing spec, or a persisted goal's key, resumes without either. The CLI also accepts the explicit `skill-bill goal <intake>` form. New requirements create a spec bundle and parent workflow before durable planning; existing specs resume without replacement. The runtime refuses new work missing the key or the requirements before it prints launch output or writes any state, and it does not assign a local workflow identity. The dispatcher asks the operator for whichever part is missing. For tracker references, the dispatcher first searches local specs including ignored and untracked files, then checks persisted workflows in the current repository through `skill-bill work status --repo-root <repo-root> --format json`. If needed, `skill-bill work list --format json` exposes other persisted work for correlation with local spec and manifest identities. Existing specs and matching goals resume without a tracker lookup. Database inspection failures block lookup rather than count as absent work. Only new tracker references resolve through the connected tracker before implementation; on lookup failure the dispatcher asks for the requirements and never infers them. Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name>` forms run `skill-bill operation <name>`, relaying one operator confirmation. `skill-bill goal status` stays CLI-only; no skill wraps it.
+`/skill-bill` is the only listed skill. Its full-run form resolves the supplied
+requirements and launches `skill-bill <intake>` through the foreground goal
+runtime with durable state, telemetry, packs, add-ons, and native subagents.
+New requirements without a key use the next local key by default. The dispatcher
+reads `.feature-specs/`, including ignored, untracked, completed, and archived
+bundles, selects the project's prefix, and increments its highest integer issue
+number. Generated `LOCAL-` hash keys do not select the project prefix. Decimal
+suffixes occupy their integer number. An ambiguous or absent prefix requires
+only a local prefix choice, never a tracker connection. An explicit "next
+available key" request follows the same rule. Recheck the inventory before
+launch, then prepend the key and a short title to the supplied requirements.
+Design references such as HTML files supply requirements, not spec identities.
+
+The key or path of an existing spec, or a persisted goal's key, resumes existing
+work. The CLI also accepts `skill-bill goal <intake>`. The runtime prepares a
+missing spec bundle and parent workflow before durable planning. Direct CLI
+intake still requires a key and requirements; the dispatcher allocates the key
+before calling it and does not reserve keys by writing placeholder specs or
+workflow rows. Supplied requirements are authoritative and need no tracker.
+For a tracker reference without requirements, the dispatcher first searches
+local specs and repository-matched persisted workflows. Existing work resumes
+without replacement or tracker lookup. Database inspection failures block
+existing-work resolution rather than count as absent work. Only an unresolved
+tracker reference without requirements uses its connected tracker. Lookup
+failure asks for requirements, never infers them. Local key allocation does not
+query the workflow database or a tracker.
+
+Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name>`
+forms run `skill-bill operation <name>`, relaying one operator confirmation.
+`skill-bill goal status` stays CLI-only; no skill wraps it.
 
 ## Phase and operation concepts
 
