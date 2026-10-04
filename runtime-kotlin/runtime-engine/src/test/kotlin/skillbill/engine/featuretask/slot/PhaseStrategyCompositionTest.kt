@@ -36,10 +36,11 @@ import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneRev
 import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
@@ -189,7 +190,7 @@ class PhaseStrategyCompositionTest {
         )
       val failures =
         orders.map { order ->
-          assertFailsWith<InvalidPhaseStrategyCompositionError> {
+          assertInvalidComposition {
             lookup.executionPlan(PhaseStrategySelectionFacts(gateOnly, order))
           }.message
         }
@@ -210,7 +211,7 @@ class PhaseStrategyCompositionTest {
     val lookup = PhaseStrategyLookup(registry, selection)
     val plan = lookup.executionPlan(PhaseStrategySelectionFacts(definition, emptySet()))
 
-    assertFailsWith<InvalidPhaseStrategyCompositionError> {
+    assertInvalidComposition {
       lookup.strategyFor(PHASE_VERIFY_FINDINGS, plan)
     }
   }
@@ -595,4 +596,10 @@ class PhaseStrategyCompositionTest {
       qualityGate == FeatureTaskRuntimeQualityGateSelection.BUILD -> PackBuildStrategy.ID
       else -> AgentValidateStrategy.ID
     }
+
+  private fun assertInvalidComposition(block: () -> Unit): SkillBillRuntimeException {
+    val error = assertFailsWith<SkillBillRuntimeException>(block = block)
+    assertEquals(PhaseSlotFailureCode.INVALID_STRATEGY_COMPOSITION, error.code)
+    return error
+  }
 }

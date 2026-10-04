@@ -1,8 +1,7 @@
 package skillbill.workflow.taskruntime.model.skeleton
 
-import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
-import skillbill.error.featuretask.InvalidSkeletonDefinitionError
-import skillbill.error.featuretask.UnknownSkeletonDefinitionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
 
 enum class SkeletonRunStateKind(val wireValue: String) {
   DURABLE("durable"),
@@ -25,13 +24,14 @@ data class SkeletonDefinition(
 ) {
   init {
     val canonicalOrder = slots.zipWithNext().all { (previous, next) -> previous.ordinal < next.ordinal }
-    if (slots.isEmpty() || !canonicalOrder) {
-      throw InvalidSkeletonDefinitionError(id, slots.map(PhaseSlot::wireValue))
+    require(slots.isNotEmpty() && canonicalOrder) {
+      "Skeleton definition '$id' must list distinct phase slots in canonical order, " +
+        "was ${slots.map(PhaseSlot::wireValue)}."
     }
     require(semanticRevision > 0)
     val available = slots.flatMap(PhaseSlot::steps)
-    if (stepIds.isEmpty() || stepIds != available.filter { it in stepIds }) {
-      throw InvalidPhaseStrategyCompositionError("definition $id has duplicate, reordered, or unowned steps")
+    require(stepIds.isNotEmpty() && stepIds == available.filter { it in stepIds }) {
+      "Invalid phase strategy composition: definition $id has duplicate, reordered, or unowned steps"
     }
   }
 
@@ -83,6 +83,9 @@ data class SkeletonDefinition(
 
     fun byId(id: String): SkeletonDefinition =
       entries.firstOrNull { it.id == id }
-        ?: throw UnknownSkeletonDefinitionError(id, entries.map(SkeletonDefinition::id))
+        ?: throw SkillBillRuntimeException(
+          PhaseSlotFailureCode.UNKNOWN_SKELETON_DEFINITION,
+          "Unknown skeleton definition '$id'; expected one of ${entries.map(SkeletonDefinition::id).joinToString(", ")}.",
+        )
   }
 }

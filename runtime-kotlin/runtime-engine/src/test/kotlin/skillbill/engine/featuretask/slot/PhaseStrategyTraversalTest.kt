@@ -3,7 +3,8 @@ package skillbill.engine.featuretask.slot
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
-import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -43,8 +44,8 @@ class PhaseStrategyTraversalTest {
 
     assertEquals(listOf(PHASE_IMPLEMENT), plan.traversal.forwardPhaseIds)
     assertSame(strategy, lookup.strategyFor(PHASE_IMPLEMENT, plan))
-    assertFailsWith<InvalidPhaseStrategyCompositionError> { lookup.strategyFor(PHASE_SIMPLIFY, plan) }
-    assertFailsWith<InvalidPhaseStrategyCompositionError> {
+    assertInvalidComposition { lookup.strategyFor(PHASE_SIMPLIFY, plan) }
+    assertCompositionDefect {
       lookup(
         definition,
         CompositionTestStrategy(strategy.slot, strategy.strategyId, strategy.steps),
@@ -64,7 +65,7 @@ class PhaseStrategyTraversalTest {
         optionalSteps = setOf(PHASE_IMPLEMENT),
       )
 
-    assertFailsWith<InvalidPhaseStrategyCompositionError> {
+    assertCompositionDefect {
       lookup(definition, strategy).executionPlan(PhaseStrategySelectionFacts(definition, emptySet()))
     }
   }
@@ -73,7 +74,7 @@ class PhaseStrategyTraversalTest {
   fun `selected gates and remediation cannot reference steps omitted by the strategy`() {
     listOf(listOf(PHASE_REVIEW, PHASE_IMPLEMENT_FIX), listOf(PHASE_REVIEW, PHASE_VERIFY_FINDINGS)).forEach { steps ->
       val strategy = CompositionTestStrategy(PhaseSlot.CODE_REVIEW, "incomplete-review", steps)
-      assertFailsWith<InvalidPhaseStrategyCompositionError> {
+      assertCompositionDefect {
         lookup(repairDefinition, strategy)
           .executionPlan(PhaseStrategySelectionFacts(repairDefinition, emptySet()))
       }
@@ -107,8 +108,8 @@ class PhaseStrategyTraversalTest {
         FeatureTaskRuntimeTransitionDeclaration(listOf(PHASE_REVIEW)),
       )
     malformed.forEach { declaration ->
-      assertFailsWith<InvalidPhaseStrategyCompositionError> { lookup.validateTraversalOverride(facts, declaration) }
-      assertFailsWith<InvalidPhaseStrategyCompositionError> { plan.withTraversal(declaration) }
+      assertInvalidComposition { lookup.validateTraversalOverride(facts, declaration) }
+      assertInvalidComposition { plan.withTraversal(declaration) }
     }
   }
 
@@ -126,7 +127,7 @@ class PhaseStrategyTraversalTest {
     steps[2] = PHASE_VERIFY_FINDINGS
     val lookup = lookup(definition, strategy)
 
-    assertFailsWith<InvalidPhaseStrategyCompositionError> {
+    assertCompositionDefect {
       lookup.executionPlan(PhaseStrategySelectionFacts(definition, emptySet()))
     }
   }
@@ -147,7 +148,7 @@ class PhaseStrategyTraversalTest {
       )
 
     malformed.forEach { declaration ->
-      assertFailsWith<InvalidPhaseStrategyCompositionError> {
+      assertInvalidComposition {
         lookup.validateTraversalOverride(facts, declaration)
       }
     }
@@ -162,7 +163,7 @@ class PhaseStrategyTraversalTest {
     assertSame(strategy, lookup.strategyFor(PHASE_IMPLEMENT, plan))
     strategy.stepPolicy = strategy.stepPolicy.copy(singleAgentSession = true)
 
-    assertFailsWith<InvalidPhaseStrategyCompositionError> { lookup.strategyFor(PHASE_IMPLEMENT, plan) }
+    assertInvalidComposition { lookup.strategyFor(PHASE_IMPLEMENT, plan) }
   }
 
   @Test
@@ -203,6 +204,15 @@ class PhaseStrategyTraversalTest {
         ),
       ),
     )
+  }
+
+  private fun assertInvalidComposition(block: () -> Unit) {
+    val error = assertFailsWith<SkillBillRuntimeException>(block = block)
+    assertEquals(PhaseSlotFailureCode.INVALID_STRATEGY_COMPOSITION, error.code)
+  }
+
+  private fun assertCompositionDefect(block: () -> Unit) {
+    assertFailsWith<IllegalArgumentException>(block = block)
   }
 }
 

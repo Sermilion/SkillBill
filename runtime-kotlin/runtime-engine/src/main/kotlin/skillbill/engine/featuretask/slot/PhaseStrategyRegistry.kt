@@ -1,9 +1,5 @@
 package skillbill.engine.featuretask.slot
 
-import skillbill.error.featuretask.DuplicatePhaseStrategyError
-import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
-import skillbill.error.featuretask.PhaseStrategyStepOutsideSlotError
-import skillbill.error.featuretask.UnknownPhaseStrategyError
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import java.util.Collections
 
@@ -21,10 +17,13 @@ class PhaseStrategyRegistry(registrations: List<PhaseStrategyRegistration>) {
       val strategy = registration.strategy
       validateStrategy(strategy)
       strategy.steps.firstOrNull { it !in strategy.slot.steps }?.let { step ->
-        throw PhaseStrategyStepOutsideSlotError(strategy.slot.wireValue, strategy.strategyId, step)
+        error(
+          "Phase strategy '${strategy.strategyId}' for slot '${strategy.slot.wireValue}' " +
+            "declares step '$step' outside that slot.",
+        )
       }
-      if (keyed.put(strategy.slot to strategy.strategyId, strategy) != null) {
-        throw DuplicatePhaseStrategyError(strategy.slot.wireValue, strategy.strategyId)
+      check(keyed.put(strategy.slot to strategy.strategyId, strategy) == null) {
+        "Phase slot '${strategy.slot.wireValue}' registers strategy '${strategy.strategyId}' more than once."
       }
       keyedRunners[strategy.slot to strategy.strategyId] = registration.runner
     }
@@ -40,12 +39,12 @@ class PhaseStrategyRegistry(registrations: List<PhaseStrategyRegistration>) {
   fun strategy(
     slot: PhaseSlot,
     strategyId: String,
-  ): PhaseStrategy = byKey[slot to strategyId] ?: throw UnknownPhaseStrategyError(slot.wireValue, strategyId)
+  ): PhaseStrategy = byKey[slot to strategyId] ?: error("Phase slot '${slot.wireValue}' has no strategy '$strategyId'.")
 
   internal fun runner(
     slot: PhaseSlot,
     strategyId: String,
-  ): PhaseRunner = runners[slot to strategyId] ?: throw UnknownPhaseStrategyError(slot.wireValue, strategyId)
+  ): PhaseRunner = runners[slot to strategyId] ?: error("Phase slot '${slot.wireValue}' has no strategy '$strategyId'.")
 }
 
 private fun validateStrategy(strategy: PhaseStrategy) {
@@ -57,7 +56,9 @@ private fun validateStrategy(strategy: PhaseStrategy) {
       strategy.steps.size != strategy.steps.toSet().size -> "repeats a step"
       !strategy.steps.containsAll(strategy.optionalSteps) -> "marks an unowned step optional"
       strategy.entryStep !in strategy.steps -> "has an entry outside its steps"
-      else -> return
+      else -> null
     }
-  throw InvalidPhaseStrategyCompositionError("strategy ${strategy.slot.wireValue}/${strategy.strategyId} $reason")
+  require(reason == null) {
+    "Invalid phase strategy composition: strategy ${strategy.slot.wireValue}/${strategy.strategyId} $reason"
+  }
 }

@@ -26,7 +26,6 @@ import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.engine.featuretask.slot.stepFacts
-import skillbill.error.featuretask.UnknownPhaseStepError
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -81,7 +80,7 @@ internal class CodeReviewSlot(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> PhaseExecutionBindingKind.REVIEW
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> PhaseExecutionBindingKind.FINDING_VERIFICATION
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> PhaseExecutionBindingKind.REPAIR_RECEIPT
-      else -> throw UnknownPhaseStepError(stepId)
+      else -> error("Phase step '$stepId' does not belong to any phase slot.")
     }
 
   fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
@@ -93,7 +92,7 @@ internal class CodeReviewSlot(
         InlineReviewPromptSections.VERIFY_FINDINGS_DIRECTIVE
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX ->
         InlineReviewPromptSections.IMPLEMENT_FIX_DIRECTIVE
-      else -> throw UnknownPhaseStepError(stepId)
+      else -> error("Phase step '$stepId' does not belong to any phase slot.")
     }
 
   fun promptSections(
@@ -105,7 +104,7 @@ internal class CodeReviewSlot(
         InlineReviewPromptSections.review(inputs, pass.directive)
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> InlineReviewPromptSections.verifyFindings()
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> InlineReviewPromptSections.implementFix()
-      else -> throw UnknownPhaseStepError(stepId)
+      else -> error("Phase step '$stepId' does not belong to any phase slot.")
     }
 
   fun briefingInvariantFields(
@@ -149,7 +148,7 @@ internal class CodeReviewSlot(
         }
         strategy.runAgentStep(run, state)
       }
-      else -> throw UnknownPhaseStepError(run.phaseId)
+      else -> error("Phase step '${run.phaseId}' does not belong to any phase slot.")
     }
 
   fun stepHooks(stepId: String): PhaseStepHooks =

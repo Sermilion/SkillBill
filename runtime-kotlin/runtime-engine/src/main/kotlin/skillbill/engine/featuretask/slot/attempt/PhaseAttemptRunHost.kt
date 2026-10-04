@@ -42,7 +42,6 @@ import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.validation.FeatureTaskRuntimeReadinessGateCoordinator
-import skillbill.error.featuretask.GoalPlanningPhaseGatesUnsupportedError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diff.DiffResolverPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
@@ -99,31 +98,31 @@ internal class PhaseAttemptRunHost(
     get() = backingRunState.transitions
 
   val gitOperations: WorkflowGitOperations
-    get() = directGitOperations ?: throw GoalPlanningPhaseGatesUnsupportedError()
+    get() = directGitOperations ?: unsupportedGoalPlanningGate()
 
   val decompositionPlanner: FeatureTaskRuntimeDecompositionPlanner
-    get() = directDecompositionPlanner ?: throw GoalPlanningPhaseGatesUnsupportedError()
+    get() = directDecompositionPlanner ?: unsupportedGoalPlanningGate()
 
   val findingVerificationBoundaryMemory: FeatureTaskRuntimeFindingVerificationBoundaryMemory
-    get() = directFindingVerificationBoundaryMemory ?: throw GoalPlanningPhaseGatesUnsupportedError()
+    get() = directFindingVerificationBoundaryMemory ?: unsupportedGoalPlanningGate()
 
   val specIntentProjectionResolver: SpecIntentProjectionResolver
-    get() = directSpecIntentProjectionResolver ?: throw GoalPlanningPhaseGatesUnsupportedError()
+    get() = directSpecIntentProjectionResolver ?: unsupportedGoalPlanningGate()
 
   val lifecycleTelemetry: FeatureTaskRuntimeLifecycleTelemetry
-    get() = directLifecycleTelemetry ?: throw GoalPlanningPhaseGatesUnsupportedError()
+    get() = directLifecycleTelemetry ?: unsupportedGoalPlanningGate()
 
   val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort
-    get() = directSharedEvidenceResolver ?: throw GoalPlanningPhaseGatesUnsupportedError()
+    get() = directSharedEvidenceResolver ?: unsupportedGoalPlanningGate()
 
   val diffResolver: DiffResolverPort
-    get() = directDiffResolver ?: throw GoalPlanningPhaseGatesUnsupportedError()
+    get() = directDiffResolver ?: unsupportedGoalPlanningGate()
 
   val qualityGateCycles: RuntimeQualityGateCycles
-    get() = directQualityGateCycles ?: throw GoalPlanningPhaseGatesUnsupportedError()
+    get() = directQualityGateCycles ?: unsupportedGoalPlanningGate()
 
   val readinessGateCoordinator: FeatureTaskRuntimeReadinessGateCoordinator
-    get() = directReadinessGateCoordinator ?: throw GoalPlanningPhaseGatesUnsupportedError()
+    get() = directReadinessGateCoordinator ?: unsupportedGoalPlanningGate()
 
   val telemetry: FeatureTaskRuntimeRunObservability
     get() = backingRunState.telemetry
@@ -217,6 +216,9 @@ internal class PhaseAttemptRunHost(
     }
   }
 }
+
+private fun unsupportedGoalPlanningGate(): Nothing =
+  error("Goal planning runs read-only preplan and plan steps and has no branch, git, or validation gates.")
 
 internal fun PhaseRuntimeFinalizationContext.blockAndPersistInPhase(args: BlockAndPersistInPhaseArgs): PhaseOutcome =
   FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersistInPhase(

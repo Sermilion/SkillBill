@@ -4,7 +4,8 @@ import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.engine.featuretask.runloop.core.RepositoryCheckpointResolutionArgs
 import skillbill.engine.featuretask.runloop.output.FeatureTaskRuntimeRunLoopOutputVerification
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
-import skillbill.error.featuretask.PhaseValidationScopeError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonRunStateKind
 
@@ -15,7 +16,11 @@ object FeatureTaskRuntimeRunLoopValidationScope {
     if (run.request.skeletonDefinition?.runStateKind == SkeletonRunStateKind.IN_MEMORY) {
       return when (val paths = gitOperations.trackedPaths(run.request.repoRoot)) {
         is WorkflowGitNameListResult.Listed -> paths.names.distinct().sorted()
-        is WorkflowGitNameListResult.Failed -> throw PhaseValidationScopeError(paths.error)
+        is WorkflowGitNameListResult.Failed ->
+          throw SkillBillRuntimeException(
+            PhaseSlotFailureCode.VALIDATION_SCOPE,
+            "Cannot read the working-tree scope for validation: ${paths.error}",
+          )
       }
     }
     return with(FeatureTaskRuntimeRunLoopOutputVerification) {

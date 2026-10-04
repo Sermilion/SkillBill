@@ -2,7 +2,8 @@ package skillbill.cli.phase
 
 import com.github.ajalt.clikt.core.UsageError
 import skillbill.cli.kernel.cli.CliRunState
-import skillbill.error.featuretask.UnknownPhaseReviewTargetError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.error.shellcontent.missingValidationGate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -16,7 +17,13 @@ class PhaseRunErrorMappingTest {
 
     val error =
       assertFailsWith<UsageError> {
-        runPhase(state) { throw UnknownPhaseReviewTargetError("no-such-branch") }
+        runPhase(state) {
+          throw SkillBillRuntimeException(
+            PhaseSlotFailureCode.UNKNOWN_PHASE_REVIEW_TARGET,
+            "Review target 'no-such-branch' does not name a commit in this repository; expected HEAD, uncommitted, pr, " +
+              "staged, unstaged, or a commit sha, branch, or tag.",
+          )
+        }
       }
 
     assertEquals(

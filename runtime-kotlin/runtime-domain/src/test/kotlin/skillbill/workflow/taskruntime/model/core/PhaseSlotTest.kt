@@ -1,6 +1,5 @@
 package skillbill.workflow.taskruntime.model.core
 
-import skillbill.error.featuretask.UnknownPhaseStepError
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,9 +35,9 @@ class PhaseSlotTest {
   }
 
   @Test
-  fun `unknown step raises a typed error`() {
-    val error = assertFailsWith<UnknownPhaseStepError> { PhaseSlot.slotForStep("deploy") }
+  fun `unknown step raises a defect`() {
+    val error = assertFailsWith<IllegalStateException> { PhaseSlot.slotForStep("deploy") }
 
-    assertEquals("deploy", error.stepId)
+    assertEquals("Phase step 'deploy' does not belong to any phase slot.", error.message)
   }
 }

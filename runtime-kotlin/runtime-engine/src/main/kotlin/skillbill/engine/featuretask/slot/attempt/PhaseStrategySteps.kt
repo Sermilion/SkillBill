@@ -7,7 +7,6 @@ import skillbill.engine.featuretask.slot.PhaseStepDescription
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseAgentExecution
-import skillbill.error.featuretask.UnknownPhaseStepError
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 internal fun PhaseStrategy.promptSource(stepId: String): PhaseStepPromptSource =
@@ -30,4 +29,4 @@ internal fun PhaseStrategy.runAgentStep(
 ): PhaseOutcome = (state as PhaseAgentExecution).runAcceptedAgentStep(run, stepCall(run, state))
 
 internal fun Map<String, PhaseStepPolicy>.policyOf(stepId: String): PhaseStepPolicy =
-  this[stepId] ?: throw UnknownPhaseStepError(stepId)
+  this[stepId] ?: error("Phase step '$stepId' does not belong to any phase slot.")

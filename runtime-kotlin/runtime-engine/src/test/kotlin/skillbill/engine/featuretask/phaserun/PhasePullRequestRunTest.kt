@@ -6,7 +6,8 @@ import skillbill.engine.featuretask.runner.facts
 import skillbill.engine.featuretask.runner.phaseIdFromPrompt
 import skillbill.engine.featuretask.runner.telemetryRunnerHarness
 import skillbill.engine.featuretask.slot.validJsonOutput
-import skillbill.error.featuretask.PullRequestBranchRefusedError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
@@ -89,7 +90,8 @@ class PhasePullRequestRunTest {
     val phaseEntry = entry()
     val statusBefore = git(repoRoot, "status", "--porcelain")
 
-    assertFailsWith<PullRequestBranchRefusedError> { phaseEntry.run(prRequest()) }
+    val error = assertFailsWith<SkillBillRuntimeException> { phaseEntry.run(prRequest()) }
+    assertEquals(PhaseSlotFailureCode.PULL_REQUEST_BRANCH_REFUSED, error.code)
 
     assertEquals(headBefore, git(repoRoot, "rev-parse", "HEAD"), "nothing may be committed")
     assertEquals(statusBefore, git(repoRoot, "status", "--porcelain"))

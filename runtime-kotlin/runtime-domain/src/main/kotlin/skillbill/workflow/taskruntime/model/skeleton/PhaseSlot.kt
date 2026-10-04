@@ -1,6 +1,5 @@
 package skillbill.workflow.taskruntime.model.skeleton
 
-import skillbill.error.featuretask.UnknownPhaseStepError
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
 
 enum class PhaseSlot(val wireValue: String, val steps: List<String>) {
@@ -32,6 +31,7 @@ enum class PhaseSlot(val wireValue: String, val steps: List<String>) {
 
   companion object {
     fun slotForStep(stepId: String): PhaseSlot =
-      entries.firstOrNull { stepId in it.steps } ?: throw UnknownPhaseStepError(stepId)
+      entries.firstOrNull { stepId in it.steps }
+        ?: error("Phase step '$stepId' does not belong to any phase slot.")
   }
 }

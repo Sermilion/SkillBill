@@ -18,8 +18,8 @@ import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.failureCodeLabel
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
-import skillbill.error.featuretask.UnknownPhaseReviewTargetError
 import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope
@@ -317,7 +317,13 @@ internal class CodeReviewStep(
         ReviewTargetResolver.resolve(invocation.target, status.value.orEmpty()).also { target ->
           if (target is ReviewTarget.Commit) {
             val resolved = gitOperations.resolveCommit(repoRoot, target.sha)
-            if (resolved !is WorkflowGitOperationResult.Ok) throw UnknownPhaseReviewTargetError(target.sha)
+            if (resolved !is WorkflowGitOperationResult.Ok) {
+              throw SkillBillRuntimeException(
+                PhaseSlotFailureCode.UNKNOWN_PHASE_REVIEW_TARGET,
+                "Review target '${target.sha}' does not name a commit in this repository; expected HEAD, uncommitted, " +
+                  "pr, staged, unstaged, or a commit sha, branch, or tag.",
+              )
+            }
           }
         }
       }

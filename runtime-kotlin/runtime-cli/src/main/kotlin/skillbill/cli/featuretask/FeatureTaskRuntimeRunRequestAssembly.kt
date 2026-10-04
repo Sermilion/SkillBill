@@ -4,7 +4,6 @@ import com.github.ajalt.clikt.core.UsageError
 import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
-import skillbill.error.featuretask.UnknownQualityGateSelectionError
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
@@ -87,15 +86,11 @@ private fun parseQualityGateSelection(
   source: String,
   raw: String,
 ): FeatureTaskRuntimeQualityGateSelection =
-  try {
-    FeatureTaskRuntimeQualityGateSelection.fromWire(raw)
-  } catch (error: UnknownQualityGateSelectionError) {
-    throw UsageError(
-      "Unknown $source value '$raw'. Allowed: ${error.allowedValues.joinToString()}.",
-    ).also { usage ->
-      runCatching { usage.initCause(error) }
-    }
-  }
+  FeatureTaskRuntimeQualityGateSelection.fromWire(raw)
+    ?: throw UsageError(
+      "Unknown $source value '$raw'. Allowed: " +
+        FeatureTaskRuntimeQualityGateSelection.entries.joinToString { it.wireValue } + ".",
+    )
 
 internal fun FeatureTaskRuntimePhaseAgentCommand.requestedOperatorDecision(): GoalSubtaskOperatorDecision? {
   if (operatorDecisions.size > 1) {

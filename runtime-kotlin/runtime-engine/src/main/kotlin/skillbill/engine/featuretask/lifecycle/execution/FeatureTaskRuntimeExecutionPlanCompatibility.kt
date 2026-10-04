@@ -3,11 +3,13 @@ package skillbill.engine.featuretask.lifecycle.execution
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
-import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
 import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedExecutionPolicy
@@ -68,7 +70,13 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
   fun requireSupportedComposition(encoded: ByteArray?): ResolvedPhaseExecutionPlan {
     if (encoded == null) throw MissingFeatureTaskRuntimeExecutionPlanError()
     val recorded = decodePlan(encoded)
-    val mapping = strategies.executionPlanMapping(recorded)
+    val mapping =
+      try {
+        strategies.executionPlanMapping(recorded)
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code == PhaseSlotFailureCode.INVALID_STRATEGY_COMPOSITION)
+        incompatible()
+      }
     val plan =
       if (mapping == null) {
         recorded
@@ -87,14 +95,16 @@ class FeatureTaskRuntimeExecutionPlanCompatibility(
     val selectionMatches =
       try {
         strategies.matchesRecordedSelection(plan, definition)
-      } catch (_: InvalidPhaseStrategyCompositionError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code == PhaseSlotFailureCode.INVALID_STRATEGY_COMPOSITION)
         incompatible()
       }
     if (!selectionMatches) incompatible()
     val traversal =
       try {
         definition.traversal(plan.selectedStepIds, plan.selectedEntryStepIds)
-      } catch (_: IllegalArgumentException) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code == PhaseSlotFailureCode.INVALID_STRATEGY_COMPOSITION)
         incompatible()
       }
     if (plan.traversal != traversal) incompatible()

@@ -1,7 +1,7 @@
 package skillbill.workflow.taskruntime.phase.task
 
-import skillbill.error.featuretask.InvalidSkeletonDefinitionError
-import skillbill.error.featuretask.UnknownSkeletonDefinitionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdgeCapScope
@@ -99,18 +99,21 @@ class SkeletonDefinitionTest {
   }
 
   @Test
-  fun `a definition that reorders slots raises a typed error`() {
+  fun `a definition that reorders slots raises a defect`() {
     val error =
-      assertFailsWith<InvalidSkeletonDefinitionError> {
+      assertFailsWith<IllegalArgumentException> {
         SkeletonDefinition("reordered", listOf(PhaseSlot.PLAN, PhaseSlot.PREPLAN))
       }
 
-    assertEquals(listOf("plan", "preplan"), error.slots)
+    assertEquals(
+      "Skeleton definition 'reordered' must list distinct phase slots in canonical order, was [plan, preplan].",
+      error.message,
+    )
   }
 
   @Test
-  fun `a definition that repeats a slot raises a typed error`() {
-    assertFailsWith<InvalidSkeletonDefinitionError> {
+  fun `a definition that repeats a slot raises a defect`() {
+    assertFailsWith<IllegalArgumentException> {
       SkeletonDefinition("repeated", listOf(PhaseSlot.PLAN, PhaseSlot.PLAN))
     }
   }
@@ -130,8 +133,13 @@ class SkeletonDefinitionTest {
   fun `lookup knows the short definitions and rejects commit_push and unknown ids`() {
     assertEquals(SkeletonDefinition.VALIDATION, SkeletonDefinition.byId("validation"))
     listOf("commit_push", "bogus").forEach { id ->
-      val error = assertFailsWith<UnknownSkeletonDefinitionError> { SkeletonDefinition.byId(id) }
-      assertEquals(id, error.definitionId)
+      val error = assertFailsWith<SkillBillRuntimeException> { SkeletonDefinition.byId(id) }
+      assertEquals(PhaseSlotFailureCode.UNKNOWN_SKELETON_DEFINITION, error.code)
+      assertEquals(
+        "Unknown skeleton definition '$id'; expected one of " +
+          "standalone, goal-child, review, validation, plan, pr, goal-planning.",
+        error.message,
+      )
     }
   }
 

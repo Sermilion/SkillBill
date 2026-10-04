@@ -3,7 +3,8 @@ package skillbill.engine.featuretask.phaserun
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.issuekey.TRACKER_STYLE_ISSUE_KEY_PATTERN
 import skillbill.contracts.issuekey.issueAndFeature
-import skillbill.error.featuretask.PhaseIntakeRequiredError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
@@ -45,10 +46,10 @@ class PhaseRunIntakeResolver(
         )
       PhaseIntakeRequirement.ISSUE_KEY -> {
         val key =
-          issueKey ?: throw PhaseIntakeRequiredError(
-            definition.id,
-            "the intake must name an issue key such as SKILL-123, an issue URL, or a spec path under " +
-              ".feature-specs/<KEY>-<name>/.",
+          issueKey ?: throw SkillBillRuntimeException(
+            PhaseSlotFailureCode.INTAKE_REQUIRED,
+            "Phase '${definition.id}' requires an intake: the intake must name an issue key such as SKILL-123, " +
+              "an issue URL, or a spec path under .feature-specs/<KEY>-<name>/.",
           )
         val invariants =
           specInvariants(key, specPath, bareKey = tokens.size == 1, repoRoot = request.repoRoot)

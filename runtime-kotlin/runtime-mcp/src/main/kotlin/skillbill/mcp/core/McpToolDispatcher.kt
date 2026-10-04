@@ -4,6 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.error.learning.InvalidLearningSourceReason
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.mcp.shared.InvalidMcpToolArgumentError
@@ -41,6 +42,7 @@ internal object McpToolDispatcher {
   private fun Throwable.uncapturedAtMcp(): Boolean =
     isShellContentContractFailure() ||
       (this as? SkillBillRuntimeException)?.code is InvalidLearningSourceReason ||
+      (this as? SkillBillRuntimeException)?.code == PhaseSlotFailureCode.INVALID_STRATEGY_COMPOSITION ||
       this is IllegalArgumentException ||
       this is IllegalStateException
 

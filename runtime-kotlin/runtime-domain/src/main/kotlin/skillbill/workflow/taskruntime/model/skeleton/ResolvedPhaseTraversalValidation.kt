@@ -1,6 +1,6 @@
 package skillbill.workflow.taskruntime.model.skeleton
 
-import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
+import skillbill.error.featuretask.invalidPhaseStrategyCompositionFailure
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
 internal fun validateResolvedTraversal(
@@ -11,7 +11,7 @@ internal fun validateResolvedTraversal(
   val forward = declaration.forwardPhaseIds
   val loopOnly = declaration.loopOnlyPhaseIds
   if (forward.toSet() != selected || forward.size != selected.size || !selected.containsAll(entries)) {
-    throw InvalidPhaseStrategyCompositionError("traversal must contain exactly the selected steps and entries")
+    throw invalidPhaseStrategyCompositionFailure("traversal must contain exactly the selected steps and entries")
   }
   validateSelectedReferences(selected, declaration)
   validateUniqueTransitions(declaration)
@@ -22,7 +22,7 @@ internal fun validateResolvedTraversal(
     declaration.loopOnlySuccessors.filterKeys { it in reachable }.values.forEach(reachable::add)
   } while (previousSize != reachable.size)
   if (!reachable.containsAll(selected)) {
-    throw InvalidPhaseStrategyCompositionError(
+    throw invalidPhaseStrategyCompositionFailure(
       "selected steps are unreachable: ${(selected - reachable).sorted().joinToString()}",
     )
   }
@@ -41,7 +41,7 @@ private fun validateSelectedReferences(
     }
   val invalidLoop = !selected.containsAll(loopOnly) || invalidSuccessor
   if (invalidLoop || invalidGate || invalidEdge) {
-    throw InvalidPhaseStrategyCompositionError("traversal references an unselected step")
+    throw invalidPhaseStrategyCompositionFailure("traversal references an unselected step")
   }
 }
 
@@ -52,6 +52,6 @@ private fun validateUniqueTransitions(declaration: FeatureTaskRuntimeTransitionD
     edges.map { it.fromPhaseId to it.triggeringVerdict }.distinct().size != edges.size ||
     declaration.entryGates.map { it.phaseId to it.requiredPhaseId }.distinct().size != declaration.entryGates.size
   ) {
-    throw InvalidPhaseStrategyCompositionError("traversal has ambiguous remediation edges or entry gates")
+    throw invalidPhaseStrategyCompositionFailure("traversal has ambiguous remediation edges or entry gates")
   }
 }

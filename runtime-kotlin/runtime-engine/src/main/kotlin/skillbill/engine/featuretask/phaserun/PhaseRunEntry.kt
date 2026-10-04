@@ -10,7 +10,6 @@ import skillbill.engine.featuretask.runloop.core.strategySelectionFacts
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
-import skillbill.error.featuretask.InMemorySkeletonDefinitionRequiredError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -34,7 +33,10 @@ class PhaseRunEntry(
   fun run(request: PhaseRunRequest): PhaseRunResult {
     val definition = SkeletonDefinition.byId(request.definitionId)
     if (definition.runStateKind != SkeletonRunStateKind.IN_MEMORY) {
-      throw InMemorySkeletonDefinitionRequiredError(definition.id)
+      error(
+        "Skeleton definition '${definition.id}' runs over durable workflow state; a phase run drives only " +
+          "in-memory definitions.",
+      )
     }
     val branch = currentBranch(request)
     val intake = intakeResolver.resolve(definition, request, branch?.branch)

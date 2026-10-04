@@ -3,12 +3,8 @@ package skillbill.engine.featuretask.slot
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
-import skillbill.error.featuretask.DuplicatePhaseStrategyError
-import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
-import skillbill.error.featuretask.PhaseStrategySelectionSlotMismatchError
-import skillbill.error.featuretask.PhaseStrategyStepOutsideSlotError
-import skillbill.error.featuretask.UnknownPhaseStrategyError
-import skillbill.error.featuretask.UnregisteredPhaseStrategySelectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
@@ -23,37 +19,40 @@ import kotlin.test.assertSame
 
 class PhaseStrategyRegistryTest {
   @Test
-  fun `registering one strategy id twice for a slot raises a typed error`() {
+  fun `registering one strategy id twice for a slot raises a defect`() {
     val error =
-      assertFailsWith<DuplicatePhaseStrategyError> {
+      assertFailsWith<IllegalStateException> {
         PhaseStrategyRegistry(listOf(reviewStrategy("inline"), reviewStrategy("inline")))
       }
 
-    assertEquals("code_review" to "inline", error.slot to error.strategyId)
+    assertEquals("Phase slot 'code_review' registers strategy 'inline' more than once.", error.message)
   }
 
   @Test
-  fun `a strategy declaring a step outside its slot raises a typed error`() {
+  fun `a strategy declaring a step outside its slot raises a defect`() {
     val error =
-      assertFailsWith<PhaseStrategyStepOutsideSlotError> {
+      assertFailsWith<IllegalStateException> {
         PhaseStrategyRegistry(
           listOf(FakeStrategy(PhaseSlot.CODE_REVIEW, "inline", listOf(PHASE_BUILD))),
         )
       }
 
-    assertEquals(PHASE_BUILD, error.stepId)
+    assertEquals(
+      "Phase strategy 'inline' for slot 'code_review' declares step '$PHASE_BUILD' outside that slot.",
+      error.message,
+    )
   }
 
   @Test
   fun `a strategy with no steps raises a typed composition error`() {
-    assertFailsWith<InvalidPhaseStrategyCompositionError> {
+    assertFailsWith<IllegalArgumentException> {
       PhaseStrategyRegistry(listOf(FakeStrategy(PhaseSlot.CODE_REVIEW, "empty", emptyList())))
     }
   }
 
   @Test
   fun `a strategy repeating a step raises a typed composition error`() {
-    assertFailsWith<InvalidPhaseStrategyCompositionError> {
+    assertFailsWith<IllegalArgumentException> {
       PhaseStrategyRegistry(
         listOf(FakeStrategy(PhaseSlot.CODE_REVIEW, "duplicate", listOf(PHASE_REVIEW, PHASE_REVIEW))),
       )
@@ -62,7 +61,7 @@ class PhaseStrategyRegistryTest {
 
   @Test
   fun `a strategy with an invalid semantic revision raises a typed composition error`() {
-    assertFailsWith<InvalidPhaseStrategyCompositionError> {
+    assertFailsWith<IllegalArgumentException> {
       PhaseStrategyRegistry(listOf(FakeStrategy(PhaseSlot.CODE_REVIEW, "invalid-revision", listOf(PHASE_REVIEW), 0)))
     }
   }
@@ -71,14 +70,14 @@ class PhaseStrategyRegistryTest {
   fun `looking up an unregistered strategy raises a typed error`() {
     val registry = PhaseStrategyRegistry(listOf(reviewStrategy("inline")))
 
-    val error = assertFailsWith<UnknownPhaseStrategyError> { registry.strategy(PhaseSlot.CODE_REVIEW, "delegated") }
+    val error = assertFailsWith<IllegalStateException> { registry.strategy(PhaseSlot.CODE_REVIEW, "delegated") }
 
-    assertEquals("delegated", error.strategyId)
+    assertEquals("Phase slot 'code_review' has no strategy 'delegated'.", error.message)
   }
 
   @Test
   fun `an entry outside the owned steps raises a typed composition error`() {
-    assertFailsWith<InvalidPhaseStrategyCompositionError> {
+    assertFailsWith<IllegalArgumentException> {
       PhaseStrategyRegistry(
         listOf(
           FakeStrategy(PhaseSlot.CODE_REVIEW, "bad-entry", listOf(PHASE_REVIEW), entryStep = PHASE_VERIFY_FINDINGS),
@@ -92,8 +91,10 @@ class PhaseStrategyRegistryTest {
     val registry = PhaseStrategyRegistry(listOf(reviewStrategy("inline")))
     val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, emptyMap()))
 
-    assertFailsWith<UnknownPhaseStrategyError> { lookup.executionPlan(facts(CodeReviewExecutionMode.INLINE)) }
-    assertFailsWith<PhaseStrategySelectionSlotMismatchError> {
+    val unknown =
+      assertFailsWith<SkillBillRuntimeException> { lookup.executionPlan(facts(CodeReviewExecutionMode.INLINE)) }
+    assertEquals(PhaseSlotFailureCode.UNKNOWN_PHASE_STRATEGY, unknown.code)
+    assertFailsWith<IllegalStateException> {
       PhaseStrategySelection(registry, mapOf(REVIEW_ONLY to emptyMap()))
     }
   }
@@ -103,14 +104,17 @@ class PhaseStrategyRegistryTest {
     val registry = PhaseStrategyRegistry(listOf(reviewStrategy("inline")))
 
     val error =
-      assertFailsWith<UnregisteredPhaseStrategySelectionError> {
+      assertFailsWith<IllegalStateException> {
         PhaseStrategySelection(
           registry,
           mapOf(REVIEW_ONLY to mapOf(PhaseSlot.CODE_REVIEW to PhaseStrategyBinding.Fixed("parallel"))),
         )
       }
 
-    assertEquals("parallel", error.strategyId)
+    assertEquals(
+      "Phase strategy selection for slot 'code_review' names unregistered strategy 'parallel'.",
+      error.message,
+    )
   }
 
   @Test
@@ -118,7 +122,7 @@ class PhaseStrategyRegistryTest {
     val registry = PhaseStrategyRegistry(listOf(reviewStrategy("inline")))
 
     val error =
-      assertFailsWith<PhaseStrategySelectionSlotMismatchError> {
+      assertFailsWith<IllegalStateException> {
         PhaseStrategySelection(
           registry,
           mapOf(
@@ -131,7 +135,11 @@ class PhaseStrategyRegistryTest {
         )
       }
 
-    assertEquals(REVIEW_ONLY.id to PhaseSlot.QUALITY_GATE.wireValue, error.definitionId to error.slot)
+    assertEquals(
+      "Phase strategy selection for skeleton definition '${REVIEW_ONLY.id}' must bind exactly its slots; " +
+        "slot '${PhaseSlot.QUALITY_GATE.wireValue}' is unbound or outside the definition.",
+      error.message,
+    )
   }
 
   @Test
@@ -155,12 +163,17 @@ class PhaseStrategyRegistryTest {
       inline,
       lookup.strategyFor(PHASE_VERIFY_FINDINGS, facts(CodeReviewExecutionMode.INLINE)),
     )
-    assertFailsWith<InvalidPhaseStrategyCompositionError> {
+    assertInvalidComposition {
       lookup.strategyFor(PHASE_REVIEW, facts(CodeReviewExecutionMode.DELEGATED))
     }
   }
 
   private fun facts(mode: CodeReviewExecutionMode) = PhaseStrategySelectionFacts(REVIEW_ONLY, setOf(mode))
+
+  private fun assertInvalidComposition(block: () -> Unit) {
+    val error = assertFailsWith<SkillBillRuntimeException>(block = block)
+    assertEquals(PhaseSlotFailureCode.INVALID_STRATEGY_COMPOSITION, error.code)
+  }
 
   private fun reviewStrategy(strategyId: String) =
     FakeStrategy(PhaseSlot.CODE_REVIEW, strategyId, PhaseSlot.CODE_REVIEW.steps)

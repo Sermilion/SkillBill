@@ -1,9 +1,8 @@
 package skillbill.engine.featuretask.slot
 
-import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
-import skillbill.error.featuretask.PhaseStrategySelectionSlotMismatchError
-import skillbill.error.featuretask.UnknownPhaseStrategyError
-import skillbill.error.featuretask.UnregisteredPhaseStrategySelectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
+import skillbill.error.featuretask.invalidPhaseStrategyCompositionFailure
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.util.Collections
@@ -20,8 +19,8 @@ sealed interface PhaseStrategyBinding {
 
   data class Fixed(val strategyId: String) : PhaseStrategyBinding {
     init {
-      if (strategyId.isBlank()) {
-        throw InvalidPhaseStrategyCompositionError("fixed selection has a blank strategy identity")
+      require(strategyId.isNotBlank()) {
+        "Invalid phase strategy composition: fixed selection has a blank strategy identity"
       }
     }
 
@@ -34,8 +33,8 @@ sealed interface PhaseStrategyBinding {
     private val ids: Map<Enum<*>, String> = Collections.unmodifiableMap(LinkedHashMap(ids))
 
     init {
-      if (this.ids.values.any(String::isBlank)) {
-        throw InvalidPhaseStrategyCompositionError("fact selection contains a blank strategy identity")
+      require(this.ids.values.none(String::isBlank)) {
+        "Invalid phase strategy composition: fact selection contains a blank strategy identity"
       }
     }
 
@@ -44,7 +43,7 @@ sealed interface PhaseStrategyBinding {
     override fun resolve(facts: PhaseStrategySelectionFacts): String? {
       val matches = facts.values.mapNotNull { fact -> ids[fact]?.let { fact to it } }
       if (matches.size > 1) {
-        throw InvalidPhaseStrategyCompositionError(
+        throw invalidPhaseStrategyCompositionFailure(
           "ambiguous selection for ${facts.definition.id}: " + matches.map { it.first.name }.sorted().joinToString(),
         )
       }
@@ -65,16 +64,19 @@ class PhaseStrategySelection(
   init {
     this.bindings.forEach { (definition, slotBindings) ->
       (definition.slots.toSet() xor slotBindings.keys).firstOrNull()?.let { slot ->
-        throw PhaseStrategySelectionSlotMismatchError(definition.id, slot.wireValue)
+        error(
+          "Phase strategy selection for skeleton definition '${definition.id}' must bind exactly its slots; " +
+            "slot '${slot.wireValue}' is unbound or outside the definition.",
+        )
       }
       slotBindings.forEach { (slot, binding) ->
         if (binding.strategyIds.isEmpty()) {
-          throw InvalidPhaseStrategyCompositionError(
-            "selection for ${definition.id}/${slot.wireValue} has no strategies",
+          error(
+            "Invalid phase strategy composition: selection for ${definition.id}/${slot.wireValue} has no strategies",
           )
         }
         binding.strategyIds.firstOrNull { !registry.contains(slot, it) }?.let { strategyId ->
-          throw UnregisteredPhaseStrategySelectionError(slot.wireValue, strategyId)
+          error("Phase strategy selection for slot '${slot.wireValue}' names unregistered strategy '$strategyId'.")
         }
       }
     }
@@ -91,9 +93,12 @@ class PhaseStrategySelection(
   ): String {
     val binding =
       bindings[facts.definition]?.get(slot)
-        ?: throw UnknownPhaseStrategyError(slot.wireValue, "definition=${facts.definition.id}")
+        ?: throw SkillBillRuntimeException(
+          PhaseSlotFailureCode.UNKNOWN_PHASE_STRATEGY,
+          "Phase slot '${slot.wireValue}' has no strategy 'definition=${facts.definition.id}'.",
+        )
     return binding.resolve(facts)
-      ?: throw InvalidPhaseStrategyCompositionError(
+      ?: throw invalidPhaseStrategyCompositionFailure(
         "no matching selection for ${facts.definition.id}/${slot.wireValue}: " +
           facts.values.map { "${it.javaClass.simpleName}.${it.name}" }.sorted().joinToString(),
       )

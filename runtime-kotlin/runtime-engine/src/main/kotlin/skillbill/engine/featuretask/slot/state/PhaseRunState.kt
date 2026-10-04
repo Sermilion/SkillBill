@@ -11,7 +11,6 @@ import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunLoopStepB
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
 import skillbill.engine.featuretask.slot.attempt.PhaseStepAttempts
-import skillbill.error.featuretask.PhaseRunFanOutUnsupportedError
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
@@ -64,9 +63,10 @@ internal interface PhaseRunState :
 
   /**
    * The units the fan-out step [stepId] runs. Only a state that keeps fan-out units supports it; the default fails
-   * with a typed error.
+   * with an illegal-state failure.
    */
-  fun fanOut(stepId: String): PhaseRunFanOut = throw PhaseRunFanOutUnsupportedError(stepId)
+  fun fanOut(stepId: String): PhaseRunFanOut =
+    error("Phase step '$stepId' fans out over units, and only the goal-planning run state keeps fan-out units.")
 
   /** The strategy selected for [stepId] in this run. */
   fun strategyFor(stepId: String): PhaseStrategy

@@ -14,7 +14,7 @@ import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStr
 import skillbill.engine.featuretask.slot.plan.AgentPlanStrategy.PlanResumeRules
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateResumeRules
 import skillbill.engine.featuretask.slot.qualitygate.gateCurrentExecution
-import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
+import skillbill.error.featuretask.invalidPhaseStrategyCompositionFailure
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -62,7 +62,7 @@ internal class PhaseHistoricalInterpreter(private val policy: PhaseHistoricalPol
 
   fun resumeRules(stepId: String): PhaseResumeRules =
     rules[stepId]
-      ?: throw InvalidPhaseStrategyCompositionError("no historical interpretation for $stepId under $policy")
+      ?: throw invalidPhaseStrategyCompositionFailure("no historical interpretation for $stepId under $policy")
 
   fun loopOnlyStepIds(gate: FeatureTaskRuntimeQualityGateSelection): Set<String> =
     if (gate == FeatureTaskRuntimeQualityGateSelection.BUILD) {

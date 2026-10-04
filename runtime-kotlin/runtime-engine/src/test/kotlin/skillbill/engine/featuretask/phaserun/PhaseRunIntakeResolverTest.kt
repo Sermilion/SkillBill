@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phaserun
 
-import skillbill.error.featuretask.PhaseIntakeRequiredError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -44,12 +45,12 @@ class PhaseRunIntakeResolverTest {
 
   @Test
   fun `a URL whose path names no issue key still requires an intake key`() {
-    assertFailsWith<PhaseIntakeRequiredError> { resolvePlan("https://github.com/org/repo/pulls describe the work") }
+    assertIntakeRequired { resolvePlan("https://github.com/org/repo/pulls describe the work") }
   }
 
   @Test
   fun `the URL host is never read as an issue key`() {
-    assertFailsWith<PhaseIntakeRequiredError> { resolvePlan("https://abc-123/some/path") }
+    assertIntakeRequired { resolvePlan("https://abc-123/some/path") }
   }
 
   private fun resolvePlan(intake: String): PhaseRunIntake =
@@ -63,4 +64,9 @@ class PhaseRunIntakeResolverTest {
       ),
       currentBranch = null,
     )
+
+  private fun assertIntakeRequired(block: () -> Unit) {
+    val error = assertFailsWith<SkillBillRuntimeException>(block = block)
+    assertEquals(PhaseSlotFailureCode.INTAKE_REQUIRED, error.code)
+  }
 }

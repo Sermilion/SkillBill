@@ -3,7 +3,10 @@ package skillbill.engine.featuretask.slot
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.featuretask.PhaseSlotFailureCode
+import skillbill.error.featuretask.invalidPhaseStrategyCompositionFailure
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
@@ -58,6 +61,9 @@ class PhaseStrategyLookup(
           it.semanticRevision == dispatch.semanticRevision && stepId in it.steps
       }
         ?: invalidComposition("plan has no unique strategy identity for $stepId")
+    if (!registry.contains(identity.slot, identity.strategyId)) {
+      invalidComposition("plan references unknown strategy ${identity.slot.wireValue}/${identity.strategyId}")
+    }
     val strategy = registry.strategy(identity.slot, identity.strategyId)
     if (strategy.semanticRevision != identity.semanticRevision) {
       invalidComposition(
@@ -161,16 +167,16 @@ class PhaseStrategyLookup(
     val declaration =
       try {
         facts.definition.traversal(selectedSteps.keys, entrySteps)
-      } catch (error: IllegalArgumentException) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code == PhaseSlotFailureCode.INVALID_STRATEGY_COMPOSITION)
         invalidComposition(
-          "definition ${facts.definition.id} has incoherent traversal: ${error.message}",
+          "definition ${facts.definition.id} has incoherent traversal: " +
+            error.message.orEmpty().removePrefix("Invalid phase strategy composition: "),
         )
       }
     val missingEntries = entrySteps - declaration.forwardPhaseIds.toSet()
-    if (missingEntries.isNotEmpty()) {
-      invalidComposition(
-        "selected entries are unreachable: ${missingEntries.sorted().joinToString()}",
-      )
+    require(missingEntries.isEmpty()) {
+      "Invalid phase strategy composition: selected entries are unreachable: ${missingEntries.sorted().joinToString()}"
     }
     val identities =
       selected.map { strategy ->
@@ -210,26 +216,21 @@ class PhaseStrategyLookup(
     selected.forEach { strategy ->
       strategy.steps.forEach { step ->
         val slot = PhaseSlot.slotForStep(step)
-        if (slot != strategy.slot) {
-          invalidComposition(
-            "${strategy.strategyId} claims $step outside ${strategy.slot.wireValue}",
-          )
+        require(slot == strategy.slot) {
+          "Invalid phase strategy composition: ${strategy.strategyId} claims $step outside ${strategy.slot.wireValue}"
         }
-        if (step !in facts.definition.stepIds && step !in strategy.optionalSteps) {
-          invalidComposition(
-            "selected step $step is absent from ${facts.definition.id} and is not optional",
-          )
+        require(step in facts.definition.stepIds || step in strategy.optionalSteps) {
+          "Invalid phase strategy composition: selected step $step is absent from ${facts.definition.id} " +
+            "and is not optional"
         }
         if (step in facts.definition.stepIds) {
-          if (selectedSteps.put(step, strategy) != null) {
-            invalidComposition("multiple selected strategies own $step")
+          require(selectedSteps.put(step, strategy) == null) {
+            "Invalid phase strategy composition: multiple selected strategies own $step"
           }
         }
       }
-      if (strategy.entryStep !in facts.definition.stepIds) {
-        invalidComposition(
-          "selected entry ${strategy.entryStep} is outside ${facts.definition.id}",
-        )
+      require(strategy.entryStep in facts.definition.stepIds) {
+        "Invalid phase strategy composition: selected entry ${strategy.entryStep} is outside ${facts.definition.id}"
       }
     }
   }
@@ -241,28 +242,31 @@ class PhaseStrategyLookup(
     val definitionStepIds = facts.definition.stepIds.toSet()
     val transitions = FeatureTaskRuntimePhaseWorkflowDefinition.transitions
     transitions.entryGates.forEach { gate ->
-      if (
-        gate.phaseId in selectedStepIds && gate.requiredPhaseId in definitionStepIds &&
-        gate.requiredPhaseId !in selectedStepIds
+      require(
+        !(
+          gate.phaseId in selectedStepIds &&
+            gate.requiredPhaseId in definitionStepIds &&
+            gate.requiredPhaseId !in selectedStepIds
+        ),
       ) {
-        invalidComposition(
-          "entry gate ${gate.phaseId} requires unselected ${gate.requiredPhaseId}",
-        )
+        "Invalid phase strategy composition: entry gate ${gate.phaseId} requires unselected ${gate.requiredPhaseId}"
       }
     }
     transitions.backwardEdges.forEach { edge ->
-      if (
-        edge.fromPhaseId in selectedStepIds && edge.destinationPhaseId in definitionStepIds &&
-        unselectedRemediationTarget(edge.destinationPhaseId, selectedStepIds)
+      require(
+        !(
+          edge.fromPhaseId in selectedStepIds &&
+            edge.destinationPhaseId in definitionStepIds &&
+            unselectedRemediationTarget(edge.destinationPhaseId, selectedStepIds)
+        ),
       ) {
-        invalidComposition(
-          "remediation edge ${edge.fromPhaseId} targets unselected ${edge.destinationPhaseId}",
-        )
+        "Invalid phase strategy composition: remediation edge ${edge.fromPhaseId} " +
+          "targets unselected ${edge.destinationPhaseId}"
       }
     }
     transitions.loopOnlySuccessors.forEach { (source, successor) ->
-      if (source in selectedStepIds && successor in definitionStepIds && successor !in selectedStepIds) {
-        invalidComposition("loop-only step $source requires unselected successor $successor")
+      require(!(source in selectedStepIds && successor in definitionStepIds && successor !in selectedStepIds)) {
+        "Invalid phase strategy composition: loop-only step $source requires unselected successor $successor"
       }
     }
   }
@@ -282,8 +286,8 @@ class PhaseStrategyLookup(
 
   private fun reviewSelection(facts: PhaseStrategySelectionFacts): RuntimeReviewSelection? =
     facts.values.filterIsInstance<CodeReviewExecutionMode>().let { modes ->
-      if (modes.size > 1) {
-        invalidComposition("multiple review selections were supplied")
+      require(modes.size <= 1) {
+        "Invalid phase strategy composition: multiple review selections were supplied"
       }
       modes.singleOrNull()
     }?.let { mode ->
@@ -296,8 +300,8 @@ class PhaseStrategyLookup(
 
   private fun singleQualityGateSelection(facts: PhaseStrategySelectionFacts): FeatureTaskRuntimeQualityGateSelection? {
     val selections = facts.values.filterIsInstance<FeatureTaskRuntimeQualityGateSelection>()
-    if (selections.size > 1) {
-      invalidComposition("multiple quality gate selections were supplied")
+    require(selections.size <= 1) {
+      "Invalid phase strategy composition: multiple quality gate selections were supplied"
     }
     return selections.singleOrNull()
   }
@@ -312,5 +316,6 @@ class PhaseStrategyLookup(
     val facts: List<String>,
   )
 
-  private fun invalidComposition(reason: String): Nothing = throw InvalidPhaseStrategyCompositionError(reason)
+  private fun invalidComposition(reason: String): Nothing =
+    throw invalidPhaseStrategyCompositionFailure(reason)
 }

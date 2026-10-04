@@ -1,5 +1,17 @@
 # featuretask runtime boundary history
 
+## [2026-10-04] SKILL-400 subtask 4 - Phase-slot failure codes and composition defects
+Areas: runtime-engine featuretask slot/phaserun/lifecycle/runloop, runtime-contracts error featuretask/shellcontent, runtime-domain taskruntime skeleton, runtime-cli phase/featuretask, runtime-mcp dispatch, runtime-core throwable baseline
+- Deleted 18 phase-slot and strategy-composition throwable declarations and their baseline rows. Composition-only violations now use require, check, or error with the existing messages.
+- PhaseSlotFailureCode covers phase input, validation-scope I/O, skeleton lookup, and durable strategy failures. Historical step and strategy mismatches still produce the incompatible-plan result.
+- Followed the failure-tier pattern, with exact code guards at shared catches. CLI usage/completion text, exit codes, and MCP capture classification retain their existing routes.
+- PhaseSlotFailureCode and its composition message factory are reusable across domain, engine, CLI, and MCP readers.
+- Unknown quality-gate selections now return null; CLI request assembly builds the existing UsageError from enum wire values.
+- Breaking source changes: removed exception classes and nullable quality-gate parsing. Persisted formats and strategy policies are unchanged.
+- Limit: the shared throwable transition stays open while other subtasks' subclasses and codeless callers remain.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-02] SKILL-398 subtask 2 - Operation, diagnostic and phase-write results as values
 Areas: runtime-engine (operation, featuretask slot/runloop/phaserun, goalrunner planning), runtime-contracts, runtime-ports, runtime-application diagnostics, runtime-infra sqlite, runtime-cli, runtime-core throwable baseline
 - Operations return a sealed OperationRefusal (Blocked, Usage) instead of throwing OperationErrors; the executor has no catch and the CLI maps Usage to a UsageError. Refusal text is unchanged. reusable

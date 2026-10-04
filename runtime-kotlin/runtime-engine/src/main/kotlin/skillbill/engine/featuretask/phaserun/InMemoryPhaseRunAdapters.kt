@@ -10,7 +10,6 @@ import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservatio
 import skillbill.engine.featuretask.slot.state.PhaseRunCheckpoints
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
-import skillbill.error.featuretask.InMemoryPhaseRunUnsupportedError
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
@@ -63,5 +62,8 @@ internal object InMemoryPhaseRunSettlements : PhaseRunSettlements {
 
 internal object InMemoryPhaseRunCheckpoints : PhaseRunCheckpoints {
   override fun commitSubtask(request: SubtaskCommitPreservationRequest): WorkflowGitOperationResult =
-    throw InMemoryPhaseRunUnsupportedError("write a subtask checkpoint commit")
+    error(
+      "An in-memory phase run keeps no durable state and cannot write a subtask checkpoint commit; " +
+        "run the full feature-task workflow instead.",
+    )
 }

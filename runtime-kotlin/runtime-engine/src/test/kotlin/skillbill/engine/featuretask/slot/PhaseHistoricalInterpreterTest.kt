@@ -6,7 +6,8 @@ import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidate
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalInterpreter
 import skillbill.engine.featuretask.slot.state.PhaseHistoricalPolicy
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
-import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -50,7 +51,7 @@ class PhaseHistoricalInterpreterTest {
       )
     val plan = lookup.executionPlan(PhaseStrategySelectionFacts(SkeletonDefinition.VALIDATION, emptySet()))
     assertEquals(setOf(PHASE_VALIDATE), plan.selectedStepIds)
-    assertFailsWith<InvalidPhaseStrategyCompositionError> { lookup.strategyFor(PHASE_BUILD, plan) }
+    assertInvalidComposition { lookup.strategyFor(PHASE_BUILD, plan) }
 
     val history = PhaseHistoricalInterpreter(PhaseHistoricalPolicy.REVISION_1)
     val record =
@@ -88,8 +89,8 @@ class PhaseHistoricalInterpreterTest {
     assertEquals(IdeStatusCurrentPhaseExecutionKind.GATE_RUN, execution?.kind)
     assertEquals(2, execution?.count)
     assertSame(history.resumeRules(PHASE_BUILD), lookup.resumeRules(plan)(PHASE_BUILD))
-    assertFailsWith<InvalidPhaseStrategyCompositionError> { lookup.resumeRules(plan)("unknown-step") }
-    assertFailsWith<InvalidPhaseStrategyCompositionError> { lookup.strategyFor(PHASE_BUILD, plan) }
+    assertInvalidComposition { lookup.resumeRules(plan)("unknown-step") }
+    assertInvalidComposition { lookup.strategyFor(PHASE_BUILD, plan) }
     assertEquals(0, launches)
   }
 
@@ -109,6 +110,11 @@ class PhaseHistoricalInterpreterTest {
       )
 
     assertSame(record, history.normalize(mapOf(record.phaseId to record), emptyList()).records[record.phaseId])
-    assertFailsWith<InvalidPhaseStrategyCompositionError> { history.resumeRules(record.phaseId) }
+    assertInvalidComposition { history.resumeRules(record.phaseId) }
+  }
+
+  private fun assertInvalidComposition(block: () -> Unit) {
+    val error = assertFailsWith<SkillBillRuntimeException>(block = block)
+    assertEquals(PhaseSlotFailureCode.INVALID_STRATEGY_COMPOSITION, error.code)
   }
 }

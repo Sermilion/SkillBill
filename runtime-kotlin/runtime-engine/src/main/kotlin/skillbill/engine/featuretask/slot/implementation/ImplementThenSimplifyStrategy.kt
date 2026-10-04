@@ -13,7 +13,6 @@ import skillbill.engine.featuretask.slot.state.PhaseBlockResume
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.isRetiredAuditGapLoop
 import skillbill.engine.featuretask.slot.state.recordEnvelope
-import skillbill.error.featuretask.UnknownPhaseStepError
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -54,7 +53,7 @@ class ImplementThenSimplifyStrategy : PhaseStrategy() {
     when (stepId) {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT -> ImplementationPromptSections.IMPLEMENT_DIRECTIVE
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY -> ImplementationPromptSections.SIMPLIFY_DIRECTIVE
-      else -> throw UnknownPhaseStepError(stepId)
+      else -> error("Phase step '$stepId' does not belong to any phase slot.")
     }
 
   override fun promptSections(
@@ -68,7 +67,7 @@ class ImplementThenSimplifyStrategy : PhaseStrategy() {
           inputs,
         )
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY -> ImplementationPromptSections.simplify(stepId, inputs)
-      else -> throw UnknownPhaseStepError(stepId)
+      else -> error("Phase step '$stepId' does not belong to any phase slot.")
     }
 
   override fun runStep(

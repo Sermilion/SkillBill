@@ -34,7 +34,8 @@ import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.slot.verifyFindingsOutput
-import skillbill.error.featuretask.UnknownPhaseReviewTargetError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -167,9 +168,10 @@ class PhaseReviewRunTest {
     val directives = mutableListOf<String>()
     val entry = inlineEntryOver(launcher, directiveRecordingReviewRunner(directives))
 
-    assertFailsWith<UnknownPhaseReviewTargetError> {
+    val error = assertFailsWith<SkillBillRuntimeException> {
       entry.run(reviewRequest(mode = null, target = ReviewTarget.Commit(MISSING_BRANCH)))
     }
+    assertEquals(PhaseSlotFailureCode.UNKNOWN_PHASE_REVIEW_TARGET, error.code)
     assertTrue(directives.isEmpty(), "no review agent may launch")
     assertTrue(launcher.requests.isEmpty(), "no step agent may launch")
   }

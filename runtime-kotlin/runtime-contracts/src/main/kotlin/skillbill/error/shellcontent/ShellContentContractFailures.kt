@@ -9,6 +9,7 @@ import skillbill.error.core.GoalTelemetryRowFailureCode
 import skillbill.error.core.JsonFailureCode
 import skillbill.error.core.ShellContentContractException
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
 
 fun Throwable.isShellContentContractFailure(): Boolean {
   if (this is ShellContentContractException) return true
@@ -24,6 +25,12 @@ fun Throwable.isShellContentContractFailure(): Boolean {
     failureCode is GoalTelemetryRowFailureCode ||
     failureCode is ExternalPlatformPackFailureCode ||
     failureCode is ExternalAddonFailureCode ||
+    failureCode == PhaseSlotFailureCode.VALIDATION_SCOPE ||
+    failureCode == PhaseSlotFailureCode.UNKNOWN_SKELETON_DEFINITION ||
+    failureCode == PhaseSlotFailureCode.UNKNOWN_PHASE_REVIEW_TARGET ||
+    failureCode == PhaseSlotFailureCode.INTAKE_REQUIRED ||
+    failureCode == PhaseSlotFailureCode.PULL_REQUEST_BRANCH_REFUSED ||
+    failureCode == PhaseSlotFailureCode.UNKNOWN_PHASE_STRATEGY ||
     failureCode is InstallFailureCode ||
     failureCode is DurableInstallStateFailureCode ||
     failureCode is FeatureTaskRuntimeFailureCode ||

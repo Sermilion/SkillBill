@@ -37,7 +37,8 @@ import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.engine.featuretask.slot.stepFacts
-import skillbill.error.featuretask.UnknownPhaseReviewTargetError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
@@ -275,7 +276,11 @@ abstract class StandaloneReviewStrategy(
       }
     revisions.forEach { revision ->
       if (gitOperations.resolveCommit(run.request.repoRoot, revision) !is WorkflowGitOperationResult.Ok) {
-        throw UnknownPhaseReviewTargetError(revision)
+        throw SkillBillRuntimeException(
+          PhaseSlotFailureCode.UNKNOWN_PHASE_REVIEW_TARGET,
+          "Review target '$revision' does not name a commit in this repository; expected HEAD, uncommitted, pr, staged, " +
+            "unstaged, or a commit sha, branch, or tag.",
+        )
       }
     }
     return binding.pinnedReviewTarget { target }

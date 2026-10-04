@@ -1,3 +1,13 @@
+## [2026-10-04] Classify phase-slot failures by reachable input
+Context: SKILL-400 replaces phase-slot throwable classes, but similar composition checks can inspect runtime-authored wiring or persisted strategy and step identities.
+Decision: Use require, check, or error only for composition-only defects. Keep user input, validation I/O, and durable-plan failures coded. Return null for unknown quality-gate selections and let CLI assembly build UsageError.
+Reason: A stored mismatch must reach the existing incompatible-plan outcome rather than escape as a code defect. Expected invalid selection is a returned outcome under A7. The spec requires retaining a code when defect-only reachability is uncertain.
+
+## [2026-10-04] Preserve the former composition failure's edge handling
+Context: InvalidPhaseStrategyCompositionError was an IllegalArgumentException, while the other retained phase-slot failures were shell-content failures. Their shared replacement changes the throwable type seen by readers.
+Decision: Classify only the former shell-content entries as shell-content failures. Keep INVALID_STRATEGY_COMPOSITION uncaptured at MCP through its own code check, and guard compatibility catches by that exact code.
+Reason: Classifying the whole enum as shell-content would change which CLI catches handle composition failures. Broad shared catches would absorb unrelated failures. Exact checks preserve incompatible-plan handling, CLI messages, and MCP capture behavior.
+
 ## [2026-10-02] Return rejected required phase writes as values (SKILL-398)
 
 Context: A rejected required start or briefing write is an expected outcome, but it travelled as the exception RequiredPhaseWriteRejected through the recorders, the run-loop bindings and goal planning, and was caught at the attempt boundary. The failure model reserves exceptions for defects.

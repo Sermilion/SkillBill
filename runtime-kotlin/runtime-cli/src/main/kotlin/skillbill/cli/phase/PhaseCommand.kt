@@ -24,7 +24,7 @@ import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
-import skillbill.error.featuretask.UnknownPhaseReviewTargetError
+import skillbill.error.featuretask.PhaseSlotFailureCode
 import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.skeleton.PhaseIntakeRequirement
@@ -94,9 +94,8 @@ internal fun runPhase(
 ): PhaseRunResult? =
   try {
     run()
-  } catch (error: UnknownPhaseReviewTargetError) {
-    usageError(error)
   } catch (error: SkillBillRuntimeException) {
+    if (error.code == PhaseSlotFailureCode.UNKNOWN_PHASE_REVIEW_TARGET) usageError(error)
     error.rethrowUnless(error.isShellContentContractFailure())
     state.completeText(error.message.orEmpty(), emptyMap(), exitCode = 1)
     null
