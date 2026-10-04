@@ -1,3 +1,14 @@
+## [2026-10-04] Keep JSON recovery within exact code guards
+Context: SKILL-400 subtask 1 replaces JSON exception types used by shared decoders and consumers that wrap errors or return null, empty or unusable results.
+Decision: Retain the existing throwing decoder APIs and recovery results. Each converted catch handles only its former JSON codes and rethrows other failures.
+Reason: The subtask excludes JSON behavior changes and a returning-decode refactor. Exact guards preserve the handled sets, contextual causes and existing degradation records after the exception type becomes shared.
+Alternatives considered: Return decode outcomes instead of catching failures. The spec excludes that wider refactor from this conversion.
+
+## [2026-10-04] Separate failure-wire decode errors from wire vocabulary
+Context: SKILL-400 subtask 1 removes UnrecognizedFailureWireCodeError from the generic failure-wire decoder while preserving persisted wire formats.
+Decision: FailureWireDecodeCode.UNRECOGNIZED implements RuntimeFailureCode only. Register it in shell-content classification alongside JsonFailureCode.
+Reason: Unknown wire tokens remain a distinct typed violation rather than SCHEMA_INVALID. The decode error adds no FailureWireCode token, and shell-content registration preserves the former exception's guarded handling and MCP no-capture route.
+
 ## [2026-10-04] Keep decomposition failure codes with their vocabulary owners
 Context: SKILL-399 subtask 8 removes manifest and bundle-journal exception classes whose failureCode properties mixed domain wire codes with workflow-only conditions.
 Decision: Reuse DecompositionManifestValidationFailureCode entries for existing domain vocabulary. WorkflowFailureCode owns five other manifest conditions and one entry per distinct journal literal.

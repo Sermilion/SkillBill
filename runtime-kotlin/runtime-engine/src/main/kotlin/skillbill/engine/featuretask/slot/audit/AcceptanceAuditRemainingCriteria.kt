@@ -1,7 +1,8 @@
 package skillbill.engine.featuretask.slot.audit
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.MalformedJsonTextError
+import skillbill.error.core.JsonFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 
 internal sealed interface AcceptanceAuditRemainingCriteria {
   data class Known(
@@ -64,7 +65,8 @@ internal object AcceptanceAuditRemainingCriteriaParser {
     val entries =
       try {
         JsonCodec.parseJsonArrayStrict(value)
-      } catch (_: MalformedJsonTextError) {
+      } catch (error: SkillBillRuntimeException) {
+        if (error.code != JsonFailureCode.MALFORMED_TEXT) throw error
         return AcceptanceAuditRemainingCriteria.Unusable("Malformed JSON remaining-criterion list.")
       }
     val identities = linkedSetOf<String>()

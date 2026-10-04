@@ -6,16 +6,24 @@ interface FailureWireCode {
   val wireValue: String
 }
 
-class UnrecognizedFailureWireCodeError(
-  val hierarchy: String,
-  val rejectedToken: String,
-) : ShellContentContractException(
-    "Unrecognized failure wire code '$rejectedToken' for hierarchy '$hierarchy'.",
-  )
+enum class FailureWireDecodeCode : RuntimeFailureCode {
+  UNRECOGNIZED;
+
+  companion object {
+    fun unrecognizedFailureWireCode(
+      hierarchy: String,
+      rejectedToken: String,
+    ): SkillBillRuntimeException =
+      SkillBillRuntimeException(
+        UNRECOGNIZED,
+        "Unrecognized failure wire code '$rejectedToken' for hierarchy '$hierarchy'.",
+      )
+  }
+}
 
 fun <E> EnumEntries<E>.failureWireByValue(
   value: String,
   hierarchy: String,
 ): E where E : Enum<E>, E : FailureWireCode =
   firstOrNull { it.wireValue == value }
-    ?: throw UnrecognizedFailureWireCodeError(hierarchy, value)
+    ?: throw FailureWireDecodeCode.unrecognizedFailureWireCode(hierarchy, value)

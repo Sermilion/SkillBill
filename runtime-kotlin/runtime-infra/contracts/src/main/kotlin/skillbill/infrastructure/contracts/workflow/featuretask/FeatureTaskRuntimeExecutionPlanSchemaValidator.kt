@@ -11,7 +11,8 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys
-import skillbill.error.core.UnsupportedJsonValueError
+import skillbill.error.core.JsonFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeExecutionPlanSchemaError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
@@ -72,7 +73,8 @@ class FeatureTaskRuntimeExecutionPlanSchemaValidator : FeatureTaskRuntimeExecuti
     val encoded =
       try {
         JsonCodec.mapToJsonString(payload).toByteArray(Charsets.UTF_8)
-      } catch (_: UnsupportedJsonValueError) {
+      } catch (error: SkillBillRuntimeException) {
+        if (error.code != JsonFailureCode.UNSUPPORTED_VALUE) throw error
         throw InvalidFeatureTaskRuntimeExecutionPlanSchemaError("unsupported JSON value")
       }
     return JsonCodec.mapToJsonString(read(encoded, sourceLabel)).toByteArray(Charsets.UTF_8)

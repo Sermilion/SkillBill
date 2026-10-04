@@ -1,3 +1,16 @@
+## [2026-10-04] SKILL-400 JSON and failure-wire decode codes
+Areas: runtime-contracts/contracts and error/core and error/shellcontent, runtime-domain/goalrunner and review/context and workflow/decomposition tests, runtime-ports/workflow, runtime-application/workflow, runtime-cli/workflow, runtime-engine/featuretask/audit, runtime-infra/contracts/workflow/featuretask, runtime-core architecture baseline
+- Replaced four JSON and failure-wire decode exception classes with JsonFailureCode and FailureWireDecodeCode factories returning coded SkillBillRuntimeException failures.
+- JsonCodec and its consumers use exact code guards. Segment-accounting parsing handles MALFORMED_TEXT and WRONG_ROOT_TYPE together; other failures still propagate.
+- Both enums join shell-content classification, preserving guarded edge handling and the existing MCP no-capture route.
+- Followed owner-declared failure codes and narrow catches without expanding JSON recovery into a returning-decode refactor.
+- reusable: shared JSON and unknown-wire-token factories preserve message text and causes for contracts, domain, ports, application, engine and adapter consumers.
+- Converted existing JSON and wire-conformance assertions to codes and removed only the four deleted-class baseline rows.
+- Breaking change: deleted exception types have no aliases. JSON behavior, message bytes, persisted wire formats and contract versions remain unchanged; FailureWireDecodeCode implements RuntimeFailureCode only.
+- Limit: this entry covers subtask 1. Legacy exception bases and codeless support remain while other subclasses or callers exist.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-04] SKILL-399 decomposition-manifest and bundle-journal failure codes
 Areas: runtime-contracts/error/shellcontent, runtime-contracts/contracts/decomposition, runtime-domain/workflow/decomposition, runtime-application/decomposition/review/spec, runtime-engine/goalrunner/preflight, runtime-infra/contracts/workflow/decomposition, runtime-infra/workflow/decomposition/featuretask, runtime-core architecture baseline and decomposition tests
 - Replaced InvalidDecompositionManifestSchemaError and InvalidDecompositionManifestBundleJournalError with coded SkillBillRuntimeException message functions.

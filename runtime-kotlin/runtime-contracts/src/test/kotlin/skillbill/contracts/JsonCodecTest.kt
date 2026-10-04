@@ -1,8 +1,7 @@
 package skillbill.contracts
 
-import skillbill.error.core.JsonWrongRootTypeError
-import skillbill.error.core.MalformedJsonTextError
-import skillbill.error.core.UnsupportedJsonValueError
+import skillbill.error.core.JsonFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import java.math.BigDecimal
 import java.math.BigInteger
 import kotlin.test.Test
@@ -19,8 +18,14 @@ class JsonCodecTest {
 
   @Test
   fun `strict array parse rejects malformed text and wrong roots`() {
-    assertFailsWith<MalformedJsonTextError> { JsonCodec.parseJsonArrayStrict("{") }
-    assertFailsWith<JsonWrongRootTypeError> { JsonCodec.parseJsonArrayStrict("{}") }
+    assertEquals(
+      JsonFailureCode.MALFORMED_TEXT,
+      assertFailsWith<SkillBillRuntimeException> { JsonCodec.parseJsonArrayStrict("{") }.code,
+    )
+    assertEquals(
+      JsonFailureCode.WRONG_ROOT_TYPE,
+      assertFailsWith<SkillBillRuntimeException> { JsonCodec.parseJsonArrayStrict("{}") }.code,
+    )
   }
 
   @Test
@@ -49,29 +54,44 @@ class JsonCodecTest {
   @Test
   fun `mixed key maps fail instead of dropping entries`() {
     val map: Map<*, *> = mapOf("ok" to 1, 2 to 3)
-    assertFailsWith<UnsupportedJsonValueError> {
-      JsonCodec.valueToJsonString(map)
-    }
-    assertFailsWith<UnsupportedJsonValueError> {
-      JsonCodec.anyToStringAnyMap(map)
-    }
+    assertEquals(
+      JsonFailureCode.UNSUPPORTED_VALUE,
+      assertFailsWith<SkillBillRuntimeException> {
+        JsonCodec.valueToJsonString(map)
+      }.code,
+    )
+    assertEquals(
+      JsonFailureCode.UNSUPPORTED_VALUE,
+      assertFailsWith<SkillBillRuntimeException> {
+        JsonCodec.anyToStringAnyMap(map)
+      }.code,
+    )
   }
 
   @Test
   fun `unsupported value types fail instead of using toString`() {
-    assertFailsWith<UnsupportedJsonValueError> {
-      JsonCodec.valueToJsonString(object {})
-    }
+    assertEquals(
+      JsonFailureCode.UNSUPPORTED_VALUE,
+      assertFailsWith<SkillBillRuntimeException> {
+        JsonCodec.valueToJsonString(object {})
+      }.code,
+    )
   }
 
   @Test
   fun `non-finite floating point values fail instead of entering JSON`() {
-    assertFailsWith<UnsupportedJsonValueError> {
-      JsonCodec.valueToJsonString(Double.NaN)
-    }
-    assertFailsWith<UnsupportedJsonValueError> {
-      JsonCodec.valueToJsonString(Float.POSITIVE_INFINITY)
-    }
+    assertEquals(
+      JsonFailureCode.UNSUPPORTED_VALUE,
+      assertFailsWith<SkillBillRuntimeException> {
+        JsonCodec.valueToJsonString(Double.NaN)
+      }.code,
+    )
+    assertEquals(
+      JsonFailureCode.UNSUPPORTED_VALUE,
+      assertFailsWith<SkillBillRuntimeException> {
+        JsonCodec.valueToJsonString(Float.POSITIVE_INFINITY)
+      }.code,
+    )
   }
 
   @Test

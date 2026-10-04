@@ -1,7 +1,8 @@
 package skillbill.workflow.decomposition.model
 
 import skillbill.error.core.FailureWireCode
-import skillbill.error.core.UnrecognizedFailureWireCodeError
+import skillbill.error.core.FailureWireDecodeCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureKind
@@ -30,11 +31,14 @@ class FailureWireCodeConformanceTest {
   @Test
   fun `unrecognized phase-output failure wire token is a typed violation not schema invalid`() {
     val error =
-      assertFailsWith<UnrecognizedFailureWireCodeError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimePhaseOutputFailureCode.fromWire("not_a_real_failure_code")
       }
-    assertEquals("not_a_real_failure_code", error.rejectedToken)
-    assertEquals("FeatureTaskRuntimePhaseOutputFailureCode", error.hierarchy)
+    assertEquals(FailureWireDecodeCode.UNRECOGNIZED, error.code)
+    assertEquals(
+      "Unrecognized failure wire code 'not_a_real_failure_code' for hierarchy 'FeatureTaskRuntimePhaseOutputFailureCode'.",
+      error.message,
+    )
   }
 
   private fun <E> assertWireCodesTotalAndInjective(entries: Collection<E>) where E : Enum<E>, E : FailureWireCode {

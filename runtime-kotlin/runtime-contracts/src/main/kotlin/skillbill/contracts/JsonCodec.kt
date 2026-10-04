@@ -1,7 +1,6 @@
 package skillbill.contracts
 
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -16,9 +15,8 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
-import skillbill.error.core.JsonWrongRootTypeError
-import skillbill.error.core.MalformedJsonTextError
-import skillbill.error.core.UnsupportedJsonValueError
+import skillbill.error.core.JsonFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import java.math.BigDecimal
 import java.math.BigInteger
 
@@ -32,14 +30,14 @@ object JsonCodec {
   fun parseObjectOrNull(rawValue: String): JsonObject? =
     try {
       parseJsonElementStrict(rawValue) as? JsonObject
-    } catch (_: MalformedJsonTextError) {
-      null
+    } catch (error: SkillBillRuntimeException) {
+      if (error.code == JsonFailureCode.MALFORMED_TEXT) null else throw error
     }
 
   fun parseJsonArrayStrict(rawValue: String): List<Any?> {
     val parsed = parseJsonElementStrict(rawValue)
     if (parsed !is JsonArray) {
-      throw JsonWrongRootTypeError("a JSON array")
+      throw JsonFailureCode.jsonWrongRootType("a JSON array")
     }
     return parsed.map(::jsonElementToValue)
   }
@@ -57,7 +55,7 @@ object JsonCodec {
     val converted = LinkedHashMap<String, Any?>()
     entries.forEach { (entryKey, entryValue) ->
       if (entryKey !is String) {
-        throw UnsupportedJsonValueError("JSON map keys must be strings")
+        throw JsonFailureCode.unsupportedJsonValue("JSON map keys must be strings")
       }
       converted[entryKey] = entryValue
     }
@@ -94,7 +92,7 @@ object JsonCodec {
   fun valueToJsonElement(value: Any?): JsonElement =
     jsonPrimitiveElement(value)
       ?: collectionJsonElement(value)
-      ?: throw UnsupportedJsonValueError(
+      ?: throw JsonFailureCode.unsupportedJsonValue(
         "JSON value type ${value?.let { it::class.simpleName } ?: "null"} is not supported",
       )
 
@@ -106,10 +104,8 @@ object JsonCodec {
 private fun JsonCodec.parseJsonElementStrict(rawValue: String): JsonElement =
   try {
     json.parseToJsonElement(rawValue)
-  } catch (error: SerializationException) {
-    throw MalformedJsonTextError(error)
   } catch (error: IllegalArgumentException) {
-    throw MalformedJsonTextError(error)
+    throw JsonFailureCode.malformedJsonText(error)
   }
 
 private fun jsonPrimitiveToValue(primitive: JsonPrimitive): Any? =
@@ -174,7 +170,7 @@ private fun numberJsonElement(value: Number): JsonElement =
 
 private fun finiteJsonPrimitive(value: Number): JsonPrimitive {
   if (!value.toDouble().isFinite()) {
-    throw UnsupportedJsonValueError("JSON number must be finite")
+    throw JsonFailureCode.unsupportedJsonValue("JSON number must be finite")
   }
   return JsonPrimitive(value)
 }
@@ -187,7 +183,7 @@ private fun JsonCodec.mapJsonElement(value: Any?): JsonElement? =
     buildJsonObject {
       entries.forEach { (entryKey, entryValue) ->
         if (entryKey !is String) {
-          throw UnsupportedJsonValueError("JSON map keys must be strings")
+          throw JsonFailureCode.unsupportedJsonValue("JSON map keys must be strings")
         }
         put(entryKey, valueToJsonElement(entryValue))
       }

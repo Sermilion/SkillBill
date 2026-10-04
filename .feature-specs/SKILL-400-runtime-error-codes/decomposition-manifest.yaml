@@ -3,22 +3,22 @@ contract_version: "0.5"
 issue_key: "SKILL-400"
 feature_name: "runtime-error-codes"
 parent_spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec.md"
-status: "pending"
+status: "in_progress"
 execution_model: "same_branch_commit_per_subtask"
 base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feat/SKILL-400-runtime-error-codes"
 stack_branches: []
 current_subtask_intent:
   subtask_id: 1
-  action: "start"
+  action: "resume"
 subtasks:
 - id: 1
   name: "json-and-failure-wire-codes"
   spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec_subtask_1_json-and-failure-wire-codes.md"
-  status: "pending"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261004-142726-n6gy"
   blocked_reason: null
   last_resumable_step: null
   linear_issue_id: null

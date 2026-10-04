@@ -1,8 +1,7 @@
 package skillbill.review.context.model.packet
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.JsonWrongRootTypeError
-import skillbill.error.core.MalformedJsonTextError
+import skillbill.error.core.JsonFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
@@ -30,10 +29,12 @@ object ReviewRunLaneSegmentAccountingJson {
     val elements =
       try {
         JsonCodec.parseJsonArrayStrict(trimmed)
-      } catch (error: MalformedJsonTextError) {
-        throw segmentAccountingSchemaError("Segment accounting JSON is malformed: ${error.message.orEmpty()}", error)
-      } catch (error: JsonWrongRootTypeError) {
-        throw segmentAccountingSchemaError("Segment accounting JSON is malformed: ${error.message.orEmpty()}", error)
+      } catch (error: SkillBillRuntimeException) {
+        when (error.code) {
+          JsonFailureCode.MALFORMED_TEXT, JsonFailureCode.WRONG_ROOT_TYPE ->
+            throw segmentAccountingSchemaError("Segment accounting JSON is malformed: ${error.message.orEmpty()}", error)
+          else -> throw error
+        }
       }
     return elements.mapIndexed { index, element ->
       decodeSegment(element, index)

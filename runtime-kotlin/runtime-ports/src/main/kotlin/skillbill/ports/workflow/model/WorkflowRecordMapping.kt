@@ -3,7 +3,8 @@ package skillbill.ports.workflow.model
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
-import skillbill.error.core.MalformedJsonTextError
+import skillbill.error.core.JsonFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
@@ -113,7 +114,8 @@ private fun parseJson(
 ): Any? =
   try {
     JsonCodec.parseValue(raw)
-  } catch (error: MalformedJsonTextError) {
+  } catch (error: SkillBillRuntimeException) {
+    if (error.code != JsonFailureCode.MALFORMED_TEXT) throw error
     throw invalidWorkflowStateSchemaError("Workflow state $field contains malformed JSON.", error)
   }
 

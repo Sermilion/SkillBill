@@ -4,7 +4,9 @@ import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.application.workflow.persist.WorkflowPersistenceContext
 import skillbill.application.workflow.persist.buildUpdateOk
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.MalformedJsonTextError
+import skillbill.error.core.JsonFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -88,7 +90,8 @@ internal class WorkflowServiceFeatureTaskAbandon(
       try {
         JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(existing.artifactsJson))?.toMutableMap()
           ?: throw invalidWorkflowStateSchemaError("Legacy workflow artifacts must decode to an object.")
-      } catch (error: MalformedJsonTextError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code == JsonFailureCode.MALFORMED_TEXT)
         throw invalidWorkflowStateSchemaError("Legacy workflow artifacts contain malformed JSON.", error)
       }
     artifacts[FEATURE_TASK_RUNTIME_OPERATOR_ABANDONMENT_ARTIFACT_KEY] =

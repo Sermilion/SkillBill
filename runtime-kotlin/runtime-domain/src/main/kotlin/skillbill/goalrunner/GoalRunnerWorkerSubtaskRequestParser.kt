@@ -1,7 +1,8 @@
 package skillbill.goalrunner
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.MalformedJsonTextError
+import skillbill.error.core.JsonFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequest
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestRejectionReason
@@ -201,7 +202,8 @@ private fun parsePayloadMap(payload: String): Map<String, Any?>? =
       )
       null
     }
-  } catch (_: MalformedJsonTextError) {
+  } catch (error: SkillBillRuntimeException) {
+    if (error.code != JsonFailureCode.MALFORMED_TEXT) throw error
     recordDurableDecodeSubstitution(
       seam = "GoalRunnerWorkerSubtaskRequestParser.parsePayloadMap",
       valueUsed = "null",
