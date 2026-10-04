@@ -1,13 +1,13 @@
 package skillbill.engine.goalrunner.execution.support
 
 import skillbill.engine.goalrunner.execution.core.GoalRunnerProgressReader
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.goalrunner.model.GoalRunnerStopReason
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
-import skillbill.ports.goalrunner.runner.model.GoalRunnerWorkflowProgress
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.model.DecompositionSubtask
-import skillbill.workflow.gitops.ProtectedBranches
+import java.time.Clock
 
 val RUNTIME_WORKFLOW_ID_PREFIX: String = WorkflowFamily.TASK_RUNTIME.definition.workflowIdPrefix
 
@@ -17,7 +17,6 @@ const val GIT_PORCELAIN_STATUS_PREFIX_LENGTH = 3
 const val MAX_VALIDATION_QUALITY_RETRIES = 3
 const val MAX_REPORTED_FINALIZE_DIRTY_PATHS = 10
 
-val PROTECTED_GOAL_BRANCHES: Set<String> = ProtectedBranches.names
 val CHILD_WORKFLOW_BLOCK_REASONS: Set<GoalRunnerStopReason> =
   setOf(
     GoalRunnerStopReason.NO_TERMINAL_STORE_OUTCOME,
@@ -30,12 +29,6 @@ fun isFeatureSpecPath(path: String): Boolean {
   val dotted = if (normalized.startsWith(".")) normalized else ".$normalized"
   return dotted == FEATURE_SPEC_ROOT || dotted.startsWith("$FEATURE_SPEC_ROOT/")
 }
-
-fun protectedBranchName(branch: String?): String? =
-  branch
-    ?.trim()
-    ?.takeIf(String::isNotBlank)
-    ?.takeIf { normalized -> normalized.lowercase() in PROTECTED_GOAL_BRANCHES }
 
 fun parseGitPorcelainPaths(output: String): List<String> =
   output
@@ -57,19 +50,19 @@ class GoalRunnerTickProgressReader(
   private val issueKey: String,
   private val subtaskId: Int,
   private val request: GoalRunnerRunRequest,
-  private val clockNanos: () -> Long = System::nanoTime,
+  private val clock: Clock,
 ) {
-  private var cachedAtNanos: Long = 0
+  private var cachedAtMillis: Long = 0
   private var cachedHasValue: Boolean = false
   private var cached: GoalRunnerProgressState? = null
 
   internal fun progressState(): GoalRunnerProgressState? {
-    val now = clockNanos()
-    if (cachedHasValue && now - cachedAtNanos < TICK_MEMO_WINDOW_NANOS) {
+    val now = clock.millis()
+    if (cachedHasValue && now >= cachedAtMillis && now - cachedAtMillis < TICK_MEMO_WINDOW_MILLIS) {
       return cached
     }
     cached = resolve()
-    cachedAtNanos = now
+    cachedAtMillis = now
     cachedHasValue = true
     return cached
   }
@@ -96,7 +89,7 @@ class GoalRunnerTickProgressReader(
     }
 
   internal companion object {
-    const val SUPERVISOR_POLL_CADENCE_NANOS: Long = 250_000_000L
-    const val TICK_MEMO_WINDOW_NANOS: Long = SUPERVISOR_POLL_CADENCE_NANOS - 50_000_000L
+    const val SUPERVISOR_POLL_CADENCE_MILLIS: Long = 250L
+    const val TICK_MEMO_WINDOW_MILLIS: Long = 200L
   }
 }

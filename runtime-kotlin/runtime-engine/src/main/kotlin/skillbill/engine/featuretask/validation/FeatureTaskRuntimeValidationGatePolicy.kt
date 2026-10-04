@@ -1,9 +1,9 @@
 package skillbill.engine.featuretask.validation
 
 import skillbill.config.model.applyValidationGateGradleWrapper
-import skillbill.engine.featuretask.validation.model.ValidationGateCyclePhase
+import skillbill.engine.featuretask.model.execution.ValidationGateCyclePhase
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
 import skillbill.scaffold.model.ValidationGateDeclaration
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
@@ -59,7 +59,7 @@ internal fun resolveRequiredValidationCommand(
 ): String? {
   val resolution = resolver.resolve(changedPaths.orEmpty())
   if (changedPaths == null && resolution is ValidationGateResolution.Declared) {
-    throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(
+    throw invalidFeatureTaskRuntimeValidationEvidenceSchema(
       sourceLabel,
       "validation changed-path inventory is missing for a declared validation gate.",
     )
@@ -68,6 +68,6 @@ internal fun resolveRequiredValidationCommand(
     is ValidationGateResolution.Declared -> requiredCommandForDeclaration(resolution.declaration)
     is ValidationGateResolution.Absent -> evidence?.results?.lastOrNull()?.command
     is ValidationGateResolution.Incompatible ->
-      throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(sourceLabel, resolution.reason)
+      throw invalidFeatureTaskRuntimeValidationEvidenceSchema(sourceLabel, resolution.reason)
   }
 }

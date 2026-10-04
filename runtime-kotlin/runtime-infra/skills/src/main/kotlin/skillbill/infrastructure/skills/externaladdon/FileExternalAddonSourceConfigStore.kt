@@ -15,30 +15,15 @@ import skillbill.ports.repository.toFileLocation
 import skillbill.scaffold.model.SkillKind
 import skillbill.telemetry.model.TelemetryConfigDocument
 import skillbill.telemetry.model.TelemetryOpenDocument
-import java.nio.file.Files
 import java.nio.file.Path
 
 @Inject
 class FileExternalAddonSourceConfigStore : ExternalAddonSourceConfigPort {
   override fun readExternalAddonSources(request: ExternalAddonSourceConfigRequest): ExternalAddonSourceConfigResult {
-    val configPath = resolveTelemetryConfigPath(request.environment, request.userHome)
-    if (!Files.exists(configPath)) {
-      return ExternalAddonSourceConfigResult()
-    }
-    val payload =
-      try {
-        readTelemetryConfigFile(configPath)?.payload
-      } catch (error: IllegalArgumentException) {
-        throw ExternalAddonConfigError(error.message.orEmpty(), error)
-      } ?: return ExternalAddonSourceConfigResult()
-
-    val raw = payload["external_addon_sources"] ?: return ExternalAddonSourceConfigResult()
-    if (raw !is List<*>) {
-      throw ExternalAddonConfigError(
-        "External addon config at '$configPath': 'external_addon_sources' must be a list of {path, platform} entries.",
-      )
-    }
-    val sources = raw.mapIndexedNotNull { index, entry -> parseEntry(configPath, request.userHome, index, entry) }
+    val (configPath, entries) =
+      readExternalAddonSourceEntries(request.environment, request.userHome, PLATFORM_LIST_SHAPE_MESSAGE)
+        ?: return ExternalAddonSourceConfigResult()
+    val sources = entries.mapIndexedNotNull { index, entry -> parseEntry(configPath, request.userHome, index, entry) }
     return ExternalAddonSourceConfigResult(sources)
   }
 
@@ -87,7 +72,7 @@ class FileExternalAddonSourceConfigStore : ExternalAddonSourceConfigPort {
     val raw = payload["external_addon_sources"] ?: return emptyList()
     if (raw !is List<*>) {
       throw ExternalAddonConfigError(
-        "External addon config at '$configPath': 'external_addon_sources' must be a list of {path, platform} entries.",
+        "External addon config at '$configPath': 'external_addon_sources' $PLATFORM_LIST_SHAPE_MESSAGE",
       )
     }
     return raw
@@ -113,21 +98,7 @@ class FileExternalAddonSourceConfigStore : ExternalAddonSourceConfigPort {
   private fun ExternalAddonSource.normalized(): ExternalAddonSource =
     ExternalAddonSource(path = path.toPath().toAbsolutePath().normalize().toFileLocation(), platform = platform.trim())
 
-  private fun resolveSourcePath(
-    userHome: Path,
-    rawPath: String,
-  ): Path {
-    val expanded =
-      when {
-        rawPath == "~" -> userHome.toString()
-        rawPath.startsWith("~/") -> userHome.resolve(rawPath.removePrefix("~/")).toString()
-        else -> rawPath
-      }
-    val candidate = Path.of(expanded)
-    return if (candidate.isAbsolute) {
-      candidate.normalize()
-    } else {
-      Path.of(System.getProperty("user.dir")).resolve(candidate).normalize()
-    }
+  private companion object {
+    const val PLATFORM_LIST_SHAPE_MESSAGE = "must be a list of {path, platform} entries."
   }
 }

@@ -24,11 +24,6 @@ fun scriptedReviewPhaseRunner(stdout: () -> String): PhaseRunner =
 fun reviewStepOutput(stdout: String): PhaseStepOutput {
   val bytes = stdout.toByteArray()
   return PhaseStepOutput(
-    status = "",
-    value = stdout,
-    summary = null,
-    verdict = null,
-    failureDisposition = null,
     stdout =
       PhaseStepStdout(
         text = stdout,
@@ -55,7 +50,12 @@ fun reviewRoutingPhaseRunner(
       input: PhaseStepInput,
       state: PhaseLaunchState,
     ): PhaseStepOutput =
-      if (input.stepName == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) {
+      if (input.stepName in
+        setOf(
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS,
+        )
+      ) {
         review.run(input, state)
       } else {
         others.run(input, state)

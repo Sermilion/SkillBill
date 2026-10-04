@@ -3,10 +3,12 @@ package skillbill.engine.featuretask.slot.pullrequest
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowReadinessTreeIdentityResult
+import skillbill.ports.workflow.gitops.readiness.ReadinessTreeIdentityGitOperations
 import java.nio.file.Path
 
 class PullRequestReadinessGate(
@@ -17,7 +19,7 @@ class PullRequestReadinessGate(
     workflowId: String,
     repoRoot: Path,
     baseBranch: String,
-    gitOperations: WorkflowGitOperations,
+    gitOperations: ReadinessTreeIdentityGitOperations,
   ): String? {
     val identity =
       (
@@ -33,7 +35,8 @@ class PullRequestReadinessGate(
     return try {
       persisted.requireReady("pr", identity.sourceTreeSha, identity.baseRefSha, identity.headSha)
       null
-    } catch (error: InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == FeatureTaskRuntimeFailureCode.INVALID_READINESS_EVIDENCE_SCHEMA)
       blocked("readiness-pr-identity", error.message.orEmpty())
     }
   }

@@ -405,6 +405,24 @@ class CliScaffoldRuntimeTest {
   }
 
   @Test
+  fun `payload file that is not a json object reports the object diagnostic`() {
+    val tempDir = Files.createTempDirectory("skillbill-cli-scaffold-payload-array")
+    val payloadFile = tempDir.resolve("payload.json")
+    Files.writeString(payloadFile, "[]")
+
+    val result =
+      CliRuntime.run(
+        listOf("new-skill", "--payload", payloadFile.toString(), "--dry-run", "--format", "json"),
+        CliRuntimeContext(userHome = tempDir),
+      )
+    val payload = parseJsonObject(result.stdout)
+
+    assertEquals(1, result.exitCode)
+    assertEquals("error", payload.stringValue("status"))
+    assertEquals("Invalid JSON payload: expected an object.", payload.stringValue("error"))
+  }
+
+  @Test
   fun `new addon dry run preserves scaffold payload contract`() {
     val tempDir = Files.createTempDirectory("skillbill-cli-scaffold-addon")
     val bodyFile = tempDir.resolve("addon-body.md")

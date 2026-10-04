@@ -8,9 +8,8 @@ import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testHarnessClock
 import skillbill.application.testWorkflowSnapshotValidator
-import skillbill.engine.LiveProcessSupervisor
-import skillbill.engine.decodeWorkflowArtifactsForTest
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.persist.GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
@@ -18,13 +17,18 @@ import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerChildRep
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.goalTestPhaseRecorder
 import skillbill.engine.goalrunner.manifest
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
 import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosisRequest
 import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeRepairRequest
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRepairRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRepairStatus
 import skillbill.engine.goalrunner.model.GoalRunnerWedgeClass
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.LiveProcessSupervisor
 import skillbill.engine.goalrunner.persist.OutcomeStoreTestArtifactPorts
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerOutcomeStore
+import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.goalrunner.goalContinuationOutcome
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP
@@ -34,10 +38,6 @@ import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
-import skillbill.ports.goalrunner.persistence.GoalRunnerChildRepairStore
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStoreDefaults
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeHeartbeat
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
@@ -59,7 +59,7 @@ import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
 import skillbill.ports.workflow.toRecord
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -78,8 +78,8 @@ import skillbill.workflow.taskruntime.artifact.operatorBlockRetryFromWorkflowArt
 import skillbill.workflow.taskruntime.artifact.phaseLedgerFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.artifact.phaseRecordsFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.GoalSubtaskReviewArtifactDecoder
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Path
@@ -284,7 +284,7 @@ internal class GoalRunnerRepairTest : GoalRunnerRepairFixtures() {
     assertTrue(applied.appliedRepairs.isEmpty())
     assertContains(
       applied.refusalReason.orEmpty(),
-      "skill-bill goal reset $ISSUE_KEY --hard --yes",
+      "Keep the workflow and checkpoints intact",
     )
   }
 

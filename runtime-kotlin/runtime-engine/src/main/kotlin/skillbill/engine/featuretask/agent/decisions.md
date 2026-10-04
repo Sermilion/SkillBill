@@ -1,10 +1,80 @@
+## [2026-10-02] Return rejected required phase writes as values (SKILL-398)
+
+Context: A rejected required start or briefing write is an expected outcome, but it travelled as the exception RequiredPhaseWriteRejected through the recorders, the run-loop bindings and goal planning, and was caught at the attempt boundary. The failure model reserves exceptions for defects.
+Decision: The recorders return a sealed RequiredPhaseWrite, either Acknowledged or Rejected carrying write kind, workflow, phase and attempt. Each attempt-boundary site handles it with an exhaustive when and the shared blockRequiredWriteRejection handler. Launch preparation and goal planning carry a rejection as a value (LaunchRequiredWriteRejected, GoalPlanningPhaseProduction.RequiredWriteRejected) so nothing runs after it. Unchanged: no execution after a rejected write, write kind, phase and attempt attribution, terminal recording, secondary-failure diagnostics and cooperative cancellation propagation. Goal planning's attempt and shared-preplan production now also rethrow InterruptedException instead of converting it to a stop.
+Reason: A returned value makes the unhandled case a compile error and keeps exceptions for defects, with identical behavior at every boundary.
+Supersedes: The raise-and-catch mechanism of [2026-09-28] Acknowledge required phase writes before execution.
+Alternatives considered: Keeping the exception, rejected under the failure model; a Boolean result, rejected because it loses the attribution the terminal record needs.
+
+## [2026-09-30] A phase's value content section overrides the generic prose value
+
+Context: The shared settlement directive asked every phase for one prose value carrying everything the next phase needs, while audit's value content section requires exactly `[]` when satisfied. SKILL-386 subtask 1's audit settled `[]` followed by a satisfied summary, and the single-session audit blocked as invalid output.
+Decision: The settlement directive and fallback contract defer to a value content section, including any exact literal it names. Audit states that a satisfied value is exactly `[]` with no surrounding text and that the rationale goes in summary. The runtime keeps its exact `[]` interpretation.
+Reason: The conflict was in the prompt. Accepting trailing prose after `[]` would let text after the literal hide an open criterion.
+Alternatives considered: Leniently reading a leading `[]` line as satisfied when verdict is satisfied, rejected as weakening the audit guard.
+
+## [2026-09-30] Admission routes the gate pack by tracked files when the diff has no concrete owner
+
+Context: Goal-child admission freezes the gate pack from working-tree paths before implementation. A clean tree refused creation and a spec-only diff admitted the gateless review fallback, so SKILL-386 subtask 1 blocked at build with Kotlin changes committed.
+Decision: Admission keeps changed-path routing when a concrete pack owns the diff, including ties. When only the fallback owns it or nothing routes, it routes the repository's tracked files and keeps the fallback result if they have no concrete owner. Build-time resolution without an admitted plan still routes the gate's own changed paths.
+Reason: The frozen pack must name the platform the gate will build. Tracked files are available and deterministic before any code exists; the recorded digest still pins that pack for resume.
+Alternatives considered: Resolving the pack at the first gate run would reopen the frozen policy digest; routing tracked files unconditionally would override a standalone run's concrete diff in mixed repositories.
+
+## [2026-09-30] Authoring sessions run safe scoped project checks; audit loses its compile exception (SKILL-385)
+
+Context: Authoring prompts banned every command, so formatter and static-analysis findings surfaced only at validate, while audit alone could compile.
+Decision: One strategy-supplied project-authoring guidance owner reaches implement, simplify, audit_implement_fix, implement_fix and inline review's direct launch. It admits safe file-scoped formatter and standalone analysis commands after scope and safety proof, and defers with a concrete reason otherwise. Build keeps compile proof, validate keeps tests and full checks, and audit runs no commands. Evidence stays in existing output fields.
+Reason: Project rules are discovered by the agent from the repository, so the runtime stays platform-neutral and adds no executor, schema or telemetry.
+Alternatives considered: A runtime discovery executor or a new evidence field would add authority and contract surface without narrowing what the agent must prove.
+Supersedes: [2026-09-29] Audit may check application compilation after repairs.
+
 ## [2026-09-29] Audit may check application compilation after repairs
+
+Superseded by [2026-09-30] Authoring sessions run safe scoped project checks; audit loses its compile exception (SKILL-385).
 
 Audit remains responsible for production criteria and sends repairs to `audit_implement_fix`. After repairs it may run the dominant pack's compile-only `validation_gate.build_command`. Compilation failures return to the repair step as production gaps. Audit does not run or compile test targets, lint, or full validation, and a passing compile check does not satisfy test requirements.
 
 The audit directive regression and prompt snapshots cover this exception. The 25 focused audit and snapshot tests passed before reinstalling base.
 
 # featuretask runtime boundary decisions
+
+## [2026-09-30] Bind strategy authority to the accepted step
+Context: SKILL-384 subtask 3 found that broad step state, attempt environments and helper paths let strategies reach unrelated mutable state or bypass launch prerequisites.
+Decision: Issue private bindings for the accepted run, selected strategy and policy. Strategies and hooks declare their role; bindings expose detached observations and only that role's operations, then close after dispatch. Keep runners, gate cycles and finalization machinery behind their runtime owners.
+Reason: Renaming a context or adding getters preserves its authority. Bound operations enforce plan membership and required persistence while keeping the shared loop and existing review, fan-out and gate owners.
+Alternatives considered: Another workflow framework or a role interface per helper would add forwarding layers without proving narrower authority.
+
+## [2026-09-30] Keep coupled transitions with one run and session owner
+Context: Progress, session, retries, completion and review invalidation must agree during live execution and durable reconstruction.
+Decision: Store one FeatureTaskRuntimeRunTransitionOwner per run, paired with one session. Use named transitions; acknowledge durable completion and review tombstones before matching in-memory changes, and required starts before attempt accounting.
+Reason: Independent field writers can leave partial transitions or spend retry budget before persistence succeeds. One owner preserves the existing durable and ephemeral policies, checkpoint ownership and audit briefing exception without a new durable format or semantic reset.
+
+## [2026-09-30] Pair transitive capability checks with runtime admission
+Context: Strategy authority can leak through helper constructors, extensions, aliases, factories or mutable observation copies even when prohibited type names disappear from entry points.
+Decision: Use a Kotlin PSI declaration graph across engine source and a typed primitive-writer inventory. Keep runtime machinery traversable, reject unresolved governed edges, and register synthetic allowed and violating cases with the architecture rule. Retain runtime binding checks and observable behavioral coverage.
+Reason: Direct type-name checks miss transitive authority. Source-level reachability checks cannot prove active-step identity or transition outcomes, so accepted-plan admission and behavioral evidence remain separate requirements.
+
+## [2026-09-28] Bind standalone validation to its own command family
+Context: Standalone validation could dispatch build commands while reporting validation. Goal-child build and agent-driven workflow validation have different execution contracts.
+Decision: Bind SkeletonDefinition.VALIDATION to PackValidationStrategy, PHASE_VALIDATE, and validation evidence. Resolve the dominant pack's full-validation command pair with wrapper overrides; keep goal-child build on its build command pair and build receipt.
+Reason: Dispatch, telemetry, and receipts must describe the same gate. Strategy binding preserves the shared run loop and existing agent-validation alternatives without definition-specific dispatch in PhaseRunEntry.
+
+## [2026-09-28] Require command evidence while allowing cached zero-work success
+Context: Empty measurements could become successful gate evidence, while a real cached command may execute no work units or new checks.
+Decision: Require effective command identity, zero exit status, and checkpoint evidence for a successful terminal applicable command. Retain discovery and repair verification separately, reconcile counts and checks, and block missing required gate declarations.
+Reason: Command execution and executed work are different facts. Zero work can be valid evidence; zero command records cannot prove success, and earlier success cannot hide failed verification.
+
+## [2026-09-28] Acknowledge required phase writes before execution
+Mechanism superseded by [2026-10-02] Return rejected required phase writes as values (SKILL-398); the guarantees below stand.
+Context: Required start and briefing writes returned false while child launches or runtime side effects could continue.
+Decision: Raise RequiredPhaseWriteRejected at the persistence owner and handle it at the shared attempt boundary before execution. Preserve write kind, phase, and attempt through terminal recording and secondary failures. Keep cancellation propagation, ephemeral in-memory acknowledgements, and audit's in-memory briefing exception.
+Reason: Execution needs an acknowledged prerequisite record. Treating rejected persistence as child failure loses attribution; moving transaction or lease ownership is unnecessary to enforce the prerequisite.
+
+## [2026-09-28] Block uncertain receipt recovery without replaying finalization
+Context: Unsupported or empty successful receipts cannot establish current gate semantics, and historical downstream effects may already include commit or push.
+Decision: Preserve original evidence and finalization records when gate evidence fails validation. Block uncertain recovery, keep completed runs terminal, and do not regenerate a producer or replay commit/push to repair its receipt.
+Reason: Safe regeneration requires compatible execution identity and proof that downstream effects have not occurred. Subtask 2 supplies that identity prerequisite; inventing missing evidence or deleting completion records could repeat effects.
+Revisit when: Compatible execution identity and absence of downstream effects can be proven at an existing safe gate boundary.
 
 ## [2026-09-27] Scoped replan prunes the cleared child's checkpoint refs
 Context: `goal replan` deleted the child workflow but left its `refs/skill-bill/checkpoints/<issue>/<subtask>/<n>` refs. The next child restarts its checkpoint sequence at 0, so its first remediation amend that reached an old number found a foreign occupant. It refused, because overwriting would drop the only reachability that commit had. SKILL-380 subtask 5 blocked at `verify_findings` this way.
@@ -88,6 +158,12 @@ Decision: `commit_push` skips the agent launch. The runtime stages every dirty n
 Reason: A subject string is not worth a structured agent turn. Double JSON at a non-retrying gate stranded finished subtasks.
 Revisit when: commit subjects need human-authored outcome text that the manifest subtask name cannot carry.
 
+## [2026-10-01] Audit repair allows two non-shrinking rounds
+Context: SKILL-388 blocked after one repair because audit reported AC-006 where it had reported AC-007. The repair fixed AC-007 and the fresh full audit found a different gap, yet the equal count read as a stall.
+Decision: A remaining list that shrinks after repair always relaunches repair. An unchanged, replaced, or grown list relaunches repair at most twice per subtask workflow; the third such round blocks. Each allowed non-shrinking round appends an `audit_non_shrinking_round` continuation to the phase ledger, and the cap counts those entries, so it survives process restarts and an operator audit retry does not reset it.
+Reason: Each audit reinspects every criterion, so one non-shrinking round can be fresh evidence rather than a stalled repair. The `audit_repair` edge has no per-edge cap, so the bounded budget keeps the loop finite once shrinking stops.
+Revisit when: the `audit_repair` edge gains a declared per-edge cap, or in-memory phase runs start running audit (their records keep no ledger, so the cap would never fire).
+
 ## [2026-09-17] Audit repair cycles stay in one session and remaining text carries a reason
 Context: Auditors inspected once, emitted remaining ACs with no why, and the runtime relaunched. Three runtime relaunches would recreate the remaining-criteria storm.
 Decision: The audit briefing asks for up to three repair cycles inside the same agent session. Remaining-criteria text that is not `[]` includes a reason per leftover criterion. That briefing is runtime-owned and identical for every dominant platform pack; packs do not author remaining-criteria settlement. The runtime still treats any non-empty remaining text as unstructured prose: no schema on that list, one outer remaining-criteria retry, then block when the text is unchanged.
@@ -111,6 +187,7 @@ Context: F-005 documented 122 context extensions and duplicate PlanningBranch ru
 Decision: Record before/after extension counts and retained broad inputs in `runtime-kotlin/ARCHITECTURE.md` under State Ownership; peel run-loop-only overloads; keep `runPhaseDriveLoop` and `invalidateReviewGenerationIfNeeded` as the only Drive context extensions; pass carried-forward review, gate settlement, pack routing, and checkpoint calculations through explicit arguments; retain context at validation agent-turn/fix-loop orchestration and review launch capture because those paths still coordinate the launch, activity, diagnostics, clock, transition, and session ports; remove public collaborator aliases on `FeatureTaskRuntimeRunLoop`.
 Reason: Helpers must not gain authority through a renamed all-access receiver; the loop stays the sole owner of forward drive and session transitions.
 Revisit when: a new helper needs a full context and no smaller port set can be named.
+Superseded by: Bind strategy authority to the accepted step (2026-09-30)
 
 ## [2026-09-15] Run-evidence ownership derives from the active run, not the store prefix
 Context: every path under `.skill-bill/` was runtime-private, so the whole `run-evidence` store was exempt from the owned-path inventory. This run's own artifacts never blocked, but a foreign workflow's artifact and a file forged under the same directory were swept out with them.
@@ -161,6 +238,8 @@ Decision: Resolve remaining finding identities through the saved acceptance crit
 
 Reason: SKILL-384 repeated capability gaps while changing descriptions and label forms. The previous parser counted standalone S3 labels as one text item and allowed equal counts with different IDs. A suffix completion check also accepted a refusal ending in the marker text. Require the marker as a complete final content line and retain the independent fresh audit after repair.
 
+Superseded by: Audit repair allows two non-shrinking rounds, 2026-10-01. Audit reports findings while the runtime owns repair admission, 2026-10-02.
+
 ## [2026-09-29] Unfinished audit repairs block and resume with saved work
 
 Context: SKILL-384 launched eight more repair agents after partial final responses. The incomplete-work branch ignored the step's single-session policy. It saved reports but the audit-repair prompt omitted them. A no-progress audit block also retained the older accepted report instead of the latest valid findings.
@@ -182,3 +261,37 @@ Decision: Validation keeps repairing in its original agent session until every r
 Reason: A formatting recovery cannot measure repair progress. Tests, static analysis, formatting and outdated fixtures are work for the validation agent. The existing phase record, process limits and explicit operator retry own termination and recovery.
 
 Revisit when: The agent launcher supports a governed continuation inside an existing live session.
+
+## [2026-10-02] Audit reports findings while the runtime owns repair admission
+
+Context: SKILL-398's audit blocked after AC-005 remained open following a partial repair. Its prompt required decreasing criterion counts even though the runtime already allowed two non-shrinking rounds. The agent's blocked output bypassed that runtime allowance.
+
+Decision: A finished audit inspection reports completed status and the current production gaps, including repeated or larger remaining lists. The runtime alone applies progress comparison and durable retry limits. The audit agent reports blocked status only when missing or unreadable criteria or an external dependency prevents inspection. Previous reports' retry decisions do not override the current runtime policy.
+
+A completed inspection with open criteria routes to repair. Review admission still requires the existing completion parser to establish that no production criteria remain. Audit stays read-only, repair completion requires its existing marker, and runtime failures retain their existing terminal handling.
+
+Reason: A criterion can require repairs at several consumers before its count decreases. Agent instructions must not replace the runtime's bounded repair policy with a second stopping rule. The existing ledger and progress owner continue to enforce the limit without new durable state.
+
+Evidence: Historical session blocks and local telemetry include SKILL-384's one-edge cap and growing criterion list, SKILL-389's satisfied rationale rejected as an open finding, SKILL-352's repeated remaining text, schema-invalid audit output, lost durable recovery authority, and checkpoint refusal before review. The change retains progress, parsing, recovery, checkpoint and process-failure enforcement. Existing audit regression tests exercise those boundaries, including captured SKILL-389 and SKILL-393 reports.
+
+## 2026-10-03: Plan acceptance-criteria repairs before execution
+
+Context: A repair session can receive several independent production gaps under
+one criterion and spend its attempts on incidental changes while leaving the
+required behavior missing.
+
+Decision: The acceptance-audit slot now owns read-only `audit_plan_fix` between
+inspection and implementation repair. Its reasoning session plans each reported
+gap with production paths, ordered changes, dependencies, and closure evidence.
+The runtime validates criterion coverage and item fields before persisting the
+plan. `audit_implement_fix` executes that persisted plan. Ordinary phase outputs,
+handoffs, and the existing audit repair ledger own persistence and resume. The
+audit strategy revision changes to 2 so admission cannot silently reinterpret an
+older execution descriptor. The historical interpreter retains the original audit and repair
+rules and recognizes repair planning as a loop-only step.
+
+Reason: Planning must finish before repair mutates source, and interruption must
+retain the plan that justified the repair. This changes the repair loop, not its
+retry budget, test exclusion, or full-list re-audit requirement. It follows A1,
+A2, A6, and A7 by keeping audit behavior in its slot and reusing owned contracts
+and expected rejection results.

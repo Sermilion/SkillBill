@@ -2,10 +2,10 @@ package skillbill.infrastructure.sqlite.telemetry.goal
 
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.core.ops.sqliteDiagnostics
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.enqueueTelemetry
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.stringOrEmpty
 import skillbill.infrastructure.sqlite.telemetry.redaction.telemetryRedactionSalt
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.telemetry.model.GoalSubtaskFinishedRecord
 import java.sql.Connection
 import java.sql.ResultSet
@@ -40,14 +40,16 @@ internal fun emitGoalFinished(
   markGoalRunSessionEmitted(connection, "finished_event_emitted_at", workflowId)
 }
 
+internal data class GoalIssueIdentity(val parentWorkflowId: String, val issueKey: String)
+
 internal fun emitGoalIssueFinished(
   connection: Connection,
   runtimeVersion: String,
-  parentWorkflowId: String,
-  issueKey: String,
+  goal: GoalIssueIdentity,
   level: String,
+  diagnostics: RuntimeDiagnostics,
 ) {
-  val row = goalIssueProgressRow(connection, parentWorkflowId, issueKey) ?: return
+  val row = goalIssueProgressRow(connection, goal.parentWorkflowId, goal.issueKey) ?: return
   if (row.stringOrEmpty("finished_event_emitted_at").isNotBlank()) {
     return
   }
@@ -56,10 +58,10 @@ internal fun emitGoalIssueFinished(
       row,
       level,
       telemetryRedactionSalt(connection),
-      connection.sqliteDiagnostics(),
+      diagnostics,
     )
   enqueueTelemetry(connection, runtimeVersion, TelemetryOutboxEvent.GOAL_ISSUE_FINISHED, payload)
-  markGoalIssueProgressEmitted(connection, parentWorkflowId, issueKey)
+  markGoalIssueProgressEmitted(connection, goal.parentWorkflowId, goal.issueKey)
 }
 
 internal fun emitGoalSubtaskFinished(
@@ -67,6 +69,7 @@ internal fun emitGoalSubtaskFinished(
   runtimeVersion: String,
   record: GoalSubtaskFinishedRecord,
   level: String,
+  diagnostics: RuntimeDiagnostics,
 ) {
   val row = goalSubtaskEventRow(connection, record.issueKey, record.subtaskId, record.workflowId) ?: return
   if (row.stringOrEmpty("subtask_event_emitted_at").isNotBlank()) {
@@ -77,7 +80,7 @@ internal fun emitGoalSubtaskFinished(
       row,
       level,
       telemetryRedactionSalt(connection),
-      connection.sqliteDiagnostics(),
+      diagnostics,
     )
   enqueueTelemetry(connection, runtimeVersion, TelemetryOutboxEvent.GOAL_SUBTASK_FINISHED, payload)
   markGoalSubtaskEventEmitted(connection, record.issueKey, record.subtaskId, record.workflowId)

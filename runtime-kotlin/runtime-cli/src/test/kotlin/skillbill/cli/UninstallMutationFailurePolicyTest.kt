@@ -7,8 +7,8 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.model.CliExecutionResult
 import skillbill.cli.model.CliRunInputs
 import skillbill.cli.system.UninstallCommand
-import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.install.model.McpMutationResult
+import skillbill.install.model.McpRegistrationOutcome
 import skillbill.ports.install.agent.InstallAgentTargetPort
 import skillbill.ports.install.agent.model.ClaudeConfigRootsRequest
 import skillbill.ports.install.agent.model.ClaudeConfigRootsResult
@@ -80,7 +80,6 @@ class UninstallMutationFailurePolicyTest {
             environment = emptyMap(),
             userHome = HOME,
             repositoryRoot = HOME,
-            repositoryEnclosingRootPort = CanonicalRepositoryRoot,
             liveStdout = {},
             liveStderr = {},
           ),
@@ -162,6 +161,7 @@ private object StubUninstallHostPlatformPort : HostPlatformPort {
 
   override val osName: String = "Linux"
   override val jvmClassPath: String = ""
+  override val javaCommand: String? = null
   override val pathSeparator: String = ":"
 }
 
@@ -171,6 +171,8 @@ private object SucceedingMcpRegistrationPort : InstallMcpRegistrationPort {
 
   override fun unregisterMcp(request: InstallMcpUnregistrationRequest): InstallMcpRegistrationResult =
     InstallMcpRegistrationResult(
-      McpMutationResult(agent = request.agent, configPath = ABSENT_PATH.toFileLocation(), changed = false),
+      McpRegistrationOutcome.Applied(
+        McpMutationResult(agent = request.agent, configPath = ABSENT_PATH.toFileLocation(), changed = false),
+      ),
     )
 }

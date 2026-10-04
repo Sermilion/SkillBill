@@ -5,6 +5,7 @@ import skillbill.error.core.MalformedJsonTextError
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequest
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestRejectionReason
+import skillbill.goalrunner.model.recordDurableDecodeSubstitution
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.persistence.artifact.asExactIntOrNull

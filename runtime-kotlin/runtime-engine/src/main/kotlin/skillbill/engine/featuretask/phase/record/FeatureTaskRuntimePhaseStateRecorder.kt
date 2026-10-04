@@ -16,28 +16,31 @@ import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.operatorBlockRetryFromWorkflowArtifacts
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.ports.taskruntime.validateImplementationAttemptRecord
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.goalreview.appendBoundedHistoryBySequence
+import skillbill.workflow.model.persistence.artifact.appendBoundedHistoryBySequence
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptsFromArtifact
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.artifact.implementationAttemptRecordWorkflowArtifact
 import skillbill.workflow.taskruntime.artifact.operatorBlockRetryFromWorkflowArtifacts
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttempt
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttemptStatus
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.featureTaskRuntimeAppendImplementationAttempt
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
+import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeAppendImplementationAttempt
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction.COMPLETE
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
-import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeOperatorBlockRetry
+import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import java.time.Clock
 import java.time.Instant
 
@@ -48,6 +51,18 @@ class FeatureTaskRuntimePhaseStateRecorder(
   val implementationAttemptValidator: FeatureTaskRuntimeWireArtifactValidator,
   val clock: Clock,
 ) {
+  fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
+    if (recordPhaseState(request)) {
+      RequiredPhaseWrite.Acknowledged
+    } else {
+      RequiredPhaseWrite.Rejected(
+        writeKind = RequiredPhaseWriteKind.START,
+        workflowId = request.workflowId,
+        phaseId = request.phaseId,
+        attempt = request.attemptCount,
+      )
+    }
+
   fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
     database.transaction { unitOfWork ->
       val record =
@@ -263,8 +278,9 @@ fun FeatureTaskRuntimePhaseStateRecorder.implementationAttemptPatch(
         ),
     )
   val wire = implementationAttemptRecordWorkflowArtifact(appended)
-  implementationAttemptValidator.validateImplementationAttemptRecord(
-    wire,
+  implementationAttemptValidator.validate(
+    FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_ATTEMPT,
+    FeatureTaskRuntimeWorkflowArtifactMap.from(wire),
     DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.label(),
   )
   return mapOf(DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPTS.entry(wire))

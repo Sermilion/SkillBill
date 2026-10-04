@@ -26,17 +26,7 @@ internal class PrReviewFixExecution(
   private val fixes = mutableListOf<ThreadFix>()
 
   fun run(): OperationOutcome {
-    val editing = context.copy(instructions = null)
-    selected.forEach { thread ->
-      val reviewThread =
-        threads[thread.threadId]
-          ?: return stopped("thread ${thread.ordinal} (${thread.threadId}) is no longer on the pull request")
-      val directive = threadDirective(pullRequest, thread, reviewThread)
-      when (val step = context.steps.runEditing(editing, THREAD_STEP, directive, mapOf(ANALYSIS_STEP to matrix))) {
-        is OperationStepResult.Failed -> return stopped("thread ${thread.ordinal} failed: ${step.reason}")
-        is OperationStepResult.Settled -> fixes += ThreadFix(thread, step.value.trim(), step.changedPaths)
-      }
-    }
+    applySelectedFixes()?.let { return it }
     val agentId = requireNotNull(context.invokedAgentId)
     val gate =
       when (val validation = runPhase(PhaseRunRequest(VALIDATION_DEFINITION, context.repoRoot, agentId))) {
@@ -55,6 +45,22 @@ internal class PrReviewFixExecution(
     } else {
       OperationOutcome.Completed(report)
     }
+  }
+
+  private fun applySelectedFixes(): OperationOutcome? {
+    val editing = context.copy(instructions = null)
+    selected.forEach { thread ->
+      val reviewThread =
+        threads[thread.threadId]
+          ?: return stopped("thread ${thread.ordinal} (${thread.threadId}) is no longer on the pull request")
+      val directive = threadDirective(pullRequest, thread, reviewThread)
+      when (val step = context.steps.runEditing(editing, THREAD_STEP, directive, mapOf(ANALYSIS_STEP to matrix))) {
+        is OperationStepResult.Failed -> return stopped("thread ${thread.ordinal} failed: ${step.reason}")
+        is OperationStepResult.Refused -> return step.refusal
+        is OperationStepResult.Settled -> fixes += ThreadFix(thread, step.value.trim(), step.changedPaths)
+      }
+    }
+    return null
   }
 
   private fun reply(fix: ThreadFix): Reply {

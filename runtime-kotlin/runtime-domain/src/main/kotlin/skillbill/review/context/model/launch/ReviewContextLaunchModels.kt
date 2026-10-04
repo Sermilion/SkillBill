@@ -2,13 +2,13 @@ package skillbill.review.context.model.launch
 
 import skillbill.contracts.review.REVIEW_CONTEXT_CONTRACT_VERSION
 import skillbill.review.context.model.accounting.ReviewBudgetKind
+import skillbill.review.context.model.accounting.ReviewContextBudgetExceeded
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.commit.ReviewAssignment
 import skillbill.review.context.model.commit.ReviewCommitUnit
-import skillbill.review.context.model.execution.structuredString
 import skillbill.review.context.model.hunk.REVIEW_BUNDLE_MEASUREMENT_PLACEHOLDER_BYTES
 import skillbill.review.context.model.hunk.REVIEW_MIN_LANE_BUDGET_SEGMENT_COUNT
-import skillbill.review.context.model.hunk.ReviewContextBudgetExceeded
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
+import skillbill.review.context.model.hunk.structuredString
 import skillbill.review.context.model.packet.ReviewContextPacket
 import skillbill.review.context.model.packet.ReviewLaneAssembledBundle
 import skillbill.review.context.model.packet.ReviewLaneAssembledEntry

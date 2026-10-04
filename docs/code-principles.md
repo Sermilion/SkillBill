@@ -33,26 +33,46 @@ on sealed branches the compiler could check.
 
 ## Failure Contracts
 
-**Rule.** Every failure case in an in-scope `FailureWireCode` hierarchy maps to
-exactly one stable wire code, and every code maps to exactly one case. Untrusted
-input at a named parse boundary returns a typed contract failure; `error()`,
-`require()`, bare `throw`, and `runCatching` classifiers do not report malformed
-external input. `CancellationException` rethrows before broad catch.
+**Rule.** Three tiers (see A7 in `docs/architecture-guidelines.md`):
 
-**Preferred shapes.** `enum class … : FailureWireCode` with `wireValue`;
-`failureWireByValue` at decode sites; `Invalid*SchemaError` or domain-specific
-typed failures with payload-free reasons for operators.
+1. Defects use `require`, `check`, or `error()` and are never caught for control
+   flow.
+2. Expected outcomes (absent, refused, conflicting, invalid input) are returned
+   as sealed results, nullables, or existing outcome types by the function that
+   knows the outcome.
+3. Failures that end the run throw `SkillBillRuntimeException(code, message,
+   cause)` with an owner-declared `RuntimeFailureCode`.
+
+A new custom `Throwable` subclass must earn its place: it is allowed only for a
+failure that crosses a boundary the runtime does not own and cannot be tier 3.
+Record the reason in a dated `runtime-kotlin/agent/decisions.md` entry;
+`custom-throwable-baseline.txt` enforces this. Every failure case in an in-scope
+`FailureWireCode` hierarchy maps to exactly one stable wire code, and every code
+maps to exactly one case. Untrusted input at a named parse boundary becomes a
+result or a tier 3 failure; `error()`, `require()`, bare `throw`, and
+`runCatching` classifiers do not report malformed external input.
+`CancellationException` rethrows before broad catch.
+
+**Preferred shapes.** `enum class … : FailureWireCode, RuntimeFailureCode` with
+`wireValue`, and `failureWireByValue` at decode sites; a plain owner
+`enum class … : RuntimeFailureCode` for codes without a wire value; sealed
+results or nullables for tier 2.
 
 **Anti-patterns.** Collapsing unknown wire tokens to `SCHEMA_INVALID`; a second
 parallel kind enum that can diverge from the wire code; using `error("bad json")`
-inside durable control-state or phase-output decoders.
+inside durable control-state or phase-output decoders; a throwable class per
+contract or per message; throwing to report absent, refused, or conflicting
+outcomes; catching `IllegalArgumentException` or `IllegalStateException` for
+control flow; branching on exception message text.
 
 **Reference examples.**
 
-- `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/FailureWireCodeContract.kt`
-- `runtime-kotlin/runtime-domain/src/test/kotlin/skillbill/workflow/failureidentity/FailureWireCodeConformanceTest.kt`
-- `runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/db/workflow/GoalRunnerControlStore.kt` (`decodeControlState` and helpers)
+- `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/core/FailureWireCodeContract.kt`
+- `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/core/RuntimeExceptionBases.kt`
+- `runtime-kotlin/runtime-domain/src/test/kotlin/skillbill/workflow/decomposition/model/FailureWireCodeConformanceTest.kt`
+- `runtime-kotlin/runtime-infra/sqlite/src/main/kotlin/skillbill/infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreDecodeState.kt` (`decodeControlState` and helpers)
 - `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/TypedParseBoundaryArchitectureTest.kt`
+- `runtime-kotlin/runtime-core/src/repoTest/kotlin/skillbill/architecture/FailureCodeTotalityArchitectureTest.kt`
 
 **Amendment.** Genuinely open operator or agent JSON maps, external process
 stdout, and `@OpenBoundaryMap` payloads stay open at `when` branches; each site
@@ -81,7 +101,7 @@ Infrastructure Gradle directories: `runtime-infra/host`, `runtime-infra/contract
 
 - `runtime-kotlin/runtime-infra/skills/src/main/kotlin/skillbill/scaffold/platformpack/ShellContentLoader.kt` (`parseFallbackCapabilities`)
 - `runtime-kotlin/runtime-infra/skills/src/main/kotlin/skillbill/launcher/agentrun/AgentRunCommandBuildersLaunch.kt` (`GovernedReviewLaunchCapability`)
-- `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/GovernedReviewShellContentErrors.kt`
+- `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/error/shellcontent/GovernedReviewFailureCode.kt`
 
 **Amendment (SKILL-220 subtask 3).** `fallback_capabilities`, native-agent
 `entrypoint` paths, and `AgentRunIdlePolicy` remain open at their current

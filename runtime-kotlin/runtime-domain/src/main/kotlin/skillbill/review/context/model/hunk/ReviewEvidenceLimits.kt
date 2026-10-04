@@ -1,6 +1,6 @@
 package skillbill.review.context.model.hunk
 
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.shellcontent.invalidReviewContextSchemaError
 
 object ReviewEvidenceLimits {
   const val FIELD_CHARACTERS: Int = 1024
@@ -13,7 +13,7 @@ object ReviewEvidenceLimits {
     if (value.isBlank() || value.codePointCount(0, value.length) > FIELD_CHARACTERS ||
       value.toByteArray(Charsets.UTF_8).size > FIELD_BYTES
     ) {
-      throw InvalidReviewContextSchemaError(
+      throw invalidReviewContextSchemaError(
         "review-evidence",
         "Evidence field is blank or exceeds its byte or character limit.",
       )

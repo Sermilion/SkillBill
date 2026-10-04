@@ -3,11 +3,11 @@ package skillbill.application
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.decompositionPlanningResult
 import skillbill.application.decomposition.decompositionPlanningSubtask
+import skillbill.application.decomposition.model.DecompositionManifestRuntimeUpdate
+import skillbill.application.decomposition.model.DecompositionManifestWriteRequest
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.contracts.JsonCodec
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestRuntimeUpdate
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestWriteRequest
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch

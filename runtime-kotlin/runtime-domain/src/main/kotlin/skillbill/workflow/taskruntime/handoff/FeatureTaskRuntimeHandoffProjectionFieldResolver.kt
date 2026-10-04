@@ -2,8 +2,8 @@ package skillbill.workflow.taskruntime.handoff
 
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffProjectionInputs
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionField
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionInputs
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 
@@ -31,33 +31,43 @@ internal object FeatureTaskRuntimeHandoffProjectionFieldResolver {
   fun resolveFields(
     inputs: FeatureTaskRuntimeHandoffProjectionInputs,
     declaration: PhaseHandoffProjectionDeclaration,
-  ): List<FeatureTaskRuntimeHandoffProjectionField>? {
-    val fields = fieldsFor(inputs, declaration)
+  ): FeatureTaskRuntimeHandoffProjectionStep<List<FeatureTaskRuntimeHandoffProjectionField>?> {
+    val fields =
+      when (val result = fieldsFor(inputs, declaration)) {
+        is FeatureTaskRuntimeHandoffProjectionStep.Rejected -> return result
+        is FeatureTaskRuntimeHandoffProjectionStep.Value -> result.value
+      }
     if (fields == null && declaration.required) {
-      rejectFeatureTaskRuntimeHandoffProjection(
-        inputs,
-        declaration,
-        FeatureTaskRuntimeHandoffProjectionFailureKind.MISSING_REQUIRED_SOURCE,
-        "declared source '${declaration.sourceRef.wireValue}' has no recorded value.",
+      return FeatureTaskRuntimeHandoffProjectionStep.Rejected(
+        rejectedFeatureTaskRuntimeHandoffProjectionContext(
+          inputs,
+          declaration,
+          FeatureTaskRuntimeHandoffProjectionFailureKind.MISSING_REQUIRED_SOURCE,
+          "declared source '${declaration.sourceRef.wireValue}' has no recorded value.",
+        ),
       )
     }
-    return fields
+    return FeatureTaskRuntimeHandoffProjectionStep.Value(fields)
   }
 
   private fun fieldsFor(
     inputs: FeatureTaskRuntimeHandoffProjectionInputs,
     declaration: PhaseHandoffProjectionDeclaration,
-  ): List<FeatureTaskRuntimeHandoffProjectionField>? =
+  ): FeatureTaskRuntimeHandoffProjectionStep<List<FeatureTaskRuntimeHandoffProjectionField>?> =
     when (val sourceRef = declaration.sourceRef) {
       is FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput ->
         upstreamPhaseOutputFields(inputs, declaration, sourceRef)
       is FeatureTaskRuntimeHandoffSourceRef.RunInvariantField ->
-        runInvariantProjectionFields(inputs.runInvariants, sourceRef.invariantField)
+        FeatureTaskRuntimeHandoffProjectionStep.Value(
+          runInvariantProjectionFields(inputs.runInvariants, sourceRef.invariantField),
+        )
       FeatureTaskRuntimeHandoffSourceRef.DerivedCeremonyScaling ->
-        derivedCeremonyScalingFields(inputs)
+        FeatureTaskRuntimeHandoffProjectionStep.Value(derivedCeremonyScalingFields(inputs))
       FeatureTaskRuntimeHandoffSourceRef.SharedReviewEvidence ->
-        inputs.sharedReviewEvidence?.toProjectionFields()
-      FeatureTaskRuntimeHandoffSourceRef.RepairLedger -> repairLedgerProjectionFields(inputs)
-      is FeatureTaskRuntimeHandoffSourceRef.AddonContentRef -> addonContentProjectionFields(inputs, sourceRef.slug)
+        FeatureTaskRuntimeHandoffProjectionStep.Value(inputs.sharedReviewEvidence?.toProjectionFields())
+      FeatureTaskRuntimeHandoffSourceRef.RepairLedger ->
+        FeatureTaskRuntimeHandoffProjectionStep.Value(repairLedgerProjectionFields(inputs))
+      is FeatureTaskRuntimeHandoffSourceRef.AddonContentRef ->
+        FeatureTaskRuntimeHandoffProjectionStep.Value(addonContentProjectionFields(inputs, sourceRef.slug))
     }
 }

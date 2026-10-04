@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.install.staging.content
 
 import skillbill.agentaddon.model.AgentAddonConsumer
-import skillbill.error.shellcontent.AgentAddonPointerCollisionError
+import skillbill.error.shellcontent.agentAddonPointerCollision
 import skillbill.infrastructure.skills.agentaddon.AgentAddonDeliveryResolver
 import skillbill.infrastructure.skills.agentaddon.AgentAddonPointer
 import skillbill.infrastructure.skills.agentaddon.portableFileName
@@ -50,7 +50,7 @@ internal fun validateAgentAddonPointerNamespace(
   val claimed = reservedNames.map(::portableFileName).toMutableSet()
   pointers.forEach { pointer ->
     if (!claimed.add(portableFileName(pointer.name))) {
-      throw AgentAddonPointerCollisionError("$skillName/${pointer.name}")
+      throw agentAddonPointerCollision("$skillName/${pointer.name}")
     }
   }
 }

@@ -1,12 +1,10 @@
 package skillbill.scaffold
 
-import skillbill.error.shellcontent.ContractVersionMismatchError
-import skillbill.error.shellcontent.InvalidManifestSchemaError
-import skillbill.error.shellcontent.InvalidReviewSkillStructureError
-import skillbill.error.shellcontent.InvalidSkillMdShapeError
-import skillbill.error.shellcontent.MissingContentFileError
-import skillbill.error.shellcontent.MissingManifestError
-import skillbill.error.shellcontent.MissingRequiredSectionError
+import skillbill.error.core.RuntimeFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
 import skillbill.infrastructure.skills.scaffold.platformpack.substanceaudit.relative
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
@@ -48,9 +46,10 @@ class ShellContentLoaderParityTest {
     )
 
     val error =
-      assertFailsWith<InvalidReviewSkillStructureError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPlatformPack(packRoot, enforceGovernedReviewStructure = true)
       }
+    assertEquals(SkillStagingFailureCode.INVALID_REVIEW_SKILL_STRUCTURE, error.code)
 
     assertContains(error.message.orEmpty(), "specialist H2 sequence")
   }
@@ -100,9 +99,10 @@ class ShellContentLoaderParityTest {
       mutateManifest(manifest)
 
       val error =
-        assertFailsWith<InvalidManifestSchemaError>(field) {
+        assertFailsWith<SkillBillRuntimeException>(field) {
           loadPlatformPack(root)
         }
+      assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, error.code)
       assertContains(error.message.orEmpty(), field)
       assertContains(error.message.orEmpty(), "content.md")
     }
@@ -110,13 +110,17 @@ class ShellContentLoaderParityTest {
 
   @Test
   fun `loud fails with named shell content contract errors`() {
-    assertNamedFailure<MissingManifestError>("missing_manifest", "platform.yaml")
-    assertNamedFailure<MissingContentFileError>("missing_content_file", "baseline")
-    assertNamedFailure<ContractVersionMismatchError>("bad_version", "9.99")
-    assertNamedFailure<InvalidManifestSchemaError>("invalid_schema", "routing_signals")
-    assertNamedFailure<InvalidManifestSchemaError>("schema_areas_wrong_type", "declared_code_review_areas")
-    assertNamedFailure<InvalidManifestSchemaError>("schema_unapproved_area", "laravel")
-    assertNamedFailure<InvalidManifestSchemaError>("extra_area", "performance")
+    assertNamedFailure(ManifestFailureCode.MISSING_MANIFEST, "missing_manifest", "platform.yaml")
+    assertNamedFailure(SkillStagingFailureCode.MISSING_CONTENT_FILE, "missing_content_file", "baseline")
+    assertNamedContractVersionFailure("bad_version", "9.99")
+    assertNamedFailure(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, "invalid_schema", "routing_signals")
+    assertNamedFailure(
+      ManifestFailureCode.INVALID_MANIFEST_SCHEMA,
+      "schema_areas_wrong_type",
+      "declared_code_review_areas",
+    )
+    assertNamedFailure(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, "schema_unapproved_area", "laravel")
+    assertNamedFailure(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, "extra_area", "performance")
   }
 
   @Test
@@ -131,9 +135,10 @@ class ShellContentLoaderParityTest {
       ),
     )
     val shapeError =
-      assertFailsWith<InvalidSkillMdShapeError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPlatformPack(shapeRoot)
       }
+    assertEquals(SkillStagingFailureCode.INVALID_SKILL_MD_SHAPE, shapeError.code)
     assertContains(shapeError.message.orEmpty(), "description")
     assertContains(shapeError.message.orEmpty(), "content.md")
   }
@@ -148,9 +153,10 @@ class ShellContentLoaderParityTest {
     )
 
     val error =
-      assertFailsWith<MissingRequiredSectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPlatformPack(root)
       }
+    assertEquals(SkillStagingFailureCode.MISSING_REQUIRED_SECTION, error.code)
     assertContains(error.message.orEmpty(), "authored content")
     assertContains(error.message.orEmpty(), "content.md")
   }
@@ -172,9 +178,10 @@ class ShellContentLoaderParityTest {
     )
 
     val error =
-      assertFailsWith<MissingRequiredSectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPlatformPack(root)
       }
+    assertEquals(SkillStagingFailureCode.MISSING_REQUIRED_SECTION, error.code)
     assertContains(error.message.orEmpty(), "authored guidance beyond the title heading")
     assertContains(error.message.orEmpty(), "content.md")
   }
@@ -202,9 +209,10 @@ class ShellContentLoaderParityTest {
     )
 
     val wrapperError =
-      assertFailsWith<MissingRequiredSectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPlatformPack(wrapperRoot)
       }
+    assertEquals(SkillStagingFailureCode.MISSING_REQUIRED_SECTION, wrapperError.code)
     assertContains(wrapperError.message.orEmpty(), "generated wrapper boilerplate heading '## Ceremony'")
 
     val pointerRoot = copyFixture("valid_pack")
@@ -222,9 +230,10 @@ class ShellContentLoaderParityTest {
     )
 
     val pointerError =
-      assertFailsWith<MissingRequiredSectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPlatformPack(pointerRoot)
       }
+    assertEquals(SkillStagingFailureCode.MISSING_REQUIRED_SECTION, pointerError.code)
     assertContains(pointerError.message.orEmpty(), "self-referential wrapper pointer text")
   }
 
@@ -238,9 +247,10 @@ class ShellContentLoaderParityTest {
     )
 
     val areaError =
-      assertFailsWith<MissingRequiredSectionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         loadPlatformPack(areaRoot)
       }
+    assertEquals(SkillStagingFailureCode.MISSING_REQUIRED_SECTION, areaError.code)
     assertContains(areaError.message.orEmpty(), "authored content")
     assertContains(areaError.message.orEmpty(), "code-review/architecture/content.md")
   }
@@ -271,9 +281,10 @@ class ShellContentLoaderParityTest {
       Files.writeString(contentFile, mutate(Files.readString(contentFile)))
 
       val error =
-        assertFailsWith<InvalidSkillMdShapeError>(label) {
+        assertFailsWith<SkillBillRuntimeException>(label) {
           loadPlatformPack(root)
         }
+      assertEquals(SkillStagingFailureCode.INVALID_SKILL_MD_SHAPE, error.code)
       val message = error.message.orEmpty()
       assertTrue(message.isNotBlank(), label)
       assertContains(message, discriminator, message = label)
@@ -328,14 +339,25 @@ private fun malformedSpecialistContent(): String =
   Missing the governed specialist skeleton.
   """.trimIndent()
 
-private inline fun <reified T : Throwable> assertNamedFailure(
+private fun assertNamedFailure(
+  expectedCode: RuntimeFailureCode,
+  fixtureName: String,
+  expectedMessage: String,
+) {
+  val error = assertFailsWith<SkillBillRuntimeException> { loadPlatformPack(fixture(fixtureName)) }
+  assertEquals(expectedCode, error.code)
+  assertContains(error.message.orEmpty(), fixtureName)
+  assertContains(error.message.orEmpty(), expectedMessage)
+}
+
+private fun assertNamedContractVersionFailure(
   fixtureName: String,
   expectedMessage: String,
 ) {
   val error =
-    assertFailsWith<T> {
+    assertFailsWith<SkillBillRuntimeException> {
       loadPlatformPack(fixture(fixtureName))
-    }
+    }.also { assertEquals(InstallFailureCode.CONTRACT_VERSION_MISMATCH, it.code) }
   assertContains(error.message.orEmpty(), fixtureName)
   assertContains(error.message.orEmpty(), expectedMessage)
 }

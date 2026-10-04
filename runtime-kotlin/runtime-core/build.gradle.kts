@@ -8,19 +8,20 @@ plugins {
 }
 
 tasks.named<Test>("repoTest") {
-  inputs.files(
-    fileTree(rootProject.layout.projectDirectory) {
-      include(
-        "**/src/**",
-        "**/*.gradle.kts",
-        "**/ARCHITECTURE.md",
-        "**/agent/**",
-        "config/**",
-        ".editorconfig",
-      )
-      exclude("**/build/**", "**/.gradle/**", ".kotlin/**")
-    },
-  ).withPathSensitivity(PathSensitivity.RELATIVE)
+  inputs
+    .files(
+      fileTree(rootProject.layout.projectDirectory) {
+        include(
+          "**/src/**",
+          "**/*.gradle.kts",
+          "**/ARCHITECTURE.md",
+          "**/agent/**",
+          "config/**",
+          ".editorconfig",
+        )
+        exclude("**/build/**", "**/.gradle/**", ".kotlin/**")
+      },
+    ).withPathSensitivity(PathSensitivity.RELATIVE)
     .withPropertyName("runtimeKotlinArchitectureSources")
 }
 
@@ -33,6 +34,7 @@ tasks.named<ProcessResources>("processResources") {
 }
 
 dependencies {
+  testImplementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:${libs.versions.kotlin.get()}")
   api(project(":runtime-application"))
   api(project(":runtime-ports"))
   api(project(":runtime-engine"))
@@ -48,11 +50,11 @@ dependencies {
   implementation(project(":runtime-infra:sqlite"))
   implementation(libs.kotlin.inject.runtime)
   ksp(libs.kotlin.inject.compiler)
+  kspTest(libs.kotlin.inject.compiler)
 
   testImplementation(testFixtures(project(":runtime-application")))
   testImplementation(testFixtures(project(":runtime-engine")))
   testImplementation(testFixtures(project(":runtime-ports")))
-  testImplementation(testFixtures(project(":runtime-domain")))
   testImplementation(testFixtures(project(":runtime-infra:sqlite")))
   testImplementation(libs.junit.jupiter)
   testImplementation(libs.kotlin.test)

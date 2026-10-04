@@ -1,15 +1,15 @@
 package skillbill.application.review.packet
 
-import skillbill.review.context.model.execution.ReviewLaneDecision
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
+import skillbill.review.context.model.commit.ReviewLaneDecision
 import skillbill.review.context.model.hunk.ReviewBuildTestFact
 import skillbill.review.context.model.hunk.ReviewChangedHunk
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.context.model.hunk.ReviewEvidenceTarget
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import skillbill.review.context.model.hunk.ReviewHunkEvidenceLocator
 import skillbill.review.context.model.hunk.ReviewLearningsReference
 import skillbill.review.context.model.hunk.ReviewRevision
 import skillbill.review.context.model.hunk.ReviewRuleReference
-import skillbill.review.context.model.packet.ReviewExpansionRecord
 
 internal fun ReviewRevision.toEnvelope(): Map<String, Any?> =
   linkedMapOf(

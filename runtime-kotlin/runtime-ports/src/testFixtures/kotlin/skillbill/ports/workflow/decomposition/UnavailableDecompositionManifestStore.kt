@@ -19,6 +19,8 @@ object UnavailableDecompositionManifestStore : DecompositionManifestStore {
 
   override fun listDirectChildDirectories(directory: Path): List<Path> = unavailableDecompositionManifestStore()
 
+  override fun listTree(directory: Path): List<Path> = unavailableDecompositionManifestStore()
+
   override fun writeTextAtomically(
     target: Path,
     content: String,

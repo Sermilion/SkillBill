@@ -317,18 +317,22 @@ Follow-up bundles, each its own PR that leaves main usable:
 ## Fixture ledger
 
 Subtask 1 captures every skeleton fixture. Every later subtask diffs against the
-latest baseline. Only the subtasks below may change a fixture. Each of them commits the
+latest baseline. Only the subtasks and authorized follow-up changes below may change a fixture. Each of them commits the
 re-baselined fixture in the same commit, and the fixture diff contains only the
 listed change.
 
 | Fixture | Re-baselined by | Allowed change |
 | --- | --- | --- |
+| review output and consuming handoffs in full-run fixtures | 2026-10-03 operator-requested durable schema migration | seed current output version 0.7; historical migration fixtures retain their explicit source versions |
 | validate prompt, phase record, and consuming handoffs | 4 | uniform output; the shrink decision reads the `progress` / `no_progress` verdict |
 | write_history and pr prompts, phase records, and consuming handoffs | 5 | uniform output; history and PR facts measured by the runtime |
 | output-contract section of every non-review step prompt, and those steps' phase records | 5 | the "validated schema gate" JSON contract replaced by the minimal settlement instruction; stored envelopes keep only settlement fields |
 | `skill-bill code-review` output | 8 | both modes now run the whole `code_review` slot and fix: inline through `InlineReviewStrategy`, delegated through verify_findings and implement_fix after the multi-agent review |
 | pr and write_history step prompts | 11 | the "Invoke bill-pr-description …" and "Invoke bill-boundary-history inline …" directives replaced by strategy-owned rules |
 | Phase-run outputs | first captured by the subtask that adds the program | none in this bundle; SKILL-383 replaces retired skill names |
+| archived revision-one audit execution descriptors | 2026-10-03 operator-requested audit compatibility mapping | retain snapshots from `8527efaee` as migration rejection and admission fixtures; restore normalized digests from policy identities in tests |
+| full-run audit prompts and execution descriptors, archived revision-two descriptors | 2026-10-03 operator-requested prose repair planning | remove mandatory plan headings and labels, retain prose handoffs, record audit strategy revision 3, and preserve revision-two fixtures for checked migration |
+| full-run workflow execution descriptors and audit prompts | 2026-10-03 operator-requested audit repair planning | add read-only `audit_plan_fix` before repair, require its saved output, route the audit edge through it, and record acceptance-audit strategy revision 2 |
 
 ## Self-sufficient execution
 

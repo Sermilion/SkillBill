@@ -1,0 +1,43 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-392"
+feature_name: "runtime-cli-boundary-cleanup"
+parent_spec_path: ".feature-specs/SKILL-392-runtime-cli-boundary-cleanup/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "base/SKILL-380-phase-slot-strategies"
+feature_branch: "feat/SKILL-392-runtime-cli-boundary-cleanup"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "cli-composition-and-guard-integrity"
+  spec_path: ".feature-specs/SKILL-392-runtime-cli-boundary-cleanup/spec_subtask_1_cli-composition-and-guard-integrity.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261001-171513-5c81"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 2
+  name: "engine-owned-feature-task-run"
+  spec_path: ".feature-specs/SKILL-392-runtime-cli-boundary-cleanup/spec_subtask_2_engine-owned-feature-task-run.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261001-174348-vzp7"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false

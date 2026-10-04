@@ -7,7 +7,7 @@ import skillbill.error.featuretask.PhaseIntakeRequiredError
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
 import skillbill.ports.featurespec.model.FeatureSpecPathResolveInput
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.skeleton.PhaseIntakeRequirement
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -26,7 +26,10 @@ class PhaseRunIntakeResolver(
     val intake = request.intake?.trim().orEmpty()
     val tokens = intake.split(WHITESPACE).filter(String::isNotBlank)
     val specPath = tokens.firstOrNull { it.endsWith(SPEC_EXTENSION) }?.let(request.repoRoot::resolve)
-    val issueKey = tokens.firstOrNull(ISSUE_KEY::matches)?.uppercase() ?: specPath?.let(::issueKeyOfSpecPath)
+    val issueKey =
+      tokens.firstOrNull(ISSUE_KEY::matches)?.uppercase()
+        ?: tokens.firstNotNullOfOrNull(::issueKeyOfUrl)
+        ?: specPath?.let(::issueKeyOfSpecPath)
     val reviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT
     return when (definition.intake) {
       PhaseIntakeRequirement.OPTIONAL ->
@@ -44,7 +47,7 @@ class PhaseRunIntakeResolver(
         val key =
           issueKey ?: throw PhaseIntakeRequiredError(
             definition.id,
-            "the intake must name an issue key such as SKILL-123, or a spec path under " +
+            "the intake must name an issue key such as SKILL-123, an issue URL, or a spec path under " +
               ".feature-specs/<KEY>-<name>/.",
           )
         val invariants =
@@ -86,6 +89,16 @@ class PhaseRunIntakeResolver(
       .firstOrNull { (parent, _) -> parent == FEATURE_SPECS_DIRECTORY }
       ?.let { (_, directory) -> issueAndFeature(directory).first.takeIf(ISSUE_KEY::matches) }
 
+  private fun issueKeyOfUrl(token: String): String? =
+    token.takeIf { it.contains(URL_SCHEME_SEPARATOR) }
+      ?.substringAfter(URL_SCHEME_SEPARATOR)
+      ?.substringBefore('?')
+      ?.substringBefore('#')
+      ?.split('/')
+      ?.drop(1)
+      ?.firstOrNull(ISSUE_KEY::matches)
+      ?.uppercase()
+
   private fun issueKeyOfBranch(branch: String): String? {
     val leaf = branch.substringAfterLast('/')
     return ISSUE_KEY.matchEntire(leaf)?.value?.uppercase()
@@ -96,6 +109,7 @@ class PhaseRunIntakeResolver(
     val WHITESPACE = Regex("\\s+")
     val ISSUE_KEY = Regex("(?i)$TRACKER_STYLE_ISSUE_KEY_PATTERN")
     const val SPEC_EXTENSION = ".md"
+    const val URL_SCHEME_SEPARATOR = "://"
     const val FEATURE_SPECS_DIRECTORY = ".feature-specs"
     const val PHASE_SPEC_PREFIX = "phase:"
     const val PHASE_ACCEPTANCE_CRITERION = "The phase leaves no unresolved Blocker or Major finding."

@@ -2,7 +2,6 @@ package skillbill.mcp.core
 
 import skillbill.application.telemetry.validation.featureVerifyCompletionStatuses
 import skillbill.application.telemetry.validation.qualityCheckResults
-import skillbill.contracts.mcp.McpToolPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.mcp.featuretask.featureTaskPhaseBlock
 import skillbill.mcp.featuretask.featureTaskPhaseComplete
@@ -22,6 +21,7 @@ import skillbill.mcp.scaffold.newSkillScaffold
 import skillbill.mcp.shared.McpComponent
 import skillbill.mcp.shared.McpProtocolFramer
 import skillbill.mcp.shared.McpToolArguments
+import skillbill.mcp.shared.McpToolPayloadKeys
 import skillbill.mcp.system.doctor
 import skillbill.mcp.system.updateCheck
 import skillbill.mcp.telemetry.telemetryProxyCapabilities
@@ -80,7 +80,7 @@ internal object McpToolRegistry {
         description = "Record completion of a feature-verify session.",
         handler = ::featureVerifyFinished,
         runtimeOwnedArgumentKeys = setOf(LifecycleTelemetryPayloadKeys.DURATION_SECONDS_AVAILABILITY),
-        advertisedEnumSubset = McpToolPayloadKeys.COMPLETION_STATUS to featureVerifyCompletionStatuses,
+        advertisedEnumSubset = LifecycleTelemetryPayloadKeys.COMPLETION_STATUS to featureVerifyCompletionStatuses,
       ),
       McpTool(
         name = "feature_verify_stats",
@@ -159,7 +159,7 @@ internal object McpToolRegistry {
             LifecycleTelemetryPayloadKeys.FINAL_FAILURE_COUNT_AVAILABILITY,
             LifecycleTelemetryPayloadKeys.STALE_REASON,
           ),
-        advertisedEnumSubset = McpToolPayloadKeys.RESULT to qualityCheckResults,
+        advertisedEnumSubset = LifecycleTelemetryPayloadKeys.RESULT to qualityCheckResults,
       ),
       McpTool(
         name = "quality_check_started",

@@ -5,8 +5,8 @@ import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseStepDescription
 import skillbill.engine.featuretask.slot.PhaseStrategy
-import skillbill.engine.featuretask.slot.phaseEnvelopeDecoder
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseAgentExecution
 import skillbill.error.featuretask.UnknownPhaseStepError
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
@@ -15,18 +15,19 @@ internal fun PhaseStrategy.promptSource(stepId: String): PhaseStepPromptSource =
 
 internal fun PhaseStrategy.stepCall(
   run: PhaseRun,
-  state: PhaseStepState,
+  state: PhaseAcceptedStepExecution,
 ): PhaseStepCall =
   PhaseStepCall(
-    PhaseStepDescription(run.phaseId, promptSource(run.phaseId), policyFor(run.phaseId), phaseEnvelopeDecoder),
-    runner,
+    PhaseStepDescription(run.phaseId, promptSource(run.phaseId), policyFor(run.phaseId)),
     state,
+    run.request,
+    strategyId,
   )
 
 internal fun PhaseStrategy.runAgentStep(
   run: PhaseRun,
-  state: PhaseStepState,
-): PhaseOutcome = state.attemptLoop.run(run, stepCall(run, state))
+  state: PhaseAcceptedStepExecution,
+): PhaseOutcome = (state as PhaseAgentExecution).runAcceptedAgentStep(run, stepCall(run, state))
 
 internal fun Map<String, PhaseStepPolicy>.policyOf(stepId: String): PhaseStepPolicy =
   this[stepId] ?: throw UnknownPhaseStepError(stepId)

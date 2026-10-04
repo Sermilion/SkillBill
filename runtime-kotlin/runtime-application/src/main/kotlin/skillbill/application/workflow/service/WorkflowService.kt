@@ -2,7 +2,10 @@ package skillbill.application.workflow.service
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.DecompositionManifestWriter
+import skillbill.application.decomposition.clearDecompositionManifestProjectionFailure
+import skillbill.application.decomposition.model.DecompositionManifestProjectionFailurePersistence
 import skillbill.application.decomposition.model.RetryDecompositionManifestProjectionArgs
+import skillbill.application.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.application.decomposition.retryDecompositionManifestProjectionFromAuthoritativeState
 import skillbill.application.workflow.decomposition.DecompositionWorkflowContinuation
 import skillbill.application.workflow.decomposition.PendingDecompositionProjection
@@ -34,18 +37,17 @@ import skillbill.application.workflow.persist.resolveEffectiveSessionId
 import skillbill.application.workflow.persist.toWorkflowUpdateInput
 import skillbill.application.workflow.persist.withGoalObservabilityArtifacts
 import skillbill.contracts.issuekey.normalizeIssueKey
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.workflow.WorkflowSnapshotValidator
-import skillbill.ports.workflow.decomposition.DecompositionManifestProjectionFailurePersistence
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.clearDecompositionManifestProjectionFailure
-import skillbill.ports.workflow.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -57,8 +59,8 @@ import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskWorkflowMode
-import skillbill.workflow.model.goalreview.GoalObservabilityEvent
-import skillbill.workflow.model.goalreview.goalObservabilityLatestEventFromArtifacts
+import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
+import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
 import java.time.Clock
 import kotlin.random.Random
 
@@ -133,13 +135,15 @@ class WorkflowService(
           stepId = stepId,
           issueKey = args.issueKey,
           executionIdentity = executionIdentity,
+          executionPlan = args.executionPlan,
           engine = engine,
           workflowSnapshotValidator = workflowSnapshotValidator,
           repositoryCheckpointIdentity = ::repositoryCheckpointIdentity,
           database = database,
         ),
       ).withGoalObservability()
-    } catch (error: InvalidWorkflowStateSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isInvalidWorkflowStateFailure())
       WorkflowOpenResult.Error(workflowId, error.message.orEmpty())
     }
   }
@@ -161,7 +165,8 @@ class WorkflowService(
     val input =
       try {
         request.toWorkflowUpdateInput().copy(terminalInstant = clock.instant())
-      } catch (error: InvalidWorkflowStateSchemaError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isInvalidWorkflowStateFailure())
         return WorkflowUpdateResult.Error(request.workflowId, error.message.orEmpty())
       }
     val persisted =
@@ -169,7 +174,8 @@ class WorkflowService(
         database.transaction { unitOfWork ->
           persistUpdate(family, request, input, unitOfWork)
         }
-      } catch (error: InvalidWorkflowStateSchemaError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isInvalidWorkflowStateFailure())
         return WorkflowUpdateResult.Error(request.workflowId, error.message.orEmpty())
       }
     persisted.pendingProjection?.let { pending ->

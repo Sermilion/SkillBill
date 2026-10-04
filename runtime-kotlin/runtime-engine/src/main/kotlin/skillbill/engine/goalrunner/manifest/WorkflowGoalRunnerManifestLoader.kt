@@ -1,18 +1,17 @@
 package skillbill.engine.goalrunner.manifest
 
+import skillbill.application.decomposition.resolveDecompositionManifest
+import skillbill.application.workflow.decomposition.findDecomposedParentOrCorruptFallback
+import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.application.workflow.decomposition.requireRuntimeModeForEngineWrite
 import skillbill.application.workflow.persist.generateWorkflowId
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.goalrunner.GoalParentProjectionWriter
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.findDecomposedParentOrCorruptFallback
-import skillbill.ports.workflow.decomposition.findDecomposedParentWorkflow
-import skillbill.ports.workflow.decomposition.resolveDecompositionManifest
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
@@ -20,7 +19,6 @@ import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.withParentStatus
 import skillbill.workflow.engine.WorkflowEngine
-import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.DecompositionStatus
@@ -54,28 +52,32 @@ internal class WorkflowGoalRunnerManifestLoader(
   fun loadFromWorkflowStore(
     issueKey: String,
     currentProjectedManifest: DecompositionManifest? = null,
+    repositoryIdentity: String? = null,
   ): GoalRunnerManifestState? =
     database.read { unitOfWork ->
-      loadFromWorkflowUnitOfWork(unitOfWork, issueKey, currentProjectedManifest)
+      loadFromWorkflowUnitOfWork(unitOfWork, issueKey, currentProjectedManifest, repositoryIdentity)
     }
 
   fun loadFromWorkflowStoreIfPresent(
     issueKey: String,
     currentProjectedManifest: DecompositionManifest? = null,
+    repositoryIdentity: String? = null,
   ): GoalRunnerManifestState? =
     database.readIfPresent { unitOfWork ->
-      loadFromWorkflowUnitOfWork(unitOfWork, issueKey, currentProjectedManifest)
+      loadFromWorkflowUnitOfWork(unitOfWork, issueKey, currentProjectedManifest, repositoryIdentity)
     }
 
   fun loadFromWorkflowUnitOfWork(
     unitOfWork: UnitOfWork,
     issueKey: String,
     currentProjectedManifest: DecompositionManifest?,
+    repositoryIdentity: String?,
   ): GoalRunnerManifestState? {
     val record =
       unitOfWork.workflowStates.findDecomposedParentWorkflow(
         issueKey,
         currentProjectedManifest,
+        repositoryIdentity,
       ) ?: return null
     val snapshot = record.toSnapshot()
     val manifest = snapshot.decompositionRuntime() ?: return null
@@ -87,12 +89,16 @@ internal class WorkflowGoalRunnerManifestLoader(
     )
   }
 
-  fun importFromManifestProjection(manifest: DecompositionManifest): GoalRunnerManifestState? =
+  fun importFromManifestProjection(
+    manifest: DecompositionManifest,
+    repositoryIdentity: String? = null,
+  ): GoalRunnerManifestState? =
     database.transaction { unitOfWork ->
       val existingRecord =
         unitOfWork.workflowStates.findDecomposedParentOrCorruptFallback(
           manifest.issueKey,
           manifest,
+          repositoryIdentity,
         )
       existingRecord?.requireRuntimeModeForEngineWrite()
       val existing = existingRecord?.toSnapshot()
@@ -129,7 +135,7 @@ internal class WorkflowGoalRunnerManifestLoader(
                   ),
                 )
               },
-            artifactsPatch = WorkflowArtifactPatch.from(parentProjection.artifacts(manifest, base.artifacts)),
+            artifactsPatch = parentProjection.artifacts(manifest, base.artifacts),
             sessionId = base.sessionId.orEmpty(),
             replaceArtifacts = true,
           ),

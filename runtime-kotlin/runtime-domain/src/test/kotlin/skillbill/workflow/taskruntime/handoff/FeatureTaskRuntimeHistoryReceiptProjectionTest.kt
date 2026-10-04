@@ -1,11 +1,10 @@
 package skillbill.workflow.taskruntime.handoff
 
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeResolvedUpstreamOutputs
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjection
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionValue
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeResolvedUpstreamOutputs
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 import kotlin.test.Test
@@ -58,12 +57,9 @@ class FeatureTaskRuntimeHistoryReceiptProjectionTest {
     val upstream =
       FeatureTaskRuntimeResolvedUpstreamOutputs(
         mapOf(
-          def.PHASE_IMPLEMENT to
-            FeatureTaskRuntimePhaseOutput(def.PHASE_IMPLEMENT, 1, """{"produced_outputs":{"value":"implemented"}}"""),
-          def.PHASE_VALIDATE to
-            FeatureTaskRuntimePhaseOutput(def.PHASE_VALIDATE, 1, HANDOFF_VALIDATOR_VALIDATION_PHASE_PAYLOAD),
-          def.PHASE_WRITE_HISTORY to
-            FeatureTaskRuntimePhaseOutput(def.PHASE_WRITE_HISTORY, 1, writeHistoryPayload),
+          def.PHASE_IMPLEMENT to proseOutput(def.PHASE_IMPLEMENT, "implemented"),
+          def.PHASE_VALIDATE to recordedPhaseOutput(def.PHASE_VALIDATE, HANDOFF_VALIDATOR_VALIDATION_PHASE_PAYLOAD),
+          def.PHASE_WRITE_HISTORY to recordedPhaseOutput(def.PHASE_WRITE_HISTORY, writeHistoryPayload),
         ),
       )
     val checkpoint = FeatureTaskRuntimeRepositoryCheckpoint("tree-1", workingTreeOwnedPaths = listOf("src/A.kt"))

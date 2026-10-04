@@ -4,12 +4,13 @@ package skillbill.skillremove
 import skillbill.model.FileLocation
 import skillbill.skillremove.model.SkillRemovalRefusalReason
 import skillbill.skillremove.model.SkillRemovalRequest
+import skillbill.skillremove.model.SkillRemovalResult
 import skillbill.skillremove.model.SkillRemovalTarget
 
 object TargetValidation {
   private val NAME_REGEX: Regex = Regex("^[A-Za-z0-9._-]+$")
 
-  fun validateOrRefuse(request: SkillRemovalRequest) {
+  fun refusal(request: SkillRemovalRequest): SkillRemovalResult.Refused? {
     val repoRoot = FileLocation(request.repoRootAbsolutePath).normalized()
     val problem: String? =
       when (val target = request.target) {
@@ -20,9 +21,7 @@ object TargetValidation {
           nameProblem(target.platform, "platform")
             ?: validateExternalAddOnPaths(target.sourceRootAbsolutePath, target.fileName)
       }
-    if (problem != null) {
-      throw SkillRemovalRefusedException(SkillRemovalRefusalReason.INVALID_TARGET, problem)
-    }
+    return problem?.let { SkillRemovalResult.Refused(SkillRemovalRefusalReason.INVALID_TARGET, it) }
   }
 
   private fun nameProblem(

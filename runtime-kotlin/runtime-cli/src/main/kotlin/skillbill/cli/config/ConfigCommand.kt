@@ -9,11 +9,14 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.DocumentedNoOpCliCommand
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.cli.model.CliRunInputs
 import skillbill.config.model.SpecType
 import skillbill.config.model.parseSpecType
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 
 @Inject
 class ConfigCommand(
@@ -62,13 +65,14 @@ class ConfigResolveSpecTypeCommand(
     val resolved =
       try {
         configResolutionService.resolveSpecType(resolveCliRepositoryRoot(repoRoot, inputs), explicit.value)
-      } catch (error: ShellContentContractException) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isShellContentContractFailure())
         state.completeText("${error.message}\n", failurePayload(error.message), exitCode = 1)
         return
       }
     state.completeText(
       "${resolved.id}\n",
-      mapOf(SharedPayloadKeys.STATUS to "ok", "spec_type" to resolved.id),
+      mapOf(SharedPayloadKeys.STATUS to CliPayloadStatus.OK, "spec_type" to resolved.id),
     )
   }
 

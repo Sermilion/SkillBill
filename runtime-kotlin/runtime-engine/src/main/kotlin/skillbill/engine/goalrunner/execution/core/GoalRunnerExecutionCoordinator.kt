@@ -1,12 +1,12 @@
 package skillbill.engine.goalrunner.execution.core
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.core.SkillBillRuntimeException
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
 import skillbill.ports.process.DaemonThreadPort
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.process.ShutdownHookPort
@@ -24,12 +24,37 @@ interface GoalRunnerExecutionCoordinator {
   fun <T> runOwned(
     parentWorkflowId: String,
     block: () -> T,
-  ): T
+  ): GoalRunnerOwnedRun<T>
+
+  fun <T> runOwnedWithChildAdmission(
+    parentWorkflowId: String,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission,
+    block: () -> T,
+  ): GoalRunnerOwnedRun<T>
 }
 
-class GoalRunnerExecutionAlreadyRunningException(parentWorkflowId: String, detail: String) : SkillBillRuntimeException(
-  "Goal parent '$parentWorkflowId' cannot start: $detail",
-)
+sealed interface GoalRunnerOwnedRun<out T> {
+  data class Completed<T>(val value: T) : GoalRunnerOwnedRun<T>
+
+  data class AlreadyRunning(val reason: String) : GoalRunnerOwnedRun<Nothing>
+}
+
+private fun alreadyRunningReason(
+  parentWorkflowId: String,
+  detail: String,
+): String = "Goal parent '$parentWorkflowId' cannot start: $detail"
+
+private sealed interface LeaseClaim {
+  data class Reclaimable(val ownerToken: String) : LeaseClaim
+
+  data class Blocked(val detail: String) : LeaseClaim
+}
+
+private sealed interface LeaseAcquisition {
+  data class Acquired(val lease: GoalRunnerExecutionLease) : LeaseAcquisition
+
+  data class AlreadyRunning(val reason: String) : LeaseAcquisition
+}
 
 fun GoalRunnerExecutionLease.asWorkerOwnership(parentWorkflowId: String) =
   FeatureTaskRuntimeWorkerOwnership(
@@ -59,32 +84,67 @@ class DefaultGoalRunnerExecutionCoordinator(
   override fun <T> runOwned(
     parentWorkflowId: String,
     block: () -> T,
-  ): T {
-    val lease = acquireLease(parentWorkflowId)
-    return runWithLease(parentWorkflowId, lease, block)
-  }
+  ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId, null, block)
 
-  private fun acquireLease(parentWorkflowId: String): GoalRunnerExecutionLease {
+  override fun <T> runOwnedWithChildAdmission(
+    parentWorkflowId: String,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission,
+    block: () -> T,
+  ): GoalRunnerOwnedRun<T> = runOwned(parentWorkflowId, childAdmission, block)
+
+  private fun <T> runOwned(
+    parentWorkflowId: String,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission?,
+    block: () -> T,
+  ): GoalRunnerOwnedRun<T> =
+    when (val acquisition = acquireLease(parentWorkflowId, childAdmission)) {
+      is LeaseAcquisition.AlreadyRunning -> GoalRunnerOwnedRun.AlreadyRunning(acquisition.reason)
+      is LeaseAcquisition.Acquired -> runWithLease(parentWorkflowId, acquisition.lease, block)
+    }
+
+  private fun acquireLease(
+    parentWorkflowId: String,
+    childAdmission: GoalRunnerChildExecutionPlanAdmission?,
+  ): LeaseAcquisition {
     val existing = manifestStore.executionLease(parentWorkflowId)
-    val expectedOwnerToken = existing?.let { reclaimableOwnerToken(parentWorkflowId, it) }
+    val expectedOwnerToken =
+      when (val claim = existing?.let { reclaimableOwnerToken(parentWorkflowId, it) }) {
+        null -> null
+        is LeaseClaim.Reclaimable -> claim.ownerToken
+        is LeaseClaim.Blocked ->
+          return LeaseAcquisition.AlreadyRunning(alreadyRunningReason(parentWorkflowId, claim.detail))
+      }
     val lease = newLease(existing, supervisor.currentProcess())
-    if (!manifestStore.acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken)) {
-      throw GoalRunnerExecutionAlreadyRunningException(
-        parentWorkflowId,
-        "another goal runner claimed the execution lease before this run could start",
+    val acquired =
+      if (childAdmission == null) {
+        manifestStore.acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken)
+      } else {
+        manifestStore.acquireExecutionLeaseWithChildAdmission(
+          parentWorkflowId,
+          lease,
+          expectedOwnerToken,
+          childAdmission,
+        )
+      }
+    if (!acquired) {
+      return LeaseAcquisition.AlreadyRunning(
+        alreadyRunningReason(
+          parentWorkflowId,
+          "another goal runner claimed the execution lease before this run could start",
+        ),
       )
     }
     if (existing != null && leaseIsExpired(existing)) {
       clearStalePauseOrReleaseLease(parentWorkflowId, lease)
     }
-    return lease
+    return LeaseAcquisition.Acquired(lease)
   }
 
   private fun <T> runWithLease(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
     block: () -> T,
-  ): T {
+  ): GoalRunnerOwnedRun<T> {
     val plan =
       FeatureTaskRuntimeHeartbeatPlan(
         label = parentWorkflowId,
@@ -132,21 +192,17 @@ class DefaultGoalRunnerExecutionCoordinator(
     bodyResult: Result<T>,
     teardownFailure: Throwable?,
     heartbeat: FeatureTaskRuntimeHeartbeat,
-  ): T {
+  ): GoalRunnerOwnedRun<T> {
     val bodyFailure = bodyResult.exceptionOrNull()
-    val fencingFailure =
-      heartbeat.fencingLostReason()?.let { reason ->
-        GoalRunnerExecutionAlreadyRunningException(parentWorkflowId, reason)
-      }
-    val failure =
-      bodyFailure?.also { primary ->
-        teardownFailure?.let { secondary -> addSuppressedIfDistinct(primary, secondary) }
-      } ?: fencingFailure?.also { primary ->
-        teardownFailure?.let { secondary -> addSuppressedIfDistinct(primary, secondary) }
-      }
-        ?: teardownFailure
-    failure?.let { throw it }
-    return bodyResult.getOrThrow()
+    if (bodyFailure != null) {
+      teardownFailure?.let { secondary -> addSuppressedIfDistinct(bodyFailure, secondary) }
+      throw bodyFailure
+    }
+    heartbeat.fencingLostReason()?.let { reason ->
+      return GoalRunnerOwnedRun.AlreadyRunning(alreadyRunningReason(parentWorkflowId, reason))
+    }
+    teardownFailure?.let { throw it }
+    return GoalRunnerOwnedRun.Completed(bodyResult.getOrThrow())
   }
 
   private fun startHeartbeat(
@@ -273,40 +329,33 @@ class DefaultGoalRunnerExecutionCoordinator(
   private fun reclaimableOwnerToken(
     parentWorkflowId: String,
     existing: GoalRunnerExecutionLease,
-  ): String {
-    if (leaseIsExpired(existing)) return existing.ownerToken
+  ): LeaseClaim {
+    if (leaseIsExpired(existing)) return LeaseClaim.Reclaimable(existing.ownerToken)
     val ownership = existing.asWorkerOwnership(parentWorkflowId)
     return when (supervisor.inspect(ownership)) {
-      FeatureTaskRuntimeProcessInspection.NotRunning -> existing.ownerToken
-      FeatureTaskRuntimeProcessInspection.ExactLive ->
-        reclaimAfterLiveOwner(parentWorkflowId, existing, ownership)
-      is FeatureTaskRuntimeProcessInspection.OwnershipMismatch ->
-        cannotStart(parentWorkflowId, "the existing process owner is ambiguous")
-      is FeatureTaskRuntimeProcessInspection.Unsupported ->
-        cannotStart(parentWorkflowId, "the existing process owner cannot be inspected")
+      FeatureTaskRuntimeProcessInspection.NotRunning -> LeaseClaim.Reclaimable(existing.ownerToken)
+      FeatureTaskRuntimeProcessInspection.ExactLive -> reclaimAfterLiveOwner(existing, ownership)
+      is FeatureTaskRuntimeProcessInspection.OwnershipMismatch -> blockedClaim(OWNER_AMBIGUOUS)
+      is FeatureTaskRuntimeProcessInspection.Unsupported -> blockedClaim(OWNER_UNINSPECTABLE)
     }
   }
 
   private fun reclaimAfterLiveOwner(
-    parentWorkflowId: String,
     existing: GoalRunnerExecutionLease,
     ownership: FeatureTaskRuntimeWorkerOwnership,
-  ): String {
+  ): LeaseClaim {
     if (isCurrentProcess(existing)) {
-      cannotStart(parentWorkflowId, "this process already owns the execution lease")
+      return blockedClaim("this process already owns the execution lease")
     }
     if (!isDuplicateLaunchRace(existing)) {
-      cannotStart(parentWorkflowId, "another goal runner process is live")
+      return blockedClaim(OWNER_LIVE)
     }
     supervisor.awaitExit(ownership, DUPLICATE_LAUNCH_WINDOW)
     return when (supervisor.inspect(ownership)) {
-      FeatureTaskRuntimeProcessInspection.NotRunning -> existing.ownerToken
-      FeatureTaskRuntimeProcessInspection.ExactLive ->
-        cannotStart(parentWorkflowId, "another goal runner process is live")
-      is FeatureTaskRuntimeProcessInspection.OwnershipMismatch ->
-        cannotStart(parentWorkflowId, "the existing process owner is ambiguous")
-      is FeatureTaskRuntimeProcessInspection.Unsupported ->
-        cannotStart(parentWorkflowId, "the existing process owner cannot be inspected")
+      FeatureTaskRuntimeProcessInspection.NotRunning -> LeaseClaim.Reclaimable(existing.ownerToken)
+      FeatureTaskRuntimeProcessInspection.ExactLive -> blockedClaim(OWNER_LIVE)
+      is FeatureTaskRuntimeProcessInspection.OwnershipMismatch -> blockedClaim(OWNER_AMBIGUOUS)
+      is FeatureTaskRuntimeProcessInspection.Unsupported -> blockedClaim(OWNER_UNINSPECTABLE)
     }
   }
 
@@ -321,10 +370,7 @@ class DefaultGoalRunnerExecutionCoordinator(
     return ageMs in 0 until DUPLICATE_LAUNCH_WINDOW.toMillis()
   }
 
-  private fun cannotStart(
-    parentWorkflowId: String,
-    detail: String,
-  ): Nothing = throw GoalRunnerExecutionAlreadyRunningException(parentWorkflowId, detail)
+  private fun blockedClaim(detail: String): LeaseClaim = LeaseClaim.Blocked(detail)
 
   private fun newLease(
     existing: GoalRunnerExecutionLease?,
@@ -347,6 +393,9 @@ class DefaultGoalRunnerExecutionCoordinator(
     val LEASE_DURATION: Duration = Duration.ofSeconds(30)
     val DUPLICATE_LAUNCH_WINDOW: Duration = Duration.ofSeconds(60)
     const val HEARTBEAT_SECONDS: Long = 10
+    const val OWNER_AMBIGUOUS = "the existing process owner is ambiguous"
+    const val OWNER_UNINSPECTABLE = "the existing process owner cannot be inspected"
+    const val OWNER_LIVE = "another goal runner process is live"
 
     val SHUTDOWN_WRITE_BUDGET: Duration = Duration.ofSeconds(2)
   }

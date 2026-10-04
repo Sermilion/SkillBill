@@ -1,160 +1,74 @@
 package skillbill.cli.scaffold.commands
 
-import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.install.ExternalAddonOverlayService
-import skillbill.application.scaffold.InstallAgentService
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.formatOption
-import skillbill.cli.model.CliRunInputs
-import skillbill.cli.scaffold.payload.createAndFillResult
-import skillbill.cli.scaffold.payload.errorResult
+import skillbill.cli.scaffold.payload.CreateAndFillContentArgs
+import skillbill.cli.scaffold.payload.NativeScaffoldPayloadRun
+import skillbill.cli.scaffold.payload.NativeScaffoldRunOptions
+import skillbill.cli.scaffold.payload.NewAddonPayloadArgs
+import skillbill.cli.scaffold.payload.completeScaffoldError
+import skillbill.cli.scaffold.payload.completeUnsupportedScaffold
 import skillbill.cli.scaffold.payload.newAddonPayload
-import skillbill.cli.scaffold.payload.runNativeScaffoldPayload
-import skillbill.cli.scaffold.payload.unsupportedNativeScaffoldResult
-import skillbill.cli.scaffold.wizard.runNativeAssistedScaffoldWizard
-import skillbill.cli.scaffold.wizard.runNativeScaffoldWizard
-import skillbill.ports.scaffold.ScaffoldCatalogGateway
-import skillbill.ports.scaffold.ScaffoldGateway
-import skillbill.ports.scaffold.UnsupportedScaffoldGateway
-import java.time.Clock
+import skillbill.cli.scaffold.payload.retiredInteractiveModeMessage
+import skillbill.cli.scaffold.wizard.ScaffoldWizardRun
 
-@Inject
-data class ScaffoldNewDependencies(
-  val clock: Clock,
-  val scaffoldGateway: ScaffoldGateway,
-  val scaffoldCatalogGateway: ScaffoldCatalogGateway,
-  val installAgentService: InstallAgentService,
-  val externalAddonOverlayService: ExternalAddonOverlayService,
-)
+abstract class NewSkillScaffoldCommand(
+  name: String,
+  private val state: CliRunState,
+  private val payloadRun: NativeScaffoldPayloadRun,
+  private val wizardRun: ScaffoldWizardRun,
+) : DocumentedCliCommand(name, "Scaffold a new skill from a short wizard or payload file.") {
+  private val payload by option("--payload", help = "Path to a JSON payload file (or '-' for stdin).")
+  private val interactive by option(
+    "--interactive",
+    help = "Run the prompt wizard. This is the default when --payload is omitted.",
+  )
+    .flag(default = false)
+  private val assisted by option(
+    "--assisted",
+    help = "Run the assisted wizard. It asks for scaffold kind, agent, and the minimum required inputs.",
+  )
+    .flag(default = false)
+  private val dryRun by option("--dry-run", help = "Plan the scaffold and report the operations without touching disk.")
+    .flag(default = false)
+  private val format by formatOption()
+
+  override fun run() {
+    val options = NativeScaffoldRunOptions(dryRun = dryRun, format = format, withExternalAddonOverlay = true)
+    if (assisted && payload != null) {
+      state.completeScaffoldError("--assisted cannot be combined with --payload.", format)
+    } else if (assisted) {
+      wizardRun.runAssistedWizard(options)
+    } else if (interactive || payload == null) {
+      wizardRun.runWizard(options)
+    } else {
+      payloadRun.runPayloadFile(payload, options)
+    }
+  }
+}
 
 @Inject
 class NewSkillCommand(
-  private val state: CliRunState,
-  private val inputs: CliRunInputs,
-  private val deps: ScaffoldNewDependencies,
-) : DocumentedCliCommand("new-skill", "Scaffold a new skill from a short wizard or payload file.") {
-  private val payload by option("--payload", help = "Path to a JSON payload file (or '-' for stdin).")
-  private val interactive by option(
-    "--interactive",
-    help = "Run the prompt wizard. This is the default when --payload is omitted.",
-  )
-    .flag(default = false)
-  private val assisted by option(
-    "--assisted",
-    help = "Run the assisted wizard. It asks for scaffold kind, agent, and the minimum required inputs.",
-  )
-    .flag(default = false)
-  private val dryRun by option("--dry-run", help = "Plan the scaffold and report the operations without touching disk.")
-    .flag(default = false)
-  private val format by formatOption()
-
-  override fun run() {
-    val runArgs =
-      NativeScaffoldRunArgs(
-        dryRun = dryRun,
-        format = format,
-        state = state,
-        inputs = inputs,
-        clock = deps.clock,
-        scaffoldGateway = deps.scaffoldGateway,
-        externalAddonOverlayService = deps.externalAddonOverlayService,
-      )
-    state.result =
-      if (assisted && payload != null) {
-        errorResult("--assisted cannot be combined with --payload.", format)
-      } else if (assisted) {
-        runNativeAssistedScaffoldWizard(
-          AssistedScaffoldWizardArgs(
-            run = runArgs,
-            scaffoldCatalogGateway = deps.scaffoldCatalogGateway,
-            installAgentService = deps.installAgentService,
-          ),
-        )
-      } else if (interactive || payload == null) {
-        runNativeScaffoldWizard(
-          ScaffoldWizardArgs(
-            run = runArgs,
-            scaffoldCatalogGateway = deps.scaffoldCatalogGateway,
-          ),
-        )
-      } else {
-        runNativeScaffoldPayload(
-          NativeScaffoldPayloadPathArgs(payloadPath = payload, run = runArgs),
-        )
-      }
-  }
-}
+  state: CliRunState,
+  payloadRun: NativeScaffoldPayloadRun,
+  wizardRun: ScaffoldWizardRun,
+) : NewSkillScaffoldCommand("new-skill", state, payloadRun, wizardRun)
 
 @Inject
 class NewCommand(
-  private val state: CliRunState,
-  private val inputs: CliRunInputs,
-  private val deps: ScaffoldNewDependencies,
-) : DocumentedCliCommand("new", "Scaffold a new skill from a short wizard or payload file.") {
-  private val payload by option("--payload", help = "Path to a JSON payload file (or '-' for stdin).")
-  private val interactive by option(
-    "--interactive",
-    help = "Run the prompt wizard. This is the default when --payload is omitted.",
-  )
-    .flag(default = false)
-  private val assisted by option(
-    "--assisted",
-    help = "Run the assisted wizard. It asks for scaffold kind, agent, and the minimum required inputs.",
-  )
-    .flag(default = false)
-  private val dryRun by option("--dry-run", help = "Plan the scaffold and report the operations without touching disk.")
-    .flag(default = false)
-  private val format by formatOption()
-
-  override fun run() {
-    val runArgs =
-      NativeScaffoldRunArgs(
-        dryRun = dryRun,
-        format = format,
-        state = state,
-        inputs = inputs,
-        clock = deps.clock,
-        scaffoldGateway = deps.scaffoldGateway,
-        externalAddonOverlayService = deps.externalAddonOverlayService,
-      )
-    state.result =
-      if (assisted && payload != null) {
-        errorResult("--assisted cannot be combined with --payload.", format)
-      } else if (assisted) {
-        runNativeAssistedScaffoldWizard(
-          AssistedScaffoldWizardArgs(
-            run = runArgs,
-            scaffoldCatalogGateway = deps.scaffoldCatalogGateway,
-            installAgentService = deps.installAgentService,
-          ),
-        )
-      } else if (interactive || payload == null) {
-        runNativeScaffoldWizard(
-          ScaffoldWizardArgs(
-            run = runArgs,
-            scaffoldCatalogGateway = deps.scaffoldCatalogGateway,
-          ),
-        )
-      } else {
-        runNativeScaffoldPayload(
-          NativeScaffoldPayloadPathArgs(payloadPath = payload, run = runArgs),
-        )
-      }
-  }
-}
+  state: CliRunState,
+  payloadRun: NativeScaffoldPayloadRun,
+  wizardRun: ScaffoldWizardRun,
+) : NewSkillScaffoldCommand("new", state, payloadRun, wizardRun)
 
 @Inject
 class CreateAndFillCommand(
-  private val state: CliRunState,
-  private val inputs: CliRunInputs,
-  private val clock: Clock,
-  private val scaffoldGateway: ScaffoldGateway,
-  private val unsupportedScaffoldGateway: UnsupportedScaffoldGateway,
+  private val payloadRun: NativeScaffoldPayloadRun,
 ) : DocumentedCliCommand(
     "create-and-fill",
     "Scaffold one governed skill, then immediately author content.md and validate it.",
@@ -177,37 +91,23 @@ class CreateAndFillCommand(
   private val format by formatOption()
 
   override fun run() {
-    state.result =
-      createAndFillResult(
-        CreateAndFillArgs(
-          content =
-            CreateAndFillContentArgs(
-              payload = payload,
-              interactive = interactive,
-              body = body,
-              bodyFile = bodyFile,
-              editor = editor,
-            ),
-          dryRun = dryRun,
-          format = format,
-          state = state,
-          inputs = inputs,
-          clock = clock,
-          scaffoldGateway = scaffoldGateway,
-          unsupportedScaffoldGateway = unsupportedScaffoldGateway,
-        ),
-      )
+    payloadRun.createAndFill(
+      CreateAndFillContentArgs(
+        payload = payload,
+        interactive = interactive,
+        body = body,
+        bodyFile = bodyFile,
+        editor = editor,
+      ),
+      NativeScaffoldRunOptions(dryRun = dryRun, format = format, withExternalAddonOverlay = false),
+    )
   }
 }
 
 @Inject
 class NewAddonCommand(
   private val state: CliRunState,
-  private val inputs: CliRunInputs,
-  private val clock: Clock,
-  private val scaffoldGateway: ScaffoldGateway,
-  private val unsupportedScaffoldGateway: UnsupportedScaffoldGateway,
-  private val externalAddonOverlayService: ExternalAddonOverlayService,
+  private val payloadRun: NativeScaffoldPayloadRun,
 ) : DocumentedCliCommand(
     "new-addon",
     "Create a governed add-on file inside an existing platform pack or external add-on source.",
@@ -239,41 +139,31 @@ class NewAddonCommand(
   private val format by formatOption()
 
   override fun run() {
-    state.result =
-      if (interactive) {
-        unsupportedNativeScaffoldResult(
-          unsupportedScaffoldGateway.retiredUnsupportedMessage(
-            "new-addon --interactive",
-            "skill-bill new-addon --platform <platform> --name <name>",
-            editor = false,
+    if (interactive) {
+      state.completeUnsupportedScaffold(
+        retiredInteractiveModeMessage(
+          "new-addon --interactive",
+          "skill-bill new-addon --platform <platform> --name <name>",
+        ),
+        format,
+      )
+    } else if (body != null && bodyFile != null) {
+      state.completeScaffoldError("--body and --body-file are mutually exclusive.", format)
+    } else {
+      payloadRun.runPayload(
+        newAddonPayload(
+          NewAddonPayloadArgs(
+            platform = platform,
+            name = name,
+            body = body,
+            bodyFile = bodyFile,
+            addonLocationPath = addonLocationPath,
+            consumerSkillDirs = consumerSkillDirs,
           ),
-          format,
-        )
-      } else if (body != null && bodyFile != null) {
-        errorResult("--body and --body-file are mutually exclusive.", format)
-      } else {
-        runNativeScaffoldPayload(
-          newAddonPayload(
-            NewAddonPayloadArgs(
-              platform = platform,
-              name = name,
-              body = body,
-              bodyFile = bodyFile,
-              addonLocationPath = addonLocationPath,
-              consumerSkillDirs = consumerSkillDirs,
-              state = state,
-            ),
-          ),
-          NativeScaffoldRunArgs(
-            dryRun = dryRun,
-            format = format,
-            state = state,
-            inputs = inputs,
-            clock = clock,
-            scaffoldGateway = scaffoldGateway,
-            externalAddonOverlayService = externalAddonOverlayService,
-          ),
-        )
-      }
+          state,
+        ),
+        NativeScaffoldRunOptions(dryRun = dryRun, format = format, withExternalAddonOverlay = true),
+      )
+    }
   }
 }

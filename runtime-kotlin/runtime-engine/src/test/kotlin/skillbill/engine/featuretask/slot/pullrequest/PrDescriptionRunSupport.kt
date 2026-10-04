@@ -1,24 +1,23 @@
 package skillbill.engine.featuretask.slot.pullrequest
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
-import skillbill.engine.BranchSetupTestConfig
 import skillbill.engine.RecordingWorkflowGitOperations
-import skillbill.engine.RuntimeHarnessConfig
-import skillbill.engine.RuntimeRecordingLauncher
-import skillbill.engine.committedRepoBranchSetup
-import skillbill.engine.facts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.featuretask.phaserun.phaseRunEntry
+import skillbill.engine.featuretask.runner.BranchSetupTestConfig
+import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
+import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
+import skillbill.engine.featuretask.runner.committedRepoBranchSetup
+import skillbill.engine.featuretask.runner.facts
+import skillbill.engine.featuretask.runner.kotlinPackWithValidationGate
+import skillbill.engine.featuretask.runner.phaseIdFromPrompt
+import skillbill.engine.featuretask.runner.phasePerAgentAssignment
+import skillbill.engine.featuretask.runner.satisfiedAuditLauncher
+import skillbill.engine.featuretask.runner.telemetryRunnerHarness
+import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.engine.featuretask.validation.passed
-import skillbill.engine.kotlinPackWithValidationGate
-import skillbill.engine.phaseIdFromPrompt
-import skillbill.engine.phasePerAgentAssignment
-import skillbill.engine.satisfiedAuditLauncher
-import skillbill.engine.telemetryRunnerHarness
-import skillbill.engine.validJsonOutput
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.validation.ValidationGateRunner
@@ -63,14 +62,12 @@ internal fun standalonePrRun(
         object : ValidationGateRunner {
           override fun run(request: ValidationGateRunRequest) = passed()
         },
-      validator = realFeatureTaskRuntimePhaseOutputValidator,
       launcher = launcher,
       pullRequestIdentityLookup = lookup,
     )
   val harness =
     telemetryRunnerHarness(
       launcher = launcher,
-      validator = realFeatureTaskRuntimePhaseOutputValidator,
       runtimeConfig = config,
       databaseFactory = { database },
     )
@@ -90,19 +87,23 @@ internal fun phasePrRun(
     RuntimeRecordingLauncher { request ->
       facts(validJsonOutput(phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride))))
     }
-  val runner =
+  val config =
+    RuntimeHarnessConfig(
+      repoRoot = repoRoot,
+      launcher = launcher,
+      pullRequestIdentityLookup = lookup,
+      gitOperationsOverride = GitWorkflowGitOperations(),
+    )
+  val harness =
     telemetryRunnerHarness(
-      runtimeConfig =
-        RuntimeHarnessConfig(
-          repoRoot = repoRoot,
-          launcher = launcher,
-          pullRequestIdentityLookup = lookup,
-          gitOperationsOverride = GitWorkflowGitOperations(),
-        ),
+      runtimeConfig = config,
       databaseFactory = { database },
-    ).runner
+    )
   val request = PhaseRunRequest(definitionId = SkeletonDefinition.PR.id, repoRoot = repoRoot, invokedAgentId = "claude")
-  return PhasePrRun(phaseRunEntry(runner, database, clock).run(request), launcher)
+  return PhasePrRun(
+    phaseRunEntry(harness.strategies, config.harnessGitOperations, database, clock, harness.runLoopEntry).run(request),
+    launcher,
+  )
 }
 
 internal class PrRunRepository(private val root: Path) {

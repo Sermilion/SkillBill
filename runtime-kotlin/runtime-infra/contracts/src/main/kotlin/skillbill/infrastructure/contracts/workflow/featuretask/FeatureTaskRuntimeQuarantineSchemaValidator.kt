@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_QUARANTINE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeQuarantineSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeQuarantineSchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeQuarantineSchemaPaths
@@ -18,7 +18,7 @@ object FeatureTaskRuntimeQuarantineSchemaValidator {
     val instance: JsonNode = ClasspathContractSchemaLoader.valueToTree(payload)
     val errors: Set<ValidationMessage> = ClasspathContractSchemaLoader.validate(schema(), instance)
     if (errors.isNotEmpty()) {
-      throw InvalidFeatureTaskRuntimeQuarantineSchemaError(
+      throw invalidFeatureTaskRuntimeQuarantineSchema(
         sourceLabel = sourceLabel,
         reason = formatReason(errors),
       )
@@ -42,7 +42,7 @@ private fun schema(): JsonSchema =
       classLoader = FeatureTaskRuntimeQuarantineSchemaValidator::class.java.classLoader,
       classpathResource = FeatureTaskRuntimeQuarantineSchemaPaths.CLASSPATH_RESOURCE,
       missingResource = {
-        InvalidFeatureTaskRuntimeQuarantineSchemaError(
+        invalidFeatureTaskRuntimeQuarantineSchema(
           sourceLabel = FeatureTaskRuntimeQuarantineSchemaPaths.CLASSPATH_RESOURCE,
           reason =
             "Canonical feature-task-runtime quarantine schema is missing. Expected classpath resource " +
@@ -50,7 +50,7 @@ private fun schema(): JsonSchema =
         )
       },
       processingFailure = { cause ->
-        InvalidFeatureTaskRuntimeQuarantineSchemaError(
+        invalidFeatureTaskRuntimeQuarantineSchema(
           sourceLabel = FeatureTaskRuntimeQuarantineSchemaPaths.CLASSPATH_RESOURCE,
           reason = cause.message ?: cause::class.simpleName.orEmpty(),
           cause = cause,
@@ -60,7 +60,7 @@ private fun schema(): JsonSchema =
       expectedSchemaId = FeatureTaskRuntimeQuarantineSchemaPaths.EXPECTED_SCHEMA_ID,
       expectedContractVersion = FEATURE_TASK_RUNTIME_QUARANTINE_CONTRACT_VERSION,
       identityFailure = { reason ->
-        InvalidFeatureTaskRuntimeQuarantineSchemaError(
+        invalidFeatureTaskRuntimeQuarantineSchema(
           sourceLabel = FeatureTaskRuntimeQuarantineSchemaPaths.CLASSPATH_RESOURCE,
           reason = reason,
         )

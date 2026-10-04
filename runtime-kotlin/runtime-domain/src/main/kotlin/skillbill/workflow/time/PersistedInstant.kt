@@ -8,6 +8,10 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
 fun parsePersistedInstant(value: String): Instant =
+  parsePersistedInstantOrNull(value)
+    ?: throw IllegalArgumentException("Timestamp is not a supported persisted instant.")
+
+fun parsePersistedInstantOrNull(value: String): Instant? =
   try {
     Instant.parse(value)
   } catch (_: DateTimeParseException) {
@@ -16,8 +20,8 @@ fun parsePersistedInstant(value: String): Instant =
     } catch (_: DateTimeParseException) {
       try {
         LocalDateTime.parse(value.replace(' ', 'T'), DateTimeFormatter.ISO_LOCAL_DATE_TIME).toInstant(ZoneOffset.UTC)
-      } catch (error: DateTimeParseException) {
-        throw IllegalArgumentException("Timestamp is not a supported persisted instant.", error)
+      } catch (_: DateTimeParseException) {
+        null
       }
     }
   }

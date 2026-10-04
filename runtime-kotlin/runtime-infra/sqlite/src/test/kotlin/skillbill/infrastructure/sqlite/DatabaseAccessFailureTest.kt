@@ -1,8 +1,10 @@
 package skillbill.infrastructure.sqlite
 
 import org.sqlite.SQLiteException
-import skillbill.error.core.DatabaseAccessError
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.DatabaseFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.databaseAccessCondition
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import java.nio.file.Files
 import java.nio.file.Path
@@ -21,7 +23,7 @@ class DatabaseAccessFailureTest {
     val unopenable = unopenableDatabasePath()
 
     val error =
-      assertFailsWith<DatabaseAccessError> {
+      assertFailsWith<SkillBillRuntimeException> {
         DatabaseRuntime.openReadDb(
           cliValue = unopenable.toString(),
           environment = emptyMap(),
@@ -29,9 +31,16 @@ class DatabaseAccessFailureTest {
         )
       }
 
-    assertEquals(unopenable.toAbsolutePath().normalize().toString(), error.dbPath)
-    assertEquals(DatabaseAccessOperation.READ, error.operation)
-    assertTrue(error.condition.startsWith("sqlite result code "), error.condition)
+    assertEquals(DatabaseFailureCode.ACCESS, error.code)
+    assertTrue(
+      error.message.orEmpty().startsWith(
+        "Database ${DatabaseAccessOperation.READ.wireValue} failed for " +
+          "'${unopenable.toAbsolutePath().normalize()}': ",
+      ),
+      error.message.orEmpty(),
+    )
+    val condition = databaseAccessCondition(error)
+    assertTrue(condition.startsWith("sqlite result code "), condition)
   }
 
   @Test
@@ -48,7 +57,10 @@ class DatabaseAccessFailureTest {
       }.exceptionOrNull()
 
     assertFalse(thrown is SQLiteException, "raw JDBC exception escaped: $thrown")
-    assertTrue(thrown is DatabaseAccessError, "expected the typed error, got $thrown")
+    assertTrue(
+      (thrown as? SkillBillRuntimeException)?.code == DatabaseFailureCode.ACCESS,
+      "expected the typed error, got $thrown",
+    )
     val rendered = thrown.message.orEmpty()
     assertFalse(rendered.contains("org.sqlite"), rendered)
     assertFalse(rendered.contains("\n"), rendered)

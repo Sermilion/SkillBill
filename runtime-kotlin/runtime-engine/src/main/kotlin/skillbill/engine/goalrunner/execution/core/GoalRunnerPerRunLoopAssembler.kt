@@ -1,52 +1,25 @@
 package skillbill.engine.goalrunner.execution.core
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationPendingState
-import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
-import skillbill.engine.goalrunner.launch.GoalRunnerSubtaskLaunchPrepare
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweep
 
 @Inject
 class GoalRunnerPerRunLoopAssembler(
-  private val runBoundaries: GoalRunnerRunBoundaries,
-  private val launchBoundaries: GoalRunnerSubtaskLaunchBoundaries,
-  private val workerRequestHandler: GoalRunnerWorkerRequestHandler,
-  private val reconciler: GoalRunnerLaunchReconciler,
-  private val progressReader: GoalRunnerProgressReader,
-  private val pauseBoundary: GoalRunnerPauseBoundary,
-  private val launchPrepare: GoalRunnerSubtaskLaunchPrepare,
+  private val manifestStore: GoalRunnerManifestStore,
+  private val goalPlanningSweep: GoalPlanningSweep,
   private val finalization: GoalRunnerFinalization,
+  private val selectedSubtaskLoop: GoalRunnerSelectedSubtaskLoop,
+  private val pauseBoundary: GoalRunnerPauseBoundary,
+  private val progressReader: GoalRunnerProgressReader,
 ) {
-  internal fun assemble(pendingState: GoalRunnerIterationPendingState): GoalRunnerGoalLoop {
-    val iterationOutcome =
-      GoalRunnerIterationOutcome(
-        manifestStore = runBoundaries.manifestStore,
-        outcomeStore = runBoundaries.outcomeStore,
-        finalization = finalization,
-        unaddressedFindingsLedgerService = runBoundaries.unaddressedFindingsLedgerService,
-        progressReader = progressReader,
-        clock = runBoundaries.clock,
-        phaseQuery = runBoundaries.phaseQuery,
-        pendingState = pendingState,
-      )
-    val selectedSubtaskLoop =
-      GoalRunnerSelectedSubtaskLoop(
-        manifestStore = runBoundaries.manifestStore,
-        subtaskLauncher = launchBoundaries.subtaskLauncher,
-        reconciler = reconciler,
-        workerRequestHandler = workerRequestHandler,
-        iterationOutcome = iterationOutcome,
-        pauseBoundary = pauseBoundary,
-        launchPrepare = launchPrepare,
-        clock = runBoundaries.clock,
-        pendingState = pendingState,
-      )
-    return GoalRunnerGoalLoop(
-      runBoundaries.manifestStore,
-      runBoundaries.goalPlanningSweep,
+  internal fun assemble(): GoalRunnerGoalLoop =
+    GoalRunnerGoalLoop(
+      manifestStore,
+      goalPlanningSweep,
       finalization,
       selectedSubtaskLoop,
       pauseBoundary,
       progressReader,
     )
-  }
 }

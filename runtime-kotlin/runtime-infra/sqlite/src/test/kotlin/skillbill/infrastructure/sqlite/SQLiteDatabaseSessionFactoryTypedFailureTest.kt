@@ -1,8 +1,9 @@
 package skillbill.infrastructure.sqlite
 
 import org.sqlite.SQLiteException
-import skillbill.error.core.DatabaseAccessError
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.DatabaseFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
@@ -21,12 +22,18 @@ class SQLiteDatabaseSessionFactoryTypedFailureTest {
     val database = boundDatabase(tempDir, unopenable)
 
     val error =
-      assertFailsWith<DatabaseAccessError> {
+      assertFailsWith<SkillBillRuntimeException> {
         database.read { it.workflowStates }
       }
 
-    assertEquals(unopenable.toAbsolutePath().normalize().toString(), error.dbPath)
-    assertEquals(DatabaseAccessOperation.READ, error.operation)
+    assertEquals(DatabaseFailureCode.ACCESS, error.code)
+    assertTrue(
+      error.message.orEmpty().startsWith(
+        "Database ${DatabaseAccessOperation.READ.wireValue} failed for " +
+          "'${unopenable.toAbsolutePath().normalize()}': ",
+      ),
+      error.message.orEmpty(),
+    )
     assertFalse(error.message.orEmpty().contains("org.sqlite"), error.message.orEmpty())
   }
 
@@ -40,12 +47,18 @@ class SQLiteDatabaseSessionFactoryTypedFailureTest {
     val database = boundDatabase(tempDir, schemaless)
 
     val error =
-      assertFailsWith<DatabaseAccessError> {
+      assertFailsWith<SkillBillRuntimeException> {
         database.read { it.workflowStates.getFeatureTaskExecutionIdentity("missing") }
       }
 
-    assertEquals(DatabaseAccessOperation.READ, error.operation)
-    assertEquals(schemaless.toAbsolutePath().normalize().toString(), error.dbPath)
+    assertEquals(DatabaseFailureCode.ACCESS, error.code)
+    assertTrue(
+      error.message.orEmpty().startsWith(
+        "Database ${DatabaseAccessOperation.READ.wireValue} failed for " +
+          "'${schemaless.toAbsolutePath().normalize()}': ",
+      ),
+      error.message.orEmpty(),
+    )
     assertFalse(error.message.orEmpty().contains("org.sqlite"), error.message.orEmpty())
     assertFalse(error.message.orEmpty().contains("\n"), error.message.orEmpty())
   }
@@ -92,7 +105,10 @@ class SQLiteDatabaseSessionFactoryTypedFailureTest {
       }.exceptionOrNull()
 
     assertFalse(thrown is SQLiteException, "raw JDBC exception crossed the ports boundary: $thrown")
-    assertTrue(thrown is DatabaseAccessError, "expected the typed error, got $thrown")
+    assertTrue(
+      (thrown as? SkillBillRuntimeException)?.code == DatabaseFailureCode.ACCESS,
+      "expected the typed error, got $thrown",
+    )
   }
 
   @Test

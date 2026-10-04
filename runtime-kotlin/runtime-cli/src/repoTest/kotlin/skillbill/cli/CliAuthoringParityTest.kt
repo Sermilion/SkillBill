@@ -184,11 +184,14 @@ class CliAuthoringParityTest {
 
     listOf(
       listOf("new-addon", "--interactive", "--format", "json") to
-        "skill-bill new-addon --platform <platform> --name <name>",
+        "new-addon --interactive interactive mode was retired in SKILL-32; " +
+        "use `skill-bill new-addon --platform <platform> --name <name>` instead.",
       listOf("create-and-fill", "--interactive", "--format", "json") to
-        "skill-bill create-and-fill --payload <file> --body-file <file>",
+        "create-and-fill interactive mode was retired in SKILL-32; " +
+        "use `skill-bill create-and-fill --payload <file> --body-file <file>` instead.",
       listOf("edit", "skill-bill", "--repo-root", outerRepoRoot().toString(), "--format", "json") to
-        "skill-bill fill skill-bill --body-file <file>",
+        "edit interactive mode was retired in SKILL-32; " +
+        "use `skill-bill fill skill-bill --body-file <file>` instead.",
       listOf(
         "edit",
         "skill-bill",
@@ -197,15 +200,16 @@ class CliAuthoringParityTest {
         "--editor",
         "--format",
         "json",
-      ) to "skill-bill fill skill-bill --body-file <file>",
-    ).forEach { (arguments, replacement) ->
+      ) to
+        "edit --editor editor mode was retired in SKILL-32; " +
+        "use `skill-bill fill skill-bill --body-file <file>` instead.",
+    ).forEach { (arguments, expectedError) ->
       val result = CliRuntime.run(arguments, context)
       val payload = decodeJsonObject(result.stdout)
 
       assertEquals(1, result.exitCode, result.stdout)
       assertEquals("unsupported", payload["status"])
-      assertEquals(true, payload["error"].toString().contains("retired in SKILL-32"))
-      assertEquals(true, payload["error"].toString().contains(replacement))
+      assertEquals(expectedError, payload["error"].toString())
     }
   }
 }

@@ -6,6 +6,7 @@ import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTele
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryGoalSessionAdapter
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryMeasurementAdapter
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.session.LifecycleTelemetryQualityCheckSessionAdapter
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.telemetry.lifecycle.FeatureTaskRuntimeLifecycleTelemetryRepository
 import skillbill.ports.telemetry.lifecycle.FeatureTaskRuntimeTelemetryMeasurementRepository
 import skillbill.ports.telemetry.lifecycle.FeatureVerifyLifecycleTelemetryRepository
@@ -31,20 +32,23 @@ internal class LifecycleTelemetryStore private constructor(
     operator fun invoke(
       connection: Connection,
       runtimeVersion: String,
-    ): LifecycleTelemetryStore = LifecycleTelemetryStore(LifecycleTelemetryStoreAdapters(connection, runtimeVersion))
+      diagnostics: RuntimeDiagnostics,
+    ): LifecycleTelemetryStore =
+      LifecycleTelemetryStore(LifecycleTelemetryStoreAdapters(connection, runtimeVersion, diagnostics))
   }
 }
 
 internal class LifecycleTelemetryStoreAdapters(
   connection: Connection,
   runtimeVersion: String,
+  diagnostics: RuntimeDiagnostics,
 ) {
   val measurements = LifecycleTelemetryMeasurementAdapter(connection, runtimeVersion)
-  val featureTaskSessions = LifecycleTelemetryFeatureTaskSessionAdapter(connection, runtimeVersion)
-  val qualityCheckSessions = LifecycleTelemetryQualityCheckSessionAdapter(connection, runtimeVersion)
-  val featureVerifySessions = LifecycleTelemetryFeatureVerifySessionAdapter(connection, runtimeVersion)
+  val featureTaskSessions = LifecycleTelemetryFeatureTaskSessionAdapter(connection, runtimeVersion, diagnostics)
+  val qualityCheckSessions = LifecycleTelemetryQualityCheckSessionAdapter(connection, runtimeVersion, diagnostics)
+  val featureVerifySessions = LifecycleTelemetryFeatureVerifySessionAdapter(connection, runtimeVersion, diagnostics)
   val prDescriptionSessions = LifecycleTelemetryPrDescriptionSessionAdapter(connection, runtimeVersion)
-  val goalSessions = LifecycleTelemetryGoalSessionAdapter(connection, runtimeVersion)
+  val goalSessions = LifecycleTelemetryGoalSessionAdapter(connection, runtimeVersion, diagnostics)
 }
 
 internal class LifecycleTelemetryPrDescriptionSessionAdapter(

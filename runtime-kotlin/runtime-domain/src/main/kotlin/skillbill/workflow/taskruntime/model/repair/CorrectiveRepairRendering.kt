@@ -1,7 +1,5 @@
 package skillbill.workflow.taskruntime.model.repair
 
-import java.security.MessageDigest
-
 internal const val EMPTY_DIGEST: String =
   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
@@ -43,6 +41,3 @@ private fun uniqueCloseMarker(body: String): String {
     n += 1
   }
 }
-
-internal fun sha256Hex(bytes: ByteArray): String =
-  MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }

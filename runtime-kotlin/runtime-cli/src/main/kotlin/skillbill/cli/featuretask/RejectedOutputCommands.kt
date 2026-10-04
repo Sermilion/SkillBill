@@ -6,12 +6,17 @@ import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.int
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.diagnostics.RejectedOutputDiagnosticInspection
-import skillbill.application.diagnostics.model.RejectedOutputDiagnosticAmbiguousSelectorError
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticDeletion
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticInspectionResult
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticMetadata
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
-import skillbill.error.core.RejectedOutputDiagnosticError
+import skillbill.error.core.RejectedOutputDiagnosticFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rejectedOutputDiagnosticAbsentMessage
+import skillbill.error.core.rejectedOutputDiagnosticExpiredMessage
+import skillbill.error.core.rejectedOutputDiagnosticInvalidRequestMessage
+import skillbill.error.core.rejectedOutputDiagnosticOversizedMessage
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
 
 @Inject
@@ -36,7 +41,7 @@ class RejectedOutputInspectCliCommand(
 
   override fun run() {
     val selector = RejectedOutputDiagnosticSelector(workflowId, phaseId, attempt, repairTurn)
-    when (val result = inspect(selector)) {
+    when (val result = inspection.inspect(selector, rawOutput)) {
       is RejectedOutputDiagnosticInspectionResult.RawBytes ->
         state.completeRaw(result.bytes)
       is RejectedOutputDiagnosticInspectionResult.Metadata -> {
@@ -44,15 +49,18 @@ class RejectedOutputInspectCliCommand(
         val text = lines.joinToString("\n", postfix = if (lines.isEmpty()) "" else "\n")
         state.completeText(text, emptyMap())
       }
+      is RejectedOutputDiagnosticInspectionResult.Absent ->
+        throw retrievalFailure(rejectedOutputDiagnosticAbsentMessage(result.identity))
+      is RejectedOutputDiagnosticInspectionResult.Expired ->
+        throw retrievalFailure(rejectedOutputDiagnosticExpiredMessage(result.identity))
+      is RejectedOutputDiagnosticInspectionResult.Oversized ->
+        throw retrievalFailure(rejectedOutputDiagnosticOversizedMessage(result.identity))
+      is RejectedOutputDiagnosticInspectionResult.AmbiguousSelector ->
+        throw retrievalFailure("Rejected output diagnostic retrieval failed: $AMBIGUOUS_RAW_SELECTOR_REASON")
+      is RejectedOutputDiagnosticInspectionResult.InvalidRequest ->
+        throw invalidRequestFailure(result.reason)
     }
   }
-
-  private fun inspect(selector: RejectedOutputDiagnosticSelector): RejectedOutputDiagnosticInspectionResult =
-    try {
-      inspection.inspect(selector, rawOutput)
-    } catch (error: RejectedOutputDiagnosticAmbiguousSelectorError) {
-      throw RejectedOutputDiagnosticError.Retrieval(AMBIGUOUS_RAW_SELECTOR_REASON, error)
-    }
 }
 
 @Inject
@@ -73,12 +81,27 @@ class RejectedOutputCleanupCliCommand(
 
   override fun run() {
     val deleted =
-      inspection.cleanup(
-        RejectedOutputDiagnosticSelector(workflowId, phaseId, attempt, repairTurn),
-      )
+      when (
+        val deletion =
+          inspection.cleanup(
+            RejectedOutputDiagnosticSelector(workflowId, phaseId, attempt, repairTurn),
+          )
+      ) {
+        is RejectedOutputDiagnosticDeletion.Deleted -> deletion.count
+        is RejectedOutputDiagnosticDeletion.InvalidRequest -> throw invalidRequestFailure(deletion.reason)
+      }
     state.completeText("deleted=$deleted\n", mapOf("deleted" to deleted))
   }
 }
+
+private fun retrievalFailure(message: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(RejectedOutputDiagnosticFailureCode.RETRIEVAL, message)
+
+private fun invalidRequestFailure(reason: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    RejectedOutputDiagnosticFailureCode.INVALID_REQUEST,
+    rejectedOutputDiagnosticInvalidRequestMessage(reason),
+  )
 
 private const val AMBIGUOUS_RAW_SELECTOR_REASON: String =
   "raw output requires a selector resolving to exactly one diagnostic; " +

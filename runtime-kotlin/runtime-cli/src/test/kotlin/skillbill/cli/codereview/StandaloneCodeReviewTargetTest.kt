@@ -2,6 +2,7 @@ package skillbill.cli.codereview
 
 import com.github.ajalt.clikt.core.UsageError
 import skillbill.application.reviewevidence.model.ParallelReviewScope
+import skillbill.cli.kernel.cli.resolveStandaloneCodeReviewTarget
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -9,7 +10,7 @@ import kotlin.test.assertFailsWith
 class StandaloneCodeReviewTargetTest {
   @Test
   fun `positional pr reviews the open pull request`() {
-    val target = resolveStandaloneCodeReviewTarget("pr", DEFAULT_CODE_REVIEW_SCOPE)
+    val target = resolveStandaloneCodeReviewTarget("pr", null)
 
     assertEquals(ParallelReviewScope.PR, target.scope)
     assertEquals(null, target.commitRevision)
@@ -17,7 +18,7 @@ class StandaloneCodeReviewTargetTest {
 
   @Test
   fun `positional last reviews HEAD against its first parent`() {
-    val target = resolveStandaloneCodeReviewTarget("last", DEFAULT_CODE_REVIEW_SCOPE)
+    val target = resolveStandaloneCodeReviewTarget("last", null)
 
     assertEquals(ParallelReviewScope.BRANCH, target.scope)
     assertEquals("HEAD", target.commitRevision)
@@ -26,7 +27,7 @@ class StandaloneCodeReviewTargetTest {
   @Test
   fun `positional commit sha reviews that commit against its first parent`() {
     val sha = "abc1234"
-    val target = resolveStandaloneCodeReviewTarget(sha, DEFAULT_CODE_REVIEW_SCOPE)
+    val target = resolveStandaloneCodeReviewTarget(sha, null)
 
     assertEquals(ParallelReviewScope.BRANCH, target.scope)
     assertEquals(sha, target.commitRevision)
@@ -34,7 +35,7 @@ class StandaloneCodeReviewTargetTest {
 
   @Test
   fun `positional uncommitted reviews the dirty worktree`() {
-    val target = resolveStandaloneCodeReviewTarget("uncommitted", DEFAULT_CODE_REVIEW_SCOPE)
+    val target = resolveStandaloneCodeReviewTarget("uncommitted", null)
 
     assertEquals(ParallelReviewScope.UNCOMMITTED, target.scope)
     assertEquals(null, target.commitRevision)

@@ -1,35 +1,30 @@
 package skillbill.engine.featuretask.runloop.core
 
 import skillbill.application.decomposition.baseBranch
-import skillbill.contracts.JsonCodec
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetup
+import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.featuretask.lifecycle.subtask.FeatureTaskRuntimeSubtaskFinalisation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.runloop.checkpoint.FeatureTaskRuntimeRunLoopCheckpoint
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.engine.goalrunner.execution.support.protectedBranchName
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FEATURE_TASK_RUNTIME_STANDALONE_SUBTASK_ID
-import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
+import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_STANDALONE_SUBTASK_ID
 
 object FeatureTaskRuntimeRunLoopSubtaskCommit {
   internal fun unownedWorktreeCommitSha(args: UnownedWorktreeCommitShaArgs): CommitPushFinalisation {
     val request = args.request
-    val outputValidator = args.outputValidator
     val diagnostics = args.diagnostics
-    val phaseGates = args.phaseGates
-    val run = args.run
+    val gitOperations = args.gitOperations
     val normalizedOutput = args.normalizedOutput
-    val head = phaseGates.gitOperations.headCommitSha(request.repoRoot)
+    val head = gitOperations.headCommitSha(request.repoRoot)
     val sha =
       head.value.orEmpty().trim().takeIf { head is WorkflowGitOperationResult.Ok && it.isNotBlank() }
         ?: return CommitPushNotApplicable
@@ -42,8 +37,6 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
     )
     return CommitPushSettled(
       revalidated(
-        outputValidator,
-        run.phaseId,
         FeatureTaskRuntimeSubtaskFinalisation.withCommitSha(
           normalizedOutput.envelopeWireMap(),
           sha,
@@ -54,11 +47,11 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
 
   internal fun commitPushChangedPaths(
     request: FeatureTaskRuntimeRunFacts,
-    phaseGates: FeatureTaskRuntimePhaseGates,
+    gitOperations: WorkflowGitOperations,
     baseBranch: String,
   ): ReadinessChangedPaths {
     return when (
-      val changed = phaseGates.gitOperations.readinessChangedPathsAgainstBase(request.repoRoot, baseBranch)
+      val changed = gitOperations.readinessChangedPathsAgainstBase(request.repoRoot, baseBranch)
     ) {
       is WorkflowGitNameListResult.Listed -> ReadinessChangedPaths(paths = changed.names, error = null)
       is WorkflowGitNameListResult.Failed -> ReadinessChangedPaths(emptyList(), changed.error)
@@ -67,20 +60,20 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
 
   internal fun finalisationBranch(
     request: FeatureTaskRuntimeRunFacts,
-    session: FeatureTaskRuntimeRunLoopSession,
-    phaseGates: FeatureTaskRuntimePhaseGates,
+    session: FeatureTaskRuntimeRunSessionObservations,
+    gitOperations: WorkflowGitOperations,
   ): String? {
     val branch =
       session.resolvedBranch
-        ?.takeIf { FeatureTaskRuntimeBranchSetup.protectedBranchName(it) == null }
+        ?.takeIf { protectedBranchName(it) == null }
         ?: return null
-    val head = phaseGates.gitOperations.currentBranch(request.repoRoot)
+    val head = gitOperations.currentBranch(request.repoRoot)
     return branch.takeIf { head is WorkflowGitOperationResult.Ok && head.value.trim() == branch.trim() }
   }
 
   internal fun recordFinalisedCheckpointIdentity(
     request: FeatureTaskRuntimeRunFacts,
-    state: FeatureTaskRuntimeRunState,
+    state: FeatureTaskRuntimeProgressSnapshotAccess,
     recorder: PhaseRunRecords,
     diagnostics: RuntimeDiagnostics,
     args: RecordFinalisedCheckpointIdentityArgs,
@@ -124,15 +117,8 @@ object FeatureTaskRuntimeRunLoopSubtaskCommit {
       "the workflow store and resume; the commit is already on the branch."
   }
 
-  internal fun revalidated(
-    outputValidator: FeatureTaskRuntimePhaseOutputValidator,
-    phaseId: String,
-    envelope: Map<String, Any?>,
-  ): NormalizedFeatureTaskRuntimePhaseOutput =
-    outputValidator
-      .validatePhaseOutput(JsonCodec.mapToJsonString(envelope), sourceLabel = phaseId)
-      .requireAcceptedOutput(phaseId)
-      .normalizedOutput
+  internal fun revalidated(envelope: Map<String, Any?>): NormalizedFeatureTaskRuntimePhaseOutput =
+    NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(envelope))
 }
 
 internal data class ReadinessChangedPaths(

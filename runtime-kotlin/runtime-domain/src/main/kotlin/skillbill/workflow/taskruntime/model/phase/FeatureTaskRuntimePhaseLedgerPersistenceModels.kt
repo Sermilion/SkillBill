@@ -3,9 +3,9 @@ package skillbill.workflow.taskruntime.model.phase
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.contracts.workflow.featuretask.FeatureTaskRuntimePhasePayloadKeys
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.requireKnownFeatureTaskRuntimePhaseId
 import skillbill.workflow.time.parsePersistedInstant
 import java.time.Instant
 
@@ -17,7 +17,7 @@ enum class FeatureTaskRuntimePhaseExecutionOrigin(val wireValue: String) {
   companion object {
     fun fromWireValue(value: String): FeatureTaskRuntimePhaseExecutionOrigin =
       entries.firstOrNull { it.wireValue == value }
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime artifact field 'execution_origin' has unsupported value '$value'.",
         )
   }
@@ -52,7 +52,7 @@ enum class FeatureTaskRuntimePhaseLedgerAction(val wireValue: String) {
   companion object {
     fun fromWire(value: String): FeatureTaskRuntimePhaseLedgerAction =
       entries.firstOrNull { it.wireValue == value }
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Unknown feature-task-runtime phase ledger action '$value'. " +
             "Allowed: ${entries.joinToString { it.wireValue }}.",
         )
@@ -122,13 +122,13 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
   internal fun toArtifactMap(): Map<String, Any?> =
     linkedMapOf<String, Any?>(
       DecompositionManifestPayloadKeys.ACTION to action.wireValue,
-      "sequence_number" to sequenceNumber,
+      FeatureTaskRuntimePhasePayloadKeys.SEQUENCE_NUMBER to sequenceNumber,
       "timestamp" to timestamp.toString(),
       SharedPayloadKeys.PHASE_ID to phaseId,
       "attempt_count" to attemptCount,
     ).apply {
-      resolvedAgentId?.let { put("resolved_agent_id", it) }
-      put("execution_origin", executionOrigin.wireValue)
+      resolvedAgentId?.let { put(FeatureTaskRuntimePhasePayloadKeys.RESOLVED_AGENT_ID, it) }
+      put(FeatureTaskRuntimePhasePayloadKeys.EXECUTION_ORIGIN, executionOrigin.wireValue)
       fixLoopIteration?.let { put("fix_loop_iteration", it) }
       blockedReason?.let { put(DecompositionManifestPayloadKeys.BLOCKED_REASON, it) }
       loopId?.let { put("loop_id", it) }
@@ -140,7 +140,7 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
       val reader = durableArtifactMapReader(raw)
       val attemptCount = reader.requiredInt("attempt_count")
       if (attemptCount < 1) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime phase ledger entry attempt_count must be >= 1, was $attemptCount.",
         )
       }
@@ -150,7 +150,7 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
             FeatureTaskRuntimePhaseLedgerAction.fromWire(
               reader.requiredString(DecompositionManifestPayloadKeys.ACTION),
             ),
-          sequenceNumber = reader.requiredInt("sequence_number"),
+          sequenceNumber = reader.requiredInt(FeatureTaskRuntimePhasePayloadKeys.SEQUENCE_NUMBER),
           timestamp = parsePersistedInstant(reader.requiredString("timestamp")),
           phaseId =
             requireKnownFeatureTaskRuntimePhaseId(
@@ -158,9 +158,9 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
               SharedPayloadKeys.PHASE_ID,
             ),
           attemptCount = attemptCount,
-          resolvedAgentId = reader.optionalString("resolved_agent_id"),
+          resolvedAgentId = reader.optionalString(FeatureTaskRuntimePhasePayloadKeys.RESOLVED_AGENT_ID),
           executionOrigin =
-            reader.optionalString("execution_origin")?.let(
+            reader.optionalString(FeatureTaskRuntimePhasePayloadKeys.EXECUTION_ORIGIN)?.let(
               FeatureTaskRuntimePhaseExecutionOrigin::fromWireValue,
             ) ?: FeatureTaskRuntimePhaseExecutionOrigin.AGENT_EXECUTED,
           fixLoopIteration = reader.optionalInt("fix_loop_iteration"),
@@ -169,7 +169,7 @@ data class FeatureTaskRuntimePhaseLedgerEntry(
           edgeIteration = reader.optionalInt("edge_iteration"),
         )
       } catch (error: IllegalArgumentException) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime phase ledger entry is invalid.",
           error,
         )

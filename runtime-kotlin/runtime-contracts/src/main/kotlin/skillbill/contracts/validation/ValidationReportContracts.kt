@@ -3,7 +3,7 @@ package skillbill.contracts.validation
 import skillbill.contracts.JsonPayloadContract
 import skillbill.contracts.SharedPayloadKeys
 
-object ValidationReportPayloadKeys {
+private object ValidationReportPayloadKeys {
   const val SKILL_COUNT: String = "skill_count"
   const val GOVERNED_ADDON_COUNT: String = "governed_addon_count"
   const val PLATFORM_PACK_COUNT: String = "platform_pack_count"

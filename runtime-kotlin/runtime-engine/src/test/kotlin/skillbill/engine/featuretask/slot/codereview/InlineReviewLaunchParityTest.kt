@@ -1,18 +1,18 @@
 package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.config.model.PhaseModelDirective
-import skillbill.engine.BranchSetupTestConfig
-import skillbill.engine.REVIEW_BLOCKER_MESSAGE
 import skillbill.engine.RecordingWorkflowGitOperations
-import skillbill.engine.RuntimeHarnessConfig
-import skillbill.engine.RuntimeRecordingLauncher
-import skillbill.engine.auditSatisfiedOutput
-import skillbill.engine.defaultPhaseOutput
-import skillbill.engine.facts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
+import skillbill.engine.featuretask.runner.BranchSetupTestConfig
+import skillbill.engine.featuretask.runner.REVIEW_BLOCKER_MESSAGE
+import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
+import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
+import skillbill.engine.featuretask.runner.auditSatisfiedOutput
+import skillbill.engine.featuretask.runner.defaultPhaseOutput
+import skillbill.engine.featuretask.runner.facts
+import skillbill.engine.featuretask.runner.phaseIdFromPrompt
+import skillbill.engine.featuretask.runner.runnerHarness
 import skillbill.engine.featuretask.slot.scriptedReviewPhaseRunner
-import skillbill.engine.phaseIdFromPrompt
-import skillbill.engine.runnerHarness
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
@@ -53,6 +53,14 @@ class InlineReviewLaunchParityTest {
     assertNotSame(AgentRunWorktreeEditObserver.NONE, review.worktreeEditObserver)
     assertFalse(review.readOnlyPhase)
     assertNull(review.progressIdleTimeout)
+    val reviewPrompt = requireNotNull(review.promptOverride)
+    assertTrue(reviewPrompt.contains("## Project authoring discipline (discover before write)"))
+    assertTrue(reviewPrompt.contains("authoring evidence record as leading prose before the findings register"))
+    val verifyPrompt =
+      launcher.requests
+        .mapNotNull { it.skillRunRequest.promptOverride }
+        .first { it.contains("Phase: verify_findings ") }
+    assertFalse(verifyPrompt.contains("Project authoring discipline"))
   }
 
   @Test

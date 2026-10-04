@@ -1,7 +1,5 @@
 package skillbill.application.workflow.decomposition
 
-import skillbill.application.decomposition.baseBranch
-import skillbill.application.decomposition.executionModel
 import skillbill.application.workflow.model.ContinueExistingWorkflowArgs
 import skillbill.application.workflow.model.DecompositionRuntimeWriteArgs
 import skillbill.application.workflow.model.WorkflowContinueResult
@@ -15,14 +13,11 @@ import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
-import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
-import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.runtime.goalParentArtifactProjection
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
-import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowContinueDecisionOverrides
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepState
@@ -30,6 +25,7 @@ import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 internal fun WorkflowEngine.continueExistingWorkflow(
   family: WorkflowFamily,
@@ -139,7 +135,7 @@ fun WorkflowEngine.alignSubtaskResumeStep(
               listOf(
                 mapOf(
                   SharedPayloadKeys.STEP_ID to step.stepId,
-                  SharedPayloadKeys.STATUS to "completed",
+                  SharedPayloadKeys.STATUS to WorkflowStepStatus.COMPLETED.wireValue,
                   "attempt_count" to step.attemptCount,
                 ),
               ),
@@ -195,9 +191,9 @@ fun WorkflowEngine.persistParentDecompositionRuntime(
         currentStepId = parentRecord.currentStepId,
         stepUpdates = null,
         artifactsPatch =
-          WorkflowArtifactPatch.from(
-            goalParentArtifactProjection(
-              parentRecord.artifacts,
+          goalParentArtifactProjection(
+            parentRecord.artifacts,
+            FeatureTaskRuntimeWorkflowArtifactMap.from(
               validator.encodeManifestWireMap(
                 manifest,
                 DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label(),
@@ -213,46 +209,3 @@ fun WorkflowEngine.persistParentDecompositionRuntime(
     updatedParent.toRecord().copy(issueKey = manifest.issueKey),
   )
 }
-
-internal fun DecompositionManifest.withStartedSubtask(
-  subtaskId: Int,
-  workflowId: String,
-  branch: String,
-): DecompositionManifest =
-  copy(
-    status = "in_progress",
-    currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = subtaskId, action = "resume"),
-    subtasks =
-      subtasks.map { subtask ->
-        if (subtask.id == subtaskId) {
-          subtask.copy(
-            status = "in_progress",
-            workflowId = workflowId,
-            branch = branch.takeIf(String::isNotBlank) ?: subtask.branch,
-            lastResumableStep = "preplan",
-          )
-        } else {
-          subtask
-        }
-      },
-  )
-
-internal fun DecompositionManifest.withCommittedSubtask(
-  subtaskId: Int,
-  commitSha: String,
-): DecompositionManifest =
-  copy(subtasks = subtasks.map { if (it.id == subtaskId) it.copy(commitSha = commitSha) else it })
-
-internal fun DecompositionManifest.branchForSubtask(subtaskId: Int): String =
-  when (executionModel) {
-    DecompositionExecutionModel.SAME_BRANCH_COMMIT_PER_SUBTASK -> featureBranch.orEmpty()
-    DecompositionExecutionModel.STACKED_BRANCHES ->
-      stackBranches.firstOrNull { it.subtaskId == subtaskId }?.branch.orEmpty()
-  }
-
-internal fun DecompositionManifest.baseForSubtask(subtaskId: Int): String? =
-  when (executionModel) {
-    DecompositionExecutionModel.SAME_BRANCH_COMMIT_PER_SUBTASK -> baseBranch
-    DecompositionExecutionModel.STACKED_BRANCHES ->
-      stackBranches.firstOrNull { it.subtaskId == subtaskId }?.baseBranch ?: baseBranch
-  }

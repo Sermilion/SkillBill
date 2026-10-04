@@ -1,6 +1,5 @@
 package skillbill.engine.featuretask.slot.runner
 
-import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.runner.infraFailureReason
 import skillbill.engine.featuretask.runner.providerLimitPauseReason
@@ -17,6 +16,7 @@ import skillbill.engine.featuretask.slot.state.PhaseLaunchObservation
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
@@ -29,7 +29,6 @@ import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.telemetry.estimation.estimateTokens
-import skillbill.workflow.taskruntime.phase.ProsePhaseOutputSynthesizer
 import kotlin.time.Duration.Companion.minutes
 
 class DefaultPhaseRunner(
@@ -80,14 +79,13 @@ class DefaultPhaseRunner(
         is AfterCapture.Ready -> captured.manifest
         is AfterCapture.Failed ->
           return launched(
-            input,
             outcome,
             null,
             settled,
             PhaseLaunchFailure(PhaseLaunchFailureKind.AFTER_CAPTURE_FAILED, captureReason(step, captured.detail)),
           )
       }
-    return launched(input, outcome, manifest, settled, classify(step, outcome))
+    return launched(outcome, manifest, settled, classify(step, outcome))
   }
 
   private fun launchUntracked(
@@ -97,7 +95,7 @@ class DefaultPhaseRunner(
   ): PhaseStepOutput {
     val input = state.prepareLaunch(unprepared) ?: return preparationRejected(unprepared.stepName)
     val outcome = session.execute(launchRequest(input, state))
-    return launched(input, outcome, null, PhaseSettledEnvelopeRead.None, classify(input.stepName, outcome))
+    return launched(outcome, null, PhaseSettledEnvelopeRead.None, classify(input.stepName, outcome))
   }
 
   private fun launchRequest(
@@ -196,6 +194,7 @@ class DefaultPhaseRunner(
           "Feature-task-runtime phase '$step' could not launch an agent: ${outcome.reason}",
           outcome.reason,
         )
+      is AgentRunLaunchDenied -> null
       is AgentRunLaunchFacts ->
         providerLimitSignal(outcome)
           ?.let { PhaseLaunchFailure(PhaseLaunchFailureKind.PROVIDER_LIMIT, providerLimitPauseReason(step, it)) }
@@ -203,7 +202,6 @@ class DefaultPhaseRunner(
     }
 
   private fun launched(
-    input: PhaseStepInput,
     outcome: AgentRunLaunchOutcome,
     manifest: PhaseStepFileManifest?,
     settled: PhaseSettledEnvelopeRead,
@@ -220,16 +218,7 @@ class DefaultPhaseRunner(
           sha256 = it.stdoutSha256,
         )
       } ?: EMPTY_STDOUT
-    val envelope =
-      (settled as? PhaseSettledEnvelopeRead.Found)?.envelope
-        ?: runCatching { ProsePhaseOutputSynthesizer.recoverFinalObject(stdout.text, input.stepName) }.getOrNull()
-    val produced = envelope?.get(SharedPayloadKeys.PRODUCED_OUTPUTS) as? Map<*, *>
     return PhaseStepOutput(
-      status = envelope?.get(SharedPayloadKeys.STATUS) as? String ?: "",
-      value = produced?.get(SharedPayloadKeys.VALUE) as? String ?: stdout.text,
-      summary = envelope?.get(SharedPayloadKeys.SUMMARY) as? String,
-      verdict = envelope?.get(SharedPayloadKeys.VERDICT) as? String,
-      failureDisposition = envelope?.get(SharedPayloadKeys.FAILURE_DISPOSITION) as? String,
       stdout = stdout,
       stderr = facts?.stderr.orEmpty(),
       processStarted = facts?.processStarted ?: false,
@@ -243,11 +232,6 @@ class DefaultPhaseRunner(
 
   private fun notLaunched(failure: PhaseLaunchFailure) =
     PhaseStepOutput(
-      status = "",
-      value = "",
-      summary = null,
-      verdict = null,
-      failureDisposition = null,
       stdout = EMPTY_STDOUT,
       stderr = "",
       processStarted = false,

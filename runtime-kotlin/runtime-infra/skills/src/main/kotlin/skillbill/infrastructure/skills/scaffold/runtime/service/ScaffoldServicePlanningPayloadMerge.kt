@@ -3,9 +3,9 @@ package skillbill.infrastructure.skills.scaffold.runtime.service
 import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.error.core.InvalidAgentAddonAgentIdError
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
-import skillbill.error.shellcontent.MissingPlatformPackError
-import skillbill.error.shellcontent.UnknownPreShellFamilyError
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
+import skillbill.error.shellcontent.missingPlatformPackError
+import skillbill.error.shellcontent.unknownPreShellFamilyError
 import skillbill.infrastructure.skills.agentaddon.AgentAddonSchemaValidator
 import skillbill.infrastructure.skills.scaffold.payload.requireStringListPayload
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
@@ -52,7 +52,7 @@ internal fun planAddOn(
   val platform = requireString(payload, "platform")
   val packRoot = repoRoot.resolve("platform-packs").resolve(platform)
   if (!Files.isRegularFile(packRoot.resolve("platform.yaml"))) {
-    throw MissingPlatformPackError(
+    throw missingPlatformPackError(
       "Platform pack '$platform' does not exist at '$packRoot'. " +
         "Create a conforming platform.yaml before adding a governed add-on into it.",
     )
@@ -126,26 +126,26 @@ internal fun validateAgentAddonAgentId(id: String) {
   try {
     SupportedAgent.parseAgentAddonId(id)
   } catch (error: InvalidAgentAddonAgentIdError) {
-    throw InvalidScaffoldPayloadError(error.message ?: "Unknown agent '$id'.", error)
+    throw invalidScaffoldPayloadError(error.message ?: "Unknown agent '$id'.", error)
   }
 }
 
 internal fun validateAgentAddonConsumerId(id: String) {
   if (id == AgentAddonConsumer.LEGACY_BILL_FEATURE_ID) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Agent add-on consumer '$id' is retired; declare '${AgentAddonConsumer.SKILL_BILL.id}' instead.",
     )
   }
   try {
     AgentAddonConsumer.fromId(id)
   } catch (error: IllegalArgumentException) {
-    throw InvalidScaffoldPayloadError(error.message ?: "Unknown agent add-on consumer '$id'.", error)
+    throw invalidScaffoldPayloadError(error.message ?: "Unknown agent add-on consumer '$id'.", error)
   }
 }
 
 internal fun validateAgentAddonDescription(description: String) {
   if (description != description.trim() || '\n' in description || '\r' in description) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field 'description' must be trimmed and single-line for an agent add-on.",
     )
   }
@@ -157,7 +157,7 @@ internal fun validateAgentAddonSlugRoot(
 ) {
   val root = agentAddonsRoot.resolve(slug).normalize()
   if (!root.startsWith(agentAddonsRoot)) {
-    throw InvalidScaffoldPayloadError("Scaffold payload field 'slug' escapes the agent-addons root.")
+    throw invalidScaffoldPayloadError("Scaffold payload field 'slug' escapes the agent-addons root.")
   }
 }
 
@@ -169,7 +169,7 @@ internal fun planPreShellPlatformOverride(args: ScaffoldPlatformOverridePlanArgs
       } else {
         ""
       }
-    throw UnknownPreShellFamilyError(
+    throw unknownPreShellFamilyError(
       "Scaffold payload declares pre-shell family '${args.family}' " +
         "that is not in the registered set $PRE_SHELL_FAMILIES.$replacement",
     )
@@ -201,7 +201,7 @@ internal fun planShelledPlatformOverride(args: ScaffoldPlatformOverridePlanArgs)
   val packRoot = args.repoRoot.resolve("platform-packs").resolve(args.platform)
   val manifestPath = packRoot.resolve("platform.yaml")
   if (!Files.isRegularFile(manifestPath)) {
-    throw MissingPlatformPackError(
+    throw missingPlatformPackError(
       "Platform pack '${args.platform}' does not exist at '$packRoot'. " +
         "Create a conforming platform.yaml before adding a skill into it.",
     )

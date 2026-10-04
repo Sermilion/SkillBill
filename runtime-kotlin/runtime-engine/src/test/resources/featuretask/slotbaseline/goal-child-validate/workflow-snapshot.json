@@ -19,7 +19,7 @@
             "contract_version": "0.2"
         },
         "feature_task_runtime_delivered_projections": {
-            "wftr-20260602-test-0001|implement|1|implement#1,plan#1|not_required:implement": {
+            "wftr-20260602-test-0001|implement|1|implement#1|not_required:implement": {
                 "consumer_delivery_iteration": 1,
                 "consumer_phase_id": "implement",
                 "contract_version": "0.2",
@@ -27,24 +27,6 @@
                     "consumer_phase_id": "implement",
                     "contract_version": "0.1",
                     "projections": [
-                        {
-                            "fields": [
-                                {
-                                    "kind": "text",
-                                    "name": "value",
-                                    "text": "Fixture plan prose for downstream implement and audit."
-                                }
-                            ],
-                            "producer_iteration": {
-                                "iteration": 1,
-                                "phase_id": "plan"
-                            },
-                            "projection_contract_id": "feature_task_runtime.phase_prose",
-                            "projection_contract_version": "0.1",
-                            "projection_name": "plan_prose",
-                            "prompt_visibility": "prompt_visible",
-                            "source_ref": "upstream_phase_output:plan"
-                        },
                         {
                             "fields": [
                                 {
@@ -151,10 +133,6 @@
                     "fingerprint": "not_required:implement"
                 },
                 "source_producer_iterations": [
-                    {
-                        "iteration": 1,
-                        "phase_id": "plan"
-                    },
                     {
                         "iteration": 1,
                         "phase_id": "implement"
@@ -426,7 +404,7 @@
                 ],
                 "workflow_id": "wftr-20260602-test-0001"
             },
-            "wftr-20260602-test-0001|review|1|review#1|repository-checkpoint-831bf900": {
+            "wftr-20260602-test-0001|review|1|review#1|slot-baseline-checkpoint": {
                 "consumer_delivery_iteration": 1,
                 "consumer_phase_id": "review",
                 "contract_version": "0.2",
@@ -515,13 +493,13 @@
                     ],
                     "repository_checkpoint": {
                         "base_ref": "__NORMALIZED_SHA40__",
-                        "fingerprint": "repository-checkpoint-831bf900",
+                        "fingerprint": "slot-baseline-checkpoint",
                         "head_ref": "__NORMALIZED_SHA40__"
                     }
                 },
                 "record_kind": "delivered_projection",
                 "repository_checkpoint": {
-                    "fingerprint": "repository-checkpoint-831bf900"
+                    "fingerprint": "slot-baseline-checkpoint"
                 },
                 "source_producer_iterations": [
                     {
@@ -531,7 +509,7 @@
                 ],
                 "workflow_id": "wftr-20260602-test-0001"
             },
-            "wftr-20260602-test-0001|verify_findings|1|review#1,verify_findings#1|repository-checkpoint-831bf900": {
+            "wftr-20260602-test-0001|verify_findings|1|review#1,verify_findings#1|slot-baseline-checkpoint": {
                 "consumer_delivery_iteration": 1,
                 "consumer_phase_id": "verify_findings",
                 "contract_version": "0.2",
@@ -542,15 +520,15 @@
                         {
                             "fields": [
                                 {
-                                    "items": [],
-                                    "kind": "text_list",
-                                    "name": "findings"
+                                    "kind": "text",
+                                    "name": "value",
+                                    "text": "{\"contract_version\":\"0.7\",\"produced_outputs\":{\"findings\":[]}}"
                                 },
                                 {
                                     "kind": "compact_reference",
                                     "name": "repository_checkpoint",
                                     "reference_kind": "repository_checkpoint",
-                                    "reference_value": "repository-checkpoint-831bf900+producer-claimed:repository-checkpoint-831bf900"
+                                    "reference_value": "slot-baseline-checkpoint+producer-claimed:slot-baseline-checkpoint"
                                 }
                             ],
                             "producer_iteration": {
@@ -665,13 +643,13 @@
                     ],
                     "repository_checkpoint": {
                         "base_ref": "__NORMALIZED_SHA40__",
-                        "fingerprint": "repository-checkpoint-831bf900",
+                        "fingerprint": "slot-baseline-checkpoint",
                         "head_ref": "__NORMALIZED_SHA40__"
                     }
                 },
                 "record_kind": "delivered_projection",
                 "repository_checkpoint": {
-                    "fingerprint": "repository-checkpoint-831bf900"
+                    "fingerprint": "slot-baseline-checkpoint"
                 },
                 "source_producer_iterations": [
                     {
@@ -685,7 +663,7 @@
                 ],
                 "workflow_id": "wftr-20260602-test-0001"
             },
-            "wftr-20260602-test-0001|write_history|1|implement#1,validate#1,write_history#1|repository-checkpoint-831bf900": {
+            "wftr-20260602-test-0001|write_history|1|implement#1,validate#1,write_history#1|slot-baseline-checkpoint": {
                 "consumer_delivery_iteration": 1,
                 "consumer_phase_id": "write_history",
                 "contract_version": "0.2",
@@ -851,13 +829,13 @@
                     ],
                     "repository_checkpoint": {
                         "base_ref": "__NORMALIZED_SHA40__",
-                        "fingerprint": "repository-checkpoint-831bf900",
+                        "fingerprint": "slot-baseline-checkpoint",
                         "head_ref": "__NORMALIZED_SHA40__"
                     }
                 },
                 "record_kind": "delivered_projection",
                 "repository_checkpoint": {
-                    "fingerprint": "repository-checkpoint-831bf900"
+                    "fingerprint": "slot-baseline-checkpoint"
                 },
                 "source_producer_iterations": [
                     {
@@ -874,6 +852,438 @@
                     }
                 ],
                 "workflow_id": "wftr-20260602-test-0001"
+            }
+        },
+        "feature_task_runtime_diagnostic_signals": [
+            {
+                "attempt": 1,
+                "conflicting_key": "wftr-20260602-test-0001:validate:0:1:0:agent-validate",
+                "failure_class": "conflict",
+                "generation": 0,
+                "operation": "retain-producer-output",
+                "phase_id": "validate",
+                "recorded_at": "__NORMALIZED_TIMESTAMP__",
+                "repair_turn": 0
+            }
+        ],
+        "feature_task_runtime_execution_plan": {
+            "contract_version": "0.1",
+            "definition": {
+                "id": "goal-child",
+                "semantic_revision": 2
+            },
+            "dispatch_ownership": [
+                {
+                    "semantic_revision": 3,
+                    "slot": "audit",
+                    "step": "audit",
+                    "strategy_id": "acceptance-audit"
+                },
+                {
+                    "semantic_revision": 3,
+                    "slot": "audit",
+                    "step": "audit_implement_fix",
+                    "strategy_id": "acceptance-audit"
+                },
+                {
+                    "semantic_revision": 3,
+                    "slot": "audit",
+                    "step": "audit_plan_fix",
+                    "strategy_id": "acceptance-audit"
+                },
+                {
+                    "semantic_revision": 1,
+                    "slot": "commit_push",
+                    "step": "commit_push",
+                    "strategy_id": "runtime-commit"
+                },
+                {
+                    "semantic_revision": 1,
+                    "slot": "implementation",
+                    "step": "implement",
+                    "strategy_id": "implement-then-simplify"
+                },
+                {
+                    "semantic_revision": 1,
+                    "slot": "code_review",
+                    "step": "implement_fix",
+                    "strategy_id": "inline"
+                },
+                {
+                    "semantic_revision": 1,
+                    "slot": "plan",
+                    "step": "plan",
+                    "strategy_id": "agent-plan"
+                },
+                {
+                    "semantic_revision": 1,
+                    "slot": "preplan",
+                    "step": "preplan",
+                    "strategy_id": "agent-preplan"
+                },
+                {
+                    "semantic_revision": 1,
+                    "slot": "code_review",
+                    "step": "review",
+                    "strategy_id": "inline"
+                },
+                {
+                    "semantic_revision": 1,
+                    "slot": "implementation",
+                    "step": "simplify",
+                    "strategy_id": "implement-then-simplify"
+                },
+                {
+                    "semantic_revision": 1,
+                    "slot": "quality_gate",
+                    "step": "validate",
+                    "strategy_id": "agent-validate"
+                },
+                {
+                    "semantic_revision": 1,
+                    "slot": "code_review",
+                    "step": "verify_findings",
+                    "strategy_id": "inline"
+                },
+                {
+                    "semantic_revision": 1,
+                    "slot": "write_history",
+                    "step": "write_history",
+                    "strategy_id": "boundary-history"
+                }
+            ],
+            "effective_policies": [
+                {
+                    "id": "acceptance-audit",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "semantic_revision": 1
+                },
+                {
+                    "id": "checkpoint-ownership",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "semantic_revision": 1
+                },
+                {
+                    "id": "finalization",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "semantic_revision": 1
+                },
+                {
+                    "id": "gate-commands",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "semantic_revision": 1
+                },
+                {
+                    "id": "receipt-interpretation",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "semantic_revision": 1
+                },
+                {
+                    "id": "resume-budgets",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "semantic_revision": 1
+                },
+                {
+                    "id": "retry-budgets",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "semantic_revision": 1
+                },
+                {
+                    "id": "review-invalidation",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "semantic_revision": 1
+                }
+            ],
+            "effective_policy_settings": {
+                "phase_timeout_millis": null,
+                "validation_depth": "full"
+            },
+            "quality_gate_selection": "validate",
+            "resume_interpretations": [
+                {
+                    "identity": "acceptance-audit/3:audit",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "audit"
+                },
+                {
+                    "identity": "acceptance-audit/3:audit_implement_fix",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "audit_implement_fix"
+                },
+                {
+                    "identity": "acceptance-audit/3:audit_plan_fix",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "audit_plan_fix"
+                },
+                {
+                    "identity": "runtime-commit/1:commit_push",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "commit_push"
+                },
+                {
+                    "identity": "implement-then-simplify/1:implement",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "implement"
+                },
+                {
+                    "identity": "inline/1:implement_fix",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "implement_fix"
+                },
+                {
+                    "identity": "agent-plan/1:plan",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "plan"
+                },
+                {
+                    "identity": "agent-preplan/1:preplan",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "preplan"
+                },
+                {
+                    "identity": "inline/1:review",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "review"
+                },
+                {
+                    "identity": "implement-then-simplify/1:simplify",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "simplify"
+                },
+                {
+                    "identity": "agent-validate/1:validate",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "validate"
+                },
+                {
+                    "identity": "inline/1:verify_findings",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "verify_findings"
+                },
+                {
+                    "identity": "boundary-history/1:write_history",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "write_history"
+                }
+            ],
+            "review_selection": "inline",
+            "selected_strategies": [
+                {
+                    "entry_step": "audit",
+                    "selected_steps": [
+                        "audit_plan_fix",
+                        "audit_implement_fix",
+                        "audit"
+                    ],
+                    "semantic_revision": 3,
+                    "slot": "audit",
+                    "strategy_id": "acceptance-audit"
+                },
+                {
+                    "entry_step": "review",
+                    "selected_steps": [
+                        "review",
+                        "verify_findings",
+                        "implement_fix"
+                    ],
+                    "semantic_revision": 1,
+                    "slot": "code_review",
+                    "strategy_id": "inline"
+                },
+                {
+                    "entry_step": "commit_push",
+                    "selected_steps": [
+                        "commit_push"
+                    ],
+                    "semantic_revision": 1,
+                    "slot": "commit_push",
+                    "strategy_id": "runtime-commit"
+                },
+                {
+                    "entry_step": "implement",
+                    "selected_steps": [
+                        "implement",
+                        "simplify"
+                    ],
+                    "semantic_revision": 1,
+                    "slot": "implementation",
+                    "strategy_id": "implement-then-simplify"
+                },
+                {
+                    "entry_step": "plan",
+                    "selected_steps": [
+                        "plan"
+                    ],
+                    "semantic_revision": 1,
+                    "slot": "plan",
+                    "strategy_id": "agent-plan"
+                },
+                {
+                    "entry_step": "preplan",
+                    "selected_steps": [
+                        "preplan"
+                    ],
+                    "semantic_revision": 1,
+                    "slot": "preplan",
+                    "strategy_id": "agent-preplan"
+                },
+                {
+                    "entry_step": "validate",
+                    "selected_steps": [
+                        "validate"
+                    ],
+                    "semantic_revision": 1,
+                    "slot": "quality_gate",
+                    "strategy_id": "agent-validate"
+                },
+                {
+                    "entry_step": "write_history",
+                    "selected_steps": [
+                        "write_history"
+                    ],
+                    "semantic_revision": 1,
+                    "slot": "write_history",
+                    "strategy_id": "boundary-history"
+                }
+            ],
+            "step_policies": [
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "audit"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "audit_implement_fix"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "audit_plan_fix"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "commit_push"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "implement"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "implement_fix"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "plan"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "preplan"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "review"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "simplify"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "validate"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "verify_findings"
+                },
+                {
+                    "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+                    "semantic_digest": "__NORMALIZED_SHA64__",
+                    "step": "write_history"
+                }
+            ],
+            "traversal": {
+                "backward_edges": [
+                    {
+                        "cap_exhaustion_behavior": "BLOCK",
+                        "cap_scope": "PER_SUBTASK",
+                        "destination_step": "audit_plan_fix",
+                        "from_step": "audit",
+                        "loop_id": "audit_repair",
+                        "per_edge_cap": null,
+                        "verdict": "advance",
+                        "warn_after_iterations": 3
+                    },
+                    {
+                        "cap_exhaustion_behavior": "ADVANCE",
+                        "cap_scope": "PER_SUBTASK",
+                        "destination_step": "implement_fix",
+                        "from_step": "verify_findings",
+                        "loop_id": "review_fix",
+                        "per_edge_cap": 1,
+                        "verdict": "findings_verified",
+                        "warn_after_iterations": null
+                    },
+                    {
+                        "cap_exhaustion_behavior": "BLOCK",
+                        "cap_scope": "PER_SUBTASK",
+                        "destination_step": "validate",
+                        "from_step": "write_history",
+                        "loop_id": "regenerate_validation_receipt",
+                        "per_edge_cap": 2,
+                        "verdict": "record_rejected",
+                        "warn_after_iterations": null
+                    }
+                ],
+                "entry_gates": [
+                    {
+                        "required_step": "audit",
+                        "required_verdict": "satisfied",
+                        "step": "review"
+                    },
+                    {
+                        "required_step": "verify_findings",
+                        "required_verdict": "findings_verified",
+                        "step": "implement_fix"
+                    }
+                ],
+                "forward_steps": [
+                    "preplan",
+                    "plan",
+                    "implement",
+                    "simplify",
+                    "audit_plan_fix",
+                    "audit_implement_fix",
+                    "audit",
+                    "review",
+                    "verify_findings",
+                    "implement_fix",
+                    "validate",
+                    "write_history",
+                    "commit_push"
+                ],
+                "loop_only_steps": [
+                    "audit_implement_fix",
+                    "audit_plan_fix",
+                    "implement_fix"
+                ],
+                "loop_only_successors": [
+                    {
+                        "step": "audit_plan_fix",
+                        "successor": "audit_implement_fix"
+                    }
+                ]
             }
         },
         "feature_task_runtime_finding_verification_boundary_selection": null,
@@ -907,7 +1317,7 @@
                     "AC-1",
                     "AC-2"
                 ],
-                "briefing_text": "# Feature-task-runtime phase briefing\nphase: implement\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nacceptance_criteria:\n  AC-001\n  AC-002\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: plan\nvalue: Fixture plan prose for downstream implement and audit.\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)\nacceptance_criteria:\n  - AC-1\n  - AC-2\n\n## Derived context (layer 3, declared)\n(none)",
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: implement\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nacceptance_criteria:\n  AC-001\n  AC-002\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)\nacceptance_criteria:\n  - AC-1\n  - AC-2\n\n## Derived context (layer 3, declared)\n(none)",
                 "contract_version": "0.2",
                 "derived_context_keys": [],
                 "feature_size": "MEDIUM",
@@ -915,24 +1325,6 @@
                     "consumer_phase_id": "implement",
                     "contract_version": "0.1",
                     "projections": [
-                        {
-                            "fields": [
-                                {
-                                    "kind": "text",
-                                    "name": "value",
-                                    "text": "Fixture plan prose for downstream implement and audit."
-                                }
-                            ],
-                            "producer_iteration": {
-                                "iteration": 1,
-                                "phase_id": "plan"
-                            },
-                            "projection_contract_id": "feature_task_runtime.phase_prose",
-                            "projection_contract_version": "0.1",
-                            "projection_name": "plan_prose",
-                            "prompt_visibility": "prompt_visible",
-                            "source_ref": "upstream_phase_output:plan"
-                        },
                         {
                             "fields": [
                                 {
@@ -1303,7 +1695,7 @@
                     "AC-1",
                     "AC-2"
                 ],
-                "briefing_text": "# Feature-task-runtime phase briefing\nphase: review\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: repository-checkpoint-831bf900\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n- diff: read the branch diff yourself; it is not delivered in this briefing",
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: review\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: slot-baseline-checkpoint\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n- diff: read the branch diff yourself; it is not delivered in this briefing",
                 "contract_version": "0.2",
                 "derived_context_keys": [
                     "diff"
@@ -1394,7 +1786,7 @@
                     ],
                     "repository_checkpoint": {
                         "base_ref": "__NORMALIZED_SHA40__",
-                        "fingerprint": "repository-checkpoint-831bf900",
+                        "fingerprint": "slot-baseline-checkpoint",
                         "head_ref": "__NORMALIZED_SHA40__"
                     }
                 },
@@ -1409,7 +1801,7 @@
                     "AC-1",
                     "AC-2"
                 ],
-                "briefing_text": "# Feature-task-runtime phase briefing\nphase: verify_findings\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nacceptance_criteria:\n  AC-001\n  AC-002\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: review\nfindings:\nrepository_checkpoint: repository_checkpoint=repository-checkpoint-831bf900+producer-claimed:repository-checkpoint-831bf900\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)\nacceptance_criteria:\n  - AC-1\n  - AC-2\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: repository-checkpoint-831bf900\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n(none)",
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: verify_findings\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nacceptance_criteria:\n  AC-001\n  AC-002\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: review\nvalue: {\"contract_version\":\"0.7\",\"produced_outputs\":{\"findings\":[]}}\nrepository_checkpoint: repository_checkpoint=slot-baseline-checkpoint+producer-claimed:slot-baseline-checkpoint\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_acceptance_criteria (run_invariant_field:acceptance_criteria)\nacceptance_criteria:\n  - AC-1\n  - AC-2\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: slot-baseline-checkpoint\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n(none)",
                 "contract_version": "0.2",
                 "derived_context_keys": [],
                 "feature_size": "MEDIUM",
@@ -1420,15 +1812,15 @@
                         {
                             "fields": [
                                 {
-                                    "items": [],
-                                    "kind": "text_list",
-                                    "name": "findings"
+                                    "kind": "text",
+                                    "name": "value",
+                                    "text": "{\"contract_version\":\"0.7\",\"produced_outputs\":{\"findings\":[]}}"
                                 },
                                 {
                                     "kind": "compact_reference",
                                     "name": "repository_checkpoint",
                                     "reference_kind": "repository_checkpoint",
-                                    "reference_value": "repository-checkpoint-831bf900+producer-claimed:repository-checkpoint-831bf900"
+                                    "reference_value": "slot-baseline-checkpoint+producer-claimed:slot-baseline-checkpoint"
                                 }
                             ],
                             "producer_iteration": {
@@ -1543,7 +1935,7 @@
                     ],
                     "repository_checkpoint": {
                         "base_ref": "__NORMALIZED_SHA40__",
-                        "fingerprint": "repository-checkpoint-831bf900",
+                        "fingerprint": "slot-baseline-checkpoint",
                         "head_ref": "__NORMALIZED_SHA40__"
                     }
                 },
@@ -1558,7 +1950,7 @@
                     "AC-1",
                     "AC-2"
                 ],
-                "briefing_text": "# Feature-task-runtime phase briefing\nphase: write_history\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: implement\nvalue: Fixture implement prose for downstream audit.\n### from: implement\nchanged_paths:\nboundary_candidates:\n### from: validate\nvalue: Project checks passed.\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_finalization_context (run_invariant_field:finalization_context)\nfinalization_context:\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: repository-checkpoint-831bf900\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n(none)",
+                "briefing_text": "# Feature-task-runtime phase briefing\nphase: write_history\n\n## Run invariants (layer 1, unconditional)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\nfeature_size: MEDIUM\nceremony_scaling:\n  preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  review_scope: branch_diff (branch-diff review scope)\n  audit_ceremony: full_per_criterion (full per-criterion completeness audit)\nmandates_and_overrides:\n  - mandate-X\n\n## Upstream projections (layer 2, declared and validated)\n### from: implement\nvalue: Fixture implement prose for downstream audit.\n### from: implement\nchanged_paths:\nboundary_candidates:\n### from: validate\nvalue: Project checks passed.\n### run_invariant_spec_reference (run_invariant_field:spec_reference)\nspec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md\n### run_invariant_feature_size (run_invariant_field:feature_size)\nfeature_size: MEDIUM\n### run_invariant_ceremony_scaling (derived_ceremony_scaling)\nceremony_scaling:\n  - preplan_ceremony: full (full preplan covering boundaries, risks, rollout, and unknowns)\n  - review_scope: branch_diff (branch-diff review scope)\n  - audit_ceremony: full_per_criterion (full per-criterion completeness audit)\n### run_invariant_mandates_and_overrides (run_invariant_field:mandates_and_overrides)\nmandates_and_overrides:\n  - mandate-X\n### run_invariant_finalization_context (run_invariant_field:finalization_context)\nfinalization_context:\n\n## Repository checkpoint (layer 2, resolved)\nfingerprint: slot-baseline-checkpoint\nbase_ref: __NORMALIZED_SHA40__\nhead_ref: __NORMALIZED_SHA40__\nscoped_owned_paths:\n  (none)\n\n## Derived context (layer 3, declared)\n(none)",
                 "contract_version": "0.2",
                 "derived_context_keys": [],
                 "feature_size": "MEDIUM",
@@ -1724,7 +2116,7 @@
                     ],
                     "repository_checkpoint": {
                         "base_ref": "__NORMALIZED_SHA40__",
-                        "fingerprint": "repository-checkpoint-831bf900",
+                        "fingerprint": "slot-baseline-checkpoint",
                         "head_ref": "__NORMALIZED_SHA40__"
                     }
                 },
@@ -1958,7 +2350,7 @@
                 ],
                 "finished_at": "__NORMALIZED_TIMESTAMP__",
                 "first_started_at": "__NORMALIZED_TIMESTAMP__",
-                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"audit\",\"status\":\"completed\",\"summary\":\"Every acceptance criterion is met.\",\"produced_outputs\":{\"value\":\"[]\"},\"verdict\":\"satisfied\"}",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"audit\",\"status\":\"completed\",\"summary\":\"Every acceptance criterion is met.\",\"produced_outputs\":{\"value\":\"All acceptance criteria are met; no production criteria remain.\"},\"verdict\":\"satisfied\"}",
                 "phase_id": "audit",
                 "record_kind": "private_phase_record",
                 "resolved_agent_id": "agent-audit",
@@ -1972,7 +2364,7 @@
                 "execution_origin": "agent-executed",
                 "finished_at": "__NORMALIZED_TIMESTAMP__",
                 "first_started_at": "__NORMALIZED_TIMESTAMP__",
-                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"commit_push\",\"status\":\"completed\",\"summary\":\"Runtime staged every dirty path, committed, and recorded commit_sha.\",\"produced_outputs\":{\"commit_push_result\":{\"commit_sha\":\"__NORMALIZED_SHA40__\",\"branch\":\"feat/SKILL-380-phase-slot-strategies\",\"base_branch\":\"main\",\"pushed\":true}}}",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"commit_push\",\"status\":\"completed\",\"summary\":\"Runtime staged every dirty path, committed, and recorded commit_sha.\",\"produced_outputs\":{\"value\":\"Runtime committed commit __NORMALIZED_SHA40__ on branch feat/SKILL-380-phase-slot-strategies against base main and pushed it.\",\"commit_push_result\":{\"commit_sha\":\"__NORMALIZED_SHA40__\",\"branch\":\"feat/SKILL-380-phase-slot-strategies\",\"base_branch\":\"main\",\"pushed\":true}}}",
                 "phase_id": "commit_push",
                 "record_kind": "private_phase_record",
                 "resolved_agent_id": "agent-commit_push",
@@ -2052,7 +2444,7 @@
                 ],
                 "finished_at": "__NORMALIZED_TIMESTAMP__",
                 "first_started_at": "__NORMALIZED_TIMESTAMP__",
-                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"review\",\"status\":\"completed\",\"summary\":\"{\\\"contract_version\\\":\\\"0.3\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"produced_outputs\":{\"findings\":[],\"review_run_id\":\"__NORMALIZED_REVIEW_RUN_ID__\",\"repository_checkpoint\":{\"fingerprint\":\"repository-fingerprint-3\"}},\"verdict\":\"approved\"}",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"review\",\"status\":\"completed\",\"summary\":\"{\\\"contract_version\\\":\\\"0.7\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"produced_outputs\":{\"value\":\"{\\\"contract_version\\\":\\\"0.7\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"findings\":[],\"review_run_id\":\"__NORMALIZED_REVIEW_RUN_ID__\",\"repository_checkpoint\":{\"fingerprint\":\"slot-baseline-checkpoint\"}},\"verdict\":\"approved\"}",
                 "phase_id": "review",
                 "record_kind": "private_phase_record",
                 "resolved_agent_id": "agent-review",
@@ -2088,7 +2480,7 @@
                 "execution_origin": "agent-executed",
                 "finished_at": "__NORMALIZED_TIMESTAMP__",
                 "first_started_at": "__NORMALIZED_TIMESTAMP__",
-                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"validate\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Project checks passed.\",\"validation_passed\":true}}",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"validate\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"Project checks passed.\"}}",
                 "phase_id": "validate",
                 "record_kind": "private_phase_record",
                 "resolved_agent_id": "agent-validate",
@@ -2108,7 +2500,7 @@
                 ],
                 "finished_at": "__NORMALIZED_TIMESTAMP__",
                 "first_started_at": "__NORMALIZED_TIMESTAMP__",
-                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"verify_findings\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"verdict\":\"no_findings_verified\",\"produced_outputs\":{\"finding_dispositions\":[]}}",
+                "output_artifact": "{\"contract_version\":\"0.7\",\"phase_id\":\"verify_findings\",\"status\":\"completed\",\"summary\":\"Phase produced a validated output.\",\"produced_outputs\":{\"value\":\"{\\\"finding_dispositions\\\":[]}\",\"finding_dispositions\":[]},\"verdict\":\"no_findings_verified\"}",
                 "phase_id": "verify_findings",
                 "record_kind": "private_phase_record",
                 "resolved_agent_id": "agent-verify_findings",
@@ -2206,7 +2598,7 @@
             "tracked_delta": ""
         },
         "goal_subtask_review_results": {
-            "1": "{\"contract_version\":\"0.7\",\"phase_id\":\"review\",\"status\":\"completed\",\"summary\":\"{\\\"contract_version\\\":\\\"0.3\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"produced_outputs\":{\"findings\":[],\"review_run_id\":\"__NORMALIZED_REVIEW_RUN_ID__\",\"repository_checkpoint\":{\"fingerprint\":\"repository-fingerprint-3\"}},\"verdict\":\"approved\"}"
+            "1": "{\"contract_version\":\"0.7\",\"phase_id\":\"review\",\"status\":\"completed\",\"summary\":\"{\\\"contract_version\\\":\\\"0.7\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"produced_outputs\":{\"value\":\"{\\\"contract_version\\\":\\\"0.7\\\",\\\"produced_outputs\\\":{\\\"findings\\\":[]}}\",\"findings\":[],\"review_run_id\":\"__NORMALIZED_REVIEW_RUN_ID__\",\"repository_checkpoint\":{\"fingerprint\":\"slot-baseline-checkpoint\"}},\"verdict\":\"approved\"}"
         },
         "goal_subtask_review_state": {
             "blocker_dispositions": [],
@@ -2260,6 +2652,11 @@
             "attempt_count": 1,
             "status": "completed",
             "step_id": "simplify"
+        },
+        {
+            "attempt_count": 0,
+            "status": "pending",
+            "step_id": "audit_plan_fix"
         },
         {
             "attempt_count": 0,

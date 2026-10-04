@@ -4,11 +4,11 @@ import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
-import skillbill.engine.envelope
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementBlockRequest
 import skillbill.engine.featuretask.model.phase.FeatureTaskPhaseSettlementCompleteRequest
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationCommandResult
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
 import java.time.Instant
@@ -155,6 +155,30 @@ class FeatureTaskPhaseSettlementServiceTest {
     assertNotNull(service.findEnvelope("wftr-test", "plan", 1))
     assertTrue(service.clear("wftr-test", "plan", 1))
     assertNull(service.findEnvelope("wftr-test", "plan", 1))
+  }
+
+  @Test
+  fun `historical settled envelope reloads value and prompt with its stored bytes`() {
+    val repo = InMemoryFeatureTaskPhaseSettlementRepository()
+    val service = FeatureTaskPhaseSettlementService(repo, testHarnessClock)
+    val stored =
+      """{"phase_id":"write_history","contract_version":"1.0","status":"completed","summary":"done",""" +
+        """"produced_outputs":{"value":"history written","prompt":"next","legacy_key":1}}"""
+    repo.upsert(
+      FeatureTaskPhaseSettlement(
+        workflowId = "wftr-test",
+        phaseId = "write_history",
+        attempt = 2,
+        kind = FeatureTaskPhaseSettlementService.KIND_COMPLETE,
+        envelopeJson = stored,
+        recordedAt = Instant.now().toString(),
+      ),
+    )
+    val envelope = assertNotNull(service.findEnvelope("wftr-test", "write_history", 2)).envelope
+    val normalized = NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(envelope)
+    assertEquals("history written", normalized.output.value)
+    assertEquals("next", normalized.output.prompt)
+    assertEquals("completed", normalized.status)
   }
 
   @Test

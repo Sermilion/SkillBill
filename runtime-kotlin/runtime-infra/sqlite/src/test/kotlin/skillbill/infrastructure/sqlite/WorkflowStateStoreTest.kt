@@ -1,9 +1,8 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
-import skillbill.error.shellcontent.ProseFeatureTaskWorkflowWriteRefusedError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.workflow.FEATURE_IMPLEMENT_WORKFLOW_CONTRACT_VERSION
 import skillbill.infrastructure.sqlite.workflow.FEATURE_TASK_RUNTIME_WORKFLOW_CONTRACT_VERSION
@@ -18,7 +17,7 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import java.nio.file.Files
 import java.sql.DriverManager
 import java.time.Clock
@@ -34,6 +33,72 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class WorkflowStateStoreTest {
+  @Test
+  fun `issue lookup excludes corrupt unrelated workflows before decoding and retains matching failures`() {
+    val dbPath = Files.createTempDirectory("issue-scoped-workflow-read").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
+      listOf("SKILL-402", "SKILL-401").forEach { issue ->
+        store.saveFeatureTaskWorkflow(
+          workflowRow("wftr-$issue", "ftr-$issue", "bill-feature-task", "plan", RUNTIME)
+            .copy(issueKey = issue),
+          RUNTIME,
+        )
+      }
+      connection.createStatement().use { statement ->
+        statement.execute("PRAGMA ignore_check_constraints = ON")
+        statement.executeUpdate(
+          "UPDATE feature_task_workflows SET workflow_name = 'corrupt', artifacts_json = '{' " +
+            "WHERE issue_key = 'SKILL-401'",
+        )
+      }
+      assertEquals(
+        listOf("wftr-SKILL-402"),
+        store.findFeatureTaskWorkflowsForIssue(RUNTIME, "SKILL-402").map { it.workflowId },
+      )
+      assertTrue(store.findFeatureTaskWorkflowsForIssue(RUNTIME, "SKILL-403").isEmpty())
+      assertFailsWith<SkillBillRuntimeException> {
+        store.findFeatureTaskWorkflowsForIssue(RUNTIME, "SKILL-401")
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+    }
+  }
+
+  @Test
+  fun `issue lookup excludes another repository before decoding and admits unbound legacy parents`() {
+    val dbPath = Files.createTempDirectory("repository-scoped-workflow-read").resolve("metrics.db")
+    DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
+      val store = WorkflowStateStore(connection, Clock.systemUTC(), testWorkflowSnapshotValidator)
+      listOf("local", "foreign", "legacy").forEach { id ->
+        store.saveFeatureTaskWorkflow(
+          workflowRow("wftr-$id", "ftr-$id", "bill-feature-task", "plan", RUNTIME).copy(
+            issueKey = if (id == "legacy") null else "SKILL-402",
+            artifactsJson = """{"decomposition_runtime":{"issue_key":"SKILL-402"}}""",
+          ),
+          RUNTIME,
+        )
+      }
+      connection.createStatement().use { statement ->
+        statement.execute("PRAGMA ignore_check_constraints = ON")
+        statement.executeUpdate(
+          """INSERT INTO goal_runner_controls(parent_workflow_id, control_state_json)
+            VALUES ('wftr-local', '{"repository_identity":"repo-local"}'),
+              ('wftr-foreign', '{"repository_identity":"repo-foreign"}')""",
+        )
+        statement.executeUpdate(
+          "UPDATE feature_task_workflows SET workflow_name = 'corrupt', artifacts_json = '{' " +
+            "WHERE workflow_id = 'wftr-foreign'",
+        )
+      }
+      assertEquals(
+        setOf("wftr-local", "wftr-legacy"),
+        store.findFeatureTaskWorkflowsForIssue(RUNTIME, "SKILL-402", "repo-local").map { it.workflowId }.toSet(),
+      )
+      assertFailsWith<SkillBillRuntimeException> {
+        store.findFeatureTaskWorkflowsForIssue(RUNTIME, "SKILL-402", "repo-foreign")
+      }
+    }
+  }
+
   @Test
   fun `malformed goal continuation is rejected before sqlite persistence`() {
     val dbPath = Files.createTempDirectory("malformed-goal-continuation-write").resolve("metrics.db")
@@ -64,9 +129,9 @@ class WorkflowStateStoreTest {
               """"goal_branch":"feat/SKILL-372","code_review_mode":"inline"}}""",
         )
 
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.saveFeatureTaskWorkflow(row, RUNTIME)
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
       assertEquals(null, store.getFeatureTaskWorkflowAsMode(row.workflowId, RUNTIME))
     }
   }
@@ -437,7 +502,7 @@ class WorkflowStateStoreTest {
         it.setString(2, row.workflowId)
         it.executeUpdate()
       }
-      assertFailsWith<InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.getFeatureTaskRuntimeWorkerOwnership(row.workflowId)
       }
 
@@ -449,7 +514,7 @@ class WorkflowStateStoreTest {
         it.setString(3, row.workflowId)
         it.executeUpdate()
       }
-      assertFailsWith<InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.getFeatureTaskRuntimeWorkerOwnership(row.workflowId)
       }
     }
@@ -782,9 +847,9 @@ class WorkflowStateStoreLifecycleTest {
       assertEquals("plan", saved.currentStepId)
       assertEquals(artifactsJson, saved.artifactsJson)
 
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.getFeatureTaskWorkflowAsMode("wftr-001", PROSE)
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
       assertEquals(null, store.get(WorkflowFamily.VERIFY, "wftr-001"))
       assertEquals(RUNTIME, store.getFeatureTaskWorkflow("wftr-001")?.mode)
     }
@@ -923,13 +988,13 @@ class WorkflowStateStoreLifecycleTest {
 
       val generic = assertNotNull(store.getFeatureTaskWorkflow("wfl-legacy-prose-001"))
       assertEquals(PROSE, generic.mode)
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.getFeatureTaskWorkflowAsMode("wfl-legacy-prose-001", RUNTIME)
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
-      assertFailsWith<ProseFeatureTaskWorkflowWriteRefusedError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.saveFeatureTaskWorkflow(prose, PROSE)
-      }
+      }.also { assertEquals(WorkflowFailureCode.PROSE_FEATURE_TASK_WORKFLOW_WRITE_REFUSED, it.code) }
     }
   }
 
@@ -971,9 +1036,9 @@ class WorkflowStateStoreLifecycleTest {
       assertEquals("abandoned", saved.workflowStatus)
       assertContains(saved.artifactsJson, "retain-me")
       assertContains(saved.artifactsJson, "operator_abandonment")
-      assertFailsWith<ProseFeatureTaskWorkflowWriteRefusedError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.saveFeatureTaskWorkflow(saved, PROSE)
-      }
+      }.also { assertEquals(WorkflowFailureCode.PROSE_FEATURE_TASK_WORKFLOW_WRITE_REFUSED, it.code) }
     }
   }
 }

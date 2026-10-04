@@ -12,8 +12,10 @@ import skillbill.application.review.preparation.model.ReviewScopeFacts
 import skillbill.application.review.preparation.model.ReviewStackRoutingFacts
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.REVIEW_CONTEXT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.infrastructure.contracts.review.ReviewContextSchemaValidator
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.bundle.ReviewLaneBundle
 import skillbill.review.context.model.bundle.ReviewLaneBundleEntry
 import skillbill.review.context.model.commit.ReviewAssignment
@@ -23,10 +25,9 @@ import skillbill.review.context.model.commit.ReviewCommitLaneDisposition
 import skillbill.review.context.model.commit.ReviewCommitLaneRoutingMatrix
 import skillbill.review.context.model.commit.ReviewCommitSource
 import skillbill.review.context.model.commit.ReviewCommitUnit
-import skillbill.review.context.model.execution.ReviewLaneDecision
+import skillbill.review.context.model.commit.ReviewLaneDecision
 import skillbill.review.context.model.hunk.ReviewBuildTestFact
 import skillbill.review.context.model.hunk.ReviewChangedHunk
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.context.model.hunk.ReviewDependencyAllowlist
 import skillbill.review.context.model.hunk.ReviewEvidenceTarget
 import skillbill.review.context.model.hunk.ReviewLearningsReference
@@ -186,21 +187,21 @@ class ReviewContextSchemaValidatorTest {
         ("bundle" to mapOf("entries" to listOf(mapOf("content" to hunkA.content))))
 
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewContextSchemaValidator.validateIntegrationLaunch(smuggled, "integration")
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
 
     assertTrue("bundle" in failure.message.orEmpty())
   }
 
   @Test fun `a lane launch is not accepted as an integration launch`() {
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewContextSchemaValidator.validateIntegrationLaunch(
           packet.toParentPacketEnvelope().asWireMap(),
           "packet",
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
 
     assertTrue("kind='parent_packet'" in failure.message.orEmpty())
   }
@@ -227,27 +228,27 @@ class ReviewContextSchemaValidatorTest {
 
   @Test fun `wrong kind discriminator fails loudly`() {
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewContextSchemaValidator.validateAssignment(packet.toParentPacketEnvelope().asWireMap(), "packet")
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("kind='parent_packet'" in failure.message.orEmpty())
   }
 
   @Test fun `missing required fields fail with a field path`() {
     val stripped = packet.toParentPacketEnvelope().asWireMap().toMutableMap().apply { remove("lane_decisions") }
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewContextSchemaValidator.validate(stripped, "packet")
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("lane_decisions" in failure.message.orEmpty())
   }
 
   @Test fun `unknown additional properties are rejected`() {
     val extended = packet.toParentPacketEnvelope().asWireMap() + ("smuggled_diff" to "@@ -1 +1 @@")
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewContextSchemaValidator.validate(extended, "packet")
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("smuggled_diff" in failure.message.orEmpty())
   }
 
@@ -257,7 +258,9 @@ class ReviewContextSchemaValidatorTest {
       listOf(
         mapOf("lane" to "security", "included" to true, "reason" to "", "signals" to emptyList<String>()),
       )
-    assertFailsWith<InvalidReviewContextSchemaError> { ReviewContextSchemaValidator.validate(envelope, "packet") }
+    assertFailsWith<SkillBillRuntimeException> {
+      ReviewContextSchemaValidator.validate(envelope, "packet")
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `included lane decisions require composition attribution and specialist ownership`() {
@@ -272,15 +275,15 @@ class ReviewContextSchemaValidatorTest {
     listOf("origin_layer_chains", "owning_pack", "specialist_skill_name").forEach { omitted ->
       val envelope = valid.toMutableMap()
       envelope["lane_decisions"] = listOf(baseDecision - omitted)
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewContextSchemaValidator.validate(envelope, "packet")
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     }
     val envelope = valid.toMutableMap()
     envelope["lane_decisions"] = listOf(baseDecision + ("origin_layer_chains" to emptyList<List<String>>()))
-    assertFailsWith<InvalidReviewContextSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewContextSchemaValidator.validate(envelope, "packet")
-    }
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `blank expansion reachability reasons are rejected`() {
@@ -296,7 +299,9 @@ class ReviewContextSchemaValidatorTest {
           "sequence" to 0,
         ),
       )
-    assertFailsWith<InvalidReviewContextSchemaError> { ReviewContextSchemaValidator.validate(envelope, "assignment") }
+    assertFailsWith<SkillBillRuntimeException> {
+      ReviewContextSchemaValidator.validate(envelope, "assignment")
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `over long rule excerpts are rejected by the schema`() {
@@ -310,43 +315,57 @@ class ReviewContextSchemaValidatorTest {
           "digest" to "b".repeat(64),
         ),
       )
-    assertFailsWith<InvalidReviewContextSchemaError> { ReviewContextSchemaValidator.validate(envelope, "packet") }
+    assertFailsWith<SkillBillRuntimeException> {
+      ReviewContextSchemaValidator.validate(envelope, "packet")
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `traversal dependency paths are rejected by the schema`() {
     val envelope = assignment.toAssignmentEnvelope().asWireMap().toMutableMap()
     envelope["dependency_allowlist"] = listOf("../secret")
-    assertFailsWith<InvalidReviewContextSchemaError> { ReviewContextSchemaValidator.validate(envelope, "assignment") }
+    assertFailsWith<SkillBillRuntimeException> {
+      ReviewContextSchemaValidator.validate(envelope, "assignment")
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `backslash paths are rejected by the schema`() {
     val envelope = assignment.toAssignmentEnvelope().asWireMap().toMutableMap()
     envelope["dependency_allowlist"] = listOf("src\\..\\secret")
-    assertFailsWith<InvalidReviewContextSchemaError> { ReviewContextSchemaValidator.validate(envelope, "assignment") }
+    assertFailsWith<SkillBillRuntimeException> {
+      ReviewContextSchemaValidator.validate(envelope, "assignment")
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `whitespace only identifiers are rejected by the schema`() {
     val envelope = packet.toParentPacketEnvelope().asWireMap().toMutableMap()
     envelope["review_id"] = "   "
-    assertFailsWith<InvalidReviewContextSchemaError> { ReviewContextSchemaValidator.validate(envelope, "packet") }
+    assertFailsWith<SkillBillRuntimeException> {
+      ReviewContextSchemaValidator.validate(envelope, "packet")
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `positional hunk identifiers are rejected`() {
     val envelope = assignment.toAssignmentEnvelope().asWireMap().toMutableMap()
     envelope["assigned_hunks"] = listOf("@@ -1 +1 @@")
-    assertFailsWith<InvalidReviewContextSchemaError> { ReviewContextSchemaValidator.validate(envelope, "assignment") }
+    assertFailsWith<SkillBillRuntimeException> {
+      ReviewContextSchemaValidator.validate(envelope, "assignment")
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `stale contract versions are rejected`() {
     val envelope = packet.toParentPacketEnvelope().asWireMap().toMutableMap()
     envelope["contract_version"] = "0.1"
-    assertFailsWith<InvalidReviewContextSchemaError> { ReviewContextSchemaValidator.validate(envelope, "packet") }
+    assertFailsWith<SkillBillRuntimeException> {
+      ReviewContextSchemaValidator.validate(envelope, "packet")
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `an envelope declaring a non branch kind is rejected instead of validating permissively`() {
     val envelope = packet.toParentPacketEnvelope().asWireMap().toMutableMap()
     envelope["kind"] = "header"
-    assertFailsWith<InvalidReviewContextSchemaError> { ReviewContextSchemaValidator.validate(envelope, "packet") }
+    assertFailsWith<SkillBillRuntimeException> {
+      ReviewContextSchemaValidator.validate(envelope, "packet")
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `schema violations never echo guidance excerpts or diff bodies`() {
@@ -357,7 +376,9 @@ class ReviewContextSchemaValidatorTest {
         mapOf("rule_id" to "rule-1", "source_path" to "AGENTS.md", "excerpt" to secret, "digest" to 7),
       )
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> { ReviewContextSchemaValidator.validate(envelope, "packet") }
+      assertFailsWith<SkillBillRuntimeException> {
+        ReviewContextSchemaValidator.validate(envelope, "packet")
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue(secret !in failure.message.orEmpty())
   }
 
@@ -413,15 +434,15 @@ class ReviewContextSchemaValidatorTest {
     val entries = requireNotNull(JsonCodec.anyToStringAnyMapList((bundle["entries"]))).map { it.toMutableMap() }
     bundle["entries"] = listOf(entries.first() - "commit_sha")
     envelope["bundle"] = bundle
-    assertFailsWith<InvalidReviewContextSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewContextSchemaValidator.validateLaunch(envelope, "launch")
-    }
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
 
     bundle["entries"] = listOf(entries.first() - "order_index")
     envelope["bundle"] = bundle
-    assertFailsWith<InvalidReviewContextSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewContextSchemaValidator.validateLaunch(envelope, "launch")
-    }
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `projected envelopes carry contract version 2_4`() {
@@ -437,11 +458,11 @@ class ReviewContextSchemaValidatorTest {
     val envelope = packet.toParentPacketEnvelope().asWireMap().toMutableMap()
     envelope["contract_version"] = "1.0"
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewContextSchemaValidator.validateParentPacket(envelope, "packet")
-      }
-    assertTrue("1.0" in failure.reason)
-    assertTrue("2.4" in failure.reason)
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
+    assertTrue("envelope declares '1.0'" in failure.message.orEmpty())
+    assertTrue("runtime requires '2.4'" in failure.message.orEmpty())
   }
 
   @Test fun `incomplete launch bundle without budget dimension is rejected`() {
@@ -453,9 +474,9 @@ class ReviewContextSchemaValidatorTest {
     bundle["unreviewed_segment_ids"] = listOf("unreviewable")
     bundle.remove("budget_dimension")
     envelope["bundle"] = bundle
-    assertFailsWith<InvalidReviewContextSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewContextSchemaValidator.validateLaunch(envelope, "launch")
-    }
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `index hunks reject inlined diff bodies on parent assignment and launch`() {
@@ -463,14 +484,14 @@ class ReviewContextSchemaValidatorTest {
     val hunks = requireNotNull(JsonCodec.anyToStringAnyMapList((parent["changed_hunks"]))).map { it.toMutableMap() }
     hunks[0]["content"] = "+smuggled"
     parent["changed_hunks"] = hunks
-    assertFailsWith<InvalidReviewContextSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewContextSchemaValidator.validateParentPacket(parent, "packet")
-    }
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
 
     val assignmentBody = assignment.toAssignmentEnvelope().asWireMap() + ("hunk_body" to "+smuggled")
-    assertFailsWith<InvalidReviewContextSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewContextSchemaValidator.validateAssignment(assignmentBody, "assignment")
-    }
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
 
     val launch =
       GovernedReviewLaunch(assignment, packet, "contract", "rubric", "broker", ReviewContextBudgetPolicy.DEFAULT)
@@ -478,9 +499,9 @@ class ReviewContextSchemaValidatorTest {
       launch.toLaunchEnvelope().asWireMap() + (
         "brokered_evidence" to listOf(mapOf("path" to "src/A.kt", "content" to "+smuggled"))
       )
-    assertFailsWith<InvalidReviewContextSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewContextSchemaValidator.validateLaunch(launchBody, "launch")
-    }
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
 
     val launchEnvelope = launch.toLaunchEnvelope().asWireMap().toMutableMap()
     val bundle = requireNotNull(JsonCodec.anyToStringAnyMap(launchEnvelope["bundle"])).toMutableMap()
@@ -490,27 +511,27 @@ class ReviewContextSchemaValidatorTest {
     entries[0]["content"] = "+smuggled"
     bundle["entries"] = entries
     launchEnvelope["bundle"] = bundle
-    assertFailsWith<InvalidReviewContextSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewContextSchemaValidator.validateLaunch(launchEnvelope, "launch")
-    }
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `a spec intent projection missing provenance is rejected and a provenanced counterpart is accepted`() {
     ReviewContextSchemaValidator.validateSpecIntentProjection(specIntentProjection(), "projection")
     val missing = specIntentProjection() - "provenance"
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewContextSchemaValidator.validateSpecIntentProjection(missing, "projection")
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("for definition 'spec_intent_projection'" in failure.message.orEmpty())
     val noDigest =
       specIntentProjection() + (
         "provenance" to mapOf("spec_path" to "spec.md")
       )
     val digestFailure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewContextSchemaValidator.validateSpecIntentProjection(noDigest, "projection")
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("for definition 'spec_intent_projection'" in digestFailure.message.orEmpty())
   }
 
@@ -518,9 +539,9 @@ class ReviewContextSchemaValidatorTest {
     ReviewContextSchemaValidator.validateVerificationLaunch(verificationLaunch(), "verification")
     val contaminated = verificationLaunch() + ("spec_intent_projection" to specIntentProjection())
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewContextSchemaValidator.validateVerificationLaunch(contaminated, "verification")
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("for definition 'verification_launch'" in failure.message.orEmpty())
   }
 
@@ -530,12 +551,12 @@ class ReviewContextSchemaValidatorTest {
       "verdict",
     )
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewContextSchemaValidator.validateFindingVerdict(
           confirmedVerdict() + ("claim_verdict" to "refuted"),
           "verdict",
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("for definition 'finding_verdict'" in failure.message.orEmpty())
   }
 
@@ -555,20 +576,20 @@ class ReviewContextSchemaValidatorTest {
       "verdict",
     )
     val uncitedDowngrade =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewContextSchemaValidator.validateFindingVerdict(
           confirmedVerdict("adjudication") +
             ("severity_adjustment" to mapOf("direction" to "lower", "justification" to "listed non-goal")),
           "verdict",
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     val uncitedOutOfScope =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewContextSchemaValidator.validateFindingVerdict(
           confirmedVerdict("adjudication") + ("scope_disposition" to "out_of_scope_preexisting"),
           "verdict",
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("for definition 'finding_verdict'" in uncitedDowngrade.message.orEmpty())
     assertTrue("for definition 'finding_verdict'" in uncitedOutOfScope.message.orEmpty())
   }
@@ -579,12 +600,12 @@ class ReviewContextSchemaValidatorTest {
       "verdict",
     )
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewContextSchemaValidator.validateFindingVerdict(
           confirmedVerdict("verification") + ("scope_disposition" to "in_scope"),
           "verdict",
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("for definition 'finding_verdict'" in failure.message.orEmpty())
   }
 

@@ -41,7 +41,7 @@ fun establishTemporarySchemaReadiness(prefix: String = "skillbill-sqlite-test"):
 }
 
 fun ensureTestDatabase(dbPath: Path): Connection {
-  DatabaseRuntime.establishSchemaReadiness(dbPath.toAbsolutePath().normalize())
+  DatabaseRuntime.establishSchemaReadiness(dbPath.toAbsolutePath().normalize(), SqliteTestDiagnostics)
   return DriverManager.getConnection("jdbc:sqlite:${dbPath.toAbsolutePath().normalize()}")
 }
 
@@ -51,7 +51,7 @@ fun withGoalPlanningPreparationRepository(
   block: (GoalPlanningPreparationRepository) -> Unit,
 ) {
   ensureTestDatabase(dbPath).use { connection ->
-    block(GoalPlanningPreparationStore(connection))
+    block(GoalPlanningPreparationStore(connection, SqliteTestDiagnostics))
   }
 }
 
@@ -70,7 +70,7 @@ fun withLifecycleTelemetryStore(
   block: (LifecycleTelemetryRepository) -> Unit,
 ) {
   ensureTestDatabase(dbPath).use { connection ->
-    block(LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version"))
+    block(LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics))
   }
 }
 

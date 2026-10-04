@@ -9,12 +9,14 @@ internal object FeatureTaskRuntimePhaseIds {
   const val REVIEW: String = "review"
   const val BUILD: String = "build"
   const val VERIFY_FINDINGS: String = "verify_findings"
+  const val AUDIT_PLAN_FIX: String = "audit_plan_fix"
   const val AUDIT_IMPLEMENT_FIX: String = "audit_implement_fix"
   const val AUDIT: String = "audit"
   const val VALIDATE: String = "validate"
   const val WRITE_HISTORY: String = "write_history"
   const val COMMIT_PUSH: String = "commit_push"
   const val PR: String = "pr"
+  const val PRESENT_FINDINGS: String = "present_findings"
 
   val all: List<String> =
     listOf(
@@ -22,6 +24,7 @@ internal object FeatureTaskRuntimePhaseIds {
       PLAN,
       IMPLEMENT,
       SIMPLIFY,
+      AUDIT_PLAN_FIX,
       AUDIT_IMPLEMENT_FIX,
       AUDIT,
       REVIEW,
@@ -32,5 +35,6 @@ internal object FeatureTaskRuntimePhaseIds {
       WRITE_HISTORY,
       COMMIT_PUSH,
       PR,
+      PRESENT_FINDINGS,
     )
 }

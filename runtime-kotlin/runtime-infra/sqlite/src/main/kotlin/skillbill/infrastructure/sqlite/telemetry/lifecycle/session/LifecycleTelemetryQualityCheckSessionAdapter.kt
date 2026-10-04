@@ -5,6 +5,7 @@ import skillbill.infrastructure.sqlite.telemetry.lifecycle.emitQualityCheckFinis
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.emitQualityCheckStarted
 import skillbill.infrastructure.sqlite.telemetry.redaction.saveQualityCheckFinished
 import skillbill.infrastructure.sqlite.telemetry.redaction.saveQualityCheckStarted
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.telemetry.lifecycle.QualityCheckLifecycleTelemetryRepository
 import skillbill.telemetry.model.QualityCheckFinishedRecord
 import skillbill.telemetry.model.QualityCheckStartedRecord
@@ -13,6 +14,7 @@ import java.sql.Connection
 internal class LifecycleTelemetryQualityCheckSessionAdapter(
   private val connection: Connection,
   private val runtimeVersion: String,
+  private val diagnostics: RuntimeDiagnostics,
 ) : QualityCheckLifecycleTelemetryRepository {
   override fun qualityCheckStarted(
     record: QualityCheckStartedRecord,
@@ -27,7 +29,7 @@ internal class LifecycleTelemetryQualityCheckSessionAdapter(
     level: String,
   ) {
     if (saveQualityCheckFinished(connection, record) == TerminalSaveOutcome.FIRST_TERMINAL) {
-      emitQualityCheckFinished(connection, runtimeVersion, record.sessionId, level)
+      emitQualityCheckFinished(connection, runtimeVersion, record.sessionId, level, diagnostics)
     }
   }
 }

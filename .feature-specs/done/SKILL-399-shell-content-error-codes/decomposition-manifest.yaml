@@ -1,0 +1,118 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-399"
+feature_name: "shell-content-error-codes"
+parent_spec_path: ".feature-specs/SKILL-399-shell-content-error-codes/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "base/SKILL-380-phase-slot-strategies"
+feature_branch: "feat/SKILL-399-shell-content-error-codes"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "manifest-and-skill-staging"
+  spec_path: ".feature-specs/SKILL-399-shell-content-error-codes/spec_subtask_1_manifest-and-skill-staging.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261003-195217-ycw4"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 2
+  name: "scaffold-and-review-context"
+  spec_path: ".feature-specs/SKILL-399-shell-content-error-codes/spec_subtask_2_scaffold-and-review-context.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261003-202732-jrxm"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 3
+  name: "install-schema-and-config"
+  spec_path: ".feature-specs/SKILL-399-shell-content-error-codes/spec_subtask_3_install-schema-and-config.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261003-205704-xtvv"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 4
+  name: "goal-planning-preparation-results"
+  spec_path: ".feature-specs/SKILL-399-shell-content-error-codes/spec_subtask_4_goal-planning-preparation-results.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261003-211524-zedm"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 5
+  name: "feature-task-runtime-phase-output"
+  spec_path: ".feature-specs/SKILL-399-shell-content-error-codes/spec_subtask_5_feature-task-runtime-phase-output.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261004-072858-6sfg"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 6
+  name: "feature-task-runtime-evidence-records"
+  spec_path: ".feature-specs/SKILL-399-shell-content-error-codes/spec_subtask_6_feature-task-runtime-evidence-records.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261004-081332-2f2n"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 7
+  name: "workflow-state-and-records"
+  spec_path: ".feature-specs/SKILL-399-shell-content-error-codes/spec_subtask_7_workflow-state-and-records.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261004-085305-e5id"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 8
+  name: "decomposition-manifest-codes"
+  spec_path: ".feature-specs/SKILL-399-shell-content-error-codes/spec_subtask_8_decomposition-manifest-codes.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261004-091454-m5t8"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []

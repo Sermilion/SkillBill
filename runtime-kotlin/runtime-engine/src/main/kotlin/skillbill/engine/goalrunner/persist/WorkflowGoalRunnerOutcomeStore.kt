@@ -3,7 +3,13 @@ package skillbill.engine.goalrunner.persist
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goalrunner.execution.support.authoritativeOutcomesBySubtask
 import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
-import skillbill.goalrunner.goalReviewArtifacts
+import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
+import skillbill.engine.goalrunner.model.GoalRunnerLedgerSequenceWatermarks
+import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
+import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
+import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
+import skillbill.goalrunner.goalSubtaskReviewArtifacts
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
@@ -12,19 +18,9 @@ import skillbill.goalrunner.model.GoalRunnerWirePayload
 import skillbill.goalrunner.model.GoalRunnerWorkerSubtaskRequestOutcome
 import skillbill.goalrunner.validatedGoalReviewPasses
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.goalrunner.persistence.model.GoalSubtaskIdentity
-import skillbill.ports.goalrunner.runner.GoalRunnerAttemptLedgerStore
-import skillbill.ports.goalrunner.runner.GoalRunnerReviewOutcomeStore
-import skillbill.ports.goalrunner.runner.GoalRunnerTerminalOutcomeStore
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
-import skillbill.ports.goalrunner.runner.model.GoalRunnerAttemptLedgerRecordRequest
-import skillbill.ports.goalrunner.runner.model.GoalRunnerLedgerSequenceWatermarks
-import skillbill.ports.goalrunner.runner.model.GoalRunnerProgressEventRecordRequest
-import skillbill.ports.goalrunner.runner.model.GoalRunnerReconcileGate
-import skillbill.ports.goalrunner.runner.model.GoalRunnerWorkflowProgress
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -34,7 +30,8 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowUpdateInput
-import skillbill.workflow.model.goalreview.GoalProgressEvent
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import java.nio.file.Path
@@ -55,10 +52,8 @@ class WorkflowGoalRunnerOutcomeStore
   constructor(
     private val database: DatabaseSessionFactory,
     workflowSnapshotValidator: WorkflowSnapshotValidator,
-    goalObservabilityEventValidator: FeatureTaskRuntimeWireArtifactValidator,
-    goalProgressEventValidator: FeatureTaskRuntimeWireArtifactValidator,
+    wireArtifactValidator: FeatureTaskRuntimeWireArtifactValidator,
     gitOperations: WorkflowGitOperations,
-    phaseOutputValidator: FeatureTaskRuntimePhaseOutputValidator,
     workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
     clock: Clock,
   ) : GoalRunnerWorkflowOutcomeStore,
@@ -85,11 +80,10 @@ class WorkflowGoalRunnerOutcomeStore
         database,
         engine,
         workflowSnapshotValidator,
-        goalObservabilityEventValidator,
-        goalProgressEventValidator,
+        wireArtifactValidator,
       )
     private val terminal = WorkflowGoalRunnerTerminalBridge(database, terminalPersistence, gitOperations)
-    private val review = WorkflowGoalRunnerReviewBridge(database, engine, phaseOutputValidator)
+    private val review = WorkflowGoalRunnerReviewBridge(database, engine)
     private val reconcile = WorkflowGoalRunnerReconcileBridge(database, outcomeReconcile)
     private val blocks = WorkflowGoalRunnerBlockBridge(database, blockWrites)
 
@@ -171,7 +165,16 @@ class WorkflowGoalRunnerOutcomeStore
       workflowId: String,
       preferredPhaseId: String,
       reason: String,
-    ): Boolean = blocks.reopenBlockedPhaseForOperatorResume(workflowId, preferredPhaseId, reason)
+      expectedIdentity: FeatureTaskExecutionIdentity,
+      expectedExecutionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
+    ): Boolean =
+      blocks.reopenBlockedPhaseForOperatorResume(
+        workflowId,
+        preferredPhaseId,
+        reason,
+        expectedIdentity,
+        expectedExecutionPlan,
+      )
 
     override fun readAttemptLedgerSummary(issueKey: String): GoalRunnerAttemptLedgerSummary =
       progressRecording.readAttemptLedgerSummary(issueKey)
@@ -262,12 +265,11 @@ internal class WorkflowGoalRunnerTerminalBridge(
 internal class WorkflowGoalRunnerReviewBridge(
   private val database: DatabaseSessionFactory,
   private val engine: WorkflowEngine,
-  private val phaseOutputValidator: FeatureTaskRuntimePhaseOutputValidator,
 ) : GoalRunnerReviewOutcomeStore {
   override fun goalSubtaskReviewState(workflowId: String): GoalSubtaskReviewState? =
     database.read { unitOfWork ->
       val record = taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId) ?: return@read null
-      goalReviewArtifacts(record.artifacts)?.state
+      record.artifacts.goalSubtaskReviewArtifacts()?.state
     }
 
   override fun unemittedGoalReviewPasses(workflowId: String): List<GoalSubtaskReviewPassResult> =
@@ -275,10 +277,10 @@ internal class WorkflowGoalRunnerReviewBridge(
       val record = taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId) ?: return@read emptyList()
       val artifacts = record.artifacts
       if (!DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.contains(artifacts)) return@read emptyList()
-      val review = goalReviewArtifacts(artifacts) ?: return@read emptyList()
+      val review = artifacts.goalSubtaskReviewArtifacts() ?: return@read emptyList()
       validatedGoalReviewPasses(
         review,
-        { rawResult -> goalReviewEmissionEnvelope(rawResult, phaseOutputValidator) },
+        ::goalReviewEmissionEnvelope,
         unitOfWork.reviews::fetchFindingVerdicts,
       )
         .drop(review.state.emittedPassCount)
@@ -291,11 +293,11 @@ internal class WorkflowGoalRunnerReviewBridge(
     database.transaction { unitOfWork ->
       val record = taskRuntimeRecordOrNull(unitOfWork.workflowStates, workflowId) ?: return@transaction false
       val artifacts = record.artifacts
-      val review = goalReviewArtifacts(artifacts) ?: return@transaction false
+      val review = artifacts.goalSubtaskReviewArtifacts() ?: return@transaction false
       val state = review.state
       validatedGoalReviewPasses(
         review,
-        { rawResult -> goalReviewEmissionEnvelope(rawResult, phaseOutputValidator) },
+        ::goalReviewEmissionEnvelope,
         unitOfWork.reviews::fetchFindingVerdicts,
       )
       if (passNumber != state.emittedPassCount + 1 || passNumber > state.completedPassCount) {
@@ -376,8 +378,18 @@ internal class WorkflowGoalRunnerBlockBridge(
     workflowId: String,
     preferredPhaseId: String,
     reason: String,
-  ): Boolean =
-    database.transaction { unitOfWork ->
-      blockWrites.reopenBlockedPhaseForOperatorResume(unitOfWork, workflowId, preferredPhaseId, reason)
+    expectedIdentity: FeatureTaskExecutionIdentity,
+    expectedExecutionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
+  ): Boolean {
+    require(workflowId == expectedIdentity.workflowId) { "Operator resume identity belongs to another workflow." }
+    return database.transaction { unitOfWork ->
+      blockWrites.reopenBlockedPhaseForOperatorResume(
+        unitOfWork,
+        preferredPhaseId,
+        reason,
+        expectedIdentity,
+        expectedExecutionPlan,
+      )
     }
+  }
 }

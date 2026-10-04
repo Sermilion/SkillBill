@@ -2,8 +2,9 @@ package skillbill.workflow.engine
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.session.WorkflowContinueSessionSummary
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.engine.model.RUNTIME_REPOSITORY_EVIDENCE_ARTIFACT_KEY
 import skillbill.workflow.engine.model.WorkflowContinueDecision
 import skillbill.workflow.engine.model.WorkflowContinueDecisionOverrides
 import skillbill.workflow.engine.model.WorkflowDefinition
@@ -27,7 +28,7 @@ class WorkflowEngine {
     sessionId: String,
     currentStepId: String,
   ): WorkflowStateSnapshot {
-    validateWorkflowOpen(definition, currentStepId)?.let { throw InvalidWorkflowStateSchemaError(it) }
+    validateWorkflowOpen(definition, currentStepId)?.let { throw invalidWorkflowStateSchemaError(it) }
     val snapshot =
       WorkflowStateSnapshot(
         workflowId = workflowId,
@@ -51,7 +52,7 @@ class WorkflowEngine {
     existing: WorkflowStateSnapshot,
     input: WorkflowUpdateInput,
   ): WorkflowStateSnapshot {
-    validateWorkflowUpdate(definition, input)?.let { throw InvalidWorkflowStateSchemaError(it) }
+    validateWorkflowUpdate(definition, input)?.let { throw invalidWorkflowStateSchemaError(it) }
     val mergedArtifacts =
       if (input.replaceArtifacts) {
         LinkedHashMap<String, Any?>()
@@ -70,7 +71,7 @@ class WorkflowEngine {
         finishedAt =
           if (terminal) {
             existing.finishedAt ?: input.terminalInstant
-              ?: throw InvalidWorkflowStateSchemaError("A terminal workflow update requires a terminal instant.")
+              ?: throw invalidWorkflowStateSchemaError("A terminal workflow update requires a terminal instant.")
           } else {
             null
           },

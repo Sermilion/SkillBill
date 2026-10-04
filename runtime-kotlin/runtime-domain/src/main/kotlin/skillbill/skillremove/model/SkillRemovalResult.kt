@@ -11,6 +11,11 @@ sealed class SkillRemovalResult {
     val readmeWarnings: List<ReadmeCatalogWarning> = emptyList(),
   ) : SkillRemovalResult()
 
+  data class Refused(
+    val reason: SkillRemovalRefusalReason,
+    val message: String,
+  ) : SkillRemovalResult()
+
   data class Failed(
     val exceptionName: String,
     val exceptionMessage: String,

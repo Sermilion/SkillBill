@@ -1,140 +1,158 @@
 package skillbill.application.review.parallel.planning
 
+import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
+import skillbill.application.review.model.ParallelCodeReviewPlanned
+import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewRequest
-import skillbill.application.review.model.StackDetectionException
-import skillbill.application.review.model.UsageValidationException
 import skillbill.application.review.parallel.runner.PARALLEL_REVIEW_MAX_SUPPLIED_DIFF_BYTES
 import skillbill.application.review.parallel.runner.ParallelCodeReviewStackDetection
-import skillbill.application.reviewevidence.model.DiffResolutionException
+import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.install.model.SupportedAgent
+import skillbill.ports.diff.model.ReviewDiffQuery
 import skillbill.review.plan.ReviewStackRouting
 import skillbill.review.plan.model.ReviewRoutingChangedFile
-import skillbill.text.GIT_NUL_RECORD_DELIMITER
-import java.nio.file.Path
 
 internal fun ParallelCodeReviewRunnerPlanning.resolveAgent(
   agentId: String,
   label: String,
-): SupportedAgent {
+): ParallelCodeReviewPlanned<SupportedAgent> {
   if (agentId.isBlank()) {
-    throw UsageValidationException(
-      "Option $label is required. Supported agents: ${SupportedAgent.supportedIds.joinToString()}.",
-    )
+    return usageInvalid("Option $label is required. Supported agents: ${SupportedAgent.supportedIds.joinToString()}.")
   }
-  return runCatching { SupportedAgent.fromNormalizedId(agentId, label = label) }
-    .getOrElse {
-      throw UsageValidationException(
-        "Unsupported agent '$agentId' for $label. Supported agents: ${SupportedAgent.supportedIds.joinToString()}.",
-      )
-    }
+  val normalized = agentId.trim().lowercase()
+  return SupportedAgent.entries.firstOrNull { it.id == normalized }?.let { ParallelCodeReviewPlanned.Ready(it) }
+    ?: usageInvalid(
+      "Unsupported agent '$agentId' for $label. Supported agents: ${SupportedAgent.supportedIds.joinToString()}.",
+    )
 }
+
+private fun usageInvalid(message: String): ParallelCodeReviewPlanned.Failed =
+  ParallelCodeReviewPlanned.Failed(ParallelCodeReviewPlanningFailure.UsageInvalid(message))
 
 internal fun ParallelCodeReviewRunnerPlanning.resolveDiff(
   request: ParallelCodeReviewRequest,
   revisions: Pair<String, String>,
-): String {
+): DiffResolution<String> {
   if (request.suppliedDiff != null) {
-    return request.suppliedDiff
+    return DiffResolution.Resolved(request.suppliedDiff)
   }
   val (base, head) = revisions
   val diffText =
-    request.suppliedDiffPath?.let { path ->
-      readDiff(path, PARALLEL_REVIEW_MAX_SUPPLIED_DIFF_BYTES)
-        ?: throw DiffResolutionException(
-          "--diff-file must name a readable, non-empty regular file no larger than " +
-            "$PARALLEL_REVIEW_MAX_SUPPLIED_DIFF_BYTES bytes.",
-        )
-    } ?: when (request.scope) {
-      ParallelReviewScope.STAGED -> runDiff(listOf("git", "diff", "--cached"), request.repoRoot)
-      ParallelReviewScope.UNSTAGED -> runDiff(listOf("git", "diff"), request.repoRoot)
-      ParallelReviewScope.UNCOMMITTED,
-      ParallelReviewScope.WORKTREE_FROM_BASE,
-      -> resolveWorktreeFromBaseDiff(request, base)
-      ParallelReviewScope.BRANCH -> runDiff(listOf("git", "diff", base, head), request.repoRoot)
-      ParallelReviewScope.PR ->
-        runProcess(listOf("git", "diff", base, head), request.repoRoot)
-          ?: runDiff(listOf("gh", "pr", "diff"), request.repoRoot)
+    when (val read = readScopeDiff(request, base, head)) {
+      is DiffResolution.Unresolved -> return read
+      is DiffResolution.Resolved -> read.value
     }
   if (diffText.isBlank() && request.scope != ParallelReviewScope.WORKTREE_FROM_BASE) {
-    throw DiffResolutionException("Diff is empty for scope '${request.scope.name.lowercase()}'.")
+    return DiffResolution.Unresolved("Diff is empty for scope '${request.scope.name.lowercase()}'.")
   }
-  return diffText
+  return DiffResolution.Resolved(diffText)
+}
+
+private fun ParallelCodeReviewRunnerPlanning.readScopeDiff(
+  request: ParallelCodeReviewRequest,
+  base: String,
+  head: String,
+): DiffResolution<String> {
+  val suppliedPath = request.suppliedDiffPath
+  if (suppliedPath != null) {
+    return readDiff(suppliedPath, PARALLEL_REVIEW_MAX_SUPPLIED_DIFF_BYTES)?.let { DiffResolution.Resolved(it) }
+      ?: DiffResolution.Unresolved(
+        "--diff-file must name a readable, non-empty regular file no larger than " +
+          "$PARALLEL_REVIEW_MAX_SUPPLIED_DIFF_BYTES bytes.",
+      )
+  }
+  return when (request.scope) {
+    ParallelReviewScope.STAGED -> queryDiff(request, ReviewDiffQuery.Staged)
+    ParallelReviewScope.UNSTAGED -> queryDiff(request, ReviewDiffQuery.Unstaged)
+    ParallelReviewScope.UNCOMMITTED,
+    ParallelReviewScope.WORKTREE_FROM_BASE,
+    -> resolveWorktreeFromBaseDiff(request, base)
+    ParallelReviewScope.BRANCH -> queryDiff(request, ReviewDiffQuery.CommitRange(base, head))
+    ParallelReviewScope.PR -> queryDiff(request, ReviewDiffQuery.PullRequest(base, head))
+  }
 }
 
 internal fun ParallelCodeReviewRunnerPlanning.resolveWorktreeFromBaseDiff(
   request: ParallelCodeReviewRequest,
   base: String,
-): String {
-  val args =
-    buildList {
-      addAll(listOf("git", "diff", "--binary", base))
-      if (request.ownedPathspec.isNotEmpty()) {
-        add("--")
-        addAll(request.ownedPathspec)
-      }
+): DiffResolution<String> {
+  val tracked =
+    when (
+      val read =
+        queryDiff(
+          request,
+          ReviewDiffQuery.WorkingTree(base, request.ownedPathspec, includeBinary = true),
+        )
+    ) {
+      is DiffResolution.Unresolved -> return read
+      is DiffResolution.Resolved -> read.value
     }
-  val tracked = runProcess(args, request.repoRoot).orEmpty()
-  val excluded = request.baselineUntrackedPolicy.excludedPaths.toSet()
   val untracked =
-    runProcess(
-      listOf("git", "ls-files", "-o", "--exclude-standard", "-z"),
-      request.repoRoot,
-    ).orEmpty()
-      .split(GIT_NUL_RECORD_DELIMITER)
-      .map(String::trim)
-      .filter(String::isNotBlank)
-      .filterNot { it in excluded }
-      .filter { path ->
-        request.ownedPathspec.isEmpty() ||
-          request.ownedPathspec.any { owned ->
-            path == owned || path.startsWith("$owned/")
-          }
-      }
+    ownedUntrackedPaths(request)
+      ?: return DiffResolution.Unresolved("Could not list untracked files for scope '${scopeName(request)}'.")
   val patches = StringBuilder()
-  untracked.forEach { path ->
+  for (path in untracked) {
     val patch =
-      runProcess(
-        listOf("git", "diff", "--binary", "--no-index", "/dev/null", path),
-        request.repoRoot,
-      ).orEmpty()
+      diff(request.repoRoot, ReviewDiffQuery.UntrackedFile(path))
+        ?: return DiffResolution.Unresolved("Could not read the diff of untracked file '$path'.")
     if (patch.isNotBlank()) {
       patches.append(patch)
       if (!patches.endsWith("\n")) patches.append('\n')
     }
   }
-  return buildString {
-    append(tracked)
-    if (patches.isNotEmpty()) {
-      if (isNotEmpty() && !endsWith("\n")) append('\n')
-      append(patches)
-    }
-  }
+  return DiffResolution.Resolved(
+    buildString {
+      append(tracked)
+      if (patches.isNotEmpty()) {
+        if (isNotEmpty() && !endsWith("\n")) append('\n')
+        append(patches)
+      }
+    },
+  )
 }
 
-internal fun ParallelCodeReviewRunnerPlanning.runDiff(
-  args: List<String>,
-  workDir: Path,
-): String =
-  runProcess(args, workDir)
-    ?: throw DiffResolutionException(
-      "Command failed: ${args.joinToString(" ")}",
-    )
+private fun ParallelCodeReviewRunnerPlanning.ownedUntrackedPaths(request: ParallelCodeReviewRequest): List<String>? {
+  val excluded = request.baselineUntrackedPolicy.excludedPaths.toSet()
+  return untrackedPaths(request.repoRoot)
+    ?.map(String::trim)
+    ?.filter(String::isNotBlank)
+    ?.filterNot { it in excluded }
+    ?.filter { path ->
+      request.ownedPathspec.isEmpty() ||
+        request.ownedPathspec.any { owned ->
+          path == owned || path.startsWith("$owned/")
+        }
+    }
+}
+
+private fun scopeName(request: ParallelCodeReviewRequest): String = request.scope.name.lowercase()
+
+private fun ParallelCodeReviewRunnerPlanning.queryDiff(
+  request: ParallelCodeReviewRequest,
+  query: ReviewDiffQuery,
+): DiffResolution<String> =
+  diff(request.repoRoot, query)?.let { DiffResolution.Resolved(it) }
+    ?: DiffResolution.Unresolved("Could not read the diff for scope '${scopeName(request)}'.")
 
 internal fun ParallelCodeReviewRunnerPlanning.detectStack(
   evidence: ReviewDiffEvidence,
-): ParallelCodeReviewStackDetection {
+): ParallelCodeReviewPlanned<ParallelCodeReviewStackDetection> {
   val manifests =
     runCatching { installedManifests() }
       .getOrElse { e ->
-        throw StackDetectionException(
-          "Installed platform pack discovery failed: ${e.message ?: e.javaClass.simpleName}. " +
-            "Repair the installed platform packs before running parallel review.",
-          e,
+        e.rethrowIfCooperativeCancellationOrInterruption()
+        return ParallelCodeReviewPlanned.Failed(
+          ParallelCodeReviewPlanningFailure.StackUndetected(
+            "Installed platform pack discovery failed: ${e.message ?: e.javaClass.simpleName}. " +
+              "Repair the installed platform packs before running parallel review.",
+          ),
         )
       }
-  if (manifests.isEmpty()) return ParallelCodeReviewStackDetection(emptyList(), emptyList(), emptyMap())
+  if (manifests.isEmpty()) {
+    return ParallelCodeReviewPlanned.Ready(ParallelCodeReviewStackDetection(emptyList(), emptyList(), emptyMap()))
+  }
 
   val routing =
     ReviewStackRouting.route(
@@ -142,5 +160,7 @@ internal fun ParallelCodeReviewRunnerPlanning.detectStack(
       evidence.files.map { ReviewRoutingChangedFile(it.path, it.changedContent) },
     )
   val routed = manifests.filter { it.slug in routing.routedSlugs }
-  return ParallelCodeReviewStackDetection(routed, manifests, routing.ownedPathsBySlug)
+  return ParallelCodeReviewPlanned.Ready(
+    ParallelCodeReviewStackDetection(routed, manifests, routing.ownedPathsBySlug),
+  )
 }

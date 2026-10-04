@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.authoring
 
-import skillbill.error.shellcontent.InvalidInternalSkillClassificationError
+import skillbill.error.shellcontent.invalidInternalSkillClassification
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -48,7 +48,7 @@ internal fun parentViolation(
 
 internal fun requireValidInternalSkillClassification(declarations: Collection<InternalSkillDeclaration>) {
   internalSkillClassificationViolations(declarations).firstOrNull()?.let { violation ->
-    throw InvalidInternalSkillClassificationError(violation)
+    throw invalidInternalSkillClassification(violation)
   }
 }
 

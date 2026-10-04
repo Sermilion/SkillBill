@@ -49,6 +49,48 @@ class ValidationGateRoutingTest {
   }
 
   @Test
+  fun `a scope owned only by the fallback pack routes by the repository's tracked files`() {
+    val resolver = ValidationGateResolver { listOf(reviewFallbackPackWithoutGate(), ios, kotlin) }
+    val tracked = listOf("runtime-kotlin/Foo.kt", "runtime-kotlin/Bar.kt", "ios/App.swift", "README.md")
+
+    listOf(emptyList(), listOf(".feature-specs/SKILL-1-demo/decomposition-manifest.yaml")).forEach { changed ->
+      val result =
+        assertIs<ValidationGateResolution.Declared>(resolver.resolveWithRepositoryFallback(changed) { tracked })
+
+      assertEquals("kotlin", result.packSlug)
+    }
+  }
+
+  @Test
+  fun `concrete changed-file ownership wins over the repository's tracked files`() {
+    val resolver = ValidationGateResolver { listOf(reviewFallbackPackWithoutGate(), ios, kotlin) }
+    var trackedReads = 0
+    val tracked = {
+      trackedReads++
+      listOf("runtime-kotlin/Foo.kt", "runtime-kotlin/Bar.kt")
+    }
+
+    val result =
+      assertIs<ValidationGateResolution.Declared>(
+        resolver.resolveWithRepositoryFallback(listOf("ios/App.swift", "README.md"), tracked),
+      )
+    val tie = resolver.resolveWithRepositoryFallback(listOf("ios/App.swift", "runtime-kotlin/Foo.kt"), tracked)
+
+    assertEquals("ios", result.packSlug)
+    assertIs<ValidationGateResolution.Incompatible>(tie)
+    assertEquals(0, trackedReads)
+  }
+
+  @Test
+  fun `a repository without concrete ownership keeps the fallback resolution`() {
+    val resolver = ValidationGateResolver { listOf(reviewFallbackPackWithoutGate(), ios, kotlin) }
+
+    val result = resolver.resolveWithRepositoryFallback(listOf("README.md")) { listOf("README.md", "docs/a.md") }
+
+    assertEquals(ValidationGateResolution.Absent("generic"), result)
+  }
+
+  @Test
   fun `a composed pack keeps its own gate instead of borrowing its baseline gate`() {
     val kmp =
       kotlin.copy(

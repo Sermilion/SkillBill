@@ -5,6 +5,7 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
+import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.goalRunnerDefaultPhaseRecorder
@@ -38,7 +39,7 @@ class GoalRunnerValidationEvidenceProjectionTest {
     ).forEach { case ->
       val workflowId = "wfl-validation-result"
       val recorder = goalRunnerDefaultPhaseRecorder()
-      recorder.ensureWorkflowOpen(workflowId, "goal-validation-result")
+      recorder.openTestWorkflow(workflowId, "goal-validation-result")
       val produced =
         buildMap<String, Any?> {
           put(SharedPayloadKeys.VALUE, "Project validation result.")

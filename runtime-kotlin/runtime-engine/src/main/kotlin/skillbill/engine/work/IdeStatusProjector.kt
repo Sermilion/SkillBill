@@ -11,20 +11,22 @@ import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
 import skillbill.engine.work.model.IdeStatusCandidate
-import skillbill.engine.work.model.IdeStatusCurrentModel
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
-import skillbill.engine.work.model.IdeStatusLifecycleState
-import skillbill.engine.work.model.IdeStatusPauseReason
-import skillbill.engine.work.model.IdeStatusPauseReasonCode
-import skillbill.engine.work.model.IdeStatusProgress
-import skillbill.engine.work.model.IdeStatusSnapshot
-import skillbill.engine.work.model.IdeStatusStep
-import skillbill.engine.work.model.IdeStatusWorkflowFamily
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.model.IdeStatusCurrentModel
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
+import skillbill.ports.idestatus.model.IdeStatusLifecycleState
+import skillbill.ports.idestatus.model.IdeStatusPauseReason
+import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode
+import skillbill.ports.idestatus.model.IdeStatusProgress
+import skillbill.ports.idestatus.model.IdeStatusSnapshot
+import skillbill.ports.idestatus.model.IdeStatusStep
+import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -222,7 +224,8 @@ class IdeStatusProjector(
         featureTaskRuntimeStatusService.status(
           FeatureTaskRuntimeStatusRequest(workflowId = workflowId),
         )
-      } catch (error: ShellContentContractException) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isShellContentContractFailure())
         RuntimeDiagnosticsBestEffortWarning.record(diagnostics, degraded, error)
         null
       } catch (error: IOException) {

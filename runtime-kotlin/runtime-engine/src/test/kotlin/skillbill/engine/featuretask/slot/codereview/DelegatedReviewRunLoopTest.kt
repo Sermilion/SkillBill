@@ -1,25 +1,24 @@
 package skillbill.engine.featuretask.slot.codereview
 
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
 import skillbill.application.review.verification.ReviewClaimVerificationRunner
-import skillbill.engine.BranchSetupTestConfig
-import skillbill.engine.REVIEW_FIX_BLOCKER_FINDING_ID
 import skillbill.engine.RecordingWorkflowGitOperations
-import skillbill.engine.RuntimeHarnessConfig
-import skillbill.engine.RuntimeRecordingLauncher
-import skillbill.engine.TelemetryRunnerHarness
-import skillbill.engine.WORKFLOW_ID
-import skillbill.engine.auditSatisfiedOutput
-import skillbill.engine.committedRepoBranchSetup
-import skillbill.engine.defaultPhaseOutput
-import skillbill.engine.facts
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
+import skillbill.engine.featuretask.runner.BranchSetupTestConfig
+import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
+import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
+import skillbill.engine.featuretask.runner.TelemetryRunnerHarness
+import skillbill.engine.featuretask.runner.WORKFLOW_ID
+import skillbill.engine.featuretask.runner.auditSatisfiedOutput
+import skillbill.engine.featuretask.runner.committedRepoBranchSetup
+import skillbill.engine.featuretask.runner.defaultPhaseOutput
+import skillbill.engine.featuretask.runner.facts
+import skillbill.engine.featuretask.runner.phaseIdFromPrompt
+import skillbill.engine.featuretask.runner.telemetryRunnerHarness
+import skillbill.engine.featuretask.slot.REVIEW_FIX_BLOCKER_FINDING_ID
+import skillbill.engine.featuretask.slot.validJsonOutput
+import skillbill.engine.featuretask.slot.verifyFindingsOutput
 import skillbill.engine.featuretask.validation.passed
-import skillbill.engine.phaseIdFromPrompt
-import skillbill.engine.telemetryRunnerHarness
-import skillbill.engine.validJsonOutput
-import skillbill.engine.verifyFindingsOutput
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
 import skillbill.ports.validation.ValidationGateRunner
@@ -96,7 +95,6 @@ class DelegatedReviewRunLoopTest {
       val harness =
         telemetryRunnerHarness(
           launcher = launcher,
-          validator = realFeatureTaskRuntimePhaseOutputValidator,
           runtimeConfig =
             RuntimeHarnessConfig(
               branchSetup = BranchSetupTestConfig(gitOperations = git),
@@ -150,8 +148,11 @@ class DelegatedReviewRunLoopTest {
         "audit" -> facts(auditSatisfiedOutput())
         "verify_findings" -> {
           verifyLaunches += 1
-          val verified = if (verifyLaunches == 1) listOf(REVIEW_FIX_BLOCKER_FINDING_ID) else emptyList()
-          facts(verifyFindingsOutput(verified))
+          if (verifyLaunches == 1) {
+            facts(verifiedFindingProse())
+          } else {
+            facts(verifyFindingsOutput(emptyList()))
+          }
         }
         "implement_fix" -> {
           lanes.fixed = true
@@ -163,6 +164,12 @@ class DelegatedReviewRunLoopTest {
       }
     }
   }
+
+  private fun verifiedFindingProse(): String =
+    verifyFindingsOutput(listOf(REVIEW_FIX_BLOCKER_FINDING_ID)).replace(
+      "\"produced_outputs\": {",
+      "\"produced_outputs\": {\"value\": \"Verified $REVIEW_FIX_BLOCKER_FINDING_ID: $DELEGATED_FINDING_MESSAGE\", ",
+    )
 
   private fun promptFor(
     launcher: RuntimeRecordingLauncher,

@@ -2,9 +2,9 @@ package skillbill.engine.goalrunner.manifest
 
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneCompletedSubtaskCheckpointRefs
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointRefPruneRequest
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
@@ -12,6 +12,7 @@ import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.withParentStatus
 import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.DecompositionSubtaskAction
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.model.workflowStatus
@@ -160,14 +161,14 @@ private fun DecompositionManifest.withDerivedCurrentIntent(): DecompositionManif
     subtasks.firstOrNull {
       it.status.decompositionStatus() == DecompositionStatus.BLOCKED
     }?.let { blocked ->
-      CurrentSubtaskIntent(subtaskId = blocked.id, action = "blocked")
+      CurrentSubtaskIntent(subtaskId = blocked.id, action = DecompositionSubtaskAction.BLOCKED.wireValue)
     } ?: subtasks.firstOrNull {
       it.status.decompositionStatus() == DecompositionStatus.IN_PROGRESS
     }?.let { inProgress ->
-      CurrentSubtaskIntent(subtaskId = inProgress.id, action = "resume")
+      CurrentSubtaskIntent(subtaskId = inProgress.id, action = DecompositionSubtaskAction.RESUME.wireValue)
     } ?: firstRunnablePendingSubtask()?.let { pending ->
-      CurrentSubtaskIntent(subtaskId = pending.id, action = "start")
-    } ?: CurrentSubtaskIntent(subtaskId = 0, action = "complete")
+      CurrentSubtaskIntent(subtaskId = pending.id, action = DecompositionSubtaskAction.START.wireValue)
+    } ?: CurrentSubtaskIntent(subtaskId = 0, action = DecompositionSubtaskAction.COMPLETE.wireValue)
   return copy(currentSubtaskIntent = nextIntent)
 }
 

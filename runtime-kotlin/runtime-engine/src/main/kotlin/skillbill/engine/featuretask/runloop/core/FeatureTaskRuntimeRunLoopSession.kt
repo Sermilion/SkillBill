@@ -2,28 +2,49 @@ package skillbill.engine.featuretask.runloop.core
 
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
-import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeOperatorBlockRetry
+import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 
-internal sealed class FeatureTaskRuntimeRunLoopTerminalOutcome {
-  data class Blocked(val report: FeatureTaskRuntimeRunReport.Blocked) : FeatureTaskRuntimeRunLoopTerminalOutcome()
+internal sealed class FeatureTaskRuntimeRunTerminalOutcome {
+  data class Blocked(
+    val report: FeatureTaskRuntimeRunReport.Blocked,
+  ) : FeatureTaskRuntimeRunTerminalOutcome()
 
-  data class Paused(val report: FeatureTaskRuntimeRunReport.Paused) : FeatureTaskRuntimeRunLoopTerminalOutcome()
+  data class Paused(
+    val report: FeatureTaskRuntimeRunReport.Paused,
+  ) : FeatureTaskRuntimeRunTerminalOutcome()
 
-  data class Decomposed(val report: FeatureTaskRuntimeRunReport.Decomposed) : FeatureTaskRuntimeRunLoopTerminalOutcome()
+  data class Decomposed(
+    val report: FeatureTaskRuntimeRunReport.Decomposed,
+  ) : FeatureTaskRuntimeRunTerminalOutcome()
 }
 
 internal class FeatureTaskRuntimeRunLoopSession(
-  internal val operatorBlockRetry: FeatureTaskRuntimeOperatorBlockRetry?,
+  override val operatorBlockRetry: FeatureTaskRuntimeOperatorBlockRetry?,
   initialPendingReentry: PendingReentry?,
-) {
+) : FeatureTaskRuntimeRunSessionObservations {
   private val phaseContentIdentitiesStorage = mutableMapOf<String, Map<String, String>>()
   private var resolvedBranchStorage: String? = null
   private var checkpointOwnershipDecidedStorage: Boolean = false
-  private var terminalOutcome: FeatureTaskRuntimeRunLoopTerminalOutcome? = null
+  private var terminalOutcome: FeatureTaskRuntimeRunTerminalOutcome? = null
   private var operatorBlockRetryCompletedStorage: Boolean = false
   private var pendingReentryStorage: PendingReentry? = initialPendingReentry
   private var activeReentryStorage: PendingReentry? = initialPendingReentry
   private var recordRejectionSettlementPendingStorage: Boolean = false
+
+  fun sessionSnapshot(): FeatureTaskRuntimeRunSessionObservations =
+    detachedSessionObservations(
+      FeatureTaskRuntimeRunLoopSession(operatorBlockRetry, pendingReentry).also { captured ->
+        captured.phaseContentIdentitiesStorage.putAll(
+          phaseContentIdentitiesStorage.mapValues { (_, identities) -> identities.toMap() },
+        )
+        captured.resolvedBranchStorage = resolvedBranchStorage
+        captured.checkpointOwnershipDecidedStorage = checkpointOwnershipDecidedStorage
+        captured.terminalOutcome = terminalOutcome?.detached()
+        captured.operatorBlockRetryCompletedStorage = operatorBlockRetryCompletedStorage
+        captured.activeReentryStorage = activeReentryStorage
+        captured.recordRejectionSettlementPendingStorage = recordRejectionSettlementPendingStorage
+      },
+    )
 
   internal fun recordPhaseContentIdentities(
     phaseId: String,
@@ -32,46 +53,46 @@ internal class FeatureTaskRuntimeRunLoopSession(
     phaseContentIdentitiesStorage[phaseId] = identities.toMap()
   }
 
-  internal fun phaseContentIdentitiesFor(phaseId: String): Map<String, String> =
+  override fun phaseContentIdentitiesFor(phaseId: String): Map<String, String> =
     phaseContentIdentitiesStorage[phaseId].orEmpty().toMap()
 
-  internal val checkpointOwnershipDecided: Boolean
+  override val checkpointOwnershipDecided: Boolean
     get() = checkpointOwnershipDecidedStorage
 
-  internal val resolvedBranch: String?
+  override val resolvedBranch: String?
     get() = resolvedBranchStorage
 
-  internal val operatorBlockRetryCompleted: Boolean
+  override val operatorBlockRetryCompleted: Boolean
     get() = operatorBlockRetryCompletedStorage
 
-  internal val pendingReentry: PendingReentry?
+  override val pendingReentry: PendingReentry?
     get() = pendingReentryStorage
 
-  internal val activeReentry: PendingReentry?
+  override val activeReentry: PendingReentry?
     get() = activeReentryStorage
 
-  internal val recordRejectionSettlementPending: Boolean
+  override val recordRejectionSettlementPending: Boolean
     get() = recordRejectionSettlementPendingStorage
 
-  internal val blocked: FeatureTaskRuntimeRunReport.Blocked?
-    get() = (terminalOutcome as? FeatureTaskRuntimeRunLoopTerminalOutcome.Blocked)?.report
+  override val blocked: FeatureTaskRuntimeRunReport.Blocked?
+    get() = (terminalOutcome as? FeatureTaskRuntimeRunTerminalOutcome.Blocked)?.report?.detached()
 
-  internal val paused: FeatureTaskRuntimeRunReport.Paused?
-    get() = (terminalOutcome as? FeatureTaskRuntimeRunLoopTerminalOutcome.Paused)?.report
+  override val paused: FeatureTaskRuntimeRunReport.Paused?
+    get() = (terminalOutcome as? FeatureTaskRuntimeRunTerminalOutcome.Paused)?.report?.detached()
 
-  internal val decomposed: FeatureTaskRuntimeRunReport.Decomposed?
-    get() = (terminalOutcome as? FeatureTaskRuntimeRunLoopTerminalOutcome.Decomposed)?.report
+  override val decomposed: FeatureTaskRuntimeRunReport.Decomposed?
+    get() = (terminalOutcome as? FeatureTaskRuntimeRunTerminalOutcome.Decomposed)?.report?.detached()
 
   internal fun transitionToBlocked(report: FeatureTaskRuntimeRunReport.Blocked) {
-    terminalOutcome = FeatureTaskRuntimeRunLoopTerminalOutcome.Blocked(report)
+    terminalOutcome = FeatureTaskRuntimeRunTerminalOutcome.Blocked(report.detached())
   }
 
   internal fun transitionToPaused(report: FeatureTaskRuntimeRunReport.Paused) {
-    terminalOutcome = FeatureTaskRuntimeRunLoopTerminalOutcome.Paused(report)
+    terminalOutcome = FeatureTaskRuntimeRunTerminalOutcome.Paused(report.detached())
   }
 
   internal fun transitionToDecomposed(report: FeatureTaskRuntimeRunReport.Decomposed) {
-    terminalOutcome = FeatureTaskRuntimeRunLoopTerminalOutcome.Decomposed(report)
+    terminalOutcome = FeatureTaskRuntimeRunTerminalOutcome.Decomposed(report.detached())
   }
 
   internal fun clearTerminalOutcome() {
@@ -116,3 +137,28 @@ internal class FeatureTaskRuntimeRunLoopSession(
     recordRejectionSettlementPendingStorage = false
   }
 }
+
+private fun FeatureTaskRuntimeRunTerminalOutcome.detached(): FeatureTaskRuntimeRunTerminalOutcome =
+  when (this) {
+    is FeatureTaskRuntimeRunTerminalOutcome.Blocked -> copy(report = report.detached())
+    is FeatureTaskRuntimeRunTerminalOutcome.Paused -> copy(report = report.detached())
+    is FeatureTaskRuntimeRunTerminalOutcome.Decomposed -> copy(report = report.detached())
+  }
+
+private fun FeatureTaskRuntimeRunReport.Blocked.detached() =
+  copy(
+    completedPhaseIds = completedPhaseIds.toList(),
+    subtaskOutcome = subtaskOutcome?.let { it.copy(participatingAgentIds = it.participatingAgentIds.toList()) },
+  )
+
+private fun FeatureTaskRuntimeRunReport.Paused.detached() =
+  copy(
+    completedPhaseIds = completedPhaseIds.toList(),
+    subtaskOutcome = subtaskOutcome?.let { it.copy(participatingAgentIds = it.participatingAgentIds.toList()) },
+  )
+
+private fun FeatureTaskRuntimeRunReport.Decomposed.detached() =
+  copy(
+    completedPhaseIds = completedPhaseIds.toList(),
+    subtaskSpecPaths = subtaskSpecPaths.toList(),
+  )

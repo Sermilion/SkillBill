@@ -23,6 +23,7 @@ dependencies {
   ksp(libs.kotlin.inject.compiler)
 
   testImplementation(testFixtures(project(":runtime-application")))
+  testImplementation(testFixtures(project(":runtime-engine")))
   testImplementation(testFixtures(project(":runtime-ports")))
   testImplementation(project(":runtime-infra:host"))
   testImplementation(project(":runtime-infra:contracts"))

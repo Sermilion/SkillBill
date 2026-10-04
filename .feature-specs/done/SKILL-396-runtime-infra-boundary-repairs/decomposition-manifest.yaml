@@ -1,0 +1,43 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-396"
+feature_name: "runtime-infra-boundary-repairs"
+parent_spec_path: ".feature-specs/SKILL-396-runtime-infra-boundary-repairs/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "base/SKILL-380-phase-slot-strategies"
+feature_branch: "feat/SKILL-396-runtime-infra-boundary-repairs"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "Infra boundary and diagnostics repairs"
+  spec_path: ".feature-specs/SKILL-396-runtime-infra-boundary-repairs/spec_subtask_1_infra-boundary-and-diagnostics-repairs.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261001-182647-fjqn"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 2
+  name: "Workflow git and GitHub package consolidation"
+  spec_path: ".feature-specs/SKILL-396-runtime-infra-boundary-repairs/spec_subtask_2_workflow-git-and-github-package-consolidation.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261001-185047-4wvx"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false

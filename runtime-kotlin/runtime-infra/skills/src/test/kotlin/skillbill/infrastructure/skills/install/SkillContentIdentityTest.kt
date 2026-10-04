@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.install
 
-import skillbill.error.shellcontent.SkillContentIdentityMismatchError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.infrastructure.skills.install.identity.SKILL_CONTENT_IDENTITY_FILENAME
 import skillbill.infrastructure.skills.install.identity.SkillContentIdentity
 import skillbill.infrastructure.skills.install.identity.routeInstalledSkillBody
@@ -50,9 +51,9 @@ class SkillContentIdentityTest {
     Files.delete(installedDir.resolve("content.md"))
     val installedFromMarker = SkillContentIdentity.fromInstalled(installedMarker)
     val error =
-      assertFailsWith<SkillContentIdentityMismatchError> {
+      assertFailsWith<SkillBillRuntimeException> {
         SkillContentIdentity.requireMatch(supplied, installedFromMarker)
-      }
+      }.also { assertEquals(ReviewContextFailureCode.SKILL_CONTENT_IDENTITY_MISMATCH, it.code) }
 
     assertContains(error.message.orEmpty(), supplied.canonicalSourceIdentity)
     assertContains(error.message.orEmpty(), installed.canonicalSourceIdentity)
@@ -98,12 +99,12 @@ class SkillContentIdentityTest {
     val staging = root.resolve("staged").also(Files::createDirectories)
     Files.writeString(staging.resolve(SKILL_CONTENT_IDENTITY_FILENAME), installed.compact())
     val error =
-      assertFailsWith<SkillContentIdentityMismatchError> {
+      assertFailsWith<SkillBillRuntimeException> {
         routeInstalledSkillBody(
           suppliedCompactIdentity = supplied.compact(),
           installedStagingDir = staging,
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.SKILL_CONTENT_IDENTITY_MISMATCH, it.code) }
 
     assertContains(error.message.orEmpty(), supplied.canonicalSourceIdentity)
     assertContains(error.message.orEmpty(), installed.canonicalSourceIdentity)

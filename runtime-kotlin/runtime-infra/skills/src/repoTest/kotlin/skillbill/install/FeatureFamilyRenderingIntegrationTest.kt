@@ -11,7 +11,6 @@ import kotlin.io.path.readText
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContains
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -47,13 +46,16 @@ class FeatureFamilyRenderingIntegrationTest {
 
     val feature = staged.renderedSkillFile.toPath().readText()
 
-    assertContains(feature, "skill-bill goal preflight <issue-key> --agent <currently-executing-agent> --format json")
-    assertEquals(1, "skill-bill goal preflight".toRegex().findAll(feature).count())
-    assertContains(feature, "concise human-readable summary")
-    assertContains(feature, "issue key, feature name, child agent")
-    assertContains(feature, "Do not print the raw JSON")
-    assertFalse(feature.contains("Print the returned `gate_block` verbatim"))
-    assertContains(feature, "Do not launch while unconfirmed")
+    assertContains(feature, "skill-bill <intake> --agent <currently-executing-agent> --no-live-output")
+    assertContains(feature, "The runtime creates missing specs and the parent workflow before")
+    assertContains(feature, "Linear, Jira, and any other connected tracker")
+    assertContains(feature, "allocate the next local key")
+    assertContains(feature, "by default using Local key allocation")
+    assertContains(feature, "rg --files --hidden --no-ignore .feature-specs")
+    assertContains(feature, "local bundles through `NEWS-151` select `NEWS-152`")
+    assertFalse(feature.contains("ask for the tracker issue key"))
+    assertFalse(feature.contains("skill-bill goal preflight <issue-key>"))
+    assertFalse(feature.contains("Do not launch while unconfirmed"))
     assertContains(feature, "For each entry in `rehydrate_targets`")
     assertContains(feature, "Fetch nothing when the list is empty")
     assertContains(feature, "Relay its")

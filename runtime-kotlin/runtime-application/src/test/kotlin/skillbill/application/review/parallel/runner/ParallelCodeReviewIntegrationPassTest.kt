@@ -8,13 +8,14 @@ import skillbill.application.review.snapshot.ReviewRecorder
 import skillbill.application.review.snapshot.diffForPaths
 import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.reviewHarness
+import skillbill.application.review.snapshot.reviewed
 import skillbill.application.review.snapshot.sparseReviewPack
 import skillbill.application.review.verification.ReviewIntegrationPassRunner
 import skillbill.application.runner
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.review.context.model.launch.ReviewIntegrationTerminalOutcome
+import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcome
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -48,7 +49,7 @@ class ParallelCodeReviewIntegrationPassTest {
   @Test fun `one bounded integration pass runs after the lanes and re-launches no specialist rubric`() {
     val recorder = ReviewRecorder()
 
-    reviewHarness(delegatedConfig(sixCommitPaths), recorder).run(delegatedRequest())
+    reviewHarness(delegatedConfig(sixCommitPaths), recorder).reviewed(delegatedRequest())
 
     assertEquals(
       1,
@@ -72,8 +73,8 @@ class ParallelCodeReviewIntegrationPassTest {
     val three = ReviewRecorder()
     val six = ReviewRecorder()
 
-    reviewHarness(delegatedConfig(sixCommitPaths.take(3)), three).run(delegatedRequest())
-    reviewHarness(delegatedConfig(sixCommitPaths), six).run(delegatedRequest())
+    reviewHarness(delegatedConfig(sixCommitPaths.take(3)), three).reviewed(delegatedRequest())
+    reviewHarness(delegatedConfig(sixCommitPaths), six).reviewed(delegatedRequest())
 
     assertEquals(1, three.specialistLaunches.size)
     assertEquals(
@@ -102,7 +103,7 @@ class ParallelCodeReviewIntegrationPassTest {
           }
         },
         recorder,
-      ).run(delegatedRequest())
+      ).reviewed(delegatedRequest())
 
     val integration = assertNotNull(result.integration)
     assertEquals(ReviewIntegrationTerminalOutcome.COMPLETED, integration.terminalOutcome)
@@ -133,7 +134,7 @@ class ParallelCodeReviewIntegrationPassTest {
           }
         },
         recorder,
-      ).run(delegatedRequest())
+      ).reviewed(delegatedRequest())
 
     val integration = assertNotNull(result.integration)
     assertEquals(ReviewIntegrationTerminalOutcome.COMPLETED, integration.terminalOutcome)
@@ -150,7 +151,7 @@ class ParallelCodeReviewIntegrationPassTest {
   @Test fun `a single-commit sequence skips the integration pass with a stated reason`() {
     val recorder = ReviewRecorder()
 
-    val result = reviewHarness(delegatedConfig(sixCommitPaths.take(1)), recorder).run(delegatedRequest())
+    val result = reviewHarness(delegatedConfig(sixCommitPaths.take(1)), recorder).reviewed(delegatedRequest())
 
     val integration = assertNotNull(result.integration)
     assertEquals(ReviewIntegrationTerminalOutcome.SKIPPED_NOT_APPLICABLE, integration.terminalOutcome)
@@ -167,13 +168,17 @@ class ParallelCodeReviewIntegrationPassTest {
         integrationWorkerResponse(request, AgentRunTermination.SpawnFailed)
       },
       recorder,
-    ).run(delegatedRequest(reviewRunId = RUN_ID))
+    ).reviewed(delegatedRequest(reviewRunId = RUN_ID))
 
     assertTrue(recorder.specialistLaunches.size == 1)
     val durableIntegrationPass = assertNotNull(recorder.durableIntegrationPass)
     assertEquals(ReviewIntegrationTerminalOutcome.SPAWN_FAILURE.wireValue, durableIntegrationPass.terminalOutcome)
 
-    val resumed = reviewHarness(delegatedConfig(sixCommitPaths), recorder).run(delegatedRequest(reviewRunId = RUN_ID))
+    val resumed =
+      reviewHarness(
+        delegatedConfig(sixCommitPaths),
+        recorder,
+      ).reviewed(delegatedRequest(reviewRunId = RUN_ID))
 
     assertTrue(
       recorder.specialistLaunches.size == 1,
@@ -185,10 +190,10 @@ class ParallelCodeReviewIntegrationPassTest {
 
   @Test fun `a resume holding a durable integration result re-runs neither boundary`() {
     val recorder = ReviewRecorder()
-    reviewHarness(delegatedConfig(sixCommitPaths), recorder).run(delegatedRequest(reviewRunId = RUN_ID))
+    reviewHarness(delegatedConfig(sixCommitPaths), recorder).reviewed(delegatedRequest(reviewRunId = RUN_ID))
     val afterFirst = recorder.parentLaunches.size
 
-    reviewHarness(delegatedConfig(sixCommitPaths), recorder).run(delegatedRequest(reviewRunId = RUN_ID))
+    reviewHarness(delegatedConfig(sixCommitPaths), recorder).reviewed(delegatedRequest(reviewRunId = RUN_ID))
 
     assertEquals(afterFirst, recorder.parentLaunches.size, "A settled review re-launches nothing on resume.")
   }
@@ -200,12 +205,12 @@ class ParallelCodeReviewIntegrationPassTest {
     reviewHarness(
       delegatedConfig(narrow) { RecordedWorkerResponse(termination = AgentRunTermination.TimedOut) },
       recorder,
-    ).run(delegatedRequest(reviewRunId = RUN_ID))
+    ).reviewed(delegatedRequest(reviewRunId = RUN_ID))
     val afterFirst = recorder.specialistLaunches.size
 
     val resumed =
       reviewHarness(delegatedConfig(narrow + "src/db/Repo.kt"), recorder)
-        .run(delegatedRequest(reviewRunId = RUN_ID))
+        .reviewed(delegatedRequest(reviewRunId = RUN_ID))
 
     val relaunched = recorder.specialistLaunches.drop(afterFirst)
     assertTrue(
@@ -224,7 +229,7 @@ class ParallelCodeReviewIntegrationPassTest {
           integrationWorkerResponse(request, AgentRunTermination.TimedOut)
         },
         recorder,
-      ).run(delegatedRequest(reviewRunId = RUN_ID))
+      ).reviewed(delegatedRequest(reviewRunId = RUN_ID))
 
     val integration = assertNotNull(result.integration)
     assertEquals(ReviewIntegrationTerminalOutcome.TIMEOUT, integration.terminalOutcome)

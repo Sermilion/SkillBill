@@ -2,8 +2,9 @@ package skillbill.engine.featuretask.model.core
 
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.config.model.CompactionSettings
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.review.ReviewInvocation
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -17,6 +18,8 @@ import kotlin.time.Duration
  * only the durable entry consumes.
  */
 interface FeatureTaskRuntimeRunFacts {
+  val admittedExecution: AdmittedFeatureTaskRuntimeExecution? get() = null
+
   /** The issue the run works on. */
   val issueKey: String
 

@@ -4,10 +4,15 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalList
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.identity.subtask.GOAL_SUBTASK_REVIEW_STATE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeRepairReceiptError
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.error.shellcontent.invalidGoalSubtaskReviewStateSchemaError
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.engine.model.GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewPassSequence
 
 data class GoalSubtaskReviewRevision(
   val commitFocusedAccounting: GoalSubtaskCommitFocusedAccounting? = null,
@@ -209,7 +214,8 @@ data class GoalSubtaskReviewState(
   fun acknowledgeSummariesThrough(passNumber: Int): GoalSubtaskReviewState =
     copy(emittedPassCount = passNumber.coerceIn(emittedPassCount, completedPassCount))
 
-  fun toPersistenceWire(): Any = toArtifactMap()
+  fun toPersistenceWire(): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
   internal fun toArtifactMap(): Map<String, Any?> =
     linkedMapOf<String, Any?>(
@@ -306,7 +312,8 @@ data class GoalSubtaskReviewState(
           remediationBaseSha = reader.optionalString("remediation_base_sha"),
           repairReceipts = decodeRepairReceipts(raw, sourceLabel),
         )
-      } catch (error: InvalidGoalSubtaskReviewStateSchemaError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code == InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA)
         throw error
       } catch (error: IllegalArgumentException) {
         reviewStateError(sourceLabel, error.message.orEmpty(), error)
@@ -342,14 +349,12 @@ data class GoalSubtaskReviewState(
     ): List<FeatureTaskRuntimeRepairReceipt> =
       reviewStateReader(raw, sourceLabel).optionalList("repair_receipts")
         ?.mapIndexed { index, value ->
-          try {
-            FeatureTaskRuntimeRepairReceipt.fromArtifactMap(
-              value.toReviewStateMap("$sourceLabel.repair_receipts[$index]"),
-              "$sourceLabel.repair_receipts[$index]",
-            )
-          } catch (error: InvalidFeatureTaskRuntimeRepairReceiptError) {
-            reviewStateError("$sourceLabel.repair_receipts[$index]", error.payloadFreeReason, error)
-          }
+          val path = "$sourceLabel.repair_receipts[$index]"
+          FeatureTaskRuntimeRepairReceipt.fromArtifactMap(
+            value.toReviewStateMap(path),
+            path,
+            onInvalid = { reason, failure -> reviewStateError(path, reason, failure) },
+          )
         }.orEmpty()
   }
 }
@@ -375,7 +380,7 @@ internal fun reviewStateError(
   reason: String,
   cause: Throwable? = null,
 ): Nothing =
-  throw InvalidGoalSubtaskReviewStateSchemaError(
+  throw invalidGoalSubtaskReviewStateSchemaError(
     sourceLabel = GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY,
     fieldPath = fieldPath,
     reason = reason,

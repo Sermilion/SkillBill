@@ -2,8 +2,9 @@ package skillbill.goalrunner.model
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalString
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.persistence.artifact.durableArtifactMapReader
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 data class FeatureTaskRuntimeGoalContinuationOutcome(
   val issueKey: String,
@@ -50,7 +51,8 @@ data class FeatureTaskRuntimeGoalContinuationOutcome(
     }
   }
 
-  fun toPersistenceWire(): Any = toArtifactMap()
+  fun toPersistenceWire(): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
   internal fun toArtifactMap(): Map<String, Any?> =
     linkedMapOf<String, Any?>(
@@ -85,7 +87,7 @@ data class FeatureTaskRuntimeGoalContinuationOutcome(
           participatingAgentIds = reader.optionalStringList("participating_agent_ids"),
         )
       } catch (error: IllegalArgumentException) {
-        throw InvalidWorkflowStateSchemaError(
+        throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime goal-continuation outcome is invalid.",
           error,
         )

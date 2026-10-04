@@ -1,11 +1,11 @@
 package skillbill.engine.featuretask.phase.briefing
 
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseHandoffSchema
 import skillbill.workflow.taskruntime.model.audit.acceptanceCriterionIdentity
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseHandoff
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseHandoff
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 
@@ -81,7 +81,7 @@ fun StringBuilder.appendAcceptanceCriteria(handoff: FeatureTaskRuntimePhaseHando
   handoff.runInvariants.acceptanceCriteria.forEachIndexed { index, criterion ->
     val identified =
       acceptanceCriterionIdentity(criterion, index + 1)?.identifiedText(criterion)
-        ?: throw InvalidFeatureTaskRuntimePhaseHandoffSchemaError(
+        ?: throw invalidFeatureTaskRuntimePhaseHandoffSchema(
           "acceptance_criteria",
           "Invalid criterion identity at ordinal ${index + 1}.",
         )

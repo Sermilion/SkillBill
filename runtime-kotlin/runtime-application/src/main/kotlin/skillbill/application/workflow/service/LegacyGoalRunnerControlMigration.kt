@@ -4,99 +4,125 @@ import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
-import skillbill.error.shellcontent.InvalidAgentAddonSelectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
+import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
 
 internal fun migrateLegacyGoalRunnerControls(
   unitOfWork: GoalRunnerPersistenceSession,
   existing: WorkflowStateSnapshot,
 ) {
   val artifacts = existing.artifacts
-  if (unitOfWork.goalRunnerControls.reviewPolicy(existing.workflowId) == null) {
-    reviewPolicyFromLegacyArtifacts(artifacts)?.let {
-      unitOfWork.goalRunnerControls.persistReviewPolicy(existing.workflowId, it)
-    }
+  val controls = unitOfWork.goalRunnerControls
+  val legacyPolicy =
+    if (controls.reviewPolicy(existing.workflowId) == null) reviewPolicyFromLegacyArtifacts(artifacts) else null
+  val durableAcceptances = controls.outOfBandAcceptances(existing.workflowId)
+  val legacyAcceptances =
+    outOfBandAcceptancesFromLegacyArtifacts(artifacts).filterKeys { it !in durableAcceptances }
+  legacyPolicy?.let { controls.persistReviewPolicy(existing.workflowId, it) }
+  legacyAcceptances.values.forEach { acceptance ->
+    controls.persistOutOfBandAcceptance(existing.workflowId, acceptance)
   }
-  val durableAcceptances = unitOfWork.goalRunnerControls.outOfBandAcceptances(existing.workflowId)
-  outOfBandAcceptancesFromLegacyArtifacts(artifacts)
-    .filterKeys { it !in durableAcceptances }
-    .values
-    .forEach { acceptance ->
-      unitOfWork.goalRunnerControls.persistOutOfBandAcceptance(existing.workflowId, acceptance)
-    }
 }
 
-fun reviewPolicyFromLegacyArtifacts(artifacts: DurableWorkflowArtifacts): GoalRunnerReviewPolicy? {
+private fun legacyControlSchemaError(message: String): Nothing =
+  throw invalidWorkflowStateSchemaError("Legacy goal runner control artifact: $message")
+
+private fun reviewPolicyFromLegacyArtifacts(artifacts: DurableWorkflowArtifacts): GoalRunnerReviewPolicy? {
   val artifactFamily = DurableWorkflowArtifactFamily.GOAL_REVIEW_POLICY
   val raw = artifactFamily.value(artifacts) ?: return null
   val policy =
     JsonCodec.anyToStringAnyMap(raw)
-      ?: error("Goal review policy artifact '${artifactFamily.label()}' must be a map.")
-  val allowedKeys = setOf("code_review_mode", "parallel_review_agent", "agent_addon_selection")
+      ?: legacyControlSchemaError("review policy artifact '${artifactFamily.label()}' must be a map.")
+  val allowedKeys =
+    setOf(
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.PARALLEL_REVIEW_AGENT,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.AGENT_ADDON_SELECTION,
+    )
   policy.keys.forEach { key ->
-    require(key in allowedKeys) {
-      "Goal review policy artifact '${artifactFamily.label()}' has unsupported field '$key'."
+    if (key !in allowedKeys) {
+      legacyControlSchemaError("review policy artifact '${artifactFamily.label()}' has unsupported field '$key'.")
     }
   }
   val mode =
-    policy["code_review_mode"] as? String
-      ?: error("Goal review policy artifact '${artifactFamily.label()}' is missing code_review_mode.")
+    policy[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE] as? String
+      ?: legacyControlSchemaError("review policy artifact '${artifactFamily.label()}' is missing code_review_mode.")
   val codeReviewMode =
     try {
       CodeReviewExecutionMode.fromWire(mode)
     } catch (error: IllegalArgumentException) {
-      throw IllegalStateException("Goal review policy artifact has invalid code_review_mode '$mode'.", error)
+      throw invalidWorkflowStateSchemaError(
+        "Legacy goal runner control artifact: review policy artifact has invalid code_review_mode '$mode'.",
+        error,
+      )
     }
-  val agentAddonSelection = decodeGoalAgentAddonSelection(policy["agent_addon_selection"])
+  val agentAddonSelection =
+    decodeGoalAgentAddonSelection(
+      policy[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.AGENT_ADDON_SELECTION],
+    )
   return GoalRunnerReviewPolicy(codeReviewMode, agentAddonSelection)
 }
 
-fun outOfBandAcceptancesFromLegacyArtifacts(
+private fun outOfBandAcceptancesFromLegacyArtifacts(
   artifacts: DurableWorkflowArtifacts,
 ): Map<Int, GoalRunnerOutOfBandAcceptance> {
   val artifactFamily = DurableWorkflowArtifactFamily.GOAL_OUT_OF_BAND_ACCEPTANCE
   val raw = artifactFamily.value(artifacts) ?: return emptyMap()
   val entries =
     raw as? List<*>
-      ?: error("Goal acceptance artifact '${artifactFamily.label()}' must be a list.")
+      ?: legacyControlSchemaError("acceptance artifact '${artifactFamily.label()}' must be a list.")
   return entries.associate { element ->
     val entry =
       JsonCodec.anyToStringAnyMap(element)
-        ?: error("Goal acceptance artifact '${artifactFamily.label()}' entries must be maps.")
+        ?: legacyControlSchemaError("acceptance artifact '${artifactFamily.label()}' entries must be maps.")
     val acceptance =
       GoalRunnerOutOfBandAcceptance(
         subtaskId =
-          (entry[SharedPayloadKeys.SUBTASK_ID] as? Number)?.toInt()
-            ?: error("Goal acceptance artifact entry is missing a numeric subtask_id."),
-        commitSha =
-          entry["commit_sha"] as? String
-            ?: error("Goal acceptance artifact entry is missing commit_sha."),
+          (entry[SharedPayloadKeys.SUBTASK_ID] as? Number)?.asExactIntOrNull()?.takeIf { it > 0 }
+            ?: legacyControlSchemaError("acceptance artifact entry subtask_id must be a positive integer."),
+        commitSha = requiredAcceptanceString(entry, DecompositionManifestPayloadKeys.COMMIT_SHA),
         reason =
-          entry["reason"] as? String
-            ?: error("Goal acceptance artifact entry is missing reason."),
+          requiredAcceptanceString(entry, FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ACCEPTANCE_REASON),
         acceptedAt =
-          entry["accepted_at"] as? String
-            ?: error("Goal acceptance artifact entry is missing accepted_at."),
+          requiredAcceptanceString(entry, FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ACCEPTED_AT),
       )
     acceptance.subtaskId to acceptance
   }
 }
 
+private fun requiredAcceptanceString(
+  entry: Map<String, Any?>,
+  key: String,
+): String =
+  (entry[key] as? String)?.takeIf(String::isNotBlank)
+    ?: legacyControlSchemaError("acceptance artifact entry is missing a nonblank $key.")
+
+private fun addonSelectionError(
+  message: String,
+  cause: Throwable? = null,
+): Nothing =
+  throw SkillBillRuntimeException(AgentAddonFailureCode.INVALID_SELECTION, "Goal review policy $message", cause)
+
 private fun decodeGoalAgentAddonSelection(raw: Any?): AgentAddonSelection {
   val values = raw ?: return AgentAddonSelection()
-  val entries =
-    values as? List<*>
-      ?: throw InvalidAgentAddonSelectionError("Goal review policy agent_addon_selection must be a list.")
-  return AgentAddonSelection(
-    entries.mapIndexed(::decodeGoalAgentAddonSelectionEntry),
-  )
+  val entries = values as? List<*> ?: addonSelectionError("agent_addon_selection must be a list.")
+  val decoded = entries.mapIndexed(::decodeGoalAgentAddonSelectionEntry)
+  return try {
+    AgentAddonSelection(decoded)
+  } catch (error: IllegalArgumentException) {
+    addonSelectionError("agent_addon_selection is invalid: ${error.message}", error)
+  }
 }
 
 private fun decodeGoalAgentAddonSelectionEntry(
@@ -105,9 +131,7 @@ private fun decodeGoalAgentAddonSelectionEntry(
 ): PersistedAgentAddonSelectionEntry {
   val entry =
     JsonCodec.anyToStringAnyMap(value)
-      ?: throw InvalidAgentAddonSelectionError(
-        "Goal review policy agent_addon_selection entry $index must be a map.",
-      )
+      ?: addonSelectionError("agent_addon_selection entry $index must be a map.")
   val expectedKeys =
     setOf(
       FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SLUG,
@@ -115,32 +139,22 @@ private fun decodeGoalAgentAddonSelectionEntry(
       FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256,
     )
   if (entry.keys != expectedKeys) {
-    throw InvalidAgentAddonSelectionError(
-      "Goal review policy agent_addon_selection entry $index has invalid fields.",
-    )
+    addonSelectionError("agent_addon_selection entry $index has invalid fields.")
   }
-  return PersistedAgentAddonSelectionEntry(
-    requiredAddonField(entry, index, FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SLUG, "slug"),
-    requiredAddonField(
-      entry,
-      index,
-      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SOURCE_IDENTITY,
-      "source_identity",
-    ),
-    requiredAddonField(
-      entry,
-      index,
-      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256,
-      "content_sha256",
-    ),
-  )
+  val slug = requiredAddonField(entry, index, FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SLUG)
+  val sourceIdentity =
+    requiredAddonField(entry, index, FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SOURCE_IDENTITY)
+  val contentSha256 =
+    requiredAddonField(entry, index, FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256)
+  return try {
+    PersistedAgentAddonSelectionEntry(slug, sourceIdentity, contentSha256)
+  } catch (error: IllegalArgumentException) {
+    addonSelectionError("agent_addon_selection entry $index is invalid: ${error.message}", error)
+  }
 }
 
 private fun requiredAddonField(
   entry: Map<String, Any?>,
   index: Int,
   key: String,
-  label: String,
-): String =
-  entry[key] as? String
-    ?: throw InvalidAgentAddonSelectionError("Goal review policy add-on entry $index is missing $label.")
+): String = entry[key] as? String ?: addonSelectionError("add-on entry $index is missing $key.")

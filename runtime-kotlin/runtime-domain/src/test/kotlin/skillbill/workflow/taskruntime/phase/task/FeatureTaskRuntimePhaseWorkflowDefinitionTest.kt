@@ -122,6 +122,7 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY,
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW,
@@ -142,7 +143,8 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to "Phase 3: Implement",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to "Phase 3b: Simplify",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to "Phase 4a: Completeness Audit",
-        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to "Phase 4b: Implement Fix",
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX to "Phase 4b: Plan Fix",
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to "Phase 4c: Implement Fix",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW to "Phase 5: Code Review",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS to "Phase 5a: Verify Findings",
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX to "Phase 5b: Implement Fix",
@@ -184,10 +186,10 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     val transitions = def.transitions
     assertEquals(
-      setOf(def.PHASE_AUDIT_IMPLEMENT_FIX, def.PHASE_IMPLEMENT_FIX, def.PHASE_BUILD),
+      setOf(def.PHASE_AUDIT_PLAN_FIX, def.PHASE_AUDIT_IMPLEMENT_FIX, def.PHASE_IMPLEMENT_FIX, def.PHASE_BUILD),
       transitions.loopOnlyPhaseIds,
     )
-    assertEquals(emptyMap(), transitions.loopOnlySuccessors)
+    assertEquals(mapOf(def.PHASE_AUDIT_PLAN_FIX to def.PHASE_AUDIT_IMPLEMENT_FIX), transitions.loopOnlySuccessors)
     val edge = transitions.backwardEdges.single { it.loopId == def.REVIEW_FIX_LOOP_ID }
     assertEquals(def.PHASE_VERIFY_FINDINGS, edge.fromPhaseId)
     assertEquals(def.PHASE_IMPLEMENT_FIX, edge.destinationPhaseId)
@@ -207,15 +209,15 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
   }
 
   @Test
-  fun `record regeneration loops are empty after implement prose migration`() {
+  fun `audit repair remains unbounded and review_fix remains bounded`() {
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
-
-    assertEquals(emptySet(), def.REGENERATION_LOOP_IDS)
-    assertTrue(def.transitions.backwardEdges.none { def.isRegenerationLoopId(it.loopId) })
+    val transitions = def.transitions
+    assertEquals(2, transitions.backwardEdges.count { !def.isRegenerationLoopId(it.loopId) })
+    assertEquals(null, transitions.backwardEdges.single { it.fromPhaseId == def.PHASE_AUDIT }.perEdgeCap)
   }
 
   @Test
-  fun `phase projections omit audit completion dependencies and pr owns its diff key`() {
+  fun `phase projections omit audit completion and implement plan dependencies and pr owns its diff key`() {
     val declarations = FeatureTaskRuntimePhaseWorkflowDefinition.phaseDeclarations
     val def = FeatureTaskRuntimePhaseWorkflowDefinition
     definition.stepIds.forEach { phaseId ->
@@ -231,7 +233,8 @@ class FeatureTaskRuntimePhaseWorkflowDefinitionTest {
         }
       val projectedDependencies =
         phaseWorkflowDependenciesOf(phaseId).filterNot {
-          it == def.PHASE_AUDIT && phaseId != def.PHASE_AUDIT_IMPLEMENT_FIX
+          (it == def.PHASE_AUDIT && phaseId !in setOf(def.PHASE_AUDIT_PLAN_FIX, def.PHASE_AUDIT_IMPLEMENT_FIX)) ||
+            (it == def.PHASE_PLAN && phaseId == def.PHASE_IMPLEMENT)
         }
       assertEquals(projectedDependencies, declaration.consumedUpstreamPhaseIds, phaseId)
     }

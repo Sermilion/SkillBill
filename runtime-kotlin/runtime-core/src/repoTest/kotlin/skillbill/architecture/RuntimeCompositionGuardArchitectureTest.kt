@@ -1,5 +1,6 @@
 package skillbill.architecture
 
+import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -203,5 +204,52 @@ class RuntimeCompositionGuardArchitectureTest {
           """.trimIndent(),
       )
     assertEquals(emptyList(), violations)
+  }
+
+  @Test
+  fun `runtime-core tests stay in the skillbill di package tree`() {
+    val testRoot = ArchitectureScanSupport.runtimeRoot.resolve("runtime-kotlin/runtime-core/src/test")
+    val testFiles = ArchitectureScanSupport.kotlinFilesUnder(testRoot)
+    assertTrue(testFiles.isNotEmpty(), "runtime-core/src/test must contain Kotlin files.")
+    val repositoryViolations =
+      testFiles.flatMap { path ->
+        ArchitectureScanSupport.runtimeCoreTestPackagePlacementViolationsInSource(
+          relativePath = ArchitectureScanSupport.runtimeRoot.relativize(path).toString().replace('\\', '/'),
+          source = path.readText(),
+        )
+      }
+    assertEquals(emptyList(), repositoryViolations, repositoryViolations.joinToString("\n"))
+
+    assertEquals(
+      emptyList(),
+      ArchitectureScanSupport.runtimeCoreTestPackagePlacementViolationsInSource(
+        relativePath = "runtime-kotlin/runtime-core/src/test/Valid.kt",
+        source = "package skillbill.di.core\nclass Valid",
+      ),
+    )
+    val violatingSources =
+      listOf(
+        "package skillbill.application\nclass WrongArea",
+        "class MissingPackage",
+        "class MissingPackageWithFixture {\n" +
+          "  val fixture = \"\"\"\npackage skillbill.di.core\n\"\"\"\n}",
+        "  package skillbill.di.core\nclass IndentedPackage",
+        "package skillbill.di-core\nclass InvalidPackage",
+        "package skillbill.diabolical\nclass Lookalike",
+        "package skillbill.di.absent\nclass RetiredAbsent",
+        "package skillbill.di.runtime\nclass RetiredRuntime",
+      )
+    val violations =
+      violatingSources.flatMapIndexed { index, source ->
+        ArchitectureScanSupport.runtimeCoreTestPackagePlacementViolationsInSource(
+          relativePath = "runtime-kotlin/runtime-core/src/test/Synthetic$index.kt",
+          source = source,
+        )
+      }
+    assertEquals(violatingSources.size, violations.size, violations.joinToString("\n"))
+    assertEquals(
+      violatingSources.indices.map { index -> "runtime-kotlin/runtime-core/src/test/Synthetic$index.kt" }.toSet(),
+      violations.map { violation -> violation.substringBefore(' ') }.toSet(),
+    )
   }
 }

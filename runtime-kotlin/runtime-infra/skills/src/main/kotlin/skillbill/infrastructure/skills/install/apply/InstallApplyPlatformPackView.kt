@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.apply
 
+import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.assertExternalPlatformPackDeclaredReads
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.assertExternalPlatformPackTreeReads
@@ -65,7 +66,7 @@ internal fun materializeAgentPlatformPackViews(
           message = error.message.orEmpty(),
           agent = agentTarget.agent,
           path = agentTarget.path.resolve(PLATFORM_PACKS_DIR),
-          causeClass = error::class.qualifiedName,
+          causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
         ),
       )
     }
@@ -89,7 +90,7 @@ internal fun cleanupManagedPlatformPackViews(
           message = error.message.orEmpty(),
           agent = agentTarget.agent,
           path = agentTarget.path.resolve(PLATFORM_PACKS_DIR),
-          causeClass = error::class.qualifiedName,
+          causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
         ),
       )
     }

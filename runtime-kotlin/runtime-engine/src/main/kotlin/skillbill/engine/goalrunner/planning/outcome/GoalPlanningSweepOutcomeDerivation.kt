@@ -6,6 +6,7 @@ import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningPreparationStateReadStopReason
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import java.nio.file.Path
@@ -49,13 +50,17 @@ fun projectionRejectedReason(
   error: Throwable,
 ): String =
   "Goal planning phase '$phaseId' rejected a declared bounded projection at the launch seam: " +
-    "${error.message.orEmpty()}. Migrate or delete the affected goal-planning preparation record."
+    "${error.message.orEmpty()}. Preserve the saved record. Use a runtime that supports its contract or " +
+    "restore or repair the identified record and its digest before resuming."
+
+fun preparationStateReadReason(error: Throwable): String =
+  "Goal planning preparation state could not be read: ${error.message.orEmpty()}"
 
 fun preparationStateReadReason(
-  error: Throwable,
+  conflict: GoalPlanningPreparationConflict,
   issueKey: String,
   subtaskId: Int,
-): String = goalPlanningPreparationStateReadStopReason(error, issueKey, subtaskId)
+): String = goalPlanningPreparationStateReadStopReason(conflict, issueKey, subtaskId)
 
 internal fun stopped(
   shared: GoalPlanningSharedContext,

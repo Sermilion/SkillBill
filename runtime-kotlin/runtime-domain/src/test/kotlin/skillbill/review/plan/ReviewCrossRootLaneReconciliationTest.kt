@@ -1,7 +1,8 @@
 package skillbill.review.plan
 
 import org.junit.jupiter.api.Test
-import skillbill.error.shellcontent.AmbiguousLaneOwnershipError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.model.FileLocation
 import skillbill.review.plan.model.ReviewLaunchLane
 import skillbill.review.plan.model.ReviewRootLanes
@@ -48,8 +49,10 @@ class ReviewCrossRootLaneReconciliationTest {
       )
 
     val error =
-      assertFailsWith<AmbiguousLaneOwnershipError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewCrossRootLaneReconciliation.reconcile(roots)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.AMBIGUOUS_LANE_OWNERSHIP, failure.code)
       }
 
     assertTrue(error.message!!.contains("security"))

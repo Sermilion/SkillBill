@@ -3,14 +3,14 @@ package skillbill.engine.goalrunner.persist
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
+import skillbill.engine.goalrunner.model.CrashReconcileExpiredWorkerRequest
+import skillbill.engine.goalrunner.model.GoalSubtaskIdentity
 import skillbill.goalrunner.commitShaFrom
 import skillbill.goalrunner.goalContinuationOutcome
 import skillbill.goalrunner.missingResultPrefixTerminalOutcomeArtifact
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.terminalOutcomeFor
-import skillbill.ports.goalrunner.persistence.model.CrashReconcileExpiredWorkerRequest
-import skillbill.ports.goalrunner.persistence.model.GoalSubtaskIdentity
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -23,7 +23,7 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.workflowStatus
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuation
+import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 import java.nio.file.Path
 import java.time.Clock
 

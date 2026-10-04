@@ -53,6 +53,71 @@ class InjectConstructorDefaultsArchitectureTest {
   }
 
   @Test
+  fun `runtime-cli inject classes expose no constructor property`() {
+    val violations =
+      ArchitectureScanSupport.injectConstructorPropertyViolations(
+        baseline = emptySet(),
+        scanRoot = PrincipleEnforcementInventory.RUNTIME_CLI_MAIN,
+      )
+    assertEquals(emptyList(), violations, violations.joinToString("\n"))
+  }
+
+  @Test
+  fun `runtime-engine inject classes expose no constructor property`() {
+    val violations =
+      ArchitectureScanSupport.injectConstructorPropertyViolations(
+        baseline = emptySet(),
+        scanRoot = PrincipleEnforcementInventory.RUNTIME_ENGINE_MAIN,
+      )
+    assertEquals(emptyList(), violations, violations.joinToString("\n"))
+  }
+
+  @Test
+  fun `runtime-cli internal data classes carry no collaborator property`() {
+    val violations =
+      ArchitectureScanSupport.dataClassCollaboratorPropertyViolations(
+        scanRoot = PrincipleEnforcementInventory.RUNTIME_CLI_MAIN,
+      )
+    assertEquals(emptyList(), violations, violations.joinToString("\n"))
+  }
+
+  @Test
+  fun `data class collaborator scanner reports only collaborator properties of internal data classes`() {
+    val source =
+      """
+
+
+      internal data class SyntheticArgs(
+        val state: CliRunState,
+        val clock: java.time.Clock,
+        val gateway: ScaffoldGateway,
+        val overlay: ExternalAddonOverlayService? = null,
+        val format: CliFormat,
+        val transform: (CliRunState) -> String,
+      )
+
+      data class PublicArgs(val launcher: AgentLauncher)
+
+      @Inject
+      class SyntheticInjected(private val state: CliRunState)
+      """.trimIndent()
+    val sites =
+      ArchitectureScanSupport.dataClassCollaboratorPropertySitesInSource(
+        relativePath = "runtime-kotlin/runtime-example/src/main/kotlin/SyntheticArgs.kt",
+        source = source,
+      ).map { site -> "${site.symbol}::${site.parameter}" }
+    assertEquals(
+      listOf(
+        "SyntheticArgs::state",
+        "SyntheticArgs::clock",
+        "SyntheticArgs::gateway",
+        "SyntheticArgs::overlay",
+      ),
+      sites,
+    )
+  }
+
+  @Test
   fun `inject constructor property scanner reports only non-private properties`() {
     val source =
       """

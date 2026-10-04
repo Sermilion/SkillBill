@@ -2,7 +2,7 @@ package skillbill.application
 
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.contracts.decomposition.DecompositionPlanningResult
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -17,7 +17,7 @@ class DecompositionManifestWriterSelectorTest {
     Files.writeString(parentSpecPath, "# Parent spec\n")
 
     val invalidCurrent =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         DecompositionPlanningResult.fromWireMap(
           decompositionPlanningPlan(parentSpecPath).toPayload().toMutableMap().apply {
             put("current_subtask_id", 1.5)
@@ -26,7 +26,7 @@ class DecompositionManifestWriterSelectorTest {
         )
       }
     val invalidRecommended =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         DecompositionPlanningResult.fromWireMap(
           decompositionPlanningPlan(parentSpecPath).toPayload().toMutableMap().apply {
             put("recommended_first_subtask_id", 1.5)
@@ -35,7 +35,7 @@ class DecompositionManifestWriterSelectorTest {
         )
       }
 
-    assertContains(invalidCurrent.reason, "current_subtask_id must be an integer")
-    assertContains(invalidRecommended.reason, "recommended_first_subtask_id must be an integer")
+    assertContains(invalidCurrent.message.orEmpty(), "current_subtask_id must be an integer")
+    assertContains(invalidRecommended.message.orEmpty(), "recommended_first_subtask_id must be an integer")
   }
 }

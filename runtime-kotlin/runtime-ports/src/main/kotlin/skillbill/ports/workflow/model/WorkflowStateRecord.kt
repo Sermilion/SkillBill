@@ -1,6 +1,6 @@
 package skillbill.ports.workflow.model
 
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 
@@ -25,7 +25,7 @@ data class WorkflowStateRecord(
   companion object {
     internal fun requiredWorkflowStatus(value: String): WorkflowStatus =
       WorkflowStatus.fromWire(value)
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Workflow state workflow_status has unsupported value '$value'.",
         )
   }

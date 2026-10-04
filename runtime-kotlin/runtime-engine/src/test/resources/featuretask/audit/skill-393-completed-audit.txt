@@ -1,0 +1,41 @@
+No production criteria remain. I audited all six criteria against the working tree at checkpoint f670ef06 (base and head 2815b2064, uncommitted). I edited nothing and ran no build, compile, test, format or check.
+
+AC-001 is satisfied. A declaration grep over runtime-ports/src (main and testFixtures) finds none of the 56 names. runtime-engine main declares each of them exactly once, at the paths in the plan table:
+- manifest/GoalRunnerManifestStore.kt: 6
+- persist/GoalRunnerWorkflowOutcomeStore.kt: 7
+- repair/GoalRunnerChildRepairPorts.kt: 2
+- planning/hydration/GoalChildPlanningHydratorPort.kt: 1
+- goalrunner/model/GoalRunnerStoreModels.kt: 13
+- GoalRunnerChildWorkflowModels.kt: 4
+- GoalContinuationArtifactModels.kt: 4
+- GoalRunnerReconcileRequests.kt: 2
+- GoalRunnerRepairModels.kt: 11
+- GoalRunnerResetModels.kt: GoalRunnerResetSubtaskSnapshot
+- planning/model/GoalPlanningPreparationProgress.kt: 1
+- work/model/IdeStatusModels.kt: the 4 ide-status models
+
+The staying ports declarations are intact: GoalRunnerSubtaskLauncher, GoalPullRequestPort, GoalRunnerSubtaskLaunchRequest, GoalRunnerOutOfBandAcceptance, GoalPullRequestRequest/Result, GoalRunnerReviewPolicy and the IdeStatusSnapshot tree. No file in runtime-kotlin references the old ports packages or names.
+
+AC-002 is satisfied. GoalRunnerPersistenceModelAliases.kt is deleted, and engine work/model/IdeStatusModels.kt has no aliases and no IDE_STATUS_PAUSE_REASON_LABEL_MAX_LENGTH. Engine main has three typealiases left (persist/DurableChildRecoveryClass and two in featuretask/slot/attempt/PhaseAttemptEnvironment.kt), and all three target engine types. Engine main re-declares none of the public ports constants. The one name clash, the private LEGACY_GOAL_PLANNING_PREPARATION_CONTRACT_VERSION in GoalPlanningPreparationValidator, predates this branch and shadows a private ports constant, so it re-declares nothing reachable.
+
+AC-003 is satisfied. Ports main and ports testFixtures declare no IdeStatusCandidate. Ports testFixtures declares neither GoalRunnerManifestStoreDefaults nor NoopGoalRunnerAttemptLedgerStore. Engine testFixtures declares both, at goalrunner/manifest/GoalRunnerManifestStoreDefaults.kt (abstract class) and goalrunner/persist/NoopGoalRunnerAttemptLedgerStore.kt (object).
+
+AC-004: the production part is satisfied, and running the tests is left to validate.
+- PINNED_ENGINE_INBOUND_API_TYPES has 91 entries. It adds GoalRunnerAppliedRepair, GoalRunnerChildWedgeDiagnosis, GoalRunnerWedgeFinding and GoalRunnerResetSubtaskSnapshot at skillbill.engine.goalrunner.model. It no longer contains IdeStatusSnapshot or IdeStatusProblemCode. The repair entries and IdeStatusRequest/IdeStatusResult now name real engine declarations, and the other entries are unchanged engine-native names.
+- The sibling ceilings hold: persist has 12 files (exactly its limit), goalrunner/model 18 of 20, manifest 7, repair 7, planning/hydration 3, planning/model 9 and work/model 1.
+- The new goalrunner/model files import only ports, domain, workflow and java types, so they stay data-only.
+- The featuretask|work row is removed from runtime-engine-package-cycle-baseline.txt.
+
+AC-005 is satisfied. runtime-cli main imports engine names only from featuretask, operation, work (IdeStatusService and IdeStatusRequest) and goalrunner. Its ports imports are agentaddon, install, repository, telemetry, validation, agentrun, diagnostics, GoalPullRequestPort, process, system, time, workflow.gitops, taskruntime, featurespec and scaffold. No simple name appears on both sides.
+
+AC-006: the production part is satisfied, and the output-parity suites are left to validate.
+- The runtime-cli main and runtime-core main diffs change imports only, in GoalCliExitCodes.kt, GoalCliFormatting.kt, RuntimeGoalRunnerStoreProvides.kt and RuntimeGoalRunnerLaunchProvides.kt.
+- I compared these moved bodies with HEAD and found them byte-identical apart from the package and import lines: GoalRunnerRepairModels (all 11), GoalRunnerStoreModels (all 13, including the GoalRunnerWorkflowProgress secondary constructor and the require messages), GoalRunnerResetSubtaskSnapshot, GoalPlanningPreparationProgress, and IdeStatusSelectionTier, IdeStatusCandidate, IdeStatusRepositoryResolution, IdeStatusRequest and IdeStatusResult.
+- Wire values, enum order, defaults and init blocks are unchanged.
+
+Notes for later phases:
+- ARCHITECTURE.md:2469 still mentions skillbill.engine.work.model.IdeStatusPlanning.state. That name is no longer an engine type, but the doc update belongs to subtask 2 and is not a criterion here.
+- The empty ports testFixtures goalrunner/runner directory is still on disk. Git ignores it.
+- Build still has to prove compilation and kotlin-inject binding of the moved store interfaces.
+- Validate still has to run the runtime-ports, runtime-engine, runtime-cli and runtime-core suites and :runtime-core:repoTest. These cover the inbound API, engine boundary and sibling-count tests, plus the goal-runner and ide-status output suites.
+- tests_executed is empty.

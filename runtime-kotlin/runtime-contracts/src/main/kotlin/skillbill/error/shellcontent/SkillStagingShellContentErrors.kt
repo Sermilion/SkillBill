@@ -1,78 +1,109 @@
 package skillbill.error.shellcontent
 
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.RuntimeFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 
-class InternalSkillSidecarCollisionError(
-  val parentSkillName: String,
-  val internalSkillName: String,
-  val sidecarRelativePath: String,
+enum class SkillStagingFailureCode : RuntimeFailureCode {
+  INTERNAL_SKILL_SIDECAR_COLLISION,
+  INVALID_AUTHORED_SKILL_SIDECAR,
+  INVALID_REVIEW_SKILL_STRUCTURE,
+  MISSING_CONTENT_FILE,
+  COMPOSED_NATIVE_AGENT_BUDGET_EXCEEDED,
+  MISSING_REQUIRED_SECTION,
+  INVALID_SKILL_MD_SHAPE,
+  MISSING_INSTALLED_NATIVE_AGENT,
+  INVALID_INTERNAL_SKILL_CLASSIFICATION,
+  MISSING_BASELINE_PLATFORM_SELECTION,
+  INVALID_FALLBACK_CAPABILITY,
+  SKILL_STAGING_FAILURE,
+}
+
+fun internalSkillSidecarCollision(
+  parentSkillName: String,
+  internalSkillName: String,
+  sidecarRelativePath: String,
   cause: Throwable? = null,
-) : ShellContentContractException(
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    SkillStagingFailureCode.INTERNAL_SKILL_SIDECAR_COLLISION,
     "Internal skill '$internalSkillName' cannot be staged as sidecar " +
       "'$sidecarRelativePath' inside parent '$parentSkillName' skill directory: " +
       "another staged or authored file already claims that path. Rename or remove the conflicting file.",
     cause,
   )
 
-class InvalidAuthoredSkillSidecarError(
+fun invalidAuthoredSkillSidecar(
   message: String,
   cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(SkillStagingFailureCode.INVALID_AUTHORED_SKILL_SIDECAR, message, cause)
 
-class InvalidReviewSkillStructureError(
+fun invalidReviewSkillStructure(
   message: String,
   cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(SkillStagingFailureCode.INVALID_REVIEW_SKILL_STRUCTURE, message, cause)
 
-class MissingContentFileError(
+fun missingContentFile(
   message: String,
   cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+): SkillBillRuntimeException = SkillBillRuntimeException(SkillStagingFailureCode.MISSING_CONTENT_FILE, message, cause)
 
-class ComposedNativeAgentBudgetExceededError(
+fun composedNativeAgentBudgetExceeded(
   message: String,
   cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(SkillStagingFailureCode.COMPOSED_NATIVE_AGENT_BUDGET_EXCEEDED, message, cause)
 
-class MissingRequiredSectionError(
+fun missingRequiredSection(
   message: String,
   cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(SkillStagingFailureCode.MISSING_REQUIRED_SECTION, message, cause)
 
-class InvalidSkillMdShapeError(
+fun invalidSkillMdShape(
   message: String,
   cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+): SkillBillRuntimeException = SkillBillRuntimeException(SkillStagingFailureCode.INVALID_SKILL_MD_SHAPE, message, cause)
 
-class InvalidNativeAgentLinkInventorySchemaError(
+fun invalidNativeAgentLinkInventorySchema(
   message: String,
   cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+): SkillBillRuntimeException = SkillBillRuntimeException(SkillStagingFailureCode.SKILL_STAGING_FAILURE, message, cause)
 
-class MissingInstalledNativeAgentError(
+data class MissingInstalledNativeAgentContext(
   val logicalName: String,
   val provider: String,
   val expectedPath: String,
   val reason: String,
   val repairCommand: String,
+)
+
+fun missingInstalledNativeAgent(
+  context: MissingInstalledNativeAgentContext,
   cause: Throwable? = null,
-) : ShellContentContractException(
-    "Native agent '$logicalName' for provider '$provider' failed preflight at '$expectedPath': $reason. " +
-      "Repair with: $repairCommand",
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    SkillStagingFailureCode.MISSING_INSTALLED_NATIVE_AGENT,
+    "Native agent '${context.logicalName}' for provider '${context.provider}' " +
+      "failed preflight at '${context.expectedPath}': ${context.reason}. Repair with: ${context.repairCommand}",
     cause,
   )
 
-class InvalidInternalSkillClassificationError(
+fun invalidInternalSkillClassification(
   message: String,
   cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(SkillStagingFailureCode.INVALID_INTERNAL_SKILL_CLASSIFICATION, message, cause)
 
-class MissingBaselinePlatformSelectionError(
-  val selectingSlug: String,
-  val requiredBaselineSlug: String,
-  val declaringManifestPath: String,
+fun missingBaselinePlatformSelection(
+  selectingSlug: String,
+  requiredBaselineSlug: String,
+  declaringManifestPath: String,
   cause: Throwable? = null,
-) : ShellContentContractException(
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    SkillStagingFailureCode.MISSING_BASELINE_PLATFORM_SELECTION,
     "Platform pack '$selectingSlug' declares a required baseline layer on '$requiredBaselineSlug' " +
       "(declared in '$declaringManifestPath'), but '$requiredBaselineSlug' is not in the selection. " +
       "Select '$requiredBaselineSlug' (or use platform mode ALL) so the baseline sidecar is present " +
@@ -80,7 +111,8 @@ class MissingBaselinePlatformSelectionError(
     cause,
   )
 
-class InvalidFallbackCapabilityError(
+fun invalidFallbackCapability(
   message: String,
   cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(SkillStagingFailureCode.INVALID_FALLBACK_CAPABILITY, message, cause)

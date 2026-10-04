@@ -4,15 +4,16 @@ import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
+import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
-import skillbill.engine.goalrunner.execution.support.withWorkflowId
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
+import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.goalrunner.model.GoalRunnerAttemptLedgerSummary
 import skillbill.idestatus.model.WorktreeEditSource
 import skillbill.idestatus.model.WorktreeEditTick
@@ -20,7 +21,6 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
-import skillbill.ports.goalrunner.runner.GoalRunnerAttemptLedgerStore
 import skillbill.ports.idestatus.WorktreeEditJournalRepository
 import skillbill.ports.learning.LearningRepository
 import skillbill.ports.persistence.UnitOfWork
@@ -34,9 +34,10 @@ import skillbill.ports.work.WorkListRepository
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.WorkflowStateRecord
+import skillbill.workflow.decomposition.withWorkflowId
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.FeatureTaskWorkflowMode
-import skillbill.workflow.model.goalreview.GoalObservabilityFileDiffStat
+import skillbill.workflow.model.goalobservability.GoalObservabilityFileDiffStat
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
@@ -174,7 +175,7 @@ class GoalRunnerStatusProjectionDegradationTest {
       }
     val phaseDatabase = FakeDatabaseSessionFactory(InMemoryWorkflowStates())
     val phaseRecorder = testPhaseRecorder(phaseDatabase, testWorkflowSnapshotValidator)
-    phaseRecorder.ensureWorkflowOpen(childWorkflowId, "session-measured")
+    phaseRecorder.openTestWorkflow(childWorkflowId, "session-measured")
     repeat(2) {
       phaseRecorder.appendLedgerEntry(
         FeatureTaskRuntimePhaseLedgerRequest(
@@ -220,7 +221,7 @@ class GoalRunnerStatusProjectionDegradationTest {
     val childWorkflowId = "wfl-child-unmeasured"
     val zeroRetryDatabase = FakeDatabaseSessionFactory(InMemoryWorkflowStates())
     val zeroRetryRecorder = testPhaseRecorder(zeroRetryDatabase, testWorkflowSnapshotValidator)
-    zeroRetryRecorder.ensureWorkflowOpen(childWorkflowId, "session-zero")
+    zeroRetryRecorder.openTestWorkflow(childWorkflowId, "session-zero")
     zeroRetryRecorder.appendLedgerEntry(
       FeatureTaskRuntimePhaseLedgerRequest(
         workflowId = childWorkflowId,

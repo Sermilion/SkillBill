@@ -1,13 +1,13 @@
 package skillbill.engine.featuretask.phaserun
 
-import skillbill.engine.RuntimeHarnessConfig
-import skillbill.engine.RuntimeRecordingLauncher
-import skillbill.engine.facts
-import skillbill.engine.phaseIdFromPrompt
-import skillbill.engine.telemetryRunnerHarness
-import skillbill.engine.validJsonOutput
+import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
+import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
+import skillbill.engine.featuretask.runner.facts
+import skillbill.engine.featuretask.runner.phaseIdFromPrompt
+import skillbill.engine.featuretask.runner.telemetryRunnerHarness
+import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.error.featuretask.PullRequestBranchRefusedError
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.goalrunner.runner.PullRequestIdentityLookup
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -161,18 +161,20 @@ class PhasePullRequestRunTest {
     launcher.requests.map { request -> phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride)) }
 
   private fun entry(): PhaseRunEntry {
-    val runner =
+    val config =
+      RuntimeHarnessConfig(
+        seedDurableWorkflow = false,
+        repoRoot = repoRoot,
+        launcher = launcher,
+        pullRequestIdentityLookup = PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
+        gitOperationsOverride = GitWorkflowGitOperations(),
+      )
+    val harness =
       telemetryRunnerHarness(
-        runtimeConfig =
-          RuntimeHarnessConfig(
-            repoRoot = repoRoot,
-            launcher = launcher,
-            pullRequestIdentityLookup = PullRequestIdentityLookup { _, _ -> PullRequestIdentity.Absent },
-            gitOperationsOverride = GitWorkflowGitOperations(),
-          ),
+        runtimeConfig = config,
         databaseFactory = { database },
-      ).runner
-    return phaseRunEntry(runner, database, clock)
+      )
+    return phaseRunEntry(harness.strategies, config.harnessGitOperations, database, clock, harness.runLoopEntry)
   }
 
   private companion object {

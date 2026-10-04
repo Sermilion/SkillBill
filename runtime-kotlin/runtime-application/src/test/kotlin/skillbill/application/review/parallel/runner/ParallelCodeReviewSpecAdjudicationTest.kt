@@ -8,12 +8,13 @@ import skillbill.application.review.snapshot.ReviewRecorder
 import skillbill.application.review.snapshot.diffForPaths
 import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.reviewHarness
+import skillbill.application.review.snapshot.reviewed
 import skillbill.application.review.snapshot.sparseReviewPack
 import skillbill.application.review.spec.ReviewSpecAdjudicationRunner
 import skillbill.application.review.verification.ReviewClaimVerificationRunner
 import skillbill.application.runner
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ReviewClaimVerdict
 import skillbill.review.model.ReviewStage
 import skillbill.review.model.ReviewStageReached
@@ -36,7 +37,7 @@ class ParallelCodeReviewSpecAdjudicationTest {
   fun `a review that produced findings records the adjudication boundary`() {
     val recorder = ReviewRecorder()
     val repo = specRepo()
-    reviewHarness(adjudicationConfig(), recorder).run(
+    reviewHarness(adjudicationConfig(), recorder).reviewed(
       harnessRequest(
         repoRoot = repo,
         reviewRunId = "adj-wired",
@@ -58,7 +59,7 @@ class ParallelCodeReviewSpecAdjudicationTest {
   fun `a run whose stage 1 refuted every finding records the boundary without launching adjudication`() {
     val recorder = ReviewRecorder()
     val repo = specRepo()
-    reviewHarness(refutedConfig(), recorder).run(
+    reviewHarness(refutedConfig(), recorder).reviewed(
       harnessRequest(
         repoRoot = repo,
         reviewRunId = "adj-refuted",
@@ -87,7 +88,7 @@ class ParallelCodeReviewSpecAdjudicationTest {
         reviewRunId = "adj-resume",
         codeReviewMode = CodeReviewExecutionMode.DELEGATED,
       ).copy(specPath = repo.resolve("spec.md"))
-    val first = reviewHarness(adjudicationConfig(), recorder).run(request)
+    val first = reviewHarness(adjudicationConfig(), recorder).reviewed(request)
     assertTrue(assertNotNull(first.stageResume).holdsDurableResult(ReviewStage.VERIFICATION))
     val specialistCount = recorder.specialistLaunches.size
     val verificationCount = recorder.verificationLaunches.size
@@ -95,7 +96,7 @@ class ParallelCodeReviewSpecAdjudicationTest {
     recorder.durableFindingVerdicts.removeAll { it.stage == ReviewStage.ADJUDICATION }
     recorder.durableStageBoundaries.removeAll { it.stage == ReviewStage.ADJUDICATION }
 
-    val resumed = reviewHarness(adjudicationConfig(), recorder).run(request)
+    val resumed = reviewHarness(adjudicationConfig(), recorder).reviewed(request)
     assertEquals(specialistCount, recorder.specialistLaunches.size)
     assertEquals(verificationCount, recorder.verificationLaunches.size)
     assertEquals(adjudicationCount + 2, recorder.adjudicationLaunches.size)

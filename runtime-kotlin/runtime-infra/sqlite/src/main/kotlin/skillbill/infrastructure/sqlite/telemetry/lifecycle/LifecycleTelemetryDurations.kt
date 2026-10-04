@@ -1,6 +1,5 @@
 package skillbill.infrastructure.sqlite.telemetry.lifecycle
 
-import skillbill.infrastructure.sqlite.core.ops.InternalSqliteDiagnostics
 import skillbill.infrastructure.sqlite.core.ops.recordDegradedValue
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -10,7 +9,7 @@ import java.time.temporal.ChronoUnit
 
 internal fun durationSeconds(
   row: Map<String, Any?>,
-  diagnostics: RuntimeDiagnostics = InternalSqliteDiagnostics,
+  diagnostics: RuntimeDiagnostics,
 ): Int {
   val startedAt = row.stringOrEmpty(GoalTelemetryPayloadKeys.STARTED_AT)
   val finishedAt = row.stringOrEmpty(GoalTelemetryPayloadKeys.FINISHED_AT)

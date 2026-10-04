@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.install.scaffold
 import me.tatarka.inject.annotations.Inject
 import skillbill.agentaddon.model.AgentAddonCatalogueEntry
-import skillbill.error.shellcontent.MissingAgentAddonDeclarationError
+import skillbill.error.shellcontent.missingAgentAddonDeclaration
 import skillbill.infrastructure.skills.agentaddon.AgentAddonDeliveryResolver
 import skillbill.infrastructure.skills.install.nativeagent.installNativeAgentCompositionContext
 import skillbill.infrastructure.skills.scaffold.authoring.AuthoringOperations
@@ -15,7 +15,6 @@ import skillbill.model.EnvironmentContext
 import skillbill.model.toPath
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
 import skillbill.ports.scaffold.ScaffoldGateway
-import skillbill.ports.scaffold.UnsupportedScaffoldGateway
 import skillbill.ports.scaffold.catalog.model.ScaffoldExplainResult
 import skillbill.ports.scaffold.catalog.model.ScaffoldExplainSkill
 import skillbill.ports.scaffold.catalog.model.ScaffoldListResult
@@ -258,7 +257,7 @@ private fun requireAgentAddonEntry(
   identity: String,
 ): AgentAddonCatalogueEntry =
   AgentAddonDeliveryResolver().catalogue(repoRoot).firstOrNull { it.identity == identity }
-    ?: throw MissingAgentAddonDeclarationError(
+    ?: throw missingAgentAddonDeclaration(
       identity.removePrefix(AGENT_ADDON_PREFIX),
       repoRoot.resolve("agent-addons").toString(),
     )
@@ -289,19 +288,6 @@ private fun AgentAddonCatalogueEntry.toSkillStatus(
     consumers = consumers,
     manifestFile = manifestPath.toString(),
   )
-}
-
-@Inject
-class FileSystemUnsupportedScaffoldGateway : UnsupportedScaffoldGateway {
-  override fun retiredUnsupportedMessage(
-    command: String,
-    replacement: String,
-    editor: Boolean,
-  ) = if (editor) {
-    AuthoringOperations.retiredEditorMessage(command, replacement)
-  } else {
-    AuthoringOperations.retiredInteractiveMessage(command, replacement)
-  }
 }
 
 @Inject

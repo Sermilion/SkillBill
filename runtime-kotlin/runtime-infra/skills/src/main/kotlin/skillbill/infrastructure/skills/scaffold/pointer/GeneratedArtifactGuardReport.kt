@@ -1,6 +1,8 @@
 package skillbill.infrastructure.skills.scaffold.pointer
 
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.host.jvm.readGitTrackedFiles
 import skillbill.infrastructure.skills.nativeagent.validation.discoverNativeAgentGeneratedArtifactFiles
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
@@ -152,7 +154,8 @@ private fun discoverDeclaredPointerFiles(root: Path): List<Path> {
         val pack =
           try {
             loadPlatformManifest(packRoot)
-          } catch (_: ShellContentContractException) {
+          } catch (error: SkillBillRuntimeException) {
+            error.rethrowUnless(error.isShellContentContractFailure())
             return@flatMap emptyList<Path>().stream()
           }
         pack.pointers

@@ -1,8 +1,6 @@
 package skillbill.engine.operation.core
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.operation.OperationConfirmationUnsupportedError
-import skillbill.error.operation.OperationRefusalError
 import java.nio.file.Path
 import java.util.UUID
 
@@ -26,14 +24,25 @@ class OperationExecutor(
   private val steps: OperationStepRunner,
 ) {
   fun execute(request: OperationRequest): OperationResult {
-    val operation = registry.get(request.operationId)
+    val invocationId = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}"
+    val operation =
+      registry.find(request.operationId)
+        ?: return OperationResult(
+          invocationId,
+          OperationOutcome.Usage(
+            "Unknown operation '${request.operationId}'; expected one of ${registry.ids.joinToString(", ")}.",
+          ),
+        )
     val token = request.arguments.confirm
     if (token != null && operation !is ConfirmableOperation && operation !is SelfConfirmingOperation) {
-      throw OperationConfirmationUnsupportedError(operation.id)
+      return OperationResult(
+        invocationId,
+        OperationOutcome.Usage("Operation '${operation.id}' takes no confirm: token."),
+      )
     }
     val context =
       OperationContext(
-        invocationId = "$INVOCATION_ID_PREFIX${UUID.randomUUID()}",
+        invocationId = invocationId,
         repoRoot = request.repoRoot,
         invokedAgentId = request.invokedAgentId,
         arguments = request.arguments,
@@ -41,18 +50,14 @@ class OperationExecutor(
         steps = steps,
       )
     val outcome =
-      try {
-        operation.pre(context)
-        if (token != null && operation is ConfirmableOperation) {
+      operation.pre(context)
+        ?: if (token != null && operation is ConfirmableOperation) {
           gate.confirm(operation, context, token)
         } else {
           proceed(operation, context)
         }
-      } catch (refusal: OperationRefusalError) {
-        OperationOutcome.Blocked(refusal.message.orEmpty())
-      }
-    operation.post(context, outcome)
-    return OperationResult(context.invocationId, outcome)
+    if (outcome !is OperationOutcome.Usage) operation.post(context, outcome)
+    return OperationResult(invocationId, outcome)
   }
 
   private fun proceed(

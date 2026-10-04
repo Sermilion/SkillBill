@@ -2,10 +2,10 @@ package skillbill.engine.goalrunner.planning.recovery
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.telemetry.GoalRunnerBestEffortEmission
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import java.time.Clock

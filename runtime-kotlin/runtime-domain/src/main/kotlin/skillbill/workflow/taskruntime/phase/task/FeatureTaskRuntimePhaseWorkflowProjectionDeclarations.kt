@@ -1,10 +1,7 @@
 package skillbill.workflow.taskruntime.phase.task
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
-import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeCommitPushPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeMeasuredFactKeys
 import skillbill.workflow.engine.model.WorkflowDefinition
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
@@ -12,13 +9,12 @@ import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclar
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDelivery
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionShape
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionTemplate
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionBudget
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffPromptVisibility
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseDeclaration
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeHandoffPromptVisibility
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePlanningProjectionContract
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReviewEvidenceReference
-import skillbill.workflow.taskruntime.phase.planning.UpstreamPlanningProjectionSpec
 
 internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
   private fun upstreamPlanningProjection(spec: UpstreamPlanningProjectionSpec): PhaseHandoffProjectionDeclaration =
@@ -111,13 +107,7 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
         listOf(
           phaseProseDeclaration(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN),
         ),
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to
-        listOf(
-          phaseProseDeclaration(
-            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
-            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
-          ),
-        ),
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to emptyList(),
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to
         listOf(
           phaseProjection(
@@ -136,8 +126,23 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
             ),
           ),
         ),
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX to
+        listOf(
+          phaseProseDeclaration(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+          ),
+          phaseProseDeclaration(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+          ),
+        ),
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to
         listOf(
+          phaseProseDeclaration(
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
+          ),
           phaseProseDeclaration(
             FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
             FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
@@ -171,7 +176,7 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
               producingPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS,
               name = "review_repair_request",
               contractId = FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.REVIEW_REPAIR_REQUEST,
-              fields = listOf("unresolved_blocker_findings", "repository_checkpoint"),
+              fields = listOf(SharedPayloadKeys.VALUE, "repository_checkpoint"),
               checkpointPolicy = FeatureTaskRuntimeRepositoryCheckpointPolicy.MUST_MATCH,
               required = true,
             ),
@@ -186,7 +191,7 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
               name = "review_findings_for_verification",
               contractId =
                 FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.FINDINGS_VERIFICATION_INPUT,
-              fields = listOf("findings", "repository_checkpoint"),
+              fields = listOf(SharedPayloadKeys.VALUE, "repository_checkpoint"),
               checkpointPolicy = FeatureTaskRuntimeRepositoryCheckpointPolicy.REFRESH_FROM_REPOSITORY,
               required = true,
             ),
@@ -274,15 +279,7 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
               producingPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
               name = "build_receipt",
               contractId = FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.BUILD_RECEIPT,
-              fields =
-                listOf(
-                  "validation_status",
-                  "checks",
-                  "repository_checkpoint",
-                  "gate_run_count",
-                  "gate_runs",
-                  ValidationEvidencePayloadKeys.VALIDATION_EVIDENCE,
-                ),
+              fields = listOf(SharedPayloadKeys.VALUE),
               checkpointPolicy = FeatureTaskRuntimeRepositoryCheckpointPolicy.REFRESH_FROM_REPOSITORY,
               required = false,
             ),
@@ -329,14 +326,7 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
               producingPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
               name = "build_receipt",
               contractId = FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.BUILD_RECEIPT,
-              fields =
-                listOf(
-                  "validation_status",
-                  "checks",
-                  "repository_checkpoint",
-                  "gate_run_count",
-                  "gate_runs",
-                ),
+              fields = listOf(SharedPayloadKeys.VALUE),
               checkpointPolicy = FeatureTaskRuntimeRepositoryCheckpointPolicy.REFRESH_FROM_REPOSITORY,
               required = false,
             ),
@@ -389,13 +379,7 @@ internal object FeatureTaskRuntimePhaseWorkflowProjectionDeclarations {
               producingPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH,
               name = "commit_receipt",
               contractId = FeatureTaskRuntimePhaseWorkflowDefinition.PhaseProjectionContract.COMMIT_RECEIPT,
-              fields =
-                listOf(
-                  DecompositionManifestPayloadKeys.COMMIT_SHA,
-                  DecompositionPlanningPayloadKeys.BRANCH,
-                  DecompositionPlanningPayloadKeys.BASE_BRANCH,
-                  FeatureTaskRuntimeCommitPushPayloadKeys.PUSHED,
-                ),
+              fields = listOf(SharedPayloadKeys.VALUE),
               checkpointPolicy = FeatureTaskRuntimeRepositoryCheckpointPolicy.NOT_REQUIRED,
               required = true,
             ),

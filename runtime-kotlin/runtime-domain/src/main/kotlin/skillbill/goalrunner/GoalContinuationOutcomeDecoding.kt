@@ -4,14 +4,16 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
-import skillbill.workflow.model.goalreview.asGoalWorkflowArtifactMap
+import skillbill.goalrunner.model.asGoalRunnerIntOrNull
+import skillbill.workflow.model.goalobservability.asGoalWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 fun missingResultPrefixTerminalOutcomeArtifact(
   output: Any,
   issueKey: String,
   subtaskId: Int,
   workflowId: String,
-): Map<String, Any?>? {
+): FeatureTaskRuntimeWorkflowArtifactMap? {
   val wire = JsonCodec.anyToStringAnyMap(output) ?: return null
   return (JsonCodec.anyToStringAnyMap(wire["subtask_outcome"]) ?: wire)
     .takeIf { candidate ->
@@ -33,7 +35,7 @@ fun missingResultPrefixTerminalOutcomeArtifact(
         ).apply {
           candidate["commit_sha"]?.toString()?.takeIf(String::isNotBlank)?.let { put("commit_sha", it) }
           candidate["blocked_reason"]?.toString()?.takeIf(String::isNotBlank)?.let { put("blocked_reason", it) }
-        }
+        }.let(FeatureTaskRuntimeWorkflowArtifactMap::from)
       }
     }
 }

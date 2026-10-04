@@ -3,85 +3,85 @@ package skillbill.engine.goalplanning
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.workflow.goal.GOAL_SHARED_PREPLAN_DISCARDED_PAYLOAD
+import skillbill.contracts.workflow.goal.GoalPlanningPreparationPayloadKeys
+import skillbill.engine.goalrunner.planning.model.GoalPlanningPreparationProgress
+import skillbill.engine.goalrunner.planning.model.GoalPlanningRecoveryProgress
 import skillbill.engine.goalrunner.planning.model.expectedProvenance
-import skillbill.engine.planningprojection.producerProjectionGateReason
-import skillbill.engine.planningprojection.requireValidPlanningProjection
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
-import skillbill.ports.goalrunner.model.GoalPlanningPreparationProgress
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
+import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
+import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.ports.taskruntime.validateGoalPlanningPreparationEnvelope
 import skillbill.text.sha256HexUtf8
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.artifact.envelopeWireMap
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
-import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 @Inject
 class GoalPlanningPreparationCheckpoint(
   private val database: DatabaseSessionFactory,
   private val envelopeValidator: FeatureTaskRuntimeWireArtifactValidator,
-  private val phaseOutputValidator: FeatureTaskRuntimePhaseOutputValidator,
-  planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidator,
 ) {
-  private val gate =
-    GoalPlanningPreparationProjectionGate(envelopeValidator, phaseOutputValidator, planningProjectionValidator)
-  private val preparationValidator =
-    GoalPlanningPreparationValidator(phaseOutputValidator, planningProjectionValidator)
+  private val gate = GoalPlanningPreparationProjectionGate(envelopeValidator)
+  private val preparationValidator = GoalPlanningPreparationValidator()
 
   fun checkpoint(record: GoalPlanningPreparationRecord) {
     val canonical = preparationValidator.canonicalize(record)
-    envelopeValidator.validateGoalPlanningPreparationEnvelope(
-      canonical.toEnvelopeMap(),
+    envelopeValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(canonical.toEnvelopeMap()),
       "${canonical.parentGoalWorkflowId}#${canonical.subtaskId}",
     )
     database.selfManagedWrite { unitOfWork ->
-      unitOfWork.goalPlanningPreparations.markPrepared(canonical)
+      unitOfWork.goalPlanningPreparations.markPrepared(canonical).appliedOrThrow()
     }
   }
 
   fun validate(record: GoalPlanningPreparationRecord) {
     val sourceLabel = "${record.parentGoalWorkflowId}#${record.subtaskId}"
-    envelopeValidator.validateGoalPlanningPreparationEnvelope(record.toEnvelopeMap(), sourceLabel)
+    envelopeValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(record.toEnvelopeMap()),
+      sourceLabel,
+    )
     preparationValidator.validate(record)
   }
 
   fun checkpointSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) {
-    val canonical = gate.canonicalizeSharedPreplan(checkpoint)
-    gate.validateSharedPreplan(canonical)
-    database.selfManagedWrite { it.goalPlanningPreparations.checkpointSharedPreplan(canonical) }
+    gate.validateSharedPreplan(checkpoint)
+    database.selfManagedWrite { it.goalPlanningPreparations.checkpointSharedPreplan(checkpoint).appliedOrThrow() }
   }
 
   fun checkpointSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) {
-    val canonical = gate.canonicalizeSubtaskPlan(checkpoint)
-    gate.validateSubtaskPlan(canonical)
-    database.selfManagedWrite { it.goalPlanningPreparations.checkpointSubtaskPlan(canonical) }
+    gate.validateSubtaskPlan(checkpoint)
+    database.selfManagedWrite { it.goalPlanningPreparations.checkpointSubtaskPlan(checkpoint).appliedOrThrow() }
   }
 
-  fun recheckpointSharedPreplan(
-    checkpoint: SharedGoalPreplanCheckpoint,
-    cascadePlanSubtaskIds: List<Int> = emptyList(),
-  ) {
-    val canonical = gate.canonicalizeSharedPreplan(checkpoint)
-    gate.validateSharedPreplan(canonical)
-    val stored = database.read { it.goalPlanningPreparations.findSharedPreplan(canonical.identity) }
-    if (stored != null && gate.sharedPreplanIsRegenerable(stored)) {
+  fun recheckpointSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) {
+    gate.validateSharedPreplan(checkpoint)
+    val stored =
+      when (val result = database.read { it.goalPlanningPreparations.findSharedPreplan(checkpoint.identity) }) {
+        is SharedGoalPreplanLookupResult.Found -> result.checkpoint
+        is SharedGoalPreplanLookupResult.Conflicted -> throw result.conflict.toFailure()
+      }
+    if (stored?.isExplicitlyDiscarded() == true) {
       database.selfManagedWrite {
-        it.goalPlanningPreparations.replaceSharedPreplan(canonical, stored.payloadSha256, cascadePlanSubtaskIds)
+        it.goalPlanningPreparations.replaceSharedPreplan(checkpoint, stored.payloadSha256, emptyList())
+          .appliedOrThrow()
       }
     } else {
-      database.selfManagedWrite { it.goalPlanningPreparations.checkpointSharedPreplan(canonical) }
+      stored?.let(gate::validateSharedPreplan)
+      database.selfManagedWrite { it.goalPlanningPreparations.checkpointSharedPreplan(checkpoint).appliedOrThrow() }
     }
   }
 
@@ -89,19 +89,15 @@ class GoalPlanningPreparationCheckpoint(
     GoalPlanningSharedPreplanRefresh(database, gate)
 
   fun recheckpointSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) {
-    val canonical = gate.canonicalizeSubtaskPlan(checkpoint)
-    gate.validateSubtaskPlan(canonical)
+    gate.validateSubtaskPlan(checkpoint)
     val stored =
       findStoredSubtaskPlan(
-        canonical.identity,
-        canonical.subtaskId,
-        canonical.governedSubSpecPath,
+        checkpoint.identity,
+        checkpoint.subtaskId,
+        checkpoint.governedSubSpecPath,
       )
-    if (stored != null && gate.subtaskPlanIsRegenerable(stored)) {
-      database.selfManagedWrite { it.goalPlanningPreparations.replaceSubtaskPlan(canonical) }
-    } else {
-      database.selfManagedWrite { it.goalPlanningPreparations.checkpointSubtaskPlan(canonical) }
-    }
+    stored?.let(gate::validateSubtaskPlan)
+    database.selfManagedWrite { it.goalPlanningPreparations.checkpointSubtaskPlan(checkpoint).appliedOrThrow() }
   }
 
   fun findStoredSubtaskPlan(
@@ -111,89 +107,139 @@ class GoalPlanningPreparationCheckpoint(
   ): GoalSubtaskPlanCheckpoint? =
     database.read {
       it.goalPlanningPreparations.findSubtaskPlan(identity, subtaskId, governedSubSpecPath)
-    }
+    }.planOrThrow()
 
   fun findSharedPreplan(identity: GoalPlanningIdentity): SharedGoalPreplanCheckpoint? =
-    database.read { it.goalPlanningPreparations.findSharedPreplan(identity) }
-      ?.takeIf { gate.sharedPreplanRejection(it) == null }
+    when (val result = findSharedPreplanResult(identity)) {
+      is SharedGoalPreplanLookupResult.Found -> result.checkpoint
+      is SharedGoalPreplanLookupResult.Conflicted -> throw result.conflict.toFailure()
+    }
+
+  fun findSharedPreplanResult(identity: GoalPlanningIdentity): SharedGoalPreplanLookupResult =
+    when (val result = database.read { it.goalPlanningPreparations.findSharedPreplan(identity) }) {
+      is SharedGoalPreplanLookupResult.Found ->
+        SharedGoalPreplanLookupResult.Found(
+          result.checkpoint?.takeUnless {
+            it.isExplicitlyDiscarded()
+          }?.also(gate::validateSharedPreplan),
+        )
+      is SharedGoalPreplanLookupResult.Conflicted -> result
+    }
 
   fun findSubtaskPlan(
     identity: GoalPlanningIdentity,
     subtaskId: Int,
     governedSubSpecPath: String,
-    expectedDescriptor: GovernedGoalSubtaskDescriptor? = null,
   ): GoalSubtaskPlanCheckpoint? =
     database.read {
       it.goalPlanningPreparations.findSubtaskPlan(identity, subtaskId, governedSubSpecPath)
-    }?.let { plan ->
-      val projectionRejection = gate.subtaskPlanRejection(plan)
-      if (
-        expectedDescriptor != null &&
-        plan.manifestOrder != expectedDescriptor.manifestOrder
-      ) {
-        throw IncompatibleGoalPlanningPreparationRecoveryError(
-          identity.parentGoalWorkflowId,
-          subtaskId,
-          "stored manifest order differs from the authoritative decomposition manifest",
-        )
-      }
-      if (
-        expectedDescriptor != null &&
-        plan.subSpecHash != expectedDescriptor.subSpecHash
-      ) {
-        throw IncompatibleGoalPlanningPreparationRecoveryError(
-          identity.parentGoalWorkflowId,
-          subtaskId,
-          "stored governed sub-spec hash differs from the current governed sub-spec",
-        )
-      }
-      plan.takeIf { projectionRejection == null }
-    }
+    }.planOrThrow()?.also(gate::validateSubtaskPlan)
+
+  private fun requireRecoverablePlan(
+    identity: GoalPlanningIdentity,
+    plan: GoalSubtaskPlanCheckpoint,
+    expectedDescriptor: GovernedGoalSubtaskDescriptor,
+  ): GoalPlanningPreparationConflict? {
+    val divergence =
+      when {
+        plan.manifestOrder != expectedDescriptor.manifestOrder ->
+          "stored manifest order differs from the authoritative decomposition manifest"
+        plan.subSpecHash != expectedDescriptor.subSpecHash ->
+          "stored governed sub-spec hash differs from the current governed sub-spec"
+        else -> null
+      } ?: return null
+    return GoalPlanningPreparationConflict(identity.parentGoalWorkflowId, plan.subtaskId, divergence, null)
+  }
+
+  private fun nonCompletedPlanPayloadReason(planPayload: String): String? {
+    val parsed =
+      JsonCodec.parseObjectOrNull(planPayload)
+        ?.let(JsonCodec::jsonElementToValue)
+        ?.let(JsonCodec::anyToStringAnyMap)
+        ?: return null
+    val status = parsed[SharedPayloadKeys.STATUS]?.toString()
+    if (status.workflowStepStatus() == WorkflowStepStatus.COMPLETED) return null
+    return "stored plan payload has status '$status' but must be completed with non-empty produced_outputs"
+  }
 
   fun recoveryProgress(
     identity: GoalPlanningIdentity,
     orderedDescriptors: List<GovernedGoalSubtaskDescriptor>,
     expectedProvenance: GoalPlanningContractProvenance,
-  ): GoalPlanningPreparationProgress {
-    val sharedPrepared = findSharedPreplan(identity) != null
-    val prepared =
-      orderedDescriptors.mapNotNull { descriptor ->
-        findSubtaskPlan(
-          identity,
-          descriptor.subtaskId,
-          descriptor.governedSubSpecPath,
-          descriptor,
-        )?.also { plan ->
-          if (plan.provenance != expectedProvenance) {
-            throw IncompatibleGoalPlanningPreparationRecoveryError(
-              identity.parentGoalWorkflowId,
-              descriptor.subtaskId,
-              "stored plan provenance differs from the governing shared preplan",
-            )
-          }
-          val parsed =
-            JsonCodec.parseObjectOrNull(plan.planPayload)
-              ?.let(JsonCodec::jsonElementToValue)
-              ?.let(JsonCodec::anyToStringAnyMap)
-          val status = parsed?.get(SharedPayloadKeys.STATUS)?.toString()
-          val produced = parsed?.get(SharedPayloadKeys.PRODUCED_OUTPUTS) as? Map<*, *>
-          if (status.workflowStepStatus() != WorkflowStepStatus.COMPLETED || produced?.isEmpty() != false) {
-            throw IncompatibleGoalPlanningPreparationRecoveryError(
-              identity.parentGoalWorkflowId,
-              descriptor.subtaskId,
-              "stored plan payload has status '$status' but must be completed with non-empty produced_outputs",
-            )
-          }
-        }
+  ): GoalPlanningRecoveryProgress {
+    val sharedPrepared =
+      when (val shared = database.read { it.goalPlanningPreparations.findSharedPreplan(identity) }) {
+        is SharedGoalPreplanLookupResult.Found ->
+          shared.checkpoint?.takeUnless { it.isExplicitlyDiscarded() }?.also(gate::validateSharedPreplan) != null
+        is SharedGoalPreplanLookupResult.Conflicted ->
+          return GoalPlanningRecoveryProgress.Conflicted(shared.conflict)
       }
+    val prepared = mutableListOf<GoalSubtaskPlanCheckpoint>()
+    orderedDescriptors.forEach { descriptor ->
+      when (val read = readPlanForRecovery(identity, descriptor, expectedProvenance)) {
+        is PlanRecoveryRead.Incomplete ->
+          return GoalPlanningRecoveryProgress.IncompletePlan(
+            identity.parentGoalWorkflowId,
+            read.subtaskId,
+            read.reason,
+          )
+        is PlanRecoveryRead.Prepared -> prepared += read.plan
+        is PlanRecoveryRead.Conflicted -> return GoalPlanningRecoveryProgress.Conflicted(read.conflict)
+        PlanRecoveryRead.Absent -> Unit
+      }
+    }
     val preparedIds = prepared.mapTo(mutableSetOf()) { it.subtaskId }
-    return GoalPlanningPreparationProgress(
-      sharedPreplanPrepared = sharedPrepared,
-      preparedPlanCount = prepared.size,
-      expectedPlanCount = orderedDescriptors.size,
-      missingSubtaskIds = orderedDescriptors.filterNot { it.subtaskId in preparedIds }.map { it.subtaskId },
+    return GoalPlanningRecoveryProgress.Ready(
+      GoalPlanningPreparationProgress(
+        sharedPreplanPrepared = sharedPrepared,
+        preparedPlanCount = prepared.size,
+        expectedPlanCount = orderedDescriptors.size,
+        missingSubtaskIds = orderedDescriptors.filterNot { it.subtaskId in preparedIds }.map { it.subtaskId },
+      ),
     )
   }
+
+  private fun readPlanForRecovery(
+    identity: GoalPlanningIdentity,
+    descriptor: GovernedGoalSubtaskDescriptor,
+    expectedProvenance: GoalPlanningContractProvenance,
+  ): PlanRecoveryRead {
+    val read =
+      database.read {
+        it.goalPlanningPreparations.findSubtaskPlan(identity, descriptor.subtaskId, descriptor.governedSubSpecPath)
+      }
+    val plan =
+      when (read) {
+        is GoalSubtaskPlanLookupResult.Conflicted -> return PlanRecoveryRead.Conflicted(read.conflict)
+        is GoalSubtaskPlanLookupResult.Found -> read.plan ?: return PlanRecoveryRead.Absent
+      }
+    requireRecoverablePlan(identity, plan, descriptor)?.let { return PlanRecoveryRead.Conflicted(it) }
+    val incompleteReason = nonCompletedPlanPayloadReason(plan.planPayload)
+    if (incompleteReason == null) gate.validateSubtaskPlan(plan)
+    return when {
+      incompleteReason != null -> PlanRecoveryRead.Incomplete(plan.subtaskId, incompleteReason)
+      plan.provenance != expectedProvenance ->
+        PlanRecoveryRead.Conflicted(
+          GoalPlanningPreparationConflict(
+            identity.parentGoalWorkflowId,
+            descriptor.subtaskId,
+            "stored plan provenance differs from the governing shared preplan",
+            null,
+          ),
+        )
+      else -> PlanRecoveryRead.Prepared(plan)
+    }
+  }
+}
+
+private sealed interface PlanRecoveryRead {
+  data object Absent : PlanRecoveryRead
+
+  data class Prepared(val plan: GoalSubtaskPlanCheckpoint) : PlanRecoveryRead
+
+  data class Incomplete(val subtaskId: Int, val reason: String) : PlanRecoveryRead
+
+  data class Conflicted(val conflict: GoalPlanningPreparationConflict) : PlanRecoveryRead
 }
 
 class GoalPlanningSharedPreplanRefresh(
@@ -212,6 +258,7 @@ class GoalPlanningSharedPreplanRefresh(
   ) {
     database.selfManagedWrite {
       it.goalPlanningPreparations.advanceSharedPreplanProvenance(identity, expectedPayloadSha256, provenance)
+        .appliedOrThrow()
     }
   }
 
@@ -220,106 +267,39 @@ class GoalPlanningSharedPreplanRefresh(
     expectedPayloadSha256: String,
     cascadePlanSubtaskIds: List<Int>,
   ): SharedGoalPreplanCheckpoint {
-    val canonical = gate.canonicalizeSharedPreplan(checkpoint)
-    gate.validateSharedPreplan(canonical)
+    gate.validateSharedPreplan(checkpoint)
     database.selfManagedWrite {
-      it.goalPlanningPreparations.replaceSharedPreplan(canonical, expectedPayloadSha256, cascadePlanSubtaskIds)
+      it.goalPlanningPreparations.replaceSharedPreplan(checkpoint, expectedPayloadSha256, cascadePlanSubtaskIds)
+        .appliedOrThrow()
     }
-    return canonical
+    return checkpoint
   }
 }
 
 class GoalPlanningPreparationProjectionGate(
   private val envelopeValidator: FeatureTaskRuntimeWireArtifactValidator,
-  private val phaseOutputValidator: FeatureTaskRuntimePhaseOutputValidator,
-  private val planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidator,
 ) {
-  fun canonicalizeSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint): SharedGoalPreplanCheckpoint {
-    val accepted =
-      phaseOutputValidator.validatePhaseOutput(checkpoint.preplanPayload, "preplan")
-        .requireAcceptedOutput("preplan")
-    val canonical = accepted.normalizedOutput.canonicalJson
-    return checkpoint.copy(
-      preplanPayload = canonical,
-      payloadSha256 = sha256HexUtf8(canonical),
-      repairEvidence =
-        planningRepairEvidenceFor(
-          phaseId = "preplan",
-          sourcePayload = checkpoint.preplanPayload,
-          acceptedEvidence = accepted.repairEvidence,
-          storedEvidence = checkpoint.repairEvidence,
-          sourceLabel = checkpoint.identity.parentGoalWorkflowId,
-        ),
-    )
-  }
-
-  fun canonicalizeSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint): GoalSubtaskPlanCheckpoint {
-    val accepted =
-      phaseOutputValidator.validatePhaseOutput(checkpoint.planPayload, "plan")
-        .requireAcceptedOutput("plan")
-    val canonical = accepted.normalizedOutput.canonicalJson
-    return checkpoint.copy(
-      planPayload = canonical,
-      payloadSha256 = sha256HexUtf8(canonical),
-      repairEvidence =
-        planningRepairEvidenceFor(
-          phaseId = "plan",
-          sourcePayload = checkpoint.planPayload,
-          acceptedEvidence = accepted.repairEvidence,
-          storedEvidence = checkpoint.repairEvidence,
-          sourceLabel = "${checkpoint.identity.parentGoalWorkflowId}#${checkpoint.subtaskId}",
-        ),
-    )
-  }
-
   fun validateSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) {
-    val (label, envelope) = sharedPreplanEnvelope(checkpoint)
-    envelope.requirePrepared(label)
+    val label = checkpoint.identity.parentGoalWorkflowId
+    envelopeValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(checkpoint.toEnvelopeMap()),
+      label,
+    )
+    requirePlanningPayloadHash(checkpoint.payloadSha256, checkpoint.preplanPayload, label)
+    readStoredPlanningRecord(checkpoint.preplanPayload, "preplan", label)
   }
 
   fun validateSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) {
-    val (label, envelope) = subtaskPlanEnvelope(checkpoint)
-    envelope.requirePrepared(label)
-    requireValidPlanningProjection(envelope, "plan", label, planningProjectionValidator)
-  }
-
-  fun sharedPreplanRejection(checkpoint: SharedGoalPreplanCheckpoint): String? =
-    planningRecordRejection {
-      sharedPreplanEnvelope(checkpoint)
-      null
-    }
-
-  fun subtaskPlanRejection(checkpoint: GoalSubtaskPlanCheckpoint): String? =
-    planningRecordRejection {
-      val (_, envelope) = subtaskPlanEnvelope(checkpoint)
-      producerProjectionGateReason("plan", envelope, planningProjectionValidator)
-    }
-
-  private fun sharedPreplanEnvelope(checkpoint: SharedGoalPreplanCheckpoint): Pair<String, Map<String, Any?>> {
-    val label = checkpoint.identity.parentGoalWorkflowId
-    envelopeValidator.validateGoalPlanningPreparationEnvelope(checkpoint.toEnvelopeMap(), label)
-    val normalized =
-      phaseOutputValidator.validatePhaseOutput(checkpoint.preplanPayload, "preplan")
-        .requireAcceptedOutput("preplan")
-        .normalizedOutput
-    requirePlanningPayloadHash(checkpoint.payloadSha256, normalized.canonicalJson, label)
-    return label to normalized.envelopeWireMap()
-  }
-
-  private fun subtaskPlanEnvelope(checkpoint: GoalSubtaskPlanCheckpoint): Pair<String, Map<String, Any?>> {
     val label = "${checkpoint.identity.parentGoalWorkflowId}#${checkpoint.subtaskId}"
-    envelopeValidator.validateGoalPlanningPreparationEnvelope(checkpoint.toEnvelopeMap(), label)
-    val normalized =
-      phaseOutputValidator.validatePhaseOutput(checkpoint.planPayload, "plan")
-        .requireAcceptedOutput("plan")
-        .normalizedOutput
-    requirePlanningPayloadHash(checkpoint.payloadSha256, normalized.canonicalJson, label)
-    return label to normalized.envelopeWireMap()
+    envelopeValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(checkpoint.toEnvelopeMap()),
+      label,
+    )
+    requirePlanningPayloadHash(checkpoint.payloadSha256, checkpoint.planPayload, label)
+    readStoredPlanningRecord(checkpoint.planPayload, "plan", label)
   }
-
-  fun sharedPreplanIsRegenerable(stored: SharedGoalPreplanCheckpoint): Boolean = sharedPreplanRejection(stored) != null
-
-  fun subtaskPlanIsRegenerable(stored: GoalSubtaskPlanCheckpoint): Boolean = subtaskPlanRejection(stored) != null
 }
 
 private fun requirePlanningPayloadHash(
@@ -328,7 +308,7 @@ private fun requirePlanningPayloadHash(
   label: String,
 ) {
   if (sha256HexUtf8(payload) != expected) {
-    throw InvalidGoalPlanningPreparationSchemaError(
+    throw invalidGoalPlanningPreparationSchemaError(
       label,
       "payload_sha256",
       "payload_sha256 does not match the exact UTF-8 payload bytes",
@@ -336,84 +316,50 @@ private fun requirePlanningPayloadHash(
   }
 }
 
-private fun planningRepairEvidenceFor(
-  phaseId: String,
-  sourcePayload: String,
-  acceptedEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
-  storedEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
-  sourceLabel: String,
-): FeatureTaskRuntimePhaseOutputRepairEvidence? {
-  acceptedEvidence?.let { evidence ->
-    if (evidence.originalDigest != sha256HexUtf8(sourcePayload)) {
-      throw InvalidGoalPlanningPreparationSchemaError(
-        sourceLabel,
-        "$phaseId.repair_evidence.original_digest",
-        "repair evidence does not describe the checkpoint input bytes",
-      )
-    }
-  }
-  return acceptedEvidence ?: storedEvidence
-}
-
-private fun planningRecordRejection(compute: () -> String?): String? =
-  try {
-    compute()
-  } catch (error: InvalidGoalPlanningPreparationSchemaError) {
-    "stored record failed its durable contract: ${error.message.orEmpty()}"
-  } catch (error: InvalidFeatureTaskRuntimePhaseOutputSchemaError) {
-    "stored record failed its durable contract: ${error.message.orEmpty()}"
-  }
-
-private fun Map<String, Any?>.requirePrepared(label: String) {
-  if (get(SharedPayloadKeys.STATUS).workflowStepStatus() != WorkflowStepStatus.COMPLETED ||
-    (get(SharedPayloadKeys.PRODUCED_OUTPUTS) as? Map<*, *>)?.isEmpty() != false
-  ) {
-    throw InvalidGoalPlanningPreparationSchemaError(
-      label,
-      "payload",
-      "phase output must be completed with non-empty produced_outputs",
-    )
-  }
-}
-
-private fun SharedGoalPreplanCheckpoint.toEnvelopeMap(): Map<String, Any?> =
+internal fun SharedGoalPreplanCheckpoint.toEnvelopeMap(): Map<String, Any?> =
   linkedMapOf(
     SharedPayloadKeys.CONTRACT_VERSION to contractVersion,
-    "record_type" to "shared_preplan",
-    "identity" to identity.asMap(),
-    "preparation_status" to preparationStatus.wireValue,
-    "provenance" to provenance.asMap(),
-    "payload_sha256" to payloadSha256,
-    "preplan_payload" to preplanPayload,
-    "repair_evidence" to repairEvidence?.asWorkflowArtifactEntry(),
+    GoalPlanningPreparationPayloadKeys.RECORD_TYPE to "shared_preplan",
+    GoalPlanningPreparationPayloadKeys.IDENTITY to identity.asMap(),
+    GoalPlanningPreparationPayloadKeys.PREPARATION_STATUS to preparationStatus.wireValue,
+    GoalPlanningPreparationPayloadKeys.PROVENANCE to provenance.asMap(),
+    GoalPlanningPreparationPayloadKeys.PAYLOAD_SHA256 to payloadSha256,
+    GoalPlanningPreparationPayloadKeys.PREPLAN_PAYLOAD to preplanPayload,
+    GoalPlanningPreparationPayloadKeys.REPAIR_EVIDENCE to repairEvidence?.asWorkflowArtifactEntry(),
   ).filterValues { it != null }
 
-private fun GoalSubtaskPlanCheckpoint.toEnvelopeMap(): Map<String, Any?> =
+internal fun GoalSubtaskPlanCheckpoint.toEnvelopeMap(): Map<String, Any?> =
   linkedMapOf(
     SharedPayloadKeys.CONTRACT_VERSION to contractVersion,
-    "record_type" to "subtask_plan",
-    "identity" to identity.asMap(),
+    GoalPlanningPreparationPayloadKeys.RECORD_TYPE to "subtask_plan",
+    GoalPlanningPreparationPayloadKeys.IDENTITY to identity.asMap(),
     SharedPayloadKeys.SUBTASK_ID to subtaskId,
-    "manifest_order" to manifestOrder,
-    "governed_sub_spec_path" to governedSubSpecPath,
-    "sub_spec_hash" to subSpecHash, "preparation_status" to preparationStatus.wireValue,
-    "provenance" to provenance.asMap(), "payload_sha256" to payloadSha256, "plan_payload" to planPayload,
-    "repair_evidence" to repairEvidence?.asWorkflowArtifactEntry(),
+    GoalPlanningPreparationPayloadKeys.MANIFEST_ORDER to manifestOrder,
+    GoalPlanningPreparationPayloadKeys.GOVERNED_SUB_SPEC_PATH to governedSubSpecPath,
+    GoalPlanningPreparationPayloadKeys.SUB_SPEC_HASH to subSpecHash,
+    GoalPlanningPreparationPayloadKeys.PREPARATION_STATUS to preparationStatus.wireValue,
+    GoalPlanningPreparationPayloadKeys.PROVENANCE to provenance.asMap(),
+    GoalPlanningPreparationPayloadKeys.PAYLOAD_SHA256 to payloadSha256,
+    GoalPlanningPreparationPayloadKeys.PLAN_PAYLOAD to planPayload,
+    GoalPlanningPreparationPayloadKeys.REPAIR_EVIDENCE to repairEvidence?.asWorkflowArtifactEntry(),
   ).filterValues { it != null }
 
 private fun GoalPlanningIdentity.asMap() =
   linkedMapOf(
-    "parent_goal_workflow_id" to parentGoalWorkflowId,
-    "normalized_issue_key" to normalizedIssueKey,
-    "repository_identity" to repositoryIdentity,
+    GoalPlanningPreparationPayloadKeys.PARENT_GOAL_WORKFLOW_ID to parentGoalWorkflowId,
+    GoalPlanningPreparationPayloadKeys.NORMALIZED_ISSUE_KEY to normalizedIssueKey,
+    GoalPlanningPreparationPayloadKeys.REPOSITORY_IDENTITY to repositoryIdentity,
   )
 
 private fun GoalPlanningContractProvenance.asMap() =
   linkedMapOf(
-    "parent_spec_hash" to parentSpecHash,
-    "decomposition_manifest_hash" to decompositionManifestHash,
-    "planning_contract_id" to planningContractId,
-    "planning_contract_version" to planningContractVersion,
-    "phase_output_contract_id" to phaseOutputContractId,
-    "phase_output_contract_version" to phaseOutputContractVersion,
+    GoalPlanningPreparationPayloadKeys.PARENT_SPEC_HASH to parentSpecHash,
+    GoalPlanningPreparationPayloadKeys.DECOMPOSITION_MANIFEST_HASH to decompositionManifestHash,
+    GoalPlanningPreparationPayloadKeys.PLANNING_CONTRACT_ID to planningContractId,
+    GoalPlanningPreparationPayloadKeys.PLANNING_CONTRACT_VERSION to planningContractVersion,
+    GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_ID to phaseOutputContractId,
+    GoalPlanningPreparationPayloadKeys.PHASE_OUTPUT_CONTRACT_VERSION to phaseOutputContractVersion,
   )
+
+internal fun SharedGoalPreplanCheckpoint.isExplicitlyDiscarded(): Boolean =
+  preplanPayload == GOAL_SHARED_PREPLAN_DISCARDED_PAYLOAD && payloadSha256 == sha256HexUtf8(preplanPayload)

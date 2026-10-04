@@ -3,7 +3,7 @@ package skillbill.engine.goalrunner.model
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.goalrunner.model.GoalPullRequestStatus
 import skillbill.ports.agentrun.model.AgentRunOutputSink
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import java.nio.file.Path
 import kotlin.time.Duration
@@ -22,6 +22,7 @@ data class GoalRunnerRunRequest(
   val codeReviewMode: CodeReviewExecutionMode? = null,
   val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
   val stopAfterSubtaskId: Int? = null,
+  val intake: String? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }

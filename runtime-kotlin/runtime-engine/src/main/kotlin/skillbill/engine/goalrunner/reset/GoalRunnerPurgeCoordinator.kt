@@ -2,29 +2,26 @@ package skillbill.engine.goalrunner.reset
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
+import skillbill.application.decomposition.findMatchingDecompositionManifests
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.engine.decomposition.encodeDecompositionManifestYaml
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneGoalPurgeCheckpointRefs
 import skillbill.engine.goalrunner.goalRepositoryIdentity
-import skillbill.engine.goalrunner.manifest.resetManifest
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeRequest
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeResult
-import skillbill.engine.goalrunner.planning.recovery.resolveChildExecutionLiveness
-import skillbill.engine.goalrunner.status.GoalRunnerStatusDurableReadTracker
 import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
-import skillbill.engine.goalrunner.status.resolveChildExecutionLiveness
-import skillbill.engine.goalrunner.status.resolveParentExecutionLiveness
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.findMatchingDecompositionManifests
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.requireAccepted
+import skillbill.workflow.decomposition.resetManifest
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import java.nio.file.Path
 
 @Inject
@@ -40,7 +37,7 @@ class GoalRunnerPurgeCoordinator(
   fun purge(request: GoalRunnerPurgeRequest): GoalRunnerPurgeResult {
     val state =
       loadPurgeState(request)
-        ?: return missingPurgeResult(request.issueKey.trim().uppercase())
+        ?: return missingPurgeResult(FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(request.issueKey))
     state.refusal?.let { return it }
     val unlaunched = requireNotNull(state.sourceManifest).resetManifest(hard = true)
     val bundle = buildPurgeSpecBundle(state.repoRoot, unlaunched, requireNotNull(state.manifestPath))
@@ -65,7 +62,7 @@ class GoalRunnerPurgeCoordinator(
 
   private fun loadPurgeState(request: GoalRunnerPurgeRequest): PurgeState? {
     val repoRoot = request.repoRoot ?: error("repoRoot is required to purge goal '${request.issueKey}'.")
-    val issueKey = request.issueKey.trim().uppercase()
+    val issueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(request.issueKey)
     val loaded = manifestStore.loadDurableByIssueKey(issueKey)
     val parentWorkflowId = loaded?.parentWorkflowId
     val childWorkflowIds = parentWorkflowId?.let(manifestStore::listOwnedGoalChildWorkflowIds).orEmpty()
@@ -122,18 +119,8 @@ class GoalRunnerPurgeCoordinator(
     childWorkflowIds: List<String>,
     issueKey: String,
   ): GoalRunnerPurgeResult? {
-    val durableRead = GoalRunnerStatusDurableReadTracker(projectionAssembler.diagnostics)
-    val parentLiveness = projectionAssembler.resolveParentExecutionLiveness(parentWorkflowId, durableRead)
-    if (parentLiveness == ExecutionLiveness.LIVE || parentLiveness == ExecutionLiveness.UNKNOWN) {
-      return refused(issueKey, parentWorkflowId, childWorkflowIds, parentLiveness)
-    }
-    childWorkflowIds.forEach { childWorkflowId ->
-      val childLiveness = projectionAssembler.resolveChildExecutionLiveness(childWorkflowId, durableRead)
-      if (childLiveness == ExecutionLiveness.LIVE || childLiveness == ExecutionLiveness.UNKNOWN) {
-        return refused(issueKey, parentWorkflowId, childWorkflowIds, childLiveness)
-      }
-    }
-    return null
+    val blockingLiveness = projectionAssembler.resolvePurgeBlockingLiveness(parentWorkflowId, childWorkflowIds)
+    return blockingLiveness?.let { liveness -> refused(issueKey, parentWorkflowId, childWorkflowIds, liveness) }
   }
 
   private fun refused(

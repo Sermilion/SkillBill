@@ -5,6 +5,9 @@ import skillbill.contracts.telemetry.TelemetryMeasurementAvailability
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.infrastructure.sqlite.SAMPLE_REVIEW
 import skillbill.infrastructure.sqlite.SQLiteLearningStore
+import skillbill.infrastructure.sqlite.SQLiteUnitOfWork
+import skillbill.infrastructure.sqlite.SqliteTestDiagnostics
+import skillbill.infrastructure.sqlite.SqliteTestWorkflowSnapshotValidator
 import skillbill.infrastructure.sqlite.review.accounting.persistImportedReview
 import skillbill.infrastructure.sqlite.review.stage.TriageRuntime
 import skillbill.infrastructure.sqlite.review.stage.addLearning
@@ -28,6 +31,7 @@ import skillbill.review.parsing.ReviewParser
 import skillbill.telemetry.model.FeatureTaskRuntimeFinishedRecord
 import skillbill.telemetry.model.FeatureTaskRuntimeStartedRecord
 import java.sql.Connection
+import java.time.Clock
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -313,7 +317,7 @@ class ReviewStatsRuntimeTest {
     connection.use {
       insertFeatureVerifySession(connection)
 
-      val verifyStats = ReviewStatsRuntime.featureVerifyStats(connection)
+      val verifyStats = ReviewStatsRuntime.featureVerifyStats(connection, SqliteTestDiagnostics)
 
       assertEquals(1, verifyStats.totalRuns)
       assertEquals(1, verifyStats.runsWithGapsFound)
@@ -325,7 +329,7 @@ class ReviewStatsRuntimeTest {
   fun `feature task runtime telemetry persists started then finished and enqueues each event once`() {
     val (_, connection) = tempDbConnection("feature-task-runtime-telemetry")
     connection.use {
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       val outbox = TelemetryOutboxStore(connection, version = "test-runtime-version")
       persistFeatureTaskRuntimeTelemetryPair(store)
       store.featureTaskRuntimeFinished(
@@ -344,7 +348,7 @@ class ReviewStatsRuntimeTest {
         )
       assertFeatureTaskRuntimeFinishedPayload(finishedPayload)
 
-      val stats = ReviewStatsRuntime.featureTaskRuntimeStats(connection)
+      val stats = ReviewStatsRuntime.featureTaskRuntimeStats(connection, SqliteTestDiagnostics)
       assertEquals(1, stats.totalRuns)
       assertEquals(1, stats.finishedRuns)
       assertEquals(1, stats.completedRuns)
@@ -417,7 +421,7 @@ class ReviewStatsRuntimeTest {
         )
       }
 
-      val stats = ReviewStatsRuntime.featureTaskRuntimeStats(connection)
+      val stats = ReviewStatsRuntime.featureTaskRuntimeStats(connection, SqliteTestDiagnostics)
 
       assertEquals(2, stats.estimatedTokenRunsWithValue)
       assertEquals(150.0, stats.averageEstimatedTotalTokens)
@@ -425,10 +429,48 @@ class ReviewStatsRuntimeTest {
   }
 
   @Test
+  fun `stats reads report malformed persisted values to the diagnostics they were given`() {
+    val (dbPath, connection) = tempDbConnection("workflow-stats-diagnostics")
+    connection.use {
+      connection.createStatement().use { statement ->
+        statement.executeUpdate(
+          """
+          INSERT INTO feature_task_runtime_sessions (session_id, completion_status, completed_phase_ids, finished_at)
+          VALUES ('ftr-malformed', 'completed', 'not-json', '2026-04-23 10:05:00')
+          """.trimIndent(),
+        )
+        statement.executeUpdate(
+          """
+          INSERT INTO feature_verify_sessions (session_id, completion_status, gaps_found, started_at, finished_at)
+          VALUES ('fvr-malformed', 'completed', 'not-json', 'not-a-time', '2026-04-23 10:05:00')
+          """.trimIndent(),
+        )
+      }
+      SqliteTestDiagnostics.reset()
+      val reviews =
+        SQLiteUnitOfWork(
+          connection = connection,
+          dbPath = dbPath,
+          clock = Clock.systemUTC(),
+          diagnostics = SqliteTestDiagnostics,
+          workflowSnapshotValidator = SqliteTestWorkflowSnapshotValidator,
+          runtimeVersion = "test-runtime-version",
+        ).reviews
+
+      reviews.featureTaskRuntimeStats()
+      reviews.featureVerifyStats()
+
+      val warnings = SqliteTestDiagnostics.recordedWarnings()
+      assertEquals(2, warnings.count { it.contains("degraded review_stats.json_array") })
+      assertEquals(1, warnings.count { it.contains("degraded review_stats.duration_seconds") })
+    }
+  }
+
+  @Test
   fun `feature task runtime stats counts blocked and decomposed completion statuses`() {
     val (_, connection) = tempDbConnection("feature-task-runtime-stats")
     connection.use {
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       store.featureTaskRuntimeStarted(
         FeatureTaskRuntimeStartedRecord("ftr-blocked", "SMALL", "SKILL-1", "blocked-run"),
         level = "anonymous",
@@ -462,7 +504,7 @@ class ReviewStatsRuntimeTest {
         level = "anonymous",
       )
 
-      val stats = ReviewStatsRuntime.featureTaskRuntimeStats(connection)
+      val stats = ReviewStatsRuntime.featureTaskRuntimeStats(connection, SqliteTestDiagnostics)
       assertEquals(2, stats.totalRuns)
       assertEquals(1, stats.blockedRuns)
       assertEquals(1, stats.decomposedRuns)

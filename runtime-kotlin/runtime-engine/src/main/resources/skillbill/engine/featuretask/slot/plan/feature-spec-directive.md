@@ -81,6 +81,28 @@ Run when the resolved spec-source mode is `local` (no config, `spec_type: local`
 - `spec_source` resolves to `local`.
 - Omit the optional manifest `spec_source` field; absence is read as `local`.
 
+## Phase feasibility
+
+Before writing a parent or subtask spec, check every requirement, constraint,
+non-goal, and implementation step against the authority of the phase that must
+perform it. State acceptance criteria as repository end states that implement
+can produce and audit can inspect. Put command execution and its evidence in
+Validation Strategy. Keep review, commit, PR, history, and install actions with
+the phases or parent runtime that own them.
+
+Do not invent scope restrictions that prevent review or validation from repairing
+defects required checks uncover. A relocation may preserve behavior and assertions
+while still permitting production wiring, test setup, formatting, and lint repairs.
+Do not turn a small intended diff into a blanket ban on production edits, test-body
+edits, or changes outside the planned file list. Preserve architecture rules and
+observable behavior instead.
+
+Preserve explicit operator constraints. If one conflicts with a required phase's
+work, report the conflict during preparation or planning before authoring an
+executable spec. Do not silently relax it or defer an impossible requirement to a
+later worker. Apply this check to the whole spec, including Scope, Non-Goals,
+Dependency Notes, Validation Strategy, and Implementation Details.
+
 ## Spec Format Contract
 
 Every parent and subtask spec is read back by the runtime

@@ -1,5 +1,17 @@
 # goalrunner boundary history
 
+## [2026-10-04] SKILL-399 subtask 4, goal-planning preparation results
+Areas: runtime-engine/goalrunner, runtime-engine/goalplanning, runtime-ports/goalrunner, runtime-contracts/error/shellcontent, runtime-infra/sqlite, runtime-infra/contracts, runtime-core/architecture and goal tests
+- Replaced preparation schema and recovery exception classes with InstallFailureCode failures and removed their custom-throwable baseline entries.
+- Repository methods return preparation conflicts through typed results. Launch, hydration, child persistence, recovery and sweep readers preserve the conflict's subtask and reason.
+- Followed data-only ports and exhaustive result handling. Preparation checks precede transaction writes; SQL faults retain rollback behavior.
+- GoalPlanningPreparationConflict and its result families are reusable across persistence and engine readers; the engine-owned toFailure conversion preserves existing stopping behavior where required.
+- Contract mismatch producers emit the contract-incompatible code; hard-reset recovery walks causes by code and retains existing schema-message compatibility.
+- Added selected-subtask launch regression coverage and converted existing assertions and fixtures to results or failure codes.
+- Breaking API change: preparation repository return types changed, including preparedPlanCount. Durable formats and feature flags are unchanged; the remaining legacy exception transition belongs to later subtasks.
+Feature flag: N/A
+Acceptance criteria: 5/5 implemented
+
 ## [2026-09-19] SKILL-361 subtask 2 — Nest engine goal-runner packages
 Areas: runtime-kotlin/runtime-engine/{goalrunner, tests}, runtime-kotlin/{runtime-core, runtime-domain, runtime-ports, runtime-infra-sqlite, runtime-application}
 - Nested goal-runner production and test types into responsibility-named packages; moved public inputs and results into `goalrunner.model` without behavior changes.

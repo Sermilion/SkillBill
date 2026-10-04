@@ -1,18 +1,19 @@
 package skillbill.application
 
+import skillbill.application.review.parallel.verification.LaneRegisterParse
 import skillbill.application.review.parallel.verification.parseLaneRegisterSeam
+import skillbill.application.review.snapshot.reviewed
 import skillbill.application.review.snapshot.simulateGovernedEvidenceReads
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.agentRunLaunchFacts
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
-import skillbill.review.context.model.hunk.ReviewRegisterParseSeamException
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -38,7 +39,7 @@ class ParallelCodeReviewRegisterSeamTest {
     val runner = runner(launcher, diffResolver = RecordingDiffResolver(default = diffFor("A.kt")))
 
     val result =
-      runner.run(
+      runner.reviewed(
         baseRequest(scope = ParallelReviewScope.STAGED).copy(codeReviewMode = CodeReviewExecutionMode.DELEGATED),
       )
 
@@ -57,7 +58,7 @@ class ParallelCodeReviewRegisterSeamTest {
       )
 
     val result =
-      runner.run(
+      runner.reviewed(
         baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
@@ -77,7 +78,7 @@ class ParallelCodeReviewRegisterSeamTest {
       )
 
     val result =
-      runner.run(
+      runner.reviewed(
         baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
@@ -99,7 +100,7 @@ class ParallelCodeReviewRegisterSeamTest {
       )
 
     val result =
-      runner.run(
+      runner.reviewed(
         baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
@@ -110,20 +111,19 @@ class ParallelCodeReviewRegisterSeamTest {
   }
 
   @Test
-  fun `a throwing parse at the register seam escapes as a typed seam error instead of an empty register`() {
+  fun `a throwing parse at the register seam returns a failed parse instead of an empty register`() {
     val laneBody = "lane body line ".repeat(200)
-    val thrown =
-      assertFailsWith<ReviewRegisterParseSeamException> {
-        parseLaneRegisterSeam(laneBody, lane = "lane-1") { error(laneBody) }
-      }
+    val failed =
+      assertIs<LaneRegisterParse.Failed>(
+        parseLaneRegisterSeam(laneBody, lane = "lane-1") { error(laneBody) },
+      )
 
-    assertEquals("attributeLaneFindings", thrown.seam)
-    assertEquals("lane-1", thrown.lane)
-    val message = thrown.message.orEmpty()
-    assertFalse(message.contains(laneBody), "the seam error must not carry the full lane output body")
+    assertEquals("attributeLaneFindings", failed.seam)
+    assertEquals("lane-1", failed.lane)
+    assertFalse(failed.detail.contains(laneBody), "the seam failure must not carry the full lane output body")
     assertTrue(
-      message.length < laneBody.length,
-      "the cause detail must be bounded even when the parser echoes the lane body: ${message.length}",
+      failed.detail.length < laneBody.length,
+      "the cause detail must be bounded even when the parser echoes the lane body: ${failed.detail.length}",
     )
   }
 
@@ -140,7 +140,7 @@ class ParallelCodeReviewRegisterSeamTest {
       )
 
     val result =
-      runner.run(
+      runner.reviewed(
         baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
@@ -159,7 +159,7 @@ class ParallelCodeReviewRegisterSeamTest {
       )
 
     val result =
-      runner.run(
+      runner.reviewed(
         baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
@@ -179,7 +179,7 @@ class ParallelCodeReviewRegisterSeamTest {
       )
 
     val result =
-      runner.run(
+      runner.reviewed(
         baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
@@ -200,7 +200,7 @@ class ParallelCodeReviewRegisterSeamTest {
       )
 
     val result =
-      runner.run(
+      runner.reviewed(
         baseRequest(scope = ParallelReviewScope.STAGED),
       )
 
@@ -221,7 +221,7 @@ class ParallelCodeReviewRegisterSeamTest {
       )
 
     val result =
-      runner.run(
+      runner.reviewed(
         baseRequest(scope = ParallelReviewScope.STAGED),
       )
 

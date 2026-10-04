@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.scaffold.pointer
 
-import skillbill.error.shellcontent.ContractVersionMismatchError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.host.jvm.atomicWriteBytes
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.discoverPlatformPackManifests
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
@@ -128,7 +129,8 @@ private fun writePointerArtifact(
 
 private fun requireMatchingContractVersion(pack: PlatformManifest) {
   if (pack.contractVersion != SHELL_CONTRACT_VERSION) {
-    throw ContractVersionMismatchError(
+    throw SkillBillRuntimeException(
+      InstallFailureCode.CONTRACT_VERSION_MISMATCH,
       "Platform pack '${pack.slug}': declares contract_version '${pack.contractVersion}' " +
         "but the shell expects '$SHELL_CONTRACT_VERSION'.",
     )

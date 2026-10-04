@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.loader.skillclass
 
-import skillbill.error.shellcontent.InvalidManifestSchemaError
-import skillbill.error.shellcontent.MissingManifestError
+import skillbill.error.shellcontent.invalidManifestSchema
+import skillbill.error.shellcontent.missingManifest
 import skillbill.scaffold.model.SkillClassManifest
 import java.nio.file.Files
 import java.nio.file.Path
@@ -31,13 +31,13 @@ internal fun resolveSkillClassForSkill(
 internal fun discoverSkillClasses(repoRoot: Path): List<SkillClassManifest> {
   val classesDir = repoRoot.toAbsolutePath().normalize().resolve(SKILL_CLASSES_DIR)
   if (!Files.isDirectory(classesDir)) {
-    throw MissingManifestError(
+    throw missingManifest(
       "Skill classes directory '$classesDir' is missing. Every governed render needs at least the default class file.",
     )
   }
   val yamlFiles = classesDir.useDirectoryEntries("*.yaml") { stream -> stream.sorted().toList() }
   if (yamlFiles.isEmpty()) {
-    throw MissingManifestError(
+    throw missingManifest(
       "Skill classes directory '$classesDir' is empty. Expected at least one <class>.yaml file.",
     )
   }
@@ -52,7 +52,7 @@ internal fun resolveSkillClass(
   return when {
     matches.isEmpty() -> null
     matches.size == 1 -> matches.single()
-    else -> throw InvalidManifestSchemaError(
+    else -> throw invalidManifestSchema(
       "Skill '$skillName' matches more than one class: ${matches.map { it.classId }.sorted()}. " +
         "Tighten the matchers (use exclude_exact or narrower patterns) so each skill resolves to exactly one class.",
     )
@@ -62,7 +62,7 @@ internal fun resolveSkillClass(
 internal fun loadSkillClassManifest(classFile: Path): SkillClassManifest {
   val resolved = classFile.toAbsolutePath().normalize()
   if (!Files.isRegularFile(resolved)) {
-    throw MissingManifestError("Skill class manifest '$resolved' is missing.")
+    throw missingManifest("Skill class manifest '$resolved' is missing.")
   }
   val classId = resolved.fileName.toString().removeSuffix(".yaml")
   val raw = readClassManifestYaml(resolved, classId)

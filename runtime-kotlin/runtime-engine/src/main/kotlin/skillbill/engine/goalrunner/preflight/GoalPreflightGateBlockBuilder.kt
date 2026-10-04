@@ -5,6 +5,7 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.specSource
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalPreflightAgentAddon
 import skillbill.engine.goalrunner.model.GoalPreflightDependency
 import skillbill.engine.goalrunner.model.GoalPreflightGateBlock
@@ -13,17 +14,17 @@ import skillbill.engine.goalrunner.model.GoalPreflightRequest
 import skillbill.engine.goalrunner.model.GoalPreflightSubtask
 import skillbill.engine.goalrunner.review.effectiveGoalRunnerReviewPolicy
 import skillbill.engine.goalrunner.review.goalRunnerReviewPolicyMismatch
-import skillbill.error.shellcontent.InvalidAgentAddonSelectionError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.model.toPath
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
 import skillbill.ports.agentaddon.model.ExternalAgentAddonSourceConfigRequest
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource.LINEAR
@@ -49,7 +50,8 @@ class GoalPreflightGateBlockBuilder(
         ?.let { manifestStore.reviewPolicy(it)?.agentAddonSelection }
     if (request.requestedAgentAddonSlugs.isNotEmpty()) {
       if (persisted != null && persisted.entries.map { it.slug } != request.requestedAgentAddonSlugs) {
-        throw InvalidAgentAddonSelectionError(
+        throw SkillBillRuntimeException(
+          AgentAddonFailureCode.INVALID_SELECTION,
           "Cannot change agent add-on selection on goal resume: " +
             "the parent workflow has a different durable selection.",
         )
@@ -95,7 +97,7 @@ class GoalPreflightGateBlockBuilder(
         )
       }
     if (mismatch != null) {
-      throw InvalidFeatureTaskExecutionIdentitySchemaError("goal preflight", mismatch)
+      throw invalidFeatureTaskExecutionIdentitySchema("goal preflight", mismatch)
     }
     val effectiveReviewPolicy =
       effectiveGoalRunnerReviewPolicy(

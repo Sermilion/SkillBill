@@ -4,12 +4,13 @@ import skillbill.application.review.parallel.runner.ParallelCodeReviewRunnerResu
 import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
 import skillbill.application.telemetry.lifecycle.LifecycleTelemetryService
 import skillbill.contracts.JsonCodec
-import skillbill.engine.EnabledRuntimeTelemetrySettingsProvider
 import skillbill.engine.RecordingWorkflowGitOperations
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
-import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
-import skillbill.engine.featuretask.slotbaseline.SlotBaselineSqlite
-import skillbill.engine.featuretask.slotbaseline.SlotBaselineTestResources
+import skillbill.engine.featuretask.runner.EnabledRuntimeTelemetrySettingsProvider
+import skillbill.engine.featuretask.runner.SlotBaselineSqlite
+import skillbill.engine.featuretask.runner.SlotBaselineTestResources
+import skillbill.engine.featuretask.runner.TestFeatureTaskRuntimeRunLoopEntry
+import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.infrastructure.workflow.featuretask.FileSystemFeatureTaskRuntimeRunInvariantsSource
 import skillbill.infrastructure.workflow.filesystem.FileSystemFeatureSpecPathResolver
@@ -17,6 +18,7 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.review.ReviewContextEnvelopeValidator
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -45,15 +47,15 @@ internal fun phaseRunDatabase(
   }
 
 internal fun phaseRunEntry(
-  runner: FeatureTaskRuntimeRunner,
+  strategies: PhaseStrategyLookup,
+  gitOperations: WorkflowGitOperations,
   database: DatabaseSessionFactory,
   clock: Clock,
-  runLoopEntry: FeatureTaskRuntimeRunLoopEntry = FeatureTaskRuntimeRunLoopEntry(),
+  runLoopEntry: FeatureTaskRuntimeRunLoopEntry = TestFeatureTaskRuntimeRunLoopEntry(),
 ): PhaseRunEntry =
   PhaseRunEntry(
-    strategies = runner.strategies,
-    outputValidator = runner.outputValidator,
-    phaseGates = runner.phaseGates,
+    strategies = strategies,
+    gitOperations = gitOperations,
     reviewResultAssembly =
       ParallelCodeReviewRunnerResultAssembly(
         GoalRunnerSubtaskLauncher { error("A phase run must not launch an integration pass.") },

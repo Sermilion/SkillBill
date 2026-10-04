@@ -3,8 +3,10 @@ package skillbill.infrastructure.launcher.review
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.GovernedReviewEvidenceContracts
-import skillbill.error.core.ShellContentContractException
-import skillbill.error.shellcontent.GovernedReviewEvidenceTransportError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.GovernedReviewFailureCode
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.jvm.resolveUserHome
 import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
@@ -16,7 +18,7 @@ import skillbill.ports.review.evidence.ReviewEvidenceBroker
 import skillbill.ports.review.model.GovernedReviewEvidenceEndpointDescriptor
 import skillbill.ports.system.HostPlatformPort
 import skillbill.review.context.model.execution.GovernedReviewJsonRpcArguments
-import skillbill.review.context.model.packet.ReviewExpansionRecord
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import java.io.IOException
 import java.net.StandardProtocolFamily
 import java.net.UnixDomainSocketAddress
@@ -68,7 +70,8 @@ internal fun bridgeCommand(
     configured?.let(Path::of)
       ?: home.resolve(".skill-bill").resolve("runtime").resolve("runtime-mcp").resolve("bin").resolve("runtime-mcp")
   if (!Files.isExecutable(bin)) {
-    throw GovernedReviewEvidenceTransportError(
+    throw SkillBillRuntimeException(
+      GovernedReviewFailureCode.EVIDENCE_TRANSPORT,
       "Governed review evidence bridge binary '$bin' is missing or not executable.",
     )
   }
@@ -191,7 +194,8 @@ class GovernedReviewEvidenceEndpoint private constructor(
       }
     } catch (error: CancellationException) {
       throw error
-    } catch (error: ShellContentContractException) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isShellContentContractFailure())
       governedReviewEvidenceErrorResponse(
         id,
         GOVERNED_REVIEW_EVIDENCE_JSON_RPC_INVALID_PARAMS,
@@ -262,7 +266,8 @@ class GovernedReviewEvidenceEndpoint private constructor(
       } catch (error: IOException) {
         rollbackGovernedReviewBindArtifacts(channel, socketPath, directory)
         failure = error
-      } catch (error: ShellContentContractException) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isShellContentContractFailure())
         rollbackGovernedReviewBindArtifacts(channel, socketPath, directory)
         failure = error
       }
@@ -286,14 +291,17 @@ class GovernedReviewEvidenceEndpoint private constructor(
       } catch (error: IOException) {
         runCatching { rollbackDeleteIfExists(directory) }
         failure =
-          GovernedReviewEvidenceTransportError(
+          SkillBillRuntimeException(
+            GovernedReviewFailureCode.EVIDENCE_TRANSPORT,
             "Failed to bind the governed review evidence endpoint for lane '$lane'.",
             error,
           )
-      } catch (error: ShellContentContractException) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isShellContentContractFailure())
         runCatching { rollbackDeleteIfExists(directory) }
         failure =
-          GovernedReviewEvidenceTransportError(
+          SkillBillRuntimeException(
+            GovernedReviewFailureCode.EVIDENCE_TRANSPORT,
             "Failed to bind the governed review evidence endpoint for lane '$lane'.",
             error,
           )
@@ -330,7 +338,11 @@ class GovernedReviewEvidenceEndpoint private constructor(
           PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")),
         )
       } catch (error: IOException) {
-        throw GovernedReviewEvidenceTransportError("Failed to create the per-launch governed review directory.", error)
+        throw SkillBillRuntimeException(
+          GovernedReviewFailureCode.EVIDENCE_TRANSPORT,
+          "Failed to create the per-launch governed review directory.",
+          error,
+        )
       }
 
     internal fun perLaunchRoot(hostPlatform: HostPlatformPort = JdkHostPlatformPort): Path {

@@ -1,21 +1,17 @@
 package skillbill.engine.featuretask.validation.model
 
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.scaffold.model.ValidationGateDeclaration
 import skillbill.workflow.model.ValidationDepth
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRepairWindowPhase
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
 import java.nio.file.Path
-
-enum class ValidationGateCyclePhase {
-  INITIAL_DISCOVERY,
-  POST_REPAIR_VERIFY,
-}
 
 sealed interface ValidationGateResolution {
   data class Declared(
@@ -40,6 +36,8 @@ fun interface ValidationGateAgentTriageLauncher {
 sealed interface ValidationGateTriageResult {
   data class Captured(val validationRepairPlan: String) : ValidationGateTriageResult
 
+  data class Stopped(val outcome: ValidationGateCycleTerminalOutcome) : ValidationGateTriageResult
+
   data object Empty : ValidationGateTriageResult
 }
 
@@ -63,8 +61,6 @@ sealed interface ValidationGateAgentRepairResult {
 }
 
 sealed interface ValidationGateCycleResult {
-  data object AbsentFallback : ValidationGateCycleResult
-
   data class Terminal(val outcome: ValidationGateCycleTerminalOutcome) : ValidationGateCycleResult
 }
 
@@ -127,4 +123,6 @@ data class ValidationGateCycleRequest(
     ValidationGateAgentTriageLauncher {
       ValidationGateTriageResult.Empty
     },
+  val commandFamily: ValidationGateCommandFamily = ValidationGateCommandFamily.BUILD,
+  val repositoryCheckpointProvider: () -> String? = { repositoryCheckpoint },
 )

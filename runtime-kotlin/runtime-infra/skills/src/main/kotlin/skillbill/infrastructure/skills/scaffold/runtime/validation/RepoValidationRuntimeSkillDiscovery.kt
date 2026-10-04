@@ -1,6 +1,9 @@
 package skillbill.infrastructure.skills.scaffold.runtime.validation
 
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.declaredCodeReviewSkillNames
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
@@ -106,7 +109,8 @@ internal fun validatePlatformPacks(
         try {
           loadPlatformPack(packRoot, enforceGovernedReviewStructure = true)
           validCount += 1
-        } catch (error: ShellContentContractException) {
+        } catch (error: SkillBillRuntimeException) {
+          error.rethrowUnless(error.isShellContentContractFailure())
           issues += "platform-packs/${packRoot.name}: ${error.message}"
         }
       }
@@ -140,7 +144,7 @@ internal fun discoverPortableReviewSkills(
 }
 
 internal fun describeDiscoveryFailure(error: Throwable): String =
-  error.message?.takeIf(String::isNotBlank) ?: error::class.simpleName.orEmpty()
+  error.message?.takeIf(String::isNotBlank) ?: error.failureCodeLabel() ?: error::class.simpleName.orEmpty()
 
 internal fun discoverAllAddonFiles(root: Path): List<Path> {
   val containers = listOf(root.resolve("skills"), root.resolve("platform-packs"))

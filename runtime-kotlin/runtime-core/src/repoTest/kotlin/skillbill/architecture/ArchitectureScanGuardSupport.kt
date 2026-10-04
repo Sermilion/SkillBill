@@ -22,6 +22,27 @@ private val CONSTRUCTOR_PROPERTY_PATTERN =
     """^(?:@[\w.]+(?:\([^)]*\))?\s+)*((?:(?:$CONSTRUCTOR_PROPERTY_MODIFIERS)\s+)*)(?:val|var)\s+""" +
       """([A-Za-z_][A-Za-z0-9_]*)""",
   )
+private val INTERNAL_DATA_CLASS_PATTERN =
+  Regex("""\binternal\s+data\s+class\s+([A-Za-z_][A-Za-z0-9_]*)""")
+private val DATA_CLASS_PROPERTY_PATTERN =
+  Regex(
+    """^(?:@[\w.]+(?:\([^)]*\))?\s+)*(?:(?:$CONSTRUCTOR_PROPERTY_MODIFIERS)\s+)*(?:val|var)\s+""" +
+      """([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.+)$""",
+    RegexOption.DOT_MATCHES_ALL,
+  )
+private val COLLABORATOR_EXACT_TYPE_NAMES = setOf("CliRunState", "Clock")
+private val COLLABORATOR_TYPE_SUFFIXES =
+  listOf(
+    "Service",
+    "Port",
+    "Gateway",
+    "Lookup",
+    "Repository",
+    "Coordinator",
+    "Runner",
+    "Launcher",
+    "Diagnostics",
+  )
 private val CLASS_HEADER_TERMINATOR = Regex("""\n\s*\n|\}|\b(?:class|object|interface|fun|typealias)\b""")
 
 private val AMBIENT_CLOCK_FORMS: List<Pair<Regex, String>> =
@@ -446,6 +467,53 @@ private fun nonPrivateConstructorProperties(constructorBody: String): List<Strin
   }
 }
 
+fun ArchitectureScanSupport.dataClassCollaboratorPropertySites(
+  scanRoot: String,
+): List<ArchitectureScanSupport.InjectConstructorDefaultSite> =
+  kotlinFilesUnder(runtimeRoot.resolve(scanRoot))
+    .flatMap { sourceFile ->
+      val relativePath = runtimeRoot.relativize(sourceFile).toString().replace('\\', '/')
+      dataClassCollaboratorPropertySitesInSource(relativePath, sourceFile.readText())
+    }
+    .sortedWith(compareBy({ it.relativePath }, { it.symbol }, { it.parameter }))
+
+fun ArchitectureScanSupport.dataClassCollaboratorPropertyViolations(scanRoot: String): List<String> =
+  dataClassCollaboratorPropertySites(scanRoot).map { site ->
+    "${site.relativePath}::${site.symbol}::${site.parameter} is a collaborator property on an internal data class."
+  }
+
+fun ArchitectureScanSupport.dataClassCollaboratorPropertySitesInSource(
+  relativePath: String,
+  source: String,
+): List<ArchitectureScanSupport.InjectConstructorDefaultSite> {
+  val scannable = sourceWithoutCommentsOrLiterals(source)
+  return INTERNAL_DATA_CLASS_PATTERN.findAll(scannable).flatMap { match ->
+    val headerEnd = afterClassTypeParameters(scannable, match.range.last + 1)
+    val constructor =
+      if (scannable.getOrNull(headerEnd) == '(') extractBalanced(scannable, headerEnd, '(', ')') else null
+    collaboratorPropertyNames(constructor.orEmpty()).map { parameter ->
+      ArchitectureScanSupport.InjectConstructorDefaultSite(relativePath, match.groupValues[1], parameter)
+    }
+  }.toList()
+}
+
+private fun collaboratorPropertyNames(constructorBody: String): List<String> {
+  val inner = constructorBody.trim().removePrefix("(").removeSuffix(")").replace("->", "~~")
+  if (inner.isBlank()) return emptyList()
+  return splitTopLevelParameters(inner).mapNotNull { parameter ->
+    DATA_CLASS_PROPERTY_PATTERN.find(parameter.trim())?.let { match ->
+      val type = match.groupValues[2].substringBefore('=').trim()
+      match.groupValues[1].takeIf { "~~" !in type && isCollaboratorTypeName(simpleTypeName(type)) }
+    }
+  }
+}
+
+private fun simpleTypeName(type: String): String =
+  type.substringBefore('<').removeSuffix("?").trim().substringAfterLast('.')
+
+private fun isCollaboratorTypeName(name: String): Boolean =
+  name in COLLABORATOR_EXACT_TYPE_NAMES || COLLABORATOR_TYPE_SUFFIXES.any(name::endsWith)
+
 private fun afterClassTypeParameters(
   source: String,
   nameEnd: Int,
@@ -732,4 +800,162 @@ fun ArchitectureScanSupport.directComponentConstructionViolationsForSource(
 ): List<String> {
   if (boundClassNames.isEmpty()) return emptyList()
   return constructionViolationsForBoundClasses(relativePath, source, boundClassNames)
+}
+
+private val THROWABLE_DECLARATION_PATTERN =
+  Regex("""(?<!::)\b(?:(enum|annotation|companion)\s+)?(?:class|object|interface)\s+([A-Za-z_][A-Za-z0-9_]*)""")
+private val PRIMARY_CONSTRUCTOR_KEYWORD_PATTERN =
+  Regex("""^(?:@\w+\s+)*(?:(?:public|internal|private|protected)\s+)?constructor\b""")
+private val SUPERTYPE_LIST_END_PATTERN =
+  Regex("""^(?:[ \t]*\n|[ \t]*(?:@|\}|(?:[a-z]+[ \t]+)*(?:class|object|interface|fun|val|var|typealias)\b))""")
+private const val THROWABLE_ROOT_NAME = "Throwable"
+private val KOTLIN_THROWABLE_ROOT_NAMES = setOf(THROWABLE_ROOT_NAME, "Error", "Exception")
+
+private data class RawThrowableDeclaration(
+  val start: Int,
+  val name: String,
+  val body: IntRange?,
+  val supertypes: List<String>,
+)
+
+private data class ThrowableDeclaration(
+  val moduleName: String,
+  val file: String,
+  val path: String,
+  val supertypes: List<String>,
+) {
+  val simpleName: String get() = path.substringAfterLast('.')
+  val row: String get() = "$moduleName:$path"
+}
+
+internal fun ArchitectureScanSupport.customThrowableRows(scanRoot: Path = runtimeRoot): Set<String> {
+  val declarations =
+    PrincipleEnforcementInventory.moduleArchitectureScanCases.flatMap { scanCase ->
+      kotlinFilesUnder(scanRoot.resolve(scanCase.mainScanRoot)).flatMap { sourceFile ->
+        throwableDeclarationsInSource(scanCase.moduleName, sourceFile.toString(), sourceFile.readText())
+      }
+    }
+  val bySimpleName = declarations.groupBy(ThrowableDeclaration::simpleName)
+  return declarations
+    .filter { declaration -> isThrowable(declaration, declarations, bySimpleName, mutableSetOf()) }
+    .map(ThrowableDeclaration::row)
+    .toSet()
+}
+
+internal fun ArchitectureScanSupport.customThrowableDrift(
+  scanRoot: Path = runtimeRoot,
+  readBaseline: (String) -> String = ArchitectureBaselineSupport::readBaseline,
+): List<String> {
+  val baselineName = PrincipleEnforcementInventory.CUSTOM_THROWABLE_BASELINE
+  val baseline = parseStringSetBaseline(readBaseline(baselineName))
+  val current = customThrowableRows(scanRoot)
+  return (current - baseline).sorted().map { row ->
+    "${row.substringBefore(':')} declares custom throwable ${row.substringAfter(':')}; " +
+      "return a result, use require/check, or throw SkillBillRuntimeException with a code."
+  } +
+    (baseline - current).sorted().map { row ->
+      "$row is listed in $baselineName but no longer exists; re-record the baseline."
+    }
+}
+
+private fun throwableDeclarationsInSource(
+  moduleName: String,
+  file: String,
+  source: String,
+): List<ThrowableDeclaration> {
+  val raw = rawThrowableDeclarations(sourceWithoutCommentsOrLiterals(source))
+  return raw.map { declaration ->
+    val parents =
+      raw.filter { parent ->
+        parent.start < declaration.start && parent.body?.contains(declaration.start) == true
+      }
+    ThrowableDeclaration(
+      moduleName = moduleName,
+      file = file,
+      path = (parents.map(RawThrowableDeclaration::name) + declaration.name).joinToString("."),
+      supertypes = declaration.supertypes,
+    )
+  }
+}
+
+private fun rawThrowableDeclarations(source: String): List<RawThrowableDeclaration> =
+  THROWABLE_DECLARATION_PATTERN.findAll(source)
+    .filter { match -> match.groupValues[1].isEmpty() }
+    .map { match ->
+      val constructorEnd = afterPrimaryConstructor(source, afterClassTypeParameters(source, match.range.last + 1))
+      val colonIndex = source.skipWhitespace(constructorEnd)
+      val hasSupertypes = source.startsWith(":", colonIndex) && !source.startsWith("::", colonIndex)
+      val headerEnd = if (hasSupertypes) supertypeListEnd(source, colonIndex + 1) else constructorEnd
+      val braceIndex = source.skipWhitespace(headerEnd)
+      RawThrowableDeclaration(
+        start = match.range.first,
+        name = match.groupValues[2],
+        body = extractBalanced(source, braceIndex, '{', '}')?.let { body -> braceIndex until braceIndex + body.length },
+        supertypes =
+          if (hasSupertypes) {
+            supertypeReferences(source.substring(colonIndex + 1, headerEnd))
+          } else {
+            emptyList()
+          },
+      )
+    }
+    .toList()
+
+private fun afterPrimaryConstructor(
+  source: String,
+  from: Int,
+): Int {
+  var index = source.skipWhitespace(from)
+  PRIMARY_CONSTRUCTOR_KEYWORD_PATTERN.find(source.substring(index))?.let { keyword ->
+    index = source.skipWhitespace(index + keyword.value.length)
+  }
+  return extractBalanced(source, index, '(', ')')?.let { parameters -> index + parameters.length } ?: from
+}
+
+private fun supertypeListEnd(
+  source: String,
+  from: Int,
+): Int {
+  var depth = 0
+  var index = from
+  while (index < source.length) {
+    val character = source[index]
+    when {
+      character == '(' || character == '<' -> depth += 1
+      character == ')' || (character == '>' && source.getOrNull(index - 1) != '-') -> depth -= 1
+      depth == 0 && character == '{' -> return index
+      depth == 0 && character == '\n' && SUPERTYPE_LIST_END_PATTERN.containsMatchIn(source.substring(index + 1)) ->
+        return index
+    }
+    index += 1
+  }
+  return source.length
+}
+
+private fun supertypeReferences(supertypeList: String): List<String> =
+  splitTopLevelParameters(supertypeList)
+    .map { entry -> entry.substringBefore(" by ").substringBefore('<').substringBefore('(').trim().removeSuffix("?") }
+    .filter(String::isNotBlank)
+
+private fun isThrowable(
+  declaration: ThrowableDeclaration,
+  all: List<ThrowableDeclaration>,
+  bySimpleName: Map<String, List<ThrowableDeclaration>>,
+  visited: MutableSet<ThrowableDeclaration>,
+): Boolean {
+  if (!visited.add(declaration)) return false
+  return declaration.supertypes.any { reference ->
+    val sameFile = all.filter { other -> other.file == declaration.file && other.path == reference }
+    val simpleReference = reference.substringAfterLast('.')
+    val resolved =
+      sameFile.ifEmpty {
+        if (simpleReference in KOTLIN_THROWABLE_ROOT_NAMES) emptyList() else bySimpleName[simpleReference].orEmpty()
+      }
+    if (resolved.isNotEmpty()) {
+      resolved.any { supertype -> isThrowable(supertype, all, bySimpleName, visited) }
+    } else {
+      val root = reference.substringAfterLast('.')
+      root == THROWABLE_ROOT_NAME || root.endsWith("Exception") || root.endsWith("Error")
+    }
+  }
 }

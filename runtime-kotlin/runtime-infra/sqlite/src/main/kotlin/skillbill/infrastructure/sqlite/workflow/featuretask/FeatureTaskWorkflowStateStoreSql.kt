@@ -2,11 +2,11 @@ package skillbill.infrastructure.sqlite.workflow.featuretask
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_WORKER_OWNERSHIP_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeWorkerOwnershipSchema
 import skillbill.infrastructure.sqlite.core.ops.bindAll
-import skillbill.infrastructure.sqlite.core.ops.sqliteDiagnostics
 import skillbill.infrastructure.sqlite.workflow.MINIMUM_OWNER_TOKEN_LENGTH
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
@@ -56,12 +56,14 @@ internal fun PreparedStatement.bindOwnership(
   return values.size + 1
 }
 
-internal fun Connection.featureTaskRuntimeWorkerOwnership(workflowId: String): FeatureTaskRuntimeWorkerOwnership? =
+internal fun Connection.featureTaskRuntimeWorkerOwnership(
+  workflowId: String,
+  diagnostics: RuntimeDiagnostics,
+): FeatureTaskRuntimeWorkerOwnership? =
   prepareStatement("SELECT * FROM feature_task_runtime_worker_leases WHERE workflow_id = ?").use { statement ->
     statement.bindAll(workflowId)
     statement.executeQuery().use { row ->
       if (!row.next()) return null
-      val diagnostics = sqliteDiagnostics()
       val heartbeatAt = row.requiredWorkerOwnershipString(workflowId, "heartbeat_at")
       val expiresAt = row.requiredWorkerOwnershipString(workflowId, "expires_at")
       parseWorkerLeaseInstant(workflowId, "heartbeat_at", heartbeatAt, diagnostics)
@@ -92,7 +94,7 @@ internal fun ResultSet.requiredWorkerOwnershipString(
   workflowId: String,
   column: String,
 ): String =
-  getString(column) ?: throw InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError(
+  getString(column) ?: throw invalidFeatureTaskRuntimeWorkerOwnershipSchema(
     workflowId,
     "$column is required",
   )
@@ -102,7 +104,7 @@ internal fun decodeWorkerLeaseState(
   value: String,
 ): FeatureTaskRuntimeWorkerLeaseState =
   FeatureTaskRuntimeWorkerLeaseState.fromWire(value)
-    ?: throw InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError(
+    ?: throw invalidFeatureTaskRuntimeWorkerOwnershipSchema(
       workflowId,
       "lease_state '$value' is not supported",
     )
@@ -123,7 +125,7 @@ internal fun validateWorkerOwnership(ownership: FeatureTaskRuntimeWorkerOwnershi
       !expiresAt.isAfter(heartbeatAt) -> "expires_at must be later than heartbeat_at"
       else -> null
     }
-  failure?.let { throw InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError(ownership.workflowId, it) }
+  failure?.let { throw invalidFeatureTaskRuntimeWorkerOwnershipSchema(ownership.workflowId, it) }
 }
 
 internal fun Connection.featureTaskIdentity(workflowId: String): FeatureTaskExecutionIdentity? =
@@ -153,11 +155,11 @@ internal fun decodeIdentityMode(
   value: String,
 ): FeatureTaskWorkflowMode =
   FeatureTaskWorkflowMode.entries.singleOrNull { it.wireValue == value }
-    ?: throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "mode '$value' is not supported")
+    ?: throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "mode '$value' is not supported")
 
 internal fun decodeIdentityRouteScope(
   workflowId: String,
   value: String,
 ): FeatureTaskRouteScope =
   FeatureTaskRouteScope.entries.singleOrNull { it.wireValue == value }
-    ?: throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "route_scope '$value' is not supported")
+    ?: throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "route_scope '$value' is not supported")

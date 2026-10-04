@@ -2,10 +2,11 @@ package skillbill.infrastructure.host
 
 import skillbill.config.model.RepoLocalConfig
 import skillbill.config.model.SpecType
-import skillbill.error.shellcontent.MalformedRepoLocalConfigError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -50,12 +51,12 @@ class FileSystemRepoLocalConfigTest {
     val repoRoot = writeConfig("spec_type: [unterminated")
 
     val error =
-      assertFailsWith<MalformedRepoLocalConfigError> {
+      assertFailsWith<SkillBillRuntimeException> {
         adapter.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot))
-      }
+      }.also { assertEquals(InstallFailureCode.MALFORMED_REPO_LOCAL_CONFIG, it.code) }
 
     assertContains(error.message.orEmpty(), repoRoot.fileName.toString())
-    assertEquals("", error.key)
+    assertContains(error.message.orEmpty(), "key ")
     assertContains(error.message.orEmpty(), "<root>")
   }
 
@@ -71,11 +72,11 @@ class FileSystemRepoLocalConfigTest {
       )
 
     val error =
-      assertFailsWith<MalformedRepoLocalConfigError> {
+      assertFailsWith<SkillBillRuntimeException> {
         adapter.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot))
-      }
+      }.also { assertEquals(InstallFailureCode.MALFORMED_REPO_LOCAL_CONFIG, it.code) }
 
-    assertEquals("spec_type", error.key)
+    assertContains(error.message.orEmpty(), "spec_type")
     assertContains(error.message.orEmpty(), "spec_type")
   }
 
@@ -84,12 +85,12 @@ class FileSystemRepoLocalConfigTest {
     val repoRoot = writeConfig("spec_type: nonsense")
 
     val error =
-      assertFailsWith<MalformedRepoLocalConfigError> {
+      assertFailsWith<SkillBillRuntimeException> {
         adapter.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot))
-      }
+      }.also { assertEquals(InstallFailureCode.MALFORMED_REPO_LOCAL_CONFIG, it.code) }
 
-    assertEquals("spec_type", error.key)
-    assertEquals("nonsense", error.value)
+    assertContains(error.message.orEmpty(), "spec_type")
+    assertContains(error.message.orEmpty(), "nonsense")
     assertContains(error.message.orEmpty(), "spec_type")
     assertContains(error.message.orEmpty(), "nonsense")
   }
@@ -99,12 +100,12 @@ class FileSystemRepoLocalConfigTest {
     val repoRoot = writeConfig("code_review_parallel_agent: claude")
 
     val error =
-      assertFailsWith<MalformedRepoLocalConfigError> {
+      assertFailsWith<SkillBillRuntimeException> {
         adapter.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot))
-      }
+      }.also { assertEquals(InstallFailureCode.MALFORMED_REPO_LOCAL_CONFIG, it.code) }
 
-    assertEquals("code_review_parallel_agent", error.key)
-    assertEquals("claude", error.value)
+    assertContains(error.message.orEmpty(), "code_review_parallel_agent")
+    assertContains(error.message.orEmpty(), "claude")
     assertContains(error.message.orEmpty(), "removed capability")
   }
 
@@ -148,10 +149,10 @@ class FileSystemRepoLocalConfigTest {
         """.trimIndent(),
       )
     val absoluteError =
-      assertFailsWith<MalformedRepoLocalConfigError> {
+      assertFailsWith<SkillBillRuntimeException> {
         adapter.readRepoLocalConfig(ReadRepoLocalConfigRequest(absolute))
-      }
-    assertEquals("validation_gate.gradle_wrapper", absoluteError.key)
+      }.also { assertEquals(InstallFailureCode.MALFORMED_REPO_LOCAL_CONFIG, it.code) }
+    assertContains(absoluteError.message.orEmpty(), "validation_gate.gradle_wrapper")
 
     val traversal =
       writeConfig(
@@ -161,10 +162,10 @@ class FileSystemRepoLocalConfigTest {
         """.trimIndent(),
       )
     val traversalError =
-      assertFailsWith<MalformedRepoLocalConfigError> {
+      assertFailsWith<SkillBillRuntimeException> {
         adapter.readRepoLocalConfig(ReadRepoLocalConfigRequest(traversal))
-      }
-    assertEquals("validation_gate.gradle_wrapper", traversalError.key)
+      }.also { assertEquals(InstallFailureCode.MALFORMED_REPO_LOCAL_CONFIG, it.code) }
+    assertContains(traversalError.message.orEmpty(), "validation_gate.gradle_wrapper")
   }
 
   @Test
@@ -272,11 +273,11 @@ class FileSystemRepoLocalConfigTest {
       )
 
     val error =
-      assertFailsWith<MalformedRepoLocalConfigError> {
+      assertFailsWith<SkillBillRuntimeException> {
         adapter.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot))
-      }
+      }.also { assertEquals(InstallFailureCode.MALFORMED_REPO_LOCAL_CONFIG, it.code) }
 
-    assertEquals("review_context_budget", error.key)
+    assertContains(error.message.orEmpty(), "review_context_budget")
     assertContains(error.message.orEmpty(), "must be positive")
   }
 
@@ -291,11 +292,11 @@ class FileSystemRepoLocalConfigTest {
       )
 
     val error =
-      assertFailsWith<MalformedRepoLocalConfigError> {
+      assertFailsWith<SkillBillRuntimeException> {
         adapter.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot))
-      }
+      }.also { assertEquals(InstallFailureCode.MALFORMED_REPO_LOCAL_CONFIG, it.code) }
 
-    assertEquals("review_context_budget.review_context_pilot_mode", error.key)
+    assertContains(error.message.orEmpty(), "review_context_budget.review_context_pilot_mode")
     assertContains(error.message.orEmpty(), "is not a recognized key")
   }
 
@@ -330,10 +331,10 @@ class FileSystemRepoLocalConfigTest {
         """.trimIndent(),
       )
     val error =
-      assertFailsWith<MalformedRepoLocalConfigError> {
+      assertFailsWith<SkillBillRuntimeException> {
         adapter.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot))
-      }
-    assertEquals("review_context_budget.silently_truncate", error.key)
+      }.also { assertEquals(InstallFailureCode.MALFORMED_REPO_LOCAL_CONFIG, it.code) }
+    assertContains(error.message.orEmpty(), "review_context_budget.silently_truncate")
   }
 
   @Test
@@ -346,9 +347,9 @@ class FileSystemRepoLocalConfigTest {
           max_evidence_result_bytes: 11
         """.trimIndent(),
       )
-    assertFailsWith<MalformedRepoLocalConfigError> {
+    assertFailsWith<SkillBillRuntimeException> {
       adapter.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot))
-    }
+    }.also { assertEquals(InstallFailureCode.MALFORMED_REPO_LOCAL_CONFIG, it.code) }
   }
 
   @Test
@@ -360,9 +361,9 @@ class FileSystemRepoLocalConfigTest {
       "review_context_budget:\n  max_lane_launch_bytes: null",
     ).forEach { content ->
       val repoRoot = writeConfig(content)
-      assertFailsWith<MalformedRepoLocalConfigError>(content) {
+      assertFailsWith<SkillBillRuntimeException>(content) {
         adapter.readRepoLocalConfig(ReadRepoLocalConfigRequest(repoRoot))
-      }
+      }.also { assertEquals(InstallFailureCode.MALFORMED_REPO_LOCAL_CONFIG, it.code) }
     }
   }
 

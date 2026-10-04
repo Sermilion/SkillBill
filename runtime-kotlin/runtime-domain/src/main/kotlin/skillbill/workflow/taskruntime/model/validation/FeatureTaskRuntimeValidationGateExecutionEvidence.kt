@@ -2,7 +2,10 @@ package skillbill.workflow.taskruntime.model.validation
 
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
 
 data class FeatureTaskRuntimeValidationGateExecutionEvidence(
@@ -22,6 +25,26 @@ data class FeatureTaskRuntimeValidationGateExecutionEvidence(
       "FeatureTaskRuntimeValidationGateExecutionEvidence.gateRuns size ${gateRuns.size} " +
         "must equal gateRunCount $gateRunCount."
     }
+    if (validationStatus == "passed") {
+      require(gateRuns.isNotEmpty()) { "Passed validation evidence must contain a gate run." }
+      require(gateRuns.last().outcome == ValidationGateRunOutcome.PASSED && gateRuns.last().exitCode == 0) {
+        "Passed validation evidence must end with a successful required command."
+      }
+      require(
+        gateRuns.all {
+          !it.command.isNullOrBlank() && it.exitCode != null && !it.repositoryCheckpoint.isNullOrBlank()
+        },
+      ) {
+        "Validation gate runs must retain command, exit code, and repository checkpoint evidence."
+      }
+      require(gateRuns.all { it.executedChecksRecorded }) {
+        "Validation gate runs must explicitly record executed_checks, including an empty list."
+      }
+      require(gateRuns.all { it.outcome != ValidationGateRunOutcome.PASSED || it.exitCode == 0 }) {
+        "Passed validation gate outcomes must have zero command exit codes."
+      }
+    }
+    require(checks == aggregateChecks(gateRuns)) { "Aggregate checks must match the recorded gate runs." }
     require(checks.all { it.isNotBlank() }) {
       "FeatureTaskRuntimeValidationGateExecutionEvidence.checks must be non-blank strings."
     }
@@ -39,6 +62,9 @@ data class FeatureTaskRuntimeValidationGateExecutionEvidence(
     require(repositoryCheckpoint.isNotBlank()) {
       "FeatureTaskRuntimeValidationGateExecutionEvidence.repositoryCheckpoint must be non-blank."
     }
+    if (gateRuns.lastOrNull()?.repositoryCheckpoint != repositoryCheckpoint) {
+      invalid("gate execution evidence", "Receipt checkpoint must match the terminal command.")
+    }
     return linkedMapOf(
       ValidationEvidencePayloadKeys.VALIDATION_STATUS to validationStatus,
       ValidationEvidencePayloadKeys.CHECKS to checks,
@@ -52,14 +78,17 @@ data class FeatureTaskRuntimeValidationGateExecutionEvidence(
   companion object {
     fun fromGateMeasurements(
       measurements: List<FeatureTaskRuntimeValidationGateRunRecord>,
-      validationStatus: String = "passed",
     ): FeatureTaskRuntimeValidationGateExecutionEvidence =
-      FeatureTaskRuntimeValidationGateExecutionEvidence(
-        validationStatus = validationStatus,
-        checks = aggregateChecks(measurements),
-        gateRunCount = measurements.size,
-        gateRuns = measurements,
-      )
+      try {
+        FeatureTaskRuntimeValidationGateExecutionEvidence(
+          validationStatus = "passed",
+          checks = aggregateChecks(measurements),
+          gateRunCount = measurements.size,
+          gateRuns = measurements,
+        )
+      } catch (error: IllegalArgumentException) {
+        invalid("gate execution evidence", error.message.orEmpty())
+      }
 
     fun aggregateChecks(measurements: List<FeatureTaskRuntimeValidationGateRunRecord>): List<String> =
       measurements.flatMap { it.executedChecks }.distinct().sorted()
@@ -67,27 +96,39 @@ data class FeatureTaskRuntimeValidationGateExecutionEvidence(
     internal fun fromArtifactMap(
       raw: Map<String, Any?>,
       sourceLabel: String,
+      onInvalid: (String, SkillBillRuntimeException) -> SkillBillRuntimeException = { _, failure -> failure },
     ): FeatureTaskRuntimeValidationGateExecutionEvidence {
+      val failureFor: (String) -> SkillBillRuntimeException = { reason ->
+        onInvalid(reason, invalidFeatureTaskRuntimeValidationEvidenceSchema(sourceLabel, reason))
+      }
       val validationStatus =
         raw[ValidationEvidencePayloadKeys.VALIDATION_STATUS] as? String
-          ?: invalid(sourceLabel, "validation_status is missing.")
-      val checks = decodeChecks(raw, sourceLabel)
-      decodeRepositoryCheckpoint(raw[ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT], sourceLabel)
+          ?: invalid(failureFor, "validation_status is missing.")
+      val checks = decodeChecks(raw, failureFor)
+      val receiptCheckpoint =
+        decodeRepositoryCheckpoint(raw[ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT], failureFor)
       val gateRunCount =
         raw[ValidationEvidencePayloadKeys.GATE_RUN_COUNT].asExactIntOrNull()
-          ?: invalid(sourceLabel, "gate_run_count must be an integer.")
+          ?: invalid(failureFor, "gate_run_count must be an integer.")
       val gateRuns =
         try {
-          decodeGateRuns(raw[ValidationEvidencePayloadKeys.GATE_RUNS], sourceLabel)
-        } catch (error: InvalidFeatureTaskRuntimeValidationEvidenceSchemaError) {
-          throw error
+          decodeGateRuns(raw[ValidationEvidencePayloadKeys.GATE_RUNS], failureFor)
+        } catch (error: SkillBillRuntimeException) {
+          error.rethrowUnless(error.isInvalidWorkflowStateFailure())
+          val reason = "Gate run execution fields are missing or malformed."
+          val failure = invalidFeatureTaskRuntimeValidationEvidenceSchema(sourceLabel, reason)
+          failure.addSuppressed(error)
+          throw onInvalid(reason, failure)
         } catch (error: IllegalArgumentException) {
-          invalid(sourceLabel, error.message.orEmpty())
+          invalid(failureFor, error.message.orEmpty())
         }
       val aggregateChecks = aggregateChecks(gateRuns)
+      if (gateRuns.lastOrNull()?.repositoryCheckpoint != receiptCheckpoint) {
+        invalid(failureFor, "repository_checkpoint must match the terminal gate run checkpoint.")
+      }
       if (checks != aggregateChecks) {
         invalid(
-          sourceLabel,
+          failureFor,
           "checks must equal the distinct sorted executed check identities from gate_runs.",
         )
       }
@@ -99,37 +140,37 @@ data class FeatureTaskRuntimeValidationGateExecutionEvidence(
           gateRuns = gateRuns,
         )
       } catch (error: IllegalArgumentException) {
-        invalid(sourceLabel, error.message.orEmpty())
+        invalid(failureFor, error.message.orEmpty())
       }
     }
 
     private fun decodeChecks(
       raw: Map<String, Any?>,
-      sourceLabel: String,
+      onInvalid: (String) -> SkillBillRuntimeException,
     ): List<String> {
       if (!raw.containsKey(ValidationEvidencePayloadKeys.CHECKS)) {
-        invalid(sourceLabel, "checks is missing.")
+        invalid(onInvalid, "checks is missing.")
       }
       val checksRaw = raw[ValidationEvidencePayloadKeys.CHECKS]
       val list =
         checksRaw as? List<*>
-          ?: invalid(sourceLabel, "checks must be a list.")
+          ?: invalid(onInvalid, "checks must be a list.")
       return list.mapIndexed { index, entry ->
-        entry as? String ?: invalid(sourceLabel, "checks[$index] must be a string.")
+        entry as? String ?: invalid(onInvalid, "checks[$index] must be a string.")
       }
     }
 
     private fun decodeGateRuns(
       raw: Any?,
-      sourceLabel: String,
+      onInvalid: (String) -> SkillBillRuntimeException,
     ): List<FeatureTaskRuntimeValidationGateRunRecord> {
       val runsRaw =
         raw as? List<*>
-          ?: invalid(sourceLabel, "gate_runs must be a list.")
+          ?: invalid(onInvalid, "gate_runs must be a list.")
       return runsRaw.mapIndexed { index, entry ->
         val map =
           entry as? Map<*, *>
-            ?: invalid(sourceLabel, "gate_runs[$index] must be a mapping.")
+            ?: invalid(onInvalid, "gate_runs[$index] must be a mapping.")
         FeatureTaskRuntimeValidationGateRunRecord(
           durationMs = map.gateProgressLong(ValidationEvidencePayloadKeys.DURATION_MS),
           outcome =
@@ -145,9 +186,10 @@ data class FeatureTaskRuntimeValidationGateExecutionEvidence(
               "Unknown validation gate cache mode."
             },
           executedWorkUnits = map.gateProgressInt(ValidationEvidencePayloadKeys.EXECUTED_WORK_UNITS),
-          executedChecks = decodeGateRunExecutedChecks(map, sourceLabel, index),
+          executedChecks = decodeGateRunExecutedChecks(map, onInvalid, index),
           command = map.gateProgressOptionalString(ValidationEvidencePayloadKeys.COMMAND),
           exitCode = map.gateProgressOptionalInt(ValidationEvidencePayloadKeys.EXIT_CODE),
+          repositoryCheckpoint = map.gateProgressOptionalString(ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT),
           executedChecksRecorded = map.containsKey(ValidationEvidencePayloadKeys.EXECUTED_CHECKS),
         )
       }
@@ -155,17 +197,17 @@ data class FeatureTaskRuntimeValidationGateExecutionEvidence(
 
     private fun decodeGateRunExecutedChecks(
       map: Map<*, *>,
-      sourceLabel: String,
+      onInvalid: (String) -> SkillBillRuntimeException,
       index: Int,
     ): List<String> {
       if (!map.containsKey(ValidationEvidencePayloadKeys.EXECUTED_CHECKS)) return emptyList()
       val raw = map[ValidationEvidencePayloadKeys.EXECUTED_CHECKS]
       val list =
         raw as? List<*>
-          ?: invalid(sourceLabel, "gate_runs[$index].executed_checks must be a list.")
+          ?: invalid(onInvalid, "gate_runs[$index].executed_checks must be a list.")
       return list.mapIndexed { checkIndex, entry ->
         entry as? String ?: invalid(
-          sourceLabel,
+          onInvalid,
           "gate_runs[$index].executed_checks[$checkIndex] must be a string.",
         )
       }
@@ -173,20 +215,26 @@ data class FeatureTaskRuntimeValidationGateExecutionEvidence(
 
     private fun decodeRepositoryCheckpoint(
       raw: Any?,
-      sourceLabel: String,
-    ) {
+      onInvalid: (String) -> SkillBillRuntimeException,
+    ): String {
       val checkpoint =
         raw as? Map<*, *>
-          ?: invalid(sourceLabel, "repository_checkpoint must be a mapping.")
+          ?: invalid(onInvalid, "repository_checkpoint must be a mapping.")
       val fingerprint = checkpoint[ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT_FINGERPRINT] as? String
       if (fingerprint.isNullOrBlank()) {
-        invalid(sourceLabel, "repository_checkpoint.fingerprint must be non-blank.")
+        invalid(onInvalid, "repository_checkpoint.fingerprint must be non-blank.")
       }
+      return fingerprint
     }
+
+    private fun invalid(
+      onInvalid: (String) -> SkillBillRuntimeException,
+      reason: String,
+    ): Nothing = throw onInvalid(reason)
 
     private fun invalid(
       sourceLabel: String,
       reason: String,
-    ): Nothing = throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(sourceLabel, reason)
+    ): Nothing = throw invalidFeatureTaskRuntimeValidationEvidenceSchema(sourceLabel, reason)
   }
 }

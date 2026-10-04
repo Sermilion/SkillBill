@@ -3,12 +3,12 @@ package skillbill.workflow.taskruntime.handoff
 import skillbill.contracts.JsonCodec
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedger
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffProjectionInputs
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionField
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionInputs
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionValue
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 
@@ -16,26 +16,35 @@ internal fun upstreamPhaseOutputFields(
   inputs: FeatureTaskRuntimeHandoffProjectionInputs,
   declaration: PhaseHandoffProjectionDeclaration,
   sourceRef: FeatureTaskRuntimeHandoffSourceRef.UpstreamPhaseOutput,
-): List<FeatureTaskRuntimeHandoffProjectionField>? =
-  inputs.resolvedUpstream.outputsByPhaseId[sourceRef.producingPhaseId]?.let { output ->
-    FeatureTaskRuntimeHandoffProjectionValueBuilder.phaseProjectionFields(inputs, declaration, output)
-      ?: listOf(
-        FeatureTaskRuntimeHandoffProjectionField(
-          name = FeatureTaskRuntimeHandoffProjectionValidator.PHASE_OUTPUT_RECEIPT_FIELD,
-          value =
-            declaration.inlineAlternative?.let { kind ->
-              FeatureTaskRuntimeHandoffProjectionValue.CompactReference(
-                kind = kind,
-                value =
-                  FeatureTaskRuntimeHandoffProjectionValidator.privateEvidenceReference(
-                    sourceRef.producingPhaseId,
-                    output.iteration,
-                  ),
-              )
-            } ?: FeatureTaskRuntimeHandoffProjectionValue.Text(output.payload),
+): FeatureTaskRuntimeHandoffProjectionStep<List<FeatureTaskRuntimeHandoffProjectionField>?> {
+  val output =
+    inputs.resolvedUpstream.outputsByPhaseId[sourceRef.producingPhaseId]
+      ?: return FeatureTaskRuntimeHandoffProjectionStep.Value(null)
+  return when (
+    val fields = FeatureTaskRuntimeHandoffProjectionValueBuilder.phaseProjectionFields(inputs, declaration, output)
+  ) {
+    is FeatureTaskRuntimeHandoffProjectionStep.Rejected -> fields
+    is FeatureTaskRuntimeHandoffProjectionStep.Value ->
+      FeatureTaskRuntimeHandoffProjectionStep.Value(
+        fields.value ?: listOf(
+          FeatureTaskRuntimeHandoffProjectionField(
+            name = FeatureTaskRuntimeHandoffProjectionValidator.PHASE_OUTPUT_RECEIPT_FIELD,
+            value =
+              declaration.inlineAlternative?.let { kind ->
+                FeatureTaskRuntimeHandoffProjectionValue.CompactReference(
+                  kind = kind,
+                  value =
+                    FeatureTaskRuntimeHandoffProjectionValidator.privateEvidenceReference(
+                      sourceRef.producingPhaseId,
+                      output.iteration,
+                    ),
+                )
+              } ?: FeatureTaskRuntimeHandoffProjectionValue.Text(output.output.value),
+          ),
         ),
       )
   }
+}
 
 internal fun derivedCeremonyScalingFields(
   inputs: FeatureTaskRuntimeHandoffProjectionInputs,

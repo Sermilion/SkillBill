@@ -44,7 +44,7 @@ class AgentLauncherPreflightTest {
         executableLookup = executablesAvailable(),
       )
 
-    val facts = adapter.launch(request())
+    val facts = adapter.launchFacts(request())
 
     assertEquals(AgentRunTermination.SpawnFailed, facts.termination)
     assertFalse(facts.processStarted)
@@ -53,7 +53,7 @@ class AgentLauncherPreflightTest {
 
   @Test
   fun `a missing headless CLI is reported by name with an install hint`() {
-    val facts = cursorAdapter(executablesAvailable()).launch(request())
+    val facts = cursorAdapter(executablesAvailable()).launchFacts(request())
 
     assertContains(facts.stderr, "'agent' is not on PATH")
     assertContains(facts.stderr, "curl https://cursor.com/install")
@@ -72,7 +72,7 @@ class AgentLauncherPreflightTest {
         executableLookup = executablesAvailable("cursor-agent"),
       )
 
-    val facts = adapter.launch(request())
+    val facts = adapter.launchFacts(request())
 
     assertNotEquals<AgentRunTermination>(AgentRunTermination.SpawnFailed, facts.termination)
     assertEquals("cursor-agent", runner.requests.single().launch.command.first())

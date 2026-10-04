@@ -1,6 +1,6 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeQuarantineSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
@@ -13,7 +13,7 @@ class FeatureTaskRuntimeQuarantineSchemaValidatorTest {
   @Test
   fun `an unknown top-level key is rejected`() {
     val record = validRecord().toMutableMap().apply { put("unexpected", "x") }
-    assertFailsWith<InvalidFeatureTaskRuntimeQuarantineSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeQuarantineSchemaValidator.validate(record, "quarantine")
     }
   }
@@ -21,7 +21,7 @@ class FeatureTaskRuntimeQuarantineSchemaValidatorTest {
   @Test
   fun `an unknown entry key is rejected`() {
     val record = recordWithEntry(validEntry().toMutableMap().apply { put("leaked_body", "secret") })
-    assertFailsWith<InvalidFeatureTaskRuntimeQuarantineSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeQuarantineSchemaValidator.validate(record, "quarantine")
     }
   }
@@ -29,7 +29,7 @@ class FeatureTaskRuntimeQuarantineSchemaValidatorTest {
   @Test
   fun `a missing required entry field is rejected`() {
     val record = recordWithEntry(validEntry().toMutableMap().apply { remove("producing_phase_id") })
-    assertFailsWith<InvalidFeatureTaskRuntimeQuarantineSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeQuarantineSchemaValidator.validate(record, "quarantine")
     }
   }
@@ -37,7 +37,7 @@ class FeatureTaskRuntimeQuarantineSchemaValidatorTest {
   @Test
   fun `a wrong-typed entry field is rejected`() {
     val record = recordWithEntry(validEntry().toMutableMap().apply { put("producing_iteration", "one") })
-    assertFailsWith<InvalidFeatureTaskRuntimeQuarantineSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeQuarantineSchemaValidator.validate(record, "quarantine")
     }
   }
@@ -45,7 +45,7 @@ class FeatureTaskRuntimeQuarantineSchemaValidatorTest {
   @Test
   fun `an unknown rejection_class enum value is rejected`() {
     val record = recordWithEntry(validEntry().toMutableMap().apply { put("rejection_class", "made_up") })
-    assertFailsWith<InvalidFeatureTaskRuntimeQuarantineSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeQuarantineSchemaValidator.validate(record, "quarantine")
     }
   }
@@ -65,7 +65,7 @@ class FeatureTaskRuntimeQuarantineSchemaValidatorTest {
 
   @Test
   fun `identity plus diagnostic_degraded true is rejected`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeQuarantineSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeQuarantineSchemaValidator.validate(
         recordWithEntry(validEntry().toMutableMap().apply { put("diagnostic_degraded", true) }),
         "quarantine",
@@ -75,7 +75,7 @@ class FeatureTaskRuntimeQuarantineSchemaValidatorTest {
 
   @Test
   fun `neither identity nor diagnostic_degraded is rejected`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeQuarantineSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeQuarantineSchemaValidator.validate(
         recordWithEntry(validEntry().toMutableMap().apply { remove("diagnostic_identity") }),
         "quarantine",

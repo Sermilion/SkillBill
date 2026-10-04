@@ -1,6 +1,7 @@
 package skillbill.infrastructure.skills.scaffold
 
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
@@ -43,10 +44,10 @@ class WorkflowStateSchemaValidatesExistingWorkflowsTest {
   @Test
   fun `unknown durable workflow status token raises the typed schema error`() {
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         engine.openRecord(FeatureVerifyWorkflowDefinition.definition, "wfv-invalid", "", "gather_diff")
           .toRecord().copy(workflowStatus = "unknown").toSnapshot()
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
     assertEquals("Workflow state workflow_status has unsupported value 'unknown'.", error.message)
   }

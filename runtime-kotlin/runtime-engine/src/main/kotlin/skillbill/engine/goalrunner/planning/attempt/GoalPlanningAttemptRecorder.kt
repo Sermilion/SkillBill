@@ -2,10 +2,10 @@ package skillbill.engine.goalrunner.planning.attempt
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.runtime.RuntimeSingleton
+import skillbill.engine.goalrunner.model.GoalProgressEventDraft
+import skillbill.engine.goalrunner.model.GoalRunnerProgressEventRecordRequest
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.model.GoalPlanningAttemptRecord
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
-import skillbill.ports.goalrunner.runner.model.GoalProgressEventDraft
-import skillbill.ports.goalrunner.runner.model.GoalRunnerProgressEventRecordRequest
 import java.time.Clock
 
 fun interface GoalPlanningAttemptRecorder {

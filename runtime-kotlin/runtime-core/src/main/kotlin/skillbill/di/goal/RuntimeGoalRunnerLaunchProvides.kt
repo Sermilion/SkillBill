@@ -2,10 +2,10 @@ package skillbill.di.goal
 
 import me.tatarka.inject.annotations.Provides
 import skillbill.application.agentrun.AgentRunGoalRunnerSubtaskLauncher
+import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerOutcomeStore
+import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairStore
 import skillbill.engine.goalrunner.repair.WorkflowGoalRunnerChildRepairStore
-import skillbill.ports.goalrunner.persistence.GoalRunnerChildRepairStore
-import skillbill.ports.goalrunner.runner.GoalRunnerAttemptLedgerStore
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 
 internal interface RuntimeGoalRunnerLaunchProvides {

@@ -6,10 +6,10 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelectionEntry
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.engine.featuretask.model.review.ReviewTarget
+import skillbill.engine.featuretask.runner.SlotBaselineFullRunCapture
+import skillbill.engine.featuretask.runner.SlotBaselinePaths
+import skillbill.engine.featuretask.runner.SlotBaselineTestResources
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
-import skillbill.engine.featuretask.slotbaseline.SlotBaselineFullRunCapture
-import skillbill.engine.featuretask.slotbaseline.SlotBaselinePaths
-import skillbill.engine.featuretask.slotbaseline.SlotBaselineTestResources
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
@@ -95,6 +95,7 @@ class InlineReviewDirectiveTest {
 
       assertTrue(directive.contains("\n## Review mode argument\n"), directive)
       assertFalse(directive.contains("## Depth\n"), "the inline worker body stays out of the delegated review")
+      assertFalse(directive.contains("Project authoring discipline"), "delegated review gets no authoring authority")
     } finally {
       home.toFile().deleteRecursively()
     }

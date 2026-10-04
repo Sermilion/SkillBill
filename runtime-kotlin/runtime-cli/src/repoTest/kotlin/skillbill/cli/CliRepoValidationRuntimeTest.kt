@@ -69,6 +69,23 @@ class CliRepoValidationRuntimeTest {
   }
 
   @Test
+  fun `validate-release-ref prints the malformed tag message as text failure`() {
+    val repoRoot = Files.createTempDirectory("skillbill-cli-release-malformed")
+
+    val result =
+      CliRuntime.run(
+        listOf("validate-release-ref", "not-a-tag", "--repo-root", repoRoot.toString(), "--format", "text"),
+        CliRuntimeContext(),
+      )
+
+    assertEquals(1, result.exitCode)
+    assertEquals(
+      "Release tag must match canonical vMAJOR.MINOR.PATCH with optional SemVer prerelease/build metadata.\n",
+      result.stdout,
+    )
+  }
+
+  @Test
   fun `validate-agent-configs command returns failure payload for empty repo`() {
     val repoRoot = Files.createTempDirectory("skillbill-empty-validation")
 

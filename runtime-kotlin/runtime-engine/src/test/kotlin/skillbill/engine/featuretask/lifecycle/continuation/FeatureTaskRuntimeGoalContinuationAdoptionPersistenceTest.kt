@@ -3,9 +3,8 @@ package skillbill.engine.featuretask.lifecycle.continuation
 import skillbill.application.testHarnessClock
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.contracts.JsonCodec
-import skillbill.engine.InMemoryRuntimeWorkflowRepository
-import skillbill.engine.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimePreparation
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
@@ -14,15 +13,18 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunInvariantsStore
 import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunPreparation
 import skillbill.engine.featuretask.runloop.observability.continuation
+import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
+import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
@@ -35,10 +37,11 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.BUILD
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection.VALIDATE
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import java.time.Instant
 import kotlin.test.Test
@@ -76,7 +79,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
         },
       )
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       persistence.persistArtifactsPatch(
         harness.repository,
         before.toSnapshot(),
@@ -85,7 +88,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
             preContractContinuationMap().plus("subtask_id" to 2.7),
         ),
       )
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
     assertEquals(before, harness.repository.getFeatureTaskWorkflowAsMode(workflowId, RUNTIME))
   }
@@ -97,7 +100,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
         continuationMap = preContractContinuationMap().plus("subtask_id" to 2.7),
       )
 
-    val prepared = harness.preparation.prepare(resumeRequest(validationDepth = ValidationDepth.FULL))
+    val prepared = harness.prepare(resumeRequest(validationDepth = ValidationDepth.FULL))
 
     val blocked = assertIs<FeatureTaskRuntimePreparation.PreparationBlocked>(prepared)
     assertTrue(blocked.report.blockedReason.contains("malformed"))
@@ -113,7 +116,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
 
     val prepared =
       assertIs<FeatureTaskRuntimePreparation.Prepared>(
-        harness.preparation.prepare(resumeRequest(validationDepth = ValidationDepth.FULL)),
+        harness.prepare(resumeRequest(validationDepth = ValidationDepth.FULL)),
       )
 
     assertEquals(ValidationDepth.FULL, prepared.request.goalContinuation?.validationDepth)
@@ -148,7 +151,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
 
     val prepared =
       assertIs<FeatureTaskRuntimePreparation.Prepared>(
-        harness.preparation.prepare(
+        harness.prepare(
           resumeRequest(
             validationDepth = ValidationDepth.FULL,
             qualityGateSelection = BUILD,
@@ -190,7 +193,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
 
     val prepared =
       assertIs<FeatureTaskRuntimePreparation.Prepared>(
-        harness.preparation.prepare(resumeRequest(validationDepth = ValidationDepth.FULL)),
+        harness.prepare(resumeRequest(validationDepth = ValidationDepth.FULL)),
       )
 
     assertEquals(ValidationDepth.FULL, prepared.request.goalContinuation?.validationDepth)
@@ -216,7 +219,7 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
 
     val prepared =
       assertIs<FeatureTaskRuntimePreparation.Prepared>(
-        harness.preparation.prepare(
+        harness.prepare(
           resumeRequest(
             validationDepth = ValidationDepth.FULL,
             qualityGateSelection = BUILD,
@@ -352,5 +355,18 @@ class FeatureTaskRuntimeGoalContinuationAdoptionPersistenceTest {
   private data class AdoptionHarness(
     val repository: InMemoryRuntimeWorkflowRepository,
     val preparation: FeatureTaskRuntimeRunPreparation,
-  )
+  ) {
+    fun prepare(request: FeatureTaskRuntimeRunRequest): FeatureTaskRuntimePreparation {
+      val fixture =
+        ExecutionPlanAdmissionFixture(
+          definition = SkeletonDefinition.GOAL_CHILD,
+          repository = "repo-root-realpath-v1:${request.repoRoot}",
+          specPath = request.runInvariants.specReference,
+          qualityGate = request.goalContinuation?.qualityGateSelection,
+        )
+      fixture.seed(repository, request.workflowId, request.issueKey)
+      val admitted = fixture.admission.admit(repository, request.workflowId, fixture.inputs)
+      return preparation.prepare(request.copy(admittedExecution = admitted))
+    }
+  }
 }

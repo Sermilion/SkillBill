@@ -4,7 +4,7 @@ import skillbill.application.decomposition.parentSpecPath
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.goalrunner.planning.GoalPlanningExcludedPaths
 import skillbill.ports.goalrunner.planning.model.GoalPlanningContext
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -50,7 +50,7 @@ object GoalPlanningSharedContextPacket {
             GoalPlanningSharedContextPacketLegacy.migrateFromPacketVersion1(packet),
           ),
         )
-      else -> throw InvalidGoalPlanningPreparationSchemaError(
+      else -> throw invalidGoalPlanningPreparationSchemaError(
         sourceLabel = "_goal_planning_shared_context",
         fieldPath = GoalPlanningSharedContextPacketPayloadKeys.PACKET_VERSION,
         reason =
@@ -70,6 +70,91 @@ object GoalPlanningSharedContextPacket {
     validateContent(packet)
     validateTopology(packet, subtasks)
     validateIntegrity(packet)
+  }
+
+  fun validateSource(
+    packet: Map<String, Any?>,
+    repositoryIdentity: String,
+    normalizedIssueKey: String,
+    parentSpecPath: String,
+    subtasks: List<DecompositionSubtask>,
+  ) {
+    if (packet[GoalPlanningSharedContextPacketPayloadKeys.PACKET_VERSION] == VERSION) {
+      validate(packet, repositoryIdentity, normalizedIssueKey, parentSpecPath, subtasks)
+      return
+    }
+    val version = packet[GoalPlanningSharedContextPacketPayloadKeys.PACKET_VERSION]
+    if (version !in setOf(LEGACY_VERSION_0_3, LEGACY_VERSION_0_2, LEGACY_VERSION_0_1)) return
+    validateSourceHeader(packet, repositoryIdentity, normalizedIssueKey, parentSpecPath, version)
+    if (!GoalPlanningSharedContextPacketValidation.isStringMap(
+        packet[GoalPlanningSharedContextPacketPayloadKeys.BOUNDARY_MEMORY],
+      )
+    ) {
+      invalidGoalPlanningSharedContextPacket(
+        GoalPlanningSharedContextPacketPayloadKeys.BOUNDARY_MEMORY,
+        "shared context source boundary memory is invalid",
+      )
+    }
+    if (version == LEGACY_VERSION_0_1 &&
+      !GoalPlanningSharedContextPacketValidation.isStringMap(
+        packet[GoalPlanningSharedContextPacketPayloadKeys.PLATFORM_PACKS],
+      )
+    ) {
+      invalidGoalPlanningSharedContextPacket(
+        GoalPlanningSharedContextPacketPayloadKeys.PLATFORM_PACKS,
+        "shared context source platform packs are invalid",
+      )
+    }
+    val sourceTopology =
+      GoalPlanningSharedContextPacketValidation.normalizedSubtasks(
+        packet[GoalPlanningSharedContextPacketPayloadKeys.ORDERED_SUBTASKS],
+      ).map { it - GoalPlanningSharedContextPacketPayloadKeys.PLANNING_DISPOSITION }
+    val expectedTopology =
+      GoalPlanningSharedContextPacketValidation.normalizedSubtasks(orderedSubtasks(subtasks))
+        .map { it - GoalPlanningSharedContextPacketPayloadKeys.PLANNING_DISPOSITION }
+    if (sourceTopology != expectedTopology) {
+      invalidGoalPlanningSharedContextPacket(
+        GoalPlanningSharedContextPacketPayloadKeys.ORDERED_SUBTASKS,
+        "shared context source topology is invalid",
+      )
+    }
+    if (packet[GoalPlanningSharedContextPacketPayloadKeys.INTEGRITY_SHA256] !=
+      digest(packet - GoalPlanningSharedContextPacketPayloadKeys.INTEGRITY_SHA256)
+    ) {
+      invalidGoalPlanningSharedContextPacket(
+        GoalPlanningSharedContextPacketPayloadKeys.INTEGRITY_SHA256,
+        "shared context source integrity is invalid",
+      )
+    }
+  }
+
+  private fun validateSourceHeader(
+    packet: Map<String, Any?>,
+    repositoryIdentity: String,
+    normalizedIssueKey: String,
+    parentSpecPath: String,
+    version: Any?,
+  ) {
+    val fields = if (version == LEGACY_VERSION_0_1) LEGACY_V01_FIELDS else PACKET_FIELDS
+    if (packet.keys != fields) {
+      invalidGoalPlanningSharedContextPacket(
+        "<root>",
+        "shared context source fields are invalid",
+      )
+    }
+    if (packet[GoalPlanningSharedContextPacketPayloadKeys.REPOSITORY_IDENTITY] != repositoryIdentity ||
+      packet[GoalPlanningSharedContextPacketPayloadKeys.NORMALIZED_ISSUE_KEY] != normalizedIssueKey ||
+      packet[GoalPlanningSharedContextPacketPayloadKeys.PARENT_SPEC_PATH] != parentSpecPath
+    ) {
+      invalidGoalPlanningSharedContextPacket("<identity>", "shared context source identity is invalid")
+    }
+    if (packet[GoalPlanningSharedContextPacketPayloadKeys.PARENT_SPEC] !is String ||
+      (packet[GoalPlanningSharedContextPacketPayloadKeys.DECOMPOSITION_MANIFEST] as? String)
+        ?.length?.let { it <= MAX_GOVERNED_CONTEXT_CHARS } != true ||
+      packet[GoalPlanningSharedContextPacketPayloadKeys.VALIDATION_GUIDANCE] !is String
+    ) {
+      invalidGoalPlanningSharedContextPacket("<content>", "shared context source content is invalid")
+    }
   }
 
   private fun validateIdentity(
@@ -279,7 +364,7 @@ internal fun invalidGoalPlanningSharedContextPacket(
   reason: String,
   cause: Throwable? = null,
 ): Nothing =
-  throw InvalidGoalPlanningPreparationSchemaError(
+  throw invalidGoalPlanningPreparationSchemaError(
     sourceLabel = "_goal_planning_shared_context",
     fieldPath = fieldPath,
     reason = reason,

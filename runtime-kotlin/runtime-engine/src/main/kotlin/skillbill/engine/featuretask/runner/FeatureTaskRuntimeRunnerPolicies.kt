@@ -1,16 +1,9 @@
 package skillbill.engine.featuretask.runner
 
 import skillbill.contracts.JsonCodec
-import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
-import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.workflowStepStatus
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
-import skillbill.workflow.taskruntime.phase.ProsePhaseOutputSynthesizer
-import skillbill.workflow.taskruntime.phase.task.declaration
 
 const val STATUS_RUNNING = "running"
 const val STATUS_COMPLETED = "completed"
@@ -34,33 +27,6 @@ fun serializeTokenData(accumulator: Map<String, Pair<Int, Int>>): Pair<String?, 
 
 fun skeletonDefinitionFor(request: FeatureTaskRuntimeRunFacts): SkeletonDefinition =
   request.skeletonDefinition ?: SkeletonDefinition.forRun(isGoalContinuationRun(request))
-
-fun transitionsFor(request: FeatureTaskRuntimeRunFacts): FeatureTaskRuntimeTransitionDeclaration =
-  request.transitionsOverride ?: skeletonDefinitionFor(request).declaration()
-
-internal fun mutatingReconciliationGateReason(
-  phaseId: String,
-  mutating: Boolean,
-  outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-): String? {
-  if (ProsePhaseOutputSynthesizer.isProsePhase(phaseId)) {
-    return null
-  }
-  if (!mutating) return null
-
-  if ((outputMap[SharedPayloadKeys.STATUS] as? String).workflowStepStatus() != WorkflowStepStatus.COMPLETED) return null
-  val producedOutputs = outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS] as? Map<*, *>
-  val nestedReconciled = (producedOutputs?.get("reconciled_state") as? Map<*, *>)?.get("reconciled")
-  val reconciled = nestedReconciled == true || producedOutputs?.get("reconciled") == true
-  return if (reconciled) {
-    null
-  } else {
-    "Mutating phase '$phaseId' reported 'completed' without a reconciliation report proving it " +
-      "reconciled the working tree to target: produced_outputs must carry 'reconciled_state' (or a " +
-      "'reconciled' entry) with 'reconciled' set to true. The idempotency contract is verified, not " +
-      "assumed; a silent skip fails the schema gate."
-  }
-}
 
 fun boundedSchemaGateDetail(validationReason: String): String =
   if (validationReason.length <= SCHEMA_GATE_DETAIL_MAX_CHARS) {

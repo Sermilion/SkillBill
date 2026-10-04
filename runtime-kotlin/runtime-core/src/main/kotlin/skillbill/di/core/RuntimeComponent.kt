@@ -44,6 +44,7 @@ import skillbill.di.workflow.RuntimeWorkflowProvides
 import skillbill.di.workflow.RuntimeWorkflowValidatorProvides
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeWorkerCoordinator
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
 import skillbill.engine.featuretask.phase.core.FeatureTaskPhaseSettlementService
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
@@ -57,7 +58,9 @@ import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.operation.core.OperationExecutor
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.work.IdeStatusService
+import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.infrastructure.host.concurrency.JvmInterruptSignalPort
+import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.model.EnvironmentContext
 import skillbill.model.RepositoryRoot
 import skillbill.model.RuntimeVersion
@@ -66,18 +69,14 @@ import skillbill.ports.concurrency.InterruptSignalPort
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featurespec.FeatureSpecPathResolverPort
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.nativeagent.InstallNativeAgentLinkPort
 import skillbill.ports.install.selection.InstallSelectionPersistencePort
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.scaffold.ScaffoldCatalogGateway
 import skillbill.ports.scaffold.ScaffoldGateway
-import skillbill.ports.scaffold.UnsupportedScaffoldGateway
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
 import skillbill.ports.telemetry.transport.RemoteTransportPort
-import skillbill.ports.telemetry.transport.TelemetryConfigStore
 import skillbill.ports.telemetry.transport.TelemetryLevelMutator
 import skillbill.ports.validation.RepoValidationGateway
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -126,7 +125,8 @@ abstract class RuntimeComponent(
 
   @Provides
   fun remoteTransportPort(ctx: TransportContext): RemoteTransportPort =
-    RuntimeBootstrapBindings.remoteTransportPort(ctx)
+    ctx.requester
+      ?: error("RemoteTransportPort is unresolved; provide it from the composition root after bootstrap resolution.")
 
   @Provides
   fun workflowOpsContext(ctx: RuntimeContext): WorkflowOpsContext = ctx.workflowOps
@@ -141,8 +141,7 @@ abstract class RuntimeComponent(
   fun optionalCallbacks(ctx: RuntimeContext): OptionalCallbacks = ctx.callbacks
 
   @Provides
-  fun repositoryEnclosingRootPort(): RepositoryEnclosingRootPort =
-    RuntimeBootstrapBindings.repositoryEnclosingRootPort()
+  fun repositoryEnclosingRootPort(): RepositoryEnclosingRootPort = CanonicalRepositoryRoot
 
   @Provides @RuntimeSingleton
   fun databaseSessionFactory(
@@ -150,8 +149,9 @@ abstract class RuntimeComponent(
     clock: Clock,
     diagnostics: RuntimeDiagnostics,
     workflowSnapshotValidator: WorkflowSnapshotValidator,
+    runtimeVersion: RuntimeVersion,
   ): DatabaseSessionFactory =
-    RuntimeBootstrapBindings.databaseSessionFactory(context, clock, diagnostics, workflowSnapshotValidator)
+    SQLiteDatabaseSessionFactory(context, clock, diagnostics, workflowSnapshotValidator, runtimeVersion.value)
 
   @Provides
   fun interruptSignal(): InterruptSignalPort = JvmInterruptSignalPort
@@ -174,13 +174,12 @@ abstract class RuntimeComponent(
   abstract val externalPlatformPackResolutionService: ExternalPlatformPackResolutionService
   abstract val agentRunService: AgentRunService
   abstract val featureTaskRuntimeRunner: FeatureTaskRuntimeRunner
+  abstract val featureTaskRuntimeExecutionPlanResolver: FeatureTaskRuntimeExecutionPlanResolver
   abstract val featureTaskRuntimeStatusService: FeatureTaskRuntimeStatusService
   abstract val featureTaskRuntimeWorkerCoordinator: FeatureTaskRuntimeWorkerCoordinator
   abstract val featureTaskRuntimeRunInvariantsSource: FeatureTaskRuntimeRunInvariantsSource
   abstract val featureSpecPathResolverPort: FeatureSpecPathResolverPort
   abstract val goalRunner: GoalRunner
-  abstract val goalRunnerManifestStore: GoalRunnerManifestStore
-  abstract val goalRunnerWorkflowOutcomeStore: GoalRunnerWorkflowOutcomeStore
   abstract val goalPreflightService: GoalPreflightService
   abstract val goalRunnerStatusService: GoalRunnerStatusService
   abstract val goalPlanningLogService: GoalPlanningLogService
@@ -202,10 +201,8 @@ abstract class RuntimeComponent(
   abstract val skillBillUpdateService: SkillBillUpdateService
   abstract val updateCheckService: UpdateCheckService
   abstract val skillBillUninstallService: SkillBillUninstallService
-  abstract val telemetryConfigStorePort: TelemetryConfigStore
   abstract val telemetryLevelMutator: TelemetryLevelMutator
   abstract val telemetryService: TelemetryService
-  abstract val unsupportedScaffoldGateway: UnsupportedScaffoldGateway
   abstract val workflowService: WorkflowService
   abstract val workListService: WorkListService
   abstract val ideStatusService: IdeStatusService

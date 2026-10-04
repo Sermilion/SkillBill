@@ -2,25 +2,30 @@ package skillbill.engine.goalrunner.planning.attempt
 
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeBriefingScope
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
+import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssemblyResult
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposer
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.PhaseStepFacts
 import skillbill.engine.featuretask.slot.PhaseStepInput
+import skillbill.engine.featuretask.slot.state.PhasePlanningBriefingBinding
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.planning.context.GoalPlanningContextPromptFormatter
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningProduceAttemptArgs
 import skillbill.engine.goalrunner.planning.outcome.planningProgressMessage
-import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffAssemblyRequest
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffAssemblyRequest
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 
-internal fun DefaultGoalPlanningSweep.launchPlanningAttempt(
+internal fun launchPlanningAttempt(
   phase: GoalPlanningPhaseContext,
   prompt: String,
+  manifestStore: GoalRunnerManifestStore,
 ): AgentRunLaunchOutcome {
   val shared = phase.shared
   val request = phase.request
@@ -49,12 +54,15 @@ internal fun DefaultGoalPlanningSweep.launchPlanningAttempt(
   val output =
     launch.runner.run(
       PhaseStepInput(phase.phaseId, prompt, emptyMap(), null, facts, launch.policy),
-      launch.state,
+      launch.state.launchState,
     )
   return requireNotNull(output.launchOutcome) { output.launchFailure?.reason.orEmpty() }
 }
 
-internal fun DefaultGoalPlanningSweep.composePlanningPrompt(args: GoalPlanningProduceAttemptArgs): String {
+internal inline fun composePlanningPrompt(
+  args: GoalPlanningProduceAttemptArgs,
+  onRejected: (RequiredPhaseWrite.Rejected) -> Nothing,
+): String {
   val phase = args.phase
   val handoff =
     FeatureTaskRuntimeHandoffContract.assembleHandoff(
@@ -68,20 +76,30 @@ internal fun DefaultGoalPlanningSweep.composePlanningPrompt(args: GoalPlanningPr
         recordedOutputs = args.recordedOutputs,
       ),
     )
-  val briefing =
+  val assembly =
     FeatureTaskRuntimePhaseBriefingAssembler.assemble(
       handoff,
-      planningProjectionValidator = planningProjectionValidator,
       agentAddonSelection = phase.request.agentAddonSelection,
       scope = FeatureTaskRuntimeBriefingScope(invariantFields = phase.launch.invariantFields),
     )
+  val briefing =
+    when (assembly) {
+      is FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted -> assembly.briefing
+      is FeatureTaskRuntimePhaseBriefingAssemblyResult.Rejected ->
+        throw invalidFeatureTaskRuntimeHandoffProjection(assembly.context)
+    }
+  val write = (phase.launch.state as PhasePlanningBriefingBinding).recordPlanningBriefing(briefing, args.attempt)
+  if (write is RequiredPhaseWrite.Rejected) {
+    val handoffRejection = write.handoffRejection
+    if (handoffRejection != null) throw invalidFeatureTaskRuntimeHandoffProjection(handoffRejection)
+    onRejected(write)
+  }
   val basePrompt =
     FeatureTaskRuntimePhasePromptComposer.compose(
       FeatureTaskRuntimePhasePromptComposeInputs(
         issueKey = phase.request.issueKey,
         briefing = briefing,
         suppressDecomposition = true,
-        priorSchemaFailure = args.priorSchemaFailure,
       ),
       phase.launch.prompt,
     )

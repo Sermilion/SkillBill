@@ -1,12 +1,12 @@
 package skillbill.infrastructure.sqlite
 
 import me.tatarka.inject.annotations.Inject
+import org.sqlite.SQLiteErrorCode
+import org.sqlite.SQLiteException
 import skillbill.error.core.DatabaseAccessOperation
-import skillbill.error.core.DatabaseBusyError
+import skillbill.error.core.databaseBusy
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionBeginMode
 import skillbill.infrastructure.sqlite.core.ops.DatabaseTransactionSpec
-import skillbill.infrastructure.sqlite.core.ops.attachSqliteDiagnostics
-import skillbill.infrastructure.sqlite.core.ops.detachSqliteDiagnostics
 import skillbill.infrastructure.sqlite.core.ops.inDatabaseTransaction
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.OpenDatabase
@@ -46,44 +46,34 @@ class SQLiteDatabaseSessionFactory(
 
   override fun <T> read(block: (UnitOfWork) -> T): T =
     DatabaseRuntime.openReadDbAt(resolveDbPath(), diagnostics).use { openDb ->
-      openDb.connection.attachSqliteDiagnostics(diagnostics)
-      try {
-        runCatching {
-          openDb.connection.inDatabaseTransaction(
-            DatabaseTransactionSpec(
-              dbPath = openDb.dbPath,
-              beginMode = DatabaseTransactionBeginMode.DEFERRED,
-              operation = DatabaseAccessOperation.READ,
-              diagnostics = diagnostics,
-            ),
-          ) {
-            block(unitOfWork(openDb))
-          }
-        }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
-      } finally {
-        openDb.connection.detachSqliteDiagnostics()
-      }
+      runCatching {
+        openDb.connection.inDatabaseTransaction(
+          DatabaseTransactionSpec(
+            dbPath = openDb.dbPath,
+            beginMode = DatabaseTransactionBeginMode.DEFERRED,
+            operation = DatabaseAccessOperation.READ,
+            diagnostics = diagnostics,
+          ),
+        ) {
+          block(unitOfWork(openDb, transactionActive = true))
+        }
+      }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
     }
 
   override fun <T> readIfPresent(block: (UnitOfWork) -> T): T? =
     DatabaseRuntime.openReadDbIfPresentAt(resolveDbPath())?.use { openDb ->
-      openDb.connection.attachSqliteDiagnostics(diagnostics)
-      try {
-        runCatching {
-          openDb.connection.inDatabaseTransaction(
-            DatabaseTransactionSpec(
-              dbPath = openDb.dbPath,
-              beginMode = DatabaseTransactionBeginMode.DEFERRED,
-              operation = DatabaseAccessOperation.READ,
-              diagnostics = diagnostics,
-            ),
-          ) {
-            block(unitOfWork(openDb))
-          }
-        }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
-      } finally {
-        openDb.connection.detachSqliteDiagnostics()
-      }
+      runCatching {
+        openDb.connection.inDatabaseTransaction(
+          DatabaseTransactionSpec(
+            dbPath = openDb.dbPath,
+            beginMode = DatabaseTransactionBeginMode.DEFERRED,
+            operation = DatabaseAccessOperation.READ,
+            diagnostics = diagnostics,
+          ),
+        ) {
+          block(unitOfWork(openDb, transactionActive = true))
+        }
+      }.getOrElse { error -> throwReadFailure(openDb.dbPath, error) }
     }
 
   override fun <T> selfManagedWrite(block: (UnitOfWork) -> T): T {
@@ -107,32 +97,36 @@ class SQLiteDatabaseSessionFactory(
             diagnostics = diagnostics,
           ),
         ) {
-          block(unitOfWork(openDb))
+          block(unitOfWork(openDb, transactionActive = true))
         }
       }
     }
 
-  private fun unitOfWork(openDb: OpenDatabase): SQLiteUnitOfWork =
-    SQLiteUnitOfWork(openDb.connection, openDb.dbPath, clock, diagnostics, workflowSnapshotValidator, runtimeVersion)
+  private fun unitOfWork(
+    openDb: OpenDatabase,
+    transactionActive: Boolean = false,
+  ): SQLiteUnitOfWork =
+    SQLiteUnitOfWork(
+      openDb.connection,
+      openDb.dbPath,
+      clock,
+      diagnostics,
+      workflowSnapshotValidator,
+      runtimeVersion,
+      transactionActive,
+    )
 
   private fun <T> withWriteDatabase(block: (OpenDatabase) -> T): T {
     val dbPath = resolveDbPath()
     DatabaseRuntime.ensureWriteReady(dbPath, diagnostics)
-    return DatabaseRuntime.openWriteDbAt(dbPath).use { openDb ->
-      openDb.connection.attachSqliteDiagnostics(diagnostics)
-      try {
-        block(openDb)
-      } finally {
-        openDb.connection.detachSqliteDiagnostics()
-      }
-    }
+    return DatabaseRuntime.openWriteDbAt(dbPath).use(block)
   }
 }
 
 private fun <T> translatingBusyFailures(block: () -> T): T =
   runCatching(block).getOrElse { error ->
     error.rethrowIfCooperativeCancellationOrInterruption()
-    if (error.isSqliteBusy()) throw DatabaseBusyError(error)
+    if (error.isSqliteBusy()) throw databaseBusy(error)
     throw error
   }
 
@@ -145,9 +139,10 @@ private fun Throwable.rethrowIfCooperativeCancellationOrInterruption() {
 
 private fun Throwable.isSqliteBusy(): Boolean =
   generateSequence(this) { it.cause }.any { error ->
-    val message = error.message.orEmpty()
-    message.contains("SQLITE_BUSY", ignoreCase = true) || message.contains("database is locked", ignoreCase = true)
+    error is SQLiteException && (error.resultCode.code and SQLITE_PRIMARY_CODE_MASK) == SQLiteErrorCode.SQLITE_BUSY.code
   }
+
+private const val SQLITE_PRIMARY_CODE_MASK = 0xFF
 
 private fun throwReadFailure(
   dbPath: Path,

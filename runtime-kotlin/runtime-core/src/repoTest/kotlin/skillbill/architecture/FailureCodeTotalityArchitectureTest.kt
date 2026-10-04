@@ -5,6 +5,7 @@ import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKin
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureKind
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationFailureCode
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -46,6 +47,76 @@ class FailureCodeTotalityArchitectureTest {
     assertTrue(
       duplicate.contains("duplicate wire value"),
       "Regression if an orphaned or duplicated failure wire code no longer fails totality enforcement.",
+    )
+  }
+
+  @Test
+  fun `every custom throwable in production main is listed in the throwable baseline`() {
+    assertTrue(
+      ArchitectureScanSupport.customThrowableRows().isNotEmpty(),
+      "Regression if the throwable scan finds nothing in the real repository.",
+    )
+    val drift = ArchitectureScanSupport.customThrowableDrift()
+    assertEquals(emptyList(), drift, drift.joinToString("\n"))
+  }
+
+  @Test
+  fun `throwable baseline guard reports an unlisted declaration and a stale row`() {
+    val root = Files.createTempDirectory("skillbill-custom-throwable-drift")
+    seedModuleScanTreeWithEngineViolation(
+      root,
+      """
+      package skillbill.engine
+
+      class SyntheticDirectFailure(message: String) : IllegalStateException(message)
+
+      class SyntheticMultilineFailure(
+        message: String,
+        val detail: String,
+      ) : SyntheticDirectFailure(
+          message,
+        )
+
+      sealed class SyntheticSealedFailure : kotlin.RuntimeException() {
+        data class Variant(val name: String) : SyntheticSealedFailure()
+      }
+
+      sealed interface SyntheticOutcome {
+        data class Error(val message: String) : SyntheticOutcome
+      }
+
+      class SyntheticKotlinErrorFailure : Error("boom")
+
+      class SyntheticOutcomeConsumer(val message: String) : SyntheticOutcome.Error(message)
+
+      val syntheticLiteral = ${"\"\"\""}
+        class Fake : Exception()
+      ${"\"\"\""}
+      """.trimIndent(),
+    )
+    val drift =
+      ArchitectureScanSupport.customThrowableDrift(
+        scanRoot = root,
+        readBaseline = { "runtime-engine:SyntheticRemovedFailure\n" },
+      )
+    assertEquals(
+      listOf(
+        "runtime-engine declares custom throwable SyntheticDirectFailure; " +
+          "return a result, use require/check, or throw SkillBillRuntimeException with a code.",
+        "runtime-engine declares custom throwable SyntheticKotlinErrorFailure; " +
+          "return a result, use require/check, or throw SkillBillRuntimeException with a code.",
+        "runtime-engine declares custom throwable SyntheticMultilineFailure; " +
+          "return a result, use require/check, or throw SkillBillRuntimeException with a code.",
+        "runtime-engine declares custom throwable SyntheticSealedFailure; " +
+          "return a result, use require/check, or throw SkillBillRuntimeException with a code.",
+        "runtime-engine declares custom throwable SyntheticSealedFailure.Variant; " +
+          "return a result, use require/check, or throw SkillBillRuntimeException with a code.",
+        "runtime-engine:SyntheticRemovedFailure is listed in custom-throwable-baseline.txt " +
+          "but no longer exists; re-record the baseline.",
+      ),
+      drift,
+      "Regression if the throwable baseline guard misses a transitive, multi-line or nested throwable, counts " +
+        "a result variant or literal text, or ignores a stale baseline row.",
     )
   }
 

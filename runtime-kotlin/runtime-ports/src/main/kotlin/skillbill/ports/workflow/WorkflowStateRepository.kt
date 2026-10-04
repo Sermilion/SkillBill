@@ -19,6 +19,11 @@ interface WorkflowStateRepository :
   FeatureTaskWorkflowStateRepository,
   GoalChildWorkflowStateRepository,
   FeatureTaskRuntimeWorkerRepository {
+  fun migrateFeatureTaskArtifacts(
+    source: WorkflowStateRecord,
+    targetArtifactsJson: String,
+  )
+
   fun save(
     family: WorkflowFamily,
     snapshot: WorkflowStateSnapshot,
@@ -95,6 +100,12 @@ interface FeatureTaskWorkflowStateRepository : FeatureTaskExecutionLookupReposit
   fun listFeatureTaskWorkflows(
     mode: FeatureTaskWorkflowMode,
     limit: Int = 20,
+  ): List<WorkflowStateRecord>
+
+  fun findFeatureTaskWorkflowsForIssue(
+    mode: FeatureTaskWorkflowMode,
+    normalizedIssueKey: String,
+    repositoryIdentity: String? = null,
   ): List<WorkflowStateRecord>
 
   fun latestFeatureTaskWorkflow(mode: FeatureTaskWorkflowMode): WorkflowStateRecord?

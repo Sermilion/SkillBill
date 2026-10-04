@@ -9,7 +9,7 @@ intake, preflight, or confirmation, including on retries and continuation.
 Reading the installed skill-bill skill does not make this phase a new invocation.
 
 Phase: plan (Phase 2: Plan)
-Task: Produce an ordered implementation plan that satisfies every acceptance criterion, using the upstream preplan value as planning context (structured prose: interpret the stuffed digest JSON). Do not modify repository files during this phase. Emit produced_outputs with a non-blank value string carrying the executable_plan JSON (same fields as before, stuffed inside value); optional prompt may add a short directive when non-blank. Do not forward the complete plan envelope, a generic summary, or progress diagnostics.
+Task: Produce an ordered implementation plan that satisfies every acceptance criterion from the upstream preplan digest. Do not modify repository files during this phase. Write the plan as prose the implement phase can follow: the ordered tasks, the acceptance criteria each one serves, the paths or symbols it touches, the tests to add or run, constraints, and how the plan is validated. Do not forward progress diagnostics or a generic summary. The preplan digest is this phase's only repository knowledge: preplan discovers once for every subtask so planning never repeats it. Do not read, search, grep, or list repository source, tests, build files, or git history, and do not re-verify the digest. Settle every open question from the digest's evidence. When the digest lacks a fact, decide from what it does say and record that assumption in the affected spec or plan step for implement to confirm.
 
 ## Installed runtime owns phase output and settlement
 The installed Skill Bill runtime validates this phase's output and MCP settlement.
@@ -69,9 +69,8 @@ maintenance and reasoning tokens. Write few, high-value tests; never mirror code
   apply to tests too.
 
 ## Goal-continuation planning constraint
-This run is already executing one governed decomposed subtask. Do not propose or emit a new
-decomposition package in the plan phase. Produce implementable planning value for the current spec
-(executable_plan JSON stuffed inside value); never emit produced_outputs.decomposition_package.
+This run is already executing one governed decomposed subtask. Do not propose a new decomposition in
+the plan phase. Produce an implementable plan in prose for the current spec.
 Never include installer, uninstall, or
 install-sync commands in the plan: do not plan to run
 `./install.sh`, `./uninstall.sh`, `skill-bill install`, `skill-bill install apply`, or any
@@ -80,6 +79,15 @@ acceptance work will be implemented and validated; it does not require that work
 happened. Never block planning merely because a later implementation or validation action is not
 yet complete. A blocked plan requires a genuinely missing input or an irreconcilable constraint
 that prevents an implementable plan from being produced.
+
+## Phase feasibility
+Check every planned requirement, constraint, non-goal, and task against the authority of the
+phase that must perform it. Implement produces repository end states; audit inspects them.
+Validation owns commands and their evidence. Review, commit, PR, history, and install work
+stays with its owning phase or parent runtime. Never invent a scope restriction that prevents
+required review or validation repairs to production wiring, test setup, formatting, or lint.
+Preserve behavior, assertions, and architecture rules instead. Preserve explicit operator
+constraints; report any conflict with required phase work during planning, before execution.
 
 # Feature-task-runtime phase briefing
 phase: plan
@@ -127,38 +135,21 @@ The tools may be deferred in this session: load them first with ToolSearch
 - Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
   phase_id "plan", attempt 1, and value: one prose string carrying everything
   the next phase needs (what this phase produced, deviations from the briefing, what was
-  deliberately left to later phases). When a value content section follows, it describes what the
-  next phase expects inside value; carry that content as prose or as JSON text, whichever is clearer.
-  The runtime does not validate the shape of value. Optional summary: one sentence.
-- Cannot finish: call `mcp__skill-bill__feature_task_phase_block` with the same workflow_id, phase_id, and
-  attempt, a reason string naming the obstacle, and failure_disposition one of "retryable",
+  deliberately left to later phases). When a value content section follows, it defines value and
+  overrides this description: carry its content as prose or as JSON text, whichever is clearer, and
+  emit any exact literal it names with nothing added. Otherwise the runtime does not validate the
+  shape of value. Optional summary: one sentence.
+- Cannot finish because of a concrete obstacle: call `mcp__skill-bill__feature_task_phase_block` with the same
+  workflow_id, phase_id, and attempt, a reason string naming the obstacle, and failure_disposition
+  one of "retryable",
   "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
 Copy workflow_id, phase_id, and attempt exactly as written here. After the tool returns status
-"ok", end your response with a short prose recap and nothing structured. Print the fallback
-final object below only if both tools stay unavailable after loading them.
-
-## Value content
-Carry this JSON object as the value text; the runtime does not validate its shape and the next phase reads
-it as structured prose:
-```json
-{ "projection_kind": "executable_plan",
-  "contract_version": "0.2",
-  "mode": "direct",
-  "tasks": [ { "task_id": "task-1", "depends_on": [], "description": "<imperative task>",
-    "criterion_refs": ["AC-001"], "target_paths_or_symbols": ["path/or/Symbol"],
-    "test_obligations": ["<test to add or run>"], "constraints": [] } ],
-  "validation_strategy": ["<how the plan is validated>"] }
-```
-Upstream preplan value is structured prose carrying the digest JSON; read and interpret it. task_id MUST match ^[a-z][a-z0-9-]*$ (lowercase kebab; "T1" is wrong — use "task-1"); criterion_refs use the AC-### form.
+"ok", end your response with a short prose recap and nothing structured. Use the prose
+fallback below only if both tools stay unavailable after loading them.
 
 ## Fallback final output (only when the settlement tools are unavailable)
-End your response with exactly one JSON object as the last thing you emit. Prefer a raw
-object with nothing after it; a single ```json fenced block is also accepted. The runtime
-stamps the contract version and phase id itself. Fields:
-- "status": one of "completed", "blocked", "failed"
-- "summary": one sentence describing what this phase did
-- "value": non-blank prose carrying everything the next phase needs
-- "verdict": optional; set it only when this briefing names a verdict for this phase
-- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
-  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
-  Omit it when status is "completed".
+End your response with plain prose carrying everything the next phase needs (what this phase
+produced, deviations from the briefing, what was deliberately left to later phases), or exactly
+what a value content section defines. The runtime records that prose as the phase value as
+written. Do not wrap it in a status or JSON envelope. Report an obstacle only when a concrete one
+stopped the phase, and name that obstacle in the prose.

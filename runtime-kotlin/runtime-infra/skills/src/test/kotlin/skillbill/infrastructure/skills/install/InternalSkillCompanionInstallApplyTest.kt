@@ -1,8 +1,8 @@
 package skillbill.infrastructure.skills.install
 
 import skillbill.install.model.InstallApplyStatus
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.model.SupportedAgent
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -67,7 +67,7 @@ class InternalSkillCompanionInstallApplyTest : InstallApplyTestSupport() {
 
     assertEquals(InstallApplyStatus.FAILURE, second.status)
     assertEquals(
-      "skillbill.error.shellcontent.InternalSkillSidecarCollisionError",
+      "SkillStagingFailureCode.INTERNAL_SKILL_SIDECAR_COLLISION",
       second.failures.single { issue -> issue.skillName == PACK_SIDECAR_PARENT_SKILL }.causeClass,
     )
   }

@@ -2,13 +2,13 @@ package skillbill.application
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
+import skillbill.application.decomposition.model.DecompositionManifestRuntimeUpdate
+import skillbill.application.decomposition.model.DecompositionManifestWorkflowProjectionInput
+import skillbill.application.decomposition.model.DecompositionManifestWriteRequest
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.decomposition.DecompositionPlanningResult
 import skillbill.contracts.workflow.payload.WorkflowArtifactKeys
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestRuntimeUpdate
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestWorkflowProjectionInput
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestWriteRequest
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestWriteResult
@@ -19,7 +19,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
-import skillbill.ports.workflow.decomposition.loadDecompositionManifest as loadManifestFromStore
+import skillbill.application.decomposition.loadDecompositionManifest as loadManifestFromStore
 
 object TestDecompositionManifestStore : DecompositionManifestStore {
   override fun readText(path: Path): String = Files.readString(path)
@@ -42,6 +42,8 @@ object TestDecompositionManifestStore : DecompositionManifestStore {
       paths.filter { path -> Files.isDirectory(path) }.toList()
     }
   }
+
+  override fun listTree(directory: Path): List<Path> = Files.walk(directory).use { paths -> paths.toList() }
 
   override fun deleteIfExists(target: Path) {
     Files.deleteIfExists(target)

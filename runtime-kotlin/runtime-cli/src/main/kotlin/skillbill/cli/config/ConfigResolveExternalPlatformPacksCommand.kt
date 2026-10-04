@@ -6,9 +6,12 @@ import skillbill.application.install.ExternalPlatformPackResolutionService
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.scaffold.policy.platformpack.model.PlatformPackSourceKind
 
 @Inject
@@ -32,7 +35,8 @@ class ConfigResolveExternalPlatformPacksCommand(
     val catalog =
       try {
         service.resolveEffectiveCatalog(resolvedRepoRoot, inputs.userHome, inputs.environment)
-      } catch (error: ShellContentContractException) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isShellContentContractFailure())
         state.completeText(
           "${error.message}\n",
           externalPlatformPackFailurePayload(error, sourceKind = PlatformPackSourceKind.EXTERNAL),
@@ -49,7 +53,7 @@ class ConfigResolveExternalPlatformPacksCommand(
     state.completeText(
       lines.joinToString(""),
       mapOf(
-        SharedPayloadKeys.STATUS to "ok",
+        SharedPayloadKeys.STATUS to CliPayloadStatus.OK,
         ExternalPlatformPackResolutionPayloadKeys.PACKS to
           catalog.entries.map { entry ->
             mapOf(

@@ -2,14 +2,13 @@ package skillbill.workflow.engine
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.ReviewVerificationSignalKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.workflow.engine.model.RUNTIME_REPOSITORY_EVIDENCE_ARTIFACT_KEY
 import skillbill.workflow.engine.model.WorkflowDefinition
 import skillbill.workflow.engine.model.WorkflowInputProjection
 import skillbill.workflow.engine.model.WorkflowInputProjectionDeclaration
 import skillbill.workflow.engine.model.WorkflowLaunchProjectionArtifacts
 import skillbill.workflow.engine.model.WorkflowSnapshotView
-
-internal const val RUNTIME_REPOSITORY_EVIDENCE_ARTIFACT_KEY = "repository_evidence"
 
 private fun collectionItemCount(value: Any?): Int =
   when (value) {
@@ -221,5 +220,5 @@ internal object WorkflowInputProjectionSelector {
   private fun reject(
     definition: WorkflowDefinition,
     detail: String,
-  ): Nothing = throw InvalidWorkflowStateSchemaError("${definition.workflowName}: $detail")
+  ): Nothing = throw invalidWorkflowStateSchemaError("${definition.workflowName}: $detail")
 }

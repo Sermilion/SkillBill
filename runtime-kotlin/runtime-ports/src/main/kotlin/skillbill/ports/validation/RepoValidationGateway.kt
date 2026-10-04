@@ -1,6 +1,7 @@
 package skillbill.ports.validation
 
 import skillbill.ports.validation.model.ReleaseRefMetadata
+import skillbill.ports.validation.model.ReleaseRefValidation
 import skillbill.ports.validation.model.RepoValidationReport
 import java.nio.file.Path
 
@@ -11,7 +12,7 @@ interface RepoValidationGateway {
     repoRoot: Path,
     rawRef: String,
     forcePrerelease: Boolean,
-  ): ReleaseRefMetadata
+  ): ReleaseRefValidation
 
   fun appendGithubOutput(
     outputPath: Path,

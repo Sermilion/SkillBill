@@ -1,11 +1,7 @@
 package skillbill.infrastructure.contracts.workflow.decomposition
 
-import skillbill.application.decomposition.baseBranch
-import skillbill.application.decomposition.encodeValidatedDecompositionManifestYaml
-import skillbill.application.decomposition.executionModel
-import skillbill.application.decomposition.parentSpecPath
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.decodeManifest
@@ -14,9 +10,11 @@ import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionDependency
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.model.DecompositionManifestValidationResult
 import skillbill.workflow.decomposition.model.DecompositionManifestWireMap
 import skillbill.workflow.decomposition.model.DecompositionStackBranch
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.decomposition.model.requireAccepted
 import skillbill.workflow.decomposition.runtime.invalidManifest
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -59,11 +57,11 @@ class DecompositionManifestValidationTest {
     val spyFileStore = RecordingEncodeFileStore(delegate = fileStore)
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         encodeDecompositionManifestYaml(invalidManifest, realDecompositionManifestValidator, spyFileStore)
       }
 
-    assertContains(error.reason, "feature_branch")
+    assertContains(error.message.orEmpty(), "feature_branch")
     assertTrue(
       spyFileStore.encodeCalls == 0,
       "Invalid input must loud-fail at the validated map seam before reaching the YAML serializer.",
@@ -113,13 +111,13 @@ class DecompositionManifestValidationTest {
     wireMap.remove("contract_version")
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         realDecompositionManifestValidator.decodeManifest(
           DecompositionManifestWireMap.from(wireMap),
           "missing-contract",
         )
       }
-    assertContains(error.reason, "contract_version")
+    assertContains(error.message.orEmpty(), "contract_version")
   }
 
   @Test
@@ -128,13 +126,13 @@ class DecompositionManifestValidationTest {
     wireMap.mutableSubtasks()[0]["review_result"] = mapOf("finding_count" to 0)
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         realDecompositionManifestValidator.decodeManifest(
           DecompositionManifestWireMap.from(wireMap),
           "result-payload-noise",
         )
       }
-    assertContains(error.reason, "review_result")
+    assertContains(error.message.orEmpty(), "review_result")
   }
 
   @Test
@@ -143,14 +141,14 @@ class DecompositionManifestValidationTest {
     wireMap.mutableSubtasks()[0]["id"] = Int.MAX_VALUE.toLong() + 1L
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         realDecompositionManifestValidator.decodeManifest(
           DecompositionManifestWireMap.from(wireMap),
           "oversized-subtask-id",
         )
       }
-    assertContains(error.reason, "subtasks[0].id")
-    assertContains(error.reason, Int.MAX_VALUE.toString())
+    assertContains(error.message.orEmpty(), "subtasks[0].id")
+    assertContains(error.message.orEmpty(), Int.MAX_VALUE.toString())
   }
 
   @Test
@@ -159,14 +157,14 @@ class DecompositionManifestValidationTest {
     wireMap.mutableSubtasks()[1]["id"] = 1
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         realDecompositionManifestValidator.decodeManifest(
           DecompositionManifestWireMap.from(wireMap),
           "duplicate-subtask-id",
         )
       }
-    assertContains(error.reason, "subtasks[1].id")
-    assertContains(error.reason, "Duplicate subtask id '1'")
+    assertContains(error.message.orEmpty(), "subtasks[1].id")
+    assertContains(error.message.orEmpty(), "Duplicate subtask id '1'")
   }
 
   @Test
@@ -192,14 +190,14 @@ class DecompositionManifestValidationTest {
     wireMap.mutableCurrentSubtaskIntent()["subtask_id"] = 99
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         realDecompositionManifestValidator.decodeManifest(
           DecompositionManifestWireMap.from(wireMap),
           "missing-current-subtask",
         )
       }
-    assertContains(error.reason, "current_subtask_intent.subtask_id")
-    assertContains(error.reason, "Current subtask intent must reference a declared subtask")
+    assertContains(error.message.orEmpty(), "current_subtask_intent.subtask_id")
+    assertContains(error.message.orEmpty(), "Current subtask intent must reference a declared subtask")
   }
 
   @Test
@@ -210,14 +208,14 @@ class DecompositionManifestValidationTest {
     intent["action"] = "none"
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         realDecompositionManifestValidator.decodeManifest(
           DecompositionManifestWireMap.from(wireMap),
           "invalid-none-current-subtask",
         )
       }
-    assertContains(error.reason, "current_subtask_intent.subtask_id")
-    assertContains(error.reason, "Intent action none must use subtask_id 0")
+    assertContains(error.message.orEmpty(), "current_subtask_intent.subtask_id")
+    assertContains(error.message.orEmpty(), "Intent action none must use subtask_id 0")
   }
 
   @Test
@@ -226,13 +224,13 @@ class DecompositionManifestValidationTest {
     wireMap.mutableCurrentSubtaskIntent()["subtask_id"] = 1.5
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         realDecompositionManifestValidator.decodeManifest(
           DecompositionManifestWireMap.from(wireMap),
           "fractional-current-subtask",
         )
       }
-    assertContains(error.reason, "current_subtask_intent.subtask_id")
+    assertContains(error.message.orEmpty(), "current_subtask_intent.subtask_id")
   }
 
   @Test
@@ -240,10 +238,10 @@ class DecompositionManifestValidationTest {
     val manifest = validSameBranchManifest().copy(featureBranch = null)
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         encodeDecompositionManifestYaml(manifest, realDecompositionManifestValidator, fileStore)
       }
-    assertContains(error.reason, "feature_branch")
+    assertContains(error.message.orEmpty(), "feature_branch")
   }
 
   @Test
@@ -260,10 +258,10 @@ class DecompositionManifestValidationTest {
       )
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         encodeDecompositionManifestYaml(manifest, realDecompositionManifestValidator, fileStore)
       }
-    assertContains(error.reason, "one branch per subtask in subtask order")
+    assertContains(error.message.orEmpty(), "one branch per subtask in subtask order")
   }
 
   @Test
@@ -288,10 +286,10 @@ class DecompositionManifestValidationTest {
       )
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         encodeDecompositionManifestYaml(manifest, realDecompositionManifestValidator, fileStore)
       }
-    assertContains(error.reason, "earlier declared subtask")
+    assertContains(error.message.orEmpty(), "earlier declared subtask")
   }
 
   @Test
@@ -316,11 +314,11 @@ class DecompositionManifestValidationTest {
       )
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         encodeDecompositionManifestYaml(manifest, realDecompositionManifestValidator, fileStore)
       }
-    assertContains(error.reason, "spec_path")
-    assertContains(error.reason, "Duplicate")
+    assertContains(error.message.orEmpty(), "spec_path")
+    assertContains(error.message.orEmpty(), "Duplicate")
   }
 
   private fun validSameBranchManifest(): DecompositionManifest =
@@ -373,10 +371,15 @@ private fun encodeDecompositionManifestYaml(
   validator: DecompositionManifestValidator,
   fileStore: DecompositionManifestStore,
   sourceLabel: String = "<in-memory>",
-): String =
-  skillbill.application.decomposition.encodeValidatedDecompositionManifestYaml(
-    manifest,
-    validator,
-    fileStore,
-    sourceLabel,
-  ).yamlText
+): String {
+  val wireMap = validator.encodeManifestWireMap(manifest, sourceLabel)
+  val yamlText = fileStore.encodeManifestYaml(wireMap)
+  return when (val result = validator.validateYamlTextResult(yamlText, sourceLabel)) {
+    is DecompositionManifestValidationResult.AcceptedUnchanged -> result.yamlText
+    is DecompositionManifestValidationResult.AcceptedAfterRepair -> result.yamlText
+    is DecompositionManifestValidationResult.Rejected -> {
+      result.requireAccepted(sourceLabel)
+      error("Unreachable rejected decomposition manifest result.")
+    }
+  }
+}

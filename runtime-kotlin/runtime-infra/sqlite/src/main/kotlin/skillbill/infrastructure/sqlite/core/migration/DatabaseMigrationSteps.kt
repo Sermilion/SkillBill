@@ -3,6 +3,7 @@ package skillbill.infrastructure.sqlite.core.migration
 import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewColumnMigrations
 import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewFindingColumnMigrations
 import skillbill.infrastructure.sqlite.core.schema.DatabaseReviewLedgerSchema
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.sql.Connection
 
 internal fun persistGoalPlanningRepairEvidence(connection: Connection) {
@@ -165,9 +166,18 @@ internal fun ensureSchemaColumnsAndHeals(connection: Connection) {
 internal class DatabaseMigration(
   internal val version: Int,
   internal val name: String,
-  private val operation: (Connection) -> Unit,
+  private val operation: (Connection, RuntimeDiagnostics) -> Unit,
 ) {
-  fun apply(connection: Connection) {
-    operation(connection)
+  constructor(
+    version: Int,
+    name: String,
+    operation: (Connection) -> Unit,
+  ) : this(version, name, { connection, _ -> operation(connection) })
+
+  fun apply(
+    connection: Connection,
+    diagnostics: RuntimeDiagnostics,
+  ) {
+    operation(connection, diagnostics)
   }
 }

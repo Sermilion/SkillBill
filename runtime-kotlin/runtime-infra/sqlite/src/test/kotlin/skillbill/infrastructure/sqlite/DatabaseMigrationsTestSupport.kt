@@ -2,12 +2,13 @@ package skillbill.infrastructure.sqlite
 
 import org.junit.jupiter.api.Assumptions
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidWorkListRowError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import skillbill.infrastructure.sqlite.core.schema.DatabaseSchema
 import skillbill.infrastructure.sqlite.worklist.SQLiteWorkListRepository
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import java.nio.file.Files
 import java.nio.file.Path
@@ -40,7 +41,18 @@ internal fun seedVersionKeyedLedger(dbPath: Path) {
   }
 }
 
-internal fun seedLegacyGoalRunnerControlsMigrationFixture(dbPath: Path) {
+internal val VALID_LEGACY_GOAL_ACCEPTANCE: Map<String, Any?> =
+  mapOf(
+    "subtask_id" to 2,
+    "commit_sha" to "legacy-commit",
+    "reason" to "accepted outside the normal review path",
+    "accepted_at" to "2026-09-17T10:00:00Z",
+  )
+
+internal fun seedLegacyGoalRunnerControlsMigrationFixture(
+  dbPath: Path,
+  acceptances: List<Map<String, Any?>> = listOf(VALID_LEGACY_GOAL_ACCEPTANCE),
+) {
   DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
     connection.createStatement().use { statement ->
       statement.executeUpdate(
@@ -54,15 +66,7 @@ internal fun seedLegacyGoalRunnerControlsMigrationFixture(dbPath: Path) {
             mapOf(
               "code_review_mode" to CodeReviewExecutionMode.INLINE.wireValue,
             ),
-          GOAL_OUT_OF_BAND_ACCEPTANCE_ARTIFACT_KEY to
-            listOf(
-              mapOf(
-                "subtask_id" to 2,
-                "commit_sha" to "legacy-commit",
-                "reason" to "accepted outside the normal review path",
-                "accepted_at" to "2026-09-17T10:00:00Z",
-              ),
-            ),
+          GOAL_OUT_OF_BAND_ACCEPTANCE_ARTIFACT_KEY to acceptances,
         ),
       )
     connection.prepareStatement(
@@ -424,7 +428,11 @@ internal fun assertLegacyStateEntryFallbacks(connection: Connection) {
   )
   assertEstimatedMissingStateEntries(connection, "feature_task_workflows", "workflow_id", "wfl-no-time")
   assertEstimatedMissingStateEntries(connection, "goal_issue_progress", "parent_workflow_id", "goal-no-time")
-  assertFailsWith<InvalidWorkListRowError> { SQLiteWorkListRepository(connection).list() }
+  assertFailsWith<SkillBillRuntimeException> {
+    SQLiteWorkListRepository(connection).list()
+  }.also {
+    assertEquals(WorkflowFailureCode.INVALID_WORK_LIST_ROW, it.code)
+  }
 }
 
 internal fun assertStateEntryFallbacks(

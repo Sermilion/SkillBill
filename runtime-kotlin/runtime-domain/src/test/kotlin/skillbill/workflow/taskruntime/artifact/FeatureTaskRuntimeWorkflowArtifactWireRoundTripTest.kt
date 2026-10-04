@@ -1,14 +1,15 @@
 package skillbill.workflow.taskruntime.artifact
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairOutcome
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceiptEntry
 import skillbill.workflow.taskruntime.model.audit.FeatureTaskRuntimeQuarantineEntry
 import skillbill.workflow.taskruntime.model.audit.QUARANTINE_REJECTION_CLASS_PLANNING_PROJECTION
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FeatureTaskRuntimeCheckpointIdentity
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -102,8 +103,8 @@ class FeatureTaskRuntimeWorkflowArtifactWireRoundTripTest {
 
   @Test
   fun `malformed workflow artifacts fail instead of being treated as absent`() {
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       phaseRecordsFromWorkflowArtifacts(listOf("not an artifact object"))
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 }

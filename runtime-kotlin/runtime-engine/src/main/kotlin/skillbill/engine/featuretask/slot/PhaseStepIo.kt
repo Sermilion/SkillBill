@@ -39,11 +39,6 @@ data class PhaseStepFacts(
 )
 
 data class PhaseStepOutput(
-  val status: String,
-  val value: String,
-  val summary: String?,
-  val verdict: String?,
-  val failureDisposition: String?,
   val stdout: PhaseStepStdout,
   val stderr: String,
   val processStarted: Boolean,

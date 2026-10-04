@@ -1,12 +1,21 @@
 package skillbill.infrastructure.contracts.locator
 
+object FeatureTaskRuntimeExecutionPlanSchemaPaths {
+  const val REPO_RELATIVE_PATH: String =
+    "orchestration/contracts/feature-task-runtime-execution-plan.yaml"
+  const val CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/feature-task-runtime-execution-plan.yaml"
+  const val EXPECTED_SCHEMA_ID: String =
+    "https://skill-bill.dev/contracts/feature-task-runtime-execution-plan.yaml"
+}
+
 object FeatureTaskRuntimePhaseOutputSchemaPaths {
+  const val CURRENT_CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/feature-task-runtime-phase-output-schema.yaml"
+  const val HISTORICAL_0_6_CLASSPATH_RESOURCE: String =
+    "skillbill/infrastructure/contracts/feature-task-runtime-phase-output-schema-0.6.yaml"
   const val REPO_RELATIVE_PATH: String =
     "orchestration/contracts/feature-task-runtime-phase-output-schema.yaml"
-
-  const val CLASSPATH_RESOURCE: String =
-    "skillbill/infrastructure/contracts/feature-task-runtime-phase-output-schema.yaml"
-
   const val EXPECTED_SCHEMA_ID: String =
     "https://skill-bill.dev/contracts/feature-task-runtime-phase-output-schema.yaml"
 }
@@ -54,15 +63,6 @@ object FeatureTaskRuntimeProjectionMeasurementSchemaPaths {
     "skillbill/infrastructure/contracts/feature-task-runtime-projection-measurement-schema.yaml"
   const val EXPECTED_SCHEMA_ID: String =
     "https://skill-bill.dev/contracts/feature-task-runtime-projection-measurement-schema.yaml"
-}
-
-object FeatureTaskRuntimePlanningProjectionsSchemaPaths {
-  const val REPO_RELATIVE_PATH: String =
-    "orchestration/contracts/feature-task-runtime-planning-projections-schema.yaml"
-  const val CLASSPATH_RESOURCE: String =
-    "skillbill/infrastructure/contracts/feature-task-runtime-planning-projections-schema.yaml"
-  const val EXPECTED_SCHEMA_ID: String =
-    "https://skill-bill.dev/contracts/feature-task-runtime-planning-projections-schema.yaml"
 }
 
 object FeatureTaskRuntimeQuarantineSchemaPaths {

@@ -1,21 +1,26 @@
 package skillbill.engine.goalrunner.manifest
 
+import skillbill.application.decomposition.DecompositionManifestWriter
+import skillbill.application.decomposition.clearDecompositionManifestProjectionFailure
+import skillbill.application.decomposition.persistDecompositionManifestProjectionFailure
+import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.application.workflow.decomposition.requireRuntimeModeForEngineWrite
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.status.reconcileControlStateForManifest
+import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.goalrunner.GoalParentProjectionWriter
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowSnapshotValidator
-import skillbill.ports.workflow.decomposition.findDecomposedParentWorkflow
+import skillbill.ports.workflow.decomposition.DecompositionManifestStore
+import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.model.toSnapshot
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
+import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
-import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 
 internal data class SavedManifestProjection(
@@ -28,6 +33,10 @@ internal class WorkflowGoalRunnerManifestProjectionPersistence(
   private val engine: WorkflowEngine,
   private val parentProjection: GoalParentProjectionWriter,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
+  private val decompositionManifestWriter: DecompositionManifestWriter,
+  private val repositoryRoot: RepositoryRoot,
+  private val decompositionManifestValidator: DecompositionManifestValidator,
+  private val decompositionManifestStore: DecompositionManifestStore,
 ) {
   fun save(state: GoalRunnerManifestState): SavedManifestProjection =
     database.transaction { unitOfWork -> saveInTransaction(unitOfWork, state) }
@@ -68,10 +77,7 @@ internal class WorkflowGoalRunnerManifestProjectionPersistence(
           workflowStatus = existingSnapshot.workflowStatus,
           currentStepId = existingSnapshot.currentStepId,
           stepUpdates = null,
-          artifactsPatch =
-            WorkflowArtifactPatch.from(
-              parentProjection.artifacts(manifest, existingSnapshot.artifacts),
-            ),
+          artifactsPatch = parentProjection.artifacts(manifest, existingSnapshot.artifacts),
           sessionId = existingSnapshot.sessionId.orEmpty(),
           replaceArtifacts = true,
         ),
@@ -93,5 +99,35 @@ internal class WorkflowGoalRunnerManifestProjectionPersistence(
         ),
       projectionArtifacts = refreshed.artifacts,
     )
+  }
+
+  fun writeProjectionFile(
+    state: GoalRunnerManifestState,
+    projectionArtifacts: DurableWorkflowArtifacts,
+  ): DecompositionManifestProjectionOutcome {
+    val outcome =
+      decompositionManifestWriter.writeProjectionFromWorkflowState(
+        state.repoRoot ?: repositoryRoot.path,
+        projectionArtifacts,
+        decompositionManifestValidator,
+        decompositionManifestStore,
+      )
+    when (outcome) {
+      is DecompositionManifestProjectionOutcome.Failed ->
+        database.transaction { unitOfWork ->
+          persistDecompositionManifestProjectionFailure(
+            engine,
+            unitOfWork,
+            state.parentWorkflowId,
+            outcome,
+          )
+        }
+      is DecompositionManifestProjectionOutcome.Written ->
+        database.transaction { unitOfWork ->
+          clearDecompositionManifestProjectionFailure(engine, unitOfWork, state.parentWorkflowId)
+        }
+      DecompositionManifestProjectionOutcome.Absent -> Unit
+    }
+    return outcome
   }
 }

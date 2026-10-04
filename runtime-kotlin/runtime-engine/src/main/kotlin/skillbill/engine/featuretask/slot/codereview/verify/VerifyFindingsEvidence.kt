@@ -5,9 +5,11 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
+import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeProseMentions
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFindingBoundaryMemoryRequest
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeFindingBoundaryMemorySection
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
+import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
 import skillbill.engine.featuretask.review.finding.promptSection
 import skillbill.engine.featuretask.review.finding.resolvedBodiesPromptSection
@@ -18,45 +20,63 @@ import skillbill.engine.featuretask.review.finding.validateDispositionBoundaryCo
 import skillbill.engine.featuretask.review.finding.validateDispositionBoundaryProvenance
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptLaunchHookContext
+import skillbill.engine.featuretask.slot.attempt.PhaseFindingEvidenceContext
+import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.codereview.reviewSpecPath
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
+import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKeys
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewStructuredFindingsParse
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope
 import skillbill.goalrunner.subtaskreview.verificationBoundaryFindingPaths
 import skillbill.ports.repository.toFileLocation
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.execution.SpecIntentProjectionResolveRequest
 import skillbill.review.context.model.execution.SpecIntentResolution
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
-import skillbill.workflow.taskruntime.model.validation.validateDispositionCoverage
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDispositionVerdict
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
+
+private const val MAX_REASON_CHARS = 300
+private val REFUTATION_CUE =
+  Regex(
+    """\b(rejected|refuted|false positive|not a defect|not reproducible|does not reproduce|dismissed)\b""",
+    RegexOption.IGNORE_CASE,
+  )
+private val KEEP_CUE =
+  Regex(
+    """\b(verified|confirmed|stands|still|valid|reproduces|unresolved|not (?:rejected|refuted)|unrefuted)\b""",
+    RegexOption.IGNORE_CASE,
+  )
+private val CITATION = Regex("""[A-Za-z0-9_./-]*[A-Za-z0-9_-]\.[A-Za-z0-9]+:\d+""")
 
 internal object VerifyFindingsEvidence {
   fun launchSections(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseAttemptLaunchHookContext,
+    state: PhaseVerifyFindingsStepBinding,
   ): String {
     val checkpoint = state.findingVerificationCheckpoint()
     val boundarySelection = state.verificationBoundarySelection()?.takeIf { it.isNotEmpty() }
     val resolution =
-      context.phaseGates.specIntentProjectionResolver.resolve(
+      context.findingEvidence().specIntentProjectionResolver.resolve(
         SpecIntentProjectionResolveRequest(
           repoRoot = run.request.repoRoot.toFileLocation(),
           explicitSpecPath = reviewSpecPath(run)?.toFileLocation(),
-          branchName = state.resolvedBranchName() ?: "HEAD",
+          branchName = state.resolvedBranchName ?: "HEAD",
           changedPaths = emptyList(),
           budget = ReviewContextBudgetPolicy.DEFAULT,
         ),
       )
-    val boundarySections = boundarySections(run, context, state)
-    val memory = context.phaseGates.findingVerificationBoundaryMemory
+    val boundarySections = boundarySections(run, context.findingEvidence(), state)
+    val memory = context.findingEvidence().findingVerificationBoundaryMemory
     return buildString {
       when (resolution) {
         is SpecIntentResolution.Resolved -> {
@@ -92,30 +112,16 @@ internal object VerifyFindingsEvidence {
     }
   }
 
-  fun retainCheckpoint(
-    state: PhaseStepState,
-    outputText: String,
-  ) {
-    val outputMap =
-      JsonCodec.parseObjectOrNull(outputText)
-        ?.let(JsonCodec::jsonElementToValue)
-        ?.let(JsonCodec::anyToStringAnyMap)
-        ?.toWorkflowArtifactMap()
-        ?: return
-    val dispositions = FeatureTaskRuntimeOutputVerification.dispositionsFrom(outputMap)
-    if (dispositions.isEmpty()) return
-    state.persistFindingVerificationCheckpoint(dispositions)
-  }
-
   fun boundaryBodyDelivery(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseVerifyFindingsStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck {
-    val dispositions = coveredDispositions(state, outputMap) ?: return PhaseStepOutputCheck.Accept
-    val sections = boundarySections(run, context, state)
-    val memory = context.phaseGates.findingVerificationBoundaryMemory
+    val sections = boundarySections(run, context.findingEvidence(), state)
+    val dispositions =
+      interpretedDispositions(state, sections, outputMap).ifEmpty { return PhaseStepOutputCheck.Accept }
+    val memory = context.findingEvidence().findingVerificationBoundaryMemory
     val invalid =
       memory.validateDispositionBoundaryContext(sections, dispositions)
         ?: memory.validateDispositionBoundaryProvenance(sections, dispositions)
@@ -126,30 +132,49 @@ internal object VerifyFindingsEvidence {
     state.persistVerificationBoundarySelection(selections)
     state.persistFindingVerificationCheckpoint(dispositions)
     return PhaseStepOutputCheck.Redeliver(
-      "Selected boundary headings recorded; re-read the briefing with resolved entry bodies and re-emit " +
-        "finding_dispositions before verify_findings can settle.",
+      "Selected boundary headings recorded; re-read the briefing with resolved entry bodies and restate your " +
+        "verification of every finding before verify_findings can settle.",
     )
   }
 
   fun completionRejection(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseVerifyFindingsStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ): String? =
-    boundaryDispositionGate(run, context, state, outputMap)
-      ?: findingVerificationDisposition(outputMap, reviewFindingIds(state))
+  ): String? = boundaryDispositionGate(run, context, state, outputMap)
+
+  fun interpretedOutput(
+    run: PhaseRun,
+    context: PhaseStepOutputContext,
+    state: PhaseVerifyFindingsStepBinding,
+    output: NormalizedFeatureTaskRuntimePhaseOutput,
+  ): NormalizedFeatureTaskRuntimePhaseOutput {
+    val outputMap = output.envelopeWireMap()
+    if (FeatureTaskRuntimeOutputVerification.carriesFindingDispositions(outputMap)) return output
+    val sections = boundarySections(run, context.findingEvidence(), state)
+    val envelope = outputMap.toMutableMap()
+    val produced = JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty().toMutableMap()
+    produced[FeatureTaskRuntimeVerificationSignalKeys.FINDINGS_VERIFICATION_DISPOSITIONS] =
+      interpretedDispositions(state, sections, outputMap).map { workflowArtifactEntryMap(it.asWorkflowArtifactEntry()) }
+    envelope[SharedPayloadKeys.PRODUCED_OUTPUTS] = produced
+    return NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(FeatureTaskRuntimeWorkflowArtifactMap.from(envelope))
+  }
 
   fun recordRejectedFindings(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseVerifyFindingsStepBinding,
     verifyOutput: FeatureTaskRuntimeWorkflowArtifactMap,
   ) {
     if (!isGoalContinuationRun(run.request)) return
     val continuation = run.request.goalContinuation ?: return
     val reviewOutput = state.completedStepEnvelope(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) ?: return
-    val passNumber = state.completedReviewPassCount()?.takeIf { it > 0 } ?: 1
+    val passNumber =
+      (state as? PhaseReviewPassState)
+        ?.completedReviewPassCount
+        ?.takeIf { it > 0 }
+        ?: 1
     val recordedVerdicts = state.recordedFindingVerdicts(reviewOutput)
     val rejectedResult =
       GoalSubtaskReviewSummaryReducer.rejectedVerificationFindings(
@@ -173,13 +198,13 @@ internal object VerifyFindingsEvidence {
 
   private fun boundaryDispositionGate(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseVerifyFindingsStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): String? {
-    val dispositions = coveredDispositions(state, outputMap) ?: return null
-    val sections = boundarySections(run, context, state)
-    val memory = context.phaseGates.findingVerificationBoundaryMemory
+    val sections = boundarySections(run, context.findingEvidence(), state)
+    val dispositions = interpretedDispositions(state, sections, outputMap).ifEmpty { return null }
+    val memory = context.findingEvidence().findingVerificationBoundaryMemory
     return memory.validateDispositionBoundaryContext(sections, dispositions)
       ?: memory.validateDispositionBoundaryProvenance(sections, dispositions)
       ?: state.verificationBoundarySelection().let { persisted ->
@@ -195,51 +220,67 @@ internal object VerifyFindingsEvidence {
       }
   }
 
-  private fun findingVerificationDisposition(
+  private fun interpretedDispositions(
+    state: PhaseVerifyFindingsStepBinding,
+    sections: List<FeatureTaskRuntimeFindingBoundaryMemorySection>,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-    reviewFindingIds: Set<String>,
-  ): String? {
-    if (reviewFindingIds.isEmpty()) {
-      return null
+  ): List<FeatureTaskRuntimeFindingVerificationDisposition> {
+    if (FeatureTaskRuntimeOutputVerification.carriesFindingDispositions(outputMap)) {
+      return FeatureTaskRuntimeOutputVerification.dispositionsFrom(outputMap)
     }
-    val dispositionsKey = FeatureTaskRuntimeVerificationSignalKeys.FINDINGS_VERIFICATION_DISPOSITIONS
-    val dispositionsRaw =
-      outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS]
-        ?.let(JsonCodec::anyToStringAnyMap)
-        ?.get(dispositionsKey) as? List<*>
-        ?: return "verify_findings reported 'completed' without produced_outputs.$dispositionsKey."
-    return runCatching {
-      FeatureTaskRuntimeFindingVerificationDisposition.parseList(
-        dispositionsRaw,
-        "produced_outputs.$dispositionsKey",
-      )
-    }.fold(
-      onSuccess = { validateDispositionCoverage(it, reviewFindingIds) },
-      onFailure = { failure -> failure.message ?: "finding verification dispositions are not contract-safe." },
-    )
+    val prose = auditProseValue(outputMap).orEmpty()
+    val sectionByFindingId = sections.associateBy(FeatureTaskRuntimeFindingBoundaryMemorySection::findingId)
+    return reviewFindingIds(state).sorted().map { findingId ->
+      proseDisposition(findingId, featureTaskRuntimeProseMentions(prose, findingId), sectionByFindingId[findingId])
+    }
   }
 
-  private fun coveredDispositions(
-    state: PhaseStepState,
-    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ): List<FeatureTaskRuntimeFindingVerificationDisposition>? {
-    val dispositions = FeatureTaskRuntimeOutputVerification.dispositionsFrom(outputMap)
-    if (dispositions.isEmpty()) return null
-    return dispositions.takeIf { validateDispositionCoverage(it, reviewFindingIds(state)) == null }
+  private fun proseDisposition(
+    findingId: String,
+    mentions: List<String>,
+    section: FeatureTaskRuntimeFindingBoundaryMemorySection?,
+  ): FeatureTaskRuntimeFindingVerificationDisposition {
+    val unavailable = section?.discovery?.boundaryContextUnavailable == true
+    val selected =
+      section
+        ?.takeUnless { unavailable }
+        ?.discovery?.boundaryCatalog.orEmpty()
+        .filter { heading -> mentions.any { it.contains(heading.headingId) } }
+        .map { heading ->
+          FeatureTaskRuntimeVerificationBoundaryHeadingProvenance(heading.headingId, heading.sourcePath)
+        }
+    val refuted =
+      mentions.isNotEmpty() &&
+        mentions.any(REFUTATION_CUE::containsMatchIn) &&
+        mentions.none(KEEP_CUE::containsMatchIn) &&
+        mentions.any(CITATION::containsMatchIn)
+    return FeatureTaskRuntimeFindingVerificationDisposition(
+      findingId = findingId,
+      disposition =
+        if (refuted) {
+          FeatureTaskRuntimeFindingVerificationDispositionVerdict.REJECTED
+        } else {
+          FeatureTaskRuntimeFindingVerificationDispositionVerdict.VERIFIED
+        },
+      reason = mentions.joinToString(" ").take(MAX_REASON_CHARS).takeIf(String::isNotBlank),
+      selectedBoundaryHeadings = selected,
+      boundaryContextUnavailable = unavailable,
+    )
   }
 
   private fun boundarySections(
     run: PhaseRun,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    evidence: PhaseFindingEvidenceContext,
+    state: PhaseVerifyFindingsStepBinding,
   ): List<FeatureTaskRuntimeFindingBoundaryMemorySection> {
     val reviewOutput = state.completedStepEnvelope(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW)
     val recordedVerdicts = reviewOutput?.let(state::recordedFindingVerdicts).orEmpty()
     val findings =
-      reviewOutput?.let {
-        GoalSubtaskReviewStructuredFindingsParse.structuredFindings(it, recordedVerdicts)
-      }.orEmpty()
-    return context.phaseGates.findingVerificationBoundaryMemory.sectionsForFindings(
+      reviewOutput
+        ?.let {
+          GoalSubtaskReviewStructuredFindingsParse.structuredFindings(it, recordedVerdicts)
+        }.orEmpty()
+    return evidence.findingVerificationBoundaryMemory.sectionsForFindings(
       run.request.repoRoot,
       findings.mapNotNull { finding ->
         val findingId = finding.findingId?.takeIf(String::isNotBlank) ?: return@mapNotNull null
@@ -251,12 +292,19 @@ internal object VerifyFindingsEvidence {
     )
   }
 
-  private fun reviewFindingIds(state: PhaseStepState): Set<String> {
+  private fun reviewFindingIds(state: PhaseVerifyFindingsStepBinding): Set<String> {
     val reviewOutput =
       state.completedStepEnvelope(FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW) ?: return emptySet()
     val recordedVerdicts = state.recordedFindingVerdicts(reviewOutput)
-    return GoalSubtaskReviewStructuredFindingsParse.structuredFindings(reviewOutput, recordedVerdicts)
+    return GoalSubtaskReviewStructuredFindingsParse
+      .structuredFindings(reviewOutput, recordedVerdicts)
       .mapNotNull { it.findingId }
       .toSet()
   }
 }
+
+private fun PhaseAttemptLaunchHookContext.findingEvidence(): PhaseFindingEvidenceContext =
+  this as? PhaseFindingEvidenceContext ?: error("Finding evidence requires the accepted verification hook context.")
+
+private fun PhaseStepOutputContext.findingEvidence(): PhaseFindingEvidenceContext =
+  this as? PhaseFindingEvidenceContext ?: error("Finding evidence requires the accepted verification output context.")

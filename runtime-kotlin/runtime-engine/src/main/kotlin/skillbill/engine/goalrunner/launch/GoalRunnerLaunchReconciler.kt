@@ -10,12 +10,16 @@ import skillbill.engine.goalrunner.execution.support.GoalRunnerTickProgressReade
 import skillbill.engine.goalrunner.execution.support.branchPlanFor
 import skillbill.engine.goalrunner.execution.support.declaredProgressProbe
 import skillbill.engine.goalrunner.execution.support.progressProbe
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchReconciliation
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerMissingResultPrefixRecovery
+import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.model.malformedResultJsonDiagnostics
 import skillbill.engine.goalrunner.model.missingPrefixRecoveryCandidate
 import skillbill.engine.goalrunner.model.missingResultPrefixDiagnostics
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.review.effectiveAgentAddonSelection
 import skillbill.engine.goalrunner.telemetry.GoalRunnerProgressEventEmitter
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
@@ -27,6 +31,7 @@ import skillbill.goalrunner.model.GoalRunnerLivenessState
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
@@ -36,13 +41,9 @@ import skillbill.ports.agentrun.model.SkillRunGoalContinuationContext
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
-import skillbill.ports.goalrunner.runner.model.GoalRunnerReconcileGate
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
@@ -79,6 +80,7 @@ class GoalRunnerLaunchReconciler(
         issueKey = issueKey,
         subtaskId = subtaskId,
         request = request,
+        clock = clock,
       )
     val progressEmitter =
       GoalRunnerProgressEventEmitter(
@@ -312,4 +314,5 @@ internal fun AgentRunLaunchOutcome.toGoalRunnerLaunchFacts(): GoalRunnerLaunchFa
           },
       )
     is UnsupportedAgentRunLaunch -> GoalRunnerLaunchFacts(spawnFailed = true)
+    is AgentRunLaunchDenied -> error("A denied launch is paused before launch reconciliation and has no launch facts.")
   }

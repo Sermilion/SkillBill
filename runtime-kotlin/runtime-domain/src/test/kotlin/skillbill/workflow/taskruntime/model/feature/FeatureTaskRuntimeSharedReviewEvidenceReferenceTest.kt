@@ -1,9 +1,9 @@
 package skillbill.workflow.taskruntime.model.feature
 
+import skillbill.workflow.taskruntime.model.handoff.task.FEATURE_TASK_RUNTIME_CHANGED_PATH_MAX_COUNT
 import skillbill.workflow.taskruntime.model.handoff.task.FEATURE_TASK_RUNTIME_FORBIDDEN_PROJECTION_FIELD_NAMES
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeCompactReferenceKind
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionValue
-import skillbill.workflow.taskruntime.model.phase.FEATURE_TASK_RUNTIME_CHANGED_PATH_MAX_COUNT
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReviewEvidenceReference
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvidenceArtifact
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvidenceDiffPayloadRef

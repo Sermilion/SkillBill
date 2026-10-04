@@ -3,6 +3,7 @@ package skillbill.contracts.workflow.identity.evidence
 import skillbill.contracts.SharedPayloadKeys
 
 object ValidationEvidencePayloadKeys {
+  const val BUILD_RECEIPT: String = "build_receipt"
   const val VALIDATION_PASSED: String = "validation_passed"
   const val VALIDATION_EVIDENCE: String = "validation_evidence"
   const val VALIDATION_RESULT: String = "validation_result"

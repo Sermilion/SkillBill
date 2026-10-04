@@ -1,6 +1,7 @@
 package skillbill.error.featuretask
 
 import skillbill.error.core.FailureWireCode
+import skillbill.error.core.RuntimeFailureCode
 import skillbill.error.core.failureWireByValue
 
 fun coarseFailureKindForPhaseOutputWireCode(wireCode: String): FeatureTaskRuntimePhaseOutputFailureKind =
@@ -8,7 +9,7 @@ fun coarseFailureKindForPhaseOutputWireCode(wireCode: String): FeatureTaskRuntim
 
 enum class FeatureTaskRuntimePhaseOutputFailureCode(
   override val wireValue: String,
-) : FailureWireCode {
+) : FailureWireCode, RuntimeFailureCode {
   MALFORMED("malformed"),
   ROOT_NOT_OBJECT("root_not_object"),
   DUPLICATE_KEY("duplicate_key"),

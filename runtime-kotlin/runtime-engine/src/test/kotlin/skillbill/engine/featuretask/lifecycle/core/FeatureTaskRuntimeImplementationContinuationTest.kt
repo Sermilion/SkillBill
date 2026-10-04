@@ -3,14 +3,14 @@ package skillbill.engine.featuretask.lifecycle.core
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeImplementationObligations
 import skillbill.engine.featuretask.phase.core.featureTaskRuntimeImplementationContinuationFrom
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
+import skillbill.engine.featuretask.phase.prompt.compose.promptComposerBriefingFor
 import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections
 import skillbill.engine.featuretask.slot.implementation.ImplementationPromptSections.SegmentKind
-import skillbill.engine.promptComposerBriefingFor
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeImplementationAttemptFromArtifact
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttempt
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttemptStatus
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttemptStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -118,7 +118,7 @@ class FeatureTaskRuntimeImplementationContinuationTest {
     val directive = ImplementationPromptSections.continuationDirective(continuation, SegmentKind.SIMPLIFICATION)
 
     assertTrue(directive.contains("Continue this simplification"))
-    assertTrue(directive.contains("simplification_receipt"))
+    assertTrue(!directive.contains("simplification_receipt"))
     assertTrue(directive.contains("do not re-apply changes already present"))
     assertTrue(directive.contains("simplification receipt segment"))
   }

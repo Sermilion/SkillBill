@@ -1,6 +1,5 @@
 package skillbill.infrastructure.sqlite.review.stage
 
-import skillbill.contracts.mcp.McpToolPayloadKeys
 import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.contracts.review.ReviewFinishedTelemetryPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
@@ -31,7 +30,7 @@ internal fun ResultSet.toImportedFinding(): ImportedFinding =
 internal fun ResultSet.toReviewSummary(): ReviewSummary =
   ReviewSummary(
     reviewRunId = getString(ReviewVerificationSignalKeys.REVIEW_RUN_ID),
-    reviewSessionId = getString(McpToolPayloadKeys.REVIEW_SESSION_ID),
+    reviewSessionId = getString(ReviewFinishedTelemetryPayloadKeys.REVIEW_SESSION_ID),
     routedSkill = getString(LifecycleTelemetryPayloadKeys.ROUTED_SKILL),
     detectedScope = getString("detected_scope"),
     detectedStack = getString(LifecycleTelemetryPayloadKeys.DETECTED_STACK),

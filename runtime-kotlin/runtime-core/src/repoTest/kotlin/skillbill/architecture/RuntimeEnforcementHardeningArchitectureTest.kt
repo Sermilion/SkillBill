@@ -53,6 +53,7 @@ class RuntimeEnforcementHardeningArchitectureTest {
     val cleanFixture =
       """
 
+      import skillbill.infrastructure.skills.Foo
 
       interface CleanDoc {
         /**

@@ -1,87 +1,14 @@
 package skillbill.cli.featuretask
 
 import com.github.ajalt.clikt.core.UsageError
-import skillbill.agentaddon.model.AgentAddonConsumer
-import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.review.service.RuntimeOwnedReviewMode
-import skillbill.cli.kernel.agent.parseAgentAddonSelection
-import skillbill.cli.kernel.agent.refuseUnavailableAgentLaunchers
-import skillbill.cli.kernel.agent.refuseUnsupportedModelDirectives
-import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeAgentResolver
-import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolver
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeAgentAssignment
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeGoalContinuationContext
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeModelAssignment
 import skillbill.error.featuretask.UnknownQualityGateSelectionError
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
-import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import java.nio.file.Path
-
-internal fun FeatureTaskRuntimePhaseAgentCommand.prepareRuntimeRun(
-  deps: FeatureTaskRuntimeRunDependencies,
-  resolvedRepoRoot: Path = resolveCliRepositoryRoot(repoRoot, deps.inputs),
-): PreparedRuntimeRun {
-  val environment = deps.inputs.environment
-  val goalContinuation = parseGoalContinuationContext(environment)
-  val operatorDecision = requestedOperatorDecision()
-  val invokedAgentId = resolveInvokedRuntimeAgentId(agent, environment)
-  val phaseAgentMap = parsePhaseAgents(phaseAgents).toMutableMap()
-  val agentAssignment =
-    FeatureTaskRuntimeAgentAssignment(
-      perPhaseAgentIds = phaseAgentMap,
-      override = agentOverride?.takeIf(String::isNotBlank),
-    )
-  val modelAssignment =
-    FeatureTaskRuntimeModelAssignment(
-      perPhaseDirectives = parsePhaseModels(phaseModels),
-      matrix = deps.configResolutionService.resolveExecutionMatrix(),
-    )
-  val compactionSettings = deps.configResolutionService.resolveCompactionSettings()
-  val resolvedAgentIds =
-    FeatureTaskRuntimePhaseWorkflowDefinition.definition.stepIds.associateWith { phaseId ->
-      FeatureTaskRuntimeAgentResolver.resolve(phaseId, agentAssignment, invokedAgentId).resolvedAgentId
-    }
-  val directives =
-    resolvedAgentIds.mapNotNull { (phaseId, resolvedAgentId) ->
-      FeatureTaskRuntimeModelResolver.resolve(phaseId, resolvedAgentId, modelAssignment)?.let { directive ->
-        phaseId to directive
-      }
-    }.toMap()
-  refuseUnsupportedModelDirectives(directives, resolvedAgentIds)
-  val receivingAgents =
-    buildList {
-      addAll(resolvedAgentIds.values)
-      addAll(phaseAgentMap.values)
-      agentOverride?.takeIf(String::isNotBlank)?.let(::add)
-    }.distinct()
-  refuseUnavailableAgentLaunchers(receivingAgents, deps.executableLookup)
-  val persistedSelection = parseAgentAddonSelection(agentAddonSelectionJson)
-  val hydratedSelection =
-    if (persistedSelection.entries.isEmpty()) {
-      HydratedAgentAddonSelection()
-    } else {
-      deps.agentAddonSelectionPort.verifyPersisted(
-        persistedSelection,
-        AgentAddonConsumer.SKILL_BILL,
-        receivingAgents,
-      )
-    }
-  return PreparedRuntimeRun(
-    resolvedRepoRoot,
-    invokedAgentId,
-    agentAssignment,
-    modelAssignment,
-    compactionSettings,
-    hydratedSelection,
-    goalContinuation,
-    operatorDecision,
-  )
-}
 
 internal fun FeatureTaskRuntimePhaseAgentCommand.parseGoalContinuationContext(
   environment: Map<String, String>,
@@ -209,13 +136,7 @@ internal fun FeatureTaskRuntimePhaseAgentCommand.requestedCodeReviewMode() =
   }
 
 internal fun FeatureTaskRuntimePhaseAgentCommand.parseRequestedCodeReviewMode(raw: String) =
-  try {
-    RuntimeOwnedReviewMode.parse(raw)
-  } catch (error: IllegalArgumentException) {
-    throw UsageError(error.message ?: "Unknown code-review execution mode.").also { usage ->
-      runCatching { usage.initCause(error) }
-    }
-  }
+  RuntimeOwnedReviewMode.parse(raw) ?: throw UsageError(RuntimeOwnedReviewMode.unknownModeMessage(raw))
 
 internal fun FeatureTaskRuntimePhaseAgentCommand.goalContinuationMissingFields(): List<String> =
   buildList {

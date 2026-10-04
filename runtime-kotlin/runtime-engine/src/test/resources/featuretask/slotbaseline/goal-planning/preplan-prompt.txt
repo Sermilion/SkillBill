@@ -9,7 +9,7 @@ intake, preflight, or confirmation, including on retries and continuation.
 Reading the installed skill-bill skill does not make this phase a new invocation.
 
 Phase: preplan (Phase 1: Pre-plan)
-Task: Produce the scaled pre-planning digest for the resolved feature size. Do not modify repository files during this phase. Emit produced_outputs with a non-blank value string carrying the preplanning_digest JSON (same fields as before, stuffed inside value); optional prompt may add a short directive when non-blank. Do not forward the complete preplan envelope, a generic summary, or progress diagnostics.
+Task: Produce the scaled pre-planning digest for the resolved feature size, as prose. Do not modify repository files during this phase. This is the feature's only discovery: the plan phase plans every subtask from this digest and never reads the repository. Write what the plan phase needs: the boundaries the change touches, the patterns and decisions that apply, concrete risks, and rollout and validation considerations. Carry the evidence each subtask spec will cite: exact paths, symbols, signatures, type hierarchies, the tests and test helpers the change affects, and the existing patterns to follow. Settle every question the repository can answer here. Leave open only decisions the repository cannot answer, each with the facts that bear on it and the option you recommend. Walk the boundary memory headings for relevance and weave their context into the prose; name a heading by its heading_id exactly as the boundary catalog spells it. Do not forward progress diagnostics or a generic summary.
 
 ## Installed runtime owns phase output and settlement
 The installed Skill Bill runtime validates this phase's output and MCP settlement.
@@ -81,35 +81,14 @@ acceptance_criteria:
 ## Derived context (layer 3, declared)
 (none)
 
-## Value content
-Carry this JSON object as the value text; the runtime does not validate its shape and the next phase reads
-it as structured prose:
-```json
-{ "projection_kind": "preplanning_digest",
-  "contract_version": "0.2",
-  "affected_boundaries": ["<module or boundary touched>"], "patterns_and_decisions": [],
-  "risks": ["<concrete risk>"],
-  "rollout": { "flag_required": false, "flag_pattern": "none",
-    "notes": "<rollout note, or N/A>" },
-  "validation_strategy": ["<how the change is validated>"],
-  "unresolved_questions": [], "evidence_refs": [],
-  "selected_boundary_headings": ["<heading_id copied verbatim from the boundary catalog>"] }
-```
-flag_pattern is one of none, simple_conditional, di_switch, legacy. Walk boundary_memory headings for relevance; weave context into the stuffed object rather than listing headings only outside value.
-
 ## Required final output
-End your response with exactly one JSON object as the last thing you emit. Prefer a raw
-object with nothing after it; a single ```json fenced block is also accepted. The runtime
-stamps the contract version and phase id itself. Fields:
-- "status": one of "completed", "blocked", "failed"
-- "summary": one sentence describing what this phase did
-- "value": non-blank prose carrying everything the next phase needs
-- "verdict": optional; set it only when this briefing names a verdict for this phase
-- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
-  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
-  Omit it when status is "completed".
+End your response with plain prose carrying everything the next phase needs (what this phase
+produced, deviations from the briefing, what was deliberately left to later phases), or exactly
+what a value content section defines. The runtime records that prose as the phase value as
+written. Do not wrap it in a status or JSON envelope. Report an obstacle only when a concrete one
+stopped the phase, and name that obstacle in the prose.
 
 ## Goal planning session context
 Use this immutable shared context for the parent goal: {"packet_version":"0.4","repository_identity":"repo-root-realpath-v1:__NORMALIZED_REPO_ROOT__","normalized_issue_key":"SKILL-380","parent_spec_path":".feature-specs/SKILL-380-phase-slot-strategies/spec.md","parent_spec":"# Harness spec intent\n\n## Intended Outcome\nExercise the feature-task runtime harness.\n\n## Acceptance Criteria\n\n1. AC-1\n2. AC-2","decomposition_manifest":"---\ncontract_version: \"0.5\"\nissue_key: \"SKILL-380\"\nfeature_name: \"phase-slot-strategies\"\nparent_spec_path: \".feature-specs/SKILL-380-phase-slot-strategies/spec.md\"\nstatus: \"pending\"\nexecution_model: \"same_branch_commit_per_subtask\"\nbase_branch: \"main\"\nfeature_branch: \"feat/SKILL-380-phase-slot-strategies\"\nstack_branches: []\ncurrent_subtask_intent:\n  subtask_id: 1\n  action: \"start\"\nsubtasks:\n- id: 1\n  name: \"slot baseline build child\"\n  spec_path: \".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_1.md\"\n  status: \"pending\"\n  branch: null\n  commit_sha: null\n  workflow_id: null\n  blocked_reason: null\n  last_resumable_step: null\n  linear_issue_id: null\n  finalizing_agent_id: null\n  participating_agent_ids: []\n  dependencies: []\n- id: 2\n  name: \"slot baseline validate child\"\n  spec_path: \".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_2.md\"\n  status: \"pending\"\n  branch: null\n  commit_sha: null\n  workflow_id: null\n  blocked_reason: null\n  last_resumable_step: null\n  linear_issue_id: null\n  finalizing_agent_id: null\n  participating_agent_ids: []\n  dependencies:\n  - subtask_id: 1\n    optional: false\n    skipped: false\n","boundary_memory":{"catalog":[{"heading_id":"runtime-kotlin/agent/history.md#0-000000000000","source_path":"runtime-kotlin/agent/history.md","kind":"history","heading":"## [2026-08-01] fixture-entry"}],"truncated":false},"validation_guidance":"Run focused Gradle checks.","ordered_subtasks":[{"id":1,"name":"slot baseline build child","spec_path":".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_1.md","planning_disposition":"included","dependencies":[]},{"id":2,"name":"slot baseline validate child","spec_path":".feature-specs/SKILL-380-phase-slot-strategies/spec_subtask_2.md","planning_disposition":"included","dependencies":[{"subtask_id":1,"optional":false,"skipped":false}]}],"integrity_sha256":"__NORMALIZED_SHA64__"}
 This is child-only planning context. Do not copy its payload, implementation summary, audit, review, diagnostic, or raw child output into the parent conversation or parent projection. The parent retains manifest metadata, the current subtask index, and terminal outcomes only: {status, commit_sha, workflow_id}.
-boundary_memory is a heading catalog: heading text and stable heading_id only, no entry bodies. Walk the headings, stop once they are no longer relevant to this goal's scope, and weave the relevant context into produced_outputs.value as prose for the plan phase. Recommended headings may guide your prose; selected_boundary_headings is not required.
+boundary_memory is a heading catalog: heading text and stable heading_id only, no entry bodies. Walk the headings, stop once they are no longer relevant to this goal's scope, and weave the relevant context into your final prose for the plan phase. Recommended headings may guide your prose; selected_boundary_headings is not required.

@@ -2,15 +2,29 @@ package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationContractError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 
 internal fun requirePreparedEnvelope(record: GoalPlanningPreparationRecord) {
   val label = "${record.parentGoalWorkflowId}#${record.subtaskId}"
-  val failure = envelopeFailure(record) ?: provenanceFailure(record)
-  failure?.let {
-    throw InvalidGoalPlanningPreparationSchemaError(sourceLabel = label, fieldPath = "", reason = it)
+  envelopeFailure(record)?.let { reason ->
+    throw if (reason.startsWith("contract_version must be")) {
+      incompatibleGoalPlanningPreparationContractError(sourceLabel = label, fieldPath = "", reason = reason)
+    } else {
+      invalidGoalPlanningPreparationSchemaError(sourceLabel = label, fieldPath = "", reason = reason)
+    }
+  }
+  provenanceFailure(record)?.let { reason ->
+    throw if (
+      reason.startsWith("provenance.phase_output_contract_id must be") ||
+      reason.startsWith("provenance.phase_output_contract_version must be")
+    ) {
+      incompatibleGoalPlanningPreparationContractError(sourceLabel = label, fieldPath = "", reason = reason)
+    } else {
+      invalidGoalPlanningPreparationSchemaError(sourceLabel = label, fieldPath = "", reason = reason)
+    }
   }
 }
 

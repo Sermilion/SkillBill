@@ -5,7 +5,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowSnapshotView
-import skillbill.workflow.model.goalreview.GoalObservabilityEvent
+import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
 
 internal fun workflowSnapshotMcpMap(
   snapshot: WorkflowSnapshotView,

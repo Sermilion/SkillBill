@@ -1,10 +1,10 @@
 package skillbill.engine.work
 
 import skillbill.engine.work.model.IdeStatusCandidate
-import skillbill.engine.work.model.IdeStatusFreshness
-import skillbill.engine.work.model.IdeStatusLifecycleState
 import skillbill.engine.work.model.IdeStatusSelectionTier
-import skillbill.engine.work.model.IdeStatusWorkflowFamily
+import skillbill.ports.idestatus.model.IdeStatusFreshness
+import skillbill.ports.idestatus.model.IdeStatusLifecycleState
+import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals

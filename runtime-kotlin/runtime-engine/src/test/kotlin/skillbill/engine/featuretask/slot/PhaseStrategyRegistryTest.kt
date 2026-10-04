@@ -2,13 +2,14 @@ package skillbill.engine.featuretask.slot
 
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.error.featuretask.DuplicatePhaseStrategyError
+import skillbill.error.featuretask.InvalidPhaseStrategyCompositionError
 import skillbill.error.featuretask.PhaseStrategySelectionSlotMismatchError
 import skillbill.error.featuretask.PhaseStrategyStepOutsideSlotError
 import skillbill.error.featuretask.UnknownPhaseStrategyError
 import skillbill.error.featuretask.UnregisteredPhaseStrategySelectionError
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -44,12 +45,57 @@ class PhaseStrategyRegistryTest {
   }
 
   @Test
+  fun `a strategy with no steps raises a typed composition error`() {
+    assertFailsWith<InvalidPhaseStrategyCompositionError> {
+      PhaseStrategyRegistry(listOf(FakeStrategy(PhaseSlot.CODE_REVIEW, "empty", emptyList())))
+    }
+  }
+
+  @Test
+  fun `a strategy repeating a step raises a typed composition error`() {
+    assertFailsWith<InvalidPhaseStrategyCompositionError> {
+      PhaseStrategyRegistry(
+        listOf(FakeStrategy(PhaseSlot.CODE_REVIEW, "duplicate", listOf(PHASE_REVIEW, PHASE_REVIEW))),
+      )
+    }
+  }
+
+  @Test
+  fun `a strategy with an invalid semantic revision raises a typed composition error`() {
+    assertFailsWith<InvalidPhaseStrategyCompositionError> {
+      PhaseStrategyRegistry(listOf(FakeStrategy(PhaseSlot.CODE_REVIEW, "invalid-revision", listOf(PHASE_REVIEW), 0)))
+    }
+  }
+
+  @Test
   fun `looking up an unregistered strategy raises a typed error`() {
     val registry = PhaseStrategyRegistry(listOf(reviewStrategy("inline")))
 
     val error = assertFailsWith<UnknownPhaseStrategyError> { registry.strategy(PhaseSlot.CODE_REVIEW, "delegated") }
 
     assertEquals("delegated", error.strategyId)
+  }
+
+  @Test
+  fun `an entry outside the owned steps raises a typed composition error`() {
+    assertFailsWith<InvalidPhaseStrategyCompositionError> {
+      PhaseStrategyRegistry(
+        listOf(
+          FakeStrategy(PhaseSlot.CODE_REVIEW, "bad-entry", listOf(PHASE_REVIEW), entryStep = PHASE_VERIFY_FINDINGS),
+        ),
+      )
+    }
+  }
+
+  @Test
+  fun `a missing definition binding cannot resolve an execution plan`() {
+    val registry = PhaseStrategyRegistry(listOf(reviewStrategy("inline")))
+    val lookup = PhaseStrategyLookup(registry, PhaseStrategySelection(registry, emptyMap()))
+
+    assertFailsWith<UnknownPhaseStrategyError> { lookup.executionPlan(facts(CodeReviewExecutionMode.INLINE)) }
+    assertFailsWith<PhaseStrategySelectionSlotMismatchError> {
+      PhaseStrategySelection(registry, mapOf(REVIEW_ONLY to emptyMap()))
+    }
   }
 
   @Test
@@ -89,7 +135,7 @@ class PhaseStrategyRegistryTest {
   }
 
   @Test
-  fun `the lookup resolves the selected strategy and rejects an unmapped selection value`() {
+  fun `the lookup resolves the selected strategy and rejects a missing binding fact`() {
     val inline = reviewStrategy("inline")
     val registry = PhaseStrategyRegistry(listOf(inline))
     val selection =
@@ -109,7 +155,7 @@ class PhaseStrategyRegistryTest {
       inline,
       lookup.strategyFor(PHASE_VERIFY_FINDINGS, facts(CodeReviewExecutionMode.INLINE)),
     )
-    assertFailsWith<UnknownPhaseStrategyError> {
+    assertFailsWith<InvalidPhaseStrategyCompositionError> {
       lookup.strategyFor(PHASE_REVIEW, facts(CodeReviewExecutionMode.DELEGATED))
     }
   }
@@ -123,17 +169,16 @@ class PhaseStrategyRegistryTest {
     override val slot: PhaseSlot,
     override val strategyId: String,
     override val steps: List<String>,
+    override val semanticRevision: Int = 1,
+    override val entryStep: String = steps.firstOrNull().orEmpty(),
   ) : PhaseStrategy() {
-    override val entryStep: String get() = steps.first()
-    override val runner: PhaseRunner get() = error("unused")
-
-    override fun policyFor(stepId: String): PhaseStepPolicy = error("unused")
+    override fun policyFor(stepId: String): PhaseStepPolicy = PhaseStepPolicy(false, false, false, false, false)
 
     override fun directiveFor(stepId: String): String = error("unused")
 
     override fun runStep(
       run: PhaseRun,
-      state: PhaseStepState,
+      state: PhaseAcceptedStepExecution,
     ): PhaseOutcome = error("unused")
   }
 

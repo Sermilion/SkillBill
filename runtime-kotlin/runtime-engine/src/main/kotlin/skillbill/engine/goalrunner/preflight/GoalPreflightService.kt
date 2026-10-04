@@ -1,19 +1,19 @@
 package skillbill.engine.goalrunner.preflight
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.decomposition.resolveDecompositionManifest
 import skillbill.contracts.issuekey.normalizeIssueKey
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskContinuationLookupService
 import skillbill.engine.goalrunner.goalRepositoryIdentity
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalPreflightLookupInput
 import skillbill.engine.goalrunner.model.GoalPreflightRequest
 import skillbill.engine.goalrunner.model.GoalPreflightResult
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.resolveDecompositionManifest
 
 @Inject
 class GoalPreflightService(

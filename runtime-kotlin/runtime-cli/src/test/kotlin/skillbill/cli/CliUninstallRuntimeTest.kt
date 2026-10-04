@@ -19,7 +19,13 @@ class CliUninstallRuntimeTest {
     val result = runUninstall(fixture.home, "--dry-run")
 
     assertEquals(0, result.exitCode, result.stdout)
-    assertContains(result.stdout, "uninstall_status: dry_run")
+    assertEquals(
+      "uninstall_status: dry_run\n" +
+        "state_root: ${fixture.stateRoot}\n" +
+        "agent_targets: 7\n" +
+        "skill_names: 1\n",
+      result.stdout,
+    )
     assertTrue(Files.exists(fixture.stateRoot))
     assertTrue(Files.exists(fixture.managedSkillDir))
     assertTrue(Files.isSymbolicLink(fixture.skillBillLauncher))
@@ -29,10 +35,14 @@ class CliUninstallRuntimeTest {
   fun `uninstall aborts without confirmation`() {
     val fixture = uninstallFixture()
 
-    val result = runUninstall(fixture.home, stdinText = "no\n")
+    val liveStdout = StringBuilder()
+
+    val result = runUninstall(fixture.home, stdinText = "no\n", liveStdout = { liveStdout.append(it) })
 
     assertEquals(1, result.exitCode, result.stdout)
-    assertContains(result.stdout, "uninstall_status: aborted")
+    assertContains(liveStdout.toString(), fixture.stateRoot.toString())
+    assertContains(liveStdout.toString(), "Continue? [y/N]")
+    assertEquals("uninstall_status: aborted\n", result.stdout)
     assertTrue(Files.exists(fixture.stateRoot))
     assertTrue(Files.exists(fixture.managedSkillDir))
   }
@@ -132,12 +142,14 @@ class CliUninstallRuntimeTest {
     home: Path,
     vararg args: String,
     stdinText: String? = null,
+    liveStdout: (String) -> Unit = {},
   ) = CliRuntime.run(
     listOf("--home", home.toString(), "uninstall") + args,
     CliRuntimeContext(
       userHome = home,
       stdinText = stdinText,
-      environment = emptyMap(),
+      environment = mapOf("HOME" to home.toString()),
+      liveStdout = liveStdout,
     ),
   )
 

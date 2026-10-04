@@ -10,7 +10,6 @@ import skillbill.application.scaffold.InstallAgentService
 import skillbill.cli.install.apply.refuseInstallMutationDuringGoalContinuation
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
-import skillbill.cli.model.CliExecutionResult
 import skillbill.cli.model.CliRunInputs
 import java.nio.file.Path
 
@@ -24,7 +23,7 @@ class InstallAgentPathCommand(
 
   override fun run() {
     val path = installAgentService.agentPath(agent, inputs.userHome, inputs.environment)
-    state.result = CliExecutionResult(exitCode = 0, stdout = "$path\n")
+    state.completeText("$path\n")
   }
 }
 
@@ -38,7 +37,7 @@ class InstallDetectAgentsCommand(
     val output =
       installAgentService.detectAgentTargets(inputs.userHome, inputs.environment)
         .joinToString(separator = "") { target -> "${target.name}\t${target.path}\n" }
-    state.result = CliExecutionResult(exitCode = 0, stdout = output)
+    state.completeText(output)
   }
 }
 
@@ -70,6 +69,6 @@ class InstallLinkSkillCommand(
       repoRoot = repoRoot?.let(Path::of),
       home = inputs.userHome,
     )
-    state.result = CliExecutionResult(exitCode = 0, stdout = "")
+    state.completeText("")
   }
 }

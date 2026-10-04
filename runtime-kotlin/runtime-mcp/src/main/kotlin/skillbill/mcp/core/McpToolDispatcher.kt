@@ -2,16 +2,17 @@ package skillbill.mcp.core
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.mcp.McpToolPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
-import skillbill.error.core.InvalidMcpToolArgumentError
-import skillbill.error.core.ShellContentContractException
 import skillbill.error.learning.InvalidLearningSourceError
+import skillbill.error.shellcontent.isShellContentContractFailure
+import skillbill.mcp.shared.InvalidMcpToolArgumentError
 import skillbill.mcp.shared.McpComponent
 import skillbill.mcp.shared.McpToolArguments
+import skillbill.mcp.shared.McpToolPayloadKeys
 import skillbill.mcp.telemetry.TELEMETRY_EVENT_CONTRACT_VERSION
 import skillbill.mcp.telemetry.TelemetryEventSchemaValidator
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import kotlin.coroutines.cancellation.CancellationException
 
 internal object McpToolDispatcher {
   fun dispatch(
@@ -21,13 +22,10 @@ internal object McpToolDispatcher {
   ): Map<String, Any?> =
     runCatching { mcpToolResult(invoke(toolName, rawArguments, component), isError = false) }
       .getOrElse { error ->
-        when (error) {
-          is ShellContentContractException,
-          is InvalidLearningSourceError,
-          is IllegalArgumentException,
-          is IllegalStateException,
-          -> mcpToolErrorResult(toolName, error)
-          is Exception -> {
+        when {
+          error is CancellationException -> throw error
+          error.uncapturedAtMcp() -> mcpToolErrorResult(toolName, error)
+          error is Exception -> {
             recordCaptureFailure(
               workflowPhase = toolName,
               capture = { component.telemetryService.captureException(toolName, error) },
@@ -38,6 +36,12 @@ internal object McpToolDispatcher {
           else -> throw error
         }
       }
+
+  private fun Throwable.uncapturedAtMcp(): Boolean =
+    isShellContentContractFailure() ||
+      this is InvalidLearningSourceError ||
+      this is IllegalArgumentException ||
+      this is IllegalStateException
 
   private fun invoke(
     toolName: String,
@@ -76,18 +80,20 @@ internal object McpToolDispatcher {
 }
 
 internal fun normalizeQualityCheckFinished(arguments: Map<String, Any?>): Map<String, Any?> {
-  val stack = arguments[McpToolPayloadKeys.DETECTED_STACK]?.toString()?.trim().orEmpty().ifBlank { "unknown" }
-  val fallback = arguments[McpToolPayloadKeys.FALLBACK] == true
+  val stack =
+    arguments[LifecycleTelemetryPayloadKeys.DETECTED_STACK]?.toString()?.trim().orEmpty().ifBlank { "unknown" }
+  val fallback = arguments[LifecycleTelemetryPayloadKeys.FALLBACK] == true
   return arguments.toMutableMap().apply {
     put(
-      McpToolPayloadKeys.ROUTED_SKILL,
-      normalizeQualityCheckRoutedSkill(arguments[McpToolPayloadKeys.ROUTED_SKILL]?.toString()),
+      LifecycleTelemetryPayloadKeys.ROUTED_SKILL,
+      normalizeQualityCheckRoutedSkill(arguments[LifecycleTelemetryPayloadKeys.ROUTED_SKILL]?.toString()),
     )
-    put(McpToolPayloadKeys.DETECTED_STACK, stack)
-    put(McpToolPayloadKeys.FALLBACK, fallback)
-    val fallbackReason = arguments[McpToolPayloadKeys.FALLBACK_REASON]?.toString()?.takeIf(String::isNotBlank)
+    put(LifecycleTelemetryPayloadKeys.DETECTED_STACK, stack)
+    put(LifecycleTelemetryPayloadKeys.FALLBACK, fallback)
+    val fallbackReason =
+      arguments[LifecycleTelemetryPayloadKeys.FALLBACK_REASON]?.toString()?.takeIf(String::isNotBlank)
     if (fallback && fallbackReason != null) {
-      put(McpToolPayloadKeys.FALLBACK_REASON, fallbackReason)
+      put(LifecycleTelemetryPayloadKeys.FALLBACK_REASON, fallbackReason)
     }
   }
 }
@@ -110,7 +116,7 @@ internal fun mcpToolErrorResult(
     mapOf(
       SharedPayloadKeys.STATUS to "error",
       McpToolPayloadKeys.TOOL to toolName,
-      McpToolPayloadKeys.ERROR to error.message.orEmpty(),
+      LifecycleTelemetryPayloadKeys.ERROR to error.message.orEmpty(),
     ),
     isError = true,
   )

@@ -1,17 +1,17 @@
 package skillbill.engine.goalrunner.persist
 
+import skillbill.engine.goalrunner.model.GoalAttemptLedgerEntryDraft
+import skillbill.engine.goalrunner.model.GoalRunnerAttemptLedgerRecordRequest
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.telemetry.GoalRunnerBestEffortEmission
+import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.model.GoalAttemptLaunchOutcome
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
-import skillbill.ports.goalrunner.runner.model.GoalAttemptLedgerEntryDraft
-import skillbill.ports.goalrunner.runner.model.GoalRunnerAttemptLedgerRecordRequest
-import skillbill.ports.goalrunner.runner.model.GoalRunnerWorkflowProgress
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -129,7 +129,7 @@ class GoalRunnerLedgerRecorder(
     GoalRunnerBestEffortEmission.recordWarning(
       diagnostics,
       "Best-effort goal ledger write failed: action='$action' workflowId='$workflowId' subtaskId=$subtaskId " +
-        "errorType='${error::class.qualifiedName}' " +
+        "errorType='${error.failureCodeLabel() ?: error::class.qualifiedName}' " +
         "message='${GoalRunnerBestEffortEmission.boundedMessage(error.message.orEmpty())}'",
       error,
     )

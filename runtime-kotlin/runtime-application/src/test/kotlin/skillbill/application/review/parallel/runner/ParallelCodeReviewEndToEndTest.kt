@@ -10,6 +10,7 @@ import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.reviewHarness
 import skillbill.application.review.snapshot.reviewLayer
 import skillbill.application.review.snapshot.reviewPack
+import skillbill.application.review.snapshot.reviewed
 import skillbill.application.runner
 import skillbill.contracts.JsonCodec
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
@@ -33,11 +34,11 @@ class ParallelCodeReviewEndToEndTest {
         recorder,
       )
 
-    val result = runner.run(harnessRequest())
+    val result = runner.reviewed(harnessRequest())
 
     assertEquals(
       1,
-      recorder.diffCommands.count { it.contains("diff") },
+      recorder.diffQueries.size,
       "Scope discovery must happen once for the whole review, not once per lane.",
     )
     assertEquals(
@@ -69,7 +70,7 @@ class ParallelCodeReviewEndToEndTest {
   @Test fun `parent prompts carry no rediscovery affordance`() {
     val recorder = ReviewRecorder()
 
-    reviewHarness(kotlinConfig(), recorder).run(harnessRequest())
+    reviewHarness(kotlinConfig(), recorder).reviewed(harnessRequest())
 
     assertTrue(recorder.parentPrompts.isNotEmpty())
     recorder.parentPrompts.forEach { prompt ->
@@ -82,7 +83,7 @@ class ParallelCodeReviewEndToEndTest {
   @Test fun `assigned evidence is carried only in prompt hunk envelopes`() {
     val recorder = ReviewRecorder()
 
-    reviewHarness(kotlinConfig(), recorder).run(harnessRequest())
+    reviewHarness(kotlinConfig(), recorder).reviewed(harnessRequest())
 
     recorder.parentPrompts.forEach { prompt ->
       assertTrue(prompt.contains("## Assigned bundle:"))
@@ -94,7 +95,7 @@ class ParallelCodeReviewEndToEndTest {
   @Test fun `layered kmp composition expands directly to kmp and required kotlin rubrics`() {
     val recorder = ReviewRecorder()
 
-    reviewHarness(kmpConfig(), recorder).run(harnessRequest())
+    reviewHarness(kmpConfig(), recorder).reviewed(harnessRequest())
 
     val expected = kmpAreas.map { "bill-kmp-code-review-$it" } + kotlinAreas.map { "bill-kotlin-code-review-$it" }
     recorder.parentPrompts.forEach { prompt ->
@@ -116,7 +117,7 @@ class ParallelCodeReviewEndToEndTest {
           )
         },
         recorder,
-      ).run(harnessRequest(repoRoot = repoRoot))
+      ).reviewed(harnessRequest(repoRoot = repoRoot))
     }
 
     val first = run()
@@ -141,7 +142,7 @@ class ParallelCodeReviewEndToEndTest {
         recorder,
       )
 
-    val summary = assertNotNull(runner.run(harnessRequest()).accountingSummary)
+    val summary = assertNotNull(runner.reviewed(harnessRequest()).accountingSummary)
 
     val lanes = summary.lanes.filter { it.children.isEmpty() }
     assertEquals(1, lanes.size, "Single-agent review owns exactly one accounting node.")
@@ -159,7 +160,7 @@ class ParallelCodeReviewEndToEndTest {
     val recorder = ReviewRecorder()
 
     reviewHarness(kotlinConfig { RecordedWorkerResponse() }, recorder)
-      .run(harnessRequest())
+      .reviewed(harnessRequest())
 
     val record = recorder.savedAccounting.single()
     assertEquals("accounting_summary", record.summary.boundedPayload()["kind"])
@@ -171,7 +172,7 @@ class ParallelCodeReviewEndToEndTest {
     val reviewRunId = "rvw-20260722-101500-ab12"
 
     reviewHarness(kotlinConfig { RecordedWorkerResponse() }, recorder)
-      .run(harnessRequest(reviewRunId = reviewRunId))
+      .reviewed(harnessRequest(reviewRunId = reviewRunId))
 
     val record = recorder.savedAccounting.single()
     assertEquals(reviewRunId, record.reviewId)
@@ -182,7 +183,7 @@ class ParallelCodeReviewEndToEndTest {
     val recorder = ReviewRecorder()
 
     reviewHarness(kotlinConfig { RecordedWorkerResponse() }, recorder)
-      .run(harnessRequest())
+      .reviewed(harnessRequest())
 
     assertTrue(recorder.savedAccounting.single().reviewId.startsWith("code-review-"))
   }

@@ -1,12 +1,13 @@
 package skillbill.engine.goalrunner.execution.core
 
+import me.tatarka.inject.annotations.Inject
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
 import skillbill.engine.goalrunner.manifest.toResetSnapshot
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptRequest
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptanceEvidence
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
@@ -18,6 +19,7 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.ZoneOffset
 
+@Inject
 class GoalRunnerAcceptanceCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
@@ -29,7 +31,7 @@ class GoalRunnerAcceptanceCoordinator(
     if (rejection != null) {
       return GoalRunnerAcceptResult.Rejected(request.issueKey, rejection)
     }
-    val loaded = requireNotNull(manifestStore.loadDurableByIssueKey(request.issueKey))
+    val loaded = requireNotNull(manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot))
     val repoRoot = requireNotNull(request.repoRoot)
     val resolvedSha =
       when (val evidence = acceptanceEvidence(request, loaded.manifest, repoRoot)) {
@@ -44,7 +46,7 @@ class GoalRunnerAcceptanceCoordinator(
         acceptedAt = clock.instant().atOffset(ZoneOffset.UTC).toString(),
       )
     manifestStore.persistOutOfBandAcceptance(loaded.parentWorkflowId, acceptance)
-    val refreshed = manifestStore.loadDurableByIssueKey(request.issueKey) ?: loaded
+    val refreshed = manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot) ?: loaded
     val reconciled =
       reconcileGoalManifest(
         manifest = refreshed.manifest,
@@ -70,7 +72,7 @@ class GoalRunnerAcceptanceCoordinator(
         "Out-of-band accept is disabled. Repair or resume the child through the runtime; " +
           "accepting past an incomplete or blocked subtask is not supported. " +
           "Only --restore-after-hard-reset remains for recoveries that hard reset discarded."
-      manifestStore.loadDurableByIssueKey(request.issueKey) == null ->
+      manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot) == null ->
         "No prepared goal exists for '${request.issueKey}'."
       request.repoRoot == null ->
         "A repository root is required to verify the accepted commit."

@@ -14,10 +14,14 @@ import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitCommitResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.decomposition.baseForSubtask
+import skillbill.workflow.decomposition.branchForSubtask
 import skillbill.workflow.decomposition.model.DecompositionContinuationSelection
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.withBlockedSubtask
+import skillbill.workflow.decomposition.withCommittedSubtask
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
@@ -158,7 +162,8 @@ internal fun subtaskStartArtifacts(
           SharedPayloadKeys.SUBTASK_ID to selection.subtask.id,
           "suppress_pr" to true,
           FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.GOAL_BRANCH to selection.branchPlan.branch,
-          FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE to "inline",
+          FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE to
+            CodeReviewExecutionMode.INLINE.wireValue,
         ),
       ),
       DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.entry(

@@ -21,8 +21,8 @@ import skillbill.workflow.model.goalreview.GoalSubtaskCommitFocusedAccounting
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationFieldAdoption
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationFieldAdoption
 import java.nio.file.Path
 import java.time.Clock
 

@@ -1,7 +1,7 @@
 package skillbill.learnings
 
-import skillbill.error.shellcontent.ReviewLearningRuleTextTooLongError
-import skillbill.error.shellcontent.ReviewLearningTitleTooLongError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.review.context.model.hunk.REVIEW_LEARNING_TITLE_MAX_CHARS
 import skillbill.review.context.model.hunk.REVIEW_RULE_EXCERPT_MAX_CHARS
 import skillbill.review.context.model.hunk.ReviewLearningsReference
@@ -46,7 +46,7 @@ class ReviewLearningsScopeAndBoundTest {
     val oversized = "x".repeat(REVIEW_RULE_EXCERPT_MAX_CHARS + 1)
 
     val failure =
-      assertFailsWith<ReviewLearningRuleTextTooLongError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewLearningsReference(
           learningId = "L-001",
           source = "repo:acme/repo",
@@ -55,7 +55,7 @@ class ReviewLearningsScopeAndBoundTest {
           ruleText = oversized,
           digest = ReviewLearningsReference.digestOf(oversized),
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.LEARNING_RULE_TEXT_TOO_LONG, it.code) }
 
     assertTrue("L-001" in failure.message.orEmpty(), "The failure must name the offending learning.")
   }
@@ -64,7 +64,7 @@ class ReviewLearningsScopeAndBoundTest {
     val ruleText = "Keep the boundary typed."
 
     val failure =
-      assertFailsWith<ReviewLearningTitleTooLongError> {
+      assertFailsWith<SkillBillRuntimeException> {
         ReviewLearningsReference(
           learningId = "L-002",
           source = "repo:acme/repo",
@@ -73,7 +73,7 @@ class ReviewLearningsScopeAndBoundTest {
           ruleText = ruleText,
           digest = ReviewLearningsReference.digestOf(ruleText),
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.LEARNING_TITLE_TOO_LONG, it.code) }
 
     assertTrue("L-002" in failure.message.orEmpty(), "The failure must name the offending learning.")
   }

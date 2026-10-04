@@ -3,8 +3,9 @@ package skillbill.infrastructure.sqlite.telemetry.goal
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
-import skillbill.error.core.ShellContentContractException
-import skillbill.infrastructure.sqlite.core.ops.InternalSqliteDiagnostics
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.sqlite.core.ops.degradedValuePreview
 import skillbill.infrastructure.sqlite.core.ops.recordDegradedValue
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.booleanFromInt
@@ -38,7 +39,8 @@ private fun parseAgentIdArray(
   }
   return try {
     JsonCodec.parseJsonArrayStrict(trimmed)
-  } catch (error: ShellContentContractException) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isShellContentContractFailure())
     diagnostics.recordDegradedValue(
       seam = "telemetry.participating_agent_ids",
       expected = "strict JSON array for workflow $workflowId",
@@ -97,7 +99,7 @@ internal fun goalIssueFinishedPayload(
   row: Map<String, Any?>,
   level: String,
   salt: String,
-  diagnostics: RuntimeDiagnostics = InternalSqliteDiagnostics,
+  diagnostics: RuntimeDiagnostics,
 ): Map<String, Any?> {
   val firstStartedAt = row.stringOrEmpty(GoalTelemetryPayloadKeys.FIRST_STARTED_AT)
   val finishedAt = row.stringOrEmpty(GoalTelemetryPayloadKeys.FINISHED_AT)
@@ -122,7 +124,7 @@ internal fun goalSubtaskFinishedPayload(
   row: Map<String, Any?>,
   level: String,
   salt: String,
-  diagnostics: RuntimeDiagnostics = InternalSqliteDiagnostics,
+  diagnostics: RuntimeDiagnostics,
 ): Map<String, Any?> =
   linkedMapOf<String, Any?>(
     SharedPayloadKeys.WORKFLOW_ID to row.redactedWorkflowId("workflow_id", level, salt),

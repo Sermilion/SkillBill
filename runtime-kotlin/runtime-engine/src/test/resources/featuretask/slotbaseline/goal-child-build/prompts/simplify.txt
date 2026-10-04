@@ -9,7 +9,7 @@ intake, preflight, or confirmation, including on retries and continuation.
 Reading the installed skill-bill skill does not make this phase a new invocation.
 
 Phase: simplify (Phase 3b: Simplify)
-Task: Within the current subtask scoped diff and owned paths only, apply high-confidence local simplifications: dead feature-local code, one-use wrappers, unnecessary one-implementation abstractions, hand-rolled standard-library behavior, or equivalent local shrinkage. Do not perform whole-repository discovery, edit paths outside the boundary, run builds or tests, launch subagents, or delegate review. Never remove or weaken governed contracts, typed errors, loud-fail seams, parity tests, validator-backed rules, security measures, accessibility requirements, or behavior the spec explicitly requires. Treat edits already present as a no-op under the mutating-phase idempotency contract. Emit produced_outputs with a non-blank value string carrying the simplification_receipt JSON stuffed inside value: changed_paths, reductions with outcome no_edit, addressed, or unresolved, unresolved_items, reconciliation_evidence, and reconciled_state. repository_checkpoint is runtime-owned: omit it and never invent a fingerprint. Repair evidence is read-only repository facts: do not run builds or tests here.
+Task: Within the current subtask scoped diff and owned paths only, apply high-confidence local simplifications: dead feature-local code, one-use wrappers, unnecessary one-implementation abstractions, hand-rolled standard-library behavior, or equivalent local shrinkage. Reading configuration and instructions that apply to owned paths is permitted narrow discovery; do not perform whole-repository search for simplification opportunities, edit paths outside the boundary, run builds or tests, launch subagents, or delegate review. Never remove or weaken governed contracts, typed errors, loud-fail seams, parity tests, validator-backed rules, security measures, accessibility requirements, or behavior the spec explicitly requires. Treat edits already present as a no-op under the mutating-phase idempotency contract. Finish with prose for the next phase: the paths you changed, each reduction you made or declined and why, anything left unresolved, and the state the working tree is in. Repair evidence is read-only repository facts: do not run builds or tests here.
 
 ## Installed runtime owns phase output and settlement
 The installed Skill Bill runtime validates this phase's output and MCP settlement.
@@ -41,8 +41,8 @@ attempt that was interrupted mid-edit. Converge the tree to the target state; tr
 that is already applied as a no-op and NEVER blindly re-apply it (no duplicated edits, appended
 blocks, or re-created files). This phase may be re-entered or resumed after a crash, so it must
 be safe to run again: reconciling to target, not re-applying from scratch. Before finishing,
-verify every changed file is at its intended state and report that reconciled end-state in
-produced_outputs (see the reconciliation report in the required output below).
+verify every changed file is at its intended state and describe that reconciled end-state in
+your final prose.
 
 ## Validation ownership
 Only the validate phase may run the pack validation gate
@@ -97,9 +97,44 @@ Deliberate simplifications with a known ceiling get a comment: `shortcut: <ceili
 
 ## Simplify scope boundary
 The subtask_scope projection and repository checkpoint list the only owned paths and diff context
-for this session. Work exclusively inside that boundary. Forbidden: repository-wide search for
-complexity, edits outside listed paths, `./gradlew` build or check, test execution,
+for this session. Work exclusively inside that boundary. Reading configuration and instructions that
+apply to owned paths is permitted narrow discovery. Forbidden: repository-wide search for
+simplification opportunities, edits outside listed paths, `./gradlew` build or check, test execution,
 `skill-bill phase review`, review subagents, delegated review, or spawning other agents.
+
+## Project authoring discipline (discover before write)
+Discovery. Before the first code write, and again whenever owned or repair scope changes, discover what
+governs the owned files: repository and nested instructions (root and nearer AGENTS or CONTRIBUTING-style
+files), formatter and linter configuration including nested and per-module overrides, build or package
+scripts, wrappers, hooks, CI requirements, and project-selected tools and pinned versions. Resolve
+applicability per owned file, language, and module using the project's own rules. While editing, follow the
+configured naming, imports, layout, file and method limits, complexity, and other static-analysis principles.
+Reading configuration for owned paths is narrow discovery, not a repository-wide search.
+
+Safe commands. Run an applicable project-selected formatter or standalone static-analysis command only after
+you establish its actual input and rewrite scope and its transitive task, dependency, hook, wrapper, and
+bootstrap behavior. A lint or format name is not proof of safety. Prefer project-supported file-scoped
+invocations and never invent flags. Never compile, build, execute tests, or run a full repository check:
+build owns compile and build proof, and validate owns tests and full validation. Never format broadly and
+then revert collateral edits; inspect resulting changes for scope compliance. Repair in-scope findings in this
+session and rerun the safe command before completion. Use the command a nested module declares for its own
+files, run it from that module's working directory with that module's pinned tool and version, and run
+commands per module in a mixed-language tree instead of one root command. When no module-scoped invocation
+exists or one cannot be proven safe, record nonexecution.
+
+Deferral. Record nonexecution with a concrete reason, never as passed, for a missing tool, ambiguous or
+conflicting configuration, compilation-coupled analysis, unsafe bootstrap or install behavior, or a command
+that cannot preserve owned scope. Resolve nested and mixed-language rules per file and module. Preserve
+unrelated dirt and report out-of-scope findings without editing them. Never weaken rules, add suppressions or
+baselines, skip or remove required tests, or substitute project-selected tools or versions. An unavailable
+check defers to its existing owning phase, but known repairable in-scope findings cannot be resolved by
+deferral.
+
+Evidence. Keep a bounded record in this phase's existing output fields, never a new field. Each record names
+the configuration sources and selected version, the exact candidate command and working directory, the owned
+scope and safety basis, the actual outcome or nonexecution reason, remaining findings, and the owning phase
+for deferred work. No raw transcripts or diff hunks. If evidence cannot fit, state the limitation explicitly.
+tests_executed stays empty.
 
 # Feature-task-runtime phase briefing
 phase: simplify
@@ -121,7 +156,7 @@ mandates_and_overrides:
 ### from: implement
 changed_paths:
   - src/Foo.kt
-repository_checkpoint: repository_checkpoint=repository-checkpoint-32cbcf3c+producer-claimed:repository-checkpoint-32cbcf3c
+repository_checkpoint: repository_checkpoint=slot-baseline-checkpoint+producer-claimed:slot-baseline-checkpoint
 ### run_invariant_spec_reference (run_invariant_field:spec_reference)
 spec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md
 ### run_invariant_feature_size (run_invariant_field:feature_size)
@@ -140,7 +175,7 @@ acceptance_criteria:
   - AC-2
 
 ## Repository checkpoint (layer 2, resolved)
-fingerprint: repository-checkpoint-32cbcf3c
+fingerprint: slot-baseline-checkpoint
 base_ref: __NORMALIZED_SHA40__
 head_ref: __NORMALIZED_SHA40__
 scoped_owned_paths:
@@ -156,39 +191,21 @@ The tools may be deferred in this session: load them first with ToolSearch
 - Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
   phase_id "simplify", attempt 1, and value: one prose string carrying everything
   the next phase needs (what this phase produced, deviations from the briefing, what was
-  deliberately left to later phases). When a value content section follows, it describes what the
-  next phase expects inside value; carry that content as prose or as JSON text, whichever is clearer.
-  The runtime does not validate the shape of value. Optional summary: one sentence.
-- Cannot finish: call `mcp__skill-bill__feature_task_phase_block` with the same workflow_id, phase_id, and
-  attempt, a reason string naming the obstacle, and failure_disposition one of "retryable",
+  deliberately left to later phases). When a value content section follows, it defines value and
+  overrides this description: carry its content as prose or as JSON text, whichever is clearer, and
+  emit any exact literal it names with nothing added. Otherwise the runtime does not validate the
+  shape of value. Optional summary: one sentence.
+- Cannot finish because of a concrete obstacle: call `mcp__skill-bill__feature_task_phase_block` with the same
+  workflow_id, phase_id, and attempt, a reason string naming the obstacle, and failure_disposition
+  one of "retryable",
   "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
 Copy workflow_id, phase_id, and attempt exactly as written here. After the tool returns status
-"ok", end your response with a short prose recap and nothing structured. Print the fallback
-final object below only if both tools stay unavailable after loading them.
-
-## Value content
-Carry this JSON object as the value text; the runtime does not validate its shape and the next phase reads
-it as structured prose:
-```json
-{ "projection_kind": "simplification_receipt",
-  "contract_version": "0.1",
-  "changed_paths": ["path/Changed.kt"],
-  "reductions": [ { "path": "path/Changed.kt", "outcome": "addressed",
-    "note": "<one-line reduction>" } ],
-  "unresolved_items": [],
-  "reconciliation_evidence": { "reconciled": true, "evidence": "<tree at target>" },
-  "reconciled_state": { "reconciled": true, "evidence": "<tree at target>" } }
-```
-Outcome on each reduction is no_edit, addressed, or unresolved. repository_checkpoint is runtime-owned: omit it entirely. Never invent a fingerprint. Do not run builds or tests here.
+"ok", end your response with a short prose recap and nothing structured. Use the prose
+fallback below only if both tools stay unavailable after loading them.
 
 ## Fallback final output (only when the settlement tools are unavailable)
-End your response with exactly one JSON object as the last thing you emit. Prefer a raw
-object with nothing after it; a single ```json fenced block is also accepted. The runtime
-stamps the contract version and phase id itself. Fields:
-- "status": one of "completed", "blocked", "failed"
-- "summary": one sentence describing what this phase did
-- "value": non-blank prose carrying everything the next phase needs
-- "verdict": optional; set it only when this briefing names a verdict for this phase
-- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
-  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
-  Omit it when status is "completed".
+End your response with plain prose carrying everything the next phase needs (what this phase
+produced, deviations from the briefing, what was deliberately left to later phases), or exactly
+what a value content section defines. The runtime records that prose as the phase value as
+written. Do not wrap it in a status or JSON envelope. Report an obstacle only when a concrete one
+stopped the phase, and name that obstacle in the prose.

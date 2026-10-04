@@ -1,3 +1,39 @@
+## [2026-10-01] SKILL-392 — CLI composition and guard integrity (subtask 1)
+Areas: runtime-kotlin/runtime-cli (agentaddon, codereview, config, core, featuretask, goal, install, kernel, learning, model, scaffold, skillremove, workflow), runtime-core architecture repoTests, ARCHITECTURE.md
+- RepositoryEnclosingRootPort is injected where used and no longer rides on CliRunInputs; CliRunState result setter is private and results settle through state methods.
+- usageError and StandaloneCodeReviewTarget moved to kernel.cli, so codereview is no longer a shared leaf area.
+- Collaborator-carrying argument data classes became @Inject classes; scaffold new/new-skill commands share an abstract base; agent-addon commands share one selection resolver and entry-map helper.
+- Single-consumer helpers moved out of goal.core, install.core and scaffold.commands; goal control exit codes live in goal/control.
+- CliPayloadStatus replaces ok/not_found literals; choice maps are built from their enum owners.
+- reusable: data-class collaborator scanner guard; runtime-cli joined EXACT_PACKAGE_SCC and the acyclicity test delegates to the baseline census.
+- Known limitation: build, spotless, detekt and tests were deferred to build and validate phases.
+Feature flag: N/A
+Acceptance criteria: 9/9 implemented
+
+## [2026-09-30] SKILL-386 — cross-module contract ownership seen from the CLI (subtask 2)
+Areas: runtime-kotlin/runtime-cli (scaffold, goal, agentaddon, kernel, system, workflow, featuretask), runtime-ports/scaffold, runtime-infra/{skills,launcher}, runtime-engine/goalrunner, runtime-contracts/agentaddon, runtime-core (RuntimeComponent, scaffold provides, architecture repoTests), ARCHITECTURE.md
+- Deleted the UnsupportedScaffoldGateway and its RuntimeComponent accessor; retired scaffold modes now fail with the exact baseline error text, pinned by CliAuthoringParityTest.
+- Goal pause/resume results carry typed status enums (pinned in the engine inbound API inventory) instead of raw strings; the CLI exit-code and presenter code consume the enums.
+- The agent-addon contract version is one contracts constant, reused by the launcher command builders and the CLI selection messages.
+- Continuation-candidate payload building lives in one kernel payload file shared by feature-task and workflow commands; malformed-JSON handling catches the single typed error.
+- reusable PATTERN: a CLI-visible wire string or version gets one owning-module constant or enum; adapters consume it and never re-declare the literal.
+- Repair: subtask 1 leftovers failing comment/KDoc and package-sibling-count architecture tests were fixed by removing comments and folding VerifyRuntimeResume into FeatureTaskRuntimeRunPreparation.
+- Known limitation: agnix was not run locally; CI validate-agent-configs covers it.
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented
+
+## [2026-09-30] SKILL-386 — runtime-cli composition without dependency bags (subtask 1)
+Areas: runtime-kotlin/runtime-cli (featuretask, goal, install, nativeagent, learning, review, scaffold, workflow command groups), runtime-kotlin/runtime-core (InjectConstructorDefaultsArchitectureTest)
+- Replaced the feature-task run dependency bag with two injected CLI classes, run preparation and run execution, with all-private constructor params; the resolved workflow id is passed as a value, not a thunk.
+- Deprecated feature-task-runtime alias commands now delegate to the same code as feature-task and add only hiddenFromHelp and the unchanged deprecation note.
+- Inlined the scaffold-new dependency bag and deleted the goal-run execution wrapper; GoalRunCommand holds GoalRunner directly.
+- Subcommand holders expose a body `commands` list built from private constructor params, following core/CliCommandGroups.kt; command order is unchanged from dfb489641.
+- reusable PATTERN: compose CLI behavior through @Inject classes with private params, not `@Inject data class` bundles or function-typed params.
+- The runtime-cli main guard now runs injectConstructorPropertyViolations over RUNTIME_CLI_MAIN with an empty baseline.
+- Known limitation: the UnsupportedScaffoldGateway parameter stays where the scaffold bag carried it; subtask 2 deletes it.
+Feature flag: N/A
+Acceptance criteria: 10/10 implemented
+
 ## [2026-09-23] SKILL-371 — single owners for cross-adapter contracts (subtask 3)
 Areas: runtime-kotlin/runtime-cli, runtime-kotlin/runtime-application, runtime-contracts, runtime-engine, runtime-infra, runtime-mcp, orchestration/shell-content-contract
 - Repository identity now comes from the canonical enclosing-root port; governed spec-path resolution and the goal-child launch tokens have single owners outside the CLI.
@@ -67,7 +103,7 @@ Areas: runtime-kotlin/runtime-cli/{core,goal,featuretask,scaffold,install,system
 - `CliRunState` shrank from eight JVM-seeded `var` defaults to result plus the stdin line cursor; per-run mutable state and resolved inputs are now separate objects. `runtime-cli`'s three subtask-1 architecture baselines (ambient clock, ambient environment, `@Inject` constructor defaults) are empty files.
 - Commands read `CliRunInputs.repositoryRoot`, the coordinate SKILL-227 already resolves through `canonicalRepositoryRoot`; the fourteen `Path.of("")` fallbacks are gone and `findRepoRoot` lost its default argument. No second derivation was added.
 - reusable `HostPlatformPort` (`runtime-ports/skillbill/ports/system`) exposes `osName`, `jvmClassPath`, `pathSeparator`, with `JdkHostPlatformPort` as an `object` adapter in `runtime-infra-fs` constructed by its DI binding. `SKILL_BILL_QUALITY_GATE_SELECTION` reads the injected `environment` map; scaffold dates come from the injected `Clock`.
-- Constructor-parameter pressure from threading inputs was absorbed by `@Inject` dependency holders (`UninstallDependencies`, `ScaffoldNewDependencies`), which detekt's `ignoreDataClasses` exempts — the same shape as `GoalRunDependencies`. Prefer a holder over widening a command's parameter list.
+- Constructor-parameter pressure from threading inputs was absorbed by `@Inject` dependency holders (`UninstallDependencies`, `ScaffoldNewDependencies`), which detekt's `ignoreDataClasses` exempts — the same shape as `GoalRunDependencies`. SKILL-392 supersedes this: collaborators stay private on `@Inject` classes, and argument types carry values only.
 - `CliRuntimeContext` keeps its public field shape and stays the embedding surface, so the `runtime-mcp` `CliRuntime.run` call sites needed no change; the resolution seam is internal to `runtime-cli`.
 - Known limitation: the `skillbill.cli.core` split, the `*Extras` renames, the `uninstall` failure policy, and the telemetry-drain record stay open for subtask 3.
 Feature flag: N/A

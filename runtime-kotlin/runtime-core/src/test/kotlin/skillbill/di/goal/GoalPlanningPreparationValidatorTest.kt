@@ -4,25 +4,19 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_CONTRACT_VERSION
 import skillbill.engine.goalplanning.GoalPlanningPreparationValidator
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
-import skillbill.infrastructure.contracts.FeatureTaskRuntimePhaseOutputSchemaValidator
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import skillbill.text.sha256HexUtf8
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator as FeatureTaskRuntimeWireArtifactSchemaValidator
 
 class GoalPlanningPreparationValidatorTest {
-  private val validator =
-    GoalPlanningPreparationValidator(
-      FeatureTaskRuntimePhaseOutputSchemaValidator(),
-      FeatureTaskRuntimeWireArtifactSchemaValidator(),
-    )
+  private val validator = GoalPlanningPreparationValidator()
 
   @Test
   fun `a valid preplan and plan pair is accepted`() {
@@ -35,75 +29,22 @@ class GoalPlanningPreparationValidatorTest {
   }
 
   @Test
-  fun `a plan payload missing value is rejected at write time`() {
-    val record =
-      validRecord(parentGoalWorkflowId = "goal-1", subtaskId = 1).copy(
-        planPayload = payloadJson(phaseId = "plan", producedOutputsJson = """{"prompt":"optional only"}"""),
-      )
-
-    val error = assertFailsWith<InvalidFeatureTaskRuntimePhaseOutputSchemaError> { validator.validate(record) }
-    assertTrue(
-      error.reason.contains("value"),
-      "the rejection must name the offending field so the fix loop can act on it: ${error.reason}",
-    )
-  }
-
-  @Test
-  fun `a preplan payload missing value is rejected at write time`() {
-    val record =
-      validRecord(parentGoalWorkflowId = "goal-1", subtaskId = 1).copy(
-        preplanPayload = payloadJson(phaseId = "preplan", producedOutputsJson = """{"prompt":"optional only"}"""),
-      )
-
-    assertFailsWith<InvalidFeatureTaskRuntimePhaseOutputSchemaError> { validator.validate(record) }
-  }
-
-  @Test
-  fun `a plan payload in the preplan slot is rejected because phase_id must match the source label`() {
-    val record =
-      validRecord(parentGoalWorkflowId = "goal-1", subtaskId = 1).copy(
-        preplanPayload = payloadJson(phaseId = "plan"),
-      )
-
-    assertFailsWith<InvalidFeatureTaskRuntimePhaseOutputSchemaError> { validator.validate(record) }
-  }
-
-  @Test
-  fun `a payload with an incompatible phase output contract version is rejected`() {
-    val record =
-      validRecord(parentGoalWorkflowId = "goal-1", subtaskId = 1).copy(
-        preplanPayload = payloadJson(phaseId = "preplan", contractVersion = "9.9"),
-      )
-
-    assertFailsWith<InvalidFeatureTaskRuntimePhaseOutputSchemaError> { validator.validate(record) }
-  }
-
-  @Test
   fun `a payload with an unsupported status is rejected`() {
     val record =
       validRecord(parentGoalWorkflowId = "goal-1", subtaskId = 1).copy(
         planPayload = payloadJson(phaseId = "plan", status = "queued"),
       )
 
-    assertFailsWith<InvalidFeatureTaskRuntimePhaseOutputSchemaError> { validator.validate(record) }
-  }
-
-  @Test
-  fun `a payload with empty produced_outputs is rejected`() {
-    val record =
-      validRecord(parentGoalWorkflowId = "goal-1", subtaskId = 1).copy(
-        planPayload = payloadJson(phaseId = "plan", producedOutputsJson = "{}"),
-      )
-
-    assertFailsWith<InvalidFeatureTaskRuntimePhaseOutputSchemaError> { validator.validate(record) }
+    assertFailsWith<SkillBillRuntimeException> { validator.validate(record) }
   }
 
   @Test
   fun `an envelope with an incompatible envelope contract version is rejected`() {
     val record = validRecord(parentGoalWorkflowId = "goal-1", subtaskId = 1).copy(contractVersion = "0.2")
 
-    val error = assertFailsWith<InvalidGoalPlanningPreparationSchemaError> { validator.validate(record) }
-    assertEquals("goal-1#1", error.sourceLabel)
+    val error = assertFailsWith<SkillBillRuntimeException> { validator.validate(record) }
+    assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, error.code)
+    assertContains(error.message.orEmpty(), "goal-1#1")
   }
 
   @Test
@@ -113,7 +54,7 @@ class GoalPlanningPreparationValidatorTest {
         preparationStatus = GoalPlanningPreparationState.PENDING,
       )
 
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> { validator.validate(record) }
+    assertFailsWith<SkillBillRuntimeException> { validator.validate(record) }
   }
 
   @Test

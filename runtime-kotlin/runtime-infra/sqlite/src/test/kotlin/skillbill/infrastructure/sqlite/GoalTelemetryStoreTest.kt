@@ -1,8 +1,9 @@
 package skillbill.infrastructure.sqlite
 
 import skillbill.contracts.JsonCodec
+import skillbill.error.core.GoalTelemetryRowFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
-import skillbill.infrastructure.sqlite.review.core.InvalidGoalTelemetryRowError
 import skillbill.infrastructure.sqlite.review.stats.ReviewStatsRuntime
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.LifecycleTelemetryStore
 import skillbill.infrastructure.sqlite.telemetry.outbox.TelemetryOutboxStore
@@ -44,7 +45,7 @@ class GoalTelemetryStoreTest {
   @Test
   fun `write read and aggregate a full blocked run with complete blocked and skipped subtasks`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       seedBlockedRunWithMixedSubtasks(store)
 
       val stats = ReviewStatsRuntime.goalStats(connection)
@@ -86,7 +87,7 @@ class GoalTelemetryStoreTest {
   @Test
   fun `top blocked subtasks is empty when no subtasks are blocked`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       finishedRun(store, "wf-a", startedAt = "2026-06-04T08:00:00Z", status = "completed", durationMs = 100_000)
       finishedRun(store, "wf-b", startedAt = "2026-06-04T09:00:00Z", status = "completed", durationMs = 200_000)
 
@@ -99,7 +100,7 @@ class GoalTelemetryStoreTest {
   @Test
   fun `top blocked subtasks lists all blocked entries across runs`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
 
       store.goalStarted(startedRecord("wf-x", subtaskTotal = 1, resumed = false), level = "full")
       store.goalSubtaskFinished(
@@ -148,7 +149,7 @@ class GoalTelemetryStoreTest {
   @Test
   fun `most-recent run lookup picks the latest started completed run`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
 
       finishedRun(store, "wf-early", startedAt = "2026-06-04T08:00:00Z", status = "completed", durationMs = 100_000)
       finishedRun(store, "wf-late", startedAt = "2026-06-04T20:00:00Z", status = "completed", durationMs = 300_000)
@@ -166,7 +167,7 @@ class GoalTelemetryStoreTest {
   @Test
   fun `resumed duplicate subtask event is not double counted or re-emitted`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       val record = subtask(id = 1, status = "complete", durationMs = 60_000, attempts = 1)
 
       store.goalSubtaskFinished(record, "full")
@@ -184,7 +185,7 @@ class GoalTelemetryStoreTest {
   @Test
   fun `paused run aggregates as resumable and is not counted as blocked`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       finishedRun(store, "wf-paused", startedAt = "2026-06-04T10:00:00Z", status = "paused", durationMs = 90_000)
 
       val stats = ReviewStatsRuntime.goalStats(connection)
@@ -206,7 +207,7 @@ class GoalTelemetryStoreTest {
   @Test
   fun `in-progress run counts as not finished and has no terminal status`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
 
       store.goalStarted(startedRecord("wf-open", subtaskTotal = 2, resumed = true), level = "full")
 
@@ -232,16 +233,18 @@ class GoalTelemetryStoreTest {
         """.trimIndent(),
       ).use { it.executeUpdate() }
 
-      assertFailsWith<InvalidGoalTelemetryRowError> {
-        ReviewStatsRuntime.goalStats(connection)
-      }
+      val error =
+        assertFailsWith<SkillBillRuntimeException> {
+          ReviewStatsRuntime.goalStats(connection)
+        }
+      assertEquals(GoalTelemetryRowFailureCode.MALFORMED, error.code)
     }
   }
 
   @Test
   fun `emitted telemetry aggregates per-agent finalized and recovery-handoff participant counts`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
 
       store.goalSubtaskFinished(attributedSubtask(1, "codex", listOf("codex")), "full")
       store.goalSubtaskFinished(attributedSubtask(2, "claude", listOf("codex", "claude")), "full")
@@ -277,7 +280,7 @@ class GoalTelemetryStoreTest {
   @Test
   fun `legacy subtask event without agent attribution is accepted and emits an empty participants array`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       store.goalSubtaskFinished(subtask(1, "complete", 60_000, 1), "full")
 
       val payload =
@@ -311,7 +314,7 @@ class GoalTelemetryStoreTest {
         it.executeUpdate()
       }
 
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       store.goalSubtaskFinished(
         subtask(id = 1, status = "complete", durationMs = 60_000, attempts = 1).copy(workflowId = "wfl-history"),
         "full",
@@ -329,7 +332,7 @@ class GoalTelemetryStoreTest {
   @Test
   fun `goal_subtask_finished payload defaults boundary_history fields when no feature_task_workflows row exists`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       store.goalSubtaskFinished(
         subtask(id = 1, status = "complete", durationMs = 60_000, attempts = 1).copy(workflowId = "wfl-unknown"),
         "full",
@@ -347,7 +350,7 @@ class GoalTelemetryStoreTest {
   @Test
   fun `anonymous goal_subtask_finished payload carries category-prefixed blocked_reason`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
       store.goalSubtaskFinished(
         subtask(id = 1, status = "blocked", durationMs = 60_000, attempts = 1, blockedReason = "validation: failed"),
         "anonymous",
@@ -364,7 +367,7 @@ class GoalTelemetryStoreTest {
   @Test
   fun `goal issue progress aggregates segments and emits completed issue exactly once`() {
     withConnection { connection ->
-      val store = LifecycleTelemetryStore(connection, runtimeVersion = "test-runtime-version")
+      val store = LifecycleTelemetryStore(connection, "test-runtime-version", SqliteTestDiagnostics)
 
       val firstStart =
         startedRecord("wf-parent:seg:1", subtaskTotal = 1, resumed = false, startedAt = "2026-06-04T10:00:00Z")

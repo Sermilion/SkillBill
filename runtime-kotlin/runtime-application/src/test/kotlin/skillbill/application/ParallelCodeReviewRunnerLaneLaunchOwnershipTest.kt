@@ -1,6 +1,7 @@
 package skillbill.application
 
 import skillbill.application.review.governed.stubGovernedReviewEvidenceEndpointBinder
+import skillbill.application.review.snapshot.reviewed
 import skillbill.application.review.snapshot.simulateGovernedEvidenceReads
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.install.model.SupportedAgent
@@ -14,7 +15,7 @@ import skillbill.ports.review.evidence.ReviewEvidenceBroker
 import skillbill.ports.review.launch.ReviewLaunchAgentStagingPort
 import skillbill.ports.review.model.ResolvedReviewRubric
 import skillbill.ports.review.preparation.ReviewRubricResolver
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicInteger
@@ -46,7 +47,7 @@ class ParallelCodeReviewRunnerLaneLaunchOwnershipTest {
       )
 
     val result =
-      runner.run(
+      runner.reviewed(
         baseRequest(agent1Id = "cursor", scope = ParallelReviewScope.STAGED)
           .copy(codeReviewMode = CodeReviewExecutionMode.DELEGATED),
       )
@@ -174,7 +175,7 @@ private fun assertLaunchOwnershipCase(case: LaunchOwnershipCase) {
       ),
     )
   val run = {
-    runner.run(
+    runner.reviewed(
       baseRequest(agent1Id = "cursor", scope = ParallelReviewScope.STAGED)
         .copy(codeReviewMode = CodeReviewExecutionMode.DELEGATED),
     )

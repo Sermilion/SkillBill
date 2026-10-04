@@ -5,6 +5,7 @@ import skillbill.infrastructure.sqlite.telemetry.lifecycle.emitFeatureVerifyFini
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.emitFeatureVerifyStarted
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.saveFeatureVerifyFinished
 import skillbill.infrastructure.sqlite.telemetry.lifecycle.saveFeatureVerifyStarted
+import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.telemetry.lifecycle.FeatureVerifyLifecycleTelemetryRepository
 import skillbill.telemetry.model.FeatureVerifyFinishedRecord
 import skillbill.telemetry.model.FeatureVerifyStartedRecord
@@ -13,6 +14,7 @@ import java.sql.Connection
 internal class LifecycleTelemetryFeatureVerifySessionAdapter(
   private val connection: Connection,
   private val runtimeVersion: String,
+  private val diagnostics: RuntimeDiagnostics,
 ) : FeatureVerifyLifecycleTelemetryRepository {
   override fun featureVerifyStarted(
     record: FeatureVerifyStartedRecord,
@@ -27,7 +29,7 @@ internal class LifecycleTelemetryFeatureVerifySessionAdapter(
     level: String,
   ) {
     if (saveFeatureVerifyFinished(connection, record) == TerminalSaveOutcome.FIRST_TERMINAL) {
-      emitFeatureVerifyFinished(connection, runtimeVersion, record.sessionId, level)
+      emitFeatureVerifyFinished(connection, runtimeVersion, record.sessionId, level, diagnostics)
     }
   }
 }

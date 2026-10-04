@@ -1,10 +1,10 @@
 package skillbill.infrastructure.sqlite.core.schema
 
 import org.sqlite.SQLiteConfig
-import skillbill.error.core.DatabaseAccessError
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.databaseAccessFailure
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
-import skillbill.infrastructure.sqlite.core.ops.InternalSqliteDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import java.nio.file.Files
 import java.nio.file.Path
@@ -29,7 +29,7 @@ internal object DatabaseRuntime {
 
   fun ensureWriteReady(
     path: Path,
-    diagnostics: RuntimeDiagnostics = InternalSqliteDiagnostics,
+    diagnostics: RuntimeDiagnostics,
   ) {
     val normalized = path.toAbsolutePath().normalize()
     writeReadinessGate.ensureReady(normalized) {
@@ -47,14 +47,15 @@ internal object DatabaseRuntime {
     cliValue: String?,
     environment: Map<String, String>,
     userHome: Path,
+    diagnostics: RuntimeDiagnostics,
   ): OpenDatabase {
     val dbPath = resolveDbPath(cliValue = cliValue, environment = environment, userHome = userHome)
-    return openDbAt(dbPath)
+    return openDbAt(dbPath, diagnostics)
   }
 
   fun openDbAt(
     dbPath: Path,
-    diagnostics: RuntimeDiagnostics = InternalSqliteDiagnostics,
+    diagnostics: RuntimeDiagnostics,
   ): OpenDatabase {
     ensureWriteReady(dbPath, diagnostics)
     return openWriteDbAt(dbPath)
@@ -65,7 +66,7 @@ internal object DatabaseRuntime {
 
   fun establishSchemaReadiness(
     path: Path,
-    diagnostics: RuntimeDiagnostics = InternalSqliteDiagnostics,
+    diagnostics: RuntimeDiagnostics,
   ) {
     path.parent?.toAbsolutePath()?.normalize()?.toFile()?.mkdirs()
     asTypedFailure(path, DatabaseAccessOperation.OPEN) {
@@ -98,14 +99,15 @@ internal object DatabaseRuntime {
     cliValue: String?,
     environment: Map<String, String>,
     userHome: Path,
+    diagnostics: RuntimeDiagnostics,
   ): OpenDatabase {
     val dbPath = resolveDbPath(cliValue = cliValue, environment = environment, userHome = userHome)
-    return openReadDbAt(dbPath)
+    return openReadDbAt(dbPath, diagnostics)
   }
 
   fun openReadDbAt(
     dbPath: Path,
-    diagnostics: RuntimeDiagnostics = InternalSqliteDiagnostics,
+    diagnostics: RuntimeDiagnostics,
   ): OpenDatabase {
     if (!Files.exists(dbPath) || isSchemaless(dbPath)) {
       return openDbAt(dbPath, diagnostics)
@@ -115,19 +117,10 @@ internal object DatabaseRuntime {
 
   internal fun openReadConnectionAt(dbPath: Path): OpenDatabase = openReadOnlyDb(dbPath)
 
-  fun openReadDbIfPresent(
-    cliValue: String?,
-    environment: Map<String, String>,
-    userHome: Path,
-  ): OpenDatabase? {
-    val dbPath = resolveDbPath(cliValue = cliValue, environment = environment, userHome = userHome)
-    return openReadDbIfPresentAt(dbPath)
-  }
-
   fun openReadDbIfPresentAt(dbPath: Path): OpenDatabase? {
     if (!Files.exists(dbPath)) return null
     if (isSchemaless(dbPath)) {
-      throw DatabaseAccessError(
+      throw databaseAccessFailure(
         dbPath = dbPath.toAbsolutePath().normalize().toString(),
         operation = DatabaseAccessOperation.READ,
         condition = "database schema is missing",
@@ -152,8 +145,11 @@ internal object DatabaseRuntime {
     }
   }
 
-  fun ensureDatabase(path: Path): Connection {
-    establishSchemaReadiness(path)
+  fun ensureDatabase(
+    path: Path,
+    diagnostics: RuntimeDiagnostics,
+  ): Connection {
+    establishSchemaReadiness(path, diagnostics)
     return openWriteConnectionAt(path)
   }
 
@@ -216,9 +212,10 @@ internal fun databaseAccessError(
   dbPath: Path,
   operation: DatabaseAccessOperation,
   error: SQLException,
-): DatabaseAccessError =
-  DatabaseAccessError(
+): SkillBillRuntimeException =
+  databaseAccessFailure(
     dbPath = dbPath.toAbsolutePath().normalize().toString(),
     operation = operation,
     condition = "sqlite result code ${error.errorCode}: ${error.message.orEmpty()}",
+    cause = error,
   )

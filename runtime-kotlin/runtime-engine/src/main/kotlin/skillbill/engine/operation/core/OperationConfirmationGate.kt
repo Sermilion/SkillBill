@@ -1,13 +1,6 @@
 package skillbill.engine.operation.core
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.operation.ConsumedOperationTokenError
-import skillbill.error.operation.ForeignOperationTokenError
-import skillbill.error.operation.MovedOperationAnchorsError
-import skillbill.error.operation.OperationAnchorUnreadableError
-import skillbill.error.operation.OperationRefusalError
-import skillbill.error.operation.SupersededOperationTokenError
-import skillbill.error.operation.UnknownOperationTokenError
 import skillbill.ports.operation.OperationProposalRepository
 import skillbill.ports.operation.model.OperationAnchors
 import skillbill.ports.operation.model.OperationProposal
@@ -26,14 +19,15 @@ class OperationConfirmationGate(
     operation: ConfirmableOperation,
     context: OperationContext,
     proposed: OperationRunResult.Proposed,
-  ): OperationOutcome.AwaitingConfirmation {
+  ): OperationOutcome {
     val token = "$TOKEN_PREFIX${UUID.randomUUID()}"
+    val anchors = repositoryAnchors(context, proposed.operationValues) { return it }
     proposals.createSupersedingPrior(
       OperationProposal(
         token = token,
         operationId = operation.id,
         repoRoot = context.repoRoot.toString(),
-        anchors = repositoryAnchors(context, proposed.operationValues),
+        anchors = anchors,
         proposalValue = proposed.value,
         createdAt = clock.instant().toString(),
       ),
@@ -46,49 +40,64 @@ class OperationConfirmationGate(
     context: OperationContext,
     token: String,
   ): OperationOutcome {
-    val proposal = admissibleProposal(operation, context, token)
+    val proposal = proposals.find(token) ?: return unknownToken(token)
     val confirmed = ConfirmedOperationProposal(token, proposal.proposalValue, proposal.anchors.operationValues)
-    operation.admit(context, confirmed)
-    if (!proposals.markConsumed(token, clock.instant().toString())) throw ConsumedOperationTokenError(token)
-    return operation.execute(context, confirmed)
+    return refusal(operation, context, proposal)
+      ?: operation.admit(context, confirmed)
+      ?: consumeAndExecute(operation, context, confirmed)
   }
 
-  private fun admissibleProposal(
+  private fun consumeAndExecute(
     operation: ConfirmableOperation,
     context: OperationContext,
-    token: String,
-  ): OperationProposal {
-    val proposal = proposals.find(token) ?: throw UnknownOperationTokenError(token)
-    refusal(operation, context, proposal)?.let { refusal -> throw refusal }
-    return proposal
-  }
+    confirmed: ConfirmedOperationProposal,
+  ): OperationOutcome =
+    if (proposals.markConsumed(confirmed.token, clock.instant().toString())) {
+      operation.execute(context, confirmed)
+    } else {
+      consumedToken(confirmed.token)
+    }
 
   private fun refusal(
     operation: ConfirmableOperation,
     context: OperationContext,
     proposal: OperationProposal,
-  ): OperationRefusalError? {
+  ): OperationRefusal? {
     val token = proposal.token
     val repoRoot = context.repoRoot.toString()
     return when {
-      proposal.consumedAt != null -> ConsumedOperationTokenError(token)
-      proposal.supersededAt != null -> SupersededOperationTokenError(token)
+      proposal.consumedAt != null -> consumedToken(token)
+      proposal.supersededAt != null -> supersededToken(token)
       proposal.operationId != operation.id || proposal.repoRoot != repoRoot ->
-        ForeignOperationTokenError(token, operation.id, repoRoot)
-      else ->
-        movedAnchors(proposal.anchors, repositoryAnchors(context, operation.currentAnchors(context)))
-          .takeIf(List<String>::isNotEmpty)
-          ?.let { moved -> MovedOperationAnchorsError(token, moved) }
+        foreignToken(token, operation.id, repoRoot)
+      else -> movedAnchorsRefusal(operation, context, proposal)
     }
   }
 
-  private fun repositoryAnchors(
+  private fun movedAnchorsRefusal(
+    operation: ConfirmableOperation,
+    context: OperationContext,
+    proposal: OperationProposal,
+  ): OperationRefusal? {
+    val operationValues =
+      when (val current = operation.currentAnchors(context)) {
+        is CurrentOperationAnchors.Read -> current.values
+        is CurrentOperationAnchors.Unreadable -> return current.refusal
+      }
+    val currentAnchors = repositoryAnchors(context, operationValues) { return it }
+    return movedAnchors(proposal.anchors, currentAnchors)
+      .takeIf(List<String>::isNotEmpty)
+      ?.let { moved -> anchorsMoved(proposal.token, moved) }
+  }
+
+  private inline fun repositoryAnchors(
     context: OperationContext,
     operationValues: Map<String, String>,
+    refuse: (OperationOutcome.Blocked) -> Nothing,
   ): OperationAnchors =
     OperationAnchors(
-      headSha = gitOperations.runtimePhaseHeadCommit(context.repoRoot).requireGitValue(HEAD_SHA_ANCHOR),
-      branch = gitOperations.currentBranch(context.repoRoot).requireGitValue(BRANCH_ANCHOR),
+      headSha = gitOperations.runtimePhaseHeadCommit(context.repoRoot).gitValueOr(HEAD_SHA_ANCHOR, refuse),
+      branch = gitOperations.currentBranch(context.repoRoot).gitValueOr(BRANCH_ANCHOR, refuse),
       operationValues = operationValues,
     )
 
@@ -103,8 +112,10 @@ class OperationConfirmationGate(
     }
 }
 
-internal fun WorkflowGitOperationResult.requireGitValue(what: String): String =
-  (this as? WorkflowGitOperationResult.Ok)?.value?.trim() ?: throw OperationAnchorUnreadableError(what, error)
+internal inline fun WorkflowGitOperationResult.gitValueOr(
+  what: String,
+  refuse: (OperationOutcome.Blocked) -> Nothing,
+): String = (this as? WorkflowGitOperationResult.Ok)?.value?.trim() ?: refuse(anchorUnreadable(what, error))
 
 private const val TOKEN_PREFIX = "opt-"
 private const val HEAD_SHA_ANCHOR = "HEAD"

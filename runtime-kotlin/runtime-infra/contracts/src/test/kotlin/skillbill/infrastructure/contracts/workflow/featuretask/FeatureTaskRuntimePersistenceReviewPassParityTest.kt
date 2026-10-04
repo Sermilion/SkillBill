@@ -1,7 +1,7 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePersistenceSchemaError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodePhaseRecordFromArtifact
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
@@ -38,12 +38,12 @@ class FeatureTaskRuntimePersistenceReviewPassParityTest {
   fun `schema and model agree that a pass number below one is invalid`() {
     val wireMap = reviewRecord(2).asWorkflowArtifactEntry().toWorkflowArtifactMap() + ("review_pass_number" to 0)
 
-    assertFailsWith<InvalidFeatureTaskRuntimePersistenceSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePersistenceSchemaValidator.validate(wireMap, "review.record")
     }
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       decodePhaseRecordFromArtifact(wireMap)
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test

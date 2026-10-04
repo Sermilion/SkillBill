@@ -38,6 +38,82 @@ parameter into a context, callback bag, or role interface does not narrow access
 Reconstruction from durable records must preserve the same invariants as live
 execution, including retry consumption, checkpoint ownership, and phase order.
 
+Finding observations are shared by review, verification and remediation. Verification checkpoint
+and boundary writes belong to `PhaseFindingVerificationState`; repair receipts belong to
+`PhaseRepairReceiptState`. These roles check the active binding and accepted writer phase.
+Planning briefing writes exist only on preplan/plan bindings and check the briefing phase.
+
+Strategies receive `PhaseAcceptedStepExecution` and a private implementation for the accepted
+step. Agent and review bindings implement `PhaseAgentExecution` for current-step launch. Gate and commit
+bindings expose their owned cycle operations and do not implement the agent launch capability.
+All bindings provide detached observations and admission checks. Planning,
+review, quality-gate, commit and PR bindings add only their role operations. The coordinator
+checks request identity, selected step and policy, authorizes dispatch, and closes each binding
+when the strategy returns. Planning unit bindings require an authorized wave and keep separate
+progress, session and records.
+
+`PhaseStepCall` carries accepted metadata and its bound target. It has no runner callback or
+prepared-launch operation. `PhaseStrategyRegistration` pairs each strategy with its runner in the
+registry. The accepted attempt host resolves that runner only after required persistence. Ordinary
+and gate strategies receive no raw runner. Goal planning resolves a runner for its accepted
+planning call after required start persistence; its phase-bound launch state rejects another step.
+The in-memory `standalone_review` definition selects one report-only `present_findings` step. Its accepted review binding pins the target and records the report. A valid register exits successfully for either verdict; invalid or failed output blocks with retained findings. The durable `code_review` slot keeps review, verification, remediation, and checkpoint ownership on `PhaseRunState`. Review strategies retain their review launch dependency inside the review slot. Strategies cannot
+recover the host, records, gate context or finalization context from a binding. Runtime gate cycles and commit cycles live under `runloop.qualitygate`
+and `runloop.finalization`; bindings invoke the selected operation rather than return its context.
+
+`PhaseAttemptEnvironment` contains request facts only. Strategy hooks receive detached
+progress/session observations and private role views. Audit settlement, planning stop, commit
+upstream recovery and PR pre-launch push are named runtime operations. PR push resolves the
+owned branch internally. Loop rules receive a readonly `PhaseLoopContext`; review and PR reads
+use `PhaseRepositoryObservations`, whose private adapter exposes no Git writes. PR measurement
+receives a single telemetry emitter instead of lifecycle terminal authority.
+
+`FeatureTaskRuntimeRunTransitionOwner` owns coupled progress, session, accounting,
+completion, re-entry, evidence and checkpoint state transitions. Each `FeatureTaskRuntimeRunState`
+stores one owner paired with one session; a second session is rejected. Durable completion and
+review tombstone writes precede corresponding in-memory changes. Required phase-start writes
+precede attempt accounting and review reservations. Runtime checkpoint machinery retains its
+storage and Git collaborators behind the owner operations. Durable and ephemeral records keep
+their storage policies, including ephemeral audit briefings.
+
+Progress and session getters return private wrappers over detached copies. Phase and loop reads
+return `PhaseProgressObservation` and `LoopProgressObservation` values. Their collections,
+buffers and terminal reports do not alias live storage, and casting an observation cannot recover
+the live owner. Settlement coupling receives the owner directly from runtime context; it does
+not reconstruct mutation authority from observations.
+
+Selected strategies declare their execution binding role, and selected hooks declare their context role.
+`FeatureTaskRuntimeRunLoopStepBindings` and `FeatureTaskRuntimeRunLoopHookViews` create private views for
+that accepted step. Shared code does not select those views through phase-name constants. Review writes
+recheck the active binding and selected review role. These role declarations do not change selection,
+step identity, execution-plan digests or durable formats.
+
+SQLite worker acquisition participates in the caller's admission transaction when present. Its
+standalone adapter still owns a write transaction. A rejected admission rolls back the workflow
+advance and worker lease together.
+
+`StrategyCapabilityBoundaryArchitectureTest` uses Kotlin PSI to build a declaration graph across
+all engine source. It follows consumer roots through helpers, extensions, aliases, constructors,
+properties, factories and used parameter/return types. Same-name overload declarations are
+combined conservatively so each candidate edge remains reachable. Extension functions with an
+implicit run-state receiver are included in primitive-writer checks. Attempt and state folders
+remain in the transitive catalog. Skeleton composition wiring is excluded as a consumer root.
+Runtime runner implementations, registry, lookup and selection are also excluded as consumer roots,
+and remain traversable when a consumer reaches them. Package-qualified helper calls, wildcard
+imports and companion members contribute declaration edges. Wildcard imports retain all indexed
+candidates, and value receivers shadow imported names.
+Unresolved governed edges fail. Raw state and raw `PhaseRunner` authority are forbidden to
+ordinary and gate strategy consumers; review authority is forbidden to non-review consumers.
+Review consumers may reach the review launch runner through their review slot. Runtime registrations
+retain other runners outside strategy objects, and the attempt host resolves the selected runner
+through run state after admission. A typed primitive-writer inventory also checks helpers outside the consumer graph. Synthetic
+allowed and violating cases prove these boundaries, and runtime binding checks prove accepted-step
+admission. The rule is registered in
+`PrincipleEnforcementInventory.enforceableRules`.
+
+The operation-level inventory and retained runtime collaborator dispositions are in
+`../.feature-specs/done/SKILL-384-workflow-skeleton-execution-contracts-and-state-ownership`.
+
 #### Feature-task run-loop helper inputs (SKILL-247 subtask 3)
 
 Investigation F-005 counted 122 `FeatureTaskRuntimeRunLoopContext` extension
@@ -67,16 +143,20 @@ repository-checkpoint calculation use explicit arguments. Carried-forward goal
 review settlement uses `CarriedForwardGoalReviewArgs`;
 PhaseRunner and PlanningBranch enter through the phase-boundary state and
 observability values. AttemptSettlement moves
-`gateOutput` / `settleValidatedOutput` / envelope settlement off the context
+`gateOutput` / `settleValidatedOutput` / prose settlement off the context
 receiver; `GateOutput` and `SettleValidatedOutput` carry the
-request/state/recorder/outputValidator/phaseGates/clock/diagnostics/
+request/state/recorder/phaseGates/clock/diagnostics/
 goalContinuationRecorder/phaseSettlementService ports those paths use.
 `settlementContext` on those args remains only for the not-yet-peeled
 audit/checkpoint and accepted-output persistence tail inside
 `settleValidatedOutputAfterFingerprint`; implement-fix repair-receipt settlement
 and commit finalisation now receive their request/state/recorder/goal-recorder/
-diagnostics ports directly. Review runs in `InlineReviewStrategy` and reaches
-durable state only through `PhaseRunState`.
+diagnostics ports directly. Review runs in `InlineReviewStrategy` and reaches review-owned persistence
+through the accepted step binding (`PhaseReviewStepBinding` on the active
+`PhaseStepCall`), not by reopening step state from `PhaseRunState.step`.
+SKILL-384 closes the review boundary with private bindings for each step role.
+`GateOutput` retains a runtime-only `PhaseOutputSettlementContext`; strategy hooks receive
+separate detached views.
 PhaseAttempts keeps `blockAndPersist` context and top-level overloads; governed
 block paths prefer the top-level `blockAndPersist(request, state, recorder,
 goalContinuationRecorder, args)` seam. `FeatureTaskRuntimeRunLoop` exposes only
@@ -106,10 +186,12 @@ inputs:
   audit/checkpoint and accepted-output persistence tail retains
   `settlementContext`.
 - Review preparation and the review step live in the `code_review` slot
-  (`slot.codereview`). They reach durable run state, git operations, the
-  output validator, and the clock only through `PhaseStepState` and its
-  attempt scope. Since SKILL-380 subtask 7, no slot class takes the run-loop
-  context.
+  (`slot.codereview`). Their binding admits each review mutation only while
+  the accepted step is active. `PhaseReviewExecutionContext` supplies repository
+  observations, the output validator, and the clock; it has no git writer or
+  attempt scope. Review launch and persistence pass through the accepted-step
+  binding and its owning recorder operations. Since SKILL-380 subtask 7, no
+  slot class takes the run-loop context.
 - PhaseAttempts exposes top-level block/pause seams with request/state/
   recorder/goal-recorder/observability arguments; its context overloads remain
   only for the generic attempt-loop adjacency.
@@ -166,7 +248,7 @@ heal, and one-time legacy goal-runner and telemetry repairs are named ledger mig
 
 `DatabaseWriteReadinessGate` compares the `DatabaseIdentity` snapshot already read
 for each cache decision (`DatabaseIdentity.matches`) instead of rereading the file
-through `matchesFile`. Unreadable database files raise `DatabaseAccessError(READ)` from
+through `matchesFile`. Unreadable database files raise a `DatabaseFailureCode.ACCESS` failure for `READ` from
 identity read and do not trigger migrate-on-access re-establishment. The synchronized
 initialization path still performs a second identity observation after acquiring the lock.
 `DatabaseWriteReadinessTest` exercises the gate through `sqliteSessionFactoryForTests`
@@ -250,11 +332,23 @@ with Clean Architecture, SOLID, or YAGNI.
 
 ## DB-first feature-task continuation
 
+Parent-workflow discovery uses `findFeatureTaskWorkflowsForIssue`, filtering the
+requested issue and any supplied repository identity in SQLite before decoding
+records. Legacy parents without an issue column use the decomposition manifest's
+issue key. Repository binding comes from planning preparation, goal controls, or
+execution identity. Unbound legacy parents retain their existing recovery path.
+Unrelated records are never decoded or validated during this lookup. Corrupt
+matching records still fail at their owning read boundary. Dispatcher intake
+launches readable local specs directly and never enumerates the global work list.
+
+
 Feature-task continuation is repository-scoped and database-authoritative. At workflow creation, an immutable identity row binds the workflow id to a normalized issue key, canonical real-path Git-root identity, repository-relative governed spec path, persisted mode, and standalone/goal-child route scope. Read-only lookup never chooses among multiple eligible rows by timestamp.
 
-The feature `spec.md` remains the governed product contract; it is not a mutable workflow ledger. A sibling `decomposition-manifest.yaml` is the sole prepared-feature authority marker and always contains one or more executable subtasks; a bare `spec.md` is preparation intake. Continuation lookup remains authoritative and precedes artifact discovery. Pre-planning, planning, phase outputs, and the phase ledger remain durable database artifacts. Initial implementation continuation is hydrated from the completed `plan`. Audit uses two steps in the acceptance-audit slot. The read-only `audit` step uses the configured reasoning model, inspects the production behavior of every planned acceptance criterion against current code, and reports remaining production gaps. Audit excludes all test requirements, including explicit test-only criteria and the test portions of mixed criteria, without changing the spec. A nonempty list enters the `audit_repair` loop at `audit_implement_fix`, which uses the configured implementation model and the persisted audit output plus the plan. The repair step reconciles production behavior in the current tree, excludes test requests from persisted findings, saves its output, and returns to a fresh full-list audit. Only an explicit empty list completes audit and allows review. Each step has separate attempt attribution. Repair continues incomplete output and retryable failures before another audit, carrying saved repair reports and preserving applied edits. Retryable terminal failures stop after the three-attempt retry budget, while incomplete completed output follows the existing continuation and wall-clock limits. A concrete needs_user_action or non_retryable_policy_conflict output still blocks for operator intervention. Equal or larger remaining criterion counts after repair block and retain the latest normalized audit findings. An operator-authorized audit retry may establish one fresh baseline after identity validation. The completion ledger consumes that authorization, and subsequent automatic rounds must shrink. The loop checkpoints before repair, retains interrupted repairs for resume, and warns after three repair rounds without imposing a round cap while progress continues. Audit and repair do not run builds or tests. Validation owns execution. Ordinary phase records and the phase ledger own the findings handoff and resume state; no per-criterion gap store is introduced. Historical `audit_gap` state still normalizes through the existing compatibility readers. Uniform prose steps report reconciliation in their value; the legacy top-level reconciliation gate applies only to structured mutating outputs. Review remediation is a single bounded round: `review` runs once, `changes_requested` may launch one `implement_fix` pass (`review_fix` cap 1, then advance to `validate`), and review does not run again after that fix.
+The feature `spec.md` remains the governed product contract; it is not a mutable workflow ledger. A sibling `decomposition-manifest.yaml` is the sole prepared-feature authority marker and always contains one or more executable subtasks; a bare `spec.md` is preparation intake. Continuation lookup remains authoritative and precedes artifact discovery. Pre-planning, planning, phase outputs, and the phase ledger remain durable database artifacts. Initial implementation continuation is hydrated from the completed `plan`. Audit uses three steps in the acceptance-audit slot. The read-only `audit` step uses the configured reasoning model. Its first pass inspects the production behavior of every planned acceptance criterion against current code and reports remaining production gaps. Later passes inspect only the unresolved criteria in the last accepted report. Previously satisfied criteria stay closed. Audit excludes all test requirements, including explicit test-only criteria and the test portions of mixed criteria, without changing the spec. A nonempty list enters the `audit_repair` loop at read-only `audit_plan_fix`, which uses the reasoning model to plan each reported production gap. Each plan item names its criterion, missing behavior, production path, ordered changes, and closure evidence. Repair plans are prose; the runtime does not parse their headings, labels, or criterion coverage. Ordinary phase records persist the accepted repair plan before `audit_implement_fix` uses the implementation model to execute it. Repair receives the saved repair plan, latest audit findings, and original feature plan. The repair step reconciles production behavior in the current tree, excludes test requests from persisted findings, saves its output, and returns to an audit of the unresolved criteria. Only an explicit empty list completes audit and allows review. Each step has separate attempt attribution. Repair continues incomplete output and retryable failures before another audit, carrying saved repair reports and preserving applied edits. Retryable terminal failures stop after the three-attempt retry budget, while incomplete completed output follows the existing continuation and wall-clock limits. A concrete needs_user_action or non_retryable_policy_conflict output still blocks for operator intervention. A remaining list that shrinks after repair is progress. At most two non-shrinking rounds (an unchanged, replaced, or grown list) relaunch repair, each recorded as an `audit_non_shrinking_round` ledger continuation; the next non-shrinking round blocks and retains the latest normalized audit findings. An operator-authorized audit retry may establish one fresh baseline after identity validation. The completion ledger consumes that authorization, and the non-shrinking budget is per subtask workflow, so that retry does not reset it. The loop checkpoints before repair, retains interrupted repairs for resume, and warns after three repair rounds without imposing a round cap while progress continues. Audit, repair planning, and repair do not run builds or tests. Validation owns execution. Ordinary phase records and the phase ledger own the findings handoff and resume state; no per-criterion gap store is introduced. Historical `audit_gap` state still normalizes through the existing compatibility readers. Uniform prose steps report reconciliation in their value; the legacy top-level reconciliation gate applies only to structured mutating outputs. Review remediation is a single bounded round: `review` runs once, `changes_requested` may launch one `implement_fix` pass (`review_fix` cap 1, then advance to `validate`), and review does not run again after that fix.
 
-Decomposed goals execute discovery and preplan once at the parent, then persist a distinct immutable plan checkpoint for each ordered subtask. Normalized checkpoint tables are the continuation authority. Status reads only bounded fields: shared-preplan readiness, planned and total counts, first missing subtask, and a concise reason. Resume reuses compatible checkpoints; hard reset atomically invalidates planning and child continuation state.
+Decomposed goals execute discovery and preplan once at the parent, then persist a distinct immutable plan checkpoint for each ordered subtask. Normalized checkpoint tables are the continuation authority. Status reads only bounded fields: shared-preplan readiness, planned and total counts, first missing subtask, and a concise reason. Resume reuses compatible checkpoints. The bounded preparation 0.2 and phase-output 0.6-to-0.7 migration runs before spec-drift recovery, readiness reads, and child execution. One immediate transaction validates source schemas and exact digests, converts payloads, validates targets, and updates coupled checkpoint and import fields. It preserves descriptors, ledger history, completed and skipped subtasks, commits, and checkpoint ownership. Unsupported or corrupt saved records block without deletion or regeneration. Explicit hard reset remains a separate operator action.
+
+Packaged CLI and MCP candidates check their own bundled schema pins through a database-free composition root. The installer runs `--check-packaged-contracts` on both staged images before promoting either image. This check runs before normal runtime composition can open the durable database.
 
 Child creation hydrates the shared preplan and child's plan as completed dependencies with goal-planning provenance. They add no child execution duration, tokens, or agent attribution. Standalone feature-task workflows retain directly executed and attributed preplan and plan phases.
 
@@ -295,8 +389,8 @@ runtime-core
   more production modules read or that a `runtime-ports` signature exposes:
   contract DTOs, JSON/ordered-map helpers, runtime surface contracts,
   `*_CONTRACT_VERSION` constants (plus the two top-level `*_SCHEMA_ID` constants
-  read by ports, engine, and sqlite), and the `skillbill.error` runtime exception
-  taxonomy. `*SchemaPaths` locators and `logSchemaLoadFailure` are **not** here:
+  read by ports, engine, and sqlite), and the `skillbill.error` failure codes (owner
+  `RuntimeFailureCode` enums) and the single runtime failure type `SkillBillRuntimeException`. `*SchemaPaths` locators and `logSchemaLoadFailure` are **not** here:
   they live in `skillbill.infrastructure.contracts.locator` in
   `runtime-infra/contracts`, the module that stages the canonical YAML. A
   declaration with a single owner lives in that owner's module (SKILL-374). It no longer owns the JSON-Schema
@@ -309,7 +403,8 @@ runtime-core
   `skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode` owns the eleven
   phase-output failure wire tokens and their coarse `FeatureTaskRuntimePhaseOutputFailureKind`
   mapping; `coarseFailureKindForPhaseOutputWireCode` sits beside it and delegates to that
-  enum. The `skillbill.error.*` packages are acyclic: `ShellContentContractException` and
+  enum. The `skillbill.error.*` packages are acyclic: `SkillBillRuntimeException`,
+  `RuntimeFailureCode`, the transitional `LegacyFailureCode`, `ShellContentContractException`, and
   the `FailureWireCode` contract live in `skillbill.error.core`, feature-task failure
   vocabulary in `skillbill.error.featuretask`, and per-surface shell-content errors in
   `skillbill.error.shellcontent`, which depends on both.
@@ -318,13 +413,18 @@ runtime-core
   types live in area-owned `model` packages, including the
   `skillbill.model.FileLocation` value type that carries repo paths through domain
   signatures without a `java.nio` dependency.
-- `runtime-ports`: `skillbill.model.EnvironmentContext`, the
+- `runtime-ports`: holds only contracts that cross a module boundary: interfaces
+  and DTOs implemented or consumed in more than one module, plus derived
+  extensions on its own types. That covers `skillbill.model.EnvironmentContext`, the
   `skillbill.model.RuntimeVersion` packaged-version value type, persistence sessions,
   repositories, gateway interfaces, telemetry port interfaces, workflow git
-  operations, decomposition-manifest file-store ports, port-owned model types,
-  and shared payload projection for
+  operations, decomposition-manifest file-store and validator ports, port-owned
+  model types, and shared payload projection for
   boundary events that must be consumed by both application and infrastructure
-  adapters. `java.nio.file.Path` is the path type in port signatures; the
+  adapters. Repository-driving behaviour — decomposition manifest and parent
+  discovery, projection-failure persistence, goal-parent artifact projection —
+  lives in `runtime-application` or `runtime-engine`, not in ports.
+  `java.nio.file.Path` is the path type in port signatures; the
   `skillbill.model.toPath` and `skillbill.ports.repository.toFileLocation` bridges
   convert between that `Path` and the `FileLocation` domain value.
 - `runtime-application`: CLI/MCP/shared use cases outside the engine run loop,
@@ -400,7 +500,7 @@ runtime-core
   JSON output, help, completion surfaces, and CLI runtime context creation.
   SKILL-52.2 subtask 5 narrows the main-source project dependency allow-list to
   `runtime-application`, `runtime-contracts`, `runtime-core`, `runtime-domain`,
-  and `runtime-ports`. Every `runtime-infra` module is dropped
+  `runtime-engine`, and `runtime-ports`. Every `runtime-infra` module is dropped
   — runtime-cli has no concrete `skillbill.infrastructure.*` imports outside
   test sources; the infrastructure adapters are resolved through
   `RuntimeComponent` (kotlin-inject). The allow-list is enforced by
@@ -409,7 +509,7 @@ runtime-core
   server, MCP telemetry schema validation, and MCP runtime context creation.
   SKILL-52.2 subtask 5 narrows the main-source project dependency allow-list to
   `runtime-application`, `runtime-contracts`, `runtime-core`, `runtime-domain`,
-  and `runtime-ports`. Every `runtime-infra` module is dropped
+  `runtime-engine`, and `runtime-ports`. Every `runtime-infra` module is dropped
   — runtime-mcp has no concrete `skillbill.infrastructure.*` imports outside
   test sources; the infrastructure adapters are resolved through
   `RuntimeComponent`. The allow-list is enforced by
@@ -546,8 +646,8 @@ and `:runtime-infra:sqlite`.
   structural repair and strict parsing live in `skillbill.infrastructure.contracts.phaseoutput`,
   not under `skillbill.infrastructure.contracts`, because they are
   adapter-owned parse/repair engines rather than schema validators.
-- `skillbill.error`: runtime exception taxonomy.
-- `skillbill.agent.model`: phase handoff string envelopes for agent phase input and output owned by `runtime-domain`.
+- `skillbill.error`: failure codes (`RuntimeFailureCode` enums) and the single runtime failure type `SkillBillRuntimeException`.
+- `skillbill.agent.model`: phase handoff inputs and the prose `PhaseOutput` (`value`, optional `prompt`) owned by `runtime-domain`.
 - `skillbill.infrastructure.skills.agentaddon`: governed agent-add-on filesystem
   discovery and schema validation owned by `runtime-infra/skills`;
   `skillbill.agentaddon.model` holds the typed declaration models owned by
@@ -558,38 +658,39 @@ and `:runtime-infra:sqlite`.
 - `skillbill.workflow.decomposition` and
   `skillbill.workflow.decomposition.model`: decomposition manifest codec,
   wire-map conversion, and decomposition models owned by `runtime-domain`.
-- `skillbill.workflow.goal` and `skillbill.workflow.goal.model`: goal
-  observability, progress events, subtask review artifacts, and goal models
-  owned by `runtime-domain`.
-- `skillbill.workflow.taskruntime` and
-  `skillbill.workflow.taskruntime.model`: feature-task runtime phase workflow,
+- `skillbill.workflow.model.goalobservability`: goal observability models and
+  parsing owned by `runtime-domain`.
+- `skillbill.workflow.taskruntime.*` and
+  `skillbill.workflow.taskruntime.model.*`: feature-task runtime phase workflow,
   handoff projections, phase records, and taskruntime models owned by
-  `runtime-domain`.
+  `runtime-domain`. The declared packages are `taskruntime.artifact`,
+  `.handoff`, `.phase.task`, `.phaseartifacts`, `.validation`, and
+  `taskruntime.model.{audit, core, feature, handoff, handoff.assembly,
+  handoff.task, persistence, phase, repair, review, skeleton, validation}`.
 - `skillbill.workflow.model.goalreview` and
   `skillbill.workflow.model.persistence.artifact`: shared goal-review vocabulary
   and durable artifact-map access owned by `runtime-domain`. These lower model
   packages are the common vocabulary below their workflow consumers.
 - `skillbill.review.parsing`: review finding and lane parsing owned by
   `runtime-domain`; review model types remain under `skillbill.review.model`.
-- `skillbill.workflow.idestatus`: IDE status validation owned by
-  `runtime-domain`.
 - `skillbill.workflow.specsource`: spec-source reading owned by
   `runtime-domain`.
 - `skillbill.workflow.verify`: Feature Verify workflow definition
   (`FeatureVerifyWorkflowDefinition`) owned by `runtime-domain`.
-- `skillbill.goalrunner` and `skillbill.goalrunner.model`: pure goal-runner
-  liveness policy, worker-subtask parsing, status projection, accounting, and
-  attempt-ledger models owned by `runtime-domain`.
-- `skillbill.idestatus` and `skillbill.idestatus.model`: agent activity label
+- `skillbill.goalrunner`, `skillbill.goalrunner.model`, and
+  `skillbill.goalrunner.ledger`: pure goal-runner liveness policy,
+  worker-subtask parsing, status projection, accounting, and attempt-ledger
+  models and decoding owned by `runtime-domain`.
+- `skillbill.idestatus.model`: agent activity label
   and stamp types for IDE status presentation owned by `runtime-domain`.
 - `skillbill.engine`: feature-task run loop, goal runner, goal planning, and
   planning projection use cases owned by `runtime-engine`.
 
 Package-cycle enforcement uses exact declared-package strongly connected
-components for `runtime-domain`, including nested model packages. Other module
-scan cases retain the existing first-segment mutual-pair algorithm and their
-recorded baselines; the scanner does not infer package nodes from imported
-symbol suffixes.
+components for `runtime-domain` (including nested model packages),
+`runtime-contracts` and `runtime-cli`. Other module scan cases retain the
+existing first-segment mutual-pair algorithm and their recorded baselines; the
+scanner does not infer package nodes from imported symbol suffixes.
 
 ### Goal-runner execution lifetime (`DefaultGoalRunnerExecutionCoordinator`)
 
@@ -645,8 +746,9 @@ reads through the production coordinator and recorders.
 - `skillbill.review` and `skillbill.review.model`: pure review parsing, triage
   decision normalization, and review models owned by `runtime-domain`.
 - `skillbill.review.context.model.claim` and
-  `skillbill.workflow.taskruntime.model.persistence.task.runtime.store`:
-  claim-admission and task-runtime persistence vocabulary owned by
+  `skillbill.workflow.taskruntime.model.persistence`:
+  claim-admission and task-runtime persistence vocabulary (checkpoint, run,
+  implementation, prior-gap, goal, and store models) owned by
   `runtime-domain`.
 - `skillbill.telemetry.model`: telemetry settings normalization and lifecycle
   telemetry records owned by `runtime-domain`.
@@ -764,7 +866,8 @@ in `runtime-infra/host`.
 
 `InstallerProcessAdapter` in `runtime-infra/host` starts an argv vector with an
 explicit environment map, closes child stdin immediately after start, captures
-merged stdout/stderr with a 1 MiB cap and `INSTALLER_OUTPUT_TRUNCATION_SENTINEL`,
+merged stdout/stderr with a 1 MiB cap and `INSTALLER_OUTPUT_TRUNCATION_SENTINEL`
+(both `internal` to `skillbill.infrastructure.host.process`),
 and applies `DEFAULT_INSTALLER_PROCESS_DEADLINE_SECONDS` (600s) from the request
 object. Tests inject shorter deadlines through that field; the CLI exposes no
 public timeout flag. Post-failure teardown uses `GIT_PROCESS_CLEANUP_BUDGET_SECONDS`
@@ -839,7 +942,11 @@ silently bypass the journal boundary.
    adapters, or composition roots. `runtime-ports/src/main` must not declare
    top-level objects, non-DTO top-level classes, `(this as` casts, interface
    default bodies that `error` or `throw`, or — outside a `fun interface` —
-   interface default bodies that return a bare constant;
+   interface default bodies that return a bare constant, or top-level functions
+   with a `*Repository` receiver or with a `UnitOfWork`,
+   `GoalRunnerPersistenceSession`, `DatabaseSessionFactory`, `WorkflowEngine`,
+   `*Repository`, or `*Store` parameter. Derived extensions on a `*Store` receiver
+   with plain parameters stay allowed;
    `PortsDeclarationArchitectureTest`
    enforces this beside `RuntimeContractModuleImportRulesTest`.
 5. Contracts packages must not depend on application, domain area packages,
@@ -892,10 +999,25 @@ silently bypass the journal boundary.
     `runtime-ports` MUST NOT return or accept `Map<String, Any?>`,
     `Map<String, Any>`, `Map<String, *>`, string-keyed `MutableMap`,
     `HashMap`, or `LinkedHashMap` variants, or type aliases to those
-    shapes. There is no curated FQN allow-list and no production
-    annotation escape hatch. `RuntimeRawMapArchitectureTest.runtime
+    shapes. Public declarations in those modules also MUST NOT be typed
+    exactly `Any`: a public `Any` return or property hides a raw map behind a
+    type the scanner cannot see, so it is rejected the same way. Use a typed
+    carrier (for example `FeatureTaskRuntimeWorkflowArtifactMap`,
+    `DurableWorkflowArtifacts`, or `WorkflowArtifactPatch`) instead.
+
+    The only allow-listed raw-map members are the four
+    `DurableWorkflowArtifactFamily` members `contains`, `value`, `putInto`,
+    and `removeFrom`. The family's `key` is private, so these four are the
+    single typed gate for reading or writing a durable artifact family, and
+    they must accept `Map<String, Any?>`. There is no other FQN allow-list and
+    no production annotation escape hatch. `RuntimeRawMapArchitectureTest.runtime
     architecture forbids public raw map shapes in inner layers` fails on
-    any new public raw-map surface in those modules.
+    any new public raw-map or exact-`Any` surface in those modules.
+
+    The domain accepts no validators. Schema validators live in
+    `runtime-ports` (`FeatureTaskRuntimeWireArtifactValidator`,
+    `InstallPlanWireValidator`); callers validate the wire map before or after
+    the domain builds it.
 
     Contain wire maps in `private` or `internal` adapter serializers, or
     replace them with typed models at the port or application boundary.
@@ -1076,42 +1198,98 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   settled envelope, typed launch failure). `DefaultPhaseRunner` is the only
   implementation, and it is the only featuretask type that depends on
   `GoalRunnerSubtaskLauncher`.
-- The run state sits behind three ports. `PhaseLaunchState` is what a
-  `PhaseRunner` reads and writes around one launch: the settlement target,
-  launch observation, token accounting, and the settled envelope.
-  `PhaseRunState` extends it with everything one run reads and writes: the
-  in-memory progress, the session, telemetry, the attempt loop, strategy
-  selection, and the sub-ports in `slot.state` (`PhaseRunRecords`,
-  `PhaseRunGoal`, `PhaseRunSettlements`, `PhaseRunCheckpoints`).
-  `PhaseStepState` is the per-call port `runStep` receives. It adds the
-  review members of the `code_review` strategy. The run loop's entry takes
-  (definition, `PhaseRunState`, facts). `FeatureTaskRuntimeRunRequest` is
-  only the durable entry's input. The runner builds `DurablePhaseRunState`
-  and `DurablePhaseStepState` (`runloop.durable`). They are the only
-  run-loop and slot classes that hold the durable stores, writers, and
-  checkpoint git operations.
-- Strategies are context-free. No slot class references
-  `FeatureTaskRuntimeRunLoopContext`. A strategy builds its
-  `PhaseAttemptScope` (the run request and the run state) from the
-  `PhaseRun` and `PhaseStepState` it receives. Hooks and loop rules take a
-  `PhaseAttemptEnvironment`.
-- Shared code never names a step. It asks
-  `PhaseStrategyLookup.resumeRules(facts)` for the owning strategy's
-  `PhaseResumeRules` (tracks review passes, resumes past completion,
-  persisted-block retry). It asks a status projection's `reportedGate(stepId)`
-  (`BUILD` or `VALIDATION`) which step reports a gate. It reads entry and
-  loop steps from the transition declaration. The validation and readiness
-  gates and the review-generation writes take the step id from the calling
-  strategy.
+- `PhaseRunState` exposes progress, session, attempt execution, strategy
+  selection, records, goal continuation, settlements, checkpoints, and phase
+  gates. Ordinary steps receive `PhaseAgentStepBinding` at dispatch; review steps
+  receive `PhaseReviewStepBinding` (review interfaces in `PhaseStepState.kt`, not
+  a `PhaseRunState` inheritance chain). `FeatureTaskRuntimeRunLoopStepState`
+  implements those review interfaces only on review bindings. `FeatureTaskRuntimeRunLoopDurableState`
+  (`runloop.durable`) adapts durable services to `FeatureTaskRuntimeRunLoopStepState`
+  (`runloop.state`), while `InMemoryPhaseRunState` and
+  `GoalPlanningPhaseRunState` use the same step-state adapter with in-memory
+  records. Goal planning fan-out units run on `GoalPlanningUnitRunState` with
+  isolated progress, session, records, telemetry, and step binding. Durable
+  and in-memory storage remain distinct.
+- `PhaseAttemptEnvironment` supplies request facts only. Runtime scopes retain storage and effect
+  collaborators privately. Strategy hooks receive detached observations and bound role operations;
+  review/PR/loop helpers receive readonly repository inspection. Step factories require coordinator
+  dispatch, request identity, selected membership and policy. Attempt launch selects the admitted
+  owner's runner after required persistence. The transition owner coordinates progress, session,
+  evidence, retry and checkpoint state, with durable acknowledgement before in-memory advancement.
+- Execution lookup requires membership in `ResolvedPhaseExecutionPlan` and
+  checks the selected strategy revision, step policy identity, and resume
+  interpretation identity before returning a strategy. Durable run state reads
+  traversal from that same plan. `PhaseStrategyLookup.resumeRules(plan)` uses
+  selected strategy rules for execution and the explicit revision-one history
+  policy for unselected records.
+- `FeatureTaskRuntimeExecutionPlanCodec` maps resolved plans to the bounded
+  artifact through `FeatureTaskRuntimeExecutionPlanValidator`. Decoding restores
+  immutable domain data and checks policy digests. It does not select strategies
+  or launch runners. `FeatureTaskRuntimeExecutionPlanCompatibility` compares
+  recorded composition with supported definitions, registrations, and policies.
+  It returns the supported plan and reports distinct missing, corrupt,
+  unsupported, and incompatible failures with payload-free recovery guidance.
+  This composition check does not establish durable execution admission.
+  `encodeExecution` adds revision-one descriptors for gate commands, receipt
+  interpretation, retry and resume budgets, audit behavior, review invalidation,
+  checkpoint ownership, and finalization. `requireSupportedExecution` requires
+  the complete supported policy set and compares its effective inputs. Command
+  identity uses argv after wrapper resolution, command family and role, cache
+  mode, findings settings, validation depth, pack identity, and phase timeout.
+  It preserves argv order and absent values. Artifact bodies contain digests,
+  not command payloads. Policy input encoding and the artifact each have a
+  65536-byte limit. The combined policy families have a 256-descriptor limit.
+  Semantic changes require a revision bump; cosmetic source changes do not.
+  Durable traversal compatibility currently accepts the definition's exact
+  traversal. `AuditPlanningExecutionPlanMapping` permits only the exact
+  acceptance-audit revision 1 or 2 composition to map to revision 3. It checks the
+  original step identities, traversal, and retry/resume policy digests, then
+  maps to prose repair planning and derives the two affected effective-policy digests.
+  Other effective policies must still match admission inputs. The durable
+  descriptor stays unchanged, admission records a diagnostic, and existing-child
+  creation returns the original descriptor to preserve raw identity checks.
+  Resume routes through an unfinished loop-only predecessor before its successor.
+  Phase records, ledger entries, checkpoint evidence, and loop budgets stay intact.
+  There are no traversal-override mappings.
+  In-memory override validation does not grant durable compatibility.
+  The execution encoder rejects traversal overrides before producing a durable
+  descriptor. `FeatureTaskContinuationLookupService.claim` re-reads the row,
+  route identity, worker ownership, and descriptor in its claim transaction.
+  It checks effective policies before changing status and returns the immutable
+  recorded plan. Refusal diagnostics contain a bounded workflow id and reason
+  code. Diagnostic failure does not replace the refusal.
+  `FeatureTaskRuntimeExecutionPlanResolver` resolves the repository-owned path
+  inventory through installed pack routing, reads the repository wrapper setting,
+  and encodes the chosen command family, validation depth, and phase timeout.
+  Standalone CLI creation and goal-child launch preparation supply this descriptor
+  to their existing creation transactions. Build selection refuses a missing
+  discovery or verification build command before child creation.
+  `FeatureTaskRuntimeExecutionAdmission` checks the authoritative identity and
+  descriptor inside worker acquisition, takeover reservation, and ownership
+  transfer transactions. Transfer checks the identity admitted at reservation.
+  Admission failure retains workflow and lease evidence and emits a bounded
+  diagnostic. The worker hands the admitted immutable plan to the CLI's runner
+  request. Preparation and execution use that plan when supplied.
+  Direct runner entry still permits requests without admission. Creation adapters
+  still accept omitted descriptors, goal-child reuse still compares raw values,
+  and crash recovery and receipt regeneration still need transactional admission.
+  Gate execution must also consume the checked effective inputs rather than
+  resolving commands again from current configuration.
+- `PhaseHistoricalInterpreter` owns revision-one record interpretation and
+  status metadata. It has no strategy registry, runner, or persistence port.
+  Unknown steps retain their raw records during status inspection and cannot
+  acquire resume rules. Recognizing a historical build step never selects its
+  build strategy. History inspection does not grant durable resume admission.
 - `ReviewTarget` is a per-call fact on `PhaseRun`: `LastCommit` (the full-run
   default), `Uncommitted`, `Commit(revision)` (a sha, branch, or tag), or
   `Scoped` (the base and head `skill-bill code-review` resolves). It composes
   the opening lines of the review prompt.
 - `SkeletonDefinition` (`runtime-domain`) lists a run's slots in order.
-  `STANDALONE` has every slot; `GOAL_CHILD` omits `pull_request`.
-  `forRun(goalContinuation)` picks one. The declaration derived from a
+  `FEATURE_RUN_SLOTS` fixes the nine durable feature-run slots; `STANDALONE` uses
+  all nine and `GOAL_CHILD` omits `pull_request`. `standalone_review` is outside
+  that list. `forRun(goalContinuation)` picks one. The declaration derived from a
   definition equals the phase workflow's, and a reorder raises a typed error.
-  `REVIEW` (the `code_review` slot), `VALIDATION` (the `quality_gate` slot),
+  `REVIEW` (`standalone_review`, with only `present_findings`), `VALIDATION` (the `quality_gate` slot),
   `PLAN` (`preplan` and `plan`), `IMPLEMENT` (the `implementation` slot) and
   `PR` (the `pull_request` slot) are in-memory definitions (`runStateKind`
   `IN_MEMORY`) that a phase run drives on its own. Each carries a
@@ -1124,8 +1302,10 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   schedule, over the run state's `PhaseRunFanOut`. The sweep drives it through
   `FeatureTaskRuntimeRunLoopEntry` over an in-memory
   `GoalPlanningPhaseRunState`, whose attempt loop keeps the planning attempt
-  gate, budget, and checkpoints, and writes no feature-task workflow row.
-  `PhaseStrategyLookup.unselectedStepIds` counts every canonical step a run
+  gate, budget, and checkpoints, and writes no feature-task workflow row. The
+  selected `goal-plan-fan-out` strategy authorizes `agent-plan` at the attempt
+  boundary while preserving the selected step policy and request checks.
+  `ResolvedPhaseExecutionPlan.unselectedStepIds` counts every canonical step a run
   does not select, including steps outside a short definition, so a step
   drops its projections from producers the definition never runs.
 - A phase run (`skillbill.engine.featuretask.phaserun`) drives one in-memory
@@ -1155,15 +1335,23 @@ Parts (`skillbill.engine.featuretask.slot`, with `PhaseSlot` and
   `target:HEAD|uncommitted|pr|staged|unstaged|<commit-sha|branch|tag>`. An omitted target reviews
   uncommitted changes when the worktree is dirty and `HEAD` when it is clean.
   A target that names no commit is a usage error, and a worktree status that
-  cannot be read blocks the review step. `skill-bill code-review` routes
-  through `PhaseRunEntry` too, so both modes find, verify, and fix Blocker and
-  Major findings before it reports. `PhaseInstructions` carries the operator
+  cannot be read blocks the review step. `skill-bill code-review` routes through
+  `PhaseRunEntry` too. Both entry points pin the requested target through the
+  accepted review binding and run only `present_findings`. Inline, auto, and
+  omitted mode use one agent session; delegated mode uses
+  `ParallelCodeReviewRunner`. The runtime admits one canonical findings register
+  and verdict. Either valid verdict exits 0. Invalid, incomplete, or failed output
+  exits 1 with available findings and a block reason. Standalone review does not
+  edit or commit. Full runs keep `CODE_REVIEW` with review, verification, and
+  repair; durable checkpoint commits remain owned by the full-run `PhaseRunState`.
+  `PhaseInstructions` carries the operator
   instructions a phase run adds to its step prompts.
   `PhaseRunIntakeResolver` turns the intake into the run's issue key and run
   invariants as the definition's intake requirement says. An optional-intake
   run takes its issue key from the intake, else the current branch, else the
-  definition id, so a `phase pr` title names the real issue. A missing issue key
-  raises `PhaseIntakeRequiredError`. The CLI rejects an empty plan intake as a
+  definition id, so a `phase pr` title names the real issue. An issue URL in the
+  intake supplies its key from the first path segment that is one. A missing
+  issue key raises `PhaseIntakeRequiredError`. The CLI rejects an empty plan intake as a
   usage error. `skill-bill phase plan <KEY> [description]` sets
   `specBundleRequired`: the plan prompt asks for a decomposition package, the
   planning stopper writes the parent spec, subtask specs and decomposition
@@ -1263,8 +1451,10 @@ Composition:
   | `agent-plan` | `slot.plan` | Plan directive, goal-continuation constraint, decomposition stop |
   | `implement-then-simplify` | `slot.implementation` | Implement and simplify directives, continuation segments, simplify scope boundary, receipt checks |
   | `acceptance-audit` | `slot.audit` | Audit directive, remaining-criteria retry prompt and briefing rewrite, unchanged-remainder block, audit verdict rule (`AcceptanceAuditVerdictRule`) and its `gaps_found` rejection, audit-to-review checkpoint (`AcceptanceAuditLoopRules.forwardCheckpoint`) |
-  | `inline` | `slot.codereview` | Review, verify_findings, and implement_fix prompts, review envelope decoding, finding-disposition gate, review briefing field set; standalone and goal-child selection maps `inline` and `auto` here, and `RuntimeOwnedReviewMode` rejects a requested `delegated` |
-  | `delegated` | `slot.codereview` | The same `CodeReviewSlot` steps, with a review step that runs `ParallelCodeReviewRunner` lanes (bounded by `withBoundedLaneProgress`) inside its `PhaseRunner` session and edits no files; the `REVIEW` definition selects it for `delegated`, standalone and goal-child runs do not |
+  | `inline` | `slot.codereview` | Full-run review, verify_findings, and implement_fix prompts, review envelope decoding, finding-disposition gate, review briefing field set; standalone and goal-child selection maps full-run modes here |
+  | `delegated` | `slot.codereview` | The full-run CodeReviewSlot, with a review step that runs ParallelCodeReviewRunner lanes inside its PhaseRunner session; full-run repair and checkpoint behavior stays here |
+  | `inline` | `slot.standalonereview` | The report-only present_findings step, strict register and verdict admission, accepted target pinning and pass recording, one agent session, no repair or checkpoint path |
+  | `delegated` | `slot.standalonereview` | The same report-only step through ParallelCodeReviewRunner, requiring complete lane coverage and integration disposition; no repair or checkpoint path |
   | `pack-build` | `slot.qualitygate.packbuild` | Runtime-owned build gate, triage and repair sessions |
   | `agent-validate` | `slot.qualitygate.agentvalidate` | Agent validate step, its repair session, retryable blocked disposition |
   | `boundary-history` | `slot.writehistory` | write_history directive, the boundary history and decision rules (the `boundary-history-directive.md` and `boundary-decisions-directive.md` resources, with runtime inputs in `BoundaryMemoryPromptRules`; the prompt invokes no skill), finalization briefing field set, changed paths and history and decision writes measured by `WriteHistoryMeasurement` under `FeatureTaskRuntimeMeasuredFactKeys`; a fact it cannot measure is recorded as unknown with a diagnostics record |
@@ -1287,15 +1477,17 @@ Composition:
   discipline, retry, and settlement sections and has no phase-keyed table.
   Goal planning composes preplan and plan prompts from the registered
   strategies through `PhaseStrategyLookup`.
-- Every step except the three `code_review` steps settles with the minimal
-  final object: status, summary, prose value, optional verdict, and a failure
-  disposition when not completed. The runtime stamps the contract version and
-  phase id, and the durable settlement directive is added whenever the step
-  has a settlement target. `DefaultPhaseRunner` prefers the MCP-settled
-  envelope and otherwise reads the minimal final object from stdout for any
-  step name, including a step outside the domain graph. A step whose prompt
-  sections set `settles = false` (the runtime-owned build and commit_push
-  turns) does not settle with the uniform output.
+- Every step except the three `code_review` steps settles through
+  `feature_task_phase_complete` / `feature_task_phase_block` with a status,
+  summary, prose value, and optional prompt; a failure disposition accompanies
+  a non-completed status. The runtime stamps the phase id, and the durable
+  settlement directive is added whenever the step has a settlement target.
+  `PhaseOutputGate` takes the terminal outcome first, then the settlement
+  record, then non-blank stdout prose as the value for any step name, including
+  a step outside the domain graph. There is no response envelope to parse and
+  no format relaunch. A step whose prompt sections set `settles = false` (the
+  runtime-owned build and commit_push turns) does not settle with the uniform
+  output.
 
 Dispatch and policy:
 
@@ -1397,15 +1589,12 @@ Adding a phase strategy:
   `WorkflowWirePayloadKeys` and `SharedPayloadKeys`; there is no contracts-module
   ordering helper on that path.)
 - Feature-task runtime wire artifact schema validation ports live in
-  `runtime-domain` as `FeatureTaskRuntimeWireArtifactValidator` (closed
-  `FeatureTaskRuntimeWireArtifactKind`) plus `FeatureTaskRuntimePhaseOutputValidator`
-  and `DecompositionManifestValidator`. Infra implements them through
-  `FeatureTaskRuntimeWireArtifactValidatorAdapter` and the phase-output /
-  decomposition adapters under `runtime-infra/contracts`; composition wires one adapter
-  instance per port. Goal progress, observability, and planning-preparation validator
-  names are type aliases to that same port and select their closed artifact kinds
-  through extension helpers. Extension helpers on the wire-artifact port preserve
-  call-site ergonomics without default port bodies. Goal-continuation artifact keys declare in
+  `runtime-ports`: `skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator`
+  and `skillbill.ports.workflow.decomposition.DecompositionManifestValidator`.
+  Callers name the closed `FeatureTaskRuntimeWireArtifactKind` explicitly.
+  Infra implements them through
+  `FeatureTaskRuntimeWireArtifactValidatorAdapter` and the decomposition adapters under `runtime-infra/contracts`; composition wires one adapter
+  instance per port. Goal-continuation artifact keys declare in
   `FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys`; `WireVocabularyGovernedSeamInventory`
   scans that encode/decode pair. `SkillBillVersion` reads `skillbill/version.properties`
   from `runtime-core`; its `getResourceAsStream` call is the single documented
@@ -1444,13 +1633,13 @@ Adding a phase strategy:
 - Goal declared-progress event schema validation
   (`orchestration/contracts/goal-progress-event-schema.yaml`) is owned by
   `skillbill.infrastructure.contracts.workflow.GoalProgressEventSchemaValidator` in
-  `runtime-infra/contracts`, reached through the domain-owned port
-  `skillbill.workflow.goal.GoalProgressEventValidator` (wired in `RuntimeComponent`
-  to `skillbill.infrastructure.contracts.GoalProgressEventValidatorAdapter`, mirroring
-  `GoalObservabilityEventValidator`). The owning durable write/parse seam is
+  `runtime-infra/contracts`, reached through the ports-owned
+  `skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator` (the
+  `FeatureTaskRuntimeWireArtifactValidator` adapter in `runtime-infra/contracts`
+  dispatches to it). The owning durable write/parse seam is
   `skillbill.engine.goalrunner.persist.WorkflowGoalRunnerOutcomeStore.recordProgressEvent`,
-  which validates the declared-progress event map through the injected port
-  before it is appended to the bounded `goal_progress_run_history` /
+  which validates the declared-progress event map through the injected
+  `goalProgressEventValidator` before it is appended to the bounded `goal_progress_run_history` /
   `goal_progress_latest_event` workflow artifacts. The supervisor read seam
   (`WorkflowGoalRunnerOutcomeStore.progress`) decodes the latest declared event
   softly so a malformed stored record cannot disable deterministic liveness.
@@ -1534,9 +1723,9 @@ recorded output with no declaration is never delivered.
 references. It rejects — never truncates — on a missing required source,
 malformed or undeclared field, unsupported contract version, duplicate
 projection name, budget overflow, invalid compact reference, or
-checkpoint-policy violation, each through
-`InvalidFeatureTaskRuntimeHandoffProjectionError` naming the workflow, consumer
-phase, projection, and contract without echoing payload bodies. The envelope has
+checkpoint-policy violation, each through a rejection context. Throwing entry
+points turn that context into a coded runtime exception whose message names the
+workflow, consumer phase, projection, and contract without echoing payload bodies. The envelope has
 its own Draft 2020-12 contract
 (`orchestration/contracts/feature-task-runtime-handoff-envelope-schema.yaml`,
 pinned by `FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION` and
@@ -1613,6 +1802,19 @@ compile/buildability proof and never invokes the collect-all validation gate.
 Default standalone runs skip `build` (`review -> validate`); goal continuation
 stamps which quality gate a child runs (subtask 2).
 
+`SkeletonDefinition.VALIDATION` binds `PackValidationStrategy` to `PHASE_VALIDATE`.
+It runs the dominant pack's `collect_all_full_gate_command`, repairs parsed
+findings in the same agent session, then runs
+`cache_bypassing_collect_all_full_gate_command` to verify. Goal-child `BUILD`
+stays on `PackBuildStrategy`, which uses only the two build commands. Each gate
+run records its effective argv, exit code, and repository checkpoint. A passed
+receipt requires a non-empty run list and a successful terminal required command;
+an earlier pass cannot cover a failed verification. Missing required declarations
+or command members block both durable and in-memory routes. Historical receipts
+without command semantics block recovery and remain available for inspection. The
+build receipt and validation evidence contracts are versioned independently; a
+reader rejects legacy evidence when it cannot prove current command semantics.
+
 **4. Phase-local instructions.** Run identity remains durable state on every
 briefing, but prompt rendering is selected per phase by
 `FeatureTaskRuntimeRunInvariantPromptAllowlist`.
@@ -1655,9 +1857,8 @@ for every edge and `PREPLAN_DIGEST_RECEIPT` (196,608 bytes) for the single
 beyond every observed size, not that an ordinary run outgrew its budget. Re-size
 them from the same measurement when the delivered shape narrows to named fields.
 
-When a projection is rejected anyway, `FeatureTaskRuntimeRunLoop` catches
-`InvalidFeatureTaskRuntimeHandoffProjectionError` at the launch seam and blocks
-the phase through the ordinary `blockAndPersistInPhase` path with a
+When a projection is rejected anyway, the launch seam receives its rejection
+context and blocks the phase through the ordinary `blockAndPersistInPhase` path with a
 `needs_user_action` disposition. The rejection is static declaration or
 configuration drift rather than agent output, so retrying without operator action
 reproduces it; blocking durably keeps the phase row and the run's finalization
@@ -1734,10 +1935,9 @@ Cap exhaustion blocks durably with a reason naming the quarantined record, its
 producing phase, and the attempt count. A record the runtime cannot attribute to
 a producing phase, or whose producer a goal-continuation truncation dropped from
 the resolved pipeline, blocks durably with an actionable reason rather than
-attempting an impossible re-entry. Static declaration/config drift
-(`InvalidFeatureTaskRuntimeHandoffProjectionError`), briefing byte-ceiling
-overflow keep their first-occurrence durable block: re-running a producer cannot
-fix them.
+attempting an impossible re-entry. Static declaration/config drift from a coded
+handoff projection rejection and briefing byte-ceiling overflow keep their
+first-occurrence durable block. Re-running a producer cannot fix them.
 Out-of-band row deletion or migration is the corruption fallback for records the
 edge cannot regenerate. Per-run regeneration telemetry records activation counts,
 attempt counts, and outcome-class tallies on the
@@ -1762,8 +1962,6 @@ Contract validators log schema drift at `WARNING` through
 `skillbill.infrastructure.contracts.locator.logSchemaLoadFailure`
 before throwing the family's `Invalid*SchemaError`; that is the operator signal
 for packaged-schema versus runtime-contract version skew, not a silent fallback.
-`FeatureTaskRuntimePhaseOutputSchemaValidatorSupportParsing` logs unparsable
-phase-output candidates at `FINE` while continuing envelope selection.
 `InstallStaging` and staging I/O log reuse and failure at `FINE`/`SEVERE`.
 `JvmAgentRunProcessRunner` and `ProcessRunDegradationRecorder` export bounded
 degradation lines to stderr; `degradationExportLogger` records sink failures
@@ -1780,9 +1978,6 @@ degradation export);
 `SkillRemoveJvmFileSystemApply` (uninstall cleanup);
 `NativeAgentCompositionSchemaValidator` (schema drift before a typed failure);
 `PlatformPackSchemaValidator` (tolerated legacy manifest version);
-`FeatureTaskRuntimePhaseOutputSchemaLoading` and
-`FeatureTaskRuntimePhaseOutputSchemaValidatorSupportParsing` (schema-load and
-candidate-selection diagnostics);
 `WorkflowStateSchemaValidator`, `IdeStatusSchemaValidator`,
 `GoalProgressEventSchemaValidator`, `GoalObservabilityEventSchemaValidator`,
 `GoalPlanningPreparationSchemaValidator`, `InstallPlanSchemaValidator`,
@@ -1802,8 +1997,8 @@ typed snapshots before calling the policy.
 
 The install-plan wire map remains the schema source of truth at both existing
 seams. `buildInstallPlan` still calls
-`validateInstallPlanWireSnapshot(plan)`, and the CLI emission boundary still
-revalidates the same helper output before emitting `installPlanPayload` or the
+`wireValidator.validate(buildInstallPlanWireMap(plan))`, and the CLI emission
+boundary still revalidates the same wire map before emitting `installPlanPayload` or the
 planning prefix of `installApplyPayload`. New install policy APIs must use typed
 request/result/snapshot models and must not add public raw `Map<String, Any?>`
 returns outside the documented open-boundary allow-list. Adapter modules may
@@ -1969,8 +2164,10 @@ boundary rules:
   agent-target cleanup, native-agent unlinking, and MCP unregistration.
 - The Raw Map Boundary Rule (rule 11) is enforced by
   `RuntimeRawMapArchitectureTest.runtime architecture forbids public raw map
-  shapes in inner layers` with zero-tolerance: no allow-list and no annotation
-  grandfather path.
+  shapes in inner layers` with zero-tolerance: the only allow-listed members
+  are the four `DurableWorkflowArtifactFamily` accessors (`contains`, `value`,
+  `putInto`, `removeFrom`), public declarations typed exactly `Any` are
+  rejected, and there is no annotation grandfather path.
 
 Architecture scanners use `ArchitectureScanSupport.runtimeRoot` as the
 repository root that contains `runtime-kotlin`. A named module source root is
@@ -2218,7 +2415,7 @@ The closed workflow-Git result vocabulary is owned by
 
 Runtime-domain wire-token declarations own closed enum tokens and their aliases. Runtime-contracts
 `*Keys` declarations own durable and wire payload keys that two or more production modules read;
-`SharedPayloadKeys` is the shared owner for the feature-task phase-output envelope;
+`SharedPayloadKeys` is the shared owner for the feature-task phase settlement keys;
 `DecompositionManifestPayloadKeys` and `DecompositionPlanningPayloadKeys` own decomposition-manifest
 and planning-projection keys; `LifecycleTelemetryPayloadKeys` owns the telemetry envelope, including
 `event_name`. A `*Keys` object with a single owner lives in that owner's module instead — for
@@ -2228,14 +2425,12 @@ example `SqliteReviewTelemetryPayloadKeys` and
 `GovernedReviewEvidencePayloadKeys` in `runtime-infra/launcher` — and it must not restate a value a
 shared owner already declares. `WireVocabularyArchitectureTest` asserts that zero-overlap for the
 two SQLite adapter key objects (SKILL-374).
-`ProsePhaseOutputParse` delegates status normalization to `SettlementStatus`, while
 `DecompositionStatus` retains its separate `completed` input alias and `complete` output token.
 
 ## Governed payload seams (mechanical scope)
 
 `WireVocabularyGovernedSeamInventory` is the independent expected-key authority. It reads canonical
-schema YAML for decomposition manifests, the decomposition bundle journal, and the workflow
-phase-output envelope (not a scan of existing `*Keys` objects). It also declares the closed
+schema YAML for decomposition manifests and the decomposition bundle journal (not a scan of existing `*Keys` objects). It also declares the closed
 goal-continuation artifact vocabulary independently from its Kotlin owner. For each seam it
 compares closed schema fields to declared `*Keys` / `*PayloadKeys` constants and fails when a
 schema field has no Kotlin owner.
@@ -2249,7 +2444,6 @@ they spell the same token.
 | --- | --- | --- |
 | Decomposition manifest | Root, subtask, dependency, stack branch, and current-intent closed objects | N/A at manifest root (`additionalProperties: false`) |
 | Decomposition manifest bundle journal | Bundle-journal root and entry closed objects | None |
-| Workflow phase-output envelope | Top-level envelope fields only | `produced_outputs` entry maps (phase-specific keys stay open) |
 | Feature-task runtime goal-continuation artifact | `FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys` | None |
 
 A green `WireVocabularyArchitectureTest` on runtime main sources does not prove every `String` in
@@ -2330,7 +2524,7 @@ or a versioned durable payload whose vocabulary is intentionally owned by that b
   `GoalRunnerLivenessState`, as does
   `skillbill.goalrunner.model.GoalRunnerLivenessDecision.state`;
   `skillbill.goalrunner.model.GoalPlanningStatusSnapshot.state` and
-  `skillbill.engine.work.model.IdeStatusPlanning.state` use `GoalPlanningStatusState`;
+  `skillbill.ports.idestatus.model.IdeStatusPlanning.state` use `GoalPlanningStatusState`;
   `skillbill.goalrunner.model.GoalRunnerStatusProjection.executionLiveness` and
   `skillbill.goalrunner.model.GoalRunnerStatusProjectionRuntimeInputs.executionLiveness` use
   `ExecutionLiveness`; `skillbill.workflow.taskruntime.model.FeatureTaskRuntimeRepairLedgerEntry.status`
@@ -2351,7 +2545,7 @@ or a versioned durable payload whose vocabulary is intentionally owned by that b
   record crossing the SQLite and workflow-engine compatibility seam, so it preserves unknown
   definition values; consumers convert it with `workflowStatus()` before making closed decisions.
 - `skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate.workflowStatus`
-  and `skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestRuntimeUpdate.workflowStatus`
+  and `skillbill.application.decomposition.model.DecompositionManifestRuntimeUpdate.workflowStatus`
   are read from SQLite worker/decomposition update rows and preserve the workflow-definition token
   while crossing worker and decomposition update ports; their consumers convert it with
   `workflowStatus()` before closed dispatch.
@@ -2413,7 +2607,7 @@ or a versioned durable payload whose vocabulary is intentionally owned by that b
 - `skillbill.review.context.model.ReviewAccountingInput.terminalOutcome` and
   `ReviewAccountingNode.terminalOutcome` use `ReviewAccountingTerminalOutcome`; integration
   accounting continues to use `ReviewIntegrationTerminalOutcome`.
-- `skillbill.workflow.goal.model.GoalSubtaskCommitFocusedAccounting.integrationTerminalOutcome`
+- `skillbill.workflow.model.goalreview.GoalSubtaskCommitFocusedAccounting.integrationTerminalOutcome`
   uses `ReviewIntegrationTerminalOutcome`; durable artifact decoding uses `fromWire` and emission
   uses `wireValue`, preserving the existing integration tokens, unknown-value rejection, and
   skipped-pass reason rule.

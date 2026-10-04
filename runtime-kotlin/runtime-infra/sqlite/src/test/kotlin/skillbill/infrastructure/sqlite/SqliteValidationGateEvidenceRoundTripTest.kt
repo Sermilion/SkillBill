@@ -27,6 +27,30 @@ class SqliteValidationGateEvidenceRoundTripTest {
     assertRoundTrip(decoded)
   }
 
+  @Test
+  fun cachedSuccessfulCommandRetainsExplicitEmptyWorkAndChecks() {
+    val repo = repository()
+    val evidence =
+      FeatureTaskRuntimeValidationGateExecutionEvidence.fromGateMeasurements(
+        listOf(
+          FeatureTaskRuntimeValidationGateRunRecord(
+            durationMs = 1,
+            outcome = ValidationGateRunOutcome.PASSED,
+            cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE,
+            executedWorkUnits = 0,
+            executedChecks = emptyList(),
+            command = "./gradlew check",
+            exitCode = 0,
+            repositoryCheckpoint = "cached-checkpoint",
+          ),
+        ),
+      )
+
+    persistEvidence(repo, evidence)
+
+    assertEquals(evidence, readEvidence(repo))
+  }
+
   private fun repository(): SqliteFeatureTaskPhaseSettlementRepository {
     val tempDir = Files.createTempDirectory("validation-gate-evidence")
     val dbPath = tempDir.resolve("metrics.db")
@@ -45,6 +69,9 @@ class SqliteValidationGateEvidenceRoundTripTest {
           cacheMode = ValidationGateCacheMode.CACHE_ELIGIBLE,
           executedWorkUnits = 2,
           executedChecks = listOf("runtime-engine|compileKotlin"),
+          command = "./gradlew check",
+          exitCode = 1,
+          repositoryCheckpoint = "checkpoint-before",
         ),
         FeatureTaskRuntimeValidationGateRunRecord(
           durationMs = 6,
@@ -52,6 +79,9 @@ class SqliteValidationGateEvidenceRoundTripTest {
           cacheMode = ValidationGateCacheMode.FORCED_FULL,
           executedWorkUnits = 2,
           executedChecks = listOf("runtime-engine|compileKotlin", "runtime-engine|test"),
+          command = "./gradlew check --rerun-tasks",
+          exitCode = 0,
+          repositoryCheckpoint = "checkpoint-after",
         ),
       ),
     )
@@ -67,7 +97,7 @@ class SqliteValidationGateEvidenceRoundTripTest {
           SharedPayloadKeys.PRODUCED_OUTPUTS to
             mapOf(
               ValidationEvidencePayloadKeys.VALIDATION_RESULT to
-                gateEvidence.asWorkflowArtifactEntry("checkpoint"),
+                gateEvidence.asWorkflowArtifactEntry(requireNotNull(gateEvidence.gateRuns.last().repositoryCheckpoint)),
             ),
         ),
       )
@@ -102,6 +132,9 @@ class SqliteValidationGateEvidenceRoundTripTest {
   private fun assertRoundTrip(decoded: FeatureTaskRuntimeValidationGateExecutionEvidence) {
     assertEquals(listOf("runtime-engine|compileKotlin", "runtime-engine|test"), decoded.checks)
     assertEquals(2, decoded.gateRunCount)
+    assertEquals(listOf("./gradlew check", "./gradlew check --rerun-tasks"), decoded.gateRuns.map { it.command })
+    assertEquals(listOf(1, 0), decoded.gateRuns.map { it.exitCode })
+    assertEquals(listOf("checkpoint-before", "checkpoint-after"), decoded.gateRuns.map { it.repositoryCheckpoint })
     assertEquals(
       listOf(ValidationGateCacheMode.CACHE_ELIGIBLE, ValidationGateCacheMode.FORCED_FULL),
       decoded.gateRuns.map { it.cacheMode },

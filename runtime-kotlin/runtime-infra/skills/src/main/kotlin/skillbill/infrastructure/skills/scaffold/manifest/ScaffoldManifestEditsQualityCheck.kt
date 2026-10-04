@@ -1,7 +1,7 @@
 
 package skillbill.infrastructure.skills.scaffold.manifest
 
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
 
 private val QUALITY_CHECK_KEY_PATTERN =
   Regex("^declared_quality_check_file:\\s*(.+)$", RegexOption.MULTILINE)
@@ -25,7 +25,7 @@ internal fun updateDeclaredQualityCheckFileText(
   } ?: run {
     val blockMatch =
       DECLARED_FILES_BLOCK_PATTERN.find(text)
-        ?: throw InvalidScaffoldPayloadError(
+        ?: throw invalidScaffoldPayloadError(
           "Manifest is missing 'declared_files:' block; refusing to append declared_quality_check_file.",
         )
     val insertion = "\ndeclared_quality_check_file: ${yamlScalar(relativeContentPath)}\n"

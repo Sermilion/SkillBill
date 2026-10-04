@@ -10,7 +10,6 @@ import skillbill.engine.featuretask.phase.prompt.directives.nonBuildPhaseBuildOw
 import skillbill.engine.featuretask.phase.prompt.directives.nonValidatePhaseValidationOwnershipDirective
 import skillbill.engine.featuretask.phase.prompt.directives.operatorBlockRetryDirective
 import skillbill.engine.featuretask.phase.prompt.directives.phasePromptHeader
-import skillbill.engine.featuretask.phase.prompt.directives.retryCorrectionDirective
 import skillbill.engine.featuretask.phase.prompt.directives.terminalRetryDirective
 import skillbill.engine.featuretask.phase.prompt.directives.testValueDisciplineDirective
 
@@ -28,6 +27,7 @@ fun phasePromptLeadingSections(
     minimalismDisciplineDirective(inputs.mutating),
     sections.scopeBoundary,
     testValueDisciplineDirective(sections.testValueDiscipline),
+    sections.authoringDiscipline,
   )
 
 fun phasePromptMiddleSections(
@@ -47,13 +47,6 @@ fun phasePromptTrailingSections(
     operatorBlockRetryDirective(inputs.briefing.phaseId, inputs.operatorBlockRetry),
     sections.retryFocus,
     sections.continuation,
-    retryCorrectionDirective(
-      inputs.briefing,
-      inputs.priorSchemaFailure.takeUnless { inputs.singleAgentSession },
-      inputs.correctiveRepairContext,
-      sections.retryShape,
-      sections.schemaFailureCorrection,
-    ),
     terminalRetryDirective(inputs.priorTerminalFailure),
     findingCoverageDirective(inputs.priorFindingCoverage),
     sections.outputContract

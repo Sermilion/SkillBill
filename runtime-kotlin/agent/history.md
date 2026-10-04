@@ -1,3 +1,158 @@
+## [2026-10-04] SKILL-402 standalone review slot
+Areas: runtime-domain workflow/taskruntime; runtime-engine featuretask slots and bindings; runtime-application review; runtime-ports review; runtime-core composition and architecture guards; runtime-cli review; orchestration review guidance; docs; skills/skill-bill
+- Both standalone review commands now run only `standalone_review` with `present_findings`. Inline, auto, and omitted mode use one session; delegated mode uses the existing parallel review runner with report-only parent and lane instructions.
+- Read-only step policies avoid staging and checkpoint paths. Omitted targets select uncommitted changes for a dirty worktree and HEAD for a clean one; explicit target handling stays available.
+- The explicit nine-slot `FEATURE_RUN_SLOTS` list preserves full-run and goal-child composition. Their `code_review` steps retain verification, repair, and durable checkpoint ownership.
+- Standalone admission requires a canonical register and verdict, explicit NO_FINDINGS for empty reports, and complete delegated coverage and integration. Valid verdicts exit 0; invalid or failed reports retain available findings and explain the block with exit 1.
+- Accepted review bindings pin targets and record passes. Architecture guards admit the standalone review package while retaining rejection of unrelated consumers and raw state access.
+- reusable: existing target resolution, findings parsing and merging, parallel review launch components, and a shared standalone CLI output renderer.
+- Breaking behavior: standalone review no longer repairs findings. Automatic repair remains in full feature runs; standalone review remains in-memory with no resume or report-and-fix mode.
+Feature flag: N/A
+Acceptance criteria: 10/10 implemented
+
+## [2026-10-03] LOCAL-274870733146662 automatic durable schema migration
+Areas: runtime-kotlin/runtime-{engine,contracts,domain,ports,core,cli,mcp}, runtime-kotlin/runtime-infra/{contracts,sqlite}, orchestration/contracts, docs, install.sh, scripts, .github/workflows
+- Preparation 0.2 with planning provenance 0.2 now admits phase-output 0.6 and converts it to 0.7 before recovery or child execution. Independent feature-task admission uses the same conversion.
+- Source and target validation use separately packaged historical and current schemas. Conversion preserves supplied evidence and refuses missing target evidence without inventing prose or dispositions.
+- One owning transaction publishes coupled payloads, UTF-8 hashes, provenance, and child imports with source guards. Completed/skipped state, commits, descriptors, ledgers, checkpoints, and terminal workflows retain their meaning.
+- The bounded phase-output converter, migration receipt, and database-free packaged-contract inspector are reusable. Current-valid records remain unchanged on repeated admission.
+- CLI and MCP candidates check their own bundled producer/schema pins before either install image is promoted. Rejected packages preserve installed images and durable state.
+- Limits: legacy preparation 0.1 and undeclared transitions remain unsupported. Corrupt, stale, mismatched, or non-convertible records block with typed diagnostics that omit payload content; this transition reuses planning without refresh.
+Feature flag: N/A
+Acceptance criteria: 1/1 implemented
+## [2026-10-04] SKILL-399 subtask 5: feature-task-runtime phase-output failures
+Areas: runtime-contracts error/shellcontent and error/featuretask; runtime-domain workflow/taskruntime; runtime-engine featuretask and goal planning; runtime-ports taskruntime; runtime-infra/contracts; runtime-core architecture baseline and workflow tests; runtime-application test fixtures; runtime-kotlin/ARCHITECTURE.md
+- Removed three legacy throwable classes and two unused structural-repair data types. Phase-output and projection message helpers create coded SkillBillRuntimeException values with the existing messages.
+- nextTransition returns Resolved or PhaseOrderViolation. The run loop blocks at the violation's phaseId with its message instead of recovering fields from an exception.
+- Projection validation, briefing assembly and recording pass rejection contexts as values. RequiredPhaseWrite.Rejected carries optional handoff details so launch rejection measurements retain their projection identity and classification.
+- reusable: accepted/rejected projection results and handoffEnvelopeRejection on the validator port let callers handle expected rejection without exception properties; throwing validation remains available.
+- Catch sites discriminate owned failure codes; converted tests retain message and measurement assertions, and the throwable baseline loses exactly the three deleted classes.
+- Limits: Kotlin callers must adopt the changed transition and recording signatures. Other shell-content failure conversions and retirement of the legacy bases remain outside this subtask; no feature flag or new wire format.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
+## [2026-10-02] SKILL-398 subtask 6 — defect exceptions stop driving control flow at parse edges
+Areas: runtime-kotlin/runtime-{domain,ports,application,cli,core}, runtime-infra/skills
+- Four domain validators (execution mode, repository-relative path, validation depth, persisted instant) now fail with plain require/check defects; RuntimeOwnedReviewMode.parse and the scaffold payload-object decoder return null for bad input and callers branch on the value. reusable
+- Release-ref validation is a sealed port result (ReleaseRefValidation) instead of a custom ReleaseLicensePolicyError; the CLI maps malformed tags to the canonical message. Throwable class and its baseline row deleted.
+- CLI review-mode, goal-run and repo-validation sites render the typed failure directly; no catch of IllegalArgumentException remains at those sites.
+- Tests added through existing harnesses: delegated review mode rejected, non-object scaffold payload rejected, malformed release tag message.
+- Validate repairs: database access failure keeps its SQLite cause for typed BUSY detection; shared-preplan Stopped outcomes stay PAUSED not BLOCKED; throwable-baseline scanner treats interfaces as nesting parents; two shell-content error files renamed for detekt.
+- Limits: remaining IAE/ISE catch sites (scaffold payload run, wizard, install, agent addon parsing) belong to SKILL-401.
+Feature flag: N/A
+Acceptance criteria: implemented per spec; validate passed (check --continue, skill-bill validate)
+
+## [2026-10-02] SKILL-398 subtask 5 — persistence and transport failures collapse to coded failures
+Areas: runtime-kotlin/runtime-{contracts,application,engine,cli,mcp,core}, runtime-infra/{sqlite,http}, ARCHITECTURE.md
+- Database access/busy, telemetry HTTP, goal-telemetry-row and runtime-owned persistence failures (9 classes) are now coded SkillBillRuntimeException via factories in runtime-contracts and runtime-application; baseline rows removed. reusable
+- rethrowIfDatabaseFailure() guards catches a database failure could newly reach (planning stop, install replay, scaffold payload run); readers match codes through rethrowUnless.
+- McpToolDispatcher keeps no-capture classification in one private predicate; unresolved remote transport port is now a plain error() composition defect.
+- Telemetry request is split into execute and body-check steps so proxy capability detection reads the status as a value.
+- Limits: authored without compile or test runs; planning-stop database-propagation test not yet written; remaining shell-content and error areas move to SKILL-399 and SKILL-400, so the legacy bases stay.
+Feature flag: N/A
+Acceptance criteria: implemented per reduced-scope spec; validate confirms
+
+## [2026-10-02] SKILL-398 subtask 4 — AgentAddon and GovernedReview shell-content errors collapse to coded failures
+Areas: runtime-kotlin/runtime-{contracts,application,cli,engine,mcp,domain,core}, runtime-infra/{skills,launcher,contracts,sqlite,http,workflow}, docs/telemetry-privacy.md
+- The 10 AgentAddon and GovernedReview ShellContentContractException subclasses are deleted; both files keep only a failure-code enum plus message functions, and every throw site raises one coded SkillBillRuntimeException. reusable
+- New SkillBillRuntimeException.rethrowUnless(handled) and Throwable.failureCodeLabel() ("CodeEnum.ENTRY", null for uncoded or legacy codes) in runtime-contracts; ~40 class-name renders (telemetry error_type, diagnostics, install causeClass) use the label with the old expression as fallback. reusable
+- isShellContentContractFailure() is a transitional predicate (the old class plus the codes of converted areas); catch sites use it so coded failures stay handled like the old subclasses. Each later area conversion adds its code enum; it goes away when the base class retires.
+- Tests assert the coded exception and code instead of class types; one MCP test pins that AgentAddon coded failures stay no-capture while other coded failures are captured with the label. 10 baseline rows removed.
+- Limits: the other seven shell-content areas move to SKILL-399; CodeReviewCommand's aggregation-integrity catch is still dead; authored without compile or test runs, so validate checks import order, line width and detekt.
+Feature flag: N/A
+Acceptance criteria: implemented per reduced-scope spec; validate confirms
+
+## [2026-10-02] SKILL-398 subtask 3 — local control-flow exceptions become results
+Areas: runtime-kotlin/runtime-{engine,application,cli,domain,ports,contracts,core}, runtime-infra/{launcher,skills,sqlite,contracts,workflow}
+- Custom throwables used only for local control flow were replaced by sealed results: runner already-running, launch-authorization denial, shared-preplan refresh refusal, missing unaddressed-findings ledger, spec-intent source read, parallel-review planning failures, lane-register parse, MCP registration outcome, skill-removal refusal. reusable
+- Callers branch on the value; absent-ledger CLI path throws one coded SkillBillRuntimeException (new governed-review failure code) with the old message.
+- Config model parsers validate then build; duplicate-key detection uses Jackson features and typed exceptions, not message matching; SQLite-busy detection walks causes by result code; recovery classification no longer reads Throwable.message.
+- custom-throwable-baseline.txt rows for every deleted class were removed; only two documented legacy wire strings still name old classes (profile-failure cause class, skill-removal refusal name).
+- Behaviour change: a delegated-verify planning failure now fails the code-review step with its message instead of escaping to the CLI edge.
+- Limits: authored without compile or test runs; some paths lack direct tests (carried-forward review settle, config parsers, assigned-child launch denial).
+Feature flag: N/A
+Acceptance criteria: implemented per spec; validate confirms
+
+## [2026-10-02] SKILL-398 subtask 1 — failure policy and throwable baseline
+Areas: runtime-kotlin/runtime-contracts (error/core, error/featuretask), runtime-domain decomposition model, runtime-core repoTest architecture guards, docs/code-principles.md, AGENTS.md, ARCHITECTURE.md
+- SkillBillRuntimeException now carries a RuntimeFailureCode; a secondary constructor keeps legacy callers on LegacyFailureCode.UNCLASSIFIED until later subtasks convert them. reusable
+- Four existing failure enums (phase-output code and kind, handoff-projection kind, decomposition-manifest validation code) implement RuntimeFailureCode.
+- New architecture scan lists every custom throwable in production main across modules (comments and literals stripped, nesting tracked, supertypes resolved transitively) and diffs it against custom-throwable-baseline.txt; the recorder regenerates the baseline. reusable
+- Parse-boundary guard messages now say "a result or a SkillBillRuntimeException code"; scan logic untouched.
+- Docs: Failure Contracts in code-principles.md rewritten as three tiers with an earns-its-place rule; AGENTS.md and ARCHITECTURE.md name the single failure type and code enums.
+- Limits: no exception class removed or converted yet (subtasks 2-6); authored without compile or test runs, so validate must sanity-check the baseline, the scan heuristics (simple-name fallback, Exception/Error suffix) and formatting.
+Feature flag: N/A
+Acceptance criteria: implemented per spec; build and validate confirm
+
+## [2026-10-01] SKILL-397 subtask 3 — domain package graph repair
+Areas: runtime-kotlin/runtime-{domain,application,engine,cli,core,ports}, runtime-kotlin/runtime-infra/*, ARCHITECTURE.md
+- runtime-domain package graph is acyclic: the cycle baseline file is empty and stays empty; test packages and directories now mirror main packages.
+- Artifact keys are internal to workflow.engine.model; selectedPlatformSlugs moved to install.model; the planning package folded into phase.task; SHA-256 hashing lives only in skillbill.text.
+- Package names persistence.task.runtime, handoff.envelope and repair.task are gone; handoff assembly types sit in taskruntime.model.handoff.assembly, because a loose FeatureTaskRuntime* file beside a child package named task trips the clustering guard.
+- The package-name-specific file ceiling became a generic sibling ceiling; goalrunner and goalreview stay within 12 files.
+- Placement traps: GoalSubtaskCommitFocusedAccounting and ReviewAccountingBoundedJson stay in workflow.model.goalreview (moving them creates an accounting-goalreview cycle or puts JSON projection in a review domain package). reusable
+- Limits: no feature flag; agnix not run headless; empty leftover directories under src may remain untracked.
+Feature flag: N/A
+Acceptance criteria: all implemented (validate passed `./gradlew check --continue` and agent-config validation)
+
+## [2026-10-01] SKILL-397 subtask 1 — domain wire boundary honesty
+Areas: runtime-kotlin/runtime-{domain,application,engine,core}, runtime-kotlin/runtime-infra/skills, ARCHITECTURE.md
+- The 33 public domain wrappers that returned exact Any now return the typed workflow-artifact map carrier (which gained equals, hashCode, toString); the gate-run record's entry helper was deleted in favour of its presentation wire map, and the phase-output envelope payload is internal.
+- Domain accepts no validators: the wire-artifact validation file, the install-plan snapshot validators and the validator parameters on handoff-declaration and goal-observability helpers were deleted; application and engine callers validate through the ports validators instead.
+- Removed runtime-domain testFixtures, the java-test-fixtures plugin, its five consumer dependency lines and the module-catalog entry.
+- Raw-map allow-list now holds only the four durable-artifact-family members; six former exemptions were retyped to the carrier or patch type, and the goal-review artifact helper became a public method on the durable artifacts.
+- Architecture scanner now flags public declarations typed exactly Any; ARCHITECTURE.md Boundary Rule 11 rewritten. reusable
+- Pattern: domain exposes typed carriers; validation lives in ports implementations invoked by application or engine.
+- Limits: no feature flag; wire fixtures and expected payloads untouched; authored without compile or test runs, so validate must confirm formatting and build.
+Feature flag: N/A
+Acceptance criteria: 7/7 implemented
+
+## [2026-10-01] SKILL-395 subtask 1 — MCP vocabulary ownership and adapter hygiene
+Areas: runtime-kotlin/runtime-{mcp,contracts,core}, runtime-kotlin/runtime-infra/sqlite
+- Deleted the contracts-side MCP payload keys object; the 19 MCP-only keys now live in an internal object in runtime-mcp shared, values unchanged. Every other key use points at its existing owner object (lifecycle telemetry, workflow wire, shared, telemetry proxy, review verification, learning, update check, review accounting).
+- The sqlite review row mapper reads its SQL column label from the review-finished telemetry owner instead of the MCP object.
+- Adapter hygiene: MCP adapter contract types are internal, the telemetry skill parameter is gone, the result-mapper forwarder file and the standard-map helper were inlined or removed, tool name is private, and the dispatcher rethrows CancellationException first.
+- New guard in WireVocabularyArchitectureTest: MCP payload keys must not restate a shared payload key value; no baseline added. reusable
+- Pattern followed: wire vocabulary has one owner; adapter-local keys stay internal to the adapter module.
+- Limits: no feature flag; key order and values stay byte-identical (parity and golden suites are the evidence).
+Feature flag: N/A
+Acceptance criteria: all implemented (validate passed `./gradlew check`)
+
+## [2026-10-01] SKILL-393 subtask 2 — behaviour out of runtime-ports, guard carve-outs removed
+Areas: runtime-kotlin/runtime-{ports,application,engine,core,cli}, runtime-kotlin/runtime-infra/{host,launcher,contracts}, ARCHITECTURE.md
+- Manifest DTOs, manifest discovery, parent-discovery and projection-failure persistence moved from ports to application decomposition packages; the goal parent projection writer is now an internal engine class.
+- Removed the projection-writer interface (writer has no supertype and is injected directly), the wire-validator forwarder extensions (call sites use the kind-based validate), and the review evidence batch-size duplicate; the attribution launch plan is now abstract.
+- Installer output cap and truncation sentinel are internal to host.
+- PortsDeclarationArchitectureTest gained a repository-driving-function check with fixtures; the writer exemption and two layer-boundary carve-outs are gone, and the ports cycle baseline is empty.
+- New pattern: ports hold contracts only; behaviour that drives a repository lives in application or engine. reusable
+- Validate fixes: duplicate archived-manifest helper removed, a stale test import restored, and a host-dependent uninstall test made hermetic.
+- Limits: no feature flag; moves appear in git as delete plus add.
+Feature flag: N/A
+Acceptance criteria: 12/12 implemented
+
+## [2026-10-01] SKILL-387 subtask 1 — shared prose output and persisted spec handoff
+Areas: runtime-kotlin/{runtime-domain,runtime-engine,runtime-application,runtime-infra,runtime-ports,runtime-contracts,runtime-core,runtime-cli,runtime-mcp}, orchestration/contracts, docs
+- Routed agent content through the existing PhaseOutput prose value across runtime phases; removed response-only schema, repair, and formatting-relaunch machinery while retaining runtime-owned terminal, evidence, settlement, review, audit, validation, build, and PR authority.
+- Standalone and goal planning now author and validate authorized governed spec artifacts, persist post-write hashes and readiness, and hand implementation the selected spec path/details without duplicate response plans or parallel planning trees.
+- Historical readers recover supported legacy envelopes at persistence boundaries while retaining accepted identity, attempts, completed effects, terminal precedence, and typed recovery for unsupported pending plans.
+- New patterns: prose as content, existing semantic owners for decisions, and atomic artifact/readiness/hash handoff. reusable
+- Reusable components: common PhaseOutput admission/settlement and governed spec handoff/recovery paths. reusable
+- Breaking changes or known limitations: ordinary response contracts and response-only schemas are retired; ambiguous prose remains unresolved/blocking, and legacy pending plans without ready selected specs require typed recovery.
+Feature flag: N/A
+Acceptance criteria: 13/13 implemented
+
+## [2026-09-29] SKILL-384 subtask 2: resolve composition once and preserve its semantics on durable resume
+Areas: runtime-kotlin/runtime-{engine,domain,application,ports,contracts,core,cli}, runtime-kotlin/runtime-infra/{contracts,sqlite,launcher}, orchestration/contracts
+- One immutable resolved plan owns selected strategies, steps, traversal, and effective execution policies. Composition rejects ambiguous selections, invalid ownership, and incoherent traversal before execution.
+- Durable workflow creation stores one bounded execution-plan artifact atomically with route identity and imported planning. SQLite rejects descriptor replacement or removal; in-memory phases keep their plan ephemeral.
+- Continuation, worker takeover, parent mutation, and runner entry check recorded semantics before execution-state changes. Recovery preserves attempts, outputs, checkpoints, terminal history, and uncertain commit/push evidence.
+- The execution-plan codec, semantic compatibility checks, and transactional admission are reusable. Historical-step interpretation stays separate from executable dispatch.
+- Gate receipt regeneration requires admitted semantics, retained producer evidence, and a proven safe boundary. Semantic revisions and effective-input digests detect behavioral changes without rejecting cosmetic source edits.
+- Agent process capture retains complete stdout and stderr beyond the former 1 MiB limit while preserving drain and cleanup failures.
+- Limits: identity-less legacy workflows have no adoption mapping. Missing, malformed, unsupported, or incompatible descriptors refuse execution; operators must retain evidence and use a compatible runtime or a separately reviewed mapping.
+Feature flag: N/A
+Acceptance criteria: 11/11 implemented
+
 ## [2026-09-28] SKILL-383 subtask 2 — single-skill catalog
 Areas: runtime-kotlin/{engine,application,cli,contracts,core,domain,infra}, skills, orchestration, platform-packs, docs, scripts
 - `/skill-bill` is now the only listed skill. Legacy `bill-*` trees, including `bill-monitor`, are removed; phases and operations use dispatcher routes.
@@ -1736,7 +1891,7 @@ Areas: runtime-kotlin/runtime-{application,contracts,core,domain,infra-fs,infra-
 - Goal-scoped planning preparation persists one shared preplan and ordered per-subtask plans with normalized issue/repository identity, governed spec descriptors, prepared status, and immutable parent-spec, sub-spec, decomposition, and output-contract provenance.
 - Stored preplan and plan envelopes reuse the feature-task phase-output validator and require the normalized 0.2 phase, version, completed status, and produced-output contracts; malformed, legacy, cross-goal, cross-repository, wrong-spec, and incompatible records loud-fail with typed errors.
 - Atomic checkpointing is immutable and idempotent: prepared payloads cannot be overwritten, ordered reads/count/recovery validate every governed descriptor, and the first missing plan is recovered without leaking SQLite types outside infrastructure. reusable
-- Hard reset transactionally deletes shared-preplan, subtask-plan, hydration, and continuation preparation state before manifest reset; soft reset preserves schema-valid checkpoints while provenance drift requires hard reset or operator migration.
+- Explicit hard reset transactionally deletes shared-preplan, subtask-plan, hydration, and continuation preparation state before manifest reset; soft reset preserves schema-valid checkpoints. The 2026-10-03 automatic durable schema migration supersedes the hard-reset/operator-migration requirement for the supported phase-output 0.6-to-0.7 transition.
 - Pattern: treat governed subtask descriptors plus stable provenance as the recovery key, validate opaque phase payloads at persistence seams, and reject unexpected rows or manifest-order drift instead of interpreting corruption as pending. reusable
 - Real-SQLite restart, migration, rollback, ordering, uniqueness, malformed-row, reset, and provenance tests cover durable acceptance and rejection behavior; standalone feature-task queries remain isolated from the goal-scoped store.
 Feature flag: N/A

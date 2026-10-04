@@ -1,10 +1,11 @@
 package skillbill.cli.goal.purge
 
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.goalrunner.model.GoalRunnerPurgeResult
 
 internal fun GoalRunnerPurgeResult.toGoalPurgeCliMap(): Map<String, Any?> {
-  val status = if (refusalReason != null) "refused" else "ok"
+  val status = if (refusalReason != null) "refused" else CliPayloadStatus.OK
   return linkedMapOf(
     SharedPayloadKeys.STATUS to status,
     SharedPayloadKeys.ISSUE_KEY to issueKey,
@@ -16,9 +17,9 @@ internal fun GoalRunnerPurgeResult.toGoalPurgeCliMap(): Map<String, Any?> {
 }
 
 internal fun goalPurgeText(result: GoalRunnerPurgeResult): String {
-  val status = if (result.refusalReason == null) "ok" else "refused"
+  val status = if (result.refusalReason == null) CliPayloadStatus.OK else "refused"
   return when (status) {
-    "ok" -> "Purged goal runtime state for ${result.issueKey}."
+    CliPayloadStatus.OK -> "Purged goal runtime state for ${result.issueKey}."
     "refused" -> "Purge refused for ${result.issueKey}: ${result.refusalReason}"
     else -> "Goal purge for ${result.issueKey}: $status."
   }

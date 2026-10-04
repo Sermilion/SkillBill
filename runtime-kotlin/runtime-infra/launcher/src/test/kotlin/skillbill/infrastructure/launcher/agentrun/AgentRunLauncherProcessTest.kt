@@ -80,7 +80,7 @@ class AgentRunLauncherProcessTest {
     val timeout =
       requireNotNull(
         headlessAgentRunAdapters(timeoutRunner, ALL_EXECUTABLES_AVAILABLE)[SupportedAgent.CODEX],
-      ).launch(skillRunRequest())
+      ).launchFacts(skillRunRequest())
     assertEquals(AgentRunTermination.TimedOut, timeout.termination)
 
     val spawnRunner =
@@ -98,7 +98,7 @@ class AgentRunLauncherProcessTest {
     val spawnFailure =
       requireNotNull(
         headlessAgentRunAdapters(spawnRunner, ALL_EXECUTABLES_AVAILABLE)[SupportedAgent.CODEX],
-      ).launch(skillRunRequest())
+      ).launchFacts(skillRunRequest())
     assertEquals(AgentRunTermination.SpawnFailed, spawnFailure.termination)
     assertEquals("missing executable", spawnFailure.stderr)
   }
@@ -122,7 +122,7 @@ class AgentRunLauncherProcessTest {
 
     val facts =
       requireNotNull(headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE)[SupportedAgent.CODEX])
-        .launch(skillRunRequest())
+        .launchFacts(skillRunRequest())
 
     assertEquals(rawBytes.size.toLong(), facts.stdoutByteSize)
     assertEquals(baselineSha256Hex(rawBytes), facts.stdoutSha256)
@@ -146,7 +146,7 @@ class AgentRunLauncherProcessTest {
 
     val facts =
       requireNotNull(headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE)[SupportedAgent.CLAUDE])
-        .launch(skillRunRequest())
+        .launchFacts(skillRunRequest())
 
     assertEquals("""{"status":"blocked"}""", facts.stdout)
     assertEquals(20L, facts.stdoutByteSize)

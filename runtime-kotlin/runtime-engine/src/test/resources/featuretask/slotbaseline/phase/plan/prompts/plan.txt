@@ -9,7 +9,7 @@ intake, preflight, or confirmation, including on retries and continuation.
 Reading the installed skill-bill skill does not make this phase a new invocation.
 
 Phase: plan (Phase 2: Plan)
-Task: Produce a governed spec bundle that satisfies every acceptance criterion, using the upstream preplan value as planning context. Return the complete phase-output envelope with produced_outputs.value and produced_outputs.decomposition_package. Do not modify repository files; the runtime writes the bundle from the decomposition package.
+Task: Author a governed spec bundle that satisfies every acceptance criterion from the upstream preplan digest. Write files only inside a new .feature-specs/<issue key>-<slug>/ directory and modify no other repository file. When the bundle is complete, finish with a short prose summary of the plan. The preplan digest is this phase's only repository knowledge: preplan discovers once for every subtask so planning never repeats it. Do not read, search, grep, or list repository source, tests, build files, or git history, and do not re-verify the digest. Settle every open question from the digest's evidence. When the digest lacks a fact, decide from what it does say and record that assumption in the affected spec or plan step for implement to confirm. Do not read existing .feature-specs bundles either; the manifest template below is the format.
 
 ## Installed runtime owns phase output and settlement
 The installed Skill Bill runtime validates this phase's output and MCP settlement.
@@ -151,6 +151,28 @@ Run when the resolved spec-source mode is `local` (no config, `spec_type: local`
 - `spec_source` resolves to `local`.
 - Omit the optional manifest `spec_source` field; absence is read as `local`.
 
+## Phase feasibility
+
+Before writing a parent or subtask spec, check every requirement, constraint,
+non-goal, and implementation step against the authority of the phase that must
+perform it. State acceptance criteria as repository end states that implement
+can produce and audit can inspect. Put command execution and its evidence in
+Validation Strategy. Keep review, commit, PR, history, and install actions with
+the phases or parent runtime that own them.
+
+Do not invent scope restrictions that prevent review or validation from repairing
+defects required checks uncover. A relocation may preserve behavior and assertions
+while still permitting production wiring, test setup, formatting, and lint repairs.
+Do not turn a small intended diff into a blanket ban on production edits, test-body
+edits, or changes outside the planned file list. Preserve architecture rules and
+observable behavior instead.
+
+Preserve explicit operator constraints. If one conflicts with a required phase's
+work, report the conflict during preparation or planning before authoring an
+executable spec. Do not silently relax it or defer an impossible requirement to a
+later worker. Apply this check to the whole spec, including Scope, Non-Goals,
+Dependency Notes, Validation Strategy, and Implementation Details.
+
 ## Spec Format Contract
 
 Every parent and subtask spec is read back by the runtime
@@ -219,14 +241,57 @@ UTF-8 and collection budgets before launch. Agents cannot add sources, widen
 field allowlists, or choose a fallback artifact.
 
 ## Spec bundle planning requirement
-No later phase consumes this plan: the runtime persists it as a governed spec bundle (parent spec,
-subtask specs, and decomposition manifest). Plan in mode "decompose" and emit, beside value,
-produced_outputs.decomposition_package with: "mode": "decompose", "reason", "feature_name",
-"parent_spec_overview", "validation_strategy", "base_branch", "feature_branch", and "subtasks" (one
-or more). Each subtask carries an integer "id", "name", "scope", "acceptance_criteria" (list),
-"non_goals" (list), "dependency_notes", "validation_strategy", "next_path", and "depends_on" (list of
-earlier subtask ids). Do not write the spec files yourself; the runtime writes them. A plan without a
-decomposition package blocks.
+No later phase consumes this plan: the runtime accepts it as a governed spec bundle that you author on
+disk. Create the new directory .feature-specs/<issue key>-<slug>/ (it must not exist yet) holding the
+parent spec.md, one spec_subtask_<id>_<slug>.md per subtask (one or more, in ascending dependency
+order), and decomposition-manifest.yaml whose parent spec path names that spec.md and whose subtasks
+list those files in order, each depending only on earlier subtasks. The parent and every subtask spec
+need an Acceptance Criteria list as the Spec Format Contract requires. Write nothing outside that
+directory, never write through a symlink, and never overwrite an existing spec. A bundle that fails
+these checks blocks the plan.
+
+Write decomposition-manifest.yaml in exactly this shape, one subtasks entry per subtask spec. Every
+field shown is required; dependencies lists only earlier subtask ids:
+
+```yaml
+---
+contract_version: "0.5"
+issue_key: "<issue key>"
+feature_name: "<slug>"
+parent_spec_path: ".feature-specs/<issue key>-<slug>/spec.md"
+status: "pending"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "<repository default branch>"
+feature_branch: "feat/<issue key>-<slug>"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 1
+  action: "start"
+subtasks:
+- id: 1
+  name: "<subtask name>"
+  spec_path: ".feature-specs/<issue key>-<slug>/spec_subtask_1_<subtask slug>.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies: []
+- id: 2
+  name: "<subtask name>"
+  spec_path: ".feature-specs/<issue key>-<slug>/spec_subtask_2_<subtask slug>.md"
+  status: "pending"
+  branch: null
+  commit_sha: null
+  workflow_id: null
+  blocked_reason: null
+  last_resumable_step: null
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false
+```
 
 # Feature-task-runtime phase briefing
 phase: plan
@@ -264,20 +329,9 @@ acceptance_criteria:
 ## Derived context (layer 3, declared)
 (none)
 
-## Required final output (validated schema gate)
-End your response with exactly one JSON object as the last thing you emit. Prefer a raw
-object with nothing after it; a single ```json fenced block is also accepted. The runtime
-extracts that object and blocks the run if it does not validate against the phase-output
-contract. Copy these field values from this briefing; do not look them up in this checkout:
-- "contract_version": must be exactly "0.7"
-- "phase_id": must be "plan"
-- "status": one of "completed", "blocked", "failed"
-- "failure_disposition": required by the runtime when status is "blocked" or "failed"; one of
-  "retryable", "non_retryable_policy_conflict", "needs_user_action", "process_failure", or
-  "invalid_output". Omit it when status is "completed".
-- "summary": non-empty string describing what this phase did
-- "produced_outputs": object. Empty {} is valid when this phase has no structured
-  payload. When this briefing names a required shape below, that shape is required. For completed output, include a non-blank value summarizing the plan and the complete decomposition_package described in the spec bundle planning requirement. Both fields belong inside produced_outputs.
-- "derived_notes": optional; when present, a non-empty string of notes for downstream
-  phases
-No top-level fields other than the ones listed above are allowed.
+## Required final output
+End your response with plain prose carrying everything the next phase needs (what this phase
+produced, deviations from the briefing, what was deliberately left to later phases), or exactly
+what a value content section defines. The runtime records that prose as the phase value as
+written. Do not wrap it in a status or JSON envelope. Report an obstacle only when a concrete one
+stopped the phase, and name that obstacle in the prose.

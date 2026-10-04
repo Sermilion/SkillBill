@@ -5,7 +5,7 @@ import skillbill.agentaddon.model.AgentAddonCatalogueEntry
 import skillbill.agentaddon.model.AgentAddonCatalogueInspection
 import skillbill.agentaddon.model.AgentAddonDeclaration
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.MissingAgentAddonDeclarationError
+import skillbill.error.shellcontent.missingAgentAddonDeclaration
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.repository.toFileLocation
@@ -66,7 +66,7 @@ fun requireAgentAddon(
   slug: String,
 ): AgentAddonDeclaration =
   discoverAgentAddons(repoRoot).firstOrNull { it.slug == slug }
-    ?: throw MissingAgentAddonDeclarationError(slug, repoRoot.resolve(AGENT_ADDONS_DIRECTORY).toString())
+    ?: throw missingAgentAddonDeclaration(slug, repoRoot.resolve(AGENT_ADDONS_DIRECTORY).toString())
 
 private fun discoverAgentAddonRoot(
   sourceRoot: AgentAddonSourceRoot,

@@ -6,13 +6,14 @@ import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeModelResolv
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPreLaunch
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.coupledSession
 import skillbill.engine.featuretask.runloop.state.unresolvedReviewFindings
 import skillbill.engine.featuretask.runner.phaseDeclaration
 import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.workflow.decomposition.model.SpecSource
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseDeclaration
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
@@ -28,7 +29,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     val state = context.state
     val recorder = context.recorder
     val observability = context.observability
-    val session = context.session
+    val session = context.runState.coupledSession()
     val goalContinuationRecorder = context.goalContinuationRecorder
     val unresolvedFindings = state.unresolvedReviewFindings(phaseId)
     val reason =
@@ -44,19 +45,18 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       )
     val run = capExhaustionPhaseRun(context, phaseId)
     FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersist(
-      request,
-      state,
+      context.runState,
       recorder,
       goalContinuationRecorder,
       BlockAndPersistArgs(
         run = run,
-        attemptCount = state.nextIteration(phaseId),
+        attemptCount = state.phase(phaseId).nextIteration,
         reason = reason,
         observability = observability,
         loopId = transition.loopId,
         edgeIteration = transition.edgeIteration,
         failureDisposition = FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION,
-        payload = BlockAndPersistPayload(outputArtifact = state.outputFor(phaseId)?.payload),
+        payload = BlockAndPersistPayload(outputArtifact = state.phase(phaseId).output?.payload),
       ),
     )
     FeatureTaskRuntimeRunLoopPhaseBlocking.blockAt(request, state, session, phaseId, reason)
@@ -86,7 +86,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       compaction = request.compactionSettings.directiveFor(phaseId),
       request = request,
       specSource = context.specSource,
-      policy = context.stepPolicy(phaseId),
+      policy = context.acceptedStepPolicy(phaseId),
     )
   }
 
@@ -103,12 +103,13 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
         specSource = args.specSource,
         reentry = args.reentry,
       )
-    FeatureTaskRuntimeRunLoopPreLaunch.preLaunchBlock(
-      context = context,
-      run = run,
-      state = args.state,
-      observability = args.observability,
-    )?.let { return it }
+    FeatureTaskRuntimeRunLoopPreLaunch
+      .preLaunchBlock(
+        context = context,
+        run = run,
+        state = args.state,
+        observability = args.observability,
+      )?.let { return it }
     return runPreparedPhase(context, run)
   }
 
@@ -120,7 +121,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     phaseDeclaration(
       phaseId,
       request.runInvariants.featureSize,
-      context.strategies.unselectedStepIds(strategySelectionFacts(request)),
+      context.runState.unselectedStepIds(),
     )
 
   internal fun buildPhaseRun(
@@ -149,7 +150,7 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
       compaction = request.compactionSettings.directiveFor(phaseId),
       request = request,
       specSource = specSource,
-      policy = context.stepPolicy(phaseId),
+      policy = context.acceptedStepPolicy(phaseId),
       reentry = reentry,
     )
   }
@@ -157,18 +158,33 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
   internal fun runPreparedPhase(
     context: FeatureTaskRuntimeRunLoopContext,
     run: PhaseRun,
-  ): PhaseOutcome = context.strategyFor(run.phaseId).runStep(run, context.runState.step(run))
+  ): PhaseOutcome {
+    context.runState.stepBinding.authorizeCoordinatorDispatch(run)
+    val state = context.acceptedStep(run)
+    return try {
+      context.runState.strategyFor(run.phaseId).runStep(run, state)
+    } finally {
+      state.finishStepExecution()
+      context.runState.stepBinding.releaseCoordinatorDispatch()
+    }
+  }
 
   internal fun <T : Any> decideByStep(
     context: FeatureTaskRuntimeRunLoopContext,
     stepId: String,
-    decide: (PhaseLoopRules, PhaseStepState) -> T?,
-  ): T? = context.strategyFor(stepId).loopRules?.let { rules -> decide(rules, loopRuleState(context, stepId)) }
+    decide: (PhaseLoopRules, PhaseAcceptedStepExecution) -> T?,
+  ): T? =
+    withLoopRuleBinding(context, stepId) { state ->
+      context.runState
+        .strategyFor(stepId)
+        .loopRules
+        ?.let { rules -> decide(rules, state) }
+    }
 
   internal fun <T : Any> decideByLoop(
     context: FeatureTaskRuntimeRunLoopContext,
     loopId: String,
-    decide: (PhaseLoopRules, PhaseStepState) -> T?,
+    decide: (PhaseLoopRules, PhaseAcceptedStepExecution) -> T?,
   ): T? =
     context.transitions.backwardEdges
       .firstOrNull { it.loopId == loopId }
@@ -176,31 +192,42 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
 
   internal fun forEachSlotRules(
     context: FeatureTaskRuntimeRunLoopContext,
-    act: (PhaseLoopRules, PhaseStepState) -> Unit,
+    act: (PhaseLoopRules, PhaseAcceptedStepExecution) -> Unit,
   ) {
-    context.transitions.forwardPhaseIds.map(context::strategyFor).distinct().forEach { strategy ->
-      strategy.loopRules?.let { rules -> act(rules, loopRuleState(context, strategy.entryStep)) }
+    context.transitions.forwardPhaseIds.map(context.runState::strategyFor).distinct().forEach { strategy ->
+      strategy.loopRules?.let { rules ->
+        withLoopRuleBinding(context, strategy.entryStep) { state -> act(rules, state) }
+      }
     }
   }
 
-  private fun loopRuleState(
+  private fun <T> withLoopRuleBinding(
     context: FeatureTaskRuntimeRunLoopContext,
     stepId: String,
-  ): PhaseStepState =
-    context.runState.step(
+    use: (PhaseAcceptedStepExecution) -> T,
+  ): T {
+    val run =
       buildPhaseRun(
         context = context,
         phaseId = stepId,
         request = context.request,
         specSource = context.specSource,
         reentry = null,
-      ),
-    )
+      )
+    context.runState.stepBinding.authorizeCoordinatorDispatch(run)
+    val state = context.acceptedStep(run)
+    return try {
+      use(state)
+    } finally {
+      state.finishStepExecution()
+      context.runState.stepBinding.releaseCoordinatorDispatch()
+    }
+  }
 
-  fun effectiveEdgeIterationCount(
-    state: FeatureTaskRuntimeRunState,
+  internal fun effectiveEdgeIterationCount(
+    state: FeatureTaskRuntimeProgressSnapshotAccess,
     edge: FeatureTaskRuntimeBackwardEdge,
-  ): Int = state.edgeIterationCount(edge.loopId)
+  ): Int = state.loop(edge.loopId).iteration
 
   internal fun capExhaustionReason(args: CapExhaustionReasonArgs): String {
     val request = args.request
@@ -212,18 +239,20 @@ object FeatureTaskRuntimeRunLoopPlanningBranch {
     if (FeatureTaskRuntimePhaseWorkflowDefinition.isRegenerationLoopId(loopId)) {
       val producer =
         FeatureTaskRuntimePhaseWorkflowDefinition.REGENERATION_LOOP_ID_BY_PRODUCER.entries
-          .firstOrNull { it.value == loopId }?.key
+          .firstOrNull { it.value == loopId }
+          ?.key
       val latest =
         producer?.let { producing ->
-          recorder.loadQuarantinedRecords(request.workflowId)
+          recorder
+            .loadQuarantinedRecords(request.workflowId)
             .orEmpty()
             .lastOrNull { it.producingPhaseId == producing }
         }
       val recordId = latest?.recordIdentifier() ?: producer?.let { "$it#<unknown-iteration>" } ?: "<unknown>"
       return "Quarantine-and-regenerate loop '$loopId' exhausted its regeneration cap after $edgeIteration " +
         "attempt(s): the quarantined record '$recordId' produced by phase '${producer ?: "<unknown>"}' still " +
-        "fails projection validation. The run blocks durably rather than regenerating past the cap; recover the " +
-        "record out of band by deleting or migrating the offending row."
+        "fails projection validation. Retain the workflow and its evidence. Inspect status and diagnostics " +
+        "with a compatible runtime or use a separately reviewed semantic mapping."
     }
     val findingsSuffix =
       if (unresolvedFindings.isEmpty()) {

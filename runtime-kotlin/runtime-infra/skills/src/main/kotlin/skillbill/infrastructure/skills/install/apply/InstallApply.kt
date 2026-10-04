@@ -1,5 +1,8 @@
 package skillbill.infrastructure.skills.install.apply
-import skillbill.error.shellcontent.SkillContentIdentityMismatchError
+
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.infrastructure.skills.install.plan.discoverPlatformManifests
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.infrastructure.skills.scaffold.platformpack.substanceaudit.FAILURE
@@ -192,7 +195,9 @@ private fun stagePlannedSkill(
     staging.toStagingOutcome(skill.sourceDir.toPath())
   }.getOrElse { error ->
 
-    if (error is SkillContentIdentityMismatchError) throw error
+    if (error is SkillBillRuntimeException && error.code == ReviewContextFailureCode.SKILL_CONTENT_IDENTITY_MISMATCH) {
+      throw error
+    }
     failedStagingOutcome(skill.sourceDir.toPath(), skill.name, error).also { outcome ->
       outcome.issue?.let(failures::add)
     }
@@ -221,7 +226,7 @@ private fun failedStagingOutcome(
       message = error.message.orEmpty(),
       skillName = skillName,
       path = sourceDir.toFileLocation(),
-      causeClass = error::class.qualifiedName,
+      causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
     )
   return InstallSkillStagingOutcome(
     status = InstallSkillStagingStatus.FAILED,

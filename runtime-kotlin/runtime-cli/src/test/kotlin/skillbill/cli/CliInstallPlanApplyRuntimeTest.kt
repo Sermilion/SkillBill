@@ -2,7 +2,7 @@ package skillbill.cli
 
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.install.apply.installApplyPayload
-import skillbill.cli.install.core.installPlanPayload
+import skillbill.cli.install.apply.installPlanPayload
 import skillbill.cli.kernel.cli.CliOutput
 import skillbill.cli.model.CliFormat
 import skillbill.cli.model.CliRuntimeContext
@@ -10,7 +10,8 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.telemetry.TelemetryOutboxEvent
 import skillbill.di.core.RuntimeComponent
 import skillbill.di.core.create
-import skillbill.error.shellcontent.InvalidInstallPlanSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.sqlite.SqliteTestDatabasePaths
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
 import skillbill.install.model.InstallAgentSelection
@@ -31,6 +32,7 @@ import skillbill.install.model.InstallTelemetryLevel
 import skillbill.install.model.InstallationTargetPaths
 import skillbill.install.model.McpRegistrationChoice
 import skillbill.install.model.McpRegistrationIntent
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.model.PlatformPackSelection
 import skillbill.install.model.PlatformPackSelectionMode
 import skillbill.install.model.RuntimeDistributionInputs
@@ -40,8 +42,7 @@ import skillbill.install.model.WindowsSymlinkDecision
 import skillbill.install.model.WindowsSymlinkFallbackState
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
-import skillbill.install.policy.selectedPlatformSlugs
+import skillbill.install.model.selectedPlatformSlugs
 import skillbill.ports.repository.toFileLocation
 import java.nio.file.Files
 import java.nio.file.Path
@@ -432,15 +433,15 @@ class CliInstallPlanApplyRuntimeTest {
         .create(installPlanCliContext(fixture.home).toRuntimeContext())
         .installService
     val planError =
-      assertFailsWith<InvalidInstallPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         installPlanPayload(invalidPlan, installService)
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
     assertContains(planError.message.orEmpty(), "mcp_registration.runtime_mcp_bin")
 
     val applyError =
-      assertFailsWith<InvalidInstallPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         installApplyPayload(invalidPlan, minimalApplyResult(invalidPlan), installService)
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
     assertContains(applyError.message.orEmpty(), "mcp_registration.runtime_mcp_bin")
   }
 

@@ -19,15 +19,14 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryChe
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDelivery
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionShape
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffProjectionInputs
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeResolvedUpstreamOutputs
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionBudget
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionInputs
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionValue
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffPromptVisibility
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeResolvedUpstreamOutputs
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeHandoffPromptVisibility
-import skillbill.workflow.taskruntime.noop.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -73,11 +72,11 @@ class VerdictAwareRegisterAndConsumersTest {
     assertEquals(listOf(citation), ledger.single().citations)
 
     val projected =
-      assertIs<FeatureTaskRuntimeHandoffProjectionValue.TextList>(
+      assertIs<FeatureTaskRuntimeHandoffProjectionValue.Text>(
         implementFixReviewRepairEnvelope(recordedVerdicts).projections.single().fields.first().value,
       )
-    assertTrue(projected.items.none { it.contains("F-001") })
-    assertFalse(projected.items.any { it.contains("Token logged") })
+    assertFalse(projected.text.contains("F-001"))
+    assertFalse(projected.text.contains("Token logged"))
   }
 
   @Test
@@ -195,7 +194,7 @@ class VerdictAwareRegisterAndConsumersTest {
                   projectionContractVersion = "0.1",
                   promptVisibility = FeatureTaskRuntimeHandoffPromptVisibility.PROMPT_VISIBLE,
                   budget = FeatureTaskRuntimeHandoffProjectionBudget.PHASE_RECEIPT,
-                  declaredFieldNames = listOf("unresolved_blocker_findings", "repository_checkpoint"),
+                  declaredFieldNames = listOf("value", "repository_checkpoint"),
                 ),
               delivery =
                 PhaseHandoffProjectionDelivery(
@@ -226,7 +225,6 @@ class VerdictAwareRegisterAndConsumersTest {
         workflowId = "wftr-1",
         validationDepth = ValidationDepth.DEFAULT,
         recordedFindingVerdicts = recordedVerdicts,
-        planningProjectionValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator::validate,
       ),
     )
 }

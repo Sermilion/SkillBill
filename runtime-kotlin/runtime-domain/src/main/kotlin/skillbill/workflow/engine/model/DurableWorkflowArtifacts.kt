@@ -1,7 +1,7 @@
 package skillbill.workflow.engine.model
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 
 class DurableWorkflowArtifacts private constructor(
   private val delegate: Map<String, Any?>,
@@ -20,7 +20,7 @@ class DurableWorkflowArtifacts private constructor(
         else ->
           fromMap(
             JsonCodec.anyToStringAnyMap(raw)
-              ?: throw InvalidWorkflowStateSchemaError(
+              ?: throw invalidWorkflowStateSchemaError(
                 "Durable workflow artifacts must decode to an object.",
               ),
           )

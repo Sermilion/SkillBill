@@ -1,11 +1,13 @@
 package skillbill.infrastructure.skills.scaffold
 
-import skillbill.error.shellcontent.InvalidSkillMdShapeError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.scaffold.validation.shape.validateSkillMdShape
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class SkillMdShapeValidatorTest {
@@ -78,8 +80,10 @@ class SkillMdShapeValidatorTest {
         """.trimIndent() + "\n",
       )
     val error =
-      assertFailsWith<InvalidSkillMdShapeError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateSkillMdShape(contentFile, validateBodyShape = false)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_SKILL_MD_SHAPE, failure.code)
       }
     assertContains(error.message.orEmpty(), "must begin with a YAML frontmatter block")
 
@@ -100,8 +104,10 @@ class SkillMdShapeValidatorTest {
         """.trimIndent() + "\n",
       )
     val error =
-      assertFailsWith<InvalidSkillMdShapeError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateSkillMdShape(contentFile, validateBodyShape = false)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_SKILL_MD_SHAPE, failure.code)
       }
     assertContains(error.message.orEmpty(), "name")
   }
@@ -120,8 +126,10 @@ class SkillMdShapeValidatorTest {
         """.trimIndent() + "\n",
       )
     val error =
-      assertFailsWith<InvalidSkillMdShapeError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateSkillMdShape(contentFile, validateBodyShape = false)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_SKILL_MD_SHAPE, failure.code)
       }
     assertContains(error.message.orEmpty(), "description")
   }
@@ -153,8 +161,10 @@ class SkillMdShapeValidatorTest {
         """.trimIndent() + "\n",
       )
     val error =
-      assertFailsWith<InvalidSkillMdShapeError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateSkillMdShape(skillFile, validateBodyShape = true)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_SKILL_MD_SHAPE, failure.code)
       }
     assertContains(error.message.orEmpty(), "fenced code")
     assertContains(error.message.orEmpty(), "SKILL.md")
@@ -200,8 +210,10 @@ class SkillMdShapeValidatorTest {
         """.trimIndent() + "\n",
       )
     val error =
-      assertFailsWith<InvalidSkillMdShapeError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validateSkillMdShape(skillFile, validateBodyShape = true)
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_SKILL_MD_SHAPE, failure.code)
       }
     assertContains(error.message.orEmpty(), "fenced code blocks are not allowed")
     assertContains(error.message.orEmpty(), "SKILL.md")

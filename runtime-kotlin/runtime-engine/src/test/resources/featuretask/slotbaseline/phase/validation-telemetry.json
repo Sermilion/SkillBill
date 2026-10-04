@@ -1,1 +1,52 @@
-[]
+[
+    {
+        "claim_token": null,
+        "claimed_at": null,
+        "created_at": "__NORMALIZED_TIMESTAMP__",
+        "delivery_attempts": 0,
+        "event_name": "skillbill_quality_check_started",
+        "event_uuid": "__NORMALIZED_EVENT_UUID__",
+        "id": 1,
+        "last_error": null,
+        "payload_json": {
+            "detected_stack": "kotlin",
+            "fallback": false,
+            "initial_failure_count": 0,
+            "orchestrated": false,
+            "routed_skill": "bill-code-check",
+            "scope_type": "working_tree",
+            "session_id": "__NORMALIZED_SESSION_ID__"
+        },
+        "skill_bill_version": "test-runtime-version",
+        "synced_at": null
+    },
+    {
+        "claim_token": null,
+        "claimed_at": null,
+        "created_at": "__NORMALIZED_TIMESTAMP__",
+        "delivery_attempts": 0,
+        "event_name": "skillbill_quality_check_finished",
+        "event_uuid": "__NORMALIZED_EVENT_UUID__",
+        "id": 2,
+        "last_error": null,
+        "payload_json": {
+            "completion": "operator_completed",
+            "detected_stack": "kotlin",
+            "duration_seconds": "__NORMALIZED_DURATION__",
+            "failing_check_names": [],
+            "fallback": false,
+            "final_failure_count": 0,
+            "final_failure_count_availability": "measured",
+            "initial_failure_count": 0,
+            "iterations": 1,
+            "orchestrated": false,
+            "result": "pass",
+            "routed_skill": "bill-code-check",
+            "scope_type": "working_tree",
+            "session_id": "__NORMALIZED_SESSION_ID__",
+            "unsupported_reason": ""
+        },
+        "skill_bill_version": "test-runtime-version",
+        "synced_at": null
+    }
+]

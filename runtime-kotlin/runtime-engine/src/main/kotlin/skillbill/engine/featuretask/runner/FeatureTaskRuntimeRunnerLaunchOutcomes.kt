@@ -1,8 +1,10 @@
 package skillbill.engine.featuretask.runner
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.application.agentoutput.agentFailureExcerpt
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
+import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.continuation.GoalContinuationStateRecordRequest
 import skillbill.engine.featuretask.lifecycle.continuation.agentAttributionFromPhaseState
 import skillbill.engine.featuretask.lifecycle.continuation.completedGoalContinuationOutcome
@@ -11,20 +13,22 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeSubtaskOutcome
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.goalrunner.model.FeatureTaskRuntimeGoalContinuationOutcome
 import skillbill.goalrunner.model.GoalRunnerLaunchFacts
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeProviderLimitSignal
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseDeclaration
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_STATUS_PAUSED
+import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_STATUS_PAUSED
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
@@ -71,90 +75,100 @@ internal fun terminalBlockedReasonFrom(
   return prefix + detail.takeIf(String::isNotBlank)?.let { " $it" }.orEmpty()
 }
 
-fun FeatureTaskRuntimeRunner.persistGoalContinuationOutcome(
-  request: FeatureTaskRuntimeRunRequest,
-  report: FeatureTaskRuntimeRunReport,
-  commitStepId: String,
-): FeatureTaskRuntimeRunReport {
-  val context = request.goalContinuation ?: return report
-  val outcome =
-    goalContinuationOutcomeFor(request, context, report, commitStepId)?.let { base ->
-      val attribution = agentAttributionFromPhaseState(recorder.phaseQuery, request.workflowId)
-      base.copy(
-        finalizingAgentId = attribution.finalizingAgentId,
-        participatingAgentIds = attribution.participatingAgentIds,
+@Inject
+class FeatureTaskRuntimeLaunchOutcomes(
+  private val recorder: FeatureTaskRuntimePhaseRecorder,
+  private val gitOperations: WorkflowGitOperations,
+  private val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
+) {
+  fun finalizingAgentId(request: FeatureTaskRuntimeRunRequest): String? =
+    agentAttributionFromPhaseState(recorder.phaseQuery, request.workflowId).finalizingAgentId
+
+  fun persistGoalContinuationOutcome(
+    request: FeatureTaskRuntimeRunRequest,
+    report: FeatureTaskRuntimeRunReport,
+    commitStepId: String,
+  ): FeatureTaskRuntimeRunReport {
+    val context = request.goalContinuation ?: return report
+    val outcome =
+      goalContinuationOutcomeFor(request, context, report, commitStepId)?.let { base ->
+        val attribution = agentAttributionFromPhaseState(recorder.phaseQuery, request.workflowId)
+        base.copy(
+          finalizingAgentId = attribution.finalizingAgentId,
+          participatingAgentIds = attribution.participatingAgentIds,
+        )
+      }
+    outcome?.let { terminal ->
+      goalContinuationRecorder.recordGoalContinuationState(
+        request =
+          GoalContinuationStateRecordRequest(
+            workflowId = request.workflowId,
+            outcome =
+              FeatureTaskRuntimeGoalContinuationOutcome(
+                issueKey = terminal.issueKey,
+                subtaskId = terminal.subtaskId,
+                status = terminal.status,
+                workflowId = terminal.workflowId,
+                commitSha = terminal.commitSha,
+                blockedReason = terminal.blockedReason,
+                lastResumableStep = terminal.lastResumableStep,
+                finalizingAgentId = terminal.finalizingAgentId,
+                participatingAgentIds = terminal.participatingAgentIds,
+              ),
+            workflowStatus =
+              when (terminal.status) {
+                GoalRunnerTerminalStatus.COMPLETE -> "completed"
+                GoalRunnerTerminalStatus.PAUSED -> FEATURE_TASK_RUNTIME_PHASE_STATUS_PAUSED
+                GoalRunnerTerminalStatus.FAILED,
+                GoalRunnerTerminalStatus.BLOCKED,
+                GoalRunnerTerminalStatus.TIMEOUT,
+                GoalRunnerTerminalStatus.NO_TERMINAL_STORE_OUTCOME,
+                GoalRunnerTerminalStatus.RECONCILABLE,
+                -> "blocked"
+              },
+          ),
       )
     }
-  outcome?.let { terminal ->
-    goalContinuationRecorder.recordGoalContinuationState(
-      request =
-        GoalContinuationStateRecordRequest(
-          workflowId = request.workflowId,
-          outcome =
-            FeatureTaskRuntimeGoalContinuationOutcome(
-              issueKey = terminal.issueKey,
-              subtaskId = terminal.subtaskId,
-              status = terminal.status,
-              workflowId = terminal.workflowId,
-              commitSha = terminal.commitSha,
-              blockedReason = terminal.blockedReason,
-              lastResumableStep = terminal.lastResumableStep,
-              finalizingAgentId = terminal.finalizingAgentId,
-              participatingAgentIds = terminal.participatingAgentIds,
-            ),
-          workflowStatus =
-            when (terminal.status) {
-              GoalRunnerTerminalStatus.COMPLETE -> "completed"
-              GoalRunnerTerminalStatus.PAUSED -> FEATURE_TASK_RUNTIME_PHASE_STATUS_PAUSED
-              GoalRunnerTerminalStatus.FAILED,
-              GoalRunnerTerminalStatus.BLOCKED,
-              GoalRunnerTerminalStatus.TIMEOUT,
-              GoalRunnerTerminalStatus.NO_TERMINAL_STORE_OUTCOME,
-              GoalRunnerTerminalStatus.RECONCILABLE,
-              -> "blocked"
-            },
-        ),
-    )
+    return when {
+      report is FeatureTaskRuntimeRunReport.Completed && outcome != null -> report.copy(subtaskOutcome = outcome)
+      report is FeatureTaskRuntimeRunReport.Blocked && outcome != null -> report.copy(subtaskOutcome = outcome)
+      report is FeatureTaskRuntimeRunReport.Paused && outcome != null -> report.copy(subtaskOutcome = outcome)
+      else -> report
+    }
   }
-  return when {
-    report is FeatureTaskRuntimeRunReport.Completed && outcome != null -> report.copy(subtaskOutcome = outcome)
-    report is FeatureTaskRuntimeRunReport.Blocked && outcome != null -> report.copy(subtaskOutcome = outcome)
-    report is FeatureTaskRuntimeRunReport.Paused && outcome != null -> report.copy(subtaskOutcome = outcome)
-    else -> report
-  }
-}
 
-private fun FeatureTaskRuntimeRunner.goalContinuationOutcomeFor(
-  request: FeatureTaskRuntimeRunRequest,
-  context: FeatureTaskRuntimeGoalContinuationContext,
-  report: FeatureTaskRuntimeRunReport,
-  commitStepId: String,
-): FeatureTaskRuntimeSubtaskOutcome? =
-  when (report) {
-    is FeatureTaskRuntimeRunReport.Completed ->
-      completedGoalContinuationOutcome(recorder, phaseGates.gitOperations, request, context, commitStepId)
-    is FeatureTaskRuntimeRunReport.Blocked ->
-      FeatureTaskRuntimeSubtaskOutcome(
-        issueKey = context.parentIssueKey,
-        subtaskId = context.subtaskId,
-        status = GoalRunnerTerminalStatus.BLOCKED,
-        commitSha = null,
-        workflowId = request.workflowId,
-        blockedReason = report.blockedReason,
-        lastResumableStep = report.lastIncompletePhase,
-      )
-    is FeatureTaskRuntimeRunReport.Paused ->
-      FeatureTaskRuntimeSubtaskOutcome(
-        issueKey = context.parentIssueKey,
-        subtaskId = context.subtaskId,
-        status = GoalRunnerTerminalStatus.PAUSED,
-        commitSha = null,
-        workflowId = request.workflowId,
-        blockedReason = report.pauseReason,
-        lastResumableStep = report.resumableStep,
-      )
-    is FeatureTaskRuntimeRunReport.Decomposed -> null
-  }
+  private fun goalContinuationOutcomeFor(
+    request: FeatureTaskRuntimeRunRequest,
+    context: FeatureTaskRuntimeGoalContinuationContext,
+    report: FeatureTaskRuntimeRunReport,
+    commitStepId: String,
+  ): FeatureTaskRuntimeSubtaskOutcome? =
+    when (report) {
+      is FeatureTaskRuntimeRunReport.Completed ->
+        completedGoalContinuationOutcome(recorder, gitOperations, request, context, commitStepId)
+      is FeatureTaskRuntimeRunReport.Blocked ->
+        FeatureTaskRuntimeSubtaskOutcome(
+          issueKey = context.parentIssueKey,
+          subtaskId = context.subtaskId,
+          status = GoalRunnerTerminalStatus.BLOCKED,
+          commitSha = null,
+          workflowId = request.workflowId,
+          blockedReason = report.blockedReason,
+          lastResumableStep = report.lastIncompletePhase,
+        )
+      is FeatureTaskRuntimeRunReport.Paused ->
+        FeatureTaskRuntimeSubtaskOutcome(
+          issueKey = context.parentIssueKey,
+          subtaskId = context.subtaskId,
+          status = GoalRunnerTerminalStatus.PAUSED,
+          commitSha = null,
+          workflowId = request.workflowId,
+          blockedReason = report.pauseReason,
+          lastResumableStep = report.resumableStep,
+        )
+      is FeatureTaskRuntimeRunReport.Decomposed -> null
+    }
+}
 
 fun infraFailureReason(
   phaseId: String,

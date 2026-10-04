@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.lifecycle.remediation.featureSizeFromArtifac
 import skillbill.engine.featuretask.model.subtask.CompletedUpstreamRepairRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowArtifactPatches
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
+import skillbill.engine.featuretask.persist.GOAL_CHILD_REPAIR_EVIDENCE_ARTIFACT_KEY
 import skillbill.engine.featuretask.phase.core.decodePhaseLedger
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.goalrunner.model.GoalRunnerAppliedRepair
@@ -35,9 +36,9 @@ import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.GoalSubtaskReviewArtifactDecoder
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Path
 import java.time.Clock

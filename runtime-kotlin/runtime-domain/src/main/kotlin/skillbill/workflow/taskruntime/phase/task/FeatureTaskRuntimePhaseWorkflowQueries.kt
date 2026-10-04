@@ -1,10 +1,10 @@
 package skillbill.workflow.taskruntime.phase.task
 
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeAuditCeremony
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeCeremonyScaling
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePreplanCeremony
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeReviewScope
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
@@ -38,6 +38,13 @@ object FeatureTaskRuntimePhaseWorkflowQueries {
     phaseId: String,
     featureSize: FeatureTaskRuntimeFeatureSize,
   ): FeatureTaskRuntimePhaseDeclaration {
+    if (phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PRESENT_FINDINGS) {
+      return FeatureTaskRuntimePhaseDeclaration(
+        phaseId = phaseId,
+        projectionDeclarations = emptyList(),
+        derivedContextKeys = emptyList(),
+      )
+    }
     val base =
       FeatureTaskRuntimePhaseWorkflowDefinition.phaseDeclarations[phaseId]
         ?: error("No phase declaration for runtime phase '$phaseId'.")

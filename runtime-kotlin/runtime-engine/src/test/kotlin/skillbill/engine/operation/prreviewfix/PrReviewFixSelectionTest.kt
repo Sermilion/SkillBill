@@ -1,9 +1,8 @@
 package skillbill.engine.operation.prreviewfix
 
-import skillbill.error.operation.InvalidOperationSelectionError
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 
 class PrReviewFixSelectionTest {
   private val ordinals = linkedMapOf("T1" to "PRRT_a", "T2" to "PRRT_b", "T3" to "PRRT_c")
@@ -20,14 +19,14 @@ class PrReviewFixSelectionTest {
       "T2=3" to listOf(PrReviewFixSelectedThread("T2", "PRRT_b", "3")),
       "PRRT_b=3" to listOf(PrReviewFixSelectedThread("T2", "PRRT_b", "3")),
     ).forEach { (select, expected) ->
-      assertEquals(expected, parsePrReviewFixSelection(select, ordinals), select)
+      assertEquals(PrReviewFixSelection.Selected(expected), parsePrReviewFixSelection(select, ordinals), select)
     }
   }
 
   @Test
   fun `an unknown, already-handled, repeated, or empty selection is a usage error`() {
     listOf("T9=1", "PRRT_d=1", "T1=1,T1=2", " ", "T1", "T1=banana").forEach { select ->
-      assertFailsWith<InvalidOperationSelectionError>(select) { parsePrReviewFixSelection(select, ordinals) }
+      assertIs<PrReviewFixSelection.Invalid>(parsePrReviewFixSelection(select, ordinals), select)
     }
   }
 }

@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.runloop.durable
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
@@ -57,7 +57,7 @@ private fun runInvariantsFrom(artifacts: DurableWorkflowArtifacts): FeatureTaskR
   val raw = family.value(artifacts) ?: return null
   val entryMap =
     JsonCodec.anyToStringAnyMap(raw)
-      ?: throw InvalidWorkflowStateSchemaError(
+      ?: throw invalidWorkflowStateSchemaError(
         "Feature-task-runtime artifact '${family.label()}' must decode to a map.",
       )
   return decodeRunInvariantsFromArtifact(entryMap)

@@ -2,6 +2,10 @@ package skillbill.engine.goalrunner.planning
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.diagnostics.RejectedOutputDiagnosticService
+import skillbill.application.diagnostics.model.RejectedOutputDiagnosticSelection
+import skillbill.application.getOrElseUnlessCooperative
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.attempt.diagnosticPhaseId
 import skillbill.engine.goalrunner.planning.model.GoalPlanningAttemptOutcome
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLog
@@ -11,11 +15,9 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnosticSelector
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
-import skillbill.workflow.model.goalreview.GoalProgressEvent
-import skillbill.workflow.model.goalreview.GoalProgressEventKind
-import skillbill.workflow.model.goalreview.GoalProgressOutcome
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import java.time.Clock
 import java.time.Instant
 
@@ -70,7 +72,13 @@ class GoalPlanningLogService(
           .inspect(RejectedOutputDiagnosticSelector(workflowId = parentWorkflowId))
       }
     }
-      .getOrDefault(emptyList())
+      .getOrElseUnlessCooperative { RejectedOutputDiagnosticSelection.Selected(emptyList()) }
+      .let { selection ->
+        when (selection) {
+          is RejectedOutputDiagnosticSelection.Selected -> selection.diagnostics
+          is RejectedOutputDiagnosticSelection.InvalidRequest -> emptyList()
+        }
+      }
       .associateBy { record -> rejectionKey(record.phaseId, record.attempt) }
 
   private fun assembleAttempts(

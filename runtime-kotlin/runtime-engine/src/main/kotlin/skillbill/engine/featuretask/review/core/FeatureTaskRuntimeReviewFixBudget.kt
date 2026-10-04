@@ -1,8 +1,10 @@
 package skillbill.engine.featuretask.review.core
 
+import me.tatarka.inject.annotations.Inject
+import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.continuation.reviewState
+import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeContinuationKind
-import skillbill.engine.featuretask.runner.FeatureTaskRuntimeRunner
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
@@ -37,11 +39,16 @@ private fun isAuditGapRound(entry: FeatureTaskRuntimePhaseLedgerEntry): Boolean 
     else -> false
   }
 
-fun FeatureTaskRuntimeRunner.reviewFixCapExhaustion(workflowId: String): Boolean? =
-  reviewFixCapExhaustion(
-    recorder.loadPhaseLedger(workflowId),
-    goalContinuationRecorder.reviewState(workflowId)?.reviewCapReached,
-  )
+@Inject
+class FeatureTaskRuntimeReviewFixBudget(
+  private val recorder: FeatureTaskRuntimePhaseRecorder,
+  private val goalContinuationRecorder: FeatureTaskRuntimeGoalContinuationRecorder,
+) {
+  fun reviewFixCapExhaustion(workflowId: String): Boolean? =
+    reviewFixCapExhaustion(
+      recorder.loadPhaseLedger(workflowId),
+      goalContinuationRecorder.reviewState(workflowId)?.reviewCapReached,
+    )
 
-fun FeatureTaskRuntimeRunner.auditGapIterationCount(workflowId: String): Int? =
-  auditGapIterationCount(recorder.loadPhaseLedger(workflowId))
+  fun auditGapIterationCount(workflowId: String): Int? = auditGapIterationCount(recorder.loadPhaseLedger(workflowId))
+}

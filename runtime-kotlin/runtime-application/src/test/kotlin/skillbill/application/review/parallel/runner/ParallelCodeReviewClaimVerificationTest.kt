@@ -8,11 +8,12 @@ import skillbill.application.review.snapshot.ReviewRecorder
 import skillbill.application.review.snapshot.diffForPaths
 import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.reviewHarness
+import skillbill.application.review.snapshot.reviewed
 import skillbill.application.review.snapshot.sparseReviewPack
 import skillbill.application.review.verification.ReviewClaimVerificationRunner
 import skillbill.application.runner
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ReviewClaimVerdict
 import skillbill.review.model.ReviewStage
 import skillbill.review.model.ReviewStageDegradationReason
@@ -33,7 +34,7 @@ class ParallelCodeReviewClaimVerificationTest {
   @Test
   fun `every merged finding at every severity is verified`() {
     val recorder = ReviewRecorder()
-    reviewHarness(delegatedConfig(), recorder).run(delegatedRequest())
+    reviewHarness(delegatedConfig(), recorder).reviewed(delegatedRequest())
     val findings = recorder.durableFindingVerdicts.filter { it.stage == ReviewStage.VERIFICATION }
     assertEquals(2, findings.size)
     assertEquals(setOf("F-001", "F-002"), findings.map { it.findingRef }.toSet())
@@ -49,7 +50,7 @@ class ParallelCodeReviewClaimVerificationTest {
   @Test
   fun `resume after the review pass reenters verification without relaunching lanes or settled findings`() {
     val recorder = ReviewRecorder()
-    val first = reviewHarness(delegatedConfig(), recorder).run(delegatedRequest())
+    val first = reviewHarness(delegatedConfig(), recorder).reviewed(delegatedRequest())
     assertEquals(2, recorder.verificationLaunches.size)
     assertTrue(assertNotNull(first.stageResume).holdsDurableResult(ReviewStage.REVIEW))
     val specialistCount = recorder.specialistLaunches.size
@@ -57,7 +58,7 @@ class ParallelCodeReviewClaimVerificationTest {
     recorder.durableFindingVerdicts.removeAll { it.findingRef == "F-002" }
     recorder.durableStageBoundaries.removeAll { it.stage == ReviewStage.VERIFICATION }
 
-    val resumed = reviewHarness(delegatedConfig(), recorder).run(delegatedRequest())
+    val resumed = reviewHarness(delegatedConfig(), recorder).reviewed(delegatedRequest())
     assertEquals(specialistCount, recorder.specialistLaunches.size)
     assertEquals(verificationCount + 1, recorder.verificationLaunches.size)
     val prompt = recorder.verificationLaunches.last().skillRunRequest.promptOverride.orEmpty()
@@ -74,13 +75,13 @@ class ParallelCodeReviewClaimVerificationTest {
   @Test
   fun `a later resumed lane's findings still receive verification launches`() {
     val recorder = ReviewRecorder()
-    reviewHarness(architectureOnlyConfig(), recorder).run(delegatedRequest())
+    reviewHarness(architectureOnlyConfig(), recorder).reviewed(delegatedRequest())
     assertEquals(1, recorder.verificationLaunches.size)
     assertEquals(listOf("F-001"), recorder.durablePassClaims?.findings?.map { it.fNumber })
     val firstPrompt = recorder.verificationLaunches.single().skillRunRequest.promptOverride.orEmpty()
     assertTrue("null is unchecked" in firstPrompt)
 
-    reviewHarness(architectureAndTestingConfig(), recorder).run(delegatedRequest())
+    reviewHarness(architectureAndTestingConfig(), recorder).reviewed(delegatedRequest())
     assertEquals(
       listOf("F-001", "F-002"),
       recorder.durablePassClaims?.findings?.map { it.fNumber },
@@ -119,7 +120,7 @@ class ParallelCodeReviewClaimVerificationTest {
         findings = prose,
       ),
       recorder,
-    ).run(delegatedRequest())
+    ).reviewed(delegatedRequest())
 
     val verificationPrompt = recorder.verificationLaunches.single().skillRunRequest.promptOverride.orEmpty()
     assertTrue(prose in verificationPrompt)
@@ -130,7 +131,7 @@ class ParallelCodeReviewClaimVerificationTest {
   fun `a review pass that returned no output leaves verification unreached and records why`() {
     val recorder = ReviewRecorder()
     reviewHarness(verificationConfig(paths = listOf("src/Main.kt"), findings = ""), recorder)
-      .run(harnessRequest(reviewRunId = RUN_ID, codeReviewMode = CodeReviewExecutionMode.DELEGATED))
+      .reviewed(harnessRequest(reviewRunId = RUN_ID, codeReviewMode = CodeReviewExecutionMode.DELEGATED))
 
     assertTrue(
       recorder.durableStageBoundaries.none {
@@ -154,7 +155,7 @@ class ParallelCodeReviewClaimVerificationTest {
       reviewHarness(
         verificationConfig(paths = listOf("src/Main.kt"), findings = ""),
         recorder,
-      ).run(harnessRequest(reviewRunId = RUN_ID, codeReviewMode = CodeReviewExecutionMode.DELEGATED))
+      ).reviewed(harnessRequest(reviewRunId = RUN_ID, codeReviewMode = CodeReviewExecutionMode.DELEGATED))
 
     assertTrue(recorder.stageDegradations.isEmpty())
     assertTrue(result.mergeResult.findings.isEmpty())

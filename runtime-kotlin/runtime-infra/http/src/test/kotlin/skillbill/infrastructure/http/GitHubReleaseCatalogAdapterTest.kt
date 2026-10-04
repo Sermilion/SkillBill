@@ -10,7 +10,7 @@ import kotlin.test.assertFailsWith
 
 class GitHubReleaseCatalogAdapterTest {
   @Test
-  fun `requests the GitHub releases endpoint and maps release fields`() {
+  fun `requests releases by repository id to avoid rename redirects and maps release fields`() {
     val requests = mutableListOf<Triple<String, String, Map<String, String>>>()
     val body =
       """
@@ -34,7 +34,7 @@ class GitHubReleaseCatalogAdapterTest {
       listOf(
         Triple(
           "GET",
-          "https://api.github.com/repos/Sermilion/skill-bill/releases",
+          "https://api.github.com/repositories/1183084383/releases",
           mapOf("Accept" to "application/vnd.github+json", "User-Agent" to "skill-bill-update-check"),
         ),
       ),

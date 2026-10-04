@@ -4,15 +4,16 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.repoRelativePath
 import skillbill.application.decomposition.resolvedParentSpecPath
 import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
-import skillbill.error.shellcontent.UnreadableSpecIntentProjectionError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.review.context.ReviewContextWireMap
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.execution.SpecIntentProjection
 import skillbill.review.context.model.execution.SpecIntentProvenance
 import skillbill.review.context.model.execution.SpecIntentSurroundingContext
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.spec.GovernedSpecSectionParser
 import skillbill.review.spec.GovernedSpecSectionParser.ACCEPTANCE_CRITERIA_PREFIX
 import java.io.IOException
@@ -24,21 +25,24 @@ class SpecIntentProjectionExtractor(
   private val envelopeValidator: ReviewContextEnvelopeValidator,
   private val fileStore: DecompositionManifestStore,
 ) {
-  fun extract(
+  internal fun extract(
     repoRoot: Path,
     specPath: Path,
     budget: ReviewContextBudgetPolicy,
     surrounding: SpecIntentSurroundingContext? = null,
-    explicit: Boolean,
-  ): SpecIntentProjection {
+  ): SpecIntentSourceRead<SpecIntentProjection> {
     val normalized = resolvedParentSpecPath(repoRoot, specPath)
-    val bytes = readSpecBytes(normalized, explicit)
+    val bytes =
+      when (val read = readSpecBytes(normalized)) {
+        is SpecIntentSourceRead.Unavailable -> return read
+        is SpecIntentSourceRead.Read -> read.value
+      }
     val specText = bytes.toString(Charsets.UTF_8)
     val intendedOutcome =
       GovernedSpecSectionParser.parseProseSection(specText, ::isIntendedOutcomeHeading)
         .ifBlank { documentTitle(specText) }
     if (intendedOutcome.isBlank()) {
-      fail(normalized, explicit, "unparseable")
+      return unavailable(normalized, "unparseable")
     }
     val projection =
       SpecIntentProjection(
@@ -61,42 +65,44 @@ class SpecIntentProjectionExtractor(
         declaredByteBudget = budget.maxSpecIntentProjectionBytes.toInt().coerceAtLeast(1),
         surroundingContext = surrounding,
       )
-    try {
+    return try {
       envelopeValidator.validateSpecIntentProjection(
         ReviewContextWireMap.from(projection.toProjectionPayload()),
         "spec_intent_projection",
       )
-    } catch (error: InvalidReviewContextSchemaError) {
-      fail(normalized, explicit, "unparseable", error)
+      SpecIntentSourceRead.Read(projection)
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA)
+      unavailable(normalized, "unparseable", error)
     }
-    return projection
   }
 
-  fun surroundingContext(
+  internal fun surroundingContext(
     repoRoot: Path,
     specPath: Path,
-    explicit: Boolean,
-  ): SpecIntentSurroundingContext {
+  ): SpecIntentSourceRead<SpecIntentSurroundingContext> {
     val normalized = resolvedParentSpecPath(repoRoot, specPath)
-    val bytes = readSpecBytes(normalized, explicit)
-    return SpecIntentSurroundingContext(
-      specPath = repoRelativePath(repoRoot, normalized),
-      contentDigest = sha256Hex(bytes),
-    )
+    return when (val read = readSpecBytes(normalized)) {
+      is SpecIntentSourceRead.Unavailable -> read
+      is SpecIntentSourceRead.Read ->
+        SpecIntentSourceRead.Read(
+          SpecIntentSurroundingContext(
+            specPath = repoRelativePath(repoRoot, normalized),
+            contentDigest = sha256Hex(read.value),
+          ),
+        )
+    }
   }
 
-  private fun readSpecBytes(
-    path: Path,
-    explicit: Boolean,
-  ): ByteArray {
+  private fun readSpecBytes(path: Path): SpecIntentSourceRead<ByteArray> {
     if (!fileStore.isRegularFile(path)) {
-      fail(path, explicit, "missing")
+      return unavailable(path, "missing")
     }
     return try {
-      fileStore.readText(path).toByteArray(Charsets.UTF_8)
+      SpecIntentSourceRead.Read(fileStore.readText(path).toByteArray(Charsets.UTF_8))
     } catch (error: IOException) {
       error.rethrowIfCooperativeCancellationOrInterruption()
-      fail(path, explicit, "unreadable")
+      unavailable(path, "unreadable")
     }
   }
 
@@ -112,17 +118,11 @@ class SpecIntentProjectionExtractor(
     return heading.trimStart('#').trim()
   }
 
-  private fun fail(
+  private fun unavailable(
     path: Path,
-    explicit: Boolean,
     reason: String,
     cause: Throwable? = null,
-  ): Nothing {
-    if (explicit) {
-      throw UnreadableSpecIntentProjectionError(path.toString(), reason, cause)
-    }
-    throw SpecIntentSourceUnavailable(path.toString(), reason, cause)
-  }
+  ): SpecIntentSourceRead.Unavailable = SpecIntentSourceRead.Unavailable(path.toString(), reason, cause)
 
   private companion object {
     const val INTENDED_OUTCOME_PREFIX = "intended outcome"
@@ -134,11 +134,16 @@ class SpecIntentProjectionExtractor(
   }
 }
 
-internal class SpecIntentSourceUnavailable(
-  val specPath: String,
-  val reason: String,
-  cause: Throwable? = null,
-) : RuntimeException("Spec intent source '$specPath' is $reason", cause)
+/** The outcome of reading a spec intent source: the value read, or why the source is unavailable. */
+internal sealed interface SpecIntentSourceRead<out T> {
+  data class Read<T>(val value: T) : SpecIntentSourceRead<T>
+
+  data class Unavailable(
+    val specPath: String,
+    val reason: String,
+    val cause: Throwable? = null,
+  ) : SpecIntentSourceRead<Nothing>
+}
 
 private fun sha256Hex(bytes: ByteArray): String =
   MessageDigest.getInstance("SHA-256")

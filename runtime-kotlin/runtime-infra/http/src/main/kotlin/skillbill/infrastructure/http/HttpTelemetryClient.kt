@@ -1,10 +1,11 @@
 package skillbill.infrastructure.http
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.ShellContentContractException
-import skillbill.error.core.TelemetryProxyInvalidResponseError
-import skillbill.error.core.TelemetryProxyRequestFailureError
-import skillbill.error.core.TelemetryRelayUrlUnconfiguredError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.TelemetryHttpFailureCode
+import skillbill.error.core.rethrowUnless
+import skillbill.error.core.telemetryProxyRequestFailure
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.model.EnvironmentContext
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.telemetry.model.RemoteTransportResponse
@@ -53,30 +54,25 @@ class HttpTelemetryClient(
   override fun fetchProxyCapabilities(settings: TelemetrySettings): TelemetryProxyCapabilities {
     requireConfiguredRelayUrl(settings)
     val capabilitiesUrl = settings.proxyUrl.trimEnd('/') + "/capabilities"
-    return try {
-      requestJson(
-        request =
-          JsonRequest(
-            method = "GET",
-            url = capabilitiesUrl,
-            payload = null,
-            errorContext = "Telemetry proxy capabilities request",
-            headers = proxyAuthHeaders(environmentContext.environment),
-          ),
-        requester = requester,
-      ).toTelemetryProxyCapabilities(settings.proxyUrl, capabilitiesUrl, diagnostics)
-        .also(::validateIngestCapabilities)
-    } catch (error: TelemetryProxyRequestFailureError) {
-      if (error.statusCode == HTTP_NOT_FOUND || error.statusCode == HTTP_METHOD_NOT_ALLOWED) {
-        diagnostics.warning(
-          "seam=telemetry.capabilities.fallback expected=capabilities response " +
-            "used=typed default for HTTP ${error.statusCode}",
-        )
-        TelemetryProxyCapabilities.defaultProxyCapabilities(settings.proxyUrl, capabilitiesUrl)
-      } else {
-        throw error
-      }
+    val request =
+      JsonRequest(
+        method = "GET",
+        url = capabilitiesUrl,
+        payload = null,
+        errorContext = "Telemetry proxy capabilities request",
+        headers = proxyAuthHeaders(environmentContext.environment),
+      )
+    val response = executeJsonRequest(request, requester)
+    if (response.statusCode == HTTP_NOT_FOUND || response.statusCode == HTTP_METHOD_NOT_ALLOWED) {
+      diagnostics.warning(
+        "seam=telemetry.capabilities.fallback expected=capabilities response " +
+          "used=typed default for HTTP ${response.statusCode}",
+      )
+      return TelemetryProxyCapabilities.defaultProxyCapabilities(settings.proxyUrl, capabilitiesUrl)
     }
+    return successfulJsonBody(response, request.errorContext)
+      .toTelemetryProxyCapabilities(settings.proxyUrl, capabilitiesUrl, diagnostics)
+      .also(::validateIngestCapabilities)
   }
 
   override fun fetchRemoteStats(
@@ -151,16 +147,25 @@ private data class JsonRequest(
 private fun requestJson(
   request: JsonRequest,
   requester: RemoteTransportPort,
+): Map<String, Any?> = successfulJsonBody(executeJsonRequest(request, requester), request.errorContext)
+
+private fun executeJsonRequest(
+  request: JsonRequest,
+  requester: RemoteTransportPort,
+): RemoteTransportResponse =
+  requester.execute(
+    request.method,
+    request.url,
+    request.payload?.let(JsonCodec::mapToJsonString),
+    requestHeaders(request.method) + request.headers,
+  )
+
+private fun successfulJsonBody(
+  response: RemoteTransportResponse,
+  errorContext: String,
 ): Map<String, Any?> {
-  val response =
-    requester.execute(
-      request.method,
-      request.url,
-      request.payload?.let(JsonCodec::mapToJsonString),
-      requestHeaders(request.method) + request.headers,
-    )
-  ensureSuccessfulResponse(response, request.errorContext)
-  return decodeJsonObject(response.body, request.errorContext)
+  ensureSuccessfulResponse(response, errorContext)
+  return decodeJsonObject(response.body, errorContext)
 }
 
 private fun ensureSuccessfulResponse(
@@ -168,7 +173,7 @@ private fun ensureSuccessfulResponse(
   errorContext: String,
 ) {
   if (response.statusCode !in HTTP_SUCCESS_RANGE) {
-    throw TelemetryProxyRequestFailureError(
+    throw telemetryProxyRequestFailure(
       statusCode = response.statusCode,
       seam = errorContext,
       detail = boundedHttpFailureDetail(response, errorContext),
@@ -186,7 +191,8 @@ private fun decodeJsonObject(
   val decoded =
     try {
       JsonCodec.parseValue(body)
-    } catch (_: ShellContentContractException) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isShellContentContractFailure())
       return invalidJsonResponse(errorContext, "$errorContext returned invalid JSON.")
     }
   return JsonCodec.anyToStringAnyMap(decoded)
@@ -201,9 +207,9 @@ private fun invalidJsonResponse(
   errorContext: String,
   detail: String,
 ): Nothing =
-  throw TelemetryProxyInvalidResponseError(
-    seam = errorContext,
-    detail = detail,
+  throw SkillBillRuntimeException(
+    TelemetryHttpFailureCode.PROXY_INVALID_RESPONSE,
+    "Telemetry proxy response invalid at $errorContext: $detail",
   )
 
 private fun isJsonNonObjectRoot(body: String): Boolean {
@@ -240,7 +246,10 @@ private fun boundedHttpFailureDetail(
 
 private fun requireConfiguredRelayUrl(settings: TelemetrySettings) {
   if (settings.proxyUrl.isBlank()) {
-    throw TelemetryRelayUrlUnconfiguredError()
+    throw SkillBillRuntimeException(
+      TelemetryHttpFailureCode.RELAY_URL_UNCONFIGURED,
+      "Telemetry relay URL is not configured.",
+    )
   }
 }
 

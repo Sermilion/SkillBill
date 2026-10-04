@@ -1,10 +1,16 @@
 package skillbill.architecture
 
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.learning.LearningPayloadKeys
+import skillbill.contracts.review.ReviewAccountingPayloadKeys
 import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.contracts.review.ReviewFinishedTelemetryPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
+import skillbill.contracts.system.UpdateCheckPayloadKeys
 import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
+import skillbill.contracts.telemetry.TelemetryProxyPayloadKeys
+import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
+import skillbill.contracts.workflow.session.WorkflowContinueSessionSummaryPayloadKeys
 import skillbill.infrastructure.contracts.locator.DecompositionManifestSchemaPaths
 import skillbill.infrastructure.sqlite.telemetry.SqliteReviewTelemetryPayloadKeys
 import skillbill.infrastructure.sqlite.telemetry.goal.GoalTelemetryPayloadKeys
@@ -57,6 +63,35 @@ class WireVocabularyArchitectureTest {
   }
 
   @Test
+  fun `mcp tool payload keys restate no shared payload key value`() {
+    val owner = "skillbill.mcp.shared.McpToolPayloadKeys"
+    val mcpValues =
+      WireVocabularyArchitectureSupport.scanRuntimeMainSources().declarations
+        .filter { it.owner == owner }
+        .map { it.value }
+    assertTrue(mcpValues.isNotEmpty(), "Wire vocabulary scan found no declarations for $owner")
+    val sharedValues =
+      payloadKeyValues(
+        SharedPayloadKeys::class.java,
+        LifecycleTelemetryPayloadKeys::class.java,
+        ReviewFinishedTelemetryPayloadKeys::class.java,
+        ReviewVerificationSignalKeys::class.java,
+        ReviewAccountingPayloadKeys::class.java,
+        UpdateCheckPayloadKeys::class.java,
+        TelemetryProxyPayloadKeys::class.java,
+        WorkflowWirePayloadKeys::class.java,
+        LearningPayloadKeys::class.java,
+        WorkflowContinueSessionSummaryPayloadKeys::class.java,
+      )
+
+    assertEquals(
+      emptyList(),
+      (mcpValues intersect sharedValues).sorted(),
+      "The MCP key object must reference the shared owner instead of restating its wire value",
+    )
+  }
+
+  @Test
   fun `sqlite seams keep governing the values their adapter key objects handed to shared owners`() {
     val reviewKeys =
       WireVocabularyGovernedSeamInventory.closedSchemaPropertyKeys(
@@ -91,6 +126,8 @@ class WireVocabularyArchitectureTest {
           "fixture/Owner.kt",
           """
 
+          package fixture
+
           enum class Owner(val wireValue: String) {
             READY("ready"),
 
@@ -110,6 +147,9 @@ class WireVocabularyArchitectureTest {
         syntheticSourceFile(
           "fixture/Consumer.kt",
           """
+
+          package fixture
+          import fixture.Owner as AliasOwner
 
 
           fun consume(value: AliasOwner) = value.wireValue
@@ -167,7 +207,7 @@ class WireVocabularyArchitectureTest {
     val files =
       listOf(
         syntheticSourceFile(
-          "taskruntime/model/persistence/task/runtime/goal/FeatureTaskRuntimeGoalContinuationArtifactKeys.kt",
+          "taskruntime/model/persistence/FeatureTaskRuntimeGoalContinuationArtifactKeys.kt",
           """
 
           object FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys {
@@ -176,7 +216,7 @@ class WireVocabularyArchitectureTest {
           """.trimIndent(),
         ),
         syntheticSourceFile(
-          "taskruntime/model/persistence/task/runtime/goal/FeatureTaskRuntimeGoalContinuationArtifact.kt",
+          "taskruntime/model/persistence/FeatureTaskRuntimeGoalContinuationArtifact.kt",
           """
 
           fun read(raw: Map<String, Any?>) = raw["suppress_pr"]
@@ -194,6 +234,40 @@ class WireVocabularyArchitectureTest {
           ),
       )
     assertTrue(report.violations.any { it.contains("accesses key 'suppress_pr'") })
+  }
+
+  @Test
+  fun `goal runner controls seam rejects undeclared literal key access`() {
+    val files =
+      listOf(
+        syntheticSourceFile(
+          "contracts/GoalRunnerControlPayloadKeys.kt",
+          """
+
+          object GoalRunnerControlPayloadKeys {
+            const val ACCEPTED_AT: String = "accepted_at"
+          }
+          """.trimIndent(),
+        ),
+        syntheticSourceFile(
+          "infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreDecodePolicies.kt",
+          """
+
+          fun read(raw: Map<String, Any?>) = raw["accepted_at"]
+          """.trimIndent(),
+        ),
+      )
+    val report =
+      WireVocabularyArchitectureSupport.scanSourceFiles(
+        files,
+        includePayloadKeyAccesses = true,
+        enforceGovernedSeams = true,
+        schemaPropertyKeysByPath =
+          mapOf(
+            WireVocabularyGovernedSeamInventory.GOAL_RUNNER_CONTROLS_AUTHORITY to setOf("accepted_at"),
+          ),
+      )
+    assertTrue(report.violations.any { it.contains("accesses key 'accepted_at'") })
   }
 
   @Test

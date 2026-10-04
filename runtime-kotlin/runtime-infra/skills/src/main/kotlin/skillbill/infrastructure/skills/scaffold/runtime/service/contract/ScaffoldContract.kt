@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.runtime.service.contract
 
-import skillbill.error.shellcontent.MissingSupportingFileTargetError
+import skillbill.error.shellcontent.missingSupportingFileTargetError
 import skillbill.infrastructure.skills.scaffold.platformpack.selectedPlatformManifests
 import skillbill.infrastructure.skills.scaffold.runtime.service.support.featureAddonPointerSpecsFor
 import skillbill.scaffold.model.PlatformManifest
@@ -77,7 +77,7 @@ internal fun requireSupportingFileTarget(
     ?: featureAddonPointerSpecsFor(skillName, selectedPlatformManifests)
       .firstOrNull { spec -> spec.name == fileName }
       ?.let { spec -> repoRoot.toAbsolutePath().normalize().resolve(spec.target).normalize() }
-    ?: throw MissingSupportingFileTargetError(
+    ?: throw missingSupportingFileTargetError(
       "Runtime supporting file '$fileName' is not registered for '$skillName'.",
     )
 

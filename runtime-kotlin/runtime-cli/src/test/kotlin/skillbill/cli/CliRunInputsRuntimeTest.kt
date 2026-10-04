@@ -7,9 +7,19 @@ import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.di.core.RuntimeComponent
 import skillbill.di.core.create
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanCodec
+import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
+import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
+import skillbill.engine.featuretask.slot.statusProjectionPhaseStrategies
+import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeExecutionPlanSchemaValidator
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
 import skillbill.ports.system.HostPlatformPort
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.FeatureTaskRouteScope
+import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -141,10 +151,25 @@ class CliRunInputsRuntimeTest {
         environment = emptyMap(),
       )
     val identity = CanonicalRepositoryRoot.repositoryIdentity(invocationRoot)
-    val service =
-      RuntimeComponent::class.create(
-        context.toRuntimeContext(dbPathOverride = db.toString()),
-      ).workflowService
+    val component = RuntimeComponent::class.create(context.toRuntimeContext(dbPathOverride = db.toString()))
+    val validator = FeatureTaskRuntimeExecutionPlanSchemaValidator()
+    val plan =
+      statusProjectionPhaseStrategies().executionPlan(
+        PhaseStrategySelectionFacts(SkeletonDefinition.STANDALONE, setOf(CodeReviewExecutionMode.DEFAULT)),
+      )
+    val descriptor =
+      FeatureTaskRuntimeExecutionPlanCodec(validator).encodeExecution(
+        plan,
+        EffectiveGatePolicyInputs(
+          ValidationGateCommandFamily.VALIDATION,
+          null,
+          null,
+          null,
+          ValidationDepth.DEFAULT,
+          null,
+        ),
+      )
+    val service = component.workflowService
     assertIs<WorkflowOpenResult.Ok>(
       service.open(
         WorkflowServiceOpenArgs(
@@ -153,6 +178,7 @@ class CliRunInputsRuntimeTest {
           repositoryIdentity = identity,
           governedSpecPath = ".feature-specs/SKILL-902/spec.md",
           routeScope = FeatureTaskRouteScope.STANDALONE,
+          executionPlan = ValidatedFeatureTaskRuntimeExecutionPlan.read(descriptor, validator),
         ),
       ),
     )
@@ -240,5 +266,6 @@ private class StubHostPlatformPort(override val osName: String) : HostPlatformPo
   override fun resolveTemporaryDirectory(): Path = Path.of("/tmp")
 
   override val jvmClassPath: String = ""
+  override val javaCommand: String? = null
   override val pathSeparator: String = ":"
 }

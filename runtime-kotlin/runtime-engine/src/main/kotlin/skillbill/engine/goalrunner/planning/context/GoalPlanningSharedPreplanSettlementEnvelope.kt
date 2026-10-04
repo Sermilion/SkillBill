@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.planning.context
 import skillbill.application.decomposition.DECOMPOSITION_MANIFEST_FILENAME
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.outcome.resolvedGovernedPath
@@ -10,13 +11,17 @@ import skillbill.engine.goalrunner.planning.outcome.stopped
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRecoveryKind
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningIncompatibleProvenanceStopReason
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningRemedySubtaskId
-import skillbill.engine.goalrunner.planning.sweep.DefaultGoalPlanningSweep
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
+import skillbill.ports.goalrunner.planning.GoalPlanningContextDiscovery
+import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 
-internal fun DefaultGoalPlanningSweep.freshPlanningPacket(
+internal fun freshPlanningPacket(
   shared: GoalPlanningSharedContext,
   state: GoalRunnerManifestState,
+  contextDiscovery: GoalPlanningContextDiscovery,
+  manifestFileStore: DecompositionManifestStore,
+  repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
 ): Map<String, Any?> {
   val discovered = contextDiscovery.loadPlanningContext(shared.repoRoot)
   val decomposition =

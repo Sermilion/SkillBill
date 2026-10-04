@@ -1,5 +1,6 @@
 package skillbill.infrastructure.skills.install.apply
 
+import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.skills.install.plan.platformSkills
 import skillbill.infrastructure.skills.install.staging.installedSkillsCacheRoot
 import skillbill.infrastructure.skills.install.staging.pruneLegacySkillCacheDirs
@@ -74,7 +75,7 @@ private fun cleanupOneTarget(
         message = error.message.orEmpty(),
         agent = agent,
         path = targetDir.toFileLocation(),
-        causeClass = error::class.qualifiedName,
+        causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
       ),
     )
   }

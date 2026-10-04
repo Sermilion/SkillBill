@@ -1,10 +1,9 @@
 package skillbill.mcp.shared
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.InvalidMcpToolArgumentError
 
 internal class McpToolArguments(
-  val toolName: String,
+  private val toolName: String,
   private val values: Map<String, Any?>,
 ) {
   fun string(name: String): String = optionalString(name) ?: invalid(name, "is required")

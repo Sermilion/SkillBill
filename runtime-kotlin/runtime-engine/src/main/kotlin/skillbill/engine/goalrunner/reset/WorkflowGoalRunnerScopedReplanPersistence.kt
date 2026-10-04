@@ -1,16 +1,15 @@
 package skillbill.engine.goalrunner.reset
 
+import skillbill.engine.goalplanning.countOrThrow
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestProjectionPersistence
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
+import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
+import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
 import skillbill.goalrunner.planning.cascadeEligiblePlanSubtaskIds
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
-import skillbill.ports.goalrunner.runner.model.GoalRunnerScopedReplanOptions
-import skillbill.ports.goalrunner.runner.model.GoalRunnerScopedReplanWriteResult
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.model.GoalChildWorkflowDeletionScope
-import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
-import skillbill.workflow.decomposition.model.DecompositionManifest
-import skillbill.workflow.decomposition.withParentStatus
+import skillbill.workflow.decomposition.afterReplanChildDeletion
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
@@ -87,10 +86,10 @@ internal class WorkflowGoalRunnerScopedReplanPersistence(
             "planningIdentity is required when discarding a shared preplan by digest."
           }
         if (retainedIds.isEmpty()) {
-          preparations.deleteSharedPreplan(identity, expectedDigest)
+          preparations.deleteSharedPreplan(identity, expectedDigest).countOrThrow()
           if (subtaskId in plannedBefore) 1 else 0
         } else {
-          preparations.invalidateSharedPreplan(identity, expectedDigest)
+          preparations.invalidateSharedPreplan(identity, expectedDigest).countOrThrow()
           cascadedIds.forEach { id -> preparations.deleteSubtaskPlan(state.parentWorkflowId, id) }
           preparations.deleteSubtaskPlan(state.parentWorkflowId, subtaskId)
         }
@@ -101,26 +100,6 @@ internal class WorkflowGoalRunnerScopedReplanPersistence(
     return ScopedReplanDiscard(cascadedIds = cascadedIds, deleted = deleted)
   }
 }
-
-internal fun DecompositionManifest.afterIncompatibleChildDeletion(subtaskId: Int): DecompositionManifest =
-  copy(
-    currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = subtaskId, action = "start"),
-    subtasks =
-      subtasks.map { subtask ->
-        if (subtask.id != subtaskId) {
-          subtask
-        } else {
-          subtask.copy(
-            status = "pending",
-            branch = null,
-            commitSha = null,
-            workflowId = null,
-            blockedReason = null,
-            lastResumableStep = null,
-          )
-        }
-      },
-  ).withParentStatus()
 
 internal fun deleteStaleReplanChildren(
   unitOfWork: UnitOfWork,
@@ -145,24 +124,3 @@ internal fun deleteStaleReplanChildren(
       ) == 1
     }
   }
-
-internal fun DecompositionManifest.afterReplanChildDeletion(subtaskIds: List<Int>): DecompositionManifest {
-  if (subtaskIds.isEmpty()) return this
-  return copy(
-    subtasks =
-      subtasks.map { subtask ->
-        if (subtask.id !in subtaskIds) {
-          subtask
-        } else {
-          subtask.copy(
-            status = "pending",
-            branch = null,
-            commitSha = null,
-            workflowId = null,
-            blockedReason = null,
-            lastResumableStep = null,
-          )
-        }
-      },
-  ).withParentStatus()
-}

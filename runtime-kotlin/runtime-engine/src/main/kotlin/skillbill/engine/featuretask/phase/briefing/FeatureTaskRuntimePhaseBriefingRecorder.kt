@@ -8,18 +8,18 @@ import skillbill.engine.featuretask.persist.deliveredProjectionsFrom
 import skillbill.engine.featuretask.persist.phaseBriefingsFrom
 import skillbill.engine.featuretask.phase.core.decodePhaseRecords
 import skillbill.engine.featuretask.phase.core.toMeasurementFailureClassification
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWriteKind
+import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.ports.taskruntime.validateDeclaration
-import skillbill.ports.taskruntime.validateEnvelope
-import skillbill.ports.taskruntime.validateMeasurement
-import skillbill.ports.taskruntime.validatePersistenceRecord
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.asTelemetryPayload
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProjectionMeasurement
@@ -35,12 +35,29 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
     workflowId: String,
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement?,
-  ): Boolean =
+    attempt: Int,
+  ): RequiredPhaseWrite =
     database.transaction { unitOfWork ->
       val record =
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
-          ?: return@transaction false
-      wireArtifactValidator.validateEnvelope(briefing.handoffEnvelope.asWorkflowArtifactEntry(), workflowId)
+          ?: return@transaction RequiredPhaseWrite.Rejected(
+            writeKind = RequiredPhaseWriteKind.BRIEFING,
+            workflowId = workflowId,
+            phaseId = briefing.phaseId,
+            attempt = attempt,
+          )
+      wireArtifactValidator.handoffEnvelopeRejection(
+        FeatureTaskRuntimeWorkflowArtifactMap.from(briefing.handoffEnvelope.asWorkflowArtifactEntry()),
+        workflowId,
+      )?.let { rejection ->
+        return@transaction RequiredPhaseWrite.Rejected(
+          writeKind = RequiredPhaseWriteKind.BRIEFING,
+          workflowId = workflowId,
+          phaseId = briefing.phaseId,
+          attempt = attempt,
+          handoffRejection = rejection,
+        )
+      }
       val artifacts = record.artifacts
       val updatedBriefings =
         LinkedHashMap(phaseBriefingsFrom(artifacts, wireArtifactValidator::validateEnvelopeWire))
@@ -52,8 +69,9 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
           wireArtifactValidator::validatePersistenceWire,
         )
       val delivered = nextDeliveredProjectionRecord(workflowId, briefing, deliveredHistory)
-      wireArtifactValidator.validatePersistenceRecord(
-        delivered.asWorkflowArtifactEntry(),
+      wireArtifactValidator.validate(
+        FeatureTaskRuntimeWireArtifactKind.HANDOFF_PERSISTENCE_RECORD,
+        FeatureTaskRuntimeWorkflowArtifactMap.from(delivered.asWorkflowArtifactEntry()),
         "delivered-projection:${briefing.phaseId}",
       )
       recordProjectionMeasurements(unitOfWork, workflowId, briefing, delivered, artifacts)
@@ -74,26 +92,24 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
           ),
         )
       workflowPersistence.persistArtifactsPatch(unitOfWork.workflowStates, record, patch)
-      true
+      RequiredPhaseWrite.Acknowledged
     }
 
   fun recordProjectionRejection(
-    workflowId: String,
-    consumerPhaseId: String,
-    error: InvalidFeatureTaskRuntimeHandoffProjectionError,
+    context: InvalidFeatureTaskRuntimeHandoffProjectionContext,
     repositoryCheckpointFingerprint: String?,
   ): Boolean =
     database.transaction { unitOfWork ->
       recordProjectionRejectionMeasurement(
         unitOfWork,
         FeatureTaskRuntimeProjectionRejection(
-          workflowId = workflowId,
-          consumerPhaseId = consumerPhaseId,
-          projectionContractId = error.projectionContractId.ifBlank { "unknown" },
-          producerIteration = FeatureTaskRuntimeProducerIteration(consumerPhaseId, 1),
+          workflowId = context.workflowId.orEmpty(),
+          consumerPhaseId = context.consumerPhaseId,
+          projectionContractId = context.projectionContractId.ifBlank { "unknown" },
+          producerIteration = FeatureTaskRuntimeProducerIteration(context.consumerPhaseId, 1),
           repositoryCheckpointFingerprint = repositoryCheckpointFingerprint,
-          failureClassification = error.failureKind.toMeasurementFailureClassification(),
-          sourceLabel = error.projectionName,
+          failureClassification = context.failureKind.toMeasurementFailureClassification(),
+          sourceLabel = context.projectionName,
         ),
       )
     }
@@ -105,8 +121,9 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
 
   fun validateHandoffDeclarations(declarations: List<PhaseHandoffProjectionDeclaration>) {
     declarations.forEach { declaration ->
-      wireArtifactValidator.validateDeclaration(
-        declaration.asWorkflowArtifactEntry(),
+      wireArtifactValidator.validate(
+        FeatureTaskRuntimeWireArtifactKind.HANDOFF_DECLARATION,
+        FeatureTaskRuntimeWorkflowArtifactMap.from(declaration.asWorkflowArtifactEntry()),
         "phase-handoff-declaration:${declaration.consumerPhaseId}:${declaration.projectionName}",
       )
     }
@@ -118,7 +135,11 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
         unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId)
           ?: return@read null
       phaseBriefingsFrom(record.artifacts) { envelope ->
-        wireArtifactValidator.validateEnvelope(envelope, workflowId)
+        wireArtifactValidator.validate(
+          FeatureTaskRuntimeWireArtifactKind.HANDOFF_ENVELOPE,
+          FeatureTaskRuntimeWorkflowArtifactMap.from(envelope),
+          workflowId,
+        )
       }
     }
 
@@ -129,9 +150,19 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
           ?: return@read null
       deliveredProjectionsFrom(
         record.artifacts,
-        validateEnvelope = { envelope -> wireArtifactValidator.validateEnvelope(envelope, workflowId) },
+        validateEnvelope = { envelope ->
+          wireArtifactValidator.validate(
+            FeatureTaskRuntimeWireArtifactKind.HANDOFF_ENVELOPE,
+            FeatureTaskRuntimeWorkflowArtifactMap.from(envelope),
+            workflowId,
+          )
+        },
         validatePersistenceRecord = { persistence ->
-          wireArtifactValidator.validatePersistenceRecord(persistence, "delivered-projection:$workflowId")
+          wireArtifactValidator.violation(
+            FeatureTaskRuntimeWireArtifactKind.HANDOFF_PERSISTENCE_RECORD,
+            FeatureTaskRuntimeWorkflowArtifactMap.from(persistence),
+            "delivered-projection:$workflowId",
+          )
         },
       )
     }
@@ -183,8 +214,9 @@ fun FeatureTaskRuntimePhaseBriefingRecorder.recordProjectionMeasurements(
         privateEvidenceUtf8Bytes = privateEvidenceUtf8Bytes,
         deliveredProjectionUtf8Bytes = deliveredProjectionUtf8Bytes,
       )
-    wireArtifactValidator.validateMeasurement(
-      measurement.asTelemetryPayload(),
+    wireArtifactValidator.validate(
+      FeatureTaskRuntimeWireArtifactKind.HANDOFF_MEASUREMENT,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(measurement.asTelemetryPayload()),
       "projection-delivery:${briefing.phaseId}:${projection.projectionName}",
     )
     unitOfWork.lifecycleTelemetry.featureTaskRuntimeProjectionMeasurement(measurement)
@@ -240,8 +272,9 @@ internal fun FeatureTaskRuntimePhaseBriefingRecorder.recordProjectionRejectionMe
       deliveredProjectionUtf8Bytes = 0,
       failureClassification = rejection.failureClassification,
     )
-  wireArtifactValidator.validateMeasurement(
-    measurement.asTelemetryPayload(),
+  wireArtifactValidator.validate(
+    FeatureTaskRuntimeWireArtifactKind.HANDOFF_MEASUREMENT,
+    FeatureTaskRuntimeWorkflowArtifactMap.from(measurement.asTelemetryPayload()),
     "projection-rejection:${rejection.consumerPhaseId}:${rejection.sourceLabel}",
   )
   unitOfWork.lifecycleTelemetry.featureTaskRuntimeProjectionMeasurement(measurement)
@@ -249,7 +282,15 @@ internal fun FeatureTaskRuntimePhaseBriefingRecorder.recordProjectionRejectionMe
 }
 
 internal fun FeatureTaskRuntimeWireArtifactValidator.validateEnvelopeWire(envelope: Map<String, Any?>) =
-  validateEnvelope(envelope, workflowId = null)
+  validate(
+    FeatureTaskRuntimeWireArtifactKind.HANDOFF_ENVELOPE,
+    FeatureTaskRuntimeWorkflowArtifactMap.from(envelope),
+    "handoff-envelope",
+  )
 
 internal fun FeatureTaskRuntimeWireArtifactValidator.validatePersistenceWire(record: Map<String, Any?>) =
-  validatePersistenceRecord(record, "delivered-projection")
+  violation(
+    FeatureTaskRuntimeWireArtifactKind.HANDOFF_PERSISTENCE_RECORD,
+    FeatureTaskRuntimeWorkflowArtifactMap.from(record),
+    "delivered-projection",
+  )

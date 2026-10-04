@@ -2,8 +2,7 @@ package skillbill.engine.featuretask.lifecycle.core
 
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeOmittedFindingsRetryReason
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptOmittedFindings
-import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptSettleRejection
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairOutcome
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceiptEntry
@@ -13,8 +12,6 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FeatureTaskRuntimeRefutedFindingCoverageTest {
@@ -47,16 +44,18 @@ class FeatureTaskRuntimeRefutedFindingCoverageTest {
     val state = reviewStateCarrying(surviving, alsoSurviving, refuted)
     val receipt = receiptAddressing(surviving, alsoSurviving)
 
-    assertNull(featureTaskRuntimeRepairReceiptSettleRejection(receipt, state, refutedFindingIds = setOf("F-003")))
+    assertTrue(featureTaskRuntimeRepairReceiptOmittedFindings(receipt, state, setOf("F-003")).isEmpty())
   }
 
   @Test
-  fun `the same round is still rejected while nothing records the refutation`() {
+  fun `the refuted finding stays owed while nothing records the refutation`() {
     val state = reviewStateCarrying(surviving, alsoSurviving, refuted)
     val receipt = receiptAddressing(surviving, alsoSurviving)
 
-    val rejection = assertNotNull(featureTaskRuntimeRepairReceiptSettleRejection(receipt, state))
-    assertTrue(rejection.contains("/repair_receipt/entries"))
+    assertEquals(
+      listOf("F-003"),
+      featureTaskRuntimeRepairReceiptOmittedFindings(receipt, state).map { finding -> finding.findingId },
+    )
   }
 
   @Test
@@ -64,9 +63,6 @@ class FeatureTaskRuntimeRefutedFindingCoverageTest {
     val state = reviewStateCarrying(surviving, alsoSurviving, refuted)
     val receipt = receiptAddressing(surviving)
 
-    assertNotNull(
-      featureTaskRuntimeRepairReceiptSettleRejection(receipt, state, refutedFindingIds = setOf("F-003")),
-    )
     assertEquals(
       listOf("F-002"),
       featureTaskRuntimeRepairReceiptOmittedFindings(receipt, state, setOf("F-003"))
@@ -111,8 +107,6 @@ class FeatureTaskRuntimeRefutedFindingCoverageTest {
       )
     val state = reviewStateCarrying(surviving, unnamed)
     val receipt = receiptAddressing(surviving)
-
-    assertNotNull(featureTaskRuntimeRepairReceiptSettleRejection(receipt, state))
 
     assertEquals(
       listOf("F-002"),

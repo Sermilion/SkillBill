@@ -453,18 +453,10 @@ internal fun findRawMapViolations(file: SourceFile): List<String> {
 
 private val rawMapBoundaryAccessors =
   setOf(
-    "skillbill.workflow.taskruntime.phaseartifacts.decodeStrictKeyedArtifactMap",
-    "skillbill.workflow.taskruntime.model.persistence.task.runtime.goal." +
-      "FeatureTaskRuntimeGoalContinuationArtifact.toWorkflowArtifactPatch",
-    "skillbill.workflow.decomposition.runtime.goalParentArtifactProjection",
     "skillbill.workflow.engine.model.DurableWorkflowArtifactFamily.contains",
     "skillbill.workflow.engine.model.DurableWorkflowArtifactFamily.value",
     "skillbill.workflow.engine.model.DurableWorkflowArtifactFamily.putInto",
     "skillbill.workflow.engine.model.DurableWorkflowArtifactFamily.removeFrom",
-    "skillbill.goalrunner.missingResultPrefixTerminalOutcomeArtifact",
-    "skillbill.goalrunner.goalReviewArtifacts",
-    "skillbill.goalrunner.validatedGoalReviewPasses",
-    "skillbill.ports.goalrunner.GoalParentProjectionWriter.artifacts",
   )
 
 private fun rawMapViolationForLine(
@@ -493,12 +485,24 @@ private fun rawMapViolationForLine(
       .filter(String::isNotBlank)
       .joinToString(".")
   return when {
+    signatureDeclaresExactAny(signature) && !isNonPublicDeclaration(context) ->
+      "${file.relativePath}:${index + 1} public `$declName` declares type exactly Any (fqn=$fqn)"
     !signatureUsesBannedRawMap(signature, rawMapBannedShapes, bannedTypeAliases) -> null
     fqn in rawMapBoundaryAccessors -> null
     isBoundaryCarrierRawMapDeclaration(context) -> null
     else -> "${file.relativePath}:${index + 1} public `$declName` exposes raw map shape (fqn=$fqn)"
   }
 }
+
+private val exactAnyDeclarationPattern =
+  Regex("""\)\s*:\s*Any(?![\w?<.])|\b(?:val|var)\s+\w+\s*:\s*Any(?![\w?<.])""")
+
+private fun signatureDeclaresExactAny(signature: String): Boolean =
+  exactAnyDeclarationPattern.containsMatchIn(signature)
+
+private fun isNonPublicDeclaration(context: RawMapDeclarationContext): Boolean =
+  rawMapDeclarationModifiers(context.trimmed).any { it in setOf("private", "protected", "internal") } ||
+    context.tracker.insideNonPublicScope
 
 private fun rawMapDelegatingClassViolation(
   trimmed: String,

@@ -6,7 +6,8 @@ import skillbill.application.review.preparation.model.ReviewLaneSelection
 import skillbill.application.review.preparation.model.ReviewPreparationFacts
 import skillbill.application.review.preparation.model.ReviewScopeFacts
 import skillbill.application.review.preparation.model.ReviewStackRoutingFacts
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.review.context.ReviewContextWireMap
 import skillbill.review.context.model.bundle.ReviewLaneBundle
@@ -17,7 +18,7 @@ import skillbill.review.context.model.commit.ReviewCommitLaneDisposition
 import skillbill.review.context.model.commit.ReviewCommitLaneRoutingMatrix
 import skillbill.review.context.model.commit.ReviewCommitSource
 import skillbill.review.context.model.commit.ReviewCommitUnit
-import skillbill.review.context.model.execution.ReviewLaneDecision
+import skillbill.review.context.model.commit.ReviewLaneDecision
 import skillbill.review.context.model.hunk.ReviewChangedHunk
 import skillbill.review.context.model.hunk.ReviewRevision
 import kotlin.test.Test
@@ -220,10 +221,10 @@ class ReviewPreparationCommitBundleTest {
     val widened = prepared.assignments.map { it.copy(assignedHunks = listOf(hunkA.hunkId, hunkA2.hunkId)) }
 
     val error =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         sparseService(scope, decisions, mapOf("security" to setOf("c1")))
           .validateAgainstPacket(prepared.packet, widened)
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("skipped" in error.message.orEmpty(), error.message.orEmpty())
 
     val bundled =
@@ -301,9 +302,9 @@ class ReviewPreparationCommitBundleTest {
         }
       }
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         service(multiCommitScope, prepared.packet.laneDecisions).validateAgainstPacket(prepared.packet, forged)
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     assertTrue("packet does not own" in failure.message.orEmpty(), failure.message.orEmpty())
   }
 

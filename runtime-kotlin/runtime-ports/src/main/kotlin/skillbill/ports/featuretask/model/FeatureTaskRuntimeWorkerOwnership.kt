@@ -1,7 +1,7 @@
 package skillbill.ports.featuretask.model
 
 import skillbill.contracts.workflow.identity.task.FEATURE_TASK_RUNTIME_WORKER_OWNERSHIP_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeWorkerOwnershipSchema
 import java.time.Instant
 import java.time.format.DateTimeParseException
 
@@ -32,7 +32,7 @@ data class FeatureTaskRuntimeWorkerOwnership(
       try {
         Instant.parse(value)
       } catch (_: DateTimeParseException) {
-        throw InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError(
+        throw invalidFeatureTaskRuntimeWorkerOwnershipSchema(
           workflowId,
           "$field must be an RFC 3339 instant",
         )

@@ -9,7 +9,7 @@ intake, preflight, or confirmation, including on retries and continuation.
 Reading the installed skill-bill skill does not make this phase a new invocation.
 
 Phase: verify_findings (Phase 5a: Verify Findings)
-Task: Verify every finding from the single preceding review pass against the subtask spec intent projection and the scoped boundary-memory catalog in the briefing. Each finding receives a titles-only heading catalog for boundaries that own its paths; select relevant heading_id values in selected_boundary_headings and set boundary_context_unavailable when no eligible boundary owns the finding paths. Emit envelope verdict findings_verified or no_findings_verified and produced_outputs.finding_dispositions with exactly one {finding_id, disposition} entry per review finding (verified or rejected). Optional decoration — reason, severity, location, message, selected_boundary_headings, and boundary_context_unavailable — may support the disposition but does not gate settlement. Do not edit the worktree.
+Task: Verify every finding from the single preceding review pass against the subtask spec intent projection and the scoped boundary-memory catalog in the briefing. Each finding receives a titles-only heading catalog for boundaries that own its paths; name the relevant heading_id values verbatim when a boundary entry informs your judgement. Do not edit the worktree.
 
 ## Installed runtime owns phase output and settlement
 The installed Skill Bill runtime validates this phase's output and MCP settlement.
@@ -65,8 +65,8 @@ mandates_and_overrides:
 
 ## Upstream projections (layer 2, declared and validated)
 ### from: review
-findings:
-repository_checkpoint: repository_checkpoint=repository-checkpoint-831bf900+producer-claimed:repository-checkpoint-831bf900
+value: {"contract_version":"0.7","produced_outputs":{"findings":[]}}
+repository_checkpoint: repository_checkpoint=slot-baseline-checkpoint+producer-claimed:slot-baseline-checkpoint
 ### run_invariant_spec_reference (run_invariant_field:spec_reference)
 spec_reference: .feature-specs/SKILL-380-phase-slot-strategies/spec.md
 ### run_invariant_feature_size (run_invariant_field:feature_size)
@@ -85,7 +85,7 @@ acceptance_criteria:
   - AC-2
 
 ## Repository checkpoint (layer 2, resolved)
-fingerprint: repository-checkpoint-831bf900
+fingerprint: slot-baseline-checkpoint
 base_ref: __NORMALIZED_SHA40__
 head_ref: __NORMALIZED_SHA40__
 scoped_owned_paths:
@@ -94,25 +94,33 @@ scoped_owned_paths:
 ## Derived context (layer 3, declared)
 (none)
 
-## Required final output (validated schema gate)
-End your response with exactly one JSON object as the last thing you emit. Prefer a raw
-object with nothing after it; a single ```json fenced block is also accepted. The runtime
-extracts that object and blocks the run if it does not validate against the phase-output
-contract. Copy these field values from this briefing; do not look them up in this checkout:
-- "contract_version": must be exactly "0.7"
-- "phase_id": must be "verify_findings"
-- "status": one of "completed", "blocked", "failed"
-- "failure_disposition": required by the runtime when status is "blocked" or "failed"; one of
-  "retryable", "non_retryable_policy_conflict", "needs_user_action", "process_failure", or
-  "invalid_output". Omit it when status is "completed".
-- "summary": non-empty string describing what this phase did
-- "produced_outputs": object. Empty {} is valid when this phase has no structured
-  payload. When this briefing names a required shape below, that shape is required
-  - This is a VERIFYING phase: emit top-level "verdict" as "findings_verified" or "no_findings_verified" and exactly one produced_outputs.finding_dispositions entry per review finding with required census fields finding_id and disposition (verified or rejected). Recommended optional fields per entry: reason, severity, location, message, selected_boundary_headings (heading_id and source_path), and boundary_context_unavailable when no eligible boundary owns the finding paths. When you cite boundary memory, copy heading_id and source_path verbatim from that finding's boundary_catalog only — never invent hashes or reuse another finding's catalog. Concurrent worktree dirt outside the review scope is ignored; settle dispositions for the reviewed findings only.
-    Required example: {"finding_id":"F-001","disposition":"verified"}.
-- "derived_notes": optional; when present, a non-empty string of notes for downstream
-  phases
-  - "verdict": optional top-level string; this verifying phase sets it to drive the advance-vs-remediation decision — see the verifying-phase signal above
-No top-level fields other than the ones listed above are allowed.
+## Required final output (durable settlement)
+Finish this phase through the skill-bill MCP settlement tools, not by printing a JSON envelope.
+The tools may be deferred in this session: load them first with ToolSearch
+`select:mcp__skill-bill__feature_task_phase_complete,mcp__skill-bill__feature_task_phase_block`.
+- Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
+  phase_id "verify_findings", attempt 1, and value: one prose string carrying everything
+  the next phase needs (what this phase produced, deviations from the briefing, what was
+  deliberately left to later phases). When a value content section follows, it defines value and
+  overrides this description: carry its content as prose or as JSON text, whichever is clearer, and
+  emit any exact literal it names with nothing added. Otherwise the runtime does not validate the
+  shape of value. Optional summary: one sentence.
+- Cannot finish because of a concrete obstacle: call `mcp__skill-bill__feature_task_phase_block` with the same
+  workflow_id, phase_id, and attempt, a reason string naming the obstacle, and failure_disposition
+  one of "retryable",
+  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
+Copy workflow_id, phase_id, and attempt exactly as written here. After the tool returns status
+"ok", end your response with a short prose recap and nothing structured. Use the prose
+fallback below only if both tools stay unavailable after loading them.
+
+## Value content
+Name every review finding by its finding id and say for each whether verification verified it or rejected it. Reject a finding only when you can cite the file:line construct that shows it is not a defect; a finding you do not address, or cannot settle, stays verified and is carried into repair.
+
+## Fallback final output (only when the settlement tools are unavailable)
+End your response with plain prose carrying everything the next phase needs (what this phase
+produced, deviations from the briefing, what was deliberately left to later phases), or exactly
+what a value content section defines. The runtime records that prose as the phase value as
+written. Do not wrap it in a status or JSON envelope. Report an obstacle only when a concrete one
+stopped the phase, and name that obstacle in the prose.
 ## Spec intent projection (verify_findings)
 {"intended_outcome":"Exercise the feature-task runtime harness.","acceptance_criteria":["AC-1","AC-2"],"constraints":[],"non_goals":[],"deferred_items":[],"provenance":{"spec_path":".feature-specs/SKILL-380-phase-slot-strategies/spec.md","content_digest":"__NORMALIZED_SHA64__"},"declared_byte_budget":32768}

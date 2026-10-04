@@ -1,18 +1,21 @@
 package skillbill.engine.goalrunner.status
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goalrunner.execution.core.asWorkerOwnership
 import skillbill.engine.goalrunner.goalRepositoryIdentity
-import skillbill.engine.goalrunner.manifest.isAtUnlaunchedBoundary
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerPauseResult
+import skillbill.engine.goalrunner.model.GoalRunnerPauseStatus
 import skillbill.engine.goalrunner.model.GoalRunnerResumeResult
+import skillbill.engine.goalrunner.model.GoalRunnerResumeStatus
 import skillbill.engine.goalrunner.model.GoalRunnerStopStatus
 import skillbill.engine.goalrunner.model.GoalRunnerStopVerbResult
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
+import skillbill.workflow.decomposition.isAtUnlaunchedBoundary
 import java.nio.file.Path
 import java.time.Clock
 
@@ -21,6 +24,7 @@ private const val GRACEFUL_TERMINATION_POLL_MILLIS: Long = 250
 private const val GRACEFUL_TERMINATION_POLLS: Int =
   (GRACEFUL_TERMINATION_WAIT_MILLIS / GRACEFUL_TERMINATION_POLL_MILLIS).toInt()
 
+@Inject
 class GoalRunnerStatusControlVerbs(
   private val manifestStore: GoalRunnerManifestStore,
   private val clock: Clock,
@@ -33,12 +37,12 @@ class GoalRunnerStatusControlVerbs(
   ): GoalRunnerPauseResult {
     val loaded =
       manifestStore.loadByIssueKey(issueKey, repoRoot)
-        ?: return GoalRunnerPauseResult(issueKey = issueKey, status = "not_found")
+        ?: return GoalRunnerPauseResult(issueKey = issueKey, status = GoalRunnerPauseStatus.NOT_FOUND)
     val repositoryIdentity = goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort)
     manifestStore.bindRepositoryIdentity(loaded.parentWorkflowId, repositoryIdentity)
     val control =
       manifestStore.requestPause(loaded.parentWorkflowId)
-        ?: return GoalRunnerPauseResult(issueKey = issueKey, status = "not_found")
+        ?: return GoalRunnerPauseResult(issueKey = issueKey, status = GoalRunnerPauseStatus.NOT_FOUND)
     val effectiveControl =
       if (
         control.requiresPauseBoundary(loaded.manifest) && loaded.manifest.isAtUnlaunchedBoundary()
@@ -52,7 +56,7 @@ class GoalRunnerStatusControlVerbs(
     return GoalRunnerPauseResult(
       issueKey = issueKey,
       parentWorkflowId = loaded.parentWorkflowId,
-      status = if (effectiveControl.paused) "paused" else "requested",
+      status = if (effectiveControl.paused) GoalRunnerPauseStatus.PAUSED else GoalRunnerPauseStatus.REQUESTED,
       paused = effectiveControl.paused,
       pauseRequested = effectiveControl.pauseRequested,
       pauseReason = effectiveControl.pauseReason,
@@ -124,7 +128,7 @@ class GoalRunnerStatusControlVerbs(
   ): GoalRunnerResumeResult {
     val loaded =
       manifestStore.loadByIssueKey(issueKey, repoRoot)
-        ?: return GoalRunnerResumeResult(issueKey = issueKey, status = "not_found")
+        ?: return GoalRunnerResumeResult(issueKey = issueKey, status = GoalRunnerResumeStatus.NOT_FOUND)
     manifestStore.bindRepositoryIdentity(
       loaded.parentWorkflowId,
       goalRepositoryIdentity(repoRoot, repositoryEnclosingRootPort),
@@ -134,15 +138,15 @@ class GoalRunnerStatusControlVerbs(
       return GoalRunnerResumeResult(
         issueKey = issueKey,
         parentWorkflowId = loaded.parentWorkflowId,
-        status = "not_paused",
+        status = GoalRunnerResumeStatus.NOT_PAUSED,
       )
     }
     manifestStore.resume(loaded.parentWorkflowId)
-      ?: return GoalRunnerResumeResult(issueKey = issueKey, status = "not_found")
+      ?: return GoalRunnerResumeResult(issueKey = issueKey, status = GoalRunnerResumeStatus.NOT_FOUND)
     return GoalRunnerResumeResult(
       issueKey = issueKey,
       parentWorkflowId = loaded.parentWorkflowId,
-      status = "resumed",
+      status = GoalRunnerResumeStatus.RESUMED,
       clearedPauseReason = before.pauseReason,
     )
   }

@@ -3,14 +3,15 @@ package skillbill.engine.goalrunner.telemetry
 import skillbill.engine.agentoutput.stderrExcerpt
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityWorkerRole
+import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.model.GoalRunnerLaunchFacts
 import skillbill.goalrunner.model.GoalRunnerObservabilityRecordRequest
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.exitCode
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
-import skillbill.ports.goalrunner.runner.model.GoalRunnerWorkflowProgress
 import java.time.Clock
 
 internal class GoalRunnerObservabilityEmitter(
@@ -59,7 +60,8 @@ internal class GoalRunnerObservabilityEmitter(
       },
       failureMessage = { error ->
         "Best-effort goal observability emit failed: workflowId='${subject.workflowId}' " +
-          "livenessClass='${signal.livenessClass.wireValue}' errorType='${error::class.qualifiedName}' " +
+          "livenessClass='${signal.livenessClass.wireValue}' " +
+          "errorType='${error.failureCodeLabel() ?: error::class.qualifiedName}' " +
           "message='${GoalRunnerBestEffortEmission.boundedMessage(error.message.orEmpty())}'"
       },
     )

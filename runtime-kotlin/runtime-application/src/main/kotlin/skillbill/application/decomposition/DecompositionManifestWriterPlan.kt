@@ -11,6 +11,7 @@ import skillbill.workflow.decomposition.model.DecompositionStackBranch
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.decomposition.runtime.invalidManifest
+import skillbill.workflow.model.DecompositionStatus
 import java.nio.file.Path
 
 internal fun parseSubtasks(
@@ -32,7 +33,7 @@ internal fun parseSubtasks(
       id = item.id,
       name = name,
       specPath = specPath,
-      status = "pending",
+      status = DecompositionStatus.PENDING.wireValue,
       linearIssueId = linearIssueId(item, index, sourceLabel, specSource),
       dependencies =
         item.dependencies.map { dependency ->

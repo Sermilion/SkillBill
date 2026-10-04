@@ -1,14 +1,14 @@
 package skillbill.di.goal
 
 import me.tatarka.inject.annotations.Provides
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestStore
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.WorkflowGoalRunnerOutcomeStore
+import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPortAdapter
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
-import skillbill.ports.goalrunner.persistence.GoalChildPlanningHydratorPort
-import skillbill.ports.goalrunner.persistence.GoalRunnerChildRepairRunnerPort
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairRunnerPort
 
 internal interface RuntimeGoalRunnerStoreProvides {
   @Provides

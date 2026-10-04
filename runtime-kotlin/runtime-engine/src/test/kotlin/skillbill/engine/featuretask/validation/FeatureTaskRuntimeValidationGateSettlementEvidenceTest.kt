@@ -3,9 +3,9 @@ package skillbill.engine.featuretask.validation
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
-import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimePhaseOutputWireSchema
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeValidationEvidenceSchemaValidator
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
@@ -36,6 +36,7 @@ class FeatureTaskRuntimeValidationGateSettlementEvidenceTest {
                 ),
               command = "./gradlew check --continue",
               exitCode = 0,
+              repositoryCheckpoint = "checkpoint",
             ),
           ),
         requiredCommand = "./gradlew check --continue",
@@ -45,7 +46,7 @@ class FeatureTaskRuntimeValidationGateSettlementEvidenceTest {
       requireNotNull(
         decodeValidationGateExecutionEvidenceFromArtifact(validationResult, "validate"),
       )
-    FeatureTaskRuntimePhaseOutputWireSchema.validatePhaseOutputText(output.payload, "validate")
+    NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(output.payload, "validate")
     assertEquals(0, gateEvidence.gateRuns.single().executedWorkUnits)
     assertFalse(gateEvidence.zeroWork)
     assertTrue(gateEvidence.evidenceRecorded)
@@ -133,6 +134,7 @@ class FeatureTaskRuntimeValidationGateSettlementEvidenceTest {
       executedChecks = fixture.execution.checks,
       command = fixture.command,
       exitCode = fixture.exitCode,
+      repositoryCheckpoint = "checkpoint",
     )
 
   private data class GateRunFixture(

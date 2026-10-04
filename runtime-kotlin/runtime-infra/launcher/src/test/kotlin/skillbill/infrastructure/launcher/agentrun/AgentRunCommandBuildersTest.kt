@@ -2,7 +2,8 @@ package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.config.model.PhaseCompactionDirective
 import skillbill.contracts.review.GovernedReviewEvidenceContracts
-import skillbill.error.shellcontent.GovernedReviewLaunchCapabilityError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.infrastructure.launcher.process.launch.AgentRunIdlePolicy
 import skillbill.infrastructure.skills.install.mcp.McpConfigFormat
 import skillbill.install.model.MODEL_DIRECTIVE_CAPABLE_AGENTS
@@ -27,6 +28,13 @@ class AgentRunCommandBuildersTest {
 
     assertEquals("400000", command.environment["CLAUDE_CODE_AUTO_COMPACT_WINDOW"])
     assertEquals("70", command.environment["CLAUDE_AUTOCOMPACT_PCT_OVERRIDE"])
+  }
+
+  @Test
+  fun `claude launches keep every tool call in the foreground`() {
+    val command = ClaudeAgentRunCommandBuilder().build(request())
+
+    assertEquals("1", command.environment["CLAUDE_CODE_DISABLE_BACKGROUND_TASKS"])
   }
 
   @Test
@@ -405,9 +413,10 @@ class AgentRunCommandBuildersTest {
       capable.copy(mcpIsolation = false) to "MCP isolation",
     ).forEach { (capability, missing) ->
       val builder = CodexAgentRunCommandBuilder(governedReviewLaunchCapability = capability)
-      val error = assertFailsWith<GovernedReviewLaunchCapabilityError> { builder.build(governed) }
-      assertEquals("codex", error.provider)
-      assertEquals(missing, error.capability)
+      val error = assertFailsWith<SkillBillRuntimeException> { builder.build(governed) }
+      assertEquals(GovernedReviewFailureCode.LAUNCH_CAPABILITY, error.code)
+      assertTrue(error.message.orEmpty().contains("Agent 'codex'"))
+      assertTrue(error.message.orEmpty().contains("missing capability '$missing'"))
     }
   }
 

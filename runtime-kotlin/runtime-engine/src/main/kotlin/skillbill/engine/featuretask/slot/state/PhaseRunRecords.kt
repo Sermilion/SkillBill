@@ -10,7 +10,7 @@ import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProjectionReje
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.review.model.ReviewFindingVerdict
@@ -20,9 +20,10 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranc
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FeatureTaskRuntimeCheckpointIdentity
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttempt
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
@@ -90,6 +91,9 @@ internal interface PhaseStepRecords {
   /** Records a step state. Returns false when the write did not apply. */
   fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean
 
+  /** Records a required step start, returning the rejection when the write did not apply. */
+  fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite
+
   /** Records a completed step atomically with its output. Returns false when the write did not apply. */
   fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean
 
@@ -101,6 +105,9 @@ internal interface PhaseStepRecords {
 
   /** The step records of [workflowId], keyed by step id. */
   fun loadPhaseRecords(workflowId: String): Map<String, FeatureTaskRuntimePhaseRecord>?
+
+  /** The ledger entries of [workflowId]. */
+  fun loadPhaseLedger(workflowId: String): List<FeatureTaskRuntimePhaseLedgerEntry>?
 }
 
 /** The review pass, finding ledger, verification checkpoint, and review-generation records of one run. */
@@ -158,18 +165,17 @@ internal interface PhaseReviewRecords {
 
 /** The briefing, handoff-projection, and quality-gate progress records a step launch reads and writes. */
 internal interface PhaseLaunchRecords {
-  /** Records the launch briefing of a step. */
+  /** Records the launch briefing of a step, returning the rejection when the write did not apply. */
   fun recordPhaseBriefing(
     workflowId: String,
     briefing: FeatureTaskRuntimePhaseLaunchBriefing,
     sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement? = null,
-  ): Boolean
+    attempt: Int = 1,
+  ): RequiredPhaseWrite
 
   /** Records a handoff projection the consumer step rejected. */
   fun recordProjectionRejection(
-    workflowId: String,
-    consumerPhaseId: String,
-    error: InvalidFeatureTaskRuntimeHandoffProjectionError,
+    context: InvalidFeatureTaskRuntimeHandoffProjectionContext,
     repositoryCheckpointFingerprint: String?,
   ): Boolean
 

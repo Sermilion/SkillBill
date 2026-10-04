@@ -4,14 +4,17 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.application.TestDecompositionManifestStore
 import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.encodeValidatedDecompositionManifestYaml
+import skillbill.application.decomposition.loadDecompositionManifest
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.specSource
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.contracts.JsonCodec
+import skillbill.engine.featuretask.runloop.planning.PlanBundleAuthorization
 import skillbill.engine.goalrunner.manifest
 import skillbill.error.core.InvalidFeatureSpecPreparationRequestError
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import skillbill.featurespec.model.FeatureSpecPreparationDecision
 import skillbill.featurespec.model.FeatureSpecPreparationMode
 import skillbill.featurespec.model.FeatureSpecSubtaskPreparation
@@ -19,11 +22,11 @@ import skillbill.featurespec.model.FeatureSpecWriteRequest
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.decodeManifest
-import skillbill.ports.workflow.decomposition.loadDecompositionManifest
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionManifestRepairEvidence
 import skillbill.workflow.decomposition.model.DecompositionManifestRepairOperation
+import skillbill.workflow.decomposition.model.DecompositionManifestValidationFailureCode
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationFormat
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationResult
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationSourceLocation
@@ -240,13 +243,21 @@ class FeatureSpecPreparationWriterTest {
           manifest: DecompositionManifestWireMap,
           sourceLabel: String,
         ): Unit =
-          throw InvalidDecompositionManifestSchemaError(sourceLabel, "typed manifest rejection", "schema_invalid")
+          throw invalidDecompositionManifestSchema(
+            sourceLabel,
+            "typed manifest rejection",
+            DecompositionManifestValidationFailureCode.SCHEMA_INVALID,
+          )
 
         override fun validateYamlText(
           yamlText: String,
           sourceLabel: String,
         ): DecompositionManifest =
-          throw InvalidDecompositionManifestSchemaError(sourceLabel, "typed YAML rejection", "schema_invalid")
+          throw invalidDecompositionManifestSchema(
+            sourceLabel,
+            "typed YAML rejection",
+            DecompositionManifestValidationFailureCode.SCHEMA_INVALID,
+          )
 
         override fun validateYamlTextResult(
           yamlText: String,
@@ -255,7 +266,7 @@ class FeatureSpecPreparationWriterTest {
           DecompositionManifestValidationResult.AcceptedUnchanged(validateYamlText(yamlText, sourceLabel), yamlText)
       }
 
-    assertFailsWith<InvalidDecompositionManifestSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureSpecPreparationWriter(rejectingValidator, store, testDecompositionManifestWriter).write(
         repoRoot,
         FeatureSpecWriteRequest(
@@ -289,7 +300,11 @@ class FeatureSpecPreparationWriterTest {
         ): DecompositionManifest {
           yamlValidationCount += 1
           if (yamlValidationCount == 2) {
-            throw InvalidDecompositionManifestSchemaError(sourceLabel, "read-back rejection", "schema_invalid")
+            throw invalidDecompositionManifestSchema(
+              sourceLabel,
+              "read-back rejection",
+              DecompositionManifestValidationFailureCode.SCHEMA_INVALID,
+            )
           }
           return decodeManifest(
             DecompositionManifestWireMap.from(
@@ -306,7 +321,7 @@ class FeatureSpecPreparationWriterTest {
           DecompositionManifestValidationResult.AcceptedUnchanged(validateYamlText(yamlText, sourceLabel), yamlText)
       }
 
-    assertFailsWith<InvalidDecompositionManifestSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureSpecPreparationWriter(
         readbackRejectingValidator,
         TestDecompositionManifestStore,
@@ -357,7 +372,11 @@ class FeatureSpecPreparationWriterTest {
         ): DecompositionManifest {
           yamlValidationCount += 1
           if (yamlValidationCount == 4) {
-            throw InvalidDecompositionManifestSchemaError(sourceLabel, "read-back rejection", "schema_invalid")
+            throw invalidDecompositionManifestSchema(
+              sourceLabel,
+              "read-back rejection",
+              DecompositionManifestValidationFailureCode.SCHEMA_INVALID,
+            )
           }
           return decodeManifest(
             DecompositionManifestWireMap.from(
@@ -374,7 +393,7 @@ class FeatureSpecPreparationWriterTest {
           DecompositionManifestValidationResult.AcceptedUnchanged(validateYamlText(yamlText, sourceLabel), yamlText)
       }
 
-    assertFailsWith<InvalidDecompositionManifestSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureSpecPreparationWriter(
         readbackRejectingValidator,
         TestDecompositionManifestStore,
@@ -573,6 +592,64 @@ class FeatureSpecPreparationWriterTest {
     assertTrue("status:" !in Files.readString(repoRoot.resolve(rewritten.subtaskSpecPaths.single())))
     assertEquals("blocked", loadTestManifest(manifestPath).status)
   }
+
+  @Test
+  fun `a complete authored bundle verifies and returns its parent path and reloadable manifest`() {
+    val repoRoot = Files.createTempDirectory("skillbill-feature-spec-authored")
+    val written = writer.write(repoRoot, authoredBundleRequest())
+
+    val verified = writer.verifyAuthored(repoRoot, repoRoot.resolve(written.parentSpecPath))
+
+    assertEquals(written.parentSpecPath, verified.parentSpecPath)
+    assertEquals(written.subtaskSpecPaths, verified.subtaskSpecPaths)
+    assertEquals(2, loadTestManifest(repoRoot.resolve(verified.decompositionManifestPath)).subtasks.size)
+    assertEquals(
+      null,
+      PlanBundleAuthorization.violation(repoRoot, "SKILL-59", listOf(written.parentSpecPath), writer::listTree),
+    )
+  }
+
+  @Test
+  fun `an authored subtask without an acceptance list is refused with the typed readiness failure`() {
+    val repoRoot = Files.createTempDirectory("skillbill-feature-spec-authored-missing")
+    val written = writer.write(repoRoot, authoredBundleRequest())
+    val subtask = repoRoot.resolve(written.subtaskSpecPaths.first())
+    Files.writeString(subtask, Files.readString(subtask).substringBefore("## Acceptance Criteria"))
+
+    val error =
+      assertFailsWith<InvalidFeatureSpecPreparationRequestError> {
+        writer.verifyAuthored(repoRoot, repoRoot.resolve(written.parentSpecPath))
+      }
+
+    assertEquals("subtasks[0].acceptance_criteria", error.fieldPath)
+  }
+
+  @Test
+  fun `bundle authorization refuses outside edits and symlinks that escape the repository`() {
+    val repoRoot = Files.createTempDirectory("skillbill-feature-spec-authorization")
+    val outside = Files.createTempDirectory("skillbill-feature-spec-outside")
+    val written = writer.write(repoRoot, authoredBundleRequest())
+    val bundleDirectory = repoRoot.resolve(written.parentSpecPath).parent
+
+    assertTrue(PlanBundleAuthorization.violation(repoRoot, "SKILL-59", listOf("src/Main.kt"), writer::listTree) != null)
+    Files.createSymbolicLink(bundleDirectory.resolve("escape.md"), outside.resolve("target.md"))
+    assertTrue(
+      PlanBundleAuthorization.violation(repoRoot, "SKILL-59", listOf(written.parentSpecPath), writer::listTree) != null,
+    )
+  }
+
+  private fun authoredBundleRequest() =
+    FeatureSpecWriteRequest(
+      decision = decomposedDecision(),
+      featureName = "authored-bundle",
+      parentSpecOverview = "Verify an authored bundle.",
+      validationStrategy = "bill-code-check",
+      subtasks =
+        listOf(
+          singleSubtask(),
+          singleSubtask().copy(id = 2, name = "follow-up", dependsOn = listOf(1)),
+        ),
+    )
 
   private fun loadTestManifest(path: Path) =
     loadDecompositionManifest(

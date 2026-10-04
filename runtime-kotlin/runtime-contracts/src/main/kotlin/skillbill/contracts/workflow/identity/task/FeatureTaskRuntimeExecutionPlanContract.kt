@@ -1,0 +1,46 @@
+package skillbill.contracts.workflow.identity.task
+
+import skillbill.contracts.SharedPayloadKeys
+
+const val FEATURE_TASK_RUNTIME_EXECUTION_PLAN_CONTRACT_VERSION: String = "0.1"
+
+object FeatureTaskRuntimeExecutionPlanKeys {
+  const val CONTRACT_VERSION: String = "contract_version"
+  const val DEFINITION: String = "definition"
+  const val SELECTED_STRATEGIES: String = "selected_strategies"
+  const val REVIEW_SELECTION: String = "review_selection"
+  const val QUALITY_GATE_SELECTION: String = "quality_gate_selection"
+  const val TRAVERSAL: String = "traversal"
+  const val DISPATCH_OWNERSHIP: String = "dispatch_ownership"
+  const val STEP_POLICIES: String = "step_policies"
+  const val RESUME_INTERPRETATIONS: String = "resume_interpretations"
+  const val EFFECTIVE_POLICIES: String = "effective_policies"
+  const val EFFECTIVE_POLICY_SETTINGS: String = "effective_policy_settings"
+  const val VALIDATION_DEPTH: String = "validation_depth"
+  const val PHASE_TIMEOUT_MILLIS: String = "phase_timeout_millis"
+  const val ID: String = "id"
+  const val SEMANTIC_REVISION: String = "semantic_revision"
+  const val SLOT: String = "slot"
+  const val STRATEGY_ID: String = "strategy_id"
+  const val SELECTED_STEPS: String = "selected_steps"
+  const val ENTRY_STEP: String = "entry_step"
+  const val FORWARD_STEPS: String = "forward_steps"
+  const val BACKWARD_EDGES: String = "backward_edges"
+  const val LOOP_ONLY_STEPS: String = "loop_only_steps"
+  const val ENTRY_GATES: String = "entry_gates"
+  const val LOOP_ONLY_SUCCESSORS: String = "loop_only_successors"
+  const val STEP: String = "step"
+  const val FROM_STEP: String = "from_step"
+  const val DESTINATION_STEP: String = "destination_step"
+  const val REQUIRED_STEP: String = "required_step"
+  const val SUCCESSOR: String = "successor"
+  const val IDENTITY: String = "identity"
+  const val SEMANTIC_DIGEST: String = "semantic_digest"
+  const val VERDICT: String = SharedPayloadKeys.VERDICT
+  const val LOOP_ID: String = "loop_id"
+  const val PER_EDGE_CAP: String = "per_edge_cap"
+  const val CAP_EXHAUSTION_BEHAVIOR: String = "cap_exhaustion_behavior"
+  const val CAP_SCOPE: String = "cap_scope"
+  const val WARN_AFTER_ITERATIONS: String = "warn_after_iterations"
+  const val REQUIRED_VERDICT: String = "required_verdict"
+}

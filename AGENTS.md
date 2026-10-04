@@ -16,6 +16,10 @@ Non-negotiable contracts:
 - Missing manifests, wrong contract versions, missing content, and missing required sections fail loudly with typed errors.
 - Every fallback, degradation, or swallowed failure emits a record; see `docs/observability-policy.md`.
 
+## Internal Skills
+
+`internal-for: <parent>` in `content.md` frontmatter installs as `<skill-name>.md` sidecar in the parent directory (not listed); parent reads the sibling in-session. The only parent is `skill-bill`; pack specialists install as its unlisted sidecars and native-agent inputs, never as slash commands. Contract: `docs/skill-source-generation.md`.
+
 ## Active Fix Branch
 
 Until `base/SKILL-380-phase-slot-strategies` is merged, make all fixes on that
@@ -23,15 +27,7 @@ branch. Use its worktree when a feature branch has implementation work in progre
 
 ## Product Intent
 
-`/skill-bill` is the only listed skill. Its full-run form (`/skill-bill <intake>`) presents one confirmation gate, then delegates to the foreground runtime driver with durable state, telemetry, packs, add-ons, and native subagents. Its `phase:<name>` forms run `skill-bill phase <name>`, and its `operation:<name>` forms run `skill-bill operation <name>`, relaying one operator confirmation. `skill-bill goal status` stays CLI-only; no skill wraps it.
-
-`skill-bill phase <review|validation|plan|pr>` and `skill-bill code-review` run one in-memory phase through the same run loop, with no workflow row, new branch, or checkpoint commit. `skill-bill code-review` finds, verifies, and fixes findings in both modes. `phase plan <KEY> [description]` writes a governed spec bundle that `skill-bill goal` runs, and a direct plan blocks. Implementation and simplification run inside workflows and consume their plan output. `phase pr` composes `commit_push -> pr`. It refuses a detached, protected, or base branch before staging. The runtime commits all staged, unstaged, and untracked changes, excluding ignored and runtime-private files, then pushes before creating or updating the pull request. A clean retry pushes the existing commit without creating an empty one. `commit_push` and the durable definitions are not runnable on their own.
-
-`skill-bill operation <update-check|release|unit-test-value-check|feature-guard|feature-guard-cleanup|pr-review-fix|verify>` runs one runtime operation with no feature-task workflow. `release` confirms in two invocations. The first stores the proposed version and changelog and exits `awaiting_confirmation` with a token. `confirm:<token>` then tags and pushes exactly the stored proposal, once. `unit-test-value-check` is a read-only report over the current changes or `scope:` and needs no confirmation. `feature-guard` and `feature-guard-cleanup` confirm the same way as `release`. Their first invocation changes no file and stores a plan anchored on HEAD and the current branch. Only `confirm:<token>` edits. After confirm, cleanup runs the `validation` definition. `pr-review-fix [<pr>]` proposes a per-thread matrix over the PR's unresolved GraphQL review threads. `confirm:<token> select:<...>` fixes only the selected threads, runs `validation`, then replies, and pushes only with `push:on`. `verify <intake> [target:<pr|branch|base..head>] [mode:inline|delegated]` is report-only. Its intake is free text (a Linear issue key or URL, or the requirements themselves) or `spec:<path>`, and an omitted target verifies HEAD against `origin/HEAD`. It parks a verify workflow (stored `workflow_name` `bill-feature-verify`) at the extracted criteria and exits `awaiting_confirmation`, with the workflow id as the token. `confirm:<token>` runs the audits, the review, and the verdict on that workflow.
-
-The retired skills (`bill-feature`, `bill-feature-spec`, `bill-code-review`, `bill-code-check`, `bill-feature-verify`, `bill-monitor`, and the rest) are not installed; an install over an old home removes their links and copies. Telemetry `skill` values, the verify `workflow_name`, the workflow skill label, and the quality-check `routed_skill` (`bill-code-check`) keep their retired names because remote telemetry and stored rows key on them. Never tell an agent or operator to invoke a retired skill.
-
-Bundled skills and packs are defaults, not the framework boundary. Teams may replace them while retaining governed source shape, generated-output boundaries, manifests, install staging, validators, dynamic discovery, and loud-fail.
+`/skill-bill` is the only listed skill. Read [Runtime command guidance](docs/runtime-command-guidance.md) before invoking, planning, designing, changing, or reviewing runtime commands and workflows. It owns phase and operation behavior, retired-name compatibility, agent execution, and goal commit/checkpoint rules.
 
 ## Taxonomy
 
@@ -61,17 +57,13 @@ Per-repo customization: top-level custom fields allowed; runtime-consumed fields
 
 ## Runtime Contract Schemas
 
-Every YAML under `orchestration/contracts/` is a runtime contract. New contracts: Draft 2020-12 schema in YAML → Kotlin `*_CONTRACT_VERSION` → parity test → typed `Invalid<Contract>SchemaError` → loud-fail at every parse seam. Detail: `runtime-kotlin/ARCHITECTURE.md`.
+Every YAML under `orchestration/contracts/` is a runtime contract. New contracts: Draft 2020-12 schema in YAML → Kotlin `*_CONTRACT_VERSION` → parity test → a failure-code entry in the owner's `RuntimeFailureCode` enum, thrown as `SkillBillRuntimeException` → loud-fail at every parse seam. Detail: `runtime-kotlin/ARCHITECTURE.md`.
 
 Schema bumps loud-fail legacy records; runtime quarantines and regenerates in-band. Producer-side gate: feature-task phases owning a bounded planning projection (`preplan`, `plan`, `implement`) re-enter their own fix loop when completed output fails the projection contract.
 
 ## Add-ons
 
 Pack-owned files (not skills): flat under `platform-packs/<slug>/addons/`, lowercase kebab-case, resolved only after dominant-stack routing. Declare consumers in the pack manifest (`addon_usage` / `feature_addon_usage`); do not hand-author selection tables in `content.md`. Changes need validator and routing-contract coverage.
-
-## Internal Skills
-
-`internal-for: <parent>` in `content.md` frontmatter installs as `<skill-name>.md` sidecar in the parent directory (not listed); parent reads the sibling in-session. The only parent is `skill-bill`; pack specialists install as its unlisted sidecars and native-agent inputs, never as slash commands. Contract: `docs/skill-source-generation.md`.
 
 ## Skill Authoring
 
@@ -83,17 +75,11 @@ Code review: pack root + conforming manifest/`content.md`, manifest-registered p
 
 ## Runtime Agent Behavior
 
-Agent-specific behavior uses injectable strategies on `AgentRunProcessRequest`, not identity branching in the process runner: `progressProbe`, `declaredProgressProbe`, `activityProbe`, `progressEmitter`, `idlePolicy` (`HEARTBEAT_EXTENDED` | `DB_PROGRESS_ONLY`). `ProcessWaitLoop` calls strategies only; new agents add a strategy constant. Crash reconciliation: `FeatureTaskRuntimeWorkerSupervisor` self-heals expired-lease rows to resumable at startup.
-
-When goal routing selects the build quality gate and the dominant platform pack declares `validation_gate.build_command`, build is one agent session that runs only that pack's `build_command` (Kotlin: `./gradlew compileKotlin`), reads that output, fixes every finding in that session, then runs `cache_bypassing_build_command` once to confirm. Build is compile/buildability proof only: no suite tests, no full check, no substitute agent-run gate. Do not run `collect_all_full_gate_command`, `./gradlew check`, `check --continue`, `skill-bill validate`, `skill-bill phase validation`, or any other repo-root checklist. The runtime does not start another agent for repair turns. It may still run one cache-bypassing verify after the agent signals complete; remaining findings persist `findings_open` and block, and an operator resume starts one new build session. Do not rerun the pack build command after each individual finding, and do not launch delegated subagents. Targeted compile tasks are allowed while repairing when they are part of that same pack gate. Default standalone runs skip build (`review -> validate`); only goal children stamped for build use `review -> build -> write_history`.
+Read [Runtime command guidance](docs/runtime-command-guidance.md) for injected agent strategies and build-gate rules.
 
 ## Commit Structure (feature-task / goal subtasks)
 
-Decomposed goal runs use `same_branch_commit_per_subtask`: each completed subtask leaves exactly one commit on the feature branch, not a chain of checkpoint commits in branch history.
-
-- Before review, the runtime creates the active subtask commit or amends its proven owned HEAD, records the exact reviewed target/tree identities, and launches review only after durable identity persistence. A message-only amend with the same tree may carry approval forward. `write_history` and `commit_push` never reopen earlier phases. After the bounded `review_fix` round, `commit_push` does not launch an agent. The runtime stages every non-runtime-private dirty path as this subtask's work, including files written after implement or by another process, commits with a subject from the issue key and subtask name, pushes, and records `commit_sha` into the decomposition manifest. Extra dirty content does not block and does not re-enter audit or review.
-- Checkpoint history lives under `refs/skill-bill/checkpoints/<issue-key>/<subtask-id>/<sequence>`. Those refs preserve pre-amend commits the branch no longer names; they are not reachable through `git log` on the branch without an explicit ref argument.
-- Pruning deletes a subtask's checkpoint refs only after that subtask's commit is pushed and its manifest entry records a non-blank `commit_sha`. Pruning is idempotent; a hard manifest reset prunes the refs of the subtasks it reset. Blocked or abandoned subtasks keep their refs for recovery.
+Read [Runtime command guidance](docs/runtime-command-guidance.md) for one-commit-per-subtask and checkpoint rules.
 
 ## Writing And Comments
 
@@ -114,6 +100,8 @@ comments. `CommentAndInterfaceKdocArchitectureTest` enforces this alongside
 `PrincipleEnforcementInventory.enforceableRules`.
 
 ## Coding Conventions
+
+**Required reading.** Before planning, designing, changing, or reviewing anything under `runtime-kotlin`, read [Runtime Architecture Guidelines](docs/architecture-guidelines.md). It sets the rules that regressed in earlier refactor rounds (A1–A12), the enforcement contract for architecture guards (G1–G7), and the change process (P1–P8): acceptance criteria state end states, fixes delete instead of moving, landed specs are verified, and guards, baselines, and exemptions only tighten. Every runtime-kotlin review runs its section 5 checklist and cites rule IDs.
 
 Before designing, changing, or reviewing `runtime-kotlin`, read and apply [Design Principles](runtime-kotlin/ARCHITECTURE.md#design-principles). That section owns requirements for dependency direction, state and resource ownership, persistence, contract enforcement, simplicity, and test value. Its enforcement status distinguishes mechanically checked rules, each paired with its proving test in `PrincipleEnforcementInventory.enforceableRules`, from the requirements that stay review-only. Existing violations do not authorize new ones.
 

@@ -147,7 +147,7 @@ object GoalRunnerWorkerSubtaskScheduler {
       id = id,
       name = name,
       specPath = specPath,
-      status = "pending",
+      status = DecompositionStatus.PENDING.wireValue,
       dependencies = dependencies,
     )
   }

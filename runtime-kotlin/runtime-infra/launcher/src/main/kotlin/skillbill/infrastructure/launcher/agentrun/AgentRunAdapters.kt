@@ -15,7 +15,9 @@ import skillbill.install.model.AgentLauncherCli
 import skillbill.install.model.SupportedAgent
 import skillbill.install.model.agentLauncherUnavailableMessage
 import skillbill.ports.agentrun.ExecutableLookup
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
+import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.SkillRunRequest
 import java.nio.file.Path
@@ -32,7 +34,7 @@ internal class ProcessAgentRunAdapter(
   private val processRunner: AgentRunProcessRunner,
   private val executableLookup: ExecutableLookup = PathExecutableLookup(),
 ) {
-  fun launch(request: SkillRunRequest): AgentRunLaunchFacts {
+  fun launch(request: SkillRunRequest): AgentRunLaunchOutcome {
     val built = commandBuilder.build(request)
     val command =
       when (val resolution = resolveLauncherExecutable(built.command, commandBuilder.launcherCli)) {
@@ -40,6 +42,15 @@ internal class ProcessAgentRunAdapter(
         is LauncherResolution.Missing -> return unavailableLauncherFacts(request, built, resolution.message)
       }
     val result = processRunner.run(processRequest(command, request))
+    result.spawnDenied?.let { denied -> return AgentRunLaunchDenied(agent, denied.pauseReason) }
+    return launchFacts(request, command, result)
+  }
+
+  private fun launchFacts(
+    request: SkillRunRequest,
+    command: AgentRunCommand,
+    result: AgentRunProcessResult,
+  ): AgentRunLaunchFacts {
     val decoder = command.outputDecoder ?: commandBuilder.outputDecoder
     val decoded =
       runCatching { decoder.decode(result.stdout) }.getOrElse { error ->

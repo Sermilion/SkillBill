@@ -1,12 +1,12 @@
 package skillbill.goalrunner.model
 
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.time.parsePersistedInstant
 import java.time.Instant
 
-internal const val GOAL_ATTEMPT_LEDGER_ARTIFACT_KEY: String = "goal_attempt_ledger"
 const val GOAL_ATTEMPT_LEDGER_LIMIT: Int = 200
 
 enum class GoalAttemptLedgerAction(val wireValue: String) {
@@ -26,7 +26,7 @@ enum class GoalAttemptLedgerAction(val wireValue: String) {
   companion object {
     fun fromWire(value: String): GoalAttemptLedgerAction =
       entries.firstOrNull { it.wireValue == value }
-        ?: throw InvalidWorkflowStateSchemaError("Unknown goal attempt ledger action '$value'.")
+        ?: throw invalidWorkflowStateSchemaError("Unknown goal attempt ledger action '$value'.")
   }
 }
 
@@ -133,7 +133,8 @@ data class GoalAttemptLedgerEntry(
     require(sequenceNumber >= 0) { "GoalAttemptLedgerEntry.sequenceNumber must be non-negative." }
   }
 
-  fun toPersistenceWire(): Any = toArtifactMap()
+  fun toPersistenceWire(): FeatureTaskRuntimeWorkflowArtifactMap =
+    FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
   internal fun toArtifactMap(): Map<String, Any?> {
     val optional =

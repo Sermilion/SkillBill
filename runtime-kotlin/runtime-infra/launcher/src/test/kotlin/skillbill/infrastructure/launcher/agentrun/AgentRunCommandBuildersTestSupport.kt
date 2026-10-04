@@ -2,7 +2,8 @@ package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.config.model.PhaseCompactionDirective
 import skillbill.contracts.review.GovernedReviewEvidenceContracts
-import skillbill.error.shellcontent.GovernedReviewLaunchCapabilityError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
@@ -11,7 +12,7 @@ import skillbill.ports.review.model.GovernedReviewEvidenceEndpointDescriptor
 import skillbill.ports.review.model.ReviewEvidenceBatchRequest
 import skillbill.ports.review.model.ReviewExpansionAuthorizationRequest
 import skillbill.ports.review.model.ReviewToolCall
-import skillbill.review.context.model.packet.ReviewExpansionRecord
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import java.nio.file.Path
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -25,11 +26,14 @@ internal fun assertGovernedReviewLaunch(
   if (!builder.governedReviewLaunchCapability.governedOnlyTooling ||
     !builder.governedReviewLaunchCapability.mcpIsolation
   ) {
-    val error = assertFailsWith<GovernedReviewLaunchCapabilityError> { builder.build(governed) }
-    assertEquals(builder.agent.id, error.provider)
+    val error = assertFailsWith<SkillBillRuntimeException> { builder.build(governed) }
+    assertEquals(GovernedReviewFailureCode.LAUNCH_CAPABILITY, error.code)
+    val message = error.message.orEmpty()
+    assertTrue(message.contains("Agent '${builder.agent.id}'"))
     assertTrue(
-      error.capability == "governed-only tooling" || error.capability == "MCP isolation",
-      "Junie must name the missing capability, got '${error.capability}'",
+      message.contains("missing capability 'governed-only tooling'") ||
+        message.contains("missing capability 'MCP isolation'"),
+      "Junie must name the missing capability, got '$message'",
     )
     return
   }

@@ -19,9 +19,9 @@ import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksRequest
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksResult
 import skillbill.ports.workflow.gitops.model.WorkflowWorktreeActivityResult
 import skillbill.text.RECORD_FIELD_SEPARATOR
-import skillbill.workflow.model.goalreview.GoalObservabilityChangedFileSummary
-import skillbill.workflow.model.goalreview.GoalObservabilityDiffStat
-import skillbill.workflow.model.goalreview.GoalObservabilitySelectedDiffHunks
+import skillbill.workflow.model.goalobservability.GoalObservabilityChangedFileSummary
+import skillbill.workflow.model.goalobservability.GoalObservabilityDiffStat
+import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffHunks
 import java.nio.file.Path
 
 private const val COMMITTED_HEAD_SHA = "ffffffffffffffffffffffffffffffffffffffff"
@@ -43,6 +43,7 @@ class RecordingWorkflowGitOperations(
   val worktreeStatusSequence = ArrayDeque<String>()
   var ownedPathsValue: List<String> = emptyList()
   var ownedPathsResult: WorkflowGitNameListResult? = null
+  var trackedPathsValue: List<String> = emptyList()
   var commitCountAheadValue: String? = null
   var mergeBaseWithHeadValue: String? = null
   val repositoryFingerprintSequence = ArrayDeque<String>()
@@ -367,6 +368,11 @@ class RecordingWorkflowGitOperations(
 
   override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult =
     ownedPathsResult ?: WorkflowGitNameListResult.Listed(ownedPathsValue)
+
+  override fun trackedPaths(repoRoot: Path): WorkflowGitNameListResult =
+    WorkflowGitNameListResult.Listed(
+      trackedPathsValue,
+    )
 
   override fun resolveReadinessTreeIdentity(
     repoRoot: Path,

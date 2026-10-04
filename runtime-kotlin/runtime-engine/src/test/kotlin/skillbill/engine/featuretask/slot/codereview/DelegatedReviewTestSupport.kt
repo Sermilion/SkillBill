@@ -23,7 +23,9 @@ import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.diff.DiffResolverPortDefaults
+import skillbill.ports.diff.model.ReviewDiffQuery
+import skillbill.ports.diff.model.ReviewIndexEntry
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.review.evidence.ReviewEvidenceBrokerFactory
@@ -86,7 +88,14 @@ internal class LaneScript(
       agent = SupportedAgent.fromNormalizedId(request.invokedAgentId, label = "agentId"),
       stdout =
         when (lane.issueKey) {
-          DELEGATED_SPECIALIST_ISSUE_KEY -> if (fixed) "NO_FINDINGS" else DELEGATED_FINDING_REGISTER
+          DELEGATED_SPECIALIST_ISSUE_KEY -> {
+            val register = if (fixed) "NO_FINDINGS" else DELEGATED_FINDING_REGISTER
+            if (lane.promptOverride.orEmpty().contains("End with exactly one canonical verdict line")) {
+              "$register\nverdict: ${if (fixed) "approved" else "changes_requested"}"
+            } else {
+              register
+            }
+          }
           ReviewClaimVerificationRunner.ISSUE_KEY -> """{"claim_verdict":"confirmed"}"""
           ReviewSpecAdjudicationRunner.ISSUE_KEY -> """{"scope_disposition":"in_scope"}"""
           else -> "NO_FINDINGS"
@@ -96,26 +105,31 @@ internal class LaneScript(
   }
 }
 
-private class WorktreeDiffResolver(private val diff: String) : DiffResolverPort {
+private class WorktreeDiffResolver(private val diff: String) : DiffResolverPortDefaults() {
   override fun reviewWorktreeFileIdentities(
     root: Path,
     paths: List<String>,
   ): Map<String, ReviewCheckpointFileIdentity> = emptyMap()
 
-  override fun readDiff(
-    path: Path,
-    maxBytes: Long,
-  ): String? = null
+  override fun resolveCommit(
+    repoRoot: Path,
+    revision: String,
+  ): String = revision
 
-  override fun runProcess(
-    args: List<String>,
-    workDir: Path,
-  ): String =
-    when (args.getOrNull(1)) {
-      "rev-parse" -> args.last().removeSuffix("^{commit}")
-      "rev-list", "ls-files" -> ""
-      else -> diff
-    }
+  override fun firstParentCommits(
+    repoRoot: Path,
+    base: String,
+    head: String,
+  ): List<String> = emptyList()
+
+  override fun indexEntries(repoRoot: Path): List<ReviewIndexEntry> = emptyList()
+
+  override fun untrackedPaths(repoRoot: Path): List<String> = emptyList()
+
+  override fun diff(
+    repoRoot: Path,
+    query: ReviewDiffQuery,
+  ): String = diff
 }
 
 private object DefaultRepoLocalConfig : RepoLocalConfigPort {

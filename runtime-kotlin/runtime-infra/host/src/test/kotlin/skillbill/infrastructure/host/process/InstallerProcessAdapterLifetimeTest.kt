@@ -1,8 +1,6 @@
 package skillbill.infrastructure.host.process
 
 import skillbill.ports.process.DEFAULT_INSTALLER_PROCESS_DEADLINE_SECONDS
-import skillbill.ports.process.INSTALLER_OUTPUT_TRUNCATION_SENTINEL
-import skillbill.ports.process.INSTALLER_PROCESS_OUTPUT_CAP_BYTES
 import skillbill.ports.process.model.InstallerProcessRequest
 import java.nio.file.Files
 import java.nio.file.Path

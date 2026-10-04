@@ -10,6 +10,7 @@ import skillbill.install.model.InstallTelemetryLevel
 import skillbill.install.model.InstallationTargetPaths
 import skillbill.install.model.McpRegistrationChoice
 import skillbill.install.model.NativeAgentProviderId
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.model.PlatformPackSelection
 import skillbill.install.model.PlatformPackSelectionMode
 import skillbill.install.model.RuntimeDistributionInputs
@@ -17,7 +18,6 @@ import skillbill.install.model.SupportedAgent
 import skillbill.install.model.WindowsSymlinkDecision
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.ports.repository.toFileLocation
 import skillbill.testing.seedConformingPlatformPack
 import java.io.File

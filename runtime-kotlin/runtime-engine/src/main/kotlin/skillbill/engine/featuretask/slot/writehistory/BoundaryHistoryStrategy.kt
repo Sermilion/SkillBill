@@ -7,28 +7,26 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
 import skillbill.engine.featuretask.runloop.core.ValidatedOutputCapture
-import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.withMeasuredFacts
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class BoundaryHistoryStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
+class BoundaryHistoryStrategy : PhaseStrategy() {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY to
         PhaseStepPolicy(
           mutating = false,
-          relaunchOnInvalidOutput = false,
           singleAgentSession = false,
           readOnlyIdle = false,
           fileMutating = true,
@@ -66,14 +64,14 @@ class BoundaryHistoryStrategy(override val runner: PhaseRunner) : PhaseStrategy(
 
   override fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome = runAgentStep(run, state)
 
   override fun stepHooks(stepId: String): PhaseStepHooks = MeasuredHistoryHooks
 
   private object MeasuredHistoryHooks : PhaseStepHooks {
     override fun acceptedOutput(
-      context: PhaseAttemptEnvironment,
+      context: PhaseStepOutputContext,
       capture: ValidatedOutputCapture,
       attested: NormalizedFeatureTaskRuntimePhaseOutput,
       outputMap: FeatureTaskRuntimeWorkflowArtifactMap,

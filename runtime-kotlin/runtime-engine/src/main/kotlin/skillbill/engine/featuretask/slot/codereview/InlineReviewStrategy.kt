@@ -2,40 +2,44 @@ package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.agentaddon.model.AgentAddonPromptFormatter
 import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.application.review.model.ParallelReviewLaneStatus
 import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
+import skillbill.engine.featuretask.phase.prompt.directives.projectAuthoringDisciplineDirective
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 import skillbill.engine.featuretask.slot.PhaseLaunchFailureKind
 import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepOutput
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.featuretask.slot.state.PhaseStepState
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
+import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ParallelReviewLaneResult
 import skillbill.review.model.ParallelReviewMergeResult
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.review.parallel.ParallelReviewFindingParser
 import skillbill.review.parallel.ParallelReviewMerger
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path
 
 class InlineReviewStrategy(
-  override val runner: PhaseRunner,
+  runner: PhaseRunner,
 ) : PhaseStrategyStatusProjection() {
   private val codeReview = CodeReviewSlot(runner, InlineReviewPass)
 
@@ -43,6 +47,8 @@ class InlineReviewStrategy(
   override val strategyId: String = ID
   override val steps: List<String> = codeReview.steps
   override val entryStep: String = codeReview.entryStep
+
+  override fun executionBindingKind(stepId: String): PhaseExecutionBindingKind = codeReview.executionBindingKind(stepId)
 
   override fun policyFor(stepId: String): PhaseStepPolicy = codeReview.policyFor(stepId)
 
@@ -58,7 +64,7 @@ class InlineReviewStrategy(
 
   override fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome = codeReview.runStep(this, run, state)
 
   override fun stepHooks(stepId: String): PhaseStepHooks = codeReview.stepHooks(stepId)
@@ -86,7 +92,6 @@ internal object InlineReviewPass : CodeReviewPass {
   override val policy =
     PhaseStepPolicy(
       mutating = false,
-      relaunchOnInvalidOutput = true,
       singleAgentSession = false,
       readOnlyIdle = false,
       fileMutating = true,
@@ -105,8 +110,8 @@ internal object InlineReviewPass : CodeReviewPass {
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
     runner: PhaseRunner,
-    state: PhaseStepState,
-  ): ParallelCodeReviewResult {
+    state: PhaseReviewStepBinding,
+  ): ParallelCodeReviewRunOutcome {
     val directive =
       InlineReviewDirective.compose(
         target = run.reviewTarget,
@@ -115,9 +120,11 @@ internal object InlineReviewPass : CodeReviewPass {
         specPath = reviewSpecPath(run),
         agentAddonsSection = AgentAddonPromptFormatter.format(run.request.agentAddonSelection),
       )
-    val output = runner.run(reviewStepInput(run, directive), state)
-    return InlineReviewResultDecoder.decode(run.resolvedAgent.resolvedAgentId, output)
-      .copy(reviewSessionId = run.request.reviewInvocation?.reviewSessionId)
+    val output = runner.run(reviewStepInput(run, directive), state.launchState)
+    return ParallelCodeReviewRunOutcome.Reviewed(
+      InlineReviewResultDecoder.decode(run.resolvedAgent.resolvedAgentId, output)
+        .copy(reviewSessionId = run.request.reviewInvocation?.reviewSessionId),
+    )
   }
 }
 
@@ -150,12 +157,20 @@ object InlineReviewDirective {
           "Do not run `./gradlew check`, the pack collect-all gate, or `skill-bill phase validation`; " +
             "validate owns those.",
         )
+        appendLine()
+        appendLine(projectAuthoringDisciplineDirective())
+        appendLine()
         specPath?.let { path -> appendLine("Subtask spec path: `$path`.") }
         appendLine()
         append(CodeReviewDirectives.review)
         appendLine()
         append(CodeReviewDirectives.inlineReview)
         appendLine()
+        appendLine(
+          "Emit the bounded authoring evidence record as leading prose before the findings register and final " +
+            "verdict. Do not format evidence lines as `[F-NNN]` register lines or `verdict:` lines. The runtime " +
+            "retains only the first 2,000 characters as the summary, so state any evidence limitation explicitly.",
+        )
         appendLine("After fixes, emit remaining findings in this register shape, one per line:")
         appendLine("- [F-001] Blocker | High | path/File.kt:12 | remaining defect after your edits")
         appendLine("End with exactly one line: `verdict: approved` or `verdict: changes_requested`.")

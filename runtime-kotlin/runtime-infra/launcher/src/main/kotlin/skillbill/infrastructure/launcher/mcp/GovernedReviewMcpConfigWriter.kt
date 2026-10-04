@@ -1,7 +1,8 @@
 package skillbill.infrastructure.launcher.mcp
 
 import skillbill.contracts.review.GovernedReviewEvidenceContracts
-import skillbill.error.shellcontent.GovernedReviewEvidenceTransportError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.infrastructure.skills.install.mcp.McpTomlConfig
 import skillbill.infrastructure.skills.install.mcp.mutableStringAnyMap
 import skillbill.infrastructure.skills.install.mcp.readJsonObject
@@ -20,7 +21,10 @@ object GovernedReviewMcpConfigWriter {
     lane: String,
   ): Path {
     if (bridgeCommand.isEmpty()) {
-      throw GovernedReviewEvidenceTransportError("A governed review MCP bridge command is required.")
+      throw SkillBillRuntimeException(
+        GovernedReviewFailureCode.EVIDENCE_TRANSPORT,
+        "A governed review MCP bridge command is required.",
+      )
     }
     val env =
       linkedMapOf(
@@ -61,7 +65,8 @@ object GovernedReviewMcpConfigWriter {
       )
       Files.setPosixFilePermissions(tomlPath, PosixFilePermissions.fromString("rw-------"))
     } catch (error: IOException) {
-      throw GovernedReviewEvidenceTransportError(
+      throw SkillBillRuntimeException(
+        GovernedReviewFailureCode.EVIDENCE_TRANSPORT,
         "Failed to write the per-launch governed review MCP config at '$configPath'.",
         error,
       )

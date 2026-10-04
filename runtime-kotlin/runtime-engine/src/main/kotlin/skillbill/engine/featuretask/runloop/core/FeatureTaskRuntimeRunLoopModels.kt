@@ -7,32 +7,46 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeResolvedPhaseAg
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
-import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseFileManifest
 import skillbill.engine.featuretask.phase.prompt.directives.PriorAttemptCorrection
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runner.LaunchResult
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.PhaseStepHooks
+import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
+import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
+import skillbill.engine.featuretask.slot.state.PhaseStepBinding
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseDeclaration
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
-internal data class RemediationCheckpointCommit(val commitSha: String, val parentSha: String?)
+internal data class RemediationCheckpointCommit(
+  val commitSha: String,
+  val parentSha: String?,
+)
 
-internal data class SubtaskCommitLedgerState(val commitSha: String?, val nextSequenceNumber: Int)
+internal data class SubtaskCommitLedgerState(
+  val commitSha: String?,
+  val nextSequenceNumber: Int,
+)
 
 internal sealed interface PhaseSettlement {
   data object Stopped : PhaseSettlement
 
-  data class Completed(val phaseId: String, val verdict: FeatureTaskRuntimeVerdict) : PhaseSettlement
+  data class Completed(
+    val phaseId: String,
+    val verdict: FeatureTaskRuntimeVerdict,
+  ) : PhaseSettlement
 
   val completedPhaseId: String? get() = (this as? Completed)?.phaseId
   val completedVerdict: FeatureTaskRuntimeVerdict? get() = (this as? Completed)?.verdict
@@ -61,7 +75,6 @@ internal data class PhaseAttemptLoopCarryForward(
 
 internal class PhaseAttemptLoopState(
   var iteration: Int,
-  var malformedAttemptCount: Int,
   var outputGateFailures: Int,
   var semanticIteration: Int,
   var continuationSegmentCount: Int,
@@ -113,6 +126,9 @@ internal data class FixLoopBranchContext(
   val loop: PhaseAttemptLoopState,
   val observability: FeatureTaskRuntimeRunObservability,
   val agentId: String,
+  val session: FeatureTaskRuntimeRunSessionObservations,
+  val progress: FeatureTaskRuntimeProgressSnapshotAccess,
+  val loopTransitions: FeatureTaskRuntimeRunTransitionOwner,
 )
 
 class ValidatedOutputCapture internal constructor(
@@ -148,22 +164,6 @@ internal data class RecordRejectedOutputArgs(
   val exhaustedFixLoop: Boolean? = null,
 )
 
-internal data class CorrectiveRepairRejectionDetail(
-  val rule: String,
-  val path: String,
-  val payloadFreeConstraint: String,
-  val acceptedAfterStructuralRepair: Boolean = false,
-  val structuralRepairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence? = null,
-)
-
-internal data class CorrectiveRepairRejectionArgs(
-  val run: PhaseRun,
-  val iteration: Int,
-  val captured: CapturedPhaseOutput,
-  val diagnosticWrite: FeatureTaskRuntimeRejectedOutputWrite,
-  val rejection: CorrectiveRepairRejectionDetail,
-)
-
 internal data class SettledOutputContext(
   val normalizedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
   val repairEvidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
@@ -176,13 +176,14 @@ internal class SettleValidatedOutput(
   val run: PhaseRun,
   val iteration: Int,
   val output: SettledOutputContext,
-  val settlementContext: PhaseAttemptEnvironment,
+  val settlementContext: PhaseOutputSettlementContext,
+  val boundStep: PhaseStepBinding,
+  val stepHooks: PhaseStepHooks,
 ) {
   val request get() = settlementContext.request
-  val state get() = settlementContext.state
+  val progress get() = settlementContext.progress
   val recorder get() = settlementContext.recorder
-  val outputValidator get() = settlementContext.outputValidator
-  val phaseGates get() = settlementContext.phaseGates
+  val gitOperations get() = settlementContext.gitOperations
   val clock get() = settlementContext.clock
   val diagnostics get() = settlementContext.diagnostics
   val goalContinuationRecorder get() = settlementContext.goalContinuationRecorder
@@ -210,7 +211,7 @@ internal data class PhaseStateRequestAttachments(
 internal data class PhaseStateRequestArgs(
   val write: PhaseStateWriteArgs,
   val extras: PhaseStateRequestAttachments = PhaseStateRequestAttachments(),
-  val context: PhaseAttemptEnvironment? = null,
+  val context: PhaseRunLoopAttemptCollaborators? = null,
 )
 
 internal data class PersistPhaseArgs(
@@ -235,7 +236,9 @@ internal data class CommitPushSettled(
   val output: NormalizedFeatureTaskRuntimePhaseOutput,
 ) : CommitPushFinalisation
 
-internal data class CommitPushBlocked(val reason: String) : CommitPushFinalisation
+internal data class CommitPushBlocked(
+  val reason: String,
+) : CommitPushFinalisation
 
 internal data class CheckpointRevisions(
   val base: String?,
@@ -255,13 +258,21 @@ internal data class LaunchRejectionMeasurementContext(
 
 internal sealed interface LaunchPreparation
 
-internal data class PreparedLaunchReady(val value: PreparedLaunch) : LaunchPreparation
+internal data class PreparedLaunchReady(
+  val value: PreparedLaunch,
+) : LaunchPreparation
 
 internal data class LaunchMeasurementContextReady(
   val value: LaunchRejectionMeasurementContext,
 ) : LaunchPreparation
 
-internal data class LaunchPreparationRejected(val result: LaunchResult) : LaunchPreparation
+internal data class LaunchPreparationRejected(
+  val result: LaunchResult,
+) : LaunchPreparation
+
+internal data class LaunchRequiredWriteRejected(
+  val rejection: RequiredPhaseWrite.Rejected,
+) : LaunchPreparation
 
 internal data class PhaseRun(
   val phaseId: String,
@@ -294,4 +305,7 @@ internal data class PreparedLaunch(
   val prompt: String,
 )
 
-internal data class RecordRejection(val rejectionClass: String, val rejectionDetail: String)
+internal data class RecordRejection(
+  val rejectionClass: String,
+  val rejectionDetail: String,
+)

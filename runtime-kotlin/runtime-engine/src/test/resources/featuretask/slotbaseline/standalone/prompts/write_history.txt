@@ -244,7 +244,7 @@ mandates_and_overrides:
 finalization_context:
 
 ## Repository checkpoint (layer 2, resolved)
-fingerprint: repository-checkpoint-831bf900
+fingerprint: slot-baseline-checkpoint
 base_ref: __NORMALIZED_SHA40__
 head_ref: __NORMALIZED_SHA40__
 scoped_owned_paths:
@@ -260,28 +260,25 @@ The tools may be deferred in this session: load them first with ToolSearch
 - Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
   phase_id "write_history", attempt 1, and value: one prose string carrying everything
   the next phase needs (what this phase produced, deviations from the briefing, what was
-  deliberately left to later phases). When a value content section follows, it describes what the
-  next phase expects inside value; carry that content as prose or as JSON text, whichever is clearer.
-  The runtime does not validate the shape of value. Optional summary: one sentence.
-- Cannot finish: call `mcp__skill-bill__feature_task_phase_block` with the same workflow_id, phase_id, and
-  attempt, a reason string naming the obstacle, and failure_disposition one of "retryable",
+  deliberately left to later phases). When a value content section follows, it defines value and
+  overrides this description: carry its content as prose or as JSON text, whichever is clearer, and
+  emit any exact literal it names with nothing added. Otherwise the runtime does not validate the
+  shape of value. Optional summary: one sentence.
+- Cannot finish because of a concrete obstacle: call `mcp__skill-bill__feature_task_phase_block` with the same
+  workflow_id, phase_id, and attempt, a reason string naming the obstacle, and failure_disposition
+  one of "retryable",
   "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
 Copy workflow_id, phase_id, and attempt exactly as written here. After the tool returns status
-"ok", end your response with a short prose recap and nothing structured. Print the fallback
-final object below only if both tools stay unavailable after loading them.
+"ok", end your response with a short prose recap and nothing structured. Use the prose
+fallback below only if both tools stay unavailable after loading them.
 
 ## Value content
 Carry, as prose, whether history was written or skipped and the decisions recorded. The runtime measures
 the changed history paths itself before and after this step; do not restate them as evidence.
 
 ## Fallback final output (only when the settlement tools are unavailable)
-End your response with exactly one JSON object as the last thing you emit. Prefer a raw
-object with nothing after it; a single ```json fenced block is also accepted. The runtime
-stamps the contract version and phase id itself. Fields:
-- "status": one of "completed", "blocked", "failed"
-- "summary": one sentence describing what this phase did
-- "value": non-blank prose carrying everything the next phase needs
-- "verdict": optional; set it only when this briefing names a verdict for this phase
-- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
-  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
-  Omit it when status is "completed".
+End your response with plain prose carrying everything the next phase needs (what this phase
+produced, deviations from the briefing, what was deliberately left to later phases), or exactly
+what a value content section defines. The runtime records that prose as the phase value as
+written. Do not wrap it in a status or JSON envelope. Report an obstacle only when a concrete one
+stopped the phase, and name that obstacle in the prose.

@@ -1,14 +1,14 @@
 package skillbill.engine.goalrunner.planning.remedies
 
+import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningProvenanceRecoverability
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRecoveryKind
 import skillbill.engine.goalrunner.planning.recovery.classifyGoalPlanningRecovery
-import skillbill.engine.goalrunner.planning.recovery.contractVersionHardResetStopReason
 import skillbill.engine.goalrunner.planning.recovery.goalPlanningHardResetRemedy
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.model.GoalPlanningStatusReasons
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalPlanningStatusState
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
@@ -37,6 +37,8 @@ private fun recoverySuffix(
       } else {
         "Recover with: ${goalPlanningIncludeSharedPreplanRemedy(issueKey, subtaskId)}"
       }
+    GoalPlanningRecoveryKind.BLOCKED ->
+      "Keep the workflow and its checkpoints intact, then retry after migration support is available."
   }
 
 internal fun goalPlanningIncompatibleProvenanceStopReason(
@@ -45,10 +47,14 @@ internal fun goalPlanningIncompatibleProvenanceStopReason(
   kind: GoalPlanningRecoveryKind,
 ): String =
   when (kind) {
-    GoalPlanningRecoveryKind.HARD_RESET -> contractVersionHardResetStopReason(issueKey)
+    GoalPlanningRecoveryKind.HARD_RESET ->
+      "Goal planning uses a contract unsupported by this runtime. Keep the workflow and checkpoints intact, " +
+        "then retry with a compatible runtime or an explicitly reviewed migration."
     GoalPlanningRecoveryKind.SCOPED_REPLAN ->
       "Goal planning shared preplan provenance is incompatible with the current governed inputs. " +
         recoverySuffix(issueKey, subtaskId, kind)
+    GoalPlanningRecoveryKind.BLOCKED ->
+      "Goal planning preparation failed contract validation. " + recoverySuffix(issueKey, subtaskId, kind)
   }
 
 fun goalPlanningMissingSharedContextPacketStopReason(
@@ -62,13 +68,38 @@ fun goalPlanningPreparationStateReadStopReason(
   error: Throwable,
   issueKey: String,
   subtaskId: Int?,
+): String =
+  goalPlanningPreparationStateReadStopReason(
+    error.message.orEmpty(),
+    subtaskId ?: 0,
+    issueKey,
+    subtaskId,
+    classifyGoalPlanningRecovery(error),
+  )
+
+fun goalPlanningPreparationStateReadStopReason(
+  conflict: GoalPlanningPreparationConflict,
+  issueKey: String,
+  subtaskId: Int?,
 ): String {
-  val recovery =
-    error as? IncompatibleGoalPlanningPreparationRecoveryError
-      ?: return "Goal planning preparation state could not be read: ${error.message.orEmpty()}"
-  val remedySubtaskId = subtaskId?.takeIf { it > 0 } ?: recovery.subtaskId.takeIf { it > 0 }
-  val kind = classifyGoalPlanningRecovery(recovery)
-  return "Goal planning preparation state could not be read: ${recovery.reason}. " +
+  return goalPlanningPreparationStateReadStopReason(
+    conflict.reason,
+    conflict.subtaskId,
+    issueKey,
+    subtaskId,
+    classifyGoalPlanningRecovery(conflict),
+  )
+}
+
+internal fun goalPlanningPreparationStateReadStopReason(
+  reason: String,
+  recordedSubtaskId: Int,
+  issueKey: String,
+  subtaskId: Int?,
+  kind: GoalPlanningRecoveryKind = GoalPlanningRecoveryKind.SCOPED_REPLAN,
+): String {
+  val remedySubtaskId = subtaskId?.takeIf { it > 0 } ?: recordedSubtaskId.takeIf { it > 0 }
+  return "Goal planning preparation state could not be read: $reason. " +
     recoverySuffix(issueKey, remedySubtaskId, kind)
 }
 
@@ -84,8 +115,9 @@ internal fun statusRecoverabilityOrRefuse(
   classify: () -> GoalPlanningProvenanceRecoverability,
 ): GoalPlanningProvenanceRecoverability =
   runCatching(classify).getOrElse { error ->
+    error.rethrowIfCooperativeCancellationOrInterruption()
     GoalPlanningProvenanceRecoverability.Irrecoverable(
-      classifyGoalPlanningRecovery(error.message.orEmpty(), error),
+      classifyGoalPlanningRecovery(error),
     )
   }
 

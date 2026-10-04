@@ -41,7 +41,6 @@ object CliRuntime {
         environment = resolved.environment,
         userHome = resolved.userHome,
         repositoryRoot = resolved.repositoryRoot,
-        repositoryEnclosingRootPort = runtimeComponent.repositoryEnclosingRootPort,
         featureTaskRuntimeRunOverride = context.featureTaskRuntimeRunOverride,
         liveStdout = context.liveStdout,
         liveStderr = context.liveStderr,
@@ -58,7 +57,7 @@ object CliRuntime {
   ): CliExecutionResult {
     val rootCommand = cliComponent.rootCommand
     return runCatching {
-      CommandLineParser.parseAndRun(rootCommand, arguments) { command -> command.run() }
+      CommandLineParser.parseAndRun(rootCommand, rootCommand.routeIntake(arguments)) { command -> command.run() }
       cliComponent.runState.result
         ?: CliExecutionResult(
           exitCode = 0,

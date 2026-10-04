@@ -1,0 +1,420 @@
+{
+  "contract_version": "0.1",
+  "definition": {
+    "id": "goal-child",
+    "semantic_revision": 2
+  },
+  "dispatch_ownership": [
+    {
+      "semantic_revision": 2,
+      "slot": "audit",
+      "step": "audit",
+      "strategy_id": "acceptance-audit"
+    },
+    {
+      "semantic_revision": 2,
+      "slot": "audit",
+      "step": "audit_implement_fix",
+      "strategy_id": "acceptance-audit"
+    },
+    {
+      "semantic_revision": 2,
+      "slot": "audit",
+      "step": "audit_plan_fix",
+      "strategy_id": "acceptance-audit"
+    },
+    {
+      "semantic_revision": 1,
+      "slot": "quality_gate",
+      "step": "build",
+      "strategy_id": "pack-build"
+    },
+    {
+      "semantic_revision": 1,
+      "slot": "commit_push",
+      "step": "commit_push",
+      "strategy_id": "runtime-commit"
+    },
+    {
+      "semantic_revision": 1,
+      "slot": "implementation",
+      "step": "implement",
+      "strategy_id": "implement-then-simplify"
+    },
+    {
+      "semantic_revision": 1,
+      "slot": "code_review",
+      "step": "implement_fix",
+      "strategy_id": "inline"
+    },
+    {
+      "semantic_revision": 1,
+      "slot": "plan",
+      "step": "plan",
+      "strategy_id": "agent-plan"
+    },
+    {
+      "semantic_revision": 1,
+      "slot": "preplan",
+      "step": "preplan",
+      "strategy_id": "agent-preplan"
+    },
+    {
+      "semantic_revision": 1,
+      "slot": "code_review",
+      "step": "review",
+      "strategy_id": "inline"
+    },
+    {
+      "semantic_revision": 1,
+      "slot": "implementation",
+      "step": "simplify",
+      "strategy_id": "implement-then-simplify"
+    },
+    {
+      "semantic_revision": 1,
+      "slot": "code_review",
+      "step": "verify_findings",
+      "strategy_id": "inline"
+    },
+    {
+      "semantic_revision": 1,
+      "slot": "write_history",
+      "step": "write_history",
+      "strategy_id": "boundary-history"
+    }
+  ],
+  "effective_policies": [
+    {
+      "id": "acceptance-audit",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "semantic_revision": 1
+    },
+    {
+      "id": "checkpoint-ownership",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "semantic_revision": 1
+    },
+    {
+      "id": "finalization",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "semantic_revision": 1
+    },
+    {
+      "id": "gate-commands",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "semantic_revision": 1
+    },
+    {
+      "id": "receipt-interpretation",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "semantic_revision": 1
+    },
+    {
+      "id": "resume-budgets",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "semantic_revision": 1
+    },
+    {
+      "id": "retry-budgets",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "semantic_revision": 1
+    },
+    {
+      "id": "review-invalidation",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "semantic_revision": 1
+    }
+  ],
+  "effective_policy_settings": {
+    "phase_timeout_millis": null,
+    "validation_depth": "full"
+  },
+  "quality_gate_selection": "build",
+  "resume_interpretations": [
+    {
+      "identity": "acceptance-audit/2:audit",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "audit"
+    },
+    {
+      "identity": "acceptance-audit/2:audit_implement_fix",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "audit_implement_fix"
+    },
+    {
+      "identity": "acceptance-audit/2:audit_plan_fix",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "audit_plan_fix"
+    },
+    {
+      "identity": "pack-build/1:build",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "build"
+    },
+    {
+      "identity": "runtime-commit/1:commit_push",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "commit_push"
+    },
+    {
+      "identity": "implement-then-simplify/1:implement",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "implement"
+    },
+    {
+      "identity": "inline/1:implement_fix",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "implement_fix"
+    },
+    {
+      "identity": "agent-plan/1:plan",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "plan"
+    },
+    {
+      "identity": "agent-preplan/1:preplan",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "preplan"
+    },
+    {
+      "identity": "inline/1:review",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "review"
+    },
+    {
+      "identity": "implement-then-simplify/1:simplify",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "simplify"
+    },
+    {
+      "identity": "inline/1:verify_findings",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "verify_findings"
+    },
+    {
+      "identity": "boundary-history/1:write_history",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "write_history"
+    }
+  ],
+  "review_selection": "inline",
+  "selected_strategies": [
+    {
+      "entry_step": "audit",
+      "selected_steps": [
+        "audit_plan_fix",
+        "audit_implement_fix",
+        "audit"
+      ],
+      "semantic_revision": 2,
+      "slot": "audit",
+      "strategy_id": "acceptance-audit"
+    },
+    {
+      "entry_step": "review",
+      "selected_steps": [
+        "review",
+        "verify_findings",
+        "implement_fix"
+      ],
+      "semantic_revision": 1,
+      "slot": "code_review",
+      "strategy_id": "inline"
+    },
+    {
+      "entry_step": "commit_push",
+      "selected_steps": [
+        "commit_push"
+      ],
+      "semantic_revision": 1,
+      "slot": "commit_push",
+      "strategy_id": "runtime-commit"
+    },
+    {
+      "entry_step": "implement",
+      "selected_steps": [
+        "implement",
+        "simplify"
+      ],
+      "semantic_revision": 1,
+      "slot": "implementation",
+      "strategy_id": "implement-then-simplify"
+    },
+    {
+      "entry_step": "plan",
+      "selected_steps": [
+        "plan"
+      ],
+      "semantic_revision": 1,
+      "slot": "plan",
+      "strategy_id": "agent-plan"
+    },
+    {
+      "entry_step": "preplan",
+      "selected_steps": [
+        "preplan"
+      ],
+      "semantic_revision": 1,
+      "slot": "preplan",
+      "strategy_id": "agent-preplan"
+    },
+    {
+      "entry_step": "build",
+      "selected_steps": [
+        "build"
+      ],
+      "semantic_revision": 1,
+      "slot": "quality_gate",
+      "strategy_id": "pack-build"
+    },
+    {
+      "entry_step": "write_history",
+      "selected_steps": [
+        "write_history"
+      ],
+      "semantic_revision": 1,
+      "slot": "write_history",
+      "strategy_id": "boundary-history"
+    }
+  ],
+  "step_policies": [
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "audit"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "audit_implement_fix"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "audit_plan_fix"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "build"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "commit_push"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "implement"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "implement_fix"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "plan"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "preplan"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "review"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "simplify"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "verify_findings"
+    },
+    {
+      "identity": "step-policy-v2:__NORMALIZED_SHA64__",
+      "semantic_digest": "__NORMALIZED_SHA64__",
+      "step": "write_history"
+    }
+  ],
+  "traversal": {
+    "backward_edges": [
+      {
+        "cap_exhaustion_behavior": "BLOCK",
+        "cap_scope": "PER_SUBTASK",
+        "destination_step": "audit_plan_fix",
+        "from_step": "audit",
+        "loop_id": "audit_repair",
+        "per_edge_cap": null,
+        "verdict": "advance",
+        "warn_after_iterations": 3
+      },
+      {
+        "cap_exhaustion_behavior": "ADVANCE",
+        "cap_scope": "PER_SUBTASK",
+        "destination_step": "implement_fix",
+        "from_step": "verify_findings",
+        "loop_id": "review_fix",
+        "per_edge_cap": 1,
+        "verdict": "findings_verified",
+        "warn_after_iterations": null
+      },
+      {
+        "cap_exhaustion_behavior": "BLOCK",
+        "cap_scope": "PER_SUBTASK",
+        "destination_step": "build",
+        "from_step": "write_history",
+        "loop_id": "regenerate_build_receipt",
+        "per_edge_cap": 2,
+        "verdict": "record_rejected",
+        "warn_after_iterations": null
+      }
+    ],
+    "entry_gates": [
+      {
+        "required_step": "audit",
+        "required_verdict": "satisfied",
+        "step": "review"
+      },
+      {
+        "required_step": "verify_findings",
+        "required_verdict": "findings_verified",
+        "step": "implement_fix"
+      }
+    ],
+    "forward_steps": [
+      "preplan",
+      "plan",
+      "implement",
+      "simplify",
+      "audit_plan_fix",
+      "audit_implement_fix",
+      "audit",
+      "review",
+      "verify_findings",
+      "implement_fix",
+      "build",
+      "write_history",
+      "commit_push"
+    ],
+    "loop_only_steps": [
+      "audit_implement_fix",
+      "audit_plan_fix",
+      "implement_fix"
+    ],
+    "loop_only_successors": [
+      {
+        "step": "audit_plan_fix",
+        "successor": "audit_implement_fix"
+      }
+    ]
+  }
+}

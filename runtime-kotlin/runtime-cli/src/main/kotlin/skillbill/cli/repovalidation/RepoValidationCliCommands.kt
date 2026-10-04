@@ -13,6 +13,7 @@ import skillbill.cli.model.CliFormat
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.ports.validation.RepoValidationGateway
+import skillbill.ports.validation.model.ReleaseRefValidation
 import java.nio.file.Path
 
 @Inject
@@ -111,16 +112,20 @@ class ValidateReleaseRefCommand(
     }
 
     val metadata =
-      try {
-        repoValidationGateway.validateReleaseRef(resolveCliRepositoryRoot(repoRoot, inputs), rawRef, forcePrerelease)
-      } catch (error: IllegalArgumentException) {
-        val payload = mapOf(SharedPayloadKeys.STATUS to "failed", "error" to error.message.orEmpty())
-        if (format == CliFormat.JSON) {
-          state.complete(payload, format, exitCode = 1)
-        } else {
-          state.completeText("${error.message}\n", payload, exitCode = 1)
+      when (
+        val validation =
+          repoValidationGateway.validateReleaseRef(resolveCliRepositoryRoot(repoRoot, inputs), rawRef, forcePrerelease)
+      ) {
+        is ReleaseRefValidation.Valid -> validation.metadata
+        is ReleaseRefValidation.Rejected -> {
+          val payload = mapOf(SharedPayloadKeys.STATUS to "failed", "error" to validation.message)
+          if (format == CliFormat.JSON) {
+            state.complete(payload, format, exitCode = 1)
+          } else {
+            state.completeText("${validation.message}\n", payload, exitCode = 1)
+          }
+          return
         }
-        return
       }
 
     githubOutput?.let { outputPath ->

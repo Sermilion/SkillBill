@@ -22,11 +22,7 @@ sealed interface ValidationGateRepoConfigParse {
 }
 
 fun parseValidationGateRepoConfig(raw: Any?): ValidationGateRepoConfigParse =
-  try {
-    ValidationGateRepoConfigParse.Valid(parseValidationGateMapping(raw))
-  } catch (failure: InvalidValidationGateRepoConfig) {
-    failure.invalid
-  }
+  validationGateInvalid(raw) ?: ValidationGateRepoConfigParse.Valid(buildValidationGateConfig(raw))
 
 internal fun parseGradleWrapperPath(raw: String?): String? {
   val trimmed = raw?.trim().orEmpty()
@@ -61,48 +57,55 @@ fun applyValidationGateGradleWrapper(
   return rewrittenHead + argv.drop(1)
 }
 
-private fun parseValidationGateMapping(raw: Any?): ValidationGateRepoConfig {
-  val root = raw as? Map<*, *> ?: invalidValidationGate(VALIDATION_GATE_KEY, raw, "must be a mapping.")
+private fun validationGateInvalid(raw: Any?): ValidationGateRepoConfigParse.Invalid? {
+  val root = raw as? Map<*, *> ?: return invalidValidationGate(VALIDATION_GATE_KEY, raw, "must be a mapping.")
   val fields = root.entries.associate { (key, value) -> key.toString() to value }
-  fields.entries.firstOrNull { (key, _) -> key !in VALIDATION_GATE_FIELDS }?.let { (key, value) ->
-    invalidValidationGate("$VALIDATION_GATE_KEY.$key", value, "is not a supported validation_gate field.")
-  }
-  if (!fields.containsKey(GRADLE_WRAPPER_KEY)) {
-    return ValidationGateRepoConfig.defaults()
-  }
-  val rawWrapper = fields[GRADLE_WRAPPER_KEY]
-  if (rawWrapper !is String) {
-    invalidValidationGate(
-      "$VALIDATION_GATE_KEY.$GRADLE_WRAPPER_KEY",
-      rawWrapper,
-      "must be a non-blank repo-relative path string.",
+  val unsupported = fields.entries.firstOrNull { (key, _) -> key !in VALIDATION_GATE_FIELDS }
+  if (unsupported != null) {
+    return invalidValidationGate(
+      "$VALIDATION_GATE_KEY.${unsupported.key}",
+      unsupported.value,
+      "is not a supported validation_gate field.",
     )
   }
-  val parsed =
-    parseGradleWrapperPath(rawWrapper)
-      ?: invalidValidationGate(
+  if (!fields.containsKey(GRADLE_WRAPPER_KEY)) return null
+  val rawWrapper = fields[GRADLE_WRAPPER_KEY]
+  return when {
+    rawWrapper !is String ->
+      invalidValidationGate(
+        "$VALIDATION_GATE_KEY.$GRADLE_WRAPPER_KEY",
+        rawWrapper,
+        "must be a non-blank repo-relative path string.",
+      )
+
+    parseGradleWrapperPath(rawWrapper) == null ->
+      invalidValidationGate(
         "$VALIDATION_GATE_KEY.$GRADLE_WRAPPER_KEY",
         rawWrapper,
         "must be a non-blank repo-relative path without '..' segments.",
       )
-  return ValidationGateRepoConfig(gradleWrapper = parsed)
+
+    else -> null
+  }
+}
+
+private fun buildValidationGateConfig(raw: Any?): ValidationGateRepoConfig {
+  val root = checkNotNull(raw as? Map<*, *>) { "validated validation_gate config must be a mapping." }
+  val fields = root.entries.associate { (key, value) -> key.toString() to value }
+  if (!fields.containsKey(GRADLE_WRAPPER_KEY)) return ValidationGateRepoConfig.defaults()
+  val rawWrapper = checkNotNull(fields[GRADLE_WRAPPER_KEY] as? String) { "validated wrapper must be a string." }
+  return ValidationGateRepoConfig(gradleWrapper = parseGradleWrapperPath(rawWrapper))
 }
 
 private fun invalidValidationGate(
   keyPath: String,
   value: Any?,
   reason: String,
-): Nothing =
-  throw InvalidValidationGateRepoConfig(
-    ValidationGateRepoConfigParse.Invalid(
-      keyPath = keyPath,
-      value = value?.toString() ?: "null",
-      reason = reason,
-    ),
+): ValidationGateRepoConfigParse.Invalid =
+  ValidationGateRepoConfigParse.Invalid(
+    keyPath = keyPath,
+    value = value?.toString() ?: "null",
+    reason = reason,
   )
-
-private class InvalidValidationGateRepoConfig(
-  val invalid: ValidationGateRepoConfigParse.Invalid,
-) : RuntimeException()
 
 private val VALIDATION_GATE_FIELDS: Set<String> = setOf(GRADLE_WRAPPER_KEY)

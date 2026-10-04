@@ -1,9 +1,11 @@
 package skillbill.application.review.verification
 
+import skillbill.application.review.model.ParallelCodeReviewReportContract
 import skillbill.application.review.model.ReviewIntegrationPassRunRequest
 import skillbill.application.review.model.ReviewLaneIntegrationInput
 import skillbill.application.review.model.boundedReviewLane
 import skillbill.application.review.packet.toIntegrationLaunchEnvelope
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.SkillRunRequest
@@ -12,10 +14,10 @@ import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.review.model.ReviewIntegrationPassOutcome
+import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcome
 import skillbill.review.context.model.execution.ReviewSpecialistSummaryCoverage
-import skillbill.review.context.model.execution.structuredString
+import skillbill.review.context.model.hunk.structuredString
 import skillbill.review.context.model.launch.GovernedReviewIntegrationLaunch
-import skillbill.review.context.model.launch.ReviewIntegrationTerminalOutcome
 import skillbill.review.context.model.launch.ReviewSpecialistSummary
 import skillbill.review.context.model.packet.ReviewContextPacket
 import skillbill.review.context.model.packet.ReviewPacketConsumerContract
@@ -69,7 +71,8 @@ internal class ReviewIntegrationPassRunner(
           launchBytes = launchBytes,
           failureReason = "unsupported agent: ${outcome.reason}",
         )
-      is AgentRunLaunchFacts -> completedOutcome(integration, outcome, launchBytes)
+      is AgentRunLaunchDenied -> error("Review integration pass never launches with a spawn authorization.")
+      is AgentRunLaunchFacts -> completedOutcome(integration, outcome, launchBytes, request.reportContract)
     }
   }
 
@@ -77,10 +80,12 @@ internal class ReviewIntegrationPassRunner(
     integration: GovernedReviewIntegrationLaunch,
     facts: AgentRunLaunchFacts,
     launchBytes: Long,
+    reportContract: ParallelCodeReviewReportContract,
   ): ReviewIntegrationPassOutcome {
     val terminal = terminalOutcomeOf(facts)
+    val reportOnly = reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY
     val parsed =
-      if (terminal == ReviewIntegrationTerminalOutcome.COMPLETED) {
+      if (terminal == ReviewIntegrationTerminalOutcome.COMPLETED || reportOnly) {
         crossCommitFindings(facts.stdout, integration)
       } else {
         CrossCommitFindings()
@@ -95,6 +100,8 @@ internal class ReviewIntegrationPassRunner(
       resultBytes = facts.stdout.toByteArray(Charsets.UTF_8).size.toLong(),
       modelTurns = 1,
       failureReason = if (terminal == ReviewIntegrationTerminalOutcome.COMPLETED) null else terminal.wireValue,
+      rawOutput = if (reportOnly) facts.stdout else "",
+      outputTruncated = reportOnly && facts.stdoutTruncated,
     )
   }
 

@@ -4,7 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.error.core.InvalidGovernedReviewEvidenceRequestError
 import skillbill.ports.review.model.ReviewEvidenceRequest
 import skillbill.review.context.model.hunk.ReviewEvidenceLimits
-import skillbill.review.context.model.packet.ReviewExpansionRecord
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 
 internal object GovernedReviewEvidenceCodecWireParsing {
   fun evidenceRequest(

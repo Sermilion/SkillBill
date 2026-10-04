@@ -1,8 +1,8 @@
 package skillbill.infrastructure.skills.nativeagent
 
-import skillbill.error.shellcontent.ComposedNativeAgentBudgetExceededError
-import skillbill.error.shellcontent.InvalidManifestSchemaError
-import skillbill.error.shellcontent.MissingContentFileError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTarget
 import skillbill.infrastructure.skills.nativeagent.composition.NativeAgentCompositionTargetSource
 import skillbill.infrastructure.skills.nativeagent.discovery.discoverNativeAgentSourceEntries
@@ -26,6 +26,7 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -38,8 +39,10 @@ class NativeAgentAddonCompositionFailureTest {
     val missingPath = pack.entrypointPath.toAbsolutePath().normalize()
     Files.delete(pack.entrypointPath)
     val error =
-      assertFailsWith<MissingContentFileError> {
+      assertFailsWith<SkillBillRuntimeException> {
         testComposeNativeAgentSource(pack.repoRoot, architectureSource(pack.repoRoot))
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.MISSING_CONTENT_FILE, failure.code)
       }
     assertContains(error.message.orEmpty(), "add-on '$HARBOR_ADDON_SLUG'")
     assertContains(error.message.orEmpty(), "slot 'entrypoint'")
@@ -53,7 +56,7 @@ class NativeAgentAddonCompositionFailureTest {
     val mutated = withGhostCompanion(loadPlatformPack(pack.packRoot))
     val manifestPath = pack.packRoot.resolve("platform.yaml").toAbsolutePath().normalize()
     val error =
-      assertFailsWith<MissingContentFileError> {
+      assertFailsWith<SkillBillRuntimeException> {
         composeGovernedAgentBody(
           pack.repoRoot,
           NativeAgentCompositionTarget(
@@ -63,6 +66,8 @@ class NativeAgentAddonCompositionFailureTest {
           ),
           HARBOR_AREA_MARKER,
         )
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.MISSING_CONTENT_FILE, failure.code)
       }
     assertContains(error.message.orEmpty(), "add-on '$HARBOR_ADDON_SLUG'")
     assertContains(error.message.orEmpty(), "slot 'ghost-companion.md'")
@@ -77,8 +82,10 @@ class NativeAgentAddonCompositionFailureTest {
     Files.setPosixFilePermissions(pack.entrypointPath, emptySet())
     try {
       val error =
-        assertFailsWith<MissingContentFileError> {
+        assertFailsWith<SkillBillRuntimeException> {
           testComposeNativeAgentSource(pack.repoRoot, architectureSource(pack.repoRoot))
+        }.also { failure ->
+          assertEquals(SkillStagingFailureCode.MISSING_CONTENT_FILE, failure.code)
         }
       assertContains(error.message.orEmpty(), "add-on '$HARBOR_ADDON_SLUG'")
       assertContains(error.message.orEmpty(), "slot 'entrypoint'")
@@ -103,8 +110,10 @@ class NativeAgentAddonCompositionFailureTest {
       """.trimIndent() + "\n",
     )
     val error =
-      assertFailsWith<ComposedNativeAgentBudgetExceededError> {
+      assertFailsWith<SkillBillRuntimeException> {
         testComposeNativeAgentSource(pack.repoRoot, architectureSource(pack.repoRoot))
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.COMPOSED_NATIVE_AGENT_BUDGET_EXCEEDED, failure.code)
       }
     val message = error.message.orEmpty()
     assertContains(message, "pack '$HARBOR_PACK_SLUG'")
@@ -182,7 +191,12 @@ class NativeAgentAddonCompositionFailureTest {
         """.trimMargin(),
       ),
     )
-    val schemaError = assertFailsWith<InvalidManifestSchemaError> { loadPlatformPack(pack.packRoot) }
+    val schemaError =
+      assertFailsWith<SkillBillRuntimeException> {
+        loadPlatformPack(pack.packRoot)
+      }.also { failure ->
+        assertEquals(ManifestFailureCode.INVALID_MANIFEST_SCHEMA, failure.code)
+      }
     assertContains(schemaError.message.orEmpty(), "ghost-companion.md")
     NativeAgentProvider.entries.forEach { provider ->
       assertProviderRejectsGhostCompanion(pack, provider)
@@ -208,8 +222,8 @@ class NativeAgentAddonCompositionFailureTest {
         )
       }.exceptionOrNull()
     assertTrue(
-      thrown is InvalidManifestSchemaError ||
-        thrown is MissingContentFileError ||
+      (thrown as? SkillBillRuntimeException)?.code == ManifestFailureCode.INVALID_MANIFEST_SCHEMA ||
+        (thrown as? SkillBillRuntimeException)?.code == SkillStagingFailureCode.MISSING_CONTENT_FILE ||
         (thrown is IllegalArgumentException && thrown.message.orEmpty().contains("ghost-companion.md")),
       "${provider.directoryName} failed with ${thrown?.javaClass?.name}: ${thrown?.message}",
     )

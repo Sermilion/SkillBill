@@ -1,7 +1,6 @@
 package skillbill.engine.featuretask.lifecycle.core
 
 import skillbill.engine.featuretask.runloop.core.resolveLaunchRejectionAttribution
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePlanningProjectionSchemaError
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import kotlin.test.Test
@@ -47,7 +46,7 @@ class FeatureTaskRuntimeLaunchRejectionAttributionTest {
   }
 
   @Test
-  fun `planning projection schema rejection preserves the rejected declaration identity`() {
+  fun `an implementation projection rejection preserves the rejected declaration identity`() {
     val declarations =
       requireNotNull(
         FeatureTaskRuntimePhaseWorkflowDefinition.phaseDeclarations[
@@ -58,17 +57,11 @@ class FeatureTaskRuntimeLaunchRejectionAttributionTest {
       declarations.single {
         it.producerIteration.phaseId == FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
       }
-    val error =
-      InvalidFeatureTaskRuntimePlanningProjectionSchemaError(
-        sourceLabel = "implement#produced_outputs",
-        reason = "projection contract rejected the implementation receipt",
-        projectionName = rejectedImplementation.projectionName,
-      )
 
     val attribution =
       resolveLaunchRejectionAttribution(
         declarations = declarations,
-        projectionName = requireNotNull(error.projectionName),
+        projectionName = rejectedImplementation.projectionName,
         currentProducerIteration = { phaseId ->
           when (phaseId) {
             FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN -> 5

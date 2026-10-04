@@ -1,3 +1,14 @@
+## [2026-10-01] SKILL-396 subtask 1 — infra boundary and diagnostics repairs
+Areas: runtime-kotlin/runtime-infra/sqlite, runtime-infra/skills, runtime-infra/contracts, runtime-domain goalrunner model, runtime-core architecture tests and review DI
+- The connection-keyed diagnostics registry and session diagnostics/clock are gone; `RuntimeDiagnostics` is a required parameter through migrations, `DatabaseRuntime`, nested write transactions, stores, telemetry, reconciliation, accounting and the legacy ledger migration. reusable
+- Stats reads now report malformed stored values (completed phase ids, gaps found, timestamps) to the diagnostics they receive; `DatabaseWriteReadinessGate` lost its defaulted schema-establishment hooks.
+- Planning status snapshot derivation moved into runtime-domain; the sqlite copy and "prepared" literals were replaced by the domain wire value.
+- The external agent addon source config store moved into the `externaladdon` package and shares one read/parse helper and path resolver with its sibling store; the ambient-environment baseline is now empty.
+- The infra-skills import-direction architecture test was deleted and the contracts module no longer test-depends on runtime-application.
+- Known limits: test-side overloads keep existing call sites unchanged; empty `skills/file` directories remain; wire, JSON, YAML, telemetry and persisted values are unchanged.
+Feature flag: N/A
+Acceptance criteria: 10/10 implemented
+
 ## [2026-09-18] SKILL-356 subtask 3 — ledger-owned schema evolution
 Areas: runtime-kotlin/runtime-infra/sqlite core, goalrunner, review, runtime-kotlin/agent
 - `DatabaseMigrations` now stamps `PRAGMA user_version` in the same transaction as the name-keyed ledger; readiness uses the stamped version and file identity. reusable

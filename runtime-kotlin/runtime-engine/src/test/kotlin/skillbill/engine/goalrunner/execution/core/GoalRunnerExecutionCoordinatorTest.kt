@@ -1,13 +1,13 @@
 package skillbill.engine.goalrunner.execution.core
 
 import skillbill.engine.featuretask.validation.coordinator
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStoreDefaults
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.process.DaemonThreadPort
 import skillbill.ports.process.IdentifierGeneratorPort
 import skillbill.ports.process.ShutdownHookPort
@@ -29,6 +29,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -45,7 +46,7 @@ class GoalRunnerExecutionCoordinatorTest {
         "continued"
       }
 
-    assertEquals("continued", result)
+    assertEquals(GoalRunnerOwnedRun.Completed("continued"), result)
     assertNull(store.executionLeaseValue)
   }
 
@@ -67,7 +68,7 @@ class GoalRunnerExecutionCoordinatorTest {
         "continued"
       }
 
-    assertEquals("continued", result)
+    assertEquals(GoalRunnerOwnedRun.Completed("continued"), result)
     assertNull(store.executionLeaseValue)
   }
 
@@ -89,7 +90,7 @@ class GoalRunnerExecutionCoordinatorTest {
         "continued"
       }
 
-    assertEquals("continued", result)
+    assertEquals(GoalRunnerOwnedRun.Completed("continued"), result)
     assertNull(store.executionLeaseValue)
   }
 
@@ -173,7 +174,7 @@ class GoalRunnerExecutionCoordinatorTest {
         "goal body ran"
       }
 
-    assertEquals("goal body ran", result)
+    assertEquals(GoalRunnerOwnedRun.Completed("goal body ran"), result)
     assertEquals(GoalRunnerControlState(), store.controlStateValue)
     assertNull(store.executionLeaseValue)
   }
@@ -192,10 +193,10 @@ class GoalRunnerExecutionCoordinatorTest {
     val coordinator = testCoordinator(store, supervisor)
 
     val failure =
-      assertFailsWith<GoalRunnerExecutionAlreadyRunningException> {
-        coordinator.runOwned("parent-1") { error("the second run must not enter the goal body") }
-      }
-    assertTrue(failure.message.orEmpty().contains("another goal runner process is live"))
+      assertIs<GoalRunnerOwnedRun.AlreadyRunning>(
+        coordinator.runOwned("parent-1") { error("the second run must not enter the goal body") },
+      )
+    assertTrue(failure.reason.contains("another goal runner process is live"))
     assertEquals(0, supervisor.awaitExitCalls)
     assertEquals("live-owner", requireNotNull(store.executionLeaseValue).ownerToken)
   }
@@ -219,7 +220,7 @@ class GoalRunnerExecutionCoordinatorTest {
         "continued"
       }
 
-    assertEquals("continued", result)
+    assertEquals(GoalRunnerOwnedRun.Completed("continued"), result)
     assertEquals(1, supervisor.awaitExitCalls)
     assertEquals(Duration.ofSeconds(60), supervisor.lastAwaitTimeout)
     assertNull(store.executionLeaseValue)
@@ -243,10 +244,10 @@ class GoalRunnerExecutionCoordinatorTest {
     val coordinator = testCoordinator(store, supervisor)
 
     val failure =
-      assertFailsWith<GoalRunnerExecutionAlreadyRunningException> {
-        coordinator.runOwned("parent-1") { error("must not reclaim a still-live peer") }
-      }
-    assertTrue(failure.message.orEmpty().contains("another goal runner process is live"))
+      assertIs<GoalRunnerOwnedRun.AlreadyRunning>(
+        coordinator.runOwned("parent-1") { error("must not reclaim a still-live peer") },
+      )
+    assertTrue(failure.reason.contains("another goal runner process is live"))
     assertEquals(1, supervisor.awaitExitCalls)
     assertEquals(Duration.ofSeconds(60), supervisor.lastAwaitTimeout)
     assertEquals("live-owner", requireNotNull(store.executionLeaseValue).ownerToken)
@@ -268,10 +269,10 @@ class GoalRunnerExecutionCoordinatorTest {
     val coordinator = testCoordinator(store, supervisor)
 
     val failure =
-      assertFailsWith<GoalRunnerExecutionAlreadyRunningException> {
-        coordinator.runOwned("parent-1") { error("must not re-enter") }
-      }
-    assertTrue(failure.message.orEmpty().contains("this process already owns the execution lease"))
+      assertIs<GoalRunnerOwnedRun.AlreadyRunning>(
+        coordinator.runOwned("parent-1") { error("must not re-enter") },
+      )
+    assertTrue(failure.reason.contains("this process already owns the execution lease"))
     assertEquals(0, supervisor.awaitExitCalls)
   }
 
@@ -285,10 +286,10 @@ class GoalRunnerExecutionCoordinatorTest {
     val coordinator = testCoordinator(store, supervisor)
 
     val failure =
-      assertFailsWith<GoalRunnerExecutionAlreadyRunningException> {
-        coordinator.runOwned("parent-1") { error("must not attach") }
-      }
-    assertTrue(failure.message.orEmpty().contains("another goal runner process is live"))
+      assertIs<GoalRunnerOwnedRun.AlreadyRunning>(
+        coordinator.runOwned("parent-1") { error("must not attach") },
+      )
+    assertTrue(failure.reason.contains("another goal runner process is live"))
     assertEquals(0, supervisor.awaitExitCalls)
   }
 
@@ -439,9 +440,9 @@ class GoalRunnerExecutionCoordinatorTest {
     val store = InMemoryExecutionLeaseStore(null)
     val coordinator = testCoordinator(store, FakeGoalSupervisor(NOT_RUNNING))
 
-    val result: String? = coordinator.runOwned("parent-1") { null }
+    val result = coordinator.runOwned<String?>("parent-1") { null }
 
-    assertNull(result)
+    assertEquals(GoalRunnerOwnedRun.Completed(null), result)
     assertNull(store.executionLeaseValue)
   }
 
@@ -452,14 +453,14 @@ class GoalRunnerExecutionCoordinatorTest {
     val coordinator = testCoordinator(store, supervisor)
 
     val failure =
-      assertFailsWith<GoalRunnerExecutionAlreadyRunningException> {
+      assertIs<GoalRunnerOwnedRun.AlreadyRunning>(
         coordinator.runOwned("parent-1") {
           store.executionLeaseValue = lease(generation = 9, ownerToken = "usurper-owner")
           assertTrue(supervisor.runHeartbeatTick() is FeatureTaskRuntimeHeartbeatTick.FencingLost)
-        }
-      }
+        },
+      )
 
-    assertTrue(failure.message.orEmpty().contains("execution lease fencing was lost"))
+    assertTrue(failure.reason.contains("execution lease fencing was lost"))
   }
 }
 

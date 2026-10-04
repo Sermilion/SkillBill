@@ -1,31 +1,30 @@
 package skillbill.engine.operation.core
 
-import skillbill.error.operation.DuplicateOperationIdError
-import skillbill.error.operation.UnknownOperationIdError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 class OperationRegistryTest {
   @Test
-  fun `registering one id twice fails with a typed error`() {
+  fun `registering one id twice fails the wiring check`() {
     val error =
-      assertFailsWith<DuplicateOperationIdError> {
+      assertFailsWith<IllegalArgumentException> {
         OperationRegistry(listOf(StubOperation("release"), StubOperation("update-check"), StubOperation("release")))
       }
 
-    assertEquals("release", error.operationId)
+    assertEquals("Operation 'release' is registered more than once.", error.message)
   }
 
   @Test
-  fun `an unknown id fails with a typed error naming the registered ids`() {
+  fun `an unknown id finds nothing and the registry still names the registered ids`() {
     val release = StubOperation("release")
     val registry = OperationRegistry(listOf(StubOperation("update-check"), release))
 
-    assertSame(release, registry.get("release"))
-    val error = assertFailsWith<UnknownOperationIdError> { registry.get("deploy") }
-    assertEquals(listOf("update-check", "release"), error.knownIds)
+    assertSame(release, registry.find("release"))
+    assertNull(registry.find("deploy"))
+    assertEquals(listOf("update-check", "release"), registry.ids)
   }
 
   private class StubOperation(

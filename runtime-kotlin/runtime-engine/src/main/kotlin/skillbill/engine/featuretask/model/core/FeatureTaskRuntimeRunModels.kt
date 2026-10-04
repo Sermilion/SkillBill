@@ -5,9 +5,10 @@ import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.decomposition.decompositionManifestPath
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.config.model.CompactionSettings
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.goalreview.GoalSubtaskOperatorDecision
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
@@ -34,6 +35,7 @@ data class FeatureTaskRuntimeRunRequest(
   override val agentAddonSelection: HydratedAgentAddonSelection = HydratedAgentAddonSelection(),
   override val eventSink: FeatureTaskRuntimeRunEventSink = FeatureTaskRuntimeRunEventSink.NONE,
   override val transitionsOverride: FeatureTaskRuntimeTransitionDeclaration? = null,
+  override val admittedExecution: AdmittedFeatureTaskRuntimeExecution? = null,
 ) : FeatureTaskRuntimeRunFacts {
   init {
     require(issueKey.isNotBlank()) { "FeatureTaskRuntimeRunRequest.issueKey is required." }
@@ -43,6 +45,24 @@ data class FeatureTaskRuntimeRunRequest(
     }
   }
 }
+
+data class FeatureTaskRuntimeRunInput(
+  val issueKey: String,
+  val specPath: String,
+  val repoRoot: Path,
+  val explicitWorkflowId: String?,
+  val invokedAgentId: String,
+  val agentAssignment: FeatureTaskRuntimeAgentAssignment,
+  val modelAssignment: FeatureTaskRuntimeModelAssignment,
+  val compactionSettings: CompactionSettings,
+  val environment: Map<String, String>,
+  val timeout: Duration?,
+  val requestedCodeReviewMode: CodeReviewExecutionMode?,
+  val goalContinuation: FeatureTaskRuntimeGoalContinuationContext?,
+  val operatorDecision: GoalSubtaskOperatorDecision?,
+  val agentAddonSelection: HydratedAgentAddonSelection,
+  val eventSink: FeatureTaskRuntimeRunEventSink,
+)
 
 data class FeatureTaskRuntimeGoalContinuationContext(
   val parentIssueKey: String,

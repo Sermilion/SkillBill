@@ -1,11 +1,15 @@
 package skillbill.workflow.model.goalreview
 
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY
+import skillbill.workflow.engine.model.GOAL_SUBTASK_REVIEW_RESULTS_ARTIFACT_KEY
+import skillbill.workflow.engine.model.GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.GoalSubtaskReviewArtifactDecoder
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -61,7 +65,7 @@ class GoalSubtaskReviewStateTest {
         baselineUntrackedPaths = emptyList(),
         codeReviewMode = CodeReviewExecutionMode.INLINE,
       )
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskReviewState.fromArtifactMap(
         initial.toArtifactMap() +
           mapOf(
@@ -79,7 +83,7 @@ class GoalSubtaskReviewStateTest {
               ),
           ),
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -98,7 +102,7 @@ class GoalSubtaskReviewStateTest {
 
   @Test
   fun `completing a review without a reservation fails`() {
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskReviewState.initial(
         reviewBaseSha = "d".repeat(40),
         baselineUntrackedPaths = emptyList(),
@@ -108,7 +112,7 @@ class GoalSubtaskReviewStateTest {
         unresolvedFindingCount = 0,
         findings = emptyList(),
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -295,10 +299,10 @@ class GoalSubtaskReviewStateTest {
         codeReviewMode = CodeReviewExecutionMode.AUTO,
       )
 
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskReviewState.fromArtifactMap(state.toArtifactMap() + ("unexpected" to true))
-    }
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskReviewState.fromArtifactMap(
         state.toArtifactMap() + (
           "pass_results" to
@@ -313,7 +317,7 @@ class GoalSubtaskReviewStateTest {
             )
         ) + ("completed_pass_count" to 1),
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -334,17 +338,17 @@ class GoalSubtaskReviewStateTest {
       )
 
     assertEquals(null, GoalSubtaskReviewArtifactDecoder.decode(emptyMap<String, Any?>()))
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskReviewArtifactDecoder.decode(
         mapOf(GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY to state.toArtifactMap()),
       )
-    }
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskReviewArtifactDecoder.decode(
         mapOf(FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to continuation.toArtifactMap()),
       )
-    }
-    assertFailsWith<InvalidGoalSubtaskReviewStateSchemaError> {
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
+    assertFailsWith<SkillBillRuntimeException> {
       GoalSubtaskReviewArtifactDecoder.decode(
         mapOf(
           FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY to continuation.toArtifactMap(),
@@ -352,7 +356,7 @@ class GoalSubtaskReviewStateTest {
           GOAL_SUBTASK_REVIEW_RESULTS_ARTIFACT_KEY to mapOf("1" to "stale raw review result"),
         ),
       )
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -494,6 +498,33 @@ class GoalSubtaskReviewStateTest {
     val withoutKey = encoded.toMutableMap().apply { remove("repair_receipts") }
     val decoded = GoalSubtaskReviewState.fromArtifactMap(withoutKey)
     assertEquals(emptyList(), decoded.repairReceipts)
+  }
+
+  @Test
+  fun `invalid durable receipt reports its reason once and retains the anchored cause`() {
+    val initial =
+      GoalSubtaskReviewState.initial(
+        reviewBaseSha = "e".repeat(40),
+        baselineUntrackedPaths = emptyList(),
+        codeReviewMode = CodeReviewExecutionMode.INLINE,
+      )
+    val receipt =
+      FeatureTaskRuntimeRepairReceipt(
+        roundNumber = 1,
+        preFixCheckpointSha = "e".repeat(40),
+        entries = emptyList(),
+      ).toArtifactMap() + ("round_number" to 0)
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        GoalSubtaskReviewState.fromArtifactMap(initial.toArtifactMap() + ("repair_receipts" to listOf(receipt)))
+      }
+    assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, error.code)
+    assertTrue(error.message.orEmpty().endsWith("must be a positive integer."))
+    assertFalse(error.message.orEmpty().contains("repair receipt fails at"))
+    val cause = assertNotNull(error.cause) as SkillBillRuntimeException
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_REPAIR_RECEIPT, cause.code)
+    assertTrue(cause.message.orEmpty().contains("repair_receipts[0].round_number"))
+    assertTrue(assertNotNull(cause.cause).message.orEmpty().contains("fails at 'round_number'"))
   }
 
   @Test

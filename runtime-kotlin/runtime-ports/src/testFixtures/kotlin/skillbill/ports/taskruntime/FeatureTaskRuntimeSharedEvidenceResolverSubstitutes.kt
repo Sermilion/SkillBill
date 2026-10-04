@@ -9,7 +9,7 @@ private const val UNPERSISTED_PAYLOAD_NAME = "unpersisted.patch"
 
 val DERIVING_SHARED_EVIDENCE_RESOLVER =
   FeatureTaskRuntimeSharedEvidenceResolverPort { request, deriver ->
-    val derivation = deriver.derive(request.checkpoint)
+    val derivation = deriver.derive(request.checkpoint) ?: return@FeatureTaskRuntimeSharedEvidenceResolverPort null
     FeatureTaskRuntimeSharedEvidenceResolution(
       artifact =
         FeatureTaskRuntimeSharedEvidenceArtifact(

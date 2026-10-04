@@ -1,21 +1,24 @@
 package skillbill.workflow.taskruntime.handoff
 
+import skillbill.agent.model.PhaseOutput
+import skillbill.contracts.JsonCodec
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDelivery
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionShape
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffProjectionInputs
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeResolvedUpstreamOutputs
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeCompactReferenceKind
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionBudget
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionInputs
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffPromptVisibility
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeResolvedUpstreamOutputs
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeHandoffPromptVisibility
-import skillbill.workflow.taskruntime.noop.AcceptingFeatureTaskRuntimeWireArtifactValidator
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowQueries
 import kotlin.test.assertTrue
@@ -30,9 +33,6 @@ internal const val HANDOFF_VALIDATOR_HISTORY_PHASE_PAYLOAD: String =
   """{"produced_outputs":{"value":"Recorded the boundary history entry.",""" +
     """"runtime_measured_facts":{"changed_paths":["agent/history.md"],"history_written":true,""" +
     """"decisions_recorded":false}}}"""
-internal const val HANDOFF_VALIDATOR_COMMIT_PUSH_PHASE_PAYLOAD: String =
-  """{"produced_outputs":{"commit_push_result":{"commit_sha":"abc","branch":"feat",""" +
-    """"base_branch":"main","pushed":true}}}"""
 
 internal data class HandoffProjectionDeclarationFixture(
   var consumerPhaseId: String = HANDOFF_VALIDATOR_TEST_CONSUMER,
@@ -97,7 +97,6 @@ internal data class HandoffProjectionValidatorInputsFixture(
       workflowId = "wftr-1",
       validationDepth = validationDepth,
       unselectedStepIds = unselectedStepIds,
-      planningProjectionValidator = AcceptingFeatureTaskRuntimeWireArtifactValidator::validate,
     )
 }
 
@@ -138,7 +137,26 @@ internal fun handoffProjectionRunInvariants(acceptanceCriteria: List<String> = l
     mandatesAndOverrides = emptyList(),
   )
 
-internal fun String.quoteHandoffValidatorJson(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+internal fun proseOutput(
+  phaseId: String,
+  value: String,
+  prompt: String? = null,
+): FeatureTaskRuntimePhaseOutput = FeatureTaskRuntimePhaseOutput(phaseId, 1, PhaseOutput(value, prompt))
+
+internal fun recordedPhaseOutput(
+  phaseId: String,
+  recordJson: String,
+): FeatureTaskRuntimePhaseOutput =
+  FeatureTaskRuntimePhaseOutput(
+    phaseId,
+    1,
+    recordJson,
+    NormalizedFeatureTaskRuntimePhaseOutput.fromRecordMap(
+      FeatureTaskRuntimeWorkflowArtifactMap.from(
+        JsonCodec.jsonElementToValue(requireNotNull(JsonCodec.parseObjectOrNull(recordJson))),
+      ),
+    ),
+  )
 
 internal fun valueOnlyFinalizationUpstream(): FeatureTaskRuntimeResolvedUpstreamOutputs {
   val def = FeatureTaskRuntimePhaseWorkflowDefinition
@@ -146,42 +164,12 @@ internal fun valueOnlyFinalizationUpstream(): FeatureTaskRuntimeResolvedUpstream
   val implementProse = """{"projection_kind":"implementation_receipt","completed_task_ids":["task-1"]}"""
   return FeatureTaskRuntimeResolvedUpstreamOutputs(
     mapOf(
-      def.PHASE_PLAN to
-        FeatureTaskRuntimePhaseOutput(
-          def.PHASE_PLAN,
-          1,
-          """{"produced_outputs":{"value":${planProse.quoteHandoffValidatorJson()}}}""",
-        ),
-      def.PHASE_IMPLEMENT to
-        FeatureTaskRuntimePhaseOutput(
-          def.PHASE_IMPLEMENT,
-          1,
-          """{"produced_outputs":{"value":${implementProse.quoteHandoffValidatorJson()}}}""",
-        ),
-      def.PHASE_AUDIT to
-        FeatureTaskRuntimePhaseOutput(
-          def.PHASE_AUDIT,
-          1,
-          """{"verdict":"satisfied","produced_outputs":{}}""",
-        ),
-      def.PHASE_VALIDATE to
-        FeatureTaskRuntimePhaseOutput(
-          def.PHASE_VALIDATE,
-          1,
-          HANDOFF_VALIDATOR_VALIDATION_PHASE_PAYLOAD,
-        ),
-      def.PHASE_WRITE_HISTORY to
-        FeatureTaskRuntimePhaseOutput(
-          def.PHASE_WRITE_HISTORY,
-          1,
-          HANDOFF_VALIDATOR_HISTORY_PHASE_PAYLOAD,
-        ),
-      def.PHASE_COMMIT_PUSH to
-        FeatureTaskRuntimePhaseOutput(
-          def.PHASE_COMMIT_PUSH,
-          1,
-          HANDOFF_VALIDATOR_COMMIT_PUSH_PHASE_PAYLOAD,
-        ),
+      def.PHASE_PLAN to proseOutput(def.PHASE_PLAN, planProse),
+      def.PHASE_IMPLEMENT to proseOutput(def.PHASE_IMPLEMENT, implementProse),
+      def.PHASE_AUDIT to proseOutput(def.PHASE_AUDIT, "audit satisfied"),
+      def.PHASE_VALIDATE to recordedPhaseOutput(def.PHASE_VALIDATE, HANDOFF_VALIDATOR_VALIDATION_PHASE_PAYLOAD),
+      def.PHASE_WRITE_HISTORY to recordedPhaseOutput(def.PHASE_WRITE_HISTORY, HANDOFF_VALIDATOR_HISTORY_PHASE_PAYLOAD),
+      def.PHASE_COMMIT_PUSH to proseOutput(def.PHASE_COMMIT_PUSH, "pushed feat at abc"),
     ),
   )
 }

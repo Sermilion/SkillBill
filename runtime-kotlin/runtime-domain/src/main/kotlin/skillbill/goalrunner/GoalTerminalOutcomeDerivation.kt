@@ -7,7 +7,7 @@ import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepState
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.goalreview.asGoalWorkflowArtifactMap
+import skillbill.workflow.model.goalobservability.asGoalWorkflowArtifactMap
 
 fun terminalOutcomeFor(
   snapshot: WorkflowStateSnapshot,

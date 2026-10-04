@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.phase.record
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskRuntimeRejectedOutputRecorder
+import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.featuretask.model.phase.AppendCheckpointIdentityArgs
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLedgerRequest
@@ -17,7 +18,8 @@ import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingRecorder
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeReviewCheckpointRecorder
 import skillbill.engine.featuretask.review.goal.FeatureTaskRuntimeGoalReviewCompletionRecorder
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
+import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.ProducerOutputEvidenceValidator
@@ -25,6 +27,7 @@ import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.review.model.ReviewFindingVerdict
 import skillbill.workflow.model.FeatureTaskWorkflowMode
@@ -34,13 +37,13 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranc
 import skillbill.workflow.taskruntime.model.feature.FeatureTaskRuntimeVerificationBoundaryHeadingProvenance
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeSharedEvidenceMeasurement
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FeatureTaskRuntimeCheckpointIdentity
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.implementation.FeatureTaskRuntimeImplementationAttempt
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeImplementationAttempt
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
-import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeOperatorBlockRetry
+import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import java.time.Clock
@@ -110,7 +113,8 @@ class FeatureTaskRuntimePhaseRecorder
       workflowId: String,
       sessionId: String,
       issueKey: String? = null,
-    ): Boolean = workflowPersistence.ensureWorkflowOpen(workflowId, sessionId, issueKey)
+      executionPlan: ValidatedFeatureTaskRuntimeExecutionPlan? = null,
+    ): Boolean = workflowPersistence.ensureWorkflowOpen(workflowId, sessionId, issueKey, executionPlan)
 
     internal fun recordRejectedOutput(
       request: RejectedOutputDiagnosticRequest,
@@ -126,6 +130,9 @@ class FeatureTaskRuntimePhaseRecorder
       rejectedOutput.loadDiagnosticSignals(workflowId)
 
     fun recordPhaseState(request: FeatureTaskRuntimePhaseStateRequest): Boolean = phaseState.recordPhaseState(request)
+
+    fun recordRequiredPhaseStart(request: FeatureTaskRuntimePhaseStateRequest): RequiredPhaseWrite =
+      phaseState.recordRequiredPhaseStart(request)
 
     fun recordCompletedPhase(request: FeatureTaskRuntimePhaseStateRequest): Boolean =
       phaseState.recordCompletedPhase(request)
@@ -165,12 +172,14 @@ class FeatureTaskRuntimePhaseRecorder
       producerPhaseId: String,
       loopId: String,
       edgeIteration: Int,
+      admitted: AdmittedFeatureTaskRuntimeExecution? = null,
     ): Boolean =
       reviewCheckpoint.invalidateQuarantinedProducerRecord(
         workflowId,
         producerPhaseId,
         loopId,
         edgeIteration,
+        admitted,
       )
 
     fun recordedFindingVerdicts(output: Map<String, Any?>): List<ReviewFindingVerdict> =
@@ -215,18 +224,21 @@ class FeatureTaskRuntimePhaseRecorder
       workflowId: String,
       briefing: FeatureTaskRuntimePhaseLaunchBriefing,
       sharedEvidenceMeasurement: FeatureTaskRuntimeSharedEvidenceMeasurement? = null,
-    ): Boolean = briefingRecorder.recordPhaseBriefing(workflowId, briefing, sharedEvidenceMeasurement)
+      attempt: Int = 1,
+    ): RequiredPhaseWrite =
+      briefingRecorder.recordPhaseBriefing(
+        workflowId,
+        briefing,
+        sharedEvidenceMeasurement,
+        attempt,
+      )
 
     fun recordProjectionRejection(
-      workflowId: String,
-      consumerPhaseId: String,
-      error: InvalidFeatureTaskRuntimeHandoffProjectionError,
+      context: InvalidFeatureTaskRuntimeHandoffProjectionContext,
       repositoryCheckpointFingerprint: String?,
     ): Boolean =
       briefingRecorder.recordProjectionRejection(
-        workflowId,
-        consumerPhaseId,
-        error,
+        context,
         repositoryCheckpointFingerprint,
       )
 
@@ -285,8 +297,6 @@ private interface FeatureTaskRuntimePhaseEvidenceApi {
 
   fun loadCheckpointIdentities(workflowId: String): List<FeatureTaskRuntimeCheckpointIdentity>?
 
-  fun quarantineCheckpointIdentities(workflowId: String): Boolean
-
   fun recordWorkflowOwnedPaths(
     workflowId: String,
     ownedPaths: List<String>,
@@ -334,9 +344,6 @@ private class FeatureTaskRuntimePhaseEvidenceApiDelegate(
 
   override fun loadCheckpointIdentities(workflowId: String): List<FeatureTaskRuntimeCheckpointIdentity>? =
     evidence.loadCheckpointIdentities(workflowId)
-
-  override fun quarantineCheckpointIdentities(workflowId: String): Boolean =
-    evidence.quarantineCheckpointIdentities(workflowId)
 
   override fun recordWorkflowOwnedPaths(
     workflowId: String,

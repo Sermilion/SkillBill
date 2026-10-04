@@ -49,4 +49,4 @@ data class UpdateRunResult(
   val reason: String? = null,
 )
 
-const val INSTALL_SCRIPT_URL: String = "https://raw.githubusercontent.com/Sermilion/skill-bill/main/install.sh"
+internal const val INSTALL_SCRIPT_URL: String = "https://raw.githubusercontent.com/Sermilion/skill-bill/main/install.sh"

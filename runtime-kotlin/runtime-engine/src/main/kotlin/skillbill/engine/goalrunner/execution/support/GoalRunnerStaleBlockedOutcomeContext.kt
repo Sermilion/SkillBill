@@ -9,7 +9,7 @@ import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.nonCompleteStoredOutcomeIsCorroborated
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuation
+import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 
 internal data class GoalRunnerStaleBlockedOutcomeContext(
   val record: WorkflowStateSnapshot,

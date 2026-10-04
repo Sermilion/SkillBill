@@ -159,10 +159,7 @@ mandates_and_overrides:
 
 ## Upstream projections (layer 2, declared and validated)
 ### from: commit_push
-commit_sha: __NORMALIZED_SHA40__
-branch: feat/existing-runtime-branch
-base_branch: main
-pushed: true
+value: Runtime committed commit __NORMALIZED_SHA40__ on branch feat/existing-runtime-branch against base main and pushed it.
 ### run_invariant_spec_reference (run_invariant_field:spec_reference)
 spec_reference: phase:pr
 ### run_invariant_feature_size (run_invariant_field:feature_size)
@@ -186,13 +183,8 @@ Carry, as prose, the pull request URL and the title you set. The runtime looks t
 branch itself before and after this step to record its number and whether this step created it.
 
 ## Required final output
-End your response with exactly one JSON object as the last thing you emit. Prefer a raw
-object with nothing after it; a single ```json fenced block is also accepted. The runtime
-stamps the contract version and phase id itself. Fields:
-- "status": one of "completed", "blocked", "failed"
-- "summary": one sentence describing what this phase did
-- "value": non-blank prose carrying everything the next phase needs
-- "verdict": optional; set it only when this briefing names a verdict for this phase
-- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
-  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
-  Omit it when status is "completed".
+End your response with plain prose carrying everything the next phase needs (what this phase
+produced, deviations from the briefing, what was deliberately left to later phases), or exactly
+what a value content section defines. The runtime records that prose as the phase value as
+written. Do not wrap it in a status or JSON envelope. Report an obstacle only when a concrete one
+stopped the phase, and name that obstacle in the prose.

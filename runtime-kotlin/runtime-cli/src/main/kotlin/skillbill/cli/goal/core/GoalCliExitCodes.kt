@@ -1,17 +1,7 @@
 package skillbill.cli.goal.core
 
-import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
-import skillbill.engine.goalrunner.model.GoalRunnerOperatorDecisionResult
-import skillbill.engine.goalrunner.model.GoalRunnerPauseResult
-import skillbill.engine.goalrunner.model.GoalRunnerReplanResult
-import skillbill.engine.goalrunner.model.GoalRunnerResetResult
-import skillbill.engine.goalrunner.model.GoalRunnerStopStatus
-import skillbill.engine.goalrunner.model.GoalRunnerStopVerbResult
 import skillbill.goalrunner.model.GoalRunnerRunReport
-import skillbill.goalrunner.model.GoalRunnerStatusProjection
 import skillbill.goalrunner.model.GoalRunnerStopReason
-import skillbill.ports.goalrunner.persistence.model.GoalRunnerRepairResult
-import skillbill.ports.goalrunner.persistence.model.GoalRunnerRepairStatus
 
 internal const val GOAL_EXIT_COMPLETE: Int = 0
 internal const val GOAL_EXIT_FAILED: Int = 1
@@ -39,55 +29,4 @@ private fun GoalRunnerStopReason.goalExitCode(): Int =
     GoalRunnerStopReason.RECONCILED_RESUMABLE,
     GoalRunnerStopReason.AWAITING_OPERATOR_DECISION,
     -> GOAL_EXIT_BLOCKED
-  }
-
-internal fun goalStatusExitCode(
-  projection: GoalRunnerStatusProjection?,
-  databaseUnavailable: Boolean = false,
-): Int = if (projection != null && !databaseUnavailable) 0 else 1
-
-internal fun goalPauseExitCode(result: GoalRunnerPauseResult): Int = if (result.status == "not_found") 1 else 0
-
-internal fun goalResumeExitCode(status: String): Int = if (status == "not_found") 1 else 0
-
-internal fun goalStopExitCode(result: GoalRunnerStopVerbResult): Int =
-  when (result.status) {
-    GoalRunnerStopStatus.STOPPED,
-    GoalRunnerStopStatus.ALREADY_STOPPED,
-    GoalRunnerStopStatus.NO_LIVE_LEASE,
-    -> 0
-    GoalRunnerStopStatus.IDENTITY_MISMATCH,
-    GoalRunnerStopStatus.NOT_FOUND,
-    -> 1
-  }
-
-internal fun goalResetExitCode(result: GoalRunnerResetResult?): Int =
-  if (result != null && result.refusalReason == null && result.recovery?.recoveryCommand == null) 0 else 1
-
-internal fun goalReplanExitCode(result: GoalRunnerReplanResult?): Int = if (result == null) 1 else 0
-
-internal fun goalRepairExitCode(result: GoalRunnerRepairResult): Int =
-  when (result.status) {
-    GoalRunnerRepairStatus.HEALTHY,
-    GoalRunnerRepairStatus.REPAIRED,
-    -> 0
-    GoalRunnerRepairStatus.INSPECTED,
-    GoalRunnerRepairStatus.OPERATOR_REQUIRED,
-    -> 2
-    GoalRunnerRepairStatus.NOT_WEDGED,
-    GoalRunnerRepairStatus.LIVE_LEASE_REFUSED,
-    GoalRunnerRepairStatus.NOT_FOUND,
-    -> 1
-  }
-
-internal fun goalOperatorDecisionExitCode(result: GoalRunnerOperatorDecisionResult): Int =
-  when (result) {
-    is GoalRunnerOperatorDecisionResult.Recorded -> 0
-    is GoalRunnerOperatorDecisionResult.Rejected -> 1
-  }
-
-internal fun goalAcceptExitCode(result: GoalRunnerAcceptResult): Int =
-  when (result) {
-    is GoalRunnerAcceptResult.Accepted -> 0
-    is GoalRunnerAcceptResult.Rejected -> 1
   }

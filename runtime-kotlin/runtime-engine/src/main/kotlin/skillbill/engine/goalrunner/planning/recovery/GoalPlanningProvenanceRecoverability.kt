@@ -4,7 +4,7 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.goalrunner.planning.context.GoalPlanningSpecCanonicalization
 import skillbill.engine.goalrunner.telemetry.GoalRunnerBestEffortEmission
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
 import skillbill.text.sha256HexUtf8
@@ -30,17 +30,17 @@ internal fun classifyGoalPlanningProvenanceRecoverability(
       saved.planningContractVersion == current.planningContractVersion &&
       saved.phaseOutputContractId == current.phaseOutputContractId &&
       saved.phaseOutputContractVersion == current.phaseOutputContractVersion
-  if (!contractCompatible) {
-    return GoalPlanningProvenanceRecoverability.Irrecoverable(GoalPlanningRecoveryKind.HARD_RESET)
-  }
-  val valid =
-    saved.decompositionManifestHash == current.decompositionManifestHash &&
-      savedParentSpec != null &&
-      sha256HexUtf8(savedParentSpec) == saved.parentSpecHash &&
+  val sourceValid =
+    savedParentSpec != null && sha256HexUtf8(savedParentSpec) == saved.parentSpecHash &&
       sha256HexUtf8(existing.preplanPayload) == existing.payloadSha256
-  if (!valid) return GoalPlanningProvenanceRecoverability.Irrecoverable(GoalPlanningRecoveryKind.SCOPED_REPLAN)
+  if (!contractCompatible || !sourceValid) {
+    return GoalPlanningProvenanceRecoverability.Irrecoverable(GoalPlanningRecoveryKind.BLOCKED)
+  }
+  if (saved.decompositionManifestHash != current.decompositionManifestHash) {
+    return GoalPlanningProvenanceRecoverability.Irrecoverable(GoalPlanningRecoveryKind.SCOPED_REPLAN)
+  }
   val fresh =
-    GoalPlanningSpecCanonicalization.canonical(savedParentSpec) ==
+    GoalPlanningSpecCanonicalization.canonical(requireNotNull(savedParentSpec)) ==
       GoalPlanningSpecCanonicalization.canonical(currentParentSpec)
   return if (fresh) {
     GoalPlanningProvenanceRecoverability.Reuse(saved)
@@ -51,7 +51,7 @@ internal fun classifyGoalPlanningProvenanceRecoverability(
 
 fun preplanProseValue(preplanPayload: String): String =
   preplanProducedOutputs(preplanPayload)[SharedPayloadKeys.VALUE] as? String
-    ?: throw InvalidGoalPlanningPreparationSchemaError(
+    ?: throw invalidGoalPlanningPreparationSchemaError(
       PREPLAN_PAYLOAD_SOURCE_LABEL,
       "${SharedPayloadKeys.PRODUCED_OUTPUTS}.${SharedPayloadKeys.VALUE}",
       "must be a string.",
@@ -66,7 +66,7 @@ private const val PREPLAN_PAYLOAD_SOURCE_LABEL = "shared preplan payload"
 
 private fun preplanProducedOutputs(preplanPayload: String): Map<String, Any?> =
   preplanPayloadObject(preplanPayload)[SharedPayloadKeys.PRODUCED_OUTPUTS]?.let(JsonCodec::anyToStringAnyMap)
-    ?: throw InvalidGoalPlanningPreparationSchemaError(
+    ?: throw invalidGoalPlanningPreparationSchemaError(
       PREPLAN_PAYLOAD_SOURCE_LABEL,
       SharedPayloadKeys.PRODUCED_OUTPUTS,
       "must be an object.",
@@ -83,7 +83,7 @@ private fun preplanPayloadObject(preplanPayload: String): Map<String, Any?> =
   } ?: throw preplanPayloadNotAnObject(null)
 
 private fun preplanPayloadNotAnObject(cause: Throwable?) =
-  InvalidGoalPlanningPreparationSchemaError(
+  invalidGoalPlanningPreparationSchemaError(
     PREPLAN_PAYLOAD_SOURCE_LABEL,
     "",
     "must be a JSON object.",

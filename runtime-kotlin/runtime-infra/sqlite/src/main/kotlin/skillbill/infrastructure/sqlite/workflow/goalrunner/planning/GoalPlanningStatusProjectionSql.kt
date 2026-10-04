@@ -1,9 +1,11 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
+import skillbill.goalrunner.model.planningStatusSnapshot
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.workflow.goalrunner.shared.INVALIDATED_SHARED_PREPLAN_PAYLOAD
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import java.sql.Connection
 
 internal class GoalPlanningStatusProjectionSql(
@@ -39,7 +41,7 @@ internal class GoalPlanningStatusProjectionSql(
     blockedReason: String?,
   ) {
     if (orderedSubtaskIds.distinct().size != orderedSubtaskIds.size || orderedSubtaskIds.any { it < 1 }) {
-      throw InvalidGoalPlanningPreparationSchemaError(
+      throw invalidGoalPlanningPreparationSchemaError(
         parentGoalWorkflowId,
         "ordered_subtask_ids",
         "subtask ids must be unique positive integers",
@@ -55,14 +57,14 @@ internal class GoalPlanningStatusProjectionSql(
     blockedReason: String?,
   ) {
     if ((blockedSubtaskId == null) != (blockedReason == null)) {
-      throw InvalidGoalPlanningPreparationSchemaError(
+      throw invalidGoalPlanningPreparationSchemaError(
         parentGoalWorkflowId,
         "blocked_reason",
         "blocked subtask and reason must be supplied together",
       )
     }
     if (blockedSubtaskId != null && blockedSubtaskId !in orderedSubtaskIds) {
-      throw InvalidGoalPlanningPreparationSchemaError(
+      throw invalidGoalPlanningPreparationSchemaError(
         parentGoalWorkflowId,
         "blocked_subtask_id",
         "blocked subtask must be present in the governed ordering",
@@ -77,7 +79,7 @@ internal class GoalPlanningStatusProjectionSql(
       statement.bindAll(parentGoalWorkflowId)
       statement.executeQuery().use { result ->
         result.next() &&
-          result.getString(1) == "prepared" &&
+          result.getString(1) == GoalPlanningPreparationState.PREPARED.wireValue &&
           result.getString(2) != INVALIDATED_SHARED_PREPLAN_PAYLOAD
       }
     }
@@ -91,8 +93,8 @@ internal class GoalPlanningStatusProjectionSql(
       statement.executeQuery().use { result ->
         buildList {
           while (result.next()) {
-            if (result.getString("preparation_status") != "prepared") {
-              throw InvalidGoalPlanningPreparationSchemaError(
+            if (result.getString("preparation_status") != GoalPlanningPreparationState.PREPARED.wireValue) {
+              throw invalidGoalPlanningPreparationSchemaError(
                 parentGoalWorkflowId,
                 "preparation_status",
                 "plan checkpoint must be prepared",
@@ -110,7 +112,7 @@ internal class GoalPlanningStatusProjectionSql(
     plannedIds: List<Int>,
   ) {
     if (plannedIds.any { it !in orderedSubtaskIds } || plannedIds.distinct().size != plannedIds.size) {
-      throw InvalidGoalPlanningPreparationSchemaError(
+      throw invalidGoalPlanningPreparationSchemaError(
         parentGoalWorkflowId,
         "subtask_id",
         "stored plan checkpoints must match the governed ordering",

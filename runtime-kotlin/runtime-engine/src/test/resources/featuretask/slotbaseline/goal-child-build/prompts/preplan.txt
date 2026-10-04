@@ -9,7 +9,7 @@ intake, preflight, or confirmation, including on retries and continuation.
 Reading the installed skill-bill skill does not make this phase a new invocation.
 
 Phase: preplan (Phase 1: Pre-plan)
-Task: Produce the scaled pre-planning digest for the resolved feature size. Do not modify repository files during this phase. Emit produced_outputs with a non-blank value string carrying the preplanning_digest JSON (same fields as before, stuffed inside value); optional prompt may add a short directive when non-blank. Do not forward the complete preplan envelope, a generic summary, or progress diagnostics.
+Task: Produce the scaled pre-planning digest for the resolved feature size, as prose. Do not modify repository files during this phase. This is the feature's only discovery: the plan phase plans every subtask from this digest and never reads the repository. Write what the plan phase needs: the boundaries the change touches, the patterns and decisions that apply, concrete risks, and rollout and validation considerations. Carry the evidence each subtask spec will cite: exact paths, symbols, signatures, type hierarchies, the tests and test helpers the change affects, and the existing patterns to follow. Settle every question the repository can answer here. Leave open only decisions the repository cannot answer, each with the facts that bear on it and the option you recommend. Walk the boundary memory headings for relevance and weave their context into the prose; name a heading by its heading_id exactly as the boundary catalog spells it. Do not forward progress diagnostics or a generic summary.
 
 ## Installed runtime owns phase output and settlement
 The installed Skill Bill runtime validates this phase's output and MCP settlement.
@@ -91,40 +91,21 @@ The tools may be deferred in this session: load them first with ToolSearch
 - Finished: call `mcp__skill-bill__feature_task_phase_complete` with workflow_id "wftr-20260602-test-0001",
   phase_id "preplan", attempt 1, and value: one prose string carrying everything
   the next phase needs (what this phase produced, deviations from the briefing, what was
-  deliberately left to later phases). When a value content section follows, it describes what the
-  next phase expects inside value; carry that content as prose or as JSON text, whichever is clearer.
-  The runtime does not validate the shape of value. Optional summary: one sentence.
-- Cannot finish: call `mcp__skill-bill__feature_task_phase_block` with the same workflow_id, phase_id, and
-  attempt, a reason string naming the obstacle, and failure_disposition one of "retryable",
+  deliberately left to later phases). When a value content section follows, it defines value and
+  overrides this description: carry its content as prose or as JSON text, whichever is clearer, and
+  emit any exact literal it names with nothing added. Otherwise the runtime does not validate the
+  shape of value. Optional summary: one sentence.
+- Cannot finish because of a concrete obstacle: call `mcp__skill-bill__feature_task_phase_block` with the same
+  workflow_id, phase_id, and attempt, a reason string naming the obstacle, and failure_disposition
+  one of "retryable",
   "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
 Copy workflow_id, phase_id, and attempt exactly as written here. After the tool returns status
-"ok", end your response with a short prose recap and nothing structured. Print the fallback
-final object below only if both tools stay unavailable after loading them.
-
-## Value content
-Carry this JSON object as the value text; the runtime does not validate its shape and the next phase reads
-it as structured prose:
-```json
-{ "projection_kind": "preplanning_digest",
-  "contract_version": "0.2",
-  "affected_boundaries": ["<module or boundary touched>"], "patterns_and_decisions": [],
-  "risks": ["<concrete risk>"],
-  "rollout": { "flag_required": false, "flag_pattern": "none",
-    "notes": "<rollout note, or N/A>" },
-  "validation_strategy": ["<how the change is validated>"],
-  "unresolved_questions": [], "evidence_refs": [],
-  "selected_boundary_headings": ["<heading_id copied verbatim from the boundary catalog>"] }
-```
-flag_pattern is one of none, simple_conditional, di_switch, legacy. Walk boundary_memory headings for relevance; weave context into the stuffed object rather than listing headings only outside value.
+"ok", end your response with a short prose recap and nothing structured. Use the prose
+fallback below only if both tools stay unavailable after loading them.
 
 ## Fallback final output (only when the settlement tools are unavailable)
-End your response with exactly one JSON object as the last thing you emit. Prefer a raw
-object with nothing after it; a single ```json fenced block is also accepted. The runtime
-stamps the contract version and phase id itself. Fields:
-- "status": one of "completed", "blocked", "failed"
-- "summary": one sentence describing what this phase did
-- "value": non-blank prose carrying everything the next phase needs
-- "verdict": optional; set it only when this briefing names a verdict for this phase
-- "failure_disposition": required when status is "blocked" or "failed"; one of "retryable",
-  "non_retryable_policy_conflict", "needs_user_action", "process_failure", or "invalid_output".
-  Omit it when status is "completed".
+End your response with plain prose carrying everything the next phase needs (what this phase
+produced, deviations from the briefing, what was deliberately left to later phases), or exactly
+what a value content section defines. The runtime records that prose as the phase value as
+written. Do not wrap it in a status or JSON envelope. Report an obstacle only when a concrete one
+stopped the phase, and name that obstacle in the prose.

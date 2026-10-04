@@ -1,8 +1,10 @@
 package skillbill.infrastructure.skills.install.staging
 
 import skillbill.error.core.InvalidInstallStagingError
-import skillbill.error.core.ShellContentContractException
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.infrastructure.skills.install.identity.SKILL_CONTENT_IDENTITY_FILENAME
 import skillbill.infrastructure.skills.install.identity.suppliedSkillContentIdentity
 import skillbill.infrastructure.skills.install.staging.content.installedSkillSlug
@@ -145,7 +147,8 @@ internal fun stageInstalledSkill(input: StageInstalledSkillInput): RenderedSkill
       prepareStageInstalledSkill(input)
     } catch (error: CancellationException) {
       throw error
-    } catch (error: ShellContentContractException) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isShellContentContractFailure())
       throw error
     } catch (error: IOException) {
       invalidStageInstalledSkill(input, error)
@@ -198,9 +201,6 @@ private fun buildFreshInstallStaging(inputs: FreshInstallInputs): RenderedSkill 
   } catch (error: IOException) {
     logInstallStagingFailure(inputs, tempDir, promoted, error)
     failure = error
-  } catch (error: ShellContentContractException) {
-    logInstallStagingFailure(inputs, tempDir, promoted, error)
-    failure = error
   } catch (error: SkillBillRuntimeException) {
     logInstallStagingFailure(inputs, tempDir, promoted, error)
     failure = error
@@ -229,7 +229,7 @@ private fun logInstallStagingFailure(
     Level.SEVERE,
     "stageInstalledSkill failure skill=${inputs.sourceSkillDir.fileName} hash=${inputs.contentHash} " +
       "source=${inputs.sourceSkillDir} tempDir=$tempDir finalDir=${inputs.finalStagingDir} " +
-      "promoted=$promoted error=${error::class.simpleName}",
+      "promoted=$promoted error=${error.failureCodeLabel() ?: error::class.simpleName}",
     error,
   )
   cleanupInstallStagingOnFailure(tempDir, inputs.finalStagingDir, promoted)

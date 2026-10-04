@@ -1,7 +1,9 @@
 package skillbill.infrastructure.skills.install.nativeagent.inventory
 
 import skillbill.error.core.InvalidNativeAgentLinkInventoryReconcileError
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -49,7 +51,8 @@ internal fun reconcileNativeAgentLinkInventoryLocked(request: NativeAgentLinkInv
         afterTemporaryCreation = request.afterTemporaryCreation,
       ),
     )
-  } catch (error: ShellContentContractException) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isShellContentContractFailure())
     throw reconcileError(request.path, error.message.orEmpty(), error)
   } catch (error: IOException) {
     throw reconcileError(request.path, error.message.orEmpty(), error)

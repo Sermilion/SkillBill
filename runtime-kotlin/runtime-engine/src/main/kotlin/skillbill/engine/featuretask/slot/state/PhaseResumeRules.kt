@@ -1,7 +1,7 @@
 package skillbill.engine.featuretask.slot.state
 
 import skillbill.contracts.JsonCodec
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
@@ -11,6 +11,10 @@ import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflow
  * shapes and resume decisions a step owns live with the step instead of in the shared reconstruction.
  */
 internal interface PhaseResumeRules {
+  /** Whether a completed receipt must validate before reconstruction can change any completion. */
+  val requiresValidCompletedOutput: Boolean
+    get() = false
+
   /** Whether this step records review passes, so the run state tracks its pass numbers and invalidation tombstone. */
   val tracksReviewPasses: Boolean
     get() = false

@@ -1,7 +1,7 @@
 package skillbill.infrastructure.workflow.decomposition
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
@@ -89,7 +89,7 @@ class FileSystemDecompositionManifestFileStoreTest {
     Files.writeString(marker, "pending")
     val store = FileSystemDecompositionManifestFileStore()
 
-    assertFailsWith<InvalidDecompositionManifestSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.findDecompositionManifestFilesWithoutRecovery(repoRoot)
     }
 

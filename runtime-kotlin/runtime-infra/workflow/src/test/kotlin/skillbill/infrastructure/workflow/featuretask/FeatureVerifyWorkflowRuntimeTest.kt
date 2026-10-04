@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.featuretask
 
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowContinueDecisionOverrides
@@ -129,9 +130,9 @@ class FeatureVerifyWorkflowRuntimeTest {
     assertEquals(WorkflowStatus.ABANDONED, engine.updateRecord(definition, existing, abandoned).workflowStatus)
     assertEquals("recover", engine.resumeView(definition, completedAs("abandoned")).resumeMode.wireValue)
     val failure =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         engine.updateRecord(definition, existing, pending.copy(workflowStatus = WorkflowStatus.BLOCKED))
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     assertEquals(
       "Invalid workflow_status 'blocked'. Allowed: pending, running, completed, failed, abandoned",
       failure.message,

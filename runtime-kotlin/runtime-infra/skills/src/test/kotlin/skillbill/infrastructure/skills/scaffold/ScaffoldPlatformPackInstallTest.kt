@@ -11,7 +11,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.contract.Templat
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.supportingFileTargets
 import skillbill.infrastructure.skills.scaffold.runtime.service.performInstall
 import skillbill.infrastructure.skills.scaffold.runtime.service.scaffoldWithAdapters
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestRenderRequest
 import skillbill.scaffold.policy.platformpack.renderPlatformPackManifest
 import skillbill.testsupport.SkillClassFixtures

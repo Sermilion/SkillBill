@@ -3,18 +3,21 @@ package skillbill.engine.goalrunner.launch
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.workflow.persist.generateWorkflowId
-import skillbill.engine.goalrunner.execution.core.GoalRunnerSubtaskLaunchBoundaries
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionPlanResolver
+import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.goalrunner.execution.core.StoppedReportArgs
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationResult
 import skillbill.engine.goalrunner.execution.support.PreparedLaunch
 import skillbill.engine.goalrunner.execution.support.RUNTIME_WORKFLOW_ID_PREFIX
 import skillbill.engine.goalrunner.execution.support.branchPlanFor
-import skillbill.engine.goalrunner.execution.support.withAttemptedSubtask
-import skillbill.engine.goalrunner.execution.support.withBranchSetupBlockedSubtask
-import skillbill.engine.goalrunner.execution.support.withWorkflowId
+import skillbill.engine.goalrunner.manifest.GoalRunnerChildWorkflowSaveResult
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.outcome.canonicalRepository
 import skillbill.engine.goalrunner.planning.recovery.goalPlanningChildImportConflictBlockedReason
@@ -22,21 +25,26 @@ import skillbill.engine.goalrunner.reset.reviewBaselineBlockedReason
 import skillbill.engine.goalrunner.review.effectiveAgentAddonSelection
 import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.status.supervisionEvent
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
+import skillbill.goalrunner.GoalRunnerQualityGateSelectionResolver
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
-import skillbill.ports.goalrunner.runner.model.GoalRunnerChildWorkflowSetup
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.repository.RepositoryEnclosingRootPort
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaselineResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.decomposition.withAttemptedSubtask
+import skillbill.workflow.decomposition.withBranchSetupBlockedSubtask
+import skillbill.workflow.decomposition.withWorkflowId
 import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.model.decompositionStatus
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.nio.file.Path
 import java.time.Clock
@@ -44,15 +52,14 @@ import kotlin.random.Random
 
 @Inject
 class GoalRunnerSubtaskLaunchPrepare(
-  private val launchBoundaries: GoalRunnerSubtaskLaunchBoundaries,
+  private val manifestStore: GoalRunnerManifestStore,
+  private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  private val gitOperations: WorkflowGitOperations,
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val clock: Clock,
   private val random: Random,
+  private val executionPlans: FeatureTaskRuntimeExecutionPlanResolver,
 ) {
-  private val manifestStore get() = launchBoundaries.manifestStore
-  private val outcomeStore get() = launchBoundaries.outcomeStore
-  private val gitOperations get() = launchBoundaries.gitOperations
-
   fun goalReviewBaseline(
     state: GoalRunnerManifestState,
     subtaskId: Int,
@@ -128,23 +135,13 @@ class GoalRunnerSubtaskLaunchPrepare(
     )
   }
 
-  internal fun blockedOnRecoveryError(
+  internal fun blockedOnPreparationConflict(
     state: GoalRunnerManifestState,
-    subtaskId: Int,
-    error: Throwable,
+    conflict: GoalPlanningPreparationConflict,
     request: GoalRunnerRunRequest,
   ): GoalRunnerIterationResult {
-    val (targetSubtaskId, reason) =
-      when (error) {
-        is IncompatibleGoalPlanningPreparationRecoveryError ->
-          error.subtaskId to
-            goalPlanningChildImportConflictBlockedReason(
-              state.manifest.issueKey,
-              error.subtaskId,
-              error,
-            )
-        else -> throw error
-      }
+    val targetSubtaskId = conflict.subtaskId
+    val reason = goalPlanningChildImportConflictBlockedReason(state.manifest.issueKey, targetSubtaskId, conflict)
     state.manifest.workflowIdFor(targetSubtaskId)?.takeIf(String::isNotBlank)?.let { workflowId ->
       runCatching {
         outcomeStore.markBlocked(
@@ -188,35 +185,33 @@ class GoalRunnerSubtaskLaunchPrepare(
     request: GoalRunnerRunRequest,
     reviewBaseline: GoalSubtaskReviewBaseline,
     planning: GoalPlanningSweepOutcome.PreparedAll,
-  ): PreparedLaunch {
+  ): GoalSubtaskLaunchPrepareResult {
     val priorWorkflowId = state.manifest.workflowIdFor(subtaskId)
     val subtask =
       requireNotNull(state.manifest.subtasks.firstOrNull { it.id == subtaskId }) {
         "Goal subtask '$subtaskId' is missing from the decomposition manifest."
       }
-    if (subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && priorWorkflowId != null) {
-      reopenBlockedChildForOperatorResume(subtaskId, priorWorkflowId, subtask)
-    }
+    val executionPlan =
+      executionPlans.resolveCreation(
+        FeatureTaskRuntimeExecutionPlanCreationRequest(
+          repoRoot = request.repoRoot,
+          definition = SkeletonDefinition.GOAL_CHILD,
+          reviewMode = request.codeReviewMode ?: CodeReviewExecutionMode.DEFAULT,
+          qualityGate = GoalRunnerQualityGateSelectionResolver.resolve(state.manifest, subtaskId),
+          validationDepth = ValidationDepth.FULL,
+          timeout = request.timeout,
+          workflowId = priorWorkflowId,
+        ),
+      )
     val firstRun = priorWorkflowId == null
+    val resumesBlockedChild = subtask.status.decompositionStatus() == DecompositionStatus.BLOCKED && !firstRun
     val assignedWorkflowId = priorWorkflowId ?: generateWorkflowId(RUNTIME_WORKFLOW_ID_PREFIX, clock, random)
-    val rawSpecPath =
-      requireNotNull(
-        subtask.specPath.takeIf(String::isNotBlank),
-      ) { "Goal subtask '$subtaskId' has no governed spec path." }
     val canonicalRepository = repositoryEnclosingRootPort.canonicalPath(request.repoRoot)
-    val lexicalSpecPath =
-      Path.of(rawSpecPath).let { path ->
-        (if (path.isAbsolute) path else canonicalRepository.resolve(path)).toAbsolutePath().normalize()
-      }
-    val resolvedSpecPath = repositoryEnclosingRootPort.optionalRealPath(lexicalSpecPath) ?: lexicalSpecPath
-    check(resolvedSpecPath.startsWith(canonicalRepository)) {
-      "Goal subtask '$subtaskId' governed spec path escapes repository '$canonicalRepository'."
-    }
-    val governedSpecPath = canonicalRepository.relativize(resolvedSpecPath).joinToString("/")
+    val governedSpecPath = governedChildSpecPath(subtaskId, subtask.specPath, canonicalRepository)
     val attemptedManifest =
       state.manifest.withAttemptedSubtask(subtaskId)
         .let { manifest -> if (firstRun) manifest.withWorkflowId(subtaskId, assignedWorkflowId) else manifest }
-    val attemptedState =
+    val saved =
       run {
         val branch =
           attemptedManifest.branchPlanFor(subtaskId).branch.takeIf(String::isNotBlank)
@@ -228,7 +223,7 @@ class GoalRunnerSubtaskLaunchPrepare(
             subtaskId = subtaskId,
             workflowId = assignedWorkflowId,
             goalBranch = branch,
-            normalizedIssueKey = state.manifest.issueKey.trim().uppercase(),
+            normalizedIssueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(state.manifest.issueKey),
             repositoryIdentity = repositoryEnclosingRootPort.repositoryIdentity(canonicalRepository),
             governedSpecPath = governedSpecPath,
             reviewBaseline = reviewBaseline,
@@ -238,10 +233,46 @@ class GoalRunnerSubtaskLaunchPrepare(
                 agentAddonSelection = manifestStore.effectiveAgentAddonSelection(state.parentWorkflowId, request),
               ),
             planningHydration = planning.hydrationFor(subtaskId),
+            executionPlan = executionPlan,
+            operatorResumePhaseId =
+              (
+                subtask.lastResumableStep?.takeIf(String::isNotBlank)
+                  ?: FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
+              )
+                .takeIf { resumesBlockedChild },
+            operatorResumeReason =
+              "Operator resumed the goal after a blocked stop at subtask $subtaskId."
+                .takeIf { resumesBlockedChild },
           ),
         )
       }
-    return PreparedLaunch(attemptedState, assignedWorkflowId.takeIf { firstRun })
+    return when (saved) {
+      is GoalRunnerChildWorkflowSaveResult.Conflicted -> GoalSubtaskLaunchPrepareResult.Conflicted(saved.conflict)
+      is GoalRunnerChildWorkflowSaveResult.Saved ->
+        GoalSubtaskLaunchPrepareResult.Prepared(
+          PreparedLaunch(saved.state, assignedWorkflowId.takeIf { firstRun }),
+        )
+    }
+  }
+
+  private fun governedChildSpecPath(
+    subtaskId: Int,
+    specPath: String,
+    canonicalRepository: Path,
+  ): String {
+    val rawSpecPath =
+      requireNotNull(
+        specPath.takeIf(String::isNotBlank),
+      ) { "Goal subtask '$subtaskId' has no governed spec path." }
+    val lexicalSpecPath =
+      Path.of(rawSpecPath).let { path ->
+        (if (path.isAbsolute) path else canonicalRepository.resolve(path)).toAbsolutePath().normalize()
+      }
+    val resolvedSpecPath = repositoryEnclosingRootPort.optionalRealPath(lexicalSpecPath) ?: lexicalSpecPath
+    check(resolvedSpecPath.startsWith(canonicalRepository)) {
+      "Goal subtask '$subtaskId' governed spec path escapes repository '$canonicalRepository'."
+    }
+    return canonicalRepository.relativize(resolvedSpecPath).joinToString("/")
   }
 
   internal fun goalBranchSetupFailure(
@@ -268,25 +299,6 @@ class GoalRunnerSubtaskLaunchPrepare(
       }
     return setupError.takeIf(String::isNotBlank)?.let { error ->
       blockedBranchSetupIteration(state, subtaskId, error, request)
-    }
-  }
-
-  private fun reopenBlockedChildForOperatorResume(
-    subtaskId: Int,
-    workflowId: String,
-    subtask: DecompositionSubtask,
-  ) {
-    val phaseId =
-      subtask.lastResumableStep?.takeIf(String::isNotBlank)
-        ?: FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT
-    check(
-      outcomeStore.reopenBlockedPhaseForOperatorResume(
-        workflowId = workflowId,
-        preferredPhaseId = phaseId,
-        reason = "Operator resumed the goal after a blocked stop at subtask $subtaskId.",
-      ),
-    ) {
-      "Goal subtask '$subtaskId' is blocked but child workflow '$workflowId' could not be reopened for resume."
     }
   }
 

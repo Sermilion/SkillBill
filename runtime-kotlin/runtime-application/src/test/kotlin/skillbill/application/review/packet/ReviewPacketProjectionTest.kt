@@ -2,7 +2,9 @@ package skillbill.application.review.packet
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.REVIEW_CONTEXT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.bundle.ReviewLaneBundle
 import skillbill.review.context.model.bundle.ReviewLaneBundleEntry
 import skillbill.review.context.model.commit.ReviewAssignment
@@ -12,13 +14,13 @@ import skillbill.review.context.model.commit.ReviewCommitLaneDisposition
 import skillbill.review.context.model.commit.ReviewCommitLaneRoutingMatrix
 import skillbill.review.context.model.commit.ReviewCommitSource
 import skillbill.review.context.model.commit.ReviewCommitUnit
-import skillbill.review.context.model.execution.ReviewLaneDecision
+import skillbill.review.context.model.commit.ReviewLaneDecision
 import skillbill.review.context.model.hunk.REVIEW_RULE_EXCERPT_MAX_CHARS
 import skillbill.review.context.model.hunk.ReviewBuildTestFact
 import skillbill.review.context.model.hunk.ReviewChangedHunk
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.context.model.hunk.ReviewDependencyAllowlist
 import skillbill.review.context.model.hunk.ReviewEvidenceTarget
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import skillbill.review.context.model.hunk.ReviewLearningsReference
 import skillbill.review.context.model.hunk.ReviewRevision
 import skillbill.review.context.model.hunk.ReviewRuleReference
@@ -26,7 +28,6 @@ import skillbill.review.context.model.launch.GovernedReviewIntegrationLaunch
 import skillbill.review.context.model.launch.GovernedReviewLaunch
 import skillbill.review.context.model.launch.ReviewSpecialistSummary
 import skillbill.review.context.model.packet.ReviewContextPacket
-import skillbill.review.context.model.packet.ReviewExpansionRecord
 import skillbill.review.context.model.packet.ReviewPacketConsumerContract
 import skillbill.review.model.ReviewLaneReviewDisposition
 import kotlin.test.Test
@@ -181,9 +182,9 @@ class ReviewPacketProjectionTest {
   }
 
   @Test fun `expansion records require a reachability reason`() {
-    assertFailsWith<InvalidReviewContextSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       ReviewExpansionRecord("exp-1", "d".repeat(64), "src/C.kt", " ", true, 0)
-    }
+    }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
   }
 
   @Test fun `rule excerpts are bounded and digested`() {

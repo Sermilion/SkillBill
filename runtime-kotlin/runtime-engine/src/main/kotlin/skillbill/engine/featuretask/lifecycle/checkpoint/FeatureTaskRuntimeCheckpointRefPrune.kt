@@ -4,8 +4,8 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCheckpointRefPr
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FEATURE_TASK_RUNTIME_CHECKPOINT_REF_NAMESPACE
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FEATURE_TASK_RUNTIME_STANDALONE_SUBTASK_ID
+import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_CHECKPOINT_REF_NAMESPACE
+import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_STANDALONE_SUBTASK_ID
 import java.nio.file.Path
 
 fun subtaskCommitReachableOnRemote(

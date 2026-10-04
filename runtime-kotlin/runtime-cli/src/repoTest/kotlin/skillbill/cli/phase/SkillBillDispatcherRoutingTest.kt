@@ -75,26 +75,38 @@ class SkillBillDispatcherRoutingTest {
   @Test
   fun `phase with operation stays a usage error that never reaches the cli`() {
     assertContains(dispatcher, "the caller passes `phase:` together with `operation:`: report a usage error.")
-    assertTrue(dispatcher.contains("Stop without running preflight or any CLI command when:"))
+    assertTrue(dispatcher.contains("Stop without running any CLI command when:"))
     assertFalse(Regex("""skill-bill phase [^\n`]*operation:""").containsMatchIn(dispatcher))
   }
 
   @Test
-  fun `full run keeps the feature gate and routes a missing spec to phase plan`() {
-    val preflight = section(dispatcher, "Preflight")
-
-    assertContains(section(dispatcher, "Gate"), "Ask exactly one question: whether to proceed.")
-    assertContains(section(dispatcher, "Rehydrate"), "fetch the listed issue from Linear")
+  fun `full run launches intake through the goal runtime without standalone preparation`() {
     assertContains(
       section(dispatcher, "Launch"),
-      "skill-bill goal <issue-key> --agent <currently-executing-agent> --no-live-output",
+      "skill-bill <intake> --agent <currently-executing-agent> --no-live-output",
     )
+    assertContains(section(dispatcher, "Intake"), "allocate the next local key by default")
+    assertContains(section(dispatcher, "Intake"), "A supplied key with requirements launches without tracker lookup.")
+    assertContains(section(dispatcher, "Intake"), "ask for the requirements")
+    assertContains(section(dispatcher, "Issue resolution"), "Linear, Jira, and any other connected tracker")
     assertContains(section(dispatcher, "Relay"), "Relay its output verbatim, adding nothing.")
     assertContains(
-      preflight,
-      "reports new work, the spec is missing: run `skill-bill phase plan <intake> --agent <currently-executing-agent>`",
+      section(dispatcher, "Operator-only commands"),
+      "only when the operator explicitly requests that standalone phase or operation",
     )
+    assertContains(section(dispatcher, "Phase Forms"), "only at the operator's explicit request")
+    assertContains(section(dispatcher, "Operation Forms"), "only at the operator's explicit request")
     assertFalse(dispatcher.contains("bill-feature"), "the dispatcher must not name the retired feature skill")
+  }
+
+  @Test
+  fun `existing spec intake launches directly without a global workflow scan`() {
+    val resolution = section(dispatcher, "Issue resolution")
+    assertContains(resolution, "A readable local spec launches directly through the full runtime.")
+    assertContains(resolution, "Do not run `work status` or `work list` during intake.")
+    assertFalse(resolution.contains("skill-bill work list"))
+    assertFalse(resolution.contains("skill-bill work status"))
+    assertContains(resolution, "skill-bill goal status <issue-key> --repo-root <repo-root>")
   }
 
   private fun section(

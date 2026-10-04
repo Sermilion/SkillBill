@@ -1,6 +1,7 @@
 package skillbill.infrastructure.workflow.review.specialists
 
-import skillbill.error.shellcontent.MissingInstalledNativeAgentError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.contracts.install.InstallPlanSchemaValidator
 import skillbill.infrastructure.host.FileTelemetryConfigStore
 import skillbill.infrastructure.skills.install.FileSystemInstalledPlatformPackCatalog
@@ -18,6 +19,7 @@ import skillbill.install.model.InstallPlanRequest
 import skillbill.install.model.InstallTelemetryLevel
 import skillbill.install.model.InstallationTargetPaths
 import skillbill.install.model.McpRegistrationChoice
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.install.model.PlatformPackSelection
 import skillbill.install.model.PlatformPackSelectionMode
 import skillbill.install.model.RuntimeDistributionInputs
@@ -25,7 +27,6 @@ import skillbill.install.model.SupportedAgent
 import skillbill.install.model.WindowsSymlinkDecision
 import skillbill.install.model.WindowsSymlinkPreflight
 import skillbill.install.model.WindowsSymlinkPreflightState
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.EnvironmentContext
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.mcp.model.InstallMcpRegistrationRequest
@@ -76,12 +77,14 @@ class FileSystemReviewNativeAgentPreflightTest {
     )
 
     val error =
-      assertFailsWith<MissingInstalledNativeAgentError> {
+      assertFailsWith<SkillBillRuntimeException> {
         preflight(fixture.home).verify(preflightRequest(fixture.repoRoot, "codex"))
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.MISSING_INSTALLED_NATIVE_AGENT, failure.code)
       }
 
     assertTrue(error.message.orEmpty().contains("active provider directory is missing"))
-    assertEquals("skill-bill install apply", error.repairCommand)
+    assertContains(error.message.orEmpty(), "Repair with: skill-bill install apply")
   }
 
   @Test
@@ -104,8 +107,10 @@ class FileSystemReviewNativeAgentPreflightTest {
     Files.delete(installed)
 
     val failure =
-      assertFailsWith<MissingInstalledNativeAgentError> {
+      assertFailsWith<SkillBillRuntimeException> {
         preflight(fixture.home).verify(preflightRequest(fixture.repoRoot, "cursor"))
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.MISSING_INSTALLED_NATIVE_AGENT, failure.code)
       }
 
     assertContains(failure.message.orEmpty(), "skill-bill install apply")
@@ -280,12 +285,12 @@ class FileSystemReviewNativeAgentPreflightTest {
   ) : InstallMcpRegistrationPort {
     override fun registerMcp(request: InstallMcpRegistrationRequest): InstallMcpRegistrationResult =
       InstallMcpRegistrationResult(
-        mutation = McpRegistrationOperations.register(request.agent, request.runtimeMcpBin, request.home, environment),
+        outcome = McpRegistrationOperations.register(request.agent, request.runtimeMcpBin, request.home, environment),
       )
 
     override fun unregisterMcp(request: InstallMcpUnregistrationRequest): InstallMcpRegistrationResult =
       InstallMcpRegistrationResult(
-        mutation = McpRegistrationOperations.unregister(request.agent, request.home, environment),
+        outcome = McpRegistrationOperations.unregister(request.agent, request.home, environment),
       )
   }
 

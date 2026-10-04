@@ -2,11 +2,12 @@ package skillbill.engine.goalrunner.execution.core
 
 import skillbill.application.decomposition.executionModel
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
+import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
 import skillbill.engine.goalrunner.execution.support.GoalRunnerAttemptState
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationResult
 import skillbill.engine.goalrunner.execution.support.branchPlanFor
-import skillbill.engine.goalrunner.execution.support.protectedBranchName
-import skillbill.engine.goalrunner.execution.support.withBlockedSelection
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
@@ -21,11 +22,12 @@ import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.goalrunner.model.GoalRunnerStopReason
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.withBlockedSelection
+import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.DecompositionSubtaskAction
 
 internal class GoalRunnerGoalLoop(
   private val manifestStore: GoalRunnerManifestStore,
@@ -136,6 +138,7 @@ internal class GoalRunnerGoalLoop(
           telemetryEmitter = args.telemetryEmitter,
           planning = planning,
         ),
+        args.pendingState,
       )
     return RunSelectionAdvance(result.state, planning, result.report)
   }
@@ -230,8 +233,9 @@ internal class GoalRunnerGoalLoop(
         state.manifest.withBlockedSelection(subtaskId, violation)
       } else {
         state.manifest.copy(
-          status = "blocked",
-          currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = 0, action = "blocked"),
+          status = DecompositionStatus.BLOCKED.wireValue,
+          currentSubtaskIntent =
+            CurrentSubtaskIntent(subtaskId = 0, action = DecompositionSubtaskAction.BLOCKED.wireValue),
         )
       }
     val saved = manifestStore.save(state.copy(manifest = blockedManifest))

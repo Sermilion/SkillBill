@@ -1,6 +1,7 @@
 package skillbill.application.workflow.model
 
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.workflow.model.FeatureTaskRouteScope
 
 internal data class BuildFeatureTaskExecutionIdentityArgs(
@@ -21,6 +22,7 @@ data class WorkflowServiceOpenArgs(
   val repositoryIdentity: String? = null,
   val governedSpecPath: String? = null,
   val routeScope: FeatureTaskRouteScope = FeatureTaskRouteScope.STANDALONE,
+  val executionPlan: ValidatedFeatureTaskRuntimeExecutionPlan? = null,
 )
 
 data class WorkflowServiceOpenFeatureTaskArgs(
@@ -31,6 +33,7 @@ data class WorkflowServiceOpenFeatureTaskArgs(
   val repositoryIdentity: String,
   val governedSpecPath: String,
   val routeScope: FeatureTaskRouteScope = FeatureTaskRouteScope.STANDALONE,
+  val executionPlan: ValidatedFeatureTaskRuntimeExecutionPlan? = null,
 )
 
 data class RepairFeatureTaskRuntimeIdentityArgs(

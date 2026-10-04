@@ -5,7 +5,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionDeclaration
 import skillbill.workflow.taskruntime.model.handoff.PhaseHandoffProjectionTemplate
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseDeclaration
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseDeclaration
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 
 object FeatureTaskRuntimePhaseWorkflowDefinition {
@@ -17,12 +17,14 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
   const val PHASE_REVIEW: String = FeatureTaskRuntimePhaseIds.REVIEW
   const val PHASE_BUILD: String = FeatureTaskRuntimePhaseIds.BUILD
   const val PHASE_VERIFY_FINDINGS: String = FeatureTaskRuntimePhaseIds.VERIFY_FINDINGS
+  const val PHASE_AUDIT_PLAN_FIX: String = FeatureTaskRuntimePhaseIds.AUDIT_PLAN_FIX
   const val PHASE_AUDIT_IMPLEMENT_FIX: String = FeatureTaskRuntimePhaseIds.AUDIT_IMPLEMENT_FIX
   const val PHASE_AUDIT: String = FeatureTaskRuntimePhaseIds.AUDIT
   const val PHASE_VALIDATE: String = FeatureTaskRuntimePhaseIds.VALIDATE
   const val PHASE_WRITE_HISTORY: String = FeatureTaskRuntimePhaseIds.WRITE_HISTORY
   const val PHASE_COMMIT_PUSH: String = FeatureTaskRuntimePhaseIds.COMMIT_PUSH
   const val PHASE_PR: String = FeatureTaskRuntimePhaseIds.PR
+  const val PHASE_PRESENT_FINDINGS: String = FeatureTaskRuntimePhaseIds.PRESENT_FINDINGS
 
   const val DERIVED_CONTEXT_DIFF: String = "diff"
   const val DERIVED_CONTEXT_SCOPED_REPOSITORY_STATE: String = "scoped_repository_state"
@@ -41,15 +43,22 @@ object FeatureTaskRuntimePhaseWorkflowDefinition {
 
   const val MAX_RECORD_REGENERATION_ATTEMPTS: Int = 2
 
-  val REGENERATION_LOOP_ID_BY_PRODUCER: Map<String, String> = emptyMap()
+  val REGENERATION_LOOP_ID_BY_PRODUCER: Map<String, String> =
+    mapOf(
+      PHASE_BUILD to "regenerate_build_receipt",
+      PHASE_VALIDATE to "regenerate_validation_receipt",
+    )
 
-  val REGENERATION_PRODUCER_BY_CONSUMER: Map<String, String> = emptyMap()
+  val REGENERATION_PRODUCER_BY_CONSUMER: Map<String, Set<String>> =
+    mapOf(PHASE_WRITE_HISTORY to REGENERATION_LOOP_ID_BY_PRODUCER.keys.toSet())
 
   val REGENERATION_LOOP_IDS: Set<String> = REGENERATION_LOOP_ID_BY_PRODUCER.values.toSet()
 
   fun isRegenerationLoopId(loopId: String): Boolean = loopId in REGENERATION_LOOP_IDS
 
   val definition: WorkflowDefinition = FeatureTaskRuntimePhaseWorkflowGraph.definition
+
+  val agentSettledPhaseIds: Set<String> = definition.stepIds.toSet() - PHASE_COMMIT_PUSH
 
   const val UPSTREAM_PHASE_RECEIPT_CONTRACT_ID: String = "feature_task_runtime.upstream_phase_receipt"
 

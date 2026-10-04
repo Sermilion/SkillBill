@@ -2,7 +2,8 @@ package skillbill.infrastructure.skills.scaffold
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.contracts.workflow.extractOffendingValueFromInstance
 import kotlin.test.Test
@@ -29,9 +30,9 @@ class WorkflowStateSchemaViolationsTest {
         )
       }
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.validate(snapshot, "bill-feature-task")
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     val message = error.message.orEmpty()
 
     assertContains(message, "frobnicated")
@@ -44,9 +45,9 @@ class WorkflowStateSchemaViolationsTest {
         remove("current_step_id")
       }
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.validate(snapshot, "bill-feature-task")
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "current_step_id")
   }
@@ -58,9 +59,9 @@ class WorkflowStateSchemaViolationsTest {
         put("extra_field", "x")
       }
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.validate(snapshot, "bill-feature-task")
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     val message = error.message.orEmpty()
     assertContains(message, "extra_field")
   }
@@ -72,9 +73,9 @@ class WorkflowStateSchemaViolationsTest {
         put("contract_version", "999")
       }
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.validate(snapshot, "bill-feature-task")
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     assertContains(error.message.orEmpty(), "contract_version")
   }
 
@@ -105,9 +106,9 @@ class WorkflowStateSchemaViolationsTest {
         put("workflow_status", "blocked")
       }
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.validate(snapshot, "bill-feature-verify")
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     val message = error.message.orEmpty()
 
     assertContains(message, "workflow_status")
@@ -120,9 +121,9 @@ class WorkflowStateSchemaViolationsTest {
         put("rogue_field", "x")
       }
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.validate(snapshot, "bill-feature-task")
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     assertContains(error.message.orEmpty(), "rogue_field")
   }
 
@@ -143,9 +144,9 @@ class WorkflowStateSchemaViolationsTest {
         )
       }
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.validate(snapshot, "bill-feature-task")
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     assertContains(error.message.orEmpty(), "rogue_step_field")
   }
 
@@ -157,12 +158,12 @@ class WorkflowStateSchemaViolationsTest {
     )
 
     val verifyError =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.validate(
           baseVerifySnapshot().toMutableMap().apply { put("workflow_status", "paused") },
           "bill-feature-verify",
         )
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     assertContains(verifyError.message.orEmpty(), "workflow_status")
   }
 
@@ -173,9 +174,9 @@ class WorkflowStateSchemaViolationsTest {
         put("current_step_id", "plan_fix")
       }
     val currentStepError =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.validate(currentStep, "bill-feature-task")
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     assertContains(currentStepError.message.orEmpty(), "plan_fix")
 
     val stepsSnapshot =
@@ -192,9 +193,9 @@ class WorkflowStateSchemaViolationsTest {
         )
       }
     val stepsError =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         validator.validate(stepsSnapshot, "bill-feature-task")
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     assertContains(stepsError.message.orEmpty(), "plan_fix")
   }
 

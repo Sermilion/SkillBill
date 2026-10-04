@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.payload
 
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
 import skillbill.scaffold.policy.ORCHESTRATOR_KINDS_FOR_SUBAGENTS
 import skillbill.scaffold.policy.SUBAGENT_NAME_PATTERN
 import skillbill.scaffold.policy.model.OptionalSubagents
@@ -13,12 +13,12 @@ internal fun optionalSpecialistSubagents(
   val rawSuppressed = payload["no_subagents"] ?: false
   val rawList =
     rawSpecialists as? List<*>
-      ?: throw InvalidScaffoldPayloadError(
+      ?: throw invalidScaffoldPayloadError(
         "Scaffold payload field 'subagent_specialists' must be a list of strings.",
       )
   val suppressed =
     rawSuppressed as? Boolean
-      ?: throw InvalidScaffoldPayloadError(
+      ?: throw invalidScaffoldPayloadError(
         "Scaffold payload field 'no_subagents' must be a boolean when provided.",
       )
   val specialists = parseSubagentNames(rawList)
@@ -49,11 +49,11 @@ private fun parseSubagentNames(rawList: List<*>): List<String> {
 private fun liftSubagentName(raw: Any?): String {
   val specialist =
     (raw as? String)?.takeUnless(String::isBlank)
-      ?: throw InvalidScaffoldPayloadError(
+      ?: throw invalidScaffoldPayloadError(
         "Scaffold payload field 'subagent_specialists' must contain only non-empty strings.",
       )
   if (!SUBAGENT_NAME_PATTERN.matches(specialist)) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field 'subagent_specialists' contains invalid name '$specialist'; " +
         "names must match '^[a-z][a-z0-9-]*$'.",
     )
@@ -66,7 +66,7 @@ private fun enforceSubagentNameNotDuplicate(
   seen: MutableSet<String>,
 ) {
   if (!seen.add(specialist)) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field 'subagent_specialists' contains duplicate name '$specialist'.",
     )
   }
@@ -78,12 +78,12 @@ private fun enforceSubagentInvariants(
   suppressed: Boolean,
 ) {
   if (suppressed && specialists.isNotEmpty()) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload may not set 'no_subagents=true' together with a non-empty 'subagent_specialists' list.",
     )
   }
   if (specialists.isNotEmpty() && kind !in ORCHESTRATOR_KINDS_FOR_SUBAGENTS) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "subagent_specialists is only valid for orchestrator kinds " +
         "(horizontal, platform-override-piloted, platform-pack); got $kind",
     )

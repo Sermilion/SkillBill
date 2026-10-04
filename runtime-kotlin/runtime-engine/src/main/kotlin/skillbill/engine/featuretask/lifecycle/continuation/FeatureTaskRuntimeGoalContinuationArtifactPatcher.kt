@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.lifecycle.continuation
 import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.runloop.observability.continuation
-import skillbill.error.shellcontent.InvalidGoalSubtaskReviewStateSchemaError
+import skillbill.error.shellcontent.invalidGoalSubtaskReviewStateSchemaError
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -15,8 +15,8 @@ import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewDisposition
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.GoalSubtaskReviewArtifactDecoder
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.GoalSubtaskReviewArtifactDecoder
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 
 class FeatureTaskRuntimeGoalContinuationArtifactPatcher(
@@ -82,7 +82,7 @@ fun rawReviewResultError(
   fieldPath: String,
   reason: String,
 ): Nothing =
-  throw InvalidGoalSubtaskReviewStateSchemaError(
+  throw invalidGoalSubtaskReviewStateSchemaError(
     sourceLabel = DurableWorkflowArtifactFamily.GOAL_SUBTASK_REVIEW_STATE.label(),
     fieldPath = fieldPath,
     reason = reason,

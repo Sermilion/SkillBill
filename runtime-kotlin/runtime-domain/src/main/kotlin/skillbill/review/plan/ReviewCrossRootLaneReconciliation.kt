@@ -1,6 +1,6 @@
 package skillbill.review.plan
 
-import skillbill.error.shellcontent.AmbiguousLaneOwnershipError
+import skillbill.error.shellcontent.ambiguousLaneOwnership
 import skillbill.review.plan.model.ReviewLaunchLane
 import skillbill.review.plan.model.ReviewReconciledLane
 import skillbill.review.plan.model.ReviewRootLanes
@@ -53,7 +53,7 @@ object ReviewCrossRootLaneReconciliation {
       val nearest = areaCandidates.filter { it.effectiveDepth == nearestDepth }
       val owners = nearest.map { it.lane.packSlug }.distinct().sorted()
       if (owners.size > 1) {
-        throw AmbiguousLaneOwnershipError(
+        throw ambiguousLaneOwnership(
           "Review area '$area' has ambiguous cross-root ownership at composition depth $nearestDepth: " +
             owners.joinToString() + ".",
         )

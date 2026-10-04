@@ -1,0 +1,40 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-389"
+feature_name: "runtime-core-composition-and-guard-regressions"
+parent_spec_path: ".feature-specs/SKILL-389-runtime-core-composition-and-guard-regressions/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "base/SKILL-380-phase-slot-strategies"
+feature_branch: "feat/SKILL-389-runtime-core-composition-and-guard-regressions"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "Repair regressed guards and remove composition forwarders"
+  spec_path: ".feature-specs/SKILL-389-runtime-core-composition-and-guard-regressions/spec_subtask_1_repair-regressed-guards-and-remove-composition-forwarders.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261001-105939-rdkk"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 2
+  name: "Restore runtime-core test placement under skillbill.di and guard it"
+  spec_path: ".feature-specs/SKILL-389-runtime-core-composition-and-guard-regressions/spec_subtask_2_restore-runtime-core-test-placement-under-skillbill-di-and-guard-it.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261001-123946-o4na"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []

@@ -1,7 +1,10 @@
 package skillbill.workflow.taskruntime.model.phase
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_DELIVERED_PROJECTIONS_ARTIFACT_KEY
+import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeCompactReferenceKind
@@ -9,12 +12,10 @@ import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHando
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjection
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionField
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjectionValue
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffPromptVisibility
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeProducerIteration
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeHandoffPromptVisibility
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.toArtifactMap
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_DELIVERED_PROJECTIONS_ARTIFACT_KEY
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY
+import skillbill.workflow.taskruntime.model.persistence.toArtifactMap
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -100,16 +101,16 @@ class FeatureTaskRuntimeDeliveredProjectionRecordTest {
     val restored = FeatureTaskRuntimePhaseRecord.fromArtifactMap(phaseRecord.toArtifactMap())
     assertEquals(PRIVATE_EVIDENCE, restored.outputArtifact)
 
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeDeliveredProjectionRecord.fromArtifactMap(phaseRecord.toArtifactMap())
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
   fun `a delivered projection is not decodable as a private phase record`() {
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimePhaseRecord.fromArtifactMap(deliveredProjection().toArtifactMap())
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test
@@ -128,15 +129,15 @@ class FeatureTaskRuntimeDeliveredProjectionRecordTest {
   fun `legacy and agent widened delivered records fail loudly`() {
     val valid = deliveredProjection().toArtifactMap()
     val legacy =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeDeliveredProjectionRecord.fromArtifactMap(valid - "contract_version")
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     val widened =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeDeliveredProjectionRecord.fromArtifactMap(
           valid + ("agent_selected_fields" to listOf("secret")),
         )
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     listOf(legacy, widened).forEach { error ->
       assertContains(error.message.orEmpty(), FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE)
       assertFalse(error.message.orEmpty().contains("secret"))

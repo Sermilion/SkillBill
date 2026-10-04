@@ -3,16 +3,16 @@ package skillbill.application
 import skillbill.application.decomposition.baseBranch
 import skillbill.application.decomposition.decompositionPlanningSubtask
 import skillbill.application.decomposition.executionModel
+import skillbill.application.decomposition.loadDecompositionManifest
+import skillbill.application.decomposition.model.DecompositionManifestRuntimeUpdate
+import skillbill.application.decomposition.model.DecompositionManifestWriteRequest
 import skillbill.application.decomposition.parentSpecPath
 import skillbill.application.decomposition.parseStackBranches
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.decomposition.DecompositionPlanningResult
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.model.toPath
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
-import skillbill.ports.workflow.decomposition.loadDecompositionManifest
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestRuntimeUpdate
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestWriteRequest
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.engine.WorkflowEngine
@@ -503,7 +503,7 @@ class DecompositionManifestWriterTest {
     )
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         writeIfDecomposed(
           DecompositionManifestWriteRequest(
             repoRoot = repoRoot,
@@ -517,8 +517,8 @@ class DecompositionManifestWriterTest {
         )
       }
 
-    assertContains(error.reason, "execution_model cannot change after decomposition execution has begun")
-    assertContains(error.reason, "manually migrate")
+    assertContains(error.message.orEmpty(), "execution_model cannot change after decomposition execution has begun")
+    assertContains(error.message.orEmpty(), "manually migrate")
   }
 
   @Test
@@ -580,7 +580,7 @@ class DecompositionManifestWriterTest {
     Files.writeString(parentSpecPath, "# Parent spec\n")
 
     val fractional =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         writeIfDecomposed(
           DecompositionManifestWriteRequest(
             repoRoot = repoRoot,
@@ -592,7 +592,7 @@ class DecompositionManifestWriterTest {
         )
       }
     val oversized =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         writeIfDecomposed(
           DecompositionManifestWriteRequest(
             repoRoot = repoRoot,
@@ -604,8 +604,8 @@ class DecompositionManifestWriterTest {
         )
       }
 
-    assertContains(fractional.reason, "id must be an integer")
-    assertContains(oversized.reason, "id must be an integer")
+    assertContains(fractional.message.orEmpty(), "id must be an integer")
+    assertContains(oversized.message.orEmpty(), "id must be an integer")
   }
 
   @Test
@@ -615,7 +615,7 @@ class DecompositionManifestWriterTest {
     val plan = decompositionPlanningPlan(parentSpecPath).toPayload().toMutableMap().apply { put("base_branch", 17) }
 
     val error =
-      assertFailsWith<InvalidDecompositionManifestSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         writeFromWorkflowUpdate(
           repoRoot = repoRoot,
           existingArtifactsJson = "{}",
@@ -623,8 +623,8 @@ class DecompositionManifestWriterTest {
         )
       }
 
-    assertContains(error.reason, "base_branch")
-    assertContains(error.reason, "nonblank string")
+    assertContains(error.message.orEmpty(), "base_branch")
+    assertContains(error.message.orEmpty(), "nonblank string")
   }
 
   private fun decompositionPlanWithFirstSubtaskId(

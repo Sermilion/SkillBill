@@ -1,7 +1,8 @@
 package skillbill.infrastructure.launcher.review
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.GovernedReviewEvidenceTransportError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.infrastructure.launcher.mcp.GovernedReviewMcpConfigWriter
 import skillbill.ports.review.evidence.ReviewEvidenceBroker
 import skillbill.ports.review.model.ReviewEvidenceBatchRequest
@@ -11,9 +12,9 @@ import skillbill.ports.review.model.ReviewExpansionAuthorizationRequest
 import skillbill.ports.review.model.ReviewLaneAccounting
 import skillbill.ports.review.model.ReviewToolCall
 import skillbill.ports.review.model.ReviewToolCallResult
+import skillbill.review.context.model.accounting.ReviewBudgetOutcome
 import skillbill.review.context.model.execution.ForbiddenReviewOperation
-import skillbill.review.context.model.hunk.ReviewBudgetOutcome
-import skillbill.review.context.model.packet.ReviewExpansionRecord
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import java.net.UnixDomainSocketAddress
 import java.nio.channels.Channels
 import java.nio.channels.SocketChannel
@@ -103,9 +104,11 @@ class GovernedReviewEvidenceEndpointTest {
     val tempRoot = GovernedReviewEvidenceEndpoint.perLaunchRoot()
     val before = perLaunchDirectories(tempRoot)
 
-    assertFailsWith<GovernedReviewEvidenceTransportError> {
-      GovernedReviewEvidenceEndpoint.bind("architecture", RecordingBroker(), emptyList())
-    }
+    val bindError =
+      assertFailsWith<SkillBillRuntimeException> {
+        GovernedReviewEvidenceEndpoint.bind("architecture", RecordingBroker(), emptyList())
+      }
+    assertEquals(GovernedReviewFailureCode.EVIDENCE_TRANSPORT, bindError.code)
 
     assertEquals(before, perLaunchDirectories(tempRoot))
   }
@@ -114,9 +117,10 @@ class GovernedReviewEvidenceEndpointTest {
   fun `an isolated home without runtime-mcp loud-fails instead of inheriting the host binary`() {
     val home = Files.createTempDirectory("review-evidence-home")
     val error =
-      assertFailsWith<GovernedReviewEvidenceTransportError> {
+      assertFailsWith<SkillBillRuntimeException> {
         bridgeCommand(emptyMap(), home)
       }
+    assertEquals(GovernedReviewFailureCode.EVIDENCE_TRANSPORT, error.code)
     assertTrue(error.message!!.contains(home.toString()))
     assertTrue(error.message!!.contains("missing or not executable"))
   }

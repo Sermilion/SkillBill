@@ -6,6 +6,7 @@ import java.nio.file.Path
 object JdkHostPlatformPort : HostPlatformPort {
   override val osName: String get() = System.getProperty("os.name").orEmpty()
   override val jvmClassPath: String get() = System.getProperty("java.class.path").orEmpty()
+  override val javaCommand: String? get() = ProcessHandle.current().info().command().orElse(null)
   override val pathSeparator: String get() = System.getProperty("path.separator", ":")
 
   override fun resolveUserHome(): Path = Path.of(System.getProperty("user.home"))

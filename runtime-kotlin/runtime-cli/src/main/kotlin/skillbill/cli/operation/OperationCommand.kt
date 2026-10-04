@@ -7,7 +7,6 @@ import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.choice
 import me.tatarka.inject.annotations.Inject
-import skillbill.cli.codereview.usageError
 import skillbill.cli.kernel.agent.detectInvokingAgentId
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
@@ -22,7 +21,6 @@ import skillbill.engine.operation.core.OperationOutputFormat
 import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationResult
-import skillbill.error.operation.OperationUsageError
 
 @Inject
 class OperationCommand(
@@ -73,13 +71,7 @@ class OperationCommand(
         arguments = invocation.arguments,
         instructions = invocation.instructions,
       )
-    val result =
-      try {
-        executor.execute(request)
-      } catch (error: OperationUsageError) {
-        usageError(error)
-      }
-    writeOperationResult(state, request.operationId, result)
+    writeOperationResult(state, request.operationId, executor.execute(request))
   }
 }
 
@@ -180,6 +172,7 @@ internal fun writeOperationResult(
     when (val outcome = result.outcome) {
       is OperationOutcome.Completed -> listOf(outcome.text.trimEnd(), invocationLine) to 0
       is OperationOutcome.Blocked -> listOf("Operation '$operationId' blocked: ${outcome.reason}", invocationLine) to 1
+      is OperationOutcome.Usage -> throw UsageError(outcome.reason)
       is OperationOutcome.Failed -> listOf("Operation '$operationId' failed: ${outcome.reason}", invocationLine) to 1
       is OperationOutcome.AwaitingConfirmation ->
         listOf(

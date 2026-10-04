@@ -1,7 +1,10 @@
 package skillbill.infrastructure.skills.externaladdon
 
 import skillbill.error.core.ExternalAddonOverlayError
-import skillbill.error.shellcontent.InvalidManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.ManifestFailureCode
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.scaffold.model.GovernedAddonSelection
 import skillbill.scaffold.model.PointerSpec
 import java.nio.file.Files
@@ -13,7 +16,10 @@ internal fun <T> wrapParserErrors(
 ): T =
   try {
     block()
-  } catch (error: InvalidManifestSchemaError) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(
+      error.isShellContentContractFailure() && error.code == ManifestFailureCode.INVALID_MANIFEST_SCHEMA,
+    )
     throw ExternalAddonOverlayError(
       "External addon source for platform '$slug': fragment validation failed: ${error.message}",
       error,

@@ -3,6 +3,7 @@ package skillbill.engine.goalrunner.planning.outcome
 import skillbill.engine.goalrunner.execution.core.EmptyOrStoppedArgs
 import skillbill.engine.goalrunner.planning.model.GoalPlanningEmptyTurnEvidence
 import skillbill.engine.goalrunner.planning.model.GoalPlanningPhaseProduction
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunLaunchOutcome
 import skillbill.ports.agentrun.model.AgentRunTermination
@@ -83,7 +84,7 @@ fun emptyTurnEvidence(
 fun launchedAgentId(outcome: AgentRunLaunchOutcome): String =
   when (outcome) {
     is AgentRunLaunchFacts -> outcome.agent.id
-    is UnsupportedAgentRunLaunch -> "unknown"
+    is UnsupportedAgentRunLaunch, is AgentRunLaunchDenied -> "unknown"
   }
 
 fun stdoutFor(outcome: AgentRunLaunchOutcome): String? =
@@ -92,7 +93,7 @@ fun stdoutFor(outcome: AgentRunLaunchOutcome): String? =
       outcome.stdout.takeIf { stdout ->
         outcome.termination == AgentRunTermination.Exited(0) && stdout.isNotBlank()
       }
-    is UnsupportedAgentRunLaunch -> null
+    is UnsupportedAgentRunLaunch, is AgentRunLaunchDenied -> null
   }
 
 fun exhaustedReason(
@@ -101,6 +102,7 @@ fun exhaustedReason(
 ): String =
   when (outcome) {
     is UnsupportedAgentRunLaunch -> "Goal planning could not launch a planning agent: ${outcome.reason}"
+    is AgentRunLaunchDenied -> error("A denied planning launch is settled as a pause and has no exhausted reason.")
     is AgentRunLaunchFacts ->
       "Goal planning produced no usable agent output: ${exhaustedCause(outcome, planningBudget)}."
   }

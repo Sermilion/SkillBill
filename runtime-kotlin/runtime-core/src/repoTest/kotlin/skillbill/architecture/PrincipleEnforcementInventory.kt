@@ -5,9 +5,11 @@ import kotlin.reflect.KClass
 object PrincipleEnforcementInventory {
   const val RUNTIME_APPLICATION_MAIN: String = "runtime-kotlin/runtime-application/src/main/kotlin"
   const val RUNTIME_CLI_MAIN: String = "runtime-kotlin/runtime-cli/src/main/kotlin"
+  const val RUNTIME_ENGINE_MAIN: String = "runtime-kotlin/runtime-engine/src/main/kotlin"
   const val APPLICATION_PACKAGE_PREFIX: String = "skillbill.application."
   const val CLI_PACKAGE_PREFIX: String = "skillbill.cli."
   const val SPILLOVER_FILE_NAME_BASELINE: String = "spillover-file-name-baseline.txt"
+  const val CUSTOM_THROWABLE_BASELINE: String = "custom-throwable-baseline.txt"
   const val RUNTIME_COMPONENT_SOURCE: String =
     "runtime-kotlin/runtime-core/src/main/kotlin/skillbill/di/core/RuntimeComponent.kt"
 
@@ -38,7 +40,7 @@ object PrincipleEnforcementInventory {
       packagePrefix = packagePrefixForModule(moduleName),
       packageCycleBaseline = packageCycleBaselineForModule(moduleName, baselineStem),
       packageCycleGranularity =
-        if (moduleName == "runtime-domain" || moduleName == "runtime-contracts") {
+        if (moduleName == "runtime-domain" || moduleName == "runtime-contracts" || moduleName == "runtime-cli") {
           ArchitectureScanSupport.PackageCycleGranularity.EXACT_PACKAGE_SCC
         } else {
           ArchitectureScanSupport.PackageCycleGranularity.FIRST_SEGMENT_MUTUAL_PAIR
@@ -99,7 +101,7 @@ object PrincipleEnforcementInventory {
       else -> "$baselineStem-inject-constructor-defaults-baseline.txt"
     }
 
-  val cliSharedLeafAreas: Set<String> = setOf("codereview", "kernel", "model")
+  val cliSharedLeafAreas: Set<String> = setOf("kernel", "model")
 
   const val CLI_COMPOSITION_ROOT_AREA: String = "core"
 
@@ -135,19 +137,19 @@ object PrincipleEnforcementInventory {
         "Dynamic ReviewRepository proxy passes typed args through erased invoke; casts mirror the repository contract",
       ),
       SuppressionAllowListRow(
-        "runtime-core/src/test/kotlin/skillbill/application/ApplicationPersistencePortTestSupport.kt",
+        "runtime-core/src/test/kotlin/skillbill/di/workflow/ApplicationPersistencePortTestSupport.kt",
         "noopPort",
         "UNCHECKED_CAST",
         "Dynamic port proxy returns typed facade from erased invoke",
       ),
       SuppressionAllowListRow(
-        "runtime-engine/src/test/kotlin/skillbill/engine/FeatureTaskRuntimeRunnerTestSupport.kt",
+        "runtime-engine/src/test/kotlin/skillbill/engine/featuretask/runner/FeatureTaskRuntimeRunnerTestSupport.kt",
         "noopPort",
         "UNCHECKED_CAST",
         "Dynamic port proxy returns typed facade from erased invoke",
       ),
       SuppressionAllowListRow(
-        "runtime-engine/src/test/kotlin/skillbill/engine/FeatureTaskRuntimeRunnerTestSupport.kt",
+        "runtime-engine/src/test/kotlin/skillbill/engine/featuretask/runner/FeatureTaskRuntimeRunnerTestSupport.kt",
         "recordHarnessFindingVerdicts",
         "UNCHECKED_CAST",
         "Dynamic ReviewRepository proxy passes typed verdict list through erased invoke",
@@ -169,7 +171,10 @@ object PrincipleEnforcementInventory {
       "runtime-kotlin/runtime-core/src/main/kotlin/skillbill/di/core/RuntimeBootstrapBindings.kt",
     )
 
-  data class EnforcedRule(val rule: String, val test: KClass<*>)
+  data class EnforcedRule(
+    val rule: String,
+    val test: KClass<*>,
+  )
 
   val enforceableRules: List<EnforcedRule> =
     listOf(
@@ -177,6 +182,12 @@ object PrincipleEnforcementInventory {
         "Wire vocabulary and contract-key declarations are unique, dynamically indexed, and referenced " +
           "without local token collections or literal payload-key accesses.",
         WireVocabularyArchitectureTest::class,
+      ),
+      EnforcedRule(
+        "Strategy capability boundary: consumer authority stays closed through transitive helpers and " +
+          "extensions; non-review consumers cannot acquire review mutation; coupled primitive writes " +
+          "belong to the transition owner; unresolved governed edges fail.",
+        StrategyCapabilityBoundaryArchitectureTest::class,
       ),
       EnforcedRule(
         "Package clustering: loose files in a subpackaged area do not belong to a sibling area cluster.",
@@ -277,6 +288,10 @@ object PrincipleEnforcementInventory {
         RuntimeCompositionGuardArchitectureTest::class,
       ),
       EnforcedRule(
+        "Runtime-core tests declare packages under skillbill.di and avoid retired absent and runtime packages.",
+        RuntimeCompositionGuardArchitectureTest::class,
+      ),
+      EnforcedRule(
         "RuntimeComponent composition surface: abstract service properties are pinned separately from " +
           "@Provides generated wiring; any other public function on RuntimeComponent or a Runtime*Provides " +
           "mixin fails even when the abstract property set is unchanged.",
@@ -298,13 +313,73 @@ object PrincipleEnforcementInventory {
     listOf(
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:sqlite")}/src/main/kotlin/" +
-            "skillbill/infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStore.kt",
+          "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/execution/" +
+            "FeatureTaskRuntimeExecutionPlanCodec.kt",
+        functionNames = setOf("decode"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/execution/" +
+            "FeatureTaskRuntimeExecutionPlanDecode.kt",
         functionNames =
           setOf(
-            "decodeControlState",
+            "decodeExecutionPlan",
+            "decodePolicies",
+            "planSlot",
+            "planRevision",
+            "planString",
+            "planObject",
+            "planObjects",
+            "planStrings",
+            "invalidPlanValue",
+          ),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-engine/src/main/kotlin/skillbill/engine/featuretask/lifecycle/execution/" +
+            "FeatureTaskRuntimeExecutionPlanTraversalCodec.kt",
+        functionNames = setOf("decodeExecutionPlanTraversal"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
+            "workflow/featuretask/FeatureTaskRuntimeExecutionPlanSchemaValidator.kt",
+        functionNames = setOf("read", "write", "validate", "validateInstance", "requireBoundedBytes"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-infra/contracts/src/main/kotlin/skillbill/infrastructure/contracts/" +
+            "workflow/featuretask/FeatureTaskRuntimeExecutionPlanCoherence.kt",
+        functionNames = setOf("validateExecutionPlanCoherence", "validateExecutionPlanTraversal", "incoherentPlan"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:sqlite")}/src/main/kotlin/" +
+            "skillbill/infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreDecodeState.kt",
+        functionNames = setOf("decodeControlState"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:sqlite")}/src/main/kotlin/" +
+            "skillbill/infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreDecodePolicies.kt",
+        functionNames =
+          setOf(
             "decodeReviewPolicy",
             "decodeAcceptances",
+            "decodeAcceptanceEntry",
+            "decodeReviewPolicyAddonEntry",
+            "requireReviewPolicyAddonField",
+            "requireAcceptanceInt",
+            "requireAcceptanceString",
+            "parseAcceptanceList",
+          ),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:sqlite")}/src/main/kotlin/" +
+            "skillbill/infrastructure/sqlite/workflow/goalrunner/runner/GoalRunnerControlStoreDecodeValues.kt",
+        functionNames =
+          setOf(
             "decodeExecutionLease",
             "legacyPausedAt",
             "booleanOrDefault",
@@ -313,6 +388,33 @@ object PrincipleEnforcementInventory {
             "toPositiveLong",
             "toPositiveIntOrNull",
             "nonNegativeLongOrDefault",
+            "exactPositiveSubtaskIdOrNull",
+          ),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-application/src/main/kotlin/skillbill/application/workflow/service/" +
+            "LegacyGoalRunnerControlMigration.kt",
+        functionNames =
+          setOf(
+            "reviewPolicyFromLegacyArtifacts",
+            "outOfBandAcceptancesFromLegacyArtifacts",
+            "decodeGoalAgentAddonSelection",
+            "decodeGoalAgentAddonSelectionEntry",
+            "requiredAddonField",
+          ),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "${RuntimeModuleCatalog.runtimeKotlinModuleDirectory("runtime-infra:sqlite")}/src/main/kotlin/" +
+            "skillbill/infrastructure/sqlite/workflow/goalrunner/runner/LegacyGoalRunnerControlLedgerMigration.kt",
+        functionNames =
+          setOf(
+            "reviewPolicyFromLegacyArtifacts",
+            "outOfBandAcceptancesFromLegacyArtifacts",
+            "decodeLegacyAgentAddonSelection",
+            "decodeLegacyAgentAddonSelectionEntry",
+            "requiredLegacyAddonField",
           ),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
@@ -348,8 +450,7 @@ object PrincipleEnforcementInventory {
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "task/runtime/run/" +
+          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/handoff/task/" +
             "FeatureTaskRuntimeRunInvariantPromptFields.kt",
         functionNames = setOf("fromWire"),
       ),
@@ -398,7 +499,6 @@ object PrincipleEnforcementInventory {
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "task/runtime/goal/" +
             "FeatureTaskRuntimeGoalContinuationArtifact.kt",
         functionNames = setOf("fromArtifactMap"),
       ),
@@ -435,14 +535,12 @@ object PrincipleEnforcementInventory {
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "task/runtime/implementation/" +
             "FeatureTaskRuntimeImplementationAttemptModels.kt",
         functionNames = setOf("fromArtifactMap", "featureTaskRuntimeImplementationAttemptsFromWire"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
-            "task/runtime/goal/" +
             "FeatureTaskRuntimeGoalContinuationPersistenceModels.kt",
         functionNames = setOf("fromArtifactMap"),
       ),
@@ -461,7 +559,7 @@ object PrincipleEnforcementInventory {
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/" +
-            "goalreview/GoalObservabilityModels.kt",
+            "goalobservability/GoalObservabilityModels.kt",
         functionNames = setOf("fromWire"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
@@ -472,7 +570,7 @@ object PrincipleEnforcementInventory {
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/" +
-            "goalreview/GoalObservabilityParsing.kt",
+            "goalobservability/GoalObservabilityParsing.kt",
         functionNames =
           setOf(
             "goalObservabilityHistoryFromArtifacts",
@@ -484,13 +582,13 @@ object PrincipleEnforcementInventory {
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/goalreview/" +
             "GoalSubtaskReviewFindingArtifacts.kt",
-        functionNames =
-          setOf(
-            "fromArtifactMap",
-            "decodeWire",
-            "decodeContinuationOnlyWire",
-            "decodeContinuationDirect",
-          ),
+        functionNames = setOf("fromArtifactMap"),
+      ),
+      ArchitectureScanSupport.ParseBoundarySite(
+        relativePath =
+          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/taskruntime/model/persistence/" +
+            "GoalSubtaskReviewArtifactDecoder.kt",
+        functionNames = setOf("decodeWire", "decodeContinuationOnlyWire", "decodeContinuationDirect"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
@@ -505,13 +603,13 @@ object PrincipleEnforcementInventory {
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/goalreview/" +
+          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/model/goalobservability/" +
             "GoalObservabilityParsing.kt",
         functionNames = setOf("goalObservabilityReader", "requireGoalObservabilityContractVersion"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/goalrunner/AttemptLedgerDecoding.kt",
+          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/goalrunner/ledger/AttemptLedgerDecoding.kt",
         functionNames =
           setOf(
             "decodeDeclaredGoalProgressEvent",
@@ -521,21 +619,15 @@ object PrincipleEnforcementInventory {
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/engine/" +
-            "AttemptLedgerWorkflowDecoding.kt",
-        functionNames = setOf("decodeWorkflowSteps", "parseWorkflowStepsArray", "decodeWorkflowStepAt"),
+          "runtime-kotlin/runtime-ports/src/main/kotlin/skillbill/ports/workflow/model/" +
+            "WorkflowRecordMapping.kt",
+        functionNames = setOf("decodeSteps", "decodeStep", "decodeObject", "parseJson"),
       ),
       ArchitectureScanSupport.ParseBoundarySite(
         relativePath =
           "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/engine/" +
             "WorkflowEngineSnapshotCodec.kt",
         functionNames = setOf("snapshotViewFrom", "mergeStepUpdates"),
-      ),
-      ArchitectureScanSupport.ParseBoundarySite(
-        relativePath =
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/workflow/engine/" +
-            "WorkflowEngineSnapshotCodec.kt",
-        functionNames = setOf("decodeSteps", "decodeObject"),
       ),
     )
 
@@ -584,15 +676,14 @@ object PrincipleEnforcementInventory {
       "featureTaskPhaseSettlementService",
       "featureTaskRuntimeRunInvariantsSource",
       "featureTaskRuntimeRunner",
+      "featureTaskRuntimeExecutionPlanResolver",
       "featureTaskRuntimeStatusService",
       "featureTaskRuntimeWorkerCoordinator",
       "goalOperatorDecisionService",
       "goalPlanningLogService",
       "goalPreflightService",
       "goalRunner",
-      "goalRunnerManifestStore",
       "goalRunnerStatusService",
-      "goalRunnerWorkflowOutcomeStore",
       "ideStatusService",
       "installAgentService",
       "installMcpRegistrationPort",
@@ -617,11 +708,9 @@ object PrincipleEnforcementInventory {
       "skillBillUpdateService",
       "skillBillUninstallService",
       "updateCheckService",
-      "telemetryConfigStorePort",
       "telemetryLevelMutator",
       "telemetryService",
       "unaddressedFindingsLedgerService",
-      "unsupportedScaffoldGateway",
       "workListService",
       "workflowService",
     )

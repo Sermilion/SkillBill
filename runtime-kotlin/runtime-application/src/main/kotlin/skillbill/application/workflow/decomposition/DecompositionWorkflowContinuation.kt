@@ -1,6 +1,7 @@
 package skillbill.application.workflow.decomposition
 
 import skillbill.application.decomposition.DecompositionManifestWriter
+import skillbill.application.decomposition.resolveDecompositionManifest
 import skillbill.application.workflow.model.AdvanceCompletedSubtasksRequest
 import skillbill.application.workflow.model.CheckoutAndValidateBranchRequest
 import skillbill.application.workflow.model.ContinueExistingWorkflowArgs
@@ -17,13 +18,13 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.commitPushResultArtifact
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.findDecomposedParentOrCorruptFallback
-import skillbill.ports.workflow.decomposition.resolveDecompositionManifest
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.ports.workflow.model.WorkflowFamily
@@ -36,6 +37,7 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.runtime.normalizedBlockedReason
 import skillbill.workflow.decomposition.withParentStatus
+import skillbill.workflow.decomposition.withStartedSubtask
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
@@ -144,12 +146,12 @@ class DecompositionWorkflowContinuation(
                 listOf(
                   mapOf(
                     SharedPayloadKeys.STEP_ID to "preplan",
-                    SharedPayloadKeys.STATUS to "completed",
+                    SharedPayloadKeys.STATUS to WorkflowStepStatus.COMPLETED.wireValue,
                     "attempt_count" to 1,
                   ),
                   mapOf(
                     SharedPayloadKeys.STEP_ID to "plan",
-                    SharedPayloadKeys.STATUS to "completed",
+                    SharedPayloadKeys.STATUS to WorkflowStepStatus.COMPLETED.wireValue,
                     "attempt_count" to 1,
                   ),
                 ),
@@ -217,14 +219,15 @@ class DecompositionWorkflowContinuation(
     unitOfWork: UnitOfWork,
   ): DecompositionManifest =
     manifest.copy(
-      subtasks = manifest.subtasks.map { subtask -> reconcileSubtask(subtask, unitOfWork) },
+      subtasks = manifest.subtasks.map { subtask -> reconcileSubtask(subtask, manifest.issueKey, unitOfWork) },
     ).withParentStatus()
 
   private fun reconcileSubtask(
     subtask: DecompositionSubtask,
+    issueKey: String,
     unitOfWork: UnitOfWork,
   ): DecompositionSubtask {
-    val snapshot = findSubtaskSnapshot(subtask, unitOfWork) ?: return subtask
+    val snapshot = findSubtaskSnapshot(subtask, issueKey, unitOfWork) ?: return subtask
     val artifacts = DurableWorkflowArtifacts.fromMap(snapshot.artifacts)
     val commitPushResult = artifacts.commitPushResultArtifact()
     val goalContinuation =
@@ -271,13 +274,20 @@ class DecompositionWorkflowContinuation(
 
   private fun findSubtaskSnapshot(
     subtask: DecompositionSubtask,
+    issueKey: String,
     unitOfWork: UnitOfWork,
   ): WorkflowStateSnapshot? =
     subtask.workflowId
       ?.let { workflowId -> unitOfWork.workflowStates.get(WorkflowFamily.TASK_RUNTIME, workflowId) }
       ?: sequenceOf(
-        unitOfWork.workflowStates.listFeatureTaskWorkflows(FeatureTaskWorkflowMode.RUNTIME, Int.MAX_VALUE),
-        unitOfWork.workflowStates.listFeatureTaskWorkflows(FeatureTaskWorkflowMode.PROSE, Int.MAX_VALUE),
+        unitOfWork.workflowStates.findFeatureTaskWorkflowsForIssue(
+          FeatureTaskWorkflowMode.RUNTIME,
+          normalizeRequiredIssueKey(issueKey),
+        ),
+        unitOfWork.workflowStates.findFeatureTaskWorkflowsForIssue(
+          FeatureTaskWorkflowMode.PROSE,
+          normalizeRequiredIssueKey(issueKey),
+        ),
       )
         .flatten()
         .firstOrNull { record ->
@@ -393,7 +403,7 @@ class DecompositionWorkflowContinuation(
               listOf(
                 mapOf(
                   SharedPayloadKeys.STEP_ID to "preplan",
-                  SharedPayloadKeys.STATUS to "running",
+                  SharedPayloadKeys.STATUS to WorkflowStepStatus.RUNNING.wireValue,
                   "attempt_count" to 1,
                 ),
               ),
@@ -435,6 +445,7 @@ class DecompositionWorkflowContinuation(
 private fun WorkflowStateSnapshot.decompositionRuntimeOrNull(): DecompositionManifest? =
   try {
     decompositionRuntime()
-  } catch (_: InvalidWorkflowStateSchemaError) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isInvalidWorkflowStateFailure())
     null
   }

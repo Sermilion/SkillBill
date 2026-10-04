@@ -5,7 +5,7 @@ import skillbill.application.scaffold.InstallAgentService
 import skillbill.application.uninstall.model.DesktopRemoval
 import skillbill.application.uninstall.model.LauncherRemoval
 import skillbill.application.uninstall.model.UninstallPlan
-import skillbill.install.model.ClaudeMcpProfileFailure
+import skillbill.install.model.McpRegistrationOutcome
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.mcp.model.InstallMcpUnregistrationRequest
 import skillbill.ports.install.model.NativeAgentLinkProvider
@@ -88,14 +88,18 @@ internal fun cleanupMcpRegistrations(
           agent = agent,
           home = plan.home,
         ),
-      ).mutation
-    }.onSuccess { mutation ->
-      if (mutation.changed) removed += mutation.configPath.toString()
+      ).outcome
+    }.onSuccess { outcome ->
+      when (outcome) {
+        is McpRegistrationOutcome.Applied ->
+          if (outcome.mutation.changed) removed += outcome.mutation.configPath.toString()
+        is McpRegistrationOutcome.ProfilesFailed -> {
+          removed += outcome.succeeded.filter { it.changed }.map { it.configPath.toString() }
+          recorder.recordFailure("MCP cleanup failed for $agent", outcome.message)
+        }
+      }
     }.onFailure { error ->
       error.rethrowIfCooperativeCancellationOrInterruption()
-      if (error is ClaudeMcpProfileFailure) {
-        removed += error.succeeded.filter { it.changed }.map { it.configPath.toString() }
-      }
       recorder.recordFailure("MCP cleanup failed for $agent", error)
     }
   }

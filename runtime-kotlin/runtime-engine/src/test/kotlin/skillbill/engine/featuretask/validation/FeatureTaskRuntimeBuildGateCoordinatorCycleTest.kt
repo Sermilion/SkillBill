@@ -1,18 +1,18 @@
 package skillbill.engine.featuretask.validation
 
-import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentTriageLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleRequest
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
+import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult
 import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult.Empty
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.validation.model.ValidationGateFinding
 import skillbill.ports.validation.model.ValidationGateFindingParseMode
 import skillbill.workflow.model.ValidationDepth
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
@@ -59,8 +59,10 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
     assertEquals(1, repairLaunches)
     assertEquals(2, runner.calls)
     assertEquals(2, recorded.last().gateRunCount)
-    assertEquals(listOf("echo", "build"), runner.requests.first().argv)
-    assertEquals(listOf("echo", "build-full"), runner.requests.last().argv)
+    assertEquals(
+      listOf(listOf("echo", "build"), listOf("echo", "build-full")),
+      runner.requests.map { it.argv },
+    )
   }
 
   @Test
@@ -86,7 +88,7 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
   }
 
   @Test
-  fun `absent validation gate skips build instead of blocking`() {
+  fun `absent required validation gate blocks without launching a repair agent`() {
     val cycle =
       FeatureTaskRuntimeBuildGateCoordinator(
         ValidationGateResolver { emptyList() },
@@ -109,7 +111,11 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
         ),
       )
 
-    assertEquals(ValidationGateCycleResult.AbsentFallback, cycle)
+    val blocked =
+      assertIs<ValidationGateCycleTerminalOutcome.Blocked>(
+        assertIs<ValidationGateCycleResult.Terminal>(cycle).outcome,
+      )
+    assertTrue(blocked.reason.contains("declaration is absent"))
   }
 
   @Test
@@ -191,10 +197,76 @@ class FeatureTaskRuntimeBuildGateCoordinatorCycleTest {
     assertEquals(2, runner.calls)
   }
 
+  @Test
+  fun stoppedTriageCannotLaunchRepairOrVerification() {
+    val runner = ScriptedGateRunner(listOf(failedEmptyFindings("compiler could not start")))
+    val progress = RecordingProgressStore(mutableListOf(), null)
+    val reason = "Required briefing write rejected for phase 'build', attempt 1."
+    val result =
+      buildCoordinator(declaredResolver(declarationWithBuild()), runner).execute(
+        ValidationGateCycleRequest(
+          phaseId = "build",
+          repoRoot = validationGateTestRepoRoot,
+          request = minimalRequest(),
+          validationDepth = ValidationDepth.DEFAULT,
+          changedPaths = listOf("runtime-kotlin/foo.kt"),
+          repositoryCheckpoint = "checkpoint",
+          progressStore = progress,
+          agentTriageLauncher =
+            ValidationGateAgentTriageLauncher {
+              ValidationGateTriageResult.Stopped(ValidationGateCycleTerminalOutcome.Blocked(reason))
+            },
+          agentRepairLauncher =
+            ValidationGateAgentRepairLauncher {
+                _,
+                _,
+                _,
+              ->
+              error("Triage rejection must stop repair")
+            },
+        ),
+      )
+    assertEquals(
+      reason,
+      assertIs<ValidationGateCycleTerminalOutcome.Blocked>(
+        assertIs<ValidationGateCycleResult.Terminal>(result).outcome,
+      ).reason,
+    )
+    assertEquals(1, runner.calls)
+  }
+
+  @Test
+  fun aCommandCannotCertifyAChangedRepositoryCheckpoint() {
+    val runner = ScriptedGateRunner(listOf(passed()))
+    var checkpointsRead = 0
+    val result =
+      buildCoordinator(declaredResolver(declarationWithBuild()), runner).execute(
+        ValidationGateCycleRequest(
+          phaseId = "build",
+          repoRoot = validationGateTestRepoRoot,
+          request = minimalRequest(),
+          validationDepth = ValidationDepth.DEFAULT,
+          changedPaths = listOf("runtime-kotlin/foo.kt"),
+          repositoryCheckpoint = "before",
+          repositoryCheckpointProvider = { if (checkpointsRead++ == 0) "before" else "after" },
+          progressStore = RecordingProgressStore(mutableListOf(), null),
+          agentRepairLauncher = ValidationGateAgentRepairLauncher { _, _, _ -> error("No repair was authorized") },
+        ),
+      )
+    assertTrue(
+      assertIs<ValidationGateCycleTerminalOutcome.Blocked>(
+        assertIs<ValidationGateCycleResult.Terminal>(result).outcome,
+      ).reason.contains("checkpoint changed"),
+    )
+    assertEquals(1, runner.calls)
+  }
+
   private fun declarationWithBuild() =
     validationGateTestDeclaration.copy(
       buildCommand = listOf("echo", "build"),
       cacheBypassingBuildCommand = listOf("echo", "build-full"),
+      collectAllFullGateCommand = listOf("validation", "all"),
+      cacheBypassingCollectAllFullGateCommand = listOf("validation", "all-full"),
     )
 
   private fun buildCoordinator(

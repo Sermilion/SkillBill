@@ -2,17 +2,13 @@ package skillbill.engine.operation.prreviewfix
 
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationOutcome
-import skillbill.error.operation.InvalidOperationSelectionError
-import skillbill.error.operation.MissingOperationSelectionError
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFails
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class PrReviewFixOperationExecutionTest {
   @Test
@@ -49,15 +45,16 @@ class PrReviewFixOperationExecutionTest {
   @Test
   fun `a confirm without a selection or naming no actionable thread runs nothing and keeps the token`() {
     listOf(
-      null to MissingOperationSelectionError::class,
-      "PRRT_resolved=1" to InvalidOperationSelectionError::class,
+      null to "Operation 'pr-review-fix' needs a selection with confirm:; pass $SELECTION_FORMS.",
+      "PRRT_resolved=1" to "Selection 'PRRT_resolved=1' is invalid:",
     ).forEach { (select, expected) ->
       PrReviewFixHarness().use { harness ->
         val token = harness.analyze()
 
-        val error = assertFails { harness.invoke(OperationArguments(confirm = token, select = select)) }
+        val usage =
+          assertIs<OperationOutcome.Usage>(harness.invoke(OperationArguments(confirm = token, select = select)))
 
-        assertTrue(expected.isInstance(error), "select=$select raised $error")
+        assertContains(usage.reason, expected, message = "select=$select")
         assertEquals(listOf(ANALYSIS_STEP), harness.runner.inputs.map { input -> input.stepName })
         assertEquals(emptyList(), harness.github.replies)
         assertEquals(emptyList(), harness.validations)

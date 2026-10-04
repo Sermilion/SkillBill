@@ -1,9 +1,10 @@
 package skillbill.engine.work
 
-import skillbill.engine.work.model.IdeStatusWorkflowFamily
+import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.work.model.WorkItemKind
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 
 class IdeStatusRepositoryCorrelation(
   private val unitOfWork: UnitOfWork,
@@ -31,7 +32,7 @@ class IdeStatusRepositoryCorrelation(
     val bound = unitOfWork.goalRunnerControls.controlState(item.workflowId).repositoryIdentity
     return when {
       bound == null -> {
-        val issueKey = item.issueKey?.trim()?.uppercase() ?: return null
+        val issueKey = item.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey) ?: return null
         val childrenHere =
           unitOfWork.workflowStates
             .findGoalChildFeatureTaskCandidates(issueKey, repositoryIdentity)
@@ -53,11 +54,11 @@ class IdeStatusRepositoryCorrelation(
   }
 
   private fun verifyIssueRepositoryCorrelation(issueKey: String): VerifyRepoCorrelation {
-    val normalized = issueKey.trim().uppercase()
+    val normalized = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(issueKey)
     var sawSameRepo = false
     var sawOtherRepo = false
     for (other in unitOfWork.workList.list(limit = null)) {
-      if (other.issueKey?.trim()?.uppercase() != normalized) continue
+      if (other.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey) != normalized) continue
       when (correlateSameIssueWork(other, normalized)) {
         VerifyRepoCorrelation.SAME_REPO -> sawSameRepo = true
         VerifyRepoCorrelation.OTHER_REPO -> sawOtherRepo = true

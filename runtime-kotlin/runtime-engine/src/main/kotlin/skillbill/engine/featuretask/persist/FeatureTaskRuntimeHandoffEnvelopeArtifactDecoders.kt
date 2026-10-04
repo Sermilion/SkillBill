@@ -2,10 +2,11 @@ package skillbill.engine.featuretask.persist
 
 import skillbill.contracts.JsonCodec
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseLaunchBriefing
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePersistenceSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePersistenceSchema
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.taskruntime.artifact.decodeDeliveredProjectionRecordFromArtifact
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeDeliveredProjectionRecord
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.phaseartifacts.decodeStrictKeyedArtifactMap
@@ -16,7 +17,7 @@ internal fun phaseBriefingsFrom(
   validateEnvelope: (Map<String, Any?>) -> Unit = {},
 ): Map<String, FeatureTaskRuntimePhaseLaunchBriefing> =
   decodeStrictKeyedArtifactMap(
-    artifacts,
+    FeatureTaskRuntimeWorkflowArtifactMap.from(artifacts),
     DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_BRIEFINGS.label(),
     ignoreEntry = { it in PhaseSlot.AUDIT.steps },
   ) { _, briefingMap ->
@@ -36,7 +37,7 @@ private fun handoffEnvelopeWireMap(briefingMap: Map<String, Any?>): Map<String, 
 internal fun deliveredProjectionsFrom(
   artifacts: Map<String, Any?>,
   validateEnvelope: (Map<String, Any?>) -> Unit = {},
-  validatePersistenceRecord: (Map<String, Any?>) -> Unit = {},
+  validatePersistenceRecord: (Map<String, Any?>) -> String? = { null },
 ): Map<String, FeatureTaskRuntimeDeliveredProjectionRecord> =
   deliveredProjectionHistoryFrom(artifacts, validateEnvelope, validatePersistenceRecord)
     .values
@@ -46,23 +47,20 @@ internal fun deliveredProjectionsFrom(
 internal fun deliveredProjectionHistoryFrom(
   artifacts: Map<String, Any?>,
   validateEnvelope: (Map<String, Any?>) -> Unit = {},
-  validatePersistenceRecord: (Map<String, Any?>) -> Unit = {},
+  validatePersistenceRecord: (Map<String, Any?>) -> String? = { null },
 ): Map<String, FeatureTaskRuntimeDeliveredProjectionRecord> =
   decodeStrictKeyedArtifactMap(
-    artifacts,
+    FeatureTaskRuntimeWorkflowArtifactMap.from(artifacts),
     DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DELIVERED_PROJECTIONS.label(),
     ignoreEntry = {
       it in PhaseSlot.AUDIT.steps || it.split('|').getOrNull(1) in PhaseSlot.AUDIT.steps
     },
   ) { key, recordMap ->
-    try {
-      validatePersistenceRecord(recordMap)
-    } catch (error: InvalidFeatureTaskRuntimePersistenceSchemaError) {
+    validatePersistenceRecord(recordMap)?.let { reason ->
       val consumerPhaseId = recordMap["consumer_phase_id"] as? String ?: "<unknown>"
-      throw InvalidFeatureTaskRuntimePersistenceSchemaError(
+      throw invalidFeatureTaskRuntimePersistenceSchema(
         sourceLabel = "consumer-phase:$consumerPhaseId/delivered-projection:$key",
-        reason = "${error.reason}; $FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE.",
-        cause = error,
+        reason = "$reason; $FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE.",
       )
     }
     val delivered =

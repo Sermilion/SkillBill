@@ -3,6 +3,7 @@ package skillbill.application.review.parallel.runner
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.getOrElseUnlessCooperative
 import skillbill.application.idestatus.AgentActivityStampWriter
+import skillbill.application.review.model.ParallelCodeReviewReportContract
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ReviewEvidenceReadCount
 import skillbill.application.review.model.ReviewSpecialistLaunchRequest
@@ -14,6 +15,7 @@ import skillbill.application.review.parallel.verification.parallelCodeReviewCapt
 import skillbill.application.review.parallel.verification.parallelCodeReviewInlineTerminalStatus
 import skillbill.application.review.parallel.verification.parallelCodeReviewNoOpResumeOutcome
 import skillbill.goalrunner.terminalStatus
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
@@ -30,13 +32,12 @@ import skillbill.ports.review.model.ReviewLaneAccounting
 import skillbill.ports.review.model.ReviewLaunchAgentStagingRequest
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPort
 import skillbill.review.context.model.accounting.ReviewAccountingTerminalOutcome
+import skillbill.review.context.model.accounting.ReviewBudgetEvaluator
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
+import skillbill.review.context.model.accounting.ReviewLaneIdentity
 import skillbill.review.context.model.bundle.ReviewLaneBundle
 import skillbill.review.context.model.bundle.ReviewLaneBundleEntry
-import skillbill.review.context.model.hunk.ReviewBudgetEvaluator
-import skillbill.review.context.model.hunk.ReviewContextBudgetExceededException
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.context.model.hunk.ReviewDependencyAllowlist
-import skillbill.review.context.model.hunk.ReviewLaneIdentity
 import skillbill.review.context.model.packet.ReviewContextPacket
 import skillbill.review.context.model.packet.ReviewLaneCompletionState
 import skillbill.review.context.model.packet.asFailedLaneRun
@@ -85,6 +86,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
             selected,
             args.routedManifests,
             args.agentId,
+            args.request.reportContract,
           ),
         bundleState = parallelCodeReviewAggregateBundleCompletion(bundleStates),
       )
@@ -128,7 +130,8 @@ class ParallelCodeReviewRunnerLaneLaunch(
                 issueKey = "code-review",
                 repoRoot = args.request.repoRoot,
                 timeout = args.request.timeout,
-                promptOverride = args.request.withSelectedAgentAddons(args.launch.prompt),
+                promptOverride =
+                  standaloneReportOnlyPrompt(args.request, args.launch.prompt),
                 modelOverride = args.modelOverride,
                 reviewEvidenceBroker = args.bound.broker,
                 reviewEvidenceEndpoint = args.bound.endpoint,
@@ -138,7 +141,9 @@ class ParallelCodeReviewRunnerLaneLaunch(
         )
       when (outcome) {
         is UnsupportedAgentRunLaunch -> unsupportedParentOutcome(args.launch, outcome)
-        is AgentRunLaunchFacts -> launchedParentOutcome(args.launch, outcome, args.budget, args.bound.broker)
+        is AgentRunLaunchDenied -> error("Parallel code review lane launch never carries a spawn authorization.")
+        is AgentRunLaunchFacts ->
+          launchedParentOutcome(args.launch, outcome, args.budget, args.bound.broker, args.request)
       }
     }
 
@@ -167,6 +172,20 @@ class ParallelCodeReviewRunnerLaneLaunch(
         ReviewEvidenceBoundaryAccounting.GOVERNED_EVIDENCE_SEAM,
         ParallelCodeReviewGovernedEvidenceBindFault.ENDPOINT,
       )
+    }
+  }
+
+  private fun standaloneReportOnlyPrompt(
+    request: ParallelCodeReviewRequest,
+    prompt: String,
+  ): String {
+    val composed = request.withSelectedAgentAddons(prompt)
+    return if (request.reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY) {
+      composed.trimEnd() +
+        "\n\nStandalone review is report-only. Do not apply fixes, edit, stage, commit, amend, reset, " +
+        "or launch another review command."
+    } else {
+      composed
     }
   }
 
@@ -206,6 +225,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
     outcome: AgentRunLaunchFacts,
     budget: ReviewContextBudgetPolicy,
     evidenceBroker: ReviewEvidenceBroker,
+    request: ParallelCodeReviewRequest,
   ): ParallelReviewLaneOutcome {
     val bundleState = launch.bundleState
     val budgetOutcome =
@@ -219,7 +239,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
       evidenceAccounting.authorizedReadCount == 0 &&
         launch.selected.any { parallelCodeReviewGovernedLaunchFor(it).assembledBundle.entries.isNotEmpty() }
     val launchReason =
-      budgetOutcome?.let { ReviewContextBudgetExceededException(it).message }
+      budgetOutcome?.let { "${it.type}: ${it.budgetKind.wireValue} ${it.observedValue} > ${it.configuredLimit}" }
         ?: failureAdmission.laneFailureReason(outcome)
         ?: "Review worker returned without reading assigned evidence.".takeIf { noEvidenceRead }
     val evidenceCompletion = parallelCodeReviewBrokerEvidenceCompletionState(bundleState, evidenceAccounting)
@@ -236,7 +256,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
         )
       }
     val softAdmission =
-      if (launchReason == null) {
+      if (launchReason == null || request.reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY) {
         failureAdmission.softAdmitFindings(outcome.stdout, launch)
       } else {
         ParallelCodeReviewSoftRegisterAdmission(emptyList(), null, 0, emptyList())
@@ -264,6 +284,7 @@ class ParallelCodeReviewRunnerLaneLaunch(
       unreviewedUnits = completion.unreviewedUnits,
       rejectedCandidateCount = softAdmission.rejectedCandidateCount,
       citationDiagnostics = softAdmission.citationDiagnostics,
+      outputTruncated = outcome.stdoutTruncated,
     )
   }
 

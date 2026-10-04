@@ -1,34 +1,37 @@
 package skillbill.application.decomposition
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.decomposition.model.DecompositionManifestRuntimeUpdate
+import skillbill.application.decomposition.model.DecompositionManifestWorkflowProjectionInput
+import skillbill.application.decomposition.model.DecompositionManifestWriteRequest
+import skillbill.application.decomposition.model.DecompositionPlanManifestInput
 import skillbill.application.decomposition.model.PreparedDecompositionManifestWrite
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.issuekey.issueAndFeature
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.core.rethrowUnless
 import skillbill.model.toPath
-import skillbill.ports.decomposition.DecompositionManifestProjectionWriter
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.loadDecompositionManifest
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestRuntimeUpdate
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestWorkflowProjectionInput
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestWriteRequest
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionPlanManifestInput
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionManifestPlan
+import skillbill.workflow.decomposition.model.isDecompositionManifestSchemaFailure
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.decomposition.runtime.invalidManifest
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestWriteResult
+import skillbill.workflow.decomposition.withPreservedRuntimeState
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
+import skillbill.workflow.model.DecompositionSubtaskAction
 import java.io.IOException
 import java.nio.file.Path
 
 @Inject
-class DecompositionManifestWriter : DecompositionManifestProjectionWriter {
+class DecompositionManifestWriter {
   fun writeFromWorkflowUpdate(input: DecompositionManifestWorkflowProjectionInput): DecompositionManifestWriteResult? {
     val manifest = manifestFromWorkflowUpdate(input) ?: return null
     return when (
@@ -80,7 +83,7 @@ class DecompositionManifestWriter : DecompositionManifestProjectionWriter {
   fun maybeWriteFromWorkflowUpdate(input: DecompositionManifestWorkflowProjectionInput): Path? =
     writeFromWorkflowUpdate(input)?.manifestPath?.toPath()
 
-  override fun writeProjectionFromWorkflowState(
+  fun writeProjectionFromWorkflowState(
     repoRoot: Path,
     artifacts: DurableWorkflowArtifacts,
     validator: DecompositionManifestValidator,
@@ -250,7 +253,11 @@ class DecompositionManifestWriter : DecompositionManifestProjectionWriter {
       baseBranch = typedPlan.baseBranch,
       featureBranch = typedPlan.featureBranch,
       stackBranches = typedPlan.stackBranches,
-      currentSubtaskIntent = CurrentSubtaskIntent(subtaskId = typedPlan.currentSubtaskId, action = "start"),
+      currentSubtaskIntent =
+        CurrentSubtaskIntent(
+          subtaskId = typedPlan.currentSubtaskId,
+          action = DecompositionSubtaskAction.START.wireValue,
+        ),
       subtasks = typedPlan.subtasks,
     )
   }
@@ -267,13 +274,17 @@ private fun assertParentSpecIsNotDecomposedSubtask(
   val referringManifests =
     fileStore.findDecompositionManifestFiles(repoRoot)
       .filterNot { manifestPath -> archivedDecompositionManifest(repoRoot, manifestPath) }
+      .filter { manifestPath ->
+        normalizedParentSpec.startsWith(resolvedParentSpecPath(repoRoot, manifestPath).normalize().parent)
+      }
       .mapNotNull { manifestPath ->
         val manifest =
           try {
             loadDecompositionManifest(manifestPath, fileStore, validator)
           } catch (error: IOException) {
             invalidParentSpecManifestLoad(parentSpecPath, manifestPath, parentSpecLabel, error)
-          } catch (error: InvalidDecompositionManifestSchemaError) {
+          } catch (error: SkillBillRuntimeException) {
+            error.rethrowUnless(error.isDecompositionManifestSchemaFailure())
             invalidParentSpecManifestLoad(parentSpecPath, manifestPath, parentSpecLabel, error)
           }
         val matchingSubtask =
@@ -301,7 +312,8 @@ private fun invalidParentSpecManifestLoad(
   parentSpecLabel: String,
   error: Exception,
 ): Nothing {
-  val detail = error.message?.takeIf(String::isNotBlank) ?: error::class.simpleName.orEmpty()
+  val detail =
+    error.message?.takeIf(String::isNotBlank) ?: error.failureCodeLabel() ?: error::class.simpleName.orEmpty()
   invalidManifest(
     parentSpecPath.toString(),
     "failed to load decomposition manifest '$manifestPath' while validating parent_spec_path " +

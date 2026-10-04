@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.execution.core
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.goalrunner.execution.support.CHILD_WORKFLOW_BLOCK_REASONS
 import skillbill.engine.goalrunner.execution.support.CompletedIterationArgs
@@ -11,22 +12,18 @@ import skillbill.engine.goalrunner.execution.support.StoppedIterationResultArgs
 import skillbill.engine.goalrunner.execution.support.causingLoopEntryFor
 import skillbill.engine.goalrunner.execution.support.confirmedAliveKillDiagnosticClass
 import skillbill.engine.goalrunner.execution.support.emitStoppedSubtaskEvent
-import skillbill.engine.goalrunner.execution.support.knownWorkflowId
-import skillbill.engine.goalrunner.execution.support.nextSafeAction
 import skillbill.engine.goalrunner.execution.support.reAttemptCauseFor
 import skillbill.engine.goalrunner.execution.support.recoverySafeAction
-import skillbill.engine.goalrunner.execution.support.toDiagnosticClass
-import skillbill.engine.goalrunner.execution.support.toLedgerAction
-import skillbill.engine.goalrunner.execution.support.withCompletedSubtask
-import skillbill.engine.goalrunner.execution.support.withResumableSubtask
-import skillbill.engine.goalrunner.execution.support.withStoppedSubtask
-import skillbill.engine.goalrunner.execution.support.withValidationQualityRetrySubtask
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.findings.resolveUnaddressedFindingsLedger
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerObservabilityLivenessClass
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
+import skillbill.engine.goalrunner.model.GoalRunnerWorkflowProgress
 import skillbill.engine.goalrunner.persist.GoalRunnerBackwardEdge
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerContext
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.persist.StoppedLedgerContextValues
 import skillbill.engine.goalrunner.status.completed
 import skillbill.engine.goalrunner.status.isRecoverableValidationBlock
@@ -40,16 +37,21 @@ import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerReconciledOutcome
 import skillbill.goalrunner.model.GoalRunnerStopReason
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
-import skillbill.ports.goalrunner.runner.model.GoalRunnerWorkflowProgress
+import skillbill.goalrunner.model.nextSafeAction
+import skillbill.goalrunner.model.toDiagnosticClass
+import skillbill.goalrunner.model.toLedgerAction
+import skillbill.workflow.decomposition.knownWorkflowId
 import skillbill.workflow.decomposition.model.DecompositionManifest
+import skillbill.workflow.decomposition.withCompletedSubtask
+import skillbill.workflow.decomposition.withResumableSubtask
+import skillbill.workflow.decomposition.withStoppedSubtask
+import skillbill.workflow.decomposition.withValidationQualityRetrySubtask
 import skillbill.workflow.engine.blockedStepId
 import skillbill.workflow.model.decompositionStatus
 import java.time.Clock
 
-internal class GoalRunnerIterationOutcome(
+@Inject
+class GoalRunnerIterationOutcome(
   private val manifestStore: GoalRunnerManifestStore,
   private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
   private val finalization: GoalRunnerFinalization,
@@ -57,11 +59,12 @@ internal class GoalRunnerIterationOutcome(
   private val progressReader: GoalRunnerProgressReader,
   private val clock: Clock,
   private val phaseQuery: FeatureTaskRuntimePhaseQuery?,
-  pendingState: GoalRunnerIterationPendingState,
 ) {
-  private val validationQualityState = pendingState.validationQualityState
-
-  internal fun stoppedIteration(args: StoppedIterationArgs): GoalRunnerIterationResult {
+  internal fun stoppedIteration(
+    args: StoppedIterationArgs,
+    pendingState: GoalRunnerIterationPendingState,
+  ): GoalRunnerIterationResult {
+    val validationQualityState = pendingState.validationQualityState
     val state = args.state
     val subtaskId = args.subtaskId
     val reconciled = args.reconciled
@@ -88,6 +91,7 @@ internal class GoalRunnerIterationOutcome(
           ledger = ledger,
           request = request,
         ),
+        pendingState,
       )
     }
     val blocked =
@@ -99,7 +103,7 @@ internal class GoalRunnerIterationOutcome(
     val blockedState = state.copy(manifest = blocked)
     val control = manifestStore.controlState(state.parentWorkflowId)
     if (!control.pauseRequested && !control.paused) {
-      validationRetryIteration(blocked, stoppedOutcome, subtaskId, state)
+      validationRetryIteration(blocked, stoppedOutcome, subtaskId, state, pendingState)
         ?.let { retry -> return retry }
     }
     val saved = persistStoppedBoundary(blockedState, control)
@@ -238,7 +242,11 @@ internal class GoalRunnerIterationOutcome(
 
   fun safeProgress(workflowId: String): GoalRunnerWorkflowProgress? = progressReader.safeProgress(workflowId)
 
-  private fun recordStoppedLedgerEntries(args: RecordStoppedLedgerEntriesArgs) {
+  private fun recordStoppedLedgerEntries(
+    args: RecordStoppedLedgerEntriesArgs,
+    pendingState: GoalRunnerIterationPendingState,
+  ) {
+    val validationQualityState = pendingState.validationQualityState
     val workflowId = args.workflowId
     val state = args.state
     val subtaskId = args.subtaskId
@@ -331,7 +339,9 @@ internal class GoalRunnerIterationOutcome(
     stoppedOutcome: GoalRunnerReconciledOutcome.Stop,
     subtaskId: Int,
     state: GoalRunnerManifestState,
+    pendingState: GoalRunnerIterationPendingState,
   ): GoalRunnerIterationResult? {
+    val validationQualityState = pendingState.validationQualityState
     if (!stoppedOutcome.isRecoverableValidationBlock(phaseQuery)) {
       return null
     }

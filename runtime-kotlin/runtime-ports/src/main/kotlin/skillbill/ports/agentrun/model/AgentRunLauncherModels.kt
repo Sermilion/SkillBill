@@ -10,11 +10,11 @@ import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
 import skillbill.ports.review.evidence.ReviewEvidenceBroker
 import skillbill.ports.review.model.ReviewProcessOutcome
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.ValidationDepth
-import skillbill.workflow.model.goalreview.GoalProgressEvent
-import skillbill.workflow.model.goalreview.GoalProgressEventKind
-import skillbill.workflow.model.goalreview.GoalProgressOutcome
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import java.nio.file.Path
 import kotlin.time.Duration
@@ -71,7 +71,13 @@ data class SkillRunRequest(
 }
 
 interface AgentRunSpawnAuthorization {
-  fun <T> withAuthorization(spawn: () -> T): T
+  fun <T> withAuthorization(spawn: () -> T): AgentRunSpawnAuthorizationResult<T>
+}
+
+sealed interface AgentRunSpawnAuthorizationResult<out T> {
+  data class Authorized<T>(val value: T) : AgentRunSpawnAuthorizationResult<T>
+
+  data class Denied(val pauseReason: String?) : AgentRunSpawnAuthorizationResult<Nothing>
 }
 
 data class SkillRunGoalContinuationContext(
@@ -254,6 +260,11 @@ fun AgentRunLaunchFacts.reviewProcessOutcome(): ReviewProcessOutcome =
         else -> ReviewProcessOutcome.ZERO_EXIT
       }
   }
+
+data class AgentRunLaunchDenied(
+  override val agent: SupportedAgent,
+  val pauseReason: String?,
+) : AgentRunLaunchOutcome
 
 data class UnsupportedAgentRunLaunch(
   override val agent: SupportedAgent,

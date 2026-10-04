@@ -1,5 +1,5 @@
 {
-    "wftr-20260602-test-0001|implement|1|implement#1,plan#1|not_required:implement": {
+    "wftr-20260602-test-0001|implement|1|implement#1|not_required:implement": {
         "consumer_delivery_iteration": 1,
         "consumer_phase_id": "implement",
         "contract_version": "0.2",
@@ -7,24 +7,6 @@
             "consumer_phase_id": "implement",
             "contract_version": "0.1",
             "projections": [
-                {
-                    "fields": [
-                        {
-                            "kind": "text",
-                            "name": "value",
-                            "text": "Fixture plan prose for downstream implement and audit."
-                        }
-                    ],
-                    "producer_iteration": {
-                        "iteration": 1,
-                        "phase_id": "plan"
-                    },
-                    "projection_contract_id": "feature_task_runtime.phase_prose",
-                    "projection_contract_version": "0.1",
-                    "projection_name": "plan_prose",
-                    "prompt_visibility": "prompt_visible",
-                    "source_ref": "upstream_phase_output:plan"
-                },
                 {
                     "fields": [
                         {
@@ -131,10 +113,6 @@
             "fingerprint": "not_required:implement"
         },
         "source_producer_iterations": [
-            {
-                "iteration": 1,
-                "phase_id": "plan"
-            },
             {
                 "iteration": 1,
                 "phase_id": "implement"
@@ -406,7 +384,7 @@
         ],
         "workflow_id": "wftr-20260602-test-0001"
     },
-    "wftr-20260602-test-0001|review|1|review#1|repository-checkpoint-831bf900": {
+    "wftr-20260602-test-0001|review|1|review#1|slot-baseline-checkpoint": {
         "consumer_delivery_iteration": 1,
         "consumer_phase_id": "review",
         "contract_version": "0.2",
@@ -495,13 +473,13 @@
             ],
             "repository_checkpoint": {
                 "base_ref": "__NORMALIZED_SHA40__",
-                "fingerprint": "repository-checkpoint-831bf900",
+                "fingerprint": "slot-baseline-checkpoint",
                 "head_ref": "__NORMALIZED_SHA40__"
             }
         },
         "record_kind": "delivered_projection",
         "repository_checkpoint": {
-            "fingerprint": "repository-checkpoint-831bf900"
+            "fingerprint": "slot-baseline-checkpoint"
         },
         "source_producer_iterations": [
             {
@@ -511,7 +489,7 @@
         ],
         "workflow_id": "wftr-20260602-test-0001"
     },
-    "wftr-20260602-test-0001|verify_findings|1|review#1,verify_findings#1|repository-checkpoint-831bf900": {
+    "wftr-20260602-test-0001|verify_findings|1|review#1,verify_findings#1|slot-baseline-checkpoint": {
         "consumer_delivery_iteration": 1,
         "consumer_phase_id": "verify_findings",
         "contract_version": "0.2",
@@ -522,15 +500,15 @@
                 {
                     "fields": [
                         {
-                            "items": [],
-                            "kind": "text_list",
-                            "name": "findings"
+                            "kind": "text",
+                            "name": "value",
+                            "text": "{\"contract_version\":\"0.7\",\"produced_outputs\":{\"findings\":[]}}"
                         },
                         {
                             "kind": "compact_reference",
                             "name": "repository_checkpoint",
                             "reference_kind": "repository_checkpoint",
-                            "reference_value": "repository-checkpoint-831bf900+producer-claimed:repository-checkpoint-831bf900"
+                            "reference_value": "slot-baseline-checkpoint+producer-claimed:slot-baseline-checkpoint"
                         }
                     ],
                     "producer_iteration": {
@@ -645,13 +623,13 @@
             ],
             "repository_checkpoint": {
                 "base_ref": "__NORMALIZED_SHA40__",
-                "fingerprint": "repository-checkpoint-831bf900",
+                "fingerprint": "slot-baseline-checkpoint",
                 "head_ref": "__NORMALIZED_SHA40__"
             }
         },
         "record_kind": "delivered_projection",
         "repository_checkpoint": {
-            "fingerprint": "repository-checkpoint-831bf900"
+            "fingerprint": "slot-baseline-checkpoint"
         },
         "source_producer_iterations": [
             {
@@ -665,7 +643,7 @@
         ],
         "workflow_id": "wftr-20260602-test-0001"
     },
-    "wftr-20260602-test-0001|write_history|1|implement#1,validate#1,write_history#1|repository-checkpoint-831bf900": {
+    "wftr-20260602-test-0001|write_history|1|implement#1,validate#1,write_history#1|slot-baseline-checkpoint": {
         "consumer_delivery_iteration": 1,
         "consumer_phase_id": "write_history",
         "contract_version": "0.2",
@@ -831,13 +809,13 @@
             ],
             "repository_checkpoint": {
                 "base_ref": "__NORMALIZED_SHA40__",
-                "fingerprint": "repository-checkpoint-831bf900",
+                "fingerprint": "slot-baseline-checkpoint",
                 "head_ref": "__NORMALIZED_SHA40__"
             }
         },
         "record_kind": "delivered_projection",
         "repository_checkpoint": {
-            "fingerprint": "repository-checkpoint-831bf900"
+            "fingerprint": "slot-baseline-checkpoint"
         },
         "source_producer_iterations": [
             {

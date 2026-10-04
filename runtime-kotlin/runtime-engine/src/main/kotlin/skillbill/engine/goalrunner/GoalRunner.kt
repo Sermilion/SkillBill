@@ -1,75 +1,129 @@
 package skillbill.engine.goalrunner
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.telemetry.lifecycle.GoalLifecycleTelemetryEmitter
 import skillbill.engine.goalrunner.execution.core.DriveGoalLoopArgs
-import skillbill.engine.goalrunner.execution.core.GoalRunnerExecutionAlreadyRunningException
+import skillbill.engine.goalrunner.execution.core.GoalRunnerExecutionCoordinator
+import skillbill.engine.goalrunner.execution.core.GoalRunnerOwnedRun
 import skillbill.engine.goalrunner.execution.core.GoalRunnerPauseBoundary
 import skillbill.engine.goalrunner.execution.core.GoalRunnerPerRunLoopAssembler
-import skillbill.engine.goalrunner.execution.core.GoalRunnerRunBoundaries
 import skillbill.engine.goalrunner.execution.core.GoalRunnerRunPreparation
 import skillbill.engine.goalrunner.execution.core.StoppedReportArgs
 import skillbill.engine.goalrunner.execution.core.workflowIdFor
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationPendingState
 import skillbill.engine.goalrunner.execution.support.GoalRunnerValidationQualityPendingState
+import skillbill.engine.goalrunner.intake.GoalIntake
+import skillbill.engine.goalrunner.intake.GoalIntakePreparation
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.reconcileGoalManifest
+import skillbill.engine.goalrunner.model.GoalIntakeAdmission
+import skillbill.engine.goalrunner.model.GoalIntakeMissingInput
 import skillbill.engine.goalrunner.model.GoalRunPreparation
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunEvent
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
+import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweep
 import skillbill.engine.goalrunner.status.stopped
 import skillbill.engine.goalrunner.status.unknownGoal
 import skillbill.engine.goalrunner.telemetry.GoalRunnerObservabilityEmitter
 import skillbill.engine.goalrunner.telemetry.GoalRunnerTelemetryEmitter
 import skillbill.goalrunner.model.GoalRunnerRunReport
 import skillbill.goalrunner.model.GoalRunnerStopReason
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
+import skillbill.ports.diagnostics.RuntimeDiagnostics
+import java.nio.file.Path
+import java.time.Clock
 
 @Inject
 class GoalRunner(
-  private val runBoundaries: GoalRunnerRunBoundaries,
+  private val manifestStore: GoalRunnerManifestStore,
+  private val outcomeStore: GoalRunnerWorkflowOutcomeStore,
+  private val goalPlanningSweep: GoalPlanningSweep,
+  private val telemetry: GoalLifecycleTelemetryEmitter,
+  private val clock: Clock,
+  private val diagnostics: RuntimeDiagnostics,
+  private val executionCoordinator: GoalRunnerExecutionCoordinator,
   private val runPreparation: GoalRunnerRunPreparation,
   private val perRunLoopAssembler: GoalRunnerPerRunLoopAssembler,
   private val pauseBoundary: GoalRunnerPauseBoundary,
+  private val intakePreparation: GoalIntakePreparation,
 ) {
-  private val manifestStore = runBoundaries.manifestStore
-  private val outcomeStore = runBoundaries.outcomeStore
-  private val goalPlanningSweep = runBoundaries.goalPlanningSweep
-  private val clock = runBoundaries.clock
-  private val diagnostics = runBoundaries.diagnostics
-  private val executionCoordinator = runBoundaries.executionCoordinator
+  fun admitIntake(
+    intake: String,
+    repoRoot: Path,
+  ): GoalIntakeAdmission {
+    val trimmed = intake.trim()
+    intakePreparation.issueKeyForExistingSpec(trimmed, repoRoot)?.let { return GoalIntakeAdmission.Admitted(it) }
+    if (trimmed.isNotBlank() && trimmed.none(Char::isWhitespace) && !trimmed.contains('/')) {
+      manifestStore.readByIssueKeyIfPresent(trimmed, repoRoot)?.let {
+        return GoalIntakeAdmission.Admitted(it.manifest.issueKey)
+      }
+    }
+    val parsed =
+      GoalIntake.parseOrNull(trimmed)
+        ?: return GoalIntakeAdmission.NeedsInput(GoalIntakeMissingInput.ISSUE_KEY, issueKey = null)
+    val missing =
+      if (manifestStore.readByIssueKeyIfPresent(parsed.issueKey, repoRoot) == null) {
+        intakePreparation.missingNewWorkInput(parsed, repoRoot)
+      } else {
+        null
+      }
+    return missing?.let { GoalIntakeAdmission.NeedsInput(it, parsed.issueKey) }
+      ?: GoalIntakeAdmission.Admitted(parsed.issueKey)
+  }
 
   fun run(request: GoalRunnerRunRequest): GoalRunnerRunReport {
-    val loadedState =
-      manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
+    val admittedState =
+      manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)
+        ?: intakePreparation.prepare(request)
         ?: return unknownGoal(request.issueKey)
-    return try {
-      executionCoordinator.runOwned(loadedState.parentWorkflowId) {
-        val state = reconcileStateBeforeRun(loadedState)
-        when (val preparation = runPreparation.prepareRun(state, request)) {
-          is GoalRunPreparation.PreparationBlocked -> preparation.report
-          is GoalRunPreparation.Prepared -> runPrepared(preparation)
-        }
+    runPreparation.admitPlanningMigration(admittedState, request)
+    val migratedState =
+      manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)
+        ?: admittedState
+    val loadedState = runPreparation.refreshSpecPlanning(migratedState, request)
+    val childAdmission = runPreparation.existingChildExecutionPlanAdmission(loadedState, request)
+    val execute = {
+      val state = reconcileStateBeforeRun(loadedState)
+      when (val preparation = runPreparation.prepareRun(state, request)) {
+        is GoalRunPreparation.PreparationBlocked -> preparation.report
+        is GoalRunPreparation.Prepared -> runPrepared(preparation)
       }
-    } catch (alreadyRunning: GoalRunnerExecutionAlreadyRunningException) {
-      stopped(
-        StoppedReportArgs(
-          issueKey = loadedState.manifest.issueKey,
-          attempted = emptyList(),
-          subtaskId = loadedState.manifest.currentSubtaskIntent.subtaskId,
-          reason = GoalRunnerStopReason.BLOCKED,
-          blockedReason = alreadyRunning.message.orEmpty(),
-          workflowId = loadedState.manifest.workflowIdFor(loadedState.manifest.currentSubtaskIntent.subtaskId),
-          lastResumableStep =
-            loadedState.manifest.subtasks
-              .firstOrNull { it.id == loadedState.manifest.currentSubtaskIntent.subtaskId }
-              ?.lastResumableStep
-              .orEmpty()
-              .ifBlank { "plan" },
-        ),
-      )
+    }
+    val owned =
+      if (childAdmission == null) {
+        executionCoordinator.runOwned(loadedState.parentWorkflowId, execute)
+      } else {
+        executionCoordinator.runOwnedWithChildAdmission(loadedState.parentWorkflowId, childAdmission, execute)
+      }
+    return when (owned) {
+      is GoalRunnerOwnedRun.Completed -> owned.value
+      is GoalRunnerOwnedRun.AlreadyRunning -> alreadyRunningReport(loadedState, owned.reason)
     }
   }
+
+  private fun alreadyRunningReport(
+    loadedState: GoalRunnerManifestState,
+    reason: String,
+  ): GoalRunnerRunReport =
+    stopped(
+      StoppedReportArgs(
+        issueKey = loadedState.manifest.issueKey,
+        attempted = emptyList(),
+        subtaskId = loadedState.manifest.currentSubtaskIntent.subtaskId,
+        reason = GoalRunnerStopReason.BLOCKED,
+        blockedReason = reason,
+        workflowId = loadedState.manifest.workflowIdFor(loadedState.manifest.currentSubtaskIntent.subtaskId),
+        lastResumableStep =
+          loadedState.manifest.subtasks
+            .firstOrNull { it.id == loadedState.manifest.currentSubtaskIntent.subtaskId }
+            ?.lastResumableStep
+            .orEmpty()
+            .ifBlank { "plan" },
+      ),
+    )
 
   private fun reconcileStateBeforeRun(state: GoalRunnerManifestState): GoalRunnerManifestState {
     val reconciled =
@@ -93,7 +147,7 @@ class GoalRunner(
     val ledger = GoalRunnerLedgerRecorder(outcomeStore, effectiveRequest, clock, diagnostics)
     effectiveRequest.eventSink.emit(GoalRunnerRunEvent.Started(state.manifest.issueKey))
     val telemetryEmitter =
-      GoalRunnerTelemetryEmitter(runBoundaries.telemetry, clock, state)
+      GoalRunnerTelemetryEmitter(telemetry, clock, state)
         .also { it.goalStarted() }
     pauseBoundary.pauseBeforeLaunch(state)?.let { paused ->
       val pausedReport = requireNotNull(paused.report)
@@ -107,7 +161,7 @@ class GoalRunner(
     val validationQualityState = GoalRunnerValidationQualityPendingState(manifestStore)
     validationQualityState.bind(state.parentWorkflowId)
     val pendingState = GoalRunnerIterationPendingState(validationQualityState)
-    val goalLoop = perRunLoopAssembler.assemble(pendingState)
+    val goalLoop = perRunLoopAssembler.assemble()
     val loopResult =
       goalLoop.driveGoalLoop(
         DriveGoalLoopArgs(
@@ -117,6 +171,7 @@ class GoalRunner(
           ledger = ledger,
           telemetryEmitter = telemetryEmitter,
           planning = sweepOutcome as GoalPlanningSweepOutcome.PreparedAll,
+          pendingState = pendingState,
         ),
       )
     state = loopResult.state

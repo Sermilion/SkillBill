@@ -1,5 +1,116 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-04] Separate standalone reporting from full-run repair, SKILL-402
+Context: A dirty standalone review reached the full repair slot, staged operator changes, then failed because its in-memory state cannot commit a checkpoint.
+Decision: Keep the shared run loop and give standalone review its own read-only `standalone_review` slot with only `present_findings`. Full runs retain `code_review` and its repair steps.
+Reason: A slot runs every step it owns. Separate ownership prevents standalone review from reaching staging and checkpoint code without branching inside full-run strategies or weakening the in-memory commit refusal.
+Alternatives considered: Making in-memory checkpoint commits succeed or no-op would hide an invalid path; a separate review driver would duplicate the run loop.
+
+## [2026-10-04] Keep feature-run composition independent of operator slots, SKILL-402
+Context: Deriving full-run slots and unselected steps from every PhaseSlot entry would add present_findings to durable execution descriptors and snapshots.
+Decision: Declare the existing nine feature-run slots once as FEATURE_RUN_SLOTS. Derive full-run, goal-child, and unselected-step composition from that list.
+Reason: Standalone operator slots must not change full-run plans, handoffs, or fixtures merely by joining the enum. One declaration prevents the three consumers from drifting.
+
+## [2026-10-04] Admit standalone reports independently of findings verdicts, SKILL-402
+Context: A report-only command must distinguish valid changes_requested findings from failed execution, malformed output, or incomplete delegated review.
+Decision: Apply strict register and verdict admission locally to standalone review. Either valid verdict completes with exit 0; failed or rejected reports block with retained findings and exit 1. Delegated requests select an explicit report-only prompt contract.
+Reason: Findings are the requested result and must not trigger repair. Permissive full-run extraction could falsely approve missing output, while parent process success alone cannot prove complete lane coverage or integration. Local admission preserves existing full-run behavior.
+Alternatives considered: Reusing the full-run verdict default would accept incomplete reports; changing its admission globally would alter the existing repair contract.
+
+## [2026-10-03] Reject mixed runtime packages before install promotion
+Context: A packaged producer and its bundled schema disagreed on version pins. Checksums alone did not detect the mismatch that prompted LOCAL-274870733146662.
+Decision: Check both staged CLI and MCP images against their own current and historical resource pins through database-free runtime-core composition before promoting either image.
+Reason: A mixed package is an installation failure, so durable-state migration cannot repair it. Checking both candidates before promotion preserves the installed pair and avoids opening durable databases during package inspection.
+Alternatives considered: Reuse doctor without proving database independence, or accept checksum-valid artifacts without schema parity. Neither establishes the required package contract.
+
+## [2026-10-03] Publish planning migration with coupled child imports
+Context: Shared preparation, subtask plans, and imported child outputs carry matching bytes, hashes, and provenance. Partial publication or a stale source would make resumed planning inconsistent.
+Decision: Engine admission validates and converts the complete coupled set inside the existing immediate transaction, then publishes through guarded SQLite writes. Independent feature-task conversion joins execution admission and respects parent import ownership.
+Reason: One transaction exposes either unchanged source or the complete target after interruption. Keeping conversion at readiness/resume preserves completed work and ownership without rehydrating children, appending completion events, or replaying finalization.
+Alternatives considered: Provenance-only restamping, nested replacement transactions, and conversion during hydration, status reads, or installation do not preserve this publication boundary.
+
+## [2026-10-03] Migrate only evidence-complete phase-output 0.6 records
+Context: Exact version equality forced hard reset after schema upgrades even when retained planning remained usable. Historical readers and structural database migrations did not establish conversion safety.
+Decision: Support preparation 0.2 with planning provenance 0.2 and phase-output 0.6-to-0.7, plus independent feature-task 0.6 outputs. Validate immutable source and target schemas separately, preserve supplied semantics, and refuse unsupported, corrupt, or source-valid non-convertible records.
+Reason: Explicit support lets operators resume without discarding completed subtasks or commits. Missing target prose or failure evidence cannot be inferred from summaries or decoder defaults. This transition reuses planning without refresh and replaces blanket historical-version hard-reset guidance.
+Alternatives considered: Version-token-only acceptance, automatic hard reset, speculative planning refresh, and a framework for unrelated schema families were excluded by the spec. Fresh agent prose retains its existing settlement behavior.
+Revisit when: Another concrete transition has an evidenced conversion or requires scoped refresh of unfinished planning.
+## [2026-10-04] SKILL-399: return phase-order violations with their target phase
+Context: An entry-gate violation can target a phase other than the current phase. The run loop previously recovered that phaseId from a caught exception.
+Decision: nextTransition returns Resolved or PhaseOrderViolation carrying phaseId and the unchanged message. The run loop branches on the result and blocks at that phaseId.
+Reason: Phase-order refusal is an expected outcome. Wrapping FeatureTaskRuntimeNextPhase preserves its existing variants and consumers while keeping the violation's target explicit.
+Alternatives considered: Retaining exception-based control flow would keep readers dependent on properties of the deleted throwable.
+
+## [2026-10-04] SKILL-399: return handoff rejection context through validation and recording
+Context: Launch rejection measurements need projection identity and failure classification, including when envelope schema validation rejects a briefing during recording.
+Decision: Add handoffEnvelopeRejection to the validator port and carry rejection contexts through assembly and RequiredPhaseWrite.Rejected. Keep the existing throwing validation entry point for its other callers.
+Reason: A context-returning port preserves the measurement's projection name without reading properties from a caught exception. Carrying that context in the existing write result preserves the recorder's sealed outcome shape.
+Alternatives considered: The digest's recommendation against a result-returning port left no value path for schema rejection details needed by launch measurements.
+
+## [2026-10-02] Refuse incomplete build gates at admission and retire the active blocker on resume
+
+A saved SKILL-390 child selected the generic review fallback before implementation.
+Fresh routing selects Kotlin, but resume reconstructs the saved gate policy digest.
+The repository fallback routing fix already protects fresh selection. Admission now
+also refuses a required build gate without both command roles, before creating a
+child or executing more phases on resume. Standalone validation keeps its existing
+behavior. Crash recovery can still reconstruct missing gate inputs to release dead
+workers without admitting them for execution.
+
+The saved descriptor remains immutable. Replacing its commands changes execution
+semantics, so recovery needs a reviewed mapping rather than automatic rerouting.
+This change adds no mapping and rewrites no stored descriptor.
+
+Operator resume now clears the active blocked reason in the same transaction that
+reopens the phase. Retry evidence retains the previous reason, including supervisor
+reasons absent from the phase record. Otherwise a later build block can lose its
+current continuation outcome during reconciliation because an old timeout still
+occupies the active blocked reason.
+
+## [2026-10-02] SKILL-398 subtask 5: persistence failures as codes, and the split into SKILL-400
+Context: The first implement attempt for subtask 5 blocked because 75 classes across six modules were too much for one phase that cannot compile. This subtask converts only the persistence and transport failures (database, telemetry HTTP, goal telemetry row, runtime-owned persistence boundary) and adds the shared pieces; the other areas moved to the unlaunched SKILL-400 bundle.
+Decision: (1) Handled-set rule: `DatabaseAccessError` and `DatabaseBusyError` were plain `RuntimeException`s, so no `catch (SkillBillRuntimeException)` ever absorbed them. Unguarded catches a database failure can reach call `SkillBillRuntimeException.rethrowIfDatabaseFailure()` first. Guarded: `PlanDecompositionStop` (both catches, `persistDecomposeTerminal` is mandatory), `InstallCliCommands` replay (persisted selection read), `NativeScaffoldPayloadRun` scaffold invocation and `completeAuthoring`. Left unchanged after reachability checks: `FeatureTaskRuntimeRejectedOutputRecorder` (already rethrows non-diagnostic codes), `InstallStaging`, `AuthoringDiscovery`, `AuthoringMutation` (filesystem, rethrow), `ScaffoldWizardRun`, the other `NativeScaffoldPayloadRun` catches (payload read, encode, render), `SkillRemove` (filesystem port), `CliRuntime`. (2) `McpToolDispatcher.uncapturedAtMcp()` holds today's no-capture condition; a later conversion adds a code only when its former class was uncaptured. All nine classes here were captured or already shell-content failures, so it gains nothing. (3) Accepted framing change: former `RuntimeException` database failures that reach `CliRuntime` now print through the `SkillBillRuntimeException` arm without the `ClassName: ` prefix or the diagnostics record (known case: non-monitor `goal status`, still covered by `CliGoalStatusDatabaseFailureTest`). (4) `goalReviewPreparationFailure` takes its location from the first `skillbill.` stack frame, which is now the factory for factory-built failures. (5) `RuntimeOwnedFactUnavailable` becomes two entries, not one: `FACT_UNAVAILABLE` (engine boundary) and `REVIEW_FACT_UNAVAILABLE` (application boundary, thrown by the parallel review runner), because `CodeReviewStep.launchFailure` discriminated only the engine class and the application failure took the generic RETRYABLE arm. Readers match `FACT_UNAVAILABLE` only. (6) Both `invokeOrHandle` functions keep `runCatching` with the existing cooperative handling: detekt `TooGenericExceptionCaught` is active, `@Suppress` is banned, and no main site catches `Exception` by name. (7) `UnresolvedRemoteTransportPortError` became `error()`: it is reachable only by calling the component with an unresolved context, a composition defect. (8) `fetchProxyCapabilities` reads the response status as a value (execute, then check 404/405) instead of catching `TelemetryProxyRequestFailureError.statusCode`. (9) Test edits beyond type-to-code: assertions on removed properties (`operation`, `dbPath`, `condition`, `statusCode`, `detail`) assert the same fact from the message or `databaseAccessCondition(...)`. No expected CLI, MCP, wire or payload value changed. (10) The transition stays open: SKILL-399 and SKILL-400 classes still extend the legacy bases.
+Reason: Codes keep the failure set and every message while removing nine classes; guards keep catches from widening onto failures that never reached them before.
+Alternatives considered: keep `DatabaseAccessError` outside `SkillBillRuntimeException` (blocks the baseline reduction); one persistence code (changes the review-launch disposition); catch `Exception` in the boundaries (detekt violation).
+Revisit when: SKILL-400 finishes and the legacy bases retire, at which point `rethrowIfDatabaseFailure` can be reviewed against the remaining catches.
+
+## [2026-10-02] SKILL-398 subtask 4: Shell-content collapse starts with AgentAddon and GovernedReview, coded failures render their code label
+Context: The first implement attempt for subtask 4 blocked because all 97 shell-content classes were too much for one phase. The conversion is split into the shared transition pieces plus the two smallest areas here, and the other seven areas in SKILL-399.
+Decision: (1) Coded failures render `<CodeEnum>.<ENTRY>` through `Throwable.failureCodeLabel()` wherever a caught throwable's class name was rendered; uncoded throwables render as before. Pure null-message fallbacks (`message ?: x::class.simpleName`) are left alone, because a coded failure always carries a message and the label could never render there. (2) `isShellContentContractFailure()` is a transitional classification: each area conversion adds its code enum, and it is removed when `ShellContentContractException` retires. `ScaffoldFailureCode` is never added. (3) The shell-content conversion is split between SKILL-398 subtask 4 (AgentAddon, GovernedReview, edge sites) and SKILL-399 (the other seven areas).
+Reason: Catch sites that name `ShellContentContractException` would miss a plain coded `SkillBillRuntimeException`, so the predicate keeps them handling the same failures until the class retires.
+Revisit when: `ShellContentContractException` retires, or `LegacyFailureCode` is removed.
+
+## [2026-10-02] SKILL-398: Failure model: results for expected outcomes, one runtime failure type with owner codes, defects via require/check
+Context: The census in .feature-specs/SKILL-398-runtime-exception-reduction/investigation.md found 231 custom throwables in main, and 62% are never discriminated by type.
+Decision: Three tiers. Defects use require/check/error() and are never caught for control flow. Expected outcomes are returned as results. Failures that end the run throw SkillBillRuntimeException with an owner-declared RuntimeFailureCode. A new custom Throwable earns its place only for a failure that crosses a boundary the runtime does not own and cannot be tier 3, with its reason recorded here. LegacyFailureCode.UNCLASSIFIED backs a transitional (message, cause) constructor while subclasses exist. custom-throwable-baseline.txt is a two-sided guard in FailureCodeTotalityArchitectureTest.
+Reason: 62% of types are never discriminated, and both the CLI and MCP edges discard the type and print the message.
+Supersedes: The "typed errors" retention of SKILL-349, SKILL-374 and SKILL-391, and the class-per-failure form of the SKILL-351/352/353 typed durable failures. Their ownership placement stands.
+Alternatives considered: IllegalStateException with a code (the edges would catch real bugs as user errors); guard only (it freezes 231 classes); results for everything (it pushes unrecoverable failures through every signature). All three rejected; see investigation.md.
+Revisit when: a boundary needs callers to discriminate a failure that a code on SkillBillRuntimeException cannot express.
+
+## [2026-10-02] Recover expired worker leases on blocked goal children
+
+The goal supervisor can kill a timed-out child before its worker cleanup runs, then
+mark the workflow blocked. The old crash scan selected only running workflows.
+Operator resume rejected the leftover worker lease as an incompatible execution
+plan even when the stored descriptor matched the installed runtime.
+
+Goal run preparation now reconciles the selected child's expired lease after
+validating its execution plan and before child resume. Recovery requires an active,
+expired lease and a confirmed dead process, then rechecks ownership, generation,
+workflow status, immutable identity, and descriptor inside the write transaction.
+The startup scan also includes blocked workflows. SQLite preserves their blocked
+status, phase records, artifacts, and execution identity while releasing the lease
+and recording the interruption reason. Only operator resume reopens a blocked phase.
+Running crash candidates still transition to pending. Live workers, reserved
+ownership, and uncertain process evidence remain untouched.
+
+## [2026-10-01] Goal-review accounting types stay in workflow.model.goalreview
+Context: SKILL-397 subtask 3 planned to move review accounting helpers into review.context.model.accounting to break a package cycle.
+Decision: GoalSubtaskCommitFocusedAccounting and ReviewAccountingBoundedJson stay in skillbill.workflow.model.goalreview.
+Reason: The first uses goalreview-internal decoders, so moving it creates an accounting-goalreview cycle. The second is JSON projection, which the typed-domain guards reject in a review domain package that the CLI imports.
+Revisit when: the decoders become shareable without importing goalreview internals.
+
 ## 2026-09-29: Retain complete agent process output
 
 Agent stdout and stderr have no byte retention limit. The previous 1 MiB
@@ -16,6 +127,53 @@ completion marker.
 This file records architectural and implementation decisions that span the
 `runtime-kotlin/` boundary. Each entry is dated and explains the trade-off,
 not the implementation detail.
+
+## [2026-10-01] SKILL-395: McpToolPayloadKeys is owned by runtime-mcp; supersedes the 2026-09-24 runtime-contracts clause
+Context: "[2026-09-24] runtime-contracts is a shared kernel: single-owner declarations move to their owner (SKILL-374 subtask 2)" kept `McpToolPayloadKeys` in `runtime-contracts` because `runtime-infra/sqlite` `ReviewRowMappers` read `McpToolPayloadKeys.REVIEW_SESSION_ID`. That read was a SQL column label, `review_session_id`, already owned by `ReviewFinishedTelemetryPayloadKeys.REVIEW_SESSION_ID`. The object also restated 46 of its 65 values from key objects in `runtime-contracts`.
+Decision: `ReviewRowMappers` reads the column through `ReviewFinishedTelemetryPayloadKeys.REVIEW_SESSION_ID`. `McpToolPayloadKeys` moves to `runtime-mcp` `skillbill.mcp.shared` as an `internal object` holding only the 19 MCP-only values (tool, content, text, type, isError, envelope, payload, orchestrated, repo, dry_run, repository_identity, governed_spec_path, artifacts_patch, step_updates, and the five tool names). The `skillbill.contracts.mcp` package is gone. The 46 restated values are deleted and call sites reference the shared owners. `reason` uses `UpdateCheckPayloadKeys.REASON` and `kind` uses `ReviewAccountingPayloadKeys.KIND`, because they are the only public key-object owners of those values and minting an owner would collide with the runtime-contracts work. `WireVocabularyArchitectureTest` gains `mcp tool payload keys restate no shared payload key value`, which text-scans the object (runtime-core cannot reflect an internal runtime-mcp type) and asserts zero overlap with ten shared key objects.
+Reason: no non-MCP module reads the object once the column label points at its owner, so the shared kernel carried an adapter-only vocabulary.
+Scope: supersedes only the clause keeping `McpToolPayloadKeys` in `runtime-contracts`. The rest of the 2026-09-24 entry stands. The wire values, key order and error text are unchanged.
+Revisit when: a second adapter module needs an MCP-only key, or a runtime-contracts key object gains one of the 19 values.
+
+## [2026-10-01] SKILL-393: runtime-ports declares no repository-driving function; supersedes 2026-09-06 (b) for two manifest DTOs
+Context: Decision (b) of "[2026-09-06] SKILL-233 subtask 2 audit round 3" kept `LoadedDecompositionManifest` and `ValidatedDecompositionManifestYaml` in `runtime-ports` because the SQLite adapter was expected to read them. SKILL-233's ports cleanup then regressed within 18 days: SKILL-372 moved repository-driving functions (manifest discovery, parent discovery, projection-failure persistence) and `GoalParentProjectionWriter` back into ports behind file exemptions in `PortsDeclarationArchitectureTest` and `RuntimeLayerBoundaryArchitectureTest`.
+Decision: ports declares no top-level function with a `*Repository` receiver, and none with a `UnitOfWork`, `GoalRunnerPersistenceSession`, `DatabaseSessionFactory`, `WorkflowEngine`, `*Repository`, or `*Store` parameter. Derived extensions on a `*Store` receiver with plain parameters stay allowed. `PortsDeclarationArchitectureTest` enforces it with synthetic fixtures and has no file exemption. The behaviour moved to its one consumer: manifest discovery, parent discovery, and projection-failure persistence to `runtime-application`; `GoalParentProjectionWriter` to `runtime-engine`, `internal`.
+Reason: no `runtime-infra/sqlite` file reads `LoadedDecompositionManifest` or `ValidatedDecompositionManifestYaml`. Their readers are application main and tests, engine main (`FeatureSpecPreparationWriter`, `DecompositionManifestEngineEncoding`), and core and engine tests. They now live in `skillbill.application.decomposition.model`, with the other decomposition write models. File exemptions let the regression land without a failing guard; the function rule removes the exemptions.
+What else moved: the `DecompositionManifestProjectionWriter` interface had one implementation and no boundary, so it is deleted and consumers take `DecompositionManifestWriter`. The wire-artifact validator forwarders in `runtime-ports` are deleted; callers name the closed `FeatureTaskRuntimeWireArtifactKind`. `ReviewAttributionPort.composedLaunchPlan` is abstract. `REVIEW_EVIDENCE_BATCH_SIZE` has one owner in the launcher, and `INSTALLER_PROCESS_OUTPUT_CAP_BYTES` and `INSTALLER_OUTPUT_TRUNCATION_SENTINEL` are `internal` to `runtime-infra/host`.
+Scope: this supersedes 2026-09-06 (b) only for `LoadedDecompositionManifest` and `ValidatedDecompositionManifestYaml`. The `WorkflowRecordMapping` half of (b) stands.
+Revisit when: an adapter module needs to read those two DTOs, at which point only the DTO, not discovery or persistence behaviour, belongs back in ports.
+
+## [2026-10-01] SKILL-387: use one prose content boundary with runtime-owned decisions
+Context: Agent phases had competing response envelopes, strict schema gates, and formatting relaunches even though the domain already provided PhaseOutput with value and optional prompt.
+Decision: Route agent content through PhaseOutput; keep process capture, terminal disposition, durable metadata, and semantic ledgers in their existing runtime owners. Interpret prose only in the phase owners that already decide review, finding, audit, or validation outcomes.
+Reason: One content path accepts ordinary prose without weakening accepted-step authority or terminal precedence, and removes a duplicate response contract without inventing a new DTO or completion interface.
+Alternatives considered: Retain strict response schemas or add a replacement completion contract (rejected: both preserve the wrapper failure that discarded usable work and create another authority).
+Revisit when: A future phase needs authoritative content that cannot be carried by PhaseOutput.value and its existing semantic owner.
+
+## [2026-10-01] SKILL-387: make the governed spec artifact the planning handoff
+Context: Plan responses duplicated executable details, while goal planning could checkpoint a subtask hash before the persisted spec had been revalidated after authorship.
+Decision: Standalone plan authors only its authorized local bundle and returns the canonical parent-spec path; goal planning writes its assigned subtask spec, validates readiness, recomputes its post-write hash, and checkpoints that artifact before hydration. Implementation rereads the selected spec.
+Reason: The existing artifact writer, readiness checks, and checkpoint become one authority, preventing wrong, partial, escaped, or stale-hash plans without a second planning tree or parent replacement.
+Alternatives considered: Carry executable plan text in the response or overwrite the parent spec (rejected: either creates competing authority or destroys sibling/subtask provenance).
+Revisit when: Governed planning artifacts or their checkpoint owner change.
+
+## [2026-10-01] SKILL-387: bound legacy extraction to persistence and recovery
+Context: Fresh prose must bypass legacy response validation while durable historical envelopes and pending plans still need compatibility handling.
+Decision: Extract supported historical content only at persistence/recovery boundaries; preserve accepted identity, attempts, completed effects, and terminal precedence, while routing unsupported records and unready legacy plans through existing typed recovery without conversion or replay.
+Reason: This keeps compatibility observable and bounded without making old wire shapes gate fresh content or manufacturing new artifact authority from response text.
+Alternatives considered: Blanket version bumps or automatic JSON-to-spec conversion (rejected: they either strand compatible history or silently create authority and replay risk).
+Revisit when: Historical rows are migrated to a new authoritative format under an explicit schema and compatibility policy.
+
+## [2026-09-29] Store execution semantics in the workflow creation transaction, SKILL-384
+Context: New standalone workflows and goal children need the same semantic authority before launch, including children with imported planning state.
+Decision: Store exactly one governed execution-plan descriptor in the workflow's database artifacts within its creation transaction. Pass validated resolved data through creation inputs, keep registry dependencies in the engine, and retain FeatureTaskExecutionIdentity for repository and spec lookup. Reject later descriptor replacement or removal.
+Reason: Atomic creation prevents a durable run from existing without its execution semantics. One artifact avoids competing graphs in identity rows or phase records, and passing resolved data preserves inward dependency direction.
+Alternatives considered: A separate table, per-phase descriptor copies, and a graph in the route identity would create additional authorities, so the spec excludes them.
+
+## [2026-09-29] Retain complete agent process output
+Context: The previous 1 MiB retention limit discarded output and blocked a completed review on SKILL-384.
+Decision: Retain and forward complete agent stdout and stderr through process completion. Preserve incomplete-drain, cancellation, and cleanup failures. Keep the truncation result field for adapter compatibility and historical evidence, but the JVM launcher no longer sets it.
+Reason: Discarding output can remove the completion marker and turn completed work into a blocked review. Complete capture preserves that evidence, including multibyte UTF-8 text.
 
 ## [2026-09-28] SKILL-383: skill-bill is the only listed skill; retired names stay on the wire
 Context: After SKILL-380 and SKILL-382, every capability of the other listed skills already existed as a phase, a strategy, an operation, or the `/skill-bill` dispatcher. The other listed skills duplicated those routes, and pack specialists installed as sidecars of `bill-code-review`.
@@ -64,6 +222,7 @@ Decision: Preplan, plan, and implement briefings again pin workflow_id and attem
 Reason: The runtime needs a branch signal, not a hand-authored envelope, and the one-attempt budget (2026-08-20) assumes programmatic repair catches serialisation slips. A missing root field beside a real `value` loses no producer content.
 Alternatives considered: Raising the output-gate budget (rejected 2026-09-02: a relaunch repeats the whole phase); inferring status only in the envelope walker (rejected: the synthesizer already owns prose-phase recovery).
 Revisit when: settlement tools become unavailable to child agents, or a later phase gate needs structure that `value` cannot carry.
+Superseded by: SKILL-387: use one prose content boundary with runtime-owned decisions (2026-10-01)
 
 ## [2026-09-25] Boundary memory entries are capped at 4096 bytes; verification truncates oversized bodies
 Context: A SKILL-374 goal child crashed in verify_findings because one selected decisions.md entry exceeded the verification `max_body_bytes` (4096). The per-body cap loud-failed with `GoalVerificationBoundaryCapExceededError`, which the resolved-bodies prompt path did not catch, so the child exited 1 without a durable block. The repo also held 15 entries above the cap, and 38 legacy `## <date> — <title>` headings that the parser folded into the preceding dated entry (one "entry" measured 68 KB).
@@ -2316,6 +2475,7 @@ Decision: `PhaseRunEntry` (`skillbill.engine.featuretask.phaserun`) drives an `I
 Reason: One loop and one strategy set means a phase run cannot drift from the full run. A second, review-only driver would duplicate the review, verify, and fix edges.
 Alternatives considered: Run a phase over a throwaway durable workflow row (rejected: leaves rows and branches behind and needs cleanup). A dedicated review driver (rejected: duplicates the slot strategies).
 Revisit when: a phase run needs resume, or phase-run lifecycle events are wanted (they wait for a telemetry contract-version bump, which would also carry a phase invocation id).
+Superseded by: Separate standalone reporting from full-run repair, SKILL-402 (2026-10-04)
 
 ## [2026-09-27] Phase validation keeps pack-build's triage and repair cap (SKILL-380)
 
@@ -2364,3 +2524,124 @@ Decision: `VerifyOperation` is a `SelfConfirmingOperation`. The executor hands `
 Reason: The workflow row already holds the parked criteria and the resume point, so a second proposal store would be a second source for the same state. The skill's fix offer needs editing steps and a push policy that belong to `pr-review-fix`.
 Alternatives considered: Store the criteria in `operation_proposals` and open the workflow on confirm (rejected: two stores, and the parked row could not resume). Keep the fix and PR-comment offer (rejected: it makes a read-only report an editing operation).
 Revisit when: verify needs to post its report, or a second operation needs a self-owned workflow token.
+
+## [2026-09-28] Remediation refusal preserves the original checkpoint record (SKILL-384)
+
+Context: Remediation recovery removed an unsupported checkpoint artifact into quarantine and returned a coherent result. That result let execution proceed without an admitted semantic plan or evidence of a safe regeneration boundary.
+Decision: Refuse unsupported checkpoint records without writing artifacts. Checkpoint append reads the existing history inside its write transaction and propagates version refusal without clearing that history. Refuse terminal workflows before reading recovery inputs or calling Git. Check remediation recovery before reopening stale settled review steps. Keep the original workflow, attempts, outputs, checkpoint records, and finalization evidence available for inspection with a compatible runtime or a separately reviewed semantic mapping.
+Reason: An unreadable checkpoint cannot establish that irreversible work has not begun. Moving it out of the active artifact made the next read look like missing evidence and concealed that uncertainty.
+Revisit when: Durable semantic admission supplies a recorded resume policy and proves a safe recovery boundary. These refusal checks do not implement that admission or authorize receipt regeneration.
+
+## [2026-09-28] Execution-plan canonicalization and coherence, SKILL-384
+
+Context: The execution-plan reader checked step coverage but allowed two strategies in one slot, entries owned by another strategy, reversed entry gates, and unreachable remediation cycles.
+Decision: Check those relationships after schema validation. Canonicalize object keys, strategy declarations by slot and identity, per-step declarations by step, and the loop-only set by step. Preserve selected-step order and all ordered traversal arrays. Preserve absent, empty, and null values as distinct inputs.
+Reason: Named collection order must not change descriptor equality. Traversal order can change execution, so sorting every array would hide a behavioral change.
+Revisit when: The domain codec records the remaining effective policies. These checks do not establish semantic compatibility or authorize durable continuation.
+
+## [2026-09-28] Worker takeover and terminal recovery fences, SKILL-384
+
+Context: A takeover contender could terminate an exact live worker before reserving its lease. Crash repair could remove a lease after another transaction made the workflow terminal or reserved takeover.
+Decision: Reserve takeover with the recorded token and generation before terminating the worker. Reservation and transfer require a nonterminal runtime workflow. Crash candidate discovery and repair require an active lease and a running workflow. A failed or interrupted takeover retains its reservation as evidence. Direct runner entry refuses terminal workflows before crash reconciliation, preparation, or reconstruction.
+Reason: Process identity proves which process would be stopped. The database reservation proves which contender owns the takeover. A terminal transition or reserved takeover invalidates a prior crash candidate, so repair must recheck those facts before deleting its lease.
+Revisit when: Durable semantic admission can share these transactions. The ownership fences and terminal refusal do not establish descriptor compatibility or a safe receipt regeneration boundary.
+
+## [2026-09-28] Resolved-plan encoding and composition compatibility, SKILL-384
+
+Context: The descriptor validator accepted maps, but execution had no codec for restoring an immutable resolved plan. The previous boundary test hand-built a descriptor and never reconstructed the plan.
+
+Decision: Keep the codec and composition compatibility checks in the engine. The codec delegates wire validation to the validator port and restores domain data without runners. Policy digests cover the JSON string encoding of each recorded identity. Compatibility compares the recorded selections and policy references with supported implementations without substituting a newly selected plan. A supported composition alone cannot authorize durable execution.
+
+Reason: Artifact shape, supported composition, and transactional admission have different owners. The reader must report unsupported versions and policy mismatches without leaking descriptor bodies or modifying their evidence.
+
+Revisit when: Effective execution policies and durable creation, claim, and recovery callers use this boundary. Until then, codec round-trip tests and composition refusal tests do not prove durable admission or safe receipt regeneration.
+
+## [2026-09-28] Quarantined producer invalidation retains irreversible evidence, SKILL-384
+
+Context: The producer invalidation transaction could clear a completed output after commit or PR work had started. It also treated an absent producer record as permission to continue regeneration.
+Decision: Refuse invalidation inside the transaction for terminal workflows, gate producers whose recorded semantics remain unproven, missing producer records, and any commit or PR phase record or ledger entry. Pending finalization records still count as evidence because their attempts have already started. The backward-edge caller waits for durable invalidation before changing its in-memory completion state and refuses a missing workflow. Recovery guidance directs operators to retain evidence and use a compatible runtime or a separately reviewed semantic mapping.
+Reason: A missing receipt does not prove that an external side effect never happened. Keeping the check beside the destructive write also protects direct recorder callers.
+Revisit when: Admission supplies a recorded plan and proves a safe boundary before checkpoints or other recovery work. These refusal checks do not grant semantic admission or permit gate receipt regeneration. QuarantinedProducerRecoveryRefusalTest covers retained SQLite rows, attempts, outputs, ledger entries, and checkpoints. This audit authored the test without executing it.
+
+## [2026-09-28] Effective execution policy descriptors, SKILL-384
+
+Context: Composition identity did not cover resolved gate commands or the shared rules that interpret receipts, budgets, checkpoints, and finalization.
+
+Decision: Add immutable effective-policy descriptors with named identities, semantic revisions, and bounded input digests. Hash command argv after the existing wrapper resolver. Include command family, discovery or verification role, cache mode, findings settings, pack identity, validation depth, and timeout. Keep argv order and absent values. Compare the complete supported policy set separately from composition. Durable compatibility accepts only the definition's exact traversal until an explicit mapping has behavioral coverage.
+
+Reason: An unchanged strategy id cannot prove that its command or recovery behavior is unchanged. Source hashes would also refuse harmless edits. Semantic revisions name supported behavior, while effective-input digests detect changed execution settings.
+
+Revisit when: Creation and admission resolve these inputs and pass the accepted plan to execution. The codec and effective-policy comparison still have no durable callers. Their tests cover encoding and compatibility, not transaction rollback, lease fencing, or recovery authorization.
+
+## [2026-09-28] Continuation claim admits the persisted descriptor, SKILL-384
+
+Context: Continuation claim checked only the lookup timestamp. A descriptor could change after lookup without changing that timestamp, and a successful claim returned no execution plan.
+
+Decision: Re-read the workflow, route identity, ownership, and descriptor inside the existing claim transaction. Compare the descriptor with supported composition and caller-supplied effective inputs before the status write. Return the recorded immutable plan only when the timestamp claim succeeds. Refuse changed ownership, reserved takeover, terminal status, and a definition that conflicts with the route scope. Record bounded semantic refusal diagnostics outside the rolled-back transaction and preserve the primary exception if diagnostics fail. The execution encoder also rejects traversal overrides that have no supported mapping.
+
+Reason: Lookup is advisory. Claim must check the authoritative descriptor under the same transaction as its mutation, and its consumer needs the plan that passed that check. FeatureTaskContinuationAdmissionTest exercises SQLite preservation, distinct descriptor refusals, same-timestamp descriptor changes, stale ownership, cosmetic ordering, and diagnostic failure without launching phases.
+
+Revisit when: Production launchers resolve effective inputs and consume the returned plan. Worker acquisition, creation, runner preparation, and recovery remain separate admission gaps. This change does not authorize those boundaries or gate receipt regeneration.
+
+## [2026-10-01] Audit reports open criteria only and completes on one fixed line
+
+Context: SKILL-387 accepted ordinary prose for the audit outcome and asked for a satisfied rationale on success. Every rationale line that began with a criterion ID then read as a remaining finding. SKILL-393 subtask 1 blocked on a fully satisfied audit whose rationale carried path bullets and a "the production part is satisfied" line.
+
+Decision: The audit prompt asks for the single line `No production criteria remain.` on success and, otherwise, one line per open criterion starting with its ID. The parser counts only ID-leading lines and skips ones whose first sentence declares the criterion met. It ignores explanation lines and bullets, and completes on a sentence ending in the completion phrase. Narrative prose without ID-leading lines or the completion line is unusable. A prior audit that parsed as complete gives no shrink baseline, so the comparison advances instead of casting.
+
+Reason: A fixed success line and an open-only list give the runtime a branch signal it can read without guessing at prose. Skipping satisfied notes and ignoring bullets keeps older-style reports from blocking a completed phase.
+
+Revisit when: A model regularly lists open criteria without leading IDs, or the completion phrase appears beside open criteria in real reports.
+
+## [2026-10-02] Plan works only from the preplan digest, delivered as fenced markdown
+
+Context: On ENG-1251 (capmo-android) the plan session re-read 17 of the files preplan had just mapped and spent about 40 seconds copying the manifest format from older bundles. Preplan had handed three open questions forward without the evidence to settle them. Its 100-line digest reached plan as one line with 99 escaped `\n`.
+
+Decision: Preplan is the feature's only discovery. It settles every question the repository can answer and carries the paths, symbols, hierarchies and test helpers that each subtask spec cites. Plan, bundle authoring and the goal fan-out planner treat the digest as their only repository knowledge (`PREPLAN_DIGEST_AUTHORITY`). They do not read, grep or re-verify, and they record an assumption when a fact is missing. The bundle directive carries a schema-checked manifest template. A multi-line projection text value is delivered inside a fence one backtick longer than its longest backtick run. Single-line values keep `name: value`.
+
+Reason: Discovery done once is the point of preplan, and a plan that re-verifies pays for it twice, once per subtask in a fan-out. The fence keeps the digest readable while a heading inside it still cannot pass for a briefing section, which the escaping used to guarantee.
+
+Revisit when: Plans regularly record assumptions that implement finds wrong, which would mean preplan digests are too thin rather than plan too strict.
+
+## 2026-10-03: Resume revision-one audit workflows through a checked mapping
+
+Context: Adding `audit_plan_fix` bumped acceptance-audit to revision 2. Existing
+revision-one workflows refused admission even though their production edits and
+planning evidence remained usable.
+
+Decision: Map the exact previous composition at read time. Preserve the original
+descriptor and every persisted phase, ledger entry, and checkpoint. Check the old
+retry/resume digests and recompute only those affected by the new step. Keep full
+admission checks for the other effective policies. Emit a mapping diagnostic.
+Route resumed loop-only successors through an unfinished predecessor so repair
+plans run before old blocked repairs continue. Do not delete child workflows or
+reset their budgets to make them compatible. This keeps ownership in execution
+admission and the run loop, as required by A1, A2, A7, and A10.
+
+## 2026-10-03: Keep audit repair plans as prose
+
+Context: A repair plan blocked because the completion hook parsed headings and
+required four field labels. The operator requested prose planning without content
+verification.
+
+Decision: Delete the parser and completion hook. Keep planning instructions for
+each gap's production changes and execution order. Persist the prose through the
+ordinary phase output and deliver it to repair. Bump acceptance-audit to revision
+3 and extend the checked mapping to the exact revision 1 and 2 compositions. Keep
+the original descriptors and evidence. This removes the restrictive parser rather
+than moving it, as required by A5. No architecture guard changes.
+## [2026-10-03] One-shot process success does not wait on leftover descendants
+
+Context: SKILL-399 build-gate `compileKotlin` printed `BUILD SUCCESSFUL` and every compile task came from cache. `BoundedExternalProcessRunner.settleOwnedDescendants` then remapped exit 0 to 1 because the Gradle client had started a daemon that was still alive. Parsers found no `e:` lines and minted `unparseable_gate_failure`. Cleanup already destroys the captured tree after the wait.
+
+Decision: After a client exits, publish that exit code. A still-running owned descendant is not a `readFailure`. Cleanup still destroys the captured tree. Gradle and Kotlin daemons are leftover children, and failing the command after a five-second wait turned a successful compile into a synthetic gate failure. `runtime-kotlin/gradle.properties` keeps the previous daemon and compiler settings. A one-second `org.gradle.daemon.idletimeout` and `kotlin.compiler.execution.strategy=in-process` would change every Gradle run in this tree, while this runner no longer waits on those children. `org.gradle.daemon=false` did not stop Gradle 9.3 from starting a daemon here. An installed runner that still contains the wait can still false-fail until it picks up this change.
+
+Reason: The one-shot runner's contract is complete-or-killed. Killing leftover children is teardown. Publishing the client's exit code is the result. Repo-wide daemon settings were rejected because they apply to direct Gradle invocations as well as the gate runner.
+
+Revisit when: A caller needs to distinguish a leaked child from an intentional daemon without adding process-identity branches to the shared runner.
+## [2026-10-04] Admit standalone review strategy consumers, SKILL-402
+Context: The report-only review strategies live under `skillbill.engine.featuretask.slot.standalonereview` and use the accepted review binding.
+Decision: Admit only the `standalonereview` slot package and matching relative source root in `StrategyCapabilityTransitiveGraph.reviewConsumer`.
+Reason: The new consumers require the existing review launch-runner allowance and review role authority. Their separate package must receive the same bounded traversal as `codereview`; raw run state, records, host, transition owner, and context prohibitions stay in force.
+Alternatives considered: A blanket slot exemption or admitting non-review packages (rejected: either removes transitive capability checks from unrelated strategies).
+Revisit when: The standalone review consumer package moves or its accepted binding authority changes.

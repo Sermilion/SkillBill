@@ -3,8 +3,8 @@ package skillbill.engine.operation.verify
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationOutcome
 import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
-import skillbill.error.operation.MissingOperationIntakeError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -181,7 +181,11 @@ class VerifyOperationTest {
       harness.setContractVersion(token, "9.9")
       val before = harness.row(token)
 
-      assertFailsWith<InvalidWorkflowStateSchemaError> { harness.confirm(token) }
+      assertFailsWith<SkillBillRuntimeException> {
+        harness.confirm(token)
+      }.also {
+        assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+      }
 
       assertEquals(before, harness.row(token))
       assertEquals(listOf(VerifyPromptSections.EXTRACT_CRITERIA_STEP), harness.runner.stepNames())
@@ -247,7 +251,7 @@ class VerifyOperationTest {
   @Test
   fun `verify with neither free text nor spec is a usage error that opens no workflow`() {
     VerifyOperationHarness().use { harness ->
-      assertFailsWith<MissingOperationIntakeError> { harness.invoke(OperationArguments(target = harness.range)) }
+      assertIs<OperationOutcome.Usage>(harness.invoke(OperationArguments(target = harness.range)))
 
       assertEquals(0, harness.rowCount("feature_verify_workflows"))
     }

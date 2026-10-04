@@ -14,8 +14,11 @@ import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PullRequestReadinessGate
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
 import skillbill.engine.featuretask.slot.runner.DefaultPhaseRunner
 import skillbill.engine.featuretask.slot.skeleton.SkeletonStrategyBindings
+import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
+import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -25,7 +28,7 @@ import skillbill.ports.goalrunner.runner.PullRequestTemplateFiles
 import skillbill.ports.goalrunner.runner.model.PullRequestIdentity
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -53,21 +56,32 @@ fun testPhaseStrategies(
   val registry =
     PhaseStrategyRegistry(
       listOfNotNull(
-        AgentPreplanStrategy(runner()),
-        AgentPlanStrategy(runner()),
-        ImplementThenSimplifyStrategy(runner()),
-        AcceptanceAuditStrategy(runner()),
-        InlineReviewStrategy(codeReviewRunner),
-        delegatedReviewRunner?.let { DelegatedReviewStrategy(runner(), it) },
-        PackBuildStrategy(runner()),
-        AgentValidateStrategy(runner()),
-        BoundaryHistoryStrategy(runner()),
-        RuntimeCommitStrategy(runner()),
-        PrDescriptionStrategy(
+        PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
+        PhaseStrategyRegistration(AgentPlanStrategy(), runner()),
+        PhaseStrategyRegistration(ImplementThenSimplifyStrategy(), runner()),
+        PhaseStrategyRegistration(AcceptanceAuditStrategy(), runner()),
+        PhaseStrategyRegistration(InlineReviewStrategy(codeReviewRunner), codeReviewRunner),
+        PhaseStrategyRegistration(InlineStandaloneReviewStrategy(codeReviewRunner), codeReviewRunner),
+        delegatedReviewRunner?.let {
+          val delegatedRunner = runner()
+          PhaseStrategyRegistration(DelegatedStandaloneReviewStrategy(delegatedRunner, it), delegatedRunner)
+        },
+        delegatedReviewRunner?.let {
+          val delegatedRunner = runner()
+          PhaseStrategyRegistration(DelegatedReviewStrategy(delegatedRunner, it), delegatedRunner)
+        },
+        PhaseStrategyRegistration(PackBuildStrategy(), runner()),
+        PhaseStrategyRegistration(PackValidationStrategy(), runner()),
+        PhaseStrategyRegistration(AgentValidateStrategy(), runner()),
+        PhaseStrategyRegistration(BoundaryHistoryStrategy(), runner()),
+        PhaseStrategyRegistration(RuntimeCommitStrategy(), runner()),
+        PhaseStrategyRegistration(
+          PrDescriptionStrategy(
+            pullRequestIdentityLookup,
+            PullRequestReadinessGate(readinessEvidence, NoopRuntimeDiagnostics),
+            LocalPullRequestTemplateFiles,
+          ),
           runner(),
-          pullRequestIdentityLookup,
-          PullRequestReadinessGate(readinessEvidence, NoopRuntimeDiagnostics),
-          LocalPullRequestTemplateFiles,
         ),
       ),
     )
@@ -85,9 +99,9 @@ fun goalPlanningPhaseStrategies(
   val registry =
     PhaseStrategyRegistry(
       listOf(
-        AgentPreplanStrategy(runner()),
-        AgentPlanStrategy(runner()),
-        GoalPlanFanOutStrategy(runner, fanOutPort, planFanOutCap),
+        PhaseStrategyRegistration(AgentPreplanStrategy(), runner()),
+        PhaseStrategyRegistration(AgentPlanStrategy(), runner()),
+        PhaseStrategyRegistration(GoalPlanFanOutStrategy(fanOutPort, planFanOutCap), runner()),
       ),
     )
   val bindings =
@@ -167,7 +181,7 @@ fun testPhaseStrategyBindings(
       ),
     SkeletonDefinition.REVIEW to
       mapOf(
-        PhaseSlot.CODE_REVIEW to
+        PhaseSlot.STANDALONE_REVIEW to
           PhaseStrategyBinding.ByFact(
             CodeReviewExecutionMode.entries.associateWith { mode ->
               if (mode == CodeReviewExecutionMode.DELEGATED) codeReviewStrategyId else InlineReviewStrategy.ID

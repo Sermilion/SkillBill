@@ -8,10 +8,11 @@ import skillbill.application.review.snapshot.ReviewRecorder
 import skillbill.application.review.snapshot.diffForPaths
 import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.reviewHarness
+import skillbill.application.review.snapshot.reviewed
 import skillbill.application.review.snapshot.sparseReviewPack
 import skillbill.application.runner
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ReviewClaimVerdict
 import skillbill.review.model.ReviewFindingCitation
 import skillbill.review.model.ReviewFindingVerdict
@@ -35,7 +36,7 @@ class ParallelCodeReviewStageResumeTest {
   fun `a completed review pass records verification and resumes into adjudication without relaunching lanes`() {
     val recorder = ReviewRecorder()
     val config = delegatedConfig()
-    reviewHarness(config, recorder).run(delegatedRequest())
+    reviewHarness(config, recorder).reviewed(delegatedRequest())
     assertTrue(
       recorder.durableStageBoundaries.any {
         it.stage == ReviewStage.REVIEW && it.reached == ReviewStageReached.REACHED
@@ -49,7 +50,7 @@ class ParallelCodeReviewStageResumeTest {
     val afterFirst = recorder.specialistLaunches.size
     assertTrue(afterFirst > 0)
 
-    val resumed = reviewHarness(config, recorder).run(delegatedRequest())
+    val resumed = reviewHarness(config, recorder).reviewed(delegatedRequest())
     assertEquals(
       afterFirst,
       recorder.specialistLaunches.size,
@@ -65,7 +66,7 @@ class ParallelCodeReviewStageResumeTest {
   fun `a run holding verification results resumes into adjudication with verdicts retained`() {
     val recorder = ReviewRecorder()
     val config = delegatedConfig()
-    reviewHarness(config, recorder).run(delegatedRequest())
+    reviewHarness(config, recorder).reviewed(delegatedRequest())
     val verdict =
       ReviewFindingVerdict(
         stage = ReviewStage.VERIFICATION,
@@ -82,7 +83,7 @@ class ParallelCodeReviewStageResumeTest {
       )
     recorder.durableFindingVerdicts += verdict
 
-    val resumed = reviewHarness(config, recorder).run(delegatedRequest())
+    val resumed = reviewHarness(config, recorder).reviewed(delegatedRequest())
     val resume = assertNotNull(resumed.stageResume)
     assertEquals(ReviewStage.ADJUDICATION, resume.reentryStage)
     assertEquals(listOf(verdict), recorder.durableFindingVerdicts.toList())
@@ -91,7 +92,7 @@ class ParallelCodeReviewStageResumeTest {
   @Test
   fun `no resolvable spec records a closed none reason and skips stage 2`() {
     val recorder = ReviewRecorder()
-    reviewHarness(delegatedConfig(), recorder).run(delegatedRequest())
+    reviewHarness(delegatedConfig(), recorder).reviewed(delegatedRequest())
     assertEquals("not_applicable_scope", recorder.durableSpecProjection?.absenceReason)
     assertTrue(
       recorder.durableStageBoundaries.any {

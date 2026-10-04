@@ -1,7 +1,10 @@
 package skillbill.infrastructure.http
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.ports.process.ReleaseCatalogPort
 import skillbill.ports.process.model.ReleaseCatalogEntry
 import skillbill.ports.process.model.ReleaseCatalogResult
@@ -51,7 +54,8 @@ class GitHubReleaseCatalogAdapter(
     val parsed =
       try {
         JsonCodec.parseJsonArrayStrict(response.body)
-      } catch (_: ShellContentContractException) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isShellContentContractFailure())
         return malformedPayload()
       }
     return releasesFrom(parsed)
@@ -89,10 +93,10 @@ class GitHubReleaseCatalogAdapter(
     ReleaseCatalogResult.Failure("network failure: ${errorMessage(error)}")
 
   private fun errorMessage(error: Exception): String =
-    error.message.orEmpty().ifBlank { error::class.simpleName.orEmpty() }
+    error.message.orEmpty().ifBlank { error.failureCodeLabel() ?: error::class.simpleName.orEmpty() }
 
   private companion object {
-    const val RELEASES_URL: String = "https://api.github.com/repos/Sermilion/skill-bill/releases"
+    const val RELEASES_URL: String = "https://api.github.com/repositories/1183084383/releases"
     const val GITHUB_JSON_MEDIA_TYPE: String = "application/vnd.github+json"
     const val UPDATE_CHECK_USER_AGENT: String = "skill-bill-update-check"
     const val HTTP_FORBIDDEN: Int = 403

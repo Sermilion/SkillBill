@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.networknt.schema.JsonSchema
 import skillbill.contracts.nativeagent.NATIVE_AGENT_LINK_INVENTORY_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidNativeAgentLinkInventorySchemaError
+import skillbill.error.shellcontent.invalidNativeAgentLinkInventorySchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.NativeAgentLinkInventorySchemaPaths
@@ -34,12 +34,12 @@ object NativeAgentLinkInventory {
           classLoader = javaClass.classLoader,
           classpathResource = NativeAgentLinkInventorySchemaPaths.CLASSPATH_RESOURCE,
           missingResource = {
-            InvalidNativeAgentLinkInventorySchemaError(
+            invalidNativeAgentLinkInventorySchema(
               "Canonical native-agent link inventory schema resource is missing from the classpath.",
             )
           },
           processingFailure = { cause ->
-            InvalidNativeAgentLinkInventorySchemaError(
+            invalidNativeAgentLinkInventorySchema(
               cause.message ?: cause::class.simpleName.orEmpty(),
               cause,
             )
@@ -47,7 +47,7 @@ object NativeAgentLinkInventory {
           loadFailureLogger = {},
           expectedSchemaId = NativeAgentLinkInventorySchemaPaths.EXPECTED_SCHEMA_ID,
           expectedContractVersion = NATIVE_AGENT_LINK_INVENTORY_CONTRACT_VERSION,
-          identityFailure = { reason -> InvalidNativeAgentLinkInventorySchemaError(reason) },
+          identityFailure = { reason -> invalidNativeAgentLinkInventorySchema(reason) },
         ),
       )
 
@@ -90,7 +90,7 @@ object NativeAgentLinkInventory {
       }.orEmpty()
     }
     if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
-      throw InvalidNativeAgentLinkInventorySchemaError(
+      throw invalidNativeAgentLinkInventorySchema(
         "Invalid native-agent link inventory '$path': inventory must be a regular file. Delete it and reinstall.",
       )
     }

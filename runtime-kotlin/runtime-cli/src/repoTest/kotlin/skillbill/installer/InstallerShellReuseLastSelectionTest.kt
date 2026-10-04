@@ -165,6 +165,7 @@ class InstallerShellReuseLastSelectionTest {
     """
     |#!/usr/bin/env bash
     |set -euo pipefail
+    |if [[ "${'$'}{1:-}" == "--check-packaged-contracts" ]]; then exit 0; fi
     |{
     |  echo CALL
     |  for arg in "${'$'}@"; do

@@ -2,6 +2,7 @@ package skillbill.infrastructure.sqlite.workflow.goalrunner.runner
 
 import skillbill.contracts.JsonCodec
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
 import java.math.BigDecimal
 import java.math.BigInteger
 
@@ -14,6 +15,8 @@ internal fun Map<String, Any?>.nonNegativeLongOrDefault(key: String): Long =
     else -> null
   }?.takeIf { it >= 0 }
     ?: goalRunnerControlSchemaError("field '$key' must be a non-negative integer.")
+
+internal fun Any?.exactPositiveSubtaskIdOrNull(): Int? = (this as? Number)?.asExactIntOrNull()?.takeIf { it > 0 }
 
 internal const val LEGACY_UNKNOWN_PAUSED_AT: String = "1970-01-01T00:00:00Z"
 

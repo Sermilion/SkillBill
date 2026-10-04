@@ -4,8 +4,9 @@ import org.junit.jupiter.api.Test
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PERSISTENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GOAL_PROGRESS_EVENT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
-import skillbill.goalrunner.decodeDeclaredGoalProgressEvent
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
+import skillbill.goalrunner.ledger.decodeDeclaredGoalProgressEvent
 import skillbill.goalrunner.model.GoalAttemptLedgerAction
 import skillbill.goalrunner.model.GoalAttemptLedgerEntry
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
@@ -34,7 +35,11 @@ class WorkflowRecordMappingTest {
         row().copy(artifactsJson = "[]"),
       )
     invalidRows.forEach { invalid ->
-      assertFailsWith<InvalidWorkflowStateSchemaError> { invalid.toSnapshot() }
+      assertFailsWith<SkillBillRuntimeException> {
+        invalid.toSnapshot()
+      }.also {
+        assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code)
+      }
     }
   }
 
@@ -56,9 +61,9 @@ class WorkflowRecordMappingTest {
   @Test
   fun `malformed timestamps fail as typed workflow schema errors`() {
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         row().copy(startedAt = "not-a-time").toSnapshot()
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
 
     assertNotNull(error.message)
   }
@@ -84,9 +89,9 @@ class WorkflowRecordMappingTest {
   @Test
   fun `encoding cannot replace a corrupt source row with an empty aggregate`() {
     val snapshot = row().toSnapshot()
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       snapshot.mapToRecord(row().copy(artifactsJson = "{"))
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   @Test

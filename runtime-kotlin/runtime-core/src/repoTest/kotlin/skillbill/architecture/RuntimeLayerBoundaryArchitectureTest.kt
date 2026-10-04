@@ -1,6 +1,5 @@
 package skillbill.architecture
 
-import skillbill.application.learningRecord
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -335,10 +334,7 @@ class RuntimeLayerBoundaryArchitectureTest {
         .flatMap { file ->
           if (
             file.packageName.split('.').contains("model") ||
-            file.relativePath.endsWith("skillbill/goalrunner/FeatureTaskRuntimeCommitPushResultArtifact.kt") ||
-            file.relativePath.endsWith(
-              "skillbill/ports/workflow/decomposition/DecompositionManifestProjectionFailurePersistence.kt",
-            )
+            file.relativePath.endsWith("skillbill/goalrunner/FeatureTaskRuntimeCommitPushResultArtifact.kt")
           ) {
             return@flatMap emptyList()
           }

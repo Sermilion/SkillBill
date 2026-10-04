@@ -4,54 +4,47 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
-import skillbill.engine.planningprojection.requireValidPlanningProjection
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationContractError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
-import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputValidator
-import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
-import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 
-class GoalPlanningPreparationValidator(
-  private val outputValidator: FeatureTaskRuntimePhaseOutputValidator,
-  private val planningProjectionValidator: FeatureTaskRuntimeWireArtifactValidator,
-) {
+class GoalPlanningPreparationValidator {
   fun validate(record: GoalPlanningPreparationRecord) {
     canonicalize(record)
   }
 
   fun canonicalize(record: GoalPlanningPreparationRecord): GoalPlanningPreparationRecord {
     val label = "${record.parentGoalWorkflowId}#${record.subtaskId}"
-    val acceptedPreplan =
-      outputValidator.validatePhaseOutput(record.preplanPayload, PREPLAN_PHASE_ID)
-        .requireAcceptedOutput(PREPLAN_PHASE_ID)
-    val preplan = acceptedPreplan.normalizedOutput.envelopeWireMap()
-    val acceptedPlan =
-      outputValidator.validatePhaseOutput(record.planPayload, PLAN_PHASE_ID)
-        .requireAcceptedOutput(PLAN_PHASE_ID)
-    val plan = acceptedPlan.normalizedOutput.envelopeWireMap()
-    val failure = envelopeFailure(record) ?: provenanceFailure(record)
-    failure?.let { throw InvalidGoalPlanningPreparationSchemaError(sourceLabel = label, fieldPath = "", reason = it) }
+    val preplan =
+      NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(record.preplanPayload, PREPLAN_PHASE_ID)
+        .envelopeWireMap()
+    val plan =
+      NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(record.planPayload, PLAN_PHASE_ID)
+        .envelopeWireMap()
+    envelopeFailure(record)?.let {
+      throw invalidGoalPlanningPreparationSchemaError(sourceLabel = label, fieldPath = "", reason = it)
+    }
+    provenanceFailure(record)?.let { reason ->
+      throw if (
+        reason.startsWith("provenance.phase_output_contract_id must be") ||
+        reason.startsWith("provenance.phase_output_contract_version must be")
+      ) {
+        incompatibleGoalPlanningPreparationContractError(sourceLabel = label, fieldPath = "", reason = reason)
+      } else {
+        invalidGoalPlanningPreparationSchemaError(sourceLabel = label, fieldPath = "", reason = reason)
+      }
+    }
     requireCompleted(preplan, PREPLAN_PHASE_ID, label)
     requireCompleted(plan, PLAN_PHASE_ID, label)
-    requireValidProjection(plan, PLAN_PHASE_ID, label)
     return record.copy(
       preplanPayload = JsonCodec.mapToJsonString(preplan),
       planPayload = JsonCodec.mapToJsonString(plan),
-      preplanRepairEvidence = acceptedPreplan.repairEvidence ?: record.preplanRepairEvidence,
-      planRepairEvidence = acceptedPlan.repairEvidence ?: record.planRepairEvidence,
     )
-  }
-
-  private fun requireValidProjection(
-    envelope: Map<String, Any?>,
-    phaseId: String,
-    label: String,
-  ) {
-    requireValidPlanningProjection(envelope, phaseId, label, planningProjectionValidator)
   }
 
   private fun requireCompleted(
@@ -61,7 +54,7 @@ class GoalPlanningPreparationValidator(
   ) {
     val status = payload[SharedPayloadKeys.STATUS]?.toString()
     if (status.workflowStepStatus() != WorkflowStepStatus.COMPLETED) {
-      throw InvalidGoalPlanningPreparationSchemaError(
+      throw invalidGoalPlanningPreparationSchemaError(
         sourceLabel = label,
         fieldPath = "${phaseId}_payload.status",
         reason = "status must be 'completed' for a prepared pair",
@@ -94,7 +87,8 @@ class GoalPlanningPreparationValidator(
         "provenance.phase_output_contract_id must be the feature-task-runtime phase output schema id"
       record.provenance.phaseOutputContractVersion != FEATURE_TASK_RUNTIME_CONTRACT_VERSION ->
         "provenance.phase_output_contract_version must be '$FEATURE_TASK_RUNTIME_CONTRACT_VERSION'; existing " +
-          "workflow state is incompatible and must be hard-reset"
+          "workflow state is unsupported by this runtime. Keep the workflow and checkpoints intact, then resume " +
+          "with a runtime that supports this version or an explicitly reviewed migration."
       else -> null
     }
 

@@ -1,6 +1,6 @@
 package skillbill.infrastructure.workflow.decomposition
 
-import skillbill.error.shellcontent.InvalidDecompositionManifestBundleJournalError
+import skillbill.error.core.SkillBillRuntimeException
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,7 +17,7 @@ class RuntimeFilesystemArchitectureProbeTest {
       val journal = DecompositionManifestBundleJournal()
       val transaction = journal.create(root, listOf(target to "intended"))
       Files.writeString(transaction.entries.single().staged, "corrupted")
-      assertFailsWith<InvalidDecompositionManifestBundleJournalError> {
+      assertFailsWith<SkillBillRuntimeException> {
         journal.recoverPending(root)
       }
       assertEquals("old", Files.readString(target))
@@ -41,7 +41,7 @@ class RuntimeFilesystemArchitectureProbeTest {
         Files.readString(transaction.marker)
           .replace(transaction.stagingDirectory.toString(), unrelated.toString())
       Files.writeString(transaction.marker, marker)
-      assertFailsWith<InvalidDecompositionManifestBundleJournalError> {
+      assertFailsWith<SkillBillRuntimeException> {
         journal.recoverPending(root)
       }
       assertTrue(Files.exists(unrelated.resolve("keep.txt")))

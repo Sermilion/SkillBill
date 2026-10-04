@@ -1,11 +1,11 @@
 package skillbill.application.decomposition
 
+import skillbill.application.decomposition.model.DecompositionManifestRuntimeUpdate
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.goalrunner.commitPushResultArtifact
 import skillbill.goalrunner.goalContinuationOutcomeArtifact
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestRuntimeUpdate
 import skillbill.workflow.decomposition.model.DecompositionExecutionModel
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -17,7 +17,7 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.decompositionStatus
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.model.workflowStepStatus
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 import java.nio.file.Path
 
 private val statusTrackedSteps =

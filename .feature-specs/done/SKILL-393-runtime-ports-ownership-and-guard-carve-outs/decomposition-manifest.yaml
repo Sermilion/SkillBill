@@ -1,0 +1,43 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-393"
+feature_name: "runtime-ports-ownership-and-guard-carve-outs"
+parent_spec_path: ".feature-specs/SKILL-393-runtime-ports-ownership-and-guard-carve-outs/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "base/SKILL-380-phase-slot-strategies"
+feature_branch: "feat/SKILL-393-runtime-ports-ownership-and-guard-carve-outs"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "Engine-owned contracts move to engine"
+  spec_path: ".feature-specs/SKILL-393-runtime-ports-ownership-and-guard-carve-outs/spec_subtask_1_engine-owned-contracts-move-to-engine.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261001-133726-c7v5"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 2
+  name: "Behaviour out of ports and guard carve-outs removed"
+  spec_path: ".feature-specs/SKILL-393-runtime-ports-ownership-and-guard-carve-outs/spec_subtask_2_behaviour-out-of-ports-and-guard-carve-outs.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261001-141857-8k1o"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false

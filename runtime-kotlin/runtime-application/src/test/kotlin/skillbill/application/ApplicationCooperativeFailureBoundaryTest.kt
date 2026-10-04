@@ -2,13 +2,14 @@ package skillbill.application
 
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.application.review.spec.SpecIntentProjectionExtractor
-import skillbill.application.review.spec.SpecIntentSourceUnavailable
-import skillbill.application.runtimepersistence.RuntimeOwnedFactUnavailable
+import skillbill.application.review.spec.SpecIntentSourceRead
 import skillbill.application.runtimepersistence.RuntimeOwnedPersistenceBoundary
 import skillbill.application.system.SystemService
 import skillbill.application.telemetry.settings.telemetrySettingsOrNull
 import skillbill.application.updatecheck.UpdateCheckService
 import skillbill.application.updatecheck.model.UpdateCheckStatus
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.idestatus.model.AgentActivityLabel
 import skillbill.model.RuntimeVersion
 import skillbill.ports.db.DatabaseSessionFactory
@@ -20,7 +21,7 @@ import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.telemetry.transport.TelemetrySettingsProvider
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.review.context.ReviewContextWireMap
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.telemetry.model.TelemetrySettings
 import java.io.IOException
 import java.nio.file.Files
@@ -31,6 +32,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import kotlin.time.TimeSource
@@ -50,7 +52,6 @@ class ApplicationCooperativeFailureBoundaryTest {
         Path.of("/tmp/audit-repo"),
         Path.of("spec.md"),
         ReviewContextBudgetPolicy.DEFAULT,
-        explicit = false,
       )
     }
   }
@@ -71,7 +72,6 @@ class ApplicationCooperativeFailureBoundaryTest {
         Path.of("/tmp/audit-repo"),
         Path.of("spec.md"),
         ReviewContextBudgetPolicy.DEFAULT,
-        explicit = false,
       )
     }
   }
@@ -84,16 +84,14 @@ class ApplicationCooperativeFailureBoundaryTest {
 
         override fun readText(path: Path): String = throw IOException("unreadable")
       }
-    val error =
-      assertFailsWith<SpecIntentSourceUnavailable> {
-        SpecIntentProjectionExtractor(noopReviewContextEnvelopeValidator(), fileStore).extract(
-          Path.of("/tmp/audit-repo"),
-          Path.of("spec.md"),
-          ReviewContextBudgetPolicy.DEFAULT,
-          explicit = false,
-        )
-      }
-    assertEquals("unreadable", error.reason)
+    val read =
+      SpecIntentProjectionExtractor(noopReviewContextEnvelopeValidator(), fileStore).extract(
+        Path.of("/tmp/audit-repo"),
+        Path.of("spec.md"),
+        ReviewContextBudgetPolicy.DEFAULT,
+      )
+    val unavailable = assertIs<SpecIntentSourceRead.Unavailable>(read)
+    assertEquals("unreadable", unavailable.reason)
   }
 
   @Test
@@ -183,9 +181,10 @@ class ApplicationCooperativeFailureBoundaryTest {
     val root = IOException("store-down")
     val boundary = RuntimeOwnedPersistenceBoundary(FailingDatabase(root), RecordingDiagnostics())
     val error =
-      assertFailsWith<RuntimeOwnedFactUnavailable> {
+      assertFailsWith<SkillBillRuntimeException> {
         boundary.requiredRead("probe", "fact") { "unreachable" }
       }
+    assertEquals(RuntimeOwnedPersistenceFailureCode.REVIEW_FACT_UNAVAILABLE, error.code)
     assertEquals(root, error.cause)
     assertTrue(RecordingDiagnostics.lastWarning.orEmpty().contains("store-down"))
   }
@@ -206,10 +205,11 @@ class ApplicationCooperativeFailureBoundaryTest {
         ) = Unit
       }
     val error =
-      assertFailsWith<RuntimeOwnedFactUnavailable> {
+      assertFailsWith<SkillBillRuntimeException> {
         RuntimeOwnedPersistenceBoundary(FailingDatabase(root), diagnostics)
           .requiredRead("probe", "fact") { "unreachable" }
       }
+    assertEquals(RuntimeOwnedPersistenceFailureCode.REVIEW_FACT_UNAVAILABLE, error.code)
     assertSame(root, error.cause)
   }
 

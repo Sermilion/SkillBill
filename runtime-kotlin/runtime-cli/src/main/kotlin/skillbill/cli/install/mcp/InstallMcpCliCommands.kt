@@ -8,9 +8,11 @@ import skillbill.cli.install.apply.refuseInstallMutationDuringGoalContinuation
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.model.CliRunInputs
-import skillbill.install.model.ClaudeMcpProfileFailure
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.install.model.McpMutationResult
 import skillbill.install.model.McpProfileOutcome
+import skillbill.install.model.McpRegistrationFailureCode
+import skillbill.install.model.McpRegistrationOutcome
 import skillbill.ports.install.mcp.InstallMcpRegistrationPort
 import skillbill.ports.install.mcp.model.InstallMcpRegistrationRequest
 import skillbill.ports.install.mcp.model.InstallMcpUnregistrationRequest
@@ -29,14 +31,19 @@ class InstallRegisterMcpCommand(
     if (state.refuseInstallMutationDuringGoalContinuation(inputs, "register-mcp")) {
       return
     }
-    val result =
+    val outcome =
       installMcpRegistrationPort.registerMcp(
         InstallMcpRegistrationRequest(
           agent = agent,
           runtimeMcpBin = Path.of(runtimeMcpBin),
           home = inputs.userHome,
         ),
-      ).mutation
+      ).outcome
+    val result =
+      when (outcome) {
+        is McpRegistrationOutcome.Applied -> outcome.mutation
+        is McpRegistrationOutcome.ProfilesFailed -> throw profilesFailure(outcome)
+      }
     state.completeText(mcpProfilePathsText(result), mcpProfilesMap(agent, result))
   }
 }
@@ -53,24 +60,30 @@ class InstallUnregisterMcpCommand(
     if (state.refuseInstallMutationDuringGoalContinuation(inputs, "unregister-mcp")) {
       return
     }
+    val outcome =
+      installMcpRegistrationPort.unregisterMcp(
+        InstallMcpUnregistrationRequest(
+          agent = agent,
+          home = inputs.userHome,
+        ),
+      ).outcome
     val result =
-      try {
-        installMcpRegistrationPort.unregisterMcp(
-          InstallMcpUnregistrationRequest(
-            agent = agent,
-            home = inputs.userHome,
-          ),
-        ).mutation
-      } catch (error: ClaudeMcpProfileFailure) {
-        val removed = changedProfilePathsText(error.succeeded)
-        if (removed.isNotEmpty()) {
-          inputs.liveStdout("$removed\n")
+      when (outcome) {
+        is McpRegistrationOutcome.Applied -> outcome.mutation
+        is McpRegistrationOutcome.ProfilesFailed -> {
+          val removed = changedProfilePathsText(outcome.succeeded)
+          if (removed.isNotEmpty()) {
+            inputs.liveStdout("$removed\n")
+          }
+          throw profilesFailure(outcome)
         }
-        throw error
       }
     state.completeText(mcpProfilePathsText(result), mcpProfilesMap(agent, result))
   }
 }
+
+private fun profilesFailure(failure: McpRegistrationOutcome.ProfilesFailed): SkillBillRuntimeException =
+  SkillBillRuntimeException(McpRegistrationFailureCode.PROFILE_UPDATE_FAILED, failure.message)
 
 private fun mcpProfilePathsText(result: McpMutationResult): String =
   if (result.profiles.isEmpty()) {

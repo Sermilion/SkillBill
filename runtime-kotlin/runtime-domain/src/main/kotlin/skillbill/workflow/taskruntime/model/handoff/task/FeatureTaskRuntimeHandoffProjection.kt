@@ -3,7 +3,6 @@ package skillbill.workflow.taskruntime.model.handoff.task
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeHandoffPromptVisibility
 
 data class FeatureTaskRuntimeHandoffProjection(
   val projectionName: String,
@@ -37,13 +36,21 @@ data class FeatureTaskRuntimeHandoffProjection(
               fields.size == 1 &&
                 field.name == "phase_output_receipt"
             when (val value = field.value) {
-              is FeatureTaskRuntimeHandoffProjectionValue.Text -> {
-                val text = value.text.escapeProjectionLineBreaks()
-                if (singleReceipt) appendLine(text) else appendLine("${field.name}: $text")
-              }
+              is FeatureTaskRuntimeHandoffProjectionValue.Text ->
+                when {
+                  !value.text.isMultiLine() ->
+                    if (singleReceipt) appendLine(value.text) else appendLine("${field.name}: ${value.text}")
+                  singleReceipt -> appendFenced(value.text)
+                  else -> {
+                    appendLine("${field.name}:")
+                    appendFenced(value.text)
+                  }
+                }
               is FeatureTaskRuntimeHandoffProjectionValue.TextList -> {
                 appendLine("${field.name}:")
-                value.items.forEach { item -> appendLine("  - ${item.escapeProjectionLineBreaks()}") }
+                value.items.forEach { item ->
+                  if (item.isMultiLine()) appendFenced(item) else appendLine("  - $item")
+                }
               }
               is FeatureTaskRuntimeHandoffProjectionValue.CompactReference ->
                 appendLine("${field.name}: ${value.kind.wireValue}=${value.value}")
@@ -89,4 +96,16 @@ data class FeatureTaskRuntimeHandoffProjection(
     )
 }
 
-private fun String.escapeProjectionLineBreaks(): String = replace("\r", "\\r").replace("\n", "\\n")
+private const val MINIMUM_FENCE_LENGTH = 3
+
+private val BACKTICK_RUN = Regex("`+")
+
+private fun String.isMultiLine(): Boolean = contains('\n') || contains('\r')
+
+private fun StringBuilder.appendFenced(text: String) {
+  val longestRun = BACKTICK_RUN.findAll(text).maxOfOrNull { it.value.length } ?: 0
+  val fence = "`".repeat(maxOf(MINIMUM_FENCE_LENGTH, longestRun + 1))
+  appendLine(fence)
+  appendLine(text.replace("\r\n", "\n").replace('\r', '\n').trimEnd('\n'))
+  appendLine(fence)
+}

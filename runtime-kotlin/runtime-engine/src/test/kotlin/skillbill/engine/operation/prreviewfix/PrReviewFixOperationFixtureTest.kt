@@ -1,6 +1,6 @@
 package skillbill.engine.operation.prreviewfix
 
-import skillbill.engine.featuretask.slotbaseline.SlotBaselineTestResources
+import skillbill.engine.featuretask.runner.SlotBaselineTestResources
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationOutcome
 import java.nio.file.Files

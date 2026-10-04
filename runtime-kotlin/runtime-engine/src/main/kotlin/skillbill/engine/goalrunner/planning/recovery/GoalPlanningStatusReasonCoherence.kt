@@ -18,9 +18,11 @@ import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
+import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.text.sha256HexUtf8
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import java.nio.file.Path
 
 fun interface GoalPlanningStatusReasonCoherence {
@@ -37,7 +39,11 @@ class LaunchAlignedGoalPlanningStatusReasonCoherence(
     if (!request.snapshot.sharedPreplanPrepared) return request.snapshot
     val recoverability =
       statusRecoverabilityOrRefuse {
-        classifyForStatus(request)
+        when (val stored = checkpoint.findSharedPreplanResult(statusIdentity(request))) {
+          is SharedGoalPreplanLookupResult.Conflicted ->
+            GoalPlanningProvenanceRecoverability.Irrecoverable(classifyGoalPlanningRecovery(stored.conflict))
+          is SharedGoalPreplanLookupResult.Found -> classifyForStatus(request, stored.checkpoint)
+        }
       }
     val remedySubtaskId =
       request.snapshot.currentPlanningSubtaskId
@@ -51,26 +57,23 @@ class LaunchAlignedGoalPlanningStatusReasonCoherence(
     )
   }
 
-  private fun classifyForStatus(request: GoalPlanningStatusAlignRequest): GoalPlanningProvenanceRecoverability {
+  private fun classifyForStatus(
+    request: GoalPlanningStatusAlignRequest,
+    existing: SharedGoalPreplanCheckpoint?,
+  ): GoalPlanningProvenanceRecoverability {
     val canonicalRepository =
       repositoryEnclosingRootPort.canonicalPath(
         repositoryEnclosingRootPort.enclosingRepositoryRoot(request.repoRoot),
       )
-    val identity =
-      GoalPlanningIdentity(
-        request.parentWorkflowId,
-        request.issueKey.trim().uppercase(),
-        repositoryEnclosingRootPort.repositoryIdentity(request.repoRoot),
+    if (existing == null) {
+      return GoalPlanningProvenanceRecoverability.Reuse(
+        GoalPlanningContractProvenance(
+          parentSpecHash = "",
+          decompositionManifestHash = "",
+          planningContractId = GOAL_PLANNING_PREPARATION_SCHEMA_ID,
+        ),
       )
-    val existing =
-      checkpoint.findSharedPreplan(identity)
-        ?: return GoalPlanningProvenanceRecoverability.Reuse(
-          GoalPlanningContractProvenance(
-            parentSpecHash = "",
-            decompositionManifestHash = "",
-            planningContractId = GOAL_PLANNING_PREPARATION_SCHEMA_ID,
-          ),
-        )
+    }
     val parentSpecPath = lexicalPath(canonicalRepository, request.manifest.parentSpecPath)
     val currentParentSpec = manifestFileStore.readText(parentSpecPath)
     val current =
@@ -93,6 +96,13 @@ class LaunchAlignedGoalPlanningStatusReasonCoherence(
       currentParentSpec = currentParentSpec,
     )
   }
+
+  private fun statusIdentity(request: GoalPlanningStatusAlignRequest) =
+    GoalPlanningIdentity(
+      request.parentWorkflowId,
+      FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(request.issueKey),
+      repositoryEnclosingRootPort.repositoryIdentity(request.repoRoot),
+    )
 
   private fun planningPacketParentSpec(existing: SharedGoalPreplanCheckpoint): String? {
     val packet =

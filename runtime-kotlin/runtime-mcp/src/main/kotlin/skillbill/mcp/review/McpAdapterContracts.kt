@@ -3,62 +3,64 @@ package skillbill.mcp.review
 import skillbill.contracts.JsonPayloadContract
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.learning.LearningPayloadKeys
-import skillbill.contracts.mcp.McpToolPayloadKeys
+import skillbill.contracts.learning.NO_APPLIED_LEARNINGS
+import skillbill.contracts.review.ReviewFinishedTelemetryPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
+import skillbill.contracts.system.UpdateCheckPayloadKeys
+import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 
-data class McpReviewImportSkippedContract(
+internal data class McpReviewImportSkippedContract(
   val reason: String,
   val reviewRunId: String?,
-  val findingCount: Any?,
+  val findingCount: Int,
 ) : JsonPayloadContract {
   override fun toPayload(): Map<String, Any?> =
     linkedMapOf(
       SharedPayloadKeys.STATUS to "skipped",
-      McpToolPayloadKeys.REASON to reason,
+      UpdateCheckPayloadKeys.REASON to reason,
       ReviewVerificationSignalKeys.REVIEW_RUN_ID to reviewRunId,
-      McpToolPayloadKeys.FINDING_COUNT to findingCount,
+      ReviewFinishedTelemetryPayloadKeys.FINDING_COUNT to findingCount,
     )
 }
 
-data class McpTriageSkippedContract(
+internal data class McpTriageSkippedContract(
   val reason: String,
   val reviewRunId: String,
 ) : JsonPayloadContract {
   override fun toPayload(): Map<String, Any?> =
     linkedMapOf(
       SharedPayloadKeys.STATUS to "skipped",
-      McpToolPayloadKeys.REASON to reason,
+      UpdateCheckPayloadKeys.REASON to reason,
       ReviewVerificationSignalKeys.REVIEW_RUN_ID to reviewRunId,
     )
 }
 
-data class McpLearningsSkippedContract(
+internal data class McpLearningsSkippedContract(
   val reason: String,
 ) : JsonPayloadContract {
   override fun toPayload(): Map<String, Any?> =
     linkedMapOf(
       SharedPayloadKeys.STATUS to "skipped",
-      McpToolPayloadKeys.REASON to reason,
-      LearningPayloadKeys.APPLIED_LEARNINGS to "none",
+      UpdateCheckPayloadKeys.REASON to reason,
+      LearningPayloadKeys.APPLIED_LEARNINGS to NO_APPLIED_LEARNINGS,
       LearningPayloadKeys.LEARNINGS to emptyList<Any>(),
     )
 }
 
-data class McpOrchestratedPayloadContract(
+internal data class McpOrchestratedPayloadContract(
   val basePayload: Map<String, Any?>,
   val telemetryPayload: Map<String, Any?>?,
-  val telemetrySkill: String = "bill-code-review",
 ) : JsonPayloadContract {
   override fun toPayload(): Map<String, Any?> =
     linkedMapOf<String, Any?>().apply {
       putAll(basePayload)
-      put("mode", "orchestrated")
+      put(LifecycleTelemetryPayloadKeys.MODE, "orchestrated")
       telemetryPayload?.let { telemetry ->
         put(
-          "telemetry_payload",
+          LifecycleTelemetryPayloadKeys.TELEMETRY_PAYLOAD,
           linkedMapOf<String, Any?>().apply {
             putAll(telemetry)
-            put("skill", telemetrySkill)
+            put(LifecycleTelemetryPayloadKeys.SKILL, "bill-code-review")
           },
         )
       }

@@ -18,8 +18,8 @@ class InstallPolicyOwnershipArchitectureTest {
   private val approvedValidationSeams =
     mapOf(
       "$infraSkillsModule/src/main/kotlin/skillbill/infrastructure/skills/install/plan/InstallPlanBuilder.kt" to
-        "validateInstallPlanWireSnapshot",
-      "runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/install/core/InstallCliPayloads.kt" to
+        "wireValidator.validate(buildInstallPlanWireMap(plan))",
+      "runtime-kotlin/runtime-cli/src/main/kotlin/skillbill/cli/install/apply/InstallCliPayloads.kt" to
         "installService.validateInstallPlanWire",
     )
 
@@ -87,7 +87,7 @@ class InstallPolicyOwnershipArchitectureTest {
   }
 
   @Test
-  fun `install policy delegates schema validation to the injected wire validator port`() {
+  fun `domain install policy takes no validator and does not reference the schema validator`() {
     val policyText =
       runtimeRoot
         .resolve(
@@ -95,24 +95,8 @@ class InstallPolicyOwnershipArchitectureTest {
         )
         .readText()
     assertTrue(
-      policyText.contains("validateInstallPlanWireSnapshot(plan, validate)"),
-      "InstallPlanPolicy must delegate schema validation through its validation callback.",
-    )
-    assertTrue(
       !policyText.contains("InstallPlanSchemaValidator"),
       "InstallPlanPolicy must not reference the concrete InstallPlanSchemaValidator.",
-    )
-
-    val wireMapText =
-      runtimeRoot
-        .resolve(
-          "runtime-kotlin/runtime-domain/src/main/kotlin/skillbill/install/model/InstallPlanWireMap.kt",
-        )
-        .readText()
-    assertTrue(
-      wireMapText.contains("validate: (InstallPlanWireMap) -> Unit") &&
-        wireMapText.contains("validate(buildInstallPlanWireMap(plan))"),
-      "validateInstallPlanWireSnapshot must invoke the supplied wire validator.",
     )
   }
 
@@ -166,9 +150,9 @@ class InstallPolicyOwnershipArchitectureTest {
         "runtime-cli/src/main/kotlin/skillbill/cli/BadValidatorFqn.kt" to
           "skillbill.contracts.install.InstallPlanSchemaValidator.validate(payload)",
         "runtime-mcp/src/main/kotlin/skillbill/mcp/BadValidationCall.kt" to
-          "validateInstallPlanWireSnapshot(plan)",
+          "buildInstallPlanWireMap(plan)",
         "runtime-mcp/src/main/kotlin/skillbill/mcp/BadValidationAlias.kt" to
-          "import skillbill.install.model.validateInstallPlanWireSnapshot as validatePlan\nvalidatePlan(plan)",
+          "import skillbill.install.model.buildInstallPlanWireMap as buildPlan\nbuildPlan(plan)",
       )
 
     val falseNegatives =
@@ -183,9 +167,9 @@ class InstallPolicyOwnershipArchitectureTest {
         "$infraSkillsModule/src/main/kotlin/skillbill/infrastructure/skills/install/plan/InstallPlanBuilder.kt",
         """
         |import skillbill.install.policy.InstallPlanPolicy
-        |import skillbill.install.model.validateInstallPlanWireSnapshot
+        |import skillbill.install.model.buildInstallPlanWireMap
         |val draft = InstallPlanPolicy.buildPlanDraft(input)
-        |validateInstallPlanWireSnapshot(plan)
+        |wireValidator.validate(buildInstallPlanWireMap(plan))
         """.trimMargin(),
       ),
       "Approved builder seam must remain allowed to invoke policy and shared validation.",
@@ -248,8 +232,8 @@ class InstallPolicyOwnershipArchitectureTest {
 
   private fun installWireSnapshotValidationReferencePattern(): Regex =
     Regex(
-      """^import\s+skillbill\.install\.model\.validateInstallPlanWireSnapshot(?:\s+as\s+\w+)?$|""" +
-        """(?:^|[^\w.])(?:skillbill\.install\.model\.)?validateInstallPlanWireSnapshot\s*(?:\(|$)""",
+      """^import\s+skillbill\.install\.model\.buildInstallPlanWireMap(?:\s+as\s+\w+)?$|""" +
+        """(?:^|[^\w.])(?:skillbill\.install\.model\.)?buildInstallPlanWireMap\s*(?:\(|$)""",
     )
 
   private fun installPolicyDeclarationPattern(): Regex =

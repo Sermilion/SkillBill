@@ -3,6 +3,7 @@ package skillbill.application.scaffold
 import skillbill.application.install.ExternalAddonOverlayService
 import skillbill.application.scaffold.model.ScaffoldInvocationArgs
 import skillbill.application.scaffold.model.ScaffoldInvocationOutcome
+import skillbill.error.core.failureCodeLabel
 import skillbill.install.model.ExternalAddonSource
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.scaffold.ScaffoldGateway
@@ -14,9 +15,9 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
-const val SCAFFOLD_SESSION_SUFFIX_LENGTH = 4
+private const val SCAFFOLD_SESSION_SUFFIX_LENGTH = 4
 
-fun generateScaffoldSessionId(clock: Clock): String {
+private fun generateScaffoldSessionId(clock: Clock): String {
   val date = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC).format(DateTimeFormatter.BASIC_ISO_DATE)
   val suffix = UUID.randomUUID().toString().take(SCAFFOLD_SESSION_SUFFIX_LENGTH)
   return "nss-$date-$suffix"
@@ -84,6 +85,9 @@ private fun registerExternalAddonSourceAfterSuccess(
       environment = environment,
     )
   }.exceptionOrNull()?.let { error ->
-    error.message?.takeIf(String::isNotBlank) ?: error::class.simpleName ?: "registration failed"
+    error.message?.takeIf(String::isNotBlank)
+      ?: error.failureCodeLabel()
+      ?: error::class.simpleName
+      ?: "registration failed"
   }
 }

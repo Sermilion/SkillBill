@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.install.apply
+import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.host.jvm.resolveEnvironmentMap
 import skillbill.infrastructure.host.resolveTelemetryConfigPath
-import skillbill.install.model.ClaudeMcpProfileFailure
 import skillbill.install.model.InstallApplyIssue
 import skillbill.install.model.InstallApplyIssueKind
 import skillbill.install.model.InstallPlan
@@ -11,6 +11,7 @@ import skillbill.install.model.McpMutationResult
 import skillbill.install.model.McpProfileOutcome
 import skillbill.install.model.McpRegistrationApplyOutcome
 import skillbill.install.model.McpRegistrationApplyStatus
+import skillbill.install.model.McpRegistrationOutcome
 import skillbill.install.model.SupportedAgent
 import skillbill.model.EnvironmentContext
 import skillbill.model.toPath
@@ -26,6 +27,7 @@ import skillbill.telemetry.parseTelemetryLevelValue
 import skillbill.telemetry.telemetryLevels
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.coroutines.cancellation.CancellationException
 
 internal fun applyTelemetryIntent(
   plan: InstallPlan,
@@ -65,7 +67,7 @@ internal fun applyTelemetryIntent(
       InstallApplyIssue(
         kind = InstallApplyIssueKind.TELEMETRY_APPLY_FAILED,
         message = error.message.orEmpty(),
-        causeClass = error::class.qualifiedName,
+        causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
       )
     warnings.add(issue)
     InstallTelemetryApplyOutcome(
@@ -188,38 +190,58 @@ private fun registerMcpAgent(
   plan: InstallPlan,
   warnings: MutableList<InstallApplyIssue>,
   mcpRegistrationPort: InstallMcpRegistrationPort,
-): McpRegistrationApplyOutcome =
-  runCatching {
-    val result =
+): McpRegistrationApplyOutcome {
+  val registration =
+    runCatching {
       mcpRegistrationPort.registerMcp(
         InstallMcpRegistrationRequest(
           agent = agent.id,
           runtimeMcpBin = runtimeMcpBin,
           home = plan.request.home.toPath(),
         ),
-      ).mutation
-    McpRegistrationApplyOutcome(
-      agent = agent,
-      status = McpRegistrationApplyStatus.SUCCESS,
-      configPath = result.configPath,
-      changed = result.changed,
-      message = mcpRegistrationMessage(result),
-      profiles = result.profiles,
-    )
-  }.getOrElse { error ->
-    val succeeded = (error as? ClaudeMcpProfileFailure)?.succeeded.orEmpty()
-    failedMcpRegistrationOutcome(
-      agent = agent,
-      message =
-        if (succeeded.isEmpty()) {
-          error.message.orEmpty()
-        } else {
-          "${error.message.orEmpty()}. Already updated: ${succeeded.joinToString(", ") { it.configPath.toString() }}"
-        },
-      warnings = warnings,
-      error = error,
-      profiles = succeeded,
-    )
+      ).outcome
+    }.getOrElse { error ->
+      if (error is CancellationException || error is InterruptedException) throw error
+      return failedMcpRegistrationOutcome(
+        agent = agent,
+        message = error.message.orEmpty(),
+        warnings = warnings,
+        causeClass = error.failureCodeLabel() ?: error::class.qualifiedName,
+      )
+    }
+  return when (registration) {
+    is McpRegistrationOutcome.Applied -> appliedMcpRegistrationOutcome(agent, registration.mutation)
+    is McpRegistrationOutcome.ProfilesFailed ->
+      failedMcpRegistrationOutcome(
+        agent = agent,
+        message = profilesFailedMessage(registration),
+        warnings = warnings,
+        causeClass = PROFILE_FAILURE_CAUSE_CLASS,
+        profiles = registration.succeeded,
+      )
+  }
+}
+
+private const val PROFILE_FAILURE_CAUSE_CLASS: String = "skillbill.install.model.ClaudeMcpProfileFailure"
+
+private fun appliedMcpRegistrationOutcome(
+  agent: SupportedAgent,
+  result: McpMutationResult,
+): McpRegistrationApplyOutcome =
+  McpRegistrationApplyOutcome(
+    agent = agent,
+    status = McpRegistrationApplyStatus.SUCCESS,
+    configPath = result.configPath,
+    changed = result.changed,
+    message = mcpRegistrationMessage(result),
+    profiles = result.profiles,
+  )
+
+private fun profilesFailedMessage(failure: McpRegistrationOutcome.ProfilesFailed): String =
+  if (failure.succeeded.isEmpty()) {
+    failure.message
+  } else {
+    "${failure.message}. Already updated: ${failure.succeeded.joinToString(", ") { it.configPath.toString() }}"
   }
 
 private fun mcpRegistrationMessage(result: McpMutationResult): String {
@@ -235,7 +257,7 @@ private fun failedMcpRegistrationOutcome(
   agent: SupportedAgent,
   message: String,
   warnings: MutableList<InstallApplyIssue>,
-  error: Throwable? = null,
+  causeClass: String? = null,
   profiles: List<McpProfileOutcome> = emptyList(),
 ): McpRegistrationApplyOutcome {
   val issue =
@@ -243,7 +265,7 @@ private fun failedMcpRegistrationOutcome(
       kind = InstallApplyIssueKind.MCP_REGISTRATION_FAILED,
       message = message,
       agent = agent,
-      causeClass = error?.let { it::class.qualifiedName },
+      causeClass = causeClass,
     )
   warnings.add(issue)
   return McpRegistrationApplyOutcome(

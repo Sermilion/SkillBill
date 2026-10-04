@@ -7,7 +7,14 @@ enum class PhaseSlot(val wireValue: String, val steps: List<String>) {
   PREPLAN("preplan", listOf(FeatureTaskRuntimePhaseIds.PREPLAN)),
   PLAN("plan", listOf(FeatureTaskRuntimePhaseIds.PLAN)),
   IMPLEMENTATION("implementation", listOf(FeatureTaskRuntimePhaseIds.IMPLEMENT, FeatureTaskRuntimePhaseIds.SIMPLIFY)),
-  AUDIT("audit", listOf(FeatureTaskRuntimePhaseIds.AUDIT_IMPLEMENT_FIX, FeatureTaskRuntimePhaseIds.AUDIT)),
+  AUDIT(
+    "audit",
+    listOf(
+      FeatureTaskRuntimePhaseIds.AUDIT_PLAN_FIX,
+      FeatureTaskRuntimePhaseIds.AUDIT_IMPLEMENT_FIX,
+      FeatureTaskRuntimePhaseIds.AUDIT,
+    ),
+  ),
   CODE_REVIEW(
     "code_review",
     listOf(
@@ -20,6 +27,7 @@ enum class PhaseSlot(val wireValue: String, val steps: List<String>) {
   WRITE_HISTORY("write_history", listOf(FeatureTaskRuntimePhaseIds.WRITE_HISTORY)),
   COMMIT_PUSH("commit_push", listOf(FeatureTaskRuntimePhaseIds.COMMIT_PUSH)),
   PULL_REQUEST("pull_request", listOf(FeatureTaskRuntimePhaseIds.PR)),
+  STANDALONE_REVIEW("standalone_review", listOf(FeatureTaskRuntimePhaseIds.PRESENT_FINDINGS)),
   ;
 
   companion object {

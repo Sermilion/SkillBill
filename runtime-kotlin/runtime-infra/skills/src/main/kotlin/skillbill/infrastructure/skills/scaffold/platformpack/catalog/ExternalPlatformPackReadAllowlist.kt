@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.catalog
 
 import skillbill.error.core.ExternalPlatformPackConfigError
-import skillbill.error.shellcontent.MissingContentFileError
+import skillbill.error.shellcontent.missingContentFile
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
 import java.io.IOException
@@ -14,7 +14,7 @@ internal fun assertExternalPackContentPresent(manifest: PlatformManifest) {
   declared.forEach { location ->
     val path = location.toPath().toAbsolutePath().normalize()
     if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
-      throw MissingContentFileError(
+      throw missingContentFile(
         "External platform pack '${manifest.slug}' is missing required content at '$path'.",
       )
     }

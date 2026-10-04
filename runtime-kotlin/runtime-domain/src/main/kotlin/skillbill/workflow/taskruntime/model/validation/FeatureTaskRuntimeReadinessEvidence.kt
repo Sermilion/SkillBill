@@ -1,11 +1,8 @@
 package skillbill.workflow.taskruntime.model.validation
 
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_READINESS_EVIDENCE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeReadinessEvidenceSchema
 import skillbill.workflow.model.persistence.artifact.asExactIntOrNull
-
-internal const val FEATURE_TASK_RUNTIME_READINESS_EVIDENCE_ARTIFACT_KEY: String =
-  "feature_task_runtime_readiness_evidence"
 
 enum class FeatureTaskRuntimeReadinessCheckStatus(val wireValue: String) {
   PASSED("passed"),
@@ -245,6 +242,6 @@ data class FeatureTaskRuntimeReadinessEvidence(
     private fun invalid(
       sourceLabel: String,
       reason: String,
-    ): Nothing = throw InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError(sourceLabel, reason)
+    ): Nothing = throw invalidFeatureTaskRuntimeReadinessEvidenceSchema(sourceLabel, reason)
   }
 }

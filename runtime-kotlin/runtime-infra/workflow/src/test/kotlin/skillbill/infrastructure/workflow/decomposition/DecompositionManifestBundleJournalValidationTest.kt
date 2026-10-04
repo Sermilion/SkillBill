@@ -3,7 +3,8 @@ package skillbill.infrastructure.workflow.decomposition
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidDecompositionManifestBundleJournalError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -54,7 +55,7 @@ class DecompositionManifestBundleJournalValidationTest {
           listOf(firstTarget to "intended-first", secondTarget to "intended-second"),
         )
       Files.writeString(transaction.entries[1].staged, "corrupted")
-      assertFailsWith<InvalidDecompositionManifestBundleJournalError> {
+      assertFailsWith<SkillBillRuntimeException> {
         journal.recoverPending(root)
       }
       assertEquals("old-first", Files.readString(firstTarget))
@@ -80,7 +81,7 @@ class DecompositionManifestBundleJournalValidationTest {
         Files.readString(transaction.marker)
           .replace(transaction.stagingDirectory.toString(), unrelated.toString())
       Files.writeString(transaction.marker, markerText)
-      assertFailsWith<InvalidDecompositionManifestBundleJournalError> {
+      assertFailsWith<SkillBillRuntimeException> {
         journal.recoverPending(root)
       }
       assertTrue(Files.exists(unrelated))
@@ -99,7 +100,7 @@ class DecompositionManifestBundleJournalValidationTest {
       val transaction = journal.create(root, listOf(target to "first", target to "second"))
       val markerText = Files.readString(transaction.marker)
       Files.writeString(transaction.marker, markerText)
-      assertFailsWith<InvalidDecompositionManifestBundleJournalError> {
+      assertFailsWith<SkillBillRuntimeException> {
         journal.recoverPending(root)
       }
       assertTrue(!Files.exists(target) || !Files.readString(target).contains("second"))
@@ -131,11 +132,11 @@ class DecompositionManifestBundleJournalValidationTest {
       )
 
       val failure =
-        assertFailsWith<InvalidDecompositionManifestBundleJournalError> {
+        assertFailsWith<SkillBillRuntimeException> {
           journal.recoverPending(root)
         }
 
-      assertEquals("duplicate_staged", failure.failureCode)
+      assertEquals(WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_DUPLICATE_STAGED, failure.code)
       assertEquals("old-first", Files.readString(firstTarget))
       assertEquals("old-second", Files.readString(secondTarget))
       assertTrue(Files.exists(transaction.marker))
@@ -164,7 +165,7 @@ class DecompositionManifestBundleJournalValidationTest {
         ),
       )
 
-      assertFailsWith<InvalidDecompositionManifestBundleJournalError> {
+      assertFailsWith<SkillBillRuntimeException> {
         journal.recoverPending(root)
       }
       assertEquals("keep", Files.readString(sibling.resolve("keep.txt")))
@@ -192,7 +193,7 @@ class DecompositionManifestBundleJournalValidationTest {
         Files.readString(transaction.marker)
           .replace(transaction.entries.single().staged.toString(), symlink.toString())
       Files.writeString(transaction.marker, markerText)
-      assertFailsWith<InvalidDecompositionManifestBundleJournalError> {
+      assertFailsWith<SkillBillRuntimeException> {
         journal.recoverPending(root)
       }
       outside.toFile().deleteRecursively()
@@ -218,7 +219,7 @@ class DecompositionManifestBundleJournalValidationTest {
           .replace(target.toString(), targetLink.toString())
       Files.writeString(transaction.marker, markerText)
 
-      assertFailsWith<InvalidDecompositionManifestBundleJournalError> {
+      assertFailsWith<SkillBillRuntimeException> {
         journal.recoverPending(root)
       }
       assertEquals("outside", Files.readString(outsideFile))
@@ -245,10 +246,10 @@ class DecompositionManifestBundleJournalValidationTest {
       Files.writeString(transaction.marker, markerText)
 
       val failure =
-        assertFailsWith<InvalidDecompositionManifestBundleJournalError> {
+        assertFailsWith<SkillBillRuntimeException> {
           journal.recoverPending(root)
         }
-      assertEquals("schema_invalid", failure.failureCode)
+      assertEquals(WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_SCHEMA_INVALID, failure.code)
       assertEquals("old", Files.readString(target))
       assertTrue(Files.exists(transaction.marker))
     } finally {
@@ -268,11 +269,11 @@ class DecompositionManifestBundleJournalValidationTest {
       markerNode.put(SharedPayloadKeys.CONTRACT_VERSION, "9.9")
       Files.writeString(transaction.marker, yamlMapper.writeValueAsString(markerNode))
       val failure =
-        assertFailsWith<InvalidDecompositionManifestBundleJournalError> {
+        assertFailsWith<SkillBillRuntimeException> {
           journal.recoverPending(root)
         }
-      assertEquals("unsupported_contract_version", failure.failureCode)
-      assertTrue(failure.reason.contains("Back up the marker"))
+      assertEquals(WorkflowFailureCode.DECOMPOSITION_MANIFEST_BUNDLE_JOURNAL_UNSUPPORTED_CONTRACT_VERSION, failure.code)
+      assertTrue(failure.message.orEmpty().contains("Back up the marker"))
       assertTrue(!Files.exists(target))
       assertTrue(Files.exists(transaction.marker))
     } finally {
@@ -291,7 +292,7 @@ class DecompositionManifestBundleJournalValidationTest {
       journal.apply(transaction)
       Files.writeString(target, "tampered")
 
-      assertFailsWith<InvalidDecompositionManifestBundleJournalError> {
+      assertFailsWith<SkillBillRuntimeException> {
         journal.recoverPending(root)
       }
       assertEquals("tampered", Files.readString(target))

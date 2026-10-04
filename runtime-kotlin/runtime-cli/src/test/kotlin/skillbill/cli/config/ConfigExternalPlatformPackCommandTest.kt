@@ -107,7 +107,7 @@ class ConfigExternalPlatformPackCommandTest {
     assertEquals(1, result.exitCode)
     val payload = requireNotNull(result.payload)
     assertEquals(
-      "InvalidManifestSchemaError",
+      "ManifestFailureCode.INVALID_MANIFEST_SCHEMA",
       payload[ExternalPlatformPackTelemetryPayloadKeys.ERROR_TYPE],
     )
     assertEquals("external", payload[ExternalPlatformPackTelemetryPayloadKeys.SOURCE_KIND])

@@ -2,8 +2,10 @@ package skillbill.cli.codereview
 
 import com.github.ajalt.clikt.core.UsageError
 import skillbill.application.reviewevidence.model.ParallelReviewScope
+import skillbill.cli.kernel.cli.DEFAULT_CODE_REVIEW_SCOPE
+import skillbill.cli.kernel.cli.resolveStandaloneCodeReviewTarget
 import skillbill.engine.featuretask.model.review.ReviewTarget
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
 import kotlin.test.Test
@@ -20,7 +22,7 @@ class CodeReviewPhaseRequestTest {
         CodeReviewFlags(
           agentId = "claude",
           repoRoot = repoRoot,
-          target = resolveStandaloneCodeReviewTarget("abc1234", DEFAULT_CODE_REVIEW_SCOPE),
+          target = resolveStandaloneCodeReviewTarget("abc1234", null),
           executionMode = CodeReviewExecutionMode.DELEGATED.wireValue,
           reviewRunId = "rvw-20260927-120000-abcd",
           reviewSessionId = "rss-1",

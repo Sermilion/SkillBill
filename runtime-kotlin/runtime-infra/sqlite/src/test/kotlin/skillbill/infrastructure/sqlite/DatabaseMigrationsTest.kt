@@ -1,9 +1,10 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.infrastructure.sqlite.core.migration.DatabaseColumnMigrations
 import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
 import skillbill.infrastructure.sqlite.core.migration.area.GoalTelemetryMigration
-import skillbill.infrastructure.sqlite.core.ops.attachSqliteDiagnostics
 import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.core.schema.DatabaseIdentity
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
@@ -14,9 +15,10 @@ import skillbill.infrastructure.sqlite.workflow.goalrunner.runner.GoalRunnerCont
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.telemetry.model.TelemetryOutboxRecord
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import java.nio.file.Files
+import java.nio.file.Path
 import java.sql.DriverManager
 import java.sql.SQLException
 import java.util.concurrent.CountDownLatch
@@ -212,7 +214,7 @@ class DatabaseMigrationsTest {
     DatabaseRuntime.ensureDatabase(dbPath).use { connection ->
       DatabaseMigrations.migrations
         .filter { migration -> migration.version in 42..44 }
-        .forEach { migration -> migration.apply(connection) }
+        .forEach { migration -> migration.apply(connection, SqliteTestDiagnostics) }
       connection.createStatement().use { statement ->
         statement.executeUpdate("DELETE FROM schema_migrations WHERE version = 45")
         LEGACY_EXPERIMENT_ROWS.forEach { sql -> statement.executeUpdate(sql) }
@@ -1560,39 +1562,25 @@ class DatabaseMigrationsReviewAttributionTest {
     seedLegacyGoalRunnerControlsMigrationFixture(dbPath)
     SqliteTestDiagnostics.reset()
 
-    val delegate = DriverManager.getDriver("jdbc:sqlite:$dbPath")
-    val observingDriver =
-      SqliteConnectionRecordingDriver(delegate) { connection ->
-        connection.attachSqliteDiagnostics(SqliteTestDiagnostics)
-      }
-    DriverManager.deregisterDriver(delegate)
-    DriverManager.registerDriver(observingDriver)
-    DriverManager.registerDriver(delegate)
-    try {
-      DatabaseRuntime.establishSchemaReadiness(dbPath)
-      DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
-        val store = GoalRunnerControlStore(connection)
-        assertEquals(
-          GoalRunnerReviewPolicy(CodeReviewExecutionMode.INLINE),
-          store.reviewPolicy("wftr-legacy-goal-parent"),
-        )
-        assertEquals(
-          mapOf(
-            2 to
-              GoalRunnerOutOfBandAcceptance(
-                subtaskId = 2,
-                commitSha = "legacy-commit",
-                reason = "accepted outside the normal review path",
-                acceptedAt = "2026-09-17T10:00:00Z",
-              ),
-          ),
-          store.outOfBandAcceptances("wftr-legacy-goal-parent"),
-        )
-      }
-    } finally {
-      DriverManager.deregisterDriver(observingDriver)
-      DriverManager.deregisterDriver(delegate)
-      DriverManager.registerDriver(delegate)
+    DatabaseRuntime.establishSchemaReadiness(dbPath, SqliteTestDiagnostics)
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      val store = GoalRunnerControlStore(connection)
+      assertEquals(
+        GoalRunnerReviewPolicy(CodeReviewExecutionMode.INLINE),
+        store.reviewPolicy("wftr-legacy-goal-parent"),
+      )
+      assertEquals(
+        mapOf(
+          2 to
+            GoalRunnerOutOfBandAcceptance(
+              subtaskId = 2,
+              commitSha = "legacy-commit",
+              reason = "accepted outside the normal review path",
+              acceptedAt = "2026-09-17T10:00:00Z",
+            ),
+        ),
+        store.outOfBandAcceptances("wftr-legacy-goal-parent"),
+      )
     }
 
     val migrationWarnings =
@@ -1619,6 +1607,52 @@ class DatabaseMigrationsReviewAttributionTest {
       },
     )
   }
+
+  @Test
+  fun `legacy goal runner migration rejects a fractional acceptance identity and persists nothing`() {
+    val dbPath = Files.createTempDirectory("runtime-kotlin-legacy-goal-controls-invalid").resolve("metrics.db")
+    seedLegacyGoalRunnerControlsMigrationFixture(
+      dbPath,
+      acceptances = listOf(VALID_LEGACY_GOAL_ACCEPTANCE + ("subtask_id" to 2.5)),
+    )
+    val artifactsBefore = legacyGoalParentArtifactsJson(dbPath)
+
+    assertFailsWith<SkillBillRuntimeException> {
+      DatabaseRuntime.establishSchemaReadiness(dbPath)
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
+
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      assertEquals(
+        0,
+        scalarInt(
+          connection,
+          """
+          SELECT COUNT(*) FROM goal_runner_controls
+          WHERE parent_workflow_id = 'wftr-legacy-goal-parent'
+            AND (review_policy_json IS NOT NULL OR out_of_band_acceptances_json IS NOT NULL)
+          """.trimIndent(),
+        ),
+        "A rejected legacy acceptance must not leave a review policy or acceptance control row behind.",
+      )
+      assertEquals(artifactsBefore, legacyGoalParentArtifactsJson(dbPath))
+      assertEquals(
+        0,
+        scalarInt(
+          connection,
+          "SELECT COUNT(*) FROM schema_migrations WHERE name = 'migrate-legacy-goal-runner-controls'",
+        ),
+        "The failed migration must not be recorded as applied.",
+      )
+    }
+  }
+
+  private fun legacyGoalParentArtifactsJson(dbPath: Path): String? =
+    DriverManager.getConnection("jdbc:sqlite:$dbPath").use { connection ->
+      scalarString(
+        connection,
+        "SELECT artifacts_json FROM feature_task_workflows WHERE workflow_id = 'wftr-legacy-goal-parent'",
+      )
+    }
 
   @Test
   fun `establishment stamps user_version to the highest ledger migration version`() {

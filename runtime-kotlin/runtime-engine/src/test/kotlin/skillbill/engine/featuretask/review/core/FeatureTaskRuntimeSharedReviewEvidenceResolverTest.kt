@@ -1,7 +1,8 @@
 package skillbill.engine.featuretask.review.core
 
 import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
-import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.diff.DiffResolverPortDefaults
+import skillbill.ports.diff.model.ReviewDiffQuery
 import skillbill.ports.review.model.ReviewCheckpointFileIdentity
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceDeriver
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
@@ -17,6 +18,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -39,27 +41,28 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolverTest {
     }
   }
 
-  private class FakeGit(private val responses: Map<String, String?>) : DiffResolverPort {
-    val invoked: MutableList<String> = mutableListOf()
+  private class FakeGit(private val responses: Map<ReviewDiffQuery, String?>) : DiffResolverPortDefaults() {
+    val invoked: MutableList<ReviewDiffQuery> = mutableListOf()
 
-    override fun runProcess(
-      args: List<String>,
-      workDir: Path,
+    override fun diff(
+      repoRoot: Path,
+      query: ReviewDiffQuery,
     ): String? {
-      val key = args.joinToString(" ")
-      invoked += key
-      return responses[key]
+      invoked += query
+      return responses[query]
     }
 
     override fun reviewWorktreeFileIdentities(
       root: Path,
       paths: List<String>,
     ) = emptyMap<String, ReviewCheckpointFileIdentity>()
+  }
 
-    override fun readDiff(
-      path: Path,
-      maxBytes: Long,
-    ): String? = null
+  private class InterruptedGit : DiffResolverPortDefaults() {
+    override fun diff(
+      repoRoot: Path,
+      query: ReviewDiffQuery,
+    ): String? = throw InterruptedException("interrupted while reading the diff")
   }
 
   private class InMemoryStore : FeatureTaskRuntimeSharedEvidenceResolverPort {
@@ -67,16 +70,18 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolverTest {
     var derivations: Int = 0
       private set
 
+    fun holds(fingerprint: String): Boolean = fingerprint in stored
+
     override fun resolve(
       request: FeatureTaskRuntimeSharedEvidenceRequest,
       deriver: FeatureTaskRuntimeSharedEvidenceDeriver,
-    ): FeatureTaskRuntimeSharedEvidenceResolution {
+    ): FeatureTaskRuntimeSharedEvidenceResolution? {
       val fingerprint = request.checkpoint.fingerprint
       stored[fingerprint]?.let {
         return it.copy(outcome = REUSE)
       }
       derivations++
-      val derivation = deriver.derive(request.checkpoint)
+      val derivation = deriver.derive(request.checkpoint) ?: return null
       val outcome =
         if (stored.isNotEmpty()) {
           CHECKPOINT_CHANGE_REDERIVATION
@@ -123,7 +128,7 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolverTest {
     path: String,
     line: String,
     hunks: Int = 1,
-  ) = FakeGit(mapOf("git diff $base $head" to diffFor(path, line, hunks)))
+  ) = FakeGit(mapOf(ReviewDiffQuery.CommitRange(base, head) to diffFor(path, line, hunks)))
 
   @Test
   fun `an absent artifact re-derives and the launch still receives a reference`() {
@@ -221,7 +226,9 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolverTest {
   fun `a resolution that cannot produce a store path yields null so the launch still succeeds`() {
     val blankStore =
       FeatureTaskRuntimeSharedEvidenceResolverPort { request, deriver ->
-        val derivation = deriver.derive(request.checkpoint)
+        val derivation =
+          deriver.derive(request.checkpoint)
+            ?: return@FeatureTaskRuntimeSharedEvidenceResolverPort null
         FeatureTaskRuntimeSharedEvidenceResolution(
           artifact =
             FeatureTaskRuntimeSharedEvidenceArtifact(
@@ -287,7 +294,8 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolverTest {
   @Test
   fun `owned worktree paths derive against the base revision`() {
     val store = InMemoryStore()
-    val git = FakeGit(mapOf("git diff base -- src/A.kt" to diffFor("src/A.kt", "working")))
+    val workingTree = ReviewDiffQuery.WorkingTree("base", listOf("src/A.kt"), includeBinary = false)
+    val git = FakeGit(mapOf(workingTree to diffFor("src/A.kt", "working")))
     val checkpoint =
       FeatureTaskRuntimeRepositoryCheckpoint(
         fingerprint = "fp-working-tree",
@@ -301,7 +309,45 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolverTest {
         .resolve(repoRoot, "wf-working-tree", checkpoint, "audit")
 
     assertNotNull(reference)
-    assertEquals(listOf("git diff base -- src/A.kt"), git.invoked)
+    assertEquals(listOf<ReviewDiffQuery>(workingTree), git.invoked)
     assertEquals(1, reference.reference.changedFileCount)
+  }
+
+  @Test
+  fun `an unavailable diff yields no resolution and stores no artifact`() {
+    val store = InMemoryStore()
+    val git = FakeGit(mapOf(ReviewDiffQuery.CommitRange("base", "head") to null))
+
+    val resolution =
+      FeatureTaskRuntimeSharedReviewEvidenceResolver(store, git)
+        .resolve(repoRoot, "wf-unavailable", checkpoint("fp-unavailable"), "audit")
+
+    assertNull(resolution)
+    assertFalse(store.holds("fp-unavailable"))
+  }
+
+  @Test
+  fun `an empty successful diff yields a reference with no files`() {
+    val store = InMemoryStore()
+    val git = FakeGit(mapOf(ReviewDiffQuery.CommitRange("base", "head") to ""))
+
+    val resolution =
+      FeatureTaskRuntimeSharedReviewEvidenceResolver(store, git)
+        .resolve(repoRoot, "wf-empty", checkpoint("fp-empty"), "audit")
+
+    assertNotNull(resolution)
+    assertEquals(0, resolution.reference.changedFileCount)
+    assertTrue(store.holds("fp-empty"))
+  }
+
+  @Test
+  fun `an interrupted diff query propagates instead of becoming an absent resolution`() {
+    val store = InMemoryStore()
+
+    assertFailsWith<InterruptedException> {
+      FeatureTaskRuntimeSharedReviewEvidenceResolver(store, InterruptedGit())
+        .resolve(repoRoot, "wf-interrupted", checkpoint("fp-interrupted"), "audit")
+    }
+    assertFalse(store.holds("fp-interrupted"))
   }
 }

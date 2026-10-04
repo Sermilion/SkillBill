@@ -30,7 +30,7 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
           FeatureTaskRuntimeBackwardEdge(
             fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
             triggeringVerdict = FeatureTaskRuntimeVerdict.ADVANCE,
-            destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
+            destinationPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
             loopId = FeatureTaskRuntimePhaseWorkflowDefinition.AUDIT_REPAIR_LOOP_ID,
             perEdgeCap = null,
             warnAfterIterations = FeatureTaskRuntimePhaseWorkflowDefinition.SEMANTIC_LOOP_WARNING_THRESHOLD,
@@ -44,14 +44,30 @@ internal object FeatureTaskRuntimePhaseWorkflowTransitions {
             capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.ADVANCE,
             capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
           ),
-        ),
+        ) +
+          FeatureTaskRuntimePhaseWorkflowDefinition.REGENERATION_LOOP_ID_BY_PRODUCER.map { (producer, loopId) ->
+            FeatureTaskRuntimeBackwardEdge(
+              fromPhaseId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_WRITE_HISTORY,
+              triggeringVerdict = FeatureTaskRuntimeVerdict.RECORD_REJECTED,
+              destinationPhaseId = producer,
+              loopId = loopId,
+              perEdgeCap = FeatureTaskRuntimePhaseWorkflowDefinition.MAX_RECORD_REGENERATION_ATTEMPTS,
+              capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+              capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+            )
+          },
       loopOnlyPhaseIds =
         setOf(
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_BUILD,
         ),
-      loopOnlySuccessors = emptyMap(),
+      loopOnlySuccessors =
+        mapOf(
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX to
+            FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
+        ),
     )
 
   fun backwardEdgeForLoop(

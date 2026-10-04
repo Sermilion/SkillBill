@@ -1,8 +1,10 @@
 package skillbill.engine.goalrunner.execution.core
 
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
+import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationPendingState
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchDiagnostics
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchReconciliation
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerLedgerRecorder
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
@@ -17,7 +19,6 @@ import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 
@@ -28,6 +29,7 @@ internal data class DriveGoalLoopArgs(
   val ledger: GoalRunnerLedgerRecorder,
   val telemetryEmitter: GoalRunnerTelemetryEmitter,
   val planning: GoalPlanningSweepOutcome.PreparedAll,
+  val pendingState: GoalRunnerIterationPendingState,
 )
 
 internal data class BlockedSelectionIterationArgs(
@@ -142,6 +144,7 @@ internal data class ProduceMissingPlansArgs(
   val provenance: GoalPlanningContractProvenance,
   val sharedCheckpoint: SharedGoalPreplanCheckpoint,
   val activeSubtasks: List<DecompositionSubtask>,
+  val startedPlanIds: Set<Int> = emptySet(),
 )
 
 internal data class EmptyOrStoppedArgs(

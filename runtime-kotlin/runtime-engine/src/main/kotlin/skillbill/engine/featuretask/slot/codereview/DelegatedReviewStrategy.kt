@@ -1,8 +1,10 @@
 package skillbill.engine.featuretask.slot.codereview
 
 import skillbill.agentaddon.model.AgentAddonPromptFormatter
+import skillbill.application.review.model.ParallelCodeReviewPlanningFailure
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.application.review.model.ParallelReviewLaneStatus
 import skillbill.application.review.parallel.runner.ParallelCodeReviewRunner
 import skillbill.application.reviewevidence.model.ParallelReviewScope
@@ -13,31 +15,34 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepSession
 import skillbill.engine.featuretask.slot.PhaseStrategyStatusProjection
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.featuretask.slot.state.PhaseStepState
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
+import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.agentrun.model.READ_ONLY_PHASE_PROGRESS_IDLE_TIMEOUT_MINUTES
 import skillbill.ports.agentrun.model.SkillRunRequest
+import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.review.model.ParallelReviewMergeResult
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.minutes
 
 class DelegatedReviewStrategy(
-  override val runner: PhaseRunner,
+  runner: PhaseRunner,
   reviewRunner: ParallelCodeReviewRunner,
 ) : PhaseStrategyStatusProjection() {
   private val codeReview = CodeReviewSlot(runner, DelegatedReviewPass(reviewRunner))
@@ -46,6 +51,8 @@ class DelegatedReviewStrategy(
   override val strategyId: String = ID
   override val steps: List<String> = codeReview.steps
   override val entryStep: String = codeReview.entryStep
+
+  override fun executionBindingKind(stepId: String): PhaseExecutionBindingKind = codeReview.executionBindingKind(stepId)
 
   override fun policyFor(stepId: String): PhaseStepPolicy = codeReview.policyFor(stepId)
 
@@ -61,7 +68,7 @@ class DelegatedReviewStrategy(
 
   override fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome = codeReview.runStep(this, run, state)
 
   override fun stepHooks(stepId: String): PhaseStepHooks = codeReview.stepHooks(stepId)
@@ -91,7 +98,6 @@ internal class DelegatedReviewPass(
   override val policy =
     PhaseStepPolicy(
       mutating = false,
-      relaunchOnInvalidOutput = true,
       singleAgentSession = false,
       readOnlyIdle = true,
       fileMutating = false,
@@ -110,33 +116,44 @@ internal class DelegatedReviewPass(
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
     runner: PhaseRunner,
-    state: PhaseStepState,
-  ): ParallelCodeReviewResult {
+    state: PhaseReviewStepBinding,
+  ): ParallelCodeReviewRunOutcome {
     val agentId = run.resolvedAgent.resolvedAgentId
     var reviewed: ParallelCodeReviewResult? = null
+    var planningFailure: ParallelCodeReviewPlanningFailure? = null
     val session =
       PhaseStepSession { launch ->
-        val result = reviewRunner.run(request(run, input, reviewRunId, state, launch.skillRunRequest))
-        reviewed = result
-        val stdout = result.mergeResult.formattedOutput
-        AgentRunLaunchFacts(
-          agent = SupportedAgent.fromWire(agentId),
-          termination = AgentRunTermination.Exited(0),
-          stdout = stdout,
-          stderr = "",
-          stdoutByteSize = stdout.encodeToByteArray().size.toLong(),
-          stdoutSha256 = "",
-        )
+        when (val outcome = reviewRunner.run(request(run, input, reviewRunId, state, launch.skillRunRequest))) {
+          is ParallelCodeReviewRunOutcome.PlanningFailed -> {
+            planningFailure = outcome.failure
+            UnsupportedAgentRunLaunch(SupportedAgent.fromWire(agentId), outcome.failure.message)
+          }
+          is ParallelCodeReviewRunOutcome.Reviewed -> {
+            reviewed = outcome.result
+            val stdout = outcome.result.mergeResult.formattedOutput
+            AgentRunLaunchFacts(
+              agent = SupportedAgent.fromWire(agentId),
+              termination = AgentRunTermination.Exited(0),
+              stdout = stdout,
+              stderr = "",
+              stdoutByteSize = stdout.encodeToByteArray().size.toLong(),
+              stdoutSha256 = "",
+            )
+          }
+        }
       }
-    val output = runner.run(reviewStepInput(run, directive), state, session)
-    return reviewed ?: ParallelCodeReviewResult(
-      mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = ""),
-      lane1 =
-        ParallelReviewLaneStatus(
-          agentId = agentId,
-          success = false,
-          failureReason = output.launchFailure?.reason ?: "delegated review session did not run",
-        ),
+    val output = runner.run(reviewStepInput(run, directive), state.launchState, session)
+    planningFailure?.let { return ParallelCodeReviewRunOutcome.PlanningFailed(it) }
+    return ParallelCodeReviewRunOutcome.Reviewed(
+      reviewed ?: ParallelCodeReviewResult(
+        mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = ""),
+        lane1 =
+          ParallelReviewLaneStatus(
+            agentId = agentId,
+            success = false,
+            failureReason = output.launchFailure?.reason ?: "delegated review session did not run",
+          ),
+      ),
     )
   }
 
@@ -144,7 +161,7 @@ internal class DelegatedReviewPass(
     run: PhaseRun,
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
     launch: SkillRunRequest,
   ): ParallelCodeReviewRequest {
     val branch = state.resolvedBranch()

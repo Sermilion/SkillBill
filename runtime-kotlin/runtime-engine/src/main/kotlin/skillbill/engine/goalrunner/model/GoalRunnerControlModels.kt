@@ -1,16 +1,21 @@
 package skillbill.engine.goalrunner.model
 
+enum class GoalRunnerPauseStatus(val wireValue: String) {
+  NOT_FOUND("not_found"),
+  PAUSED("paused"),
+  REQUESTED("requested"),
+}
+
 data class GoalRunnerPauseResult(
   val issueKey: String,
   val parentWorkflowId: String? = null,
-  val status: String,
+  val status: GoalRunnerPauseStatus,
   val paused: Boolean = false,
   val pauseRequested: Boolean = false,
   val pauseReason: String? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
-    require(status.isNotBlank()) { "status is required." }
   }
 }
 
@@ -35,14 +40,19 @@ data class GoalRunnerStopVerbResult(
   }
 }
 
+enum class GoalRunnerResumeStatus(val wireValue: String) {
+  NOT_FOUND("not_found"),
+  NOT_PAUSED("not_paused"),
+  RESUMED("resumed"),
+}
+
 data class GoalRunnerResumeResult(
   val issueKey: String,
   val parentWorkflowId: String? = null,
-  val status: String,
+  val status: GoalRunnerResumeStatus,
   val clearedPauseReason: String? = null,
 ) {
   init {
     require(issueKey.isNotBlank()) { "issueKey is required." }
-    require(status.isNotBlank()) { "status is required." }
   }
 }

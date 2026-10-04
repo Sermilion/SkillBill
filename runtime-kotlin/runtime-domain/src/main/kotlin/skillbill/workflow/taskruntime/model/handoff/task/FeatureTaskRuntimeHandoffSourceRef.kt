@@ -2,7 +2,6 @@ package skillbill.workflow.taskruntime.model.handoff.task
 
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.workflow.taskruntime.model.core.unrecognizedHandoffWireValue
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
 
 sealed interface FeatureTaskRuntimeHandoffSourceRef {
   val wireValue: String

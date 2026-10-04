@@ -1,0 +1,27 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-388"
+feature_name: "runtime-application-boundary-repairs"
+parent_spec_path: ".feature-specs/SKILL-388-runtime-application-boundary-repairs/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "base/SKILL-380-phase-slot-strategies"
+feature_branch: "feat/SKILL-388-runtime-application-boundary-repairs"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "repair-application-boundaries-and-enforcement"
+  spec_path: ".feature-specs/SKILL-388-runtime-application-boundary-repairs/spec_subtask_1_repair-application-boundaries-and-enforcement.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20260930-212211-8m1g"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []

@@ -1,0 +1,59 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-397"
+feature_name: "runtime-domain-boundary-integrity"
+parent_spec_path: ".feature-specs/SKILL-397-runtime-domain-boundary-integrity/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "base/SKILL-380-phase-slot-strategies"
+feature_branch: "feat/SKILL-397-runtime-domain-boundary-integrity"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "domain-wire-boundary-honesty"
+  spec_path: ".feature-specs/SKILL-397-runtime-domain-boundary-integrity/spec_subtask_1_domain-wire-boundary-honesty.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261001-195638-9tys"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 2
+  name: "domain-owned-aggregate-transitions"
+  spec_path: ".feature-specs/SKILL-397-runtime-domain-boundary-integrity/spec_subtask_2_domain-owned-aggregate-transitions.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261001-201910-xjf0"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []
+- id: 3
+  name: "domain-package-graph-repair"
+  spec_path: ".feature-specs/SKILL-397-runtime-domain-boundary-integrity/spec_subtask_3_domain-package-graph-repair.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261001-210231-67y6"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies:
+  - subtask_id: 1
+    optional: false
+    skipped: false
+  - subtask_id: 2
+    optional: false
+    skipped: false

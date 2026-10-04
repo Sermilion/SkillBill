@@ -12,16 +12,16 @@ import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.review.ReviewContextEnvelopeValidator
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.commit.ReviewCommitCoverageFact
 import skillbill.review.context.model.commit.ReviewCommitLaneDecision
 import skillbill.review.context.model.commit.ReviewCommitLaneDisposition
 import skillbill.review.context.model.commit.ReviewCommitLaneRoutingMatrix
 import skillbill.review.context.model.commit.ReviewCommitSource
 import skillbill.review.context.model.commit.ReviewCommitUnit
+import skillbill.review.context.model.commit.ReviewLaneDecision
 import skillbill.review.context.model.execution.ResolvedReviewExecutionMode
-import skillbill.review.context.model.execution.ReviewLaneDecision
 import skillbill.review.context.model.hunk.ReviewChangedHunk
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.context.model.hunk.ReviewDependencyAllowlist
 import skillbill.review.context.model.hunk.ReviewRevision
 import skillbill.review.context.model.packet.ReviewContextPacket
@@ -109,8 +109,44 @@ class ReviewClaimVerificationRunnerTest {
     assertTrue(outcome.verdicts.all { it.claimVerdict == ReviewClaimVerdict.UNRESOLVED })
     assertEquals("agent process failed to spawn", outcome.verdicts[0].rejectionReason)
     assertEquals("agent timed out", outcome.verdicts[1].rejectionReason)
-    assertEquals("unparseable verification output", outcome.verdicts[2].rejectionReason)
+    assertEquals("worker did not settle the claim", outcome.verdicts[2].rejectionReason)
   }
+
+  @Test
+  fun `prose naming more than one verdict is ambiguous and leaves the finding unresolved`() {
+    val outcome = verifyProse("This is confirmed in one branch but refuted in src/A.kt:12 for the other.")
+
+    assertEquals(ReviewClaimVerdict.UNRESOLVED, outcome.verdicts.single().claimVerdict)
+  }
+
+  @Test
+  fun `prose refutation without a file line citation does not refute`() {
+    val outcome = verifyProse("The finding is refuted; the null is handled upstream.")
+
+    assertEquals(ReviewClaimVerdict.UNRESOLVED, outcome.verdicts.single().claimVerdict)
+  }
+
+  @Test
+  fun `prose refutation with a file line citation refutes`() {
+    val outcome = verifyProse("The finding is refuted: the null is handled at src/A.kt:12.")
+
+    assertEquals(ReviewClaimVerdict.REFUTED, outcome.verdicts.single().claimVerdict)
+  }
+
+  @Test
+  fun `blank verification prose leaves the finding unresolved`() {
+    val outcome = verifyProse("   ")
+
+    assertEquals(ReviewClaimVerdict.UNRESOLVED, outcome.verdicts.single().claimVerdict)
+  }
+
+  private fun verifyProse(stdout: String) =
+    runner(launcher = { request -> facts(request, stdout) }).run(
+      verificationRequest(
+        findings = listOf(finding("F-001")),
+        repoRoot = Files.createTempDirectory("verify-prose"),
+      ),
+    )
 
   @Test
   fun `zero worker citation lines are coerced while the finding verdict still settles`() {

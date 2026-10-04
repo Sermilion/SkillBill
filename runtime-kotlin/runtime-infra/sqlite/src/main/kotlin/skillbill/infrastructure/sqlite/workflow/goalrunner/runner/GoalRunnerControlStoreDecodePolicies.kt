@@ -5,10 +5,13 @@ import kotlinx.serialization.json.JsonElement
 import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import kotlin.coroutines.cancellation.CancellationException
 
 internal fun decodeReviewPolicy(raw: String): GoalRunnerReviewPolicy {
@@ -18,18 +21,34 @@ internal fun decodeReviewPolicy(raw: String): GoalRunnerReviewPolicy {
       ?.let(JsonCodec::anyToStringAnyMap)
       ?: goalRunnerControlSchemaError("review policy durable record must be an object.")
   val mode =
-    policy["code_review_mode"] as? String
+    policy[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.CODE_REVIEW_MODE] as? String
       ?: goalRunnerControlSchemaError("review policy durable record is missing code_review_mode.")
-  val codeReviewMode = CodeReviewExecutionMode.fromWire(mode)
-  val addOns =
-    (policy["agent_addon_selection"] as? List<*>).orEmpty().mapIndexed { index, value ->
-      decodeReviewPolicyAddonEntry(index, value)
+  val codeReviewMode =
+    try {
+      CodeReviewExecutionMode.fromWire(mode)
+    } catch (error: IllegalArgumentException) {
+      goalRunnerControlSchemaError("review policy durable record has invalid code_review_mode: ${error.message}")
     }
-  return GoalRunnerReviewPolicy(codeReviewMode, AgentAddonSelection(addOns))
+  val selection =
+    try {
+      AgentAddonSelection(decodeReviewPolicyAddons(policy))
+    } catch (error: IllegalArgumentException) {
+      goalRunnerControlSchemaError("review policy durable record has invalid add-on selection: ${error.message}")
+    }
+  return GoalRunnerReviewPolicy(codeReviewMode, selection)
 }
 
 internal fun decodeAcceptances(raw: String): Map<Int, GoalRunnerOutOfBandAcceptance> =
   parseAcceptanceList(raw).associate(::decodeAcceptanceEntry)
+
+private fun decodeReviewPolicyAddons(policy: Map<String, Any?>): List<PersistedAgentAddonSelectionEntry> {
+  val raw =
+    policy[FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.AGENT_ADDON_SELECTION] ?: return emptyList()
+  val values =
+    raw as? List<*>
+      ?: goalRunnerControlSchemaError("review policy durable record agent_addon_selection must be a list.")
+  return values.mapIndexed { index, value -> decodeReviewPolicyAddonEntry(index, value) }
+}
 
 private fun decodeReviewPolicyAddonEntry(
   index: Int,
@@ -38,11 +57,25 @@ private fun decodeReviewPolicyAddonEntry(
   val entry =
     JsonCodec.anyToStringAnyMap(value)
       ?: goalRunnerControlSchemaError("review policy durable add-on entry $index must be a map.")
-  return PersistedAgentAddonSelectionEntry(
-    slug = requireReviewPolicyAddonField(entry, index, "slug"),
-    sourceIdentity = requireReviewPolicyAddonField(entry, index, "source_identity"),
-    contentSha256 = requireReviewPolicyAddonField(entry, index, "content_sha256"),
-  )
+  val slug =
+    requireReviewPolicyAddonField(entry, index, FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SLUG)
+  val sourceIdentity =
+    requireReviewPolicyAddonField(
+      entry,
+      index,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_SOURCE_IDENTITY,
+    )
+  val contentSha256 =
+    requireReviewPolicyAddonField(
+      entry,
+      index,
+      FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ADDON_CONTENT_SHA256,
+    )
+  return try {
+    PersistedAgentAddonSelectionEntry(slug = slug, sourceIdentity = sourceIdentity, contentSha256 = contentSha256)
+  } catch (error: IllegalArgumentException) {
+    goalRunnerControlSchemaError("review policy durable add-on entry $index is invalid: ${error.message}")
+  }
 }
 
 private fun requireReviewPolicyAddonField(
@@ -70,7 +103,7 @@ private fun parseAcceptanceJsonElement(raw: String): JsonElement =
   }
 
 private fun invalidAcceptanceJson(cause: Throwable): Nothing =
-  throw InvalidWorkflowStateSchemaError(
+  throw invalidWorkflowStateSchemaError(
     "Goal runner control state: acceptance durable record is not valid JSON.",
     cause,
   )
@@ -81,10 +114,12 @@ private fun decodeAcceptanceEntry(value: Any?): Pair<Int, GoalRunnerOutOfBandAcc
       ?: goalRunnerControlSchemaError("acceptance durable record entries must be maps.")
   val acceptance =
     GoalRunnerOutOfBandAcceptance(
-      subtaskId = requireAcceptanceInt(entry, "subtask_id"),
-      commitSha = requireAcceptanceString(entry, "commit_sha"),
-      reason = requireAcceptanceString(entry, "reason"),
-      acceptedAt = requireAcceptanceString(entry, "accepted_at"),
+      subtaskId = requireAcceptanceInt(entry, SharedPayloadKeys.SUBTASK_ID),
+      commitSha = requireAcceptanceString(entry, DecompositionManifestPayloadKeys.COMMIT_SHA),
+      reason =
+        requireAcceptanceString(entry, FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ACCEPTANCE_REASON),
+      acceptedAt =
+        requireAcceptanceString(entry, FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ACCEPTED_AT),
     )
   return acceptance.subtaskId to acceptance
 }
@@ -93,12 +128,12 @@ private fun requireAcceptanceInt(
   entry: Map<String, Any?>,
   key: String,
 ): Int =
-  (entry[key] as? Number)?.toInt()
-    ?: goalRunnerControlSchemaError("acceptance durable record entry is missing $key.")
+  entry[key].exactPositiveSubtaskIdOrNull()
+    ?: goalRunnerControlSchemaError("acceptance durable record entry $key must be a positive integer.")
 
 private fun requireAcceptanceString(
   entry: Map<String, Any?>,
   key: String,
 ): String =
-  entry[key] as? String
-    ?: goalRunnerControlSchemaError("acceptance durable record entry is missing $key.")
+  (entry[key] as? String)?.takeIf(String::isNotBlank)
+    ?: goalRunnerControlSchemaError("acceptance durable record entry is missing a nonblank $key.")

@@ -17,17 +17,19 @@ import skillbill.application.workflow.service.WorkflowService
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.normalizeIssueKey
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.goalrunner.GoalObservabilityArtifacts
 import skillbill.goalrunner.model.GoalObservabilityProgressInput
 import skillbill.goalrunner.model.GoalObservabilityWorktreeActivity
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.ports.taskruntime.validateGoalObservabilityEvent
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
+import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowContinueDecision
 import skillbill.workflow.engine.model.WorkflowDefinition
@@ -36,6 +38,9 @@ import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.WorkflowStatus
+import skillbill.workflow.model.WorkflowStepStatus
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import java.nio.file.Path
 import java.time.Clock
 import java.time.ZoneOffset
@@ -78,6 +83,9 @@ internal fun persistOpenedWorkflow(args: PersistOpenedWorkflowArgs): WorkflowOpe
     val family = args.family
     val workflowId = args.workflowId
     val stepId = args.stepId
+    if (family == WorkflowFamily.TASK_RUNTIME && args.executionIdentity != null && args.executionPlan == null) {
+      throw MissingFeatureTaskRuntimeExecutionPlanError()
+    }
     val record =
       engine.openRecord(
         family.definition,
@@ -85,16 +93,28 @@ internal fun persistOpenedWorkflow(args: PersistOpenedWorkflowArgs): WorkflowOpe
         args.effectiveSessionId,
         stepId,
       )
-    args.workflowSnapshotValidator.validate(record, family.definition.workflowName)
+    val withExecutionPlan =
+      args.executionPlan?.let { descriptor ->
+        record.copy(
+          artifacts =
+            DurableWorkflowArtifacts.fromMap(
+              record.artifacts +
+                DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.entry(
+                  JsonCodec.parseValue(descriptor.encoded().toString(Charsets.UTF_8)),
+                ),
+            ),
+        )
+      } ?: record
+    args.workflowSnapshotValidator.validate(withExecutionPlan, family.definition.workflowName)
     unitOfWork.workflowStates.saveRecord(
       family,
-      record.toRecord().copy(
+      withExecutionPlan.toRecord().copy(
         startedAt = null,
         issueKey = normalizeIssueKey(args.issueKey),
       ),
     )
     args.executionIdentity?.let(unitOfWork.workflowStates::saveFeatureTaskExecutionIdentity)
-    val saved = unitOfWork.workflowStates.get(family, workflowId) ?: record
+    val saved = unitOfWork.workflowStates.get(family, workflowId) ?: withExecutionPlan
     val currentStep =
       engine.snapshotView(family.definition, saved).steps
         .firstOrNull { it.stepId == stepId }
@@ -131,7 +151,7 @@ internal fun WorkflowUpdateRequest.toWorkflowUpdateInput(): WorkflowUpdateInput 
   WorkflowUpdateInput(
     workflowStatus =
       WorkflowStatus.fromWire(workflowStatus)
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Invalid workflow_status '$workflowStatus'.",
         ),
     currentStepId = currentStepId,
@@ -149,7 +169,7 @@ internal fun WorkflowContinueDecision.toReopenInput(sessionId: String): Workflow
         listOf(
           mapOf(
             SharedPayloadKeys.STEP_ID to resumeStepId,
-            SharedPayloadKeys.STATUS to "running",
+            SharedPayloadKeys.STATUS to WorkflowStepStatus.RUNNING.wireValue,
             "attempt_count" to nextAttemptCount,
           ),
         ),
@@ -175,7 +195,7 @@ internal fun WorkflowUpdateInput.withGoalObservabilityArtifacts(
       GoalObservabilityArtifacts.patchForProgressEvent(
         input =
           GoalObservabilityProgressInput(
-            artifacts = mergedArtifacts,
+            artifacts = FeatureTaskRuntimeWorkflowArtifactMap.from(mergedArtifacts),
             workflowId = workflowId,
             workflowStatus = workflowStatus.wireValue,
             currentStepId = currentStepId,
@@ -189,12 +209,31 @@ internal fun WorkflowUpdateInput.withGoalObservabilityArtifacts(
                   )
                 },
           ),
-        validator = validator::validateGoalObservabilityEvent,
       )
-    observabilityPatch?.let { patchValue ->
-      val decoded = JsonCodec.anyToStringAnyMap(patchValue) ?: return this
+    observabilityPatch?.let { decoded ->
+      validateGoalObservabilityPatch(validator, decoded)
       copy(artifactsPatch = WorkflowArtifactPatch.from(LinkedHashMap(patch).apply { putAll(decoded) }))
     } ?: this
+  }
+}
+
+private fun validateGoalObservabilityPatch(
+  validator: FeatureTaskRuntimeWireArtifactValidator,
+  patch: FeatureTaskRuntimeWorkflowArtifactMap,
+) {
+  val latestEvent = DurableWorkflowArtifactFamily.GOAL_OBSERVABILITY_LATEST_EVENT
+  validator.validate(
+    FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT,
+    FeatureTaskRuntimeWorkflowArtifactMap.from(latestEvent.value(patch)),
+    latestEvent.label(),
+  )
+  val runHistory = DurableWorkflowArtifactFamily.GOAL_OBSERVABILITY_RUN_HISTORY
+  (runHistory.value(patch) as List<*>).forEachIndexed { index, item ->
+    validator.validate(
+      FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT,
+      FeatureTaskRuntimeWorkflowArtifactMap.from(item),
+      "${runHistory.label()}[$index]",
+    )
   }
 }
 
@@ -264,6 +303,7 @@ fun WorkflowService.openFeatureTask(args: WorkflowServiceOpenFeatureTaskArgs): W
       repositoryIdentity = args.repositoryIdentity,
       governedSpecPath = args.governedSpecPath,
       routeScope = args.routeScope,
+      executionPlan = args.executionPlan,
     ),
   )
 }

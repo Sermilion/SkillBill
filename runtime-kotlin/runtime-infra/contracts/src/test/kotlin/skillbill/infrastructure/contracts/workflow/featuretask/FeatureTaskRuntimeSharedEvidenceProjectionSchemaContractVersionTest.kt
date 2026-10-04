@@ -3,7 +3,7 @@ package skillbill.infrastructure.contracts.workflow.featuretask
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_SHARED_EVIDENCE_PROJECTION_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeSharedEvidenceProjectionSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeSharedEvidenceProjectionSchemaPaths
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -76,14 +76,23 @@ class FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidatorTest {
 
   @Test
   fun `an unknown top-level property fails validation`() {
+    val payload = representativeProjection() + ("diff_content" to "+++ a/file")
+    val reason =
+      assertNotNull(
+        FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator.violation(payload, "shared-evidence#unknown"),
+      )
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeSharedEvidenceProjectionSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator.validate(
-          payload = representativeProjection() + ("diff_content" to "+++ a/file"),
+          payload = payload,
           sourceLabel = "shared-evidence#unknown",
         )
       }
-    assertTrue(error.reason.contains("diff_content"), error.reason)
+    assertTrue(error.message.orEmpty().contains("diff_content"), error.message.orEmpty())
+    assertEquals(
+      "Feature-task-runtime shared evidence projection 'shared-evidence#unknown' fails schema validation: $reason",
+      error.message,
+    )
   }
 
   @Test
@@ -92,7 +101,7 @@ class FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidatorTest {
       representativeProjection().toMutableMap().apply {
         remove("repository_checkpoint_fingerprint")
       }
-    assertFailsWith<InvalidFeatureTaskRuntimeSharedEvidenceProjectionSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator.validate(
         payload = payload,
         sourceLabel = "shared-evidence#missing-fp",
@@ -106,7 +115,7 @@ class FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidatorTest {
       representativeProjection().toMutableMap().apply {
         put("contract_version", "9.9")
       }
-    assertFailsWith<InvalidFeatureTaskRuntimeSharedEvidenceProjectionSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator.validate(
         payload = payload,
         sourceLabel = "shared-evidence#bad-version",

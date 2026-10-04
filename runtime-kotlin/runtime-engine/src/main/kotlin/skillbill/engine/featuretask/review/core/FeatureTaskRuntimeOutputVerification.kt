@@ -7,10 +7,10 @@ import skillbill.goalrunner.subtaskreview.FeatureTaskRuntimeVerificationSignalKe
 import skillbill.review.model.ReviewClaimVerdict
 import skillbill.review.model.ReviewScopeDisposition
 import skillbill.review.parsing.ReviewFindingActionability
-import skillbill.workflow.model.goalreview.FeatureTaskRuntimeReviewSeverity
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewFinding
+import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewSeverity
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeReviewVerdict
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeFindingVerificationVerdict
@@ -20,7 +20,9 @@ object FeatureTaskRuntimeOutputVerification {
     FeatureTaskRuntimeStepVerdictRule { wireVerdict, outputObject -> reviewVerdict(outputObject, wireVerdict) }
 
   internal val findingVerificationVerdictRule: FeatureTaskRuntimeStepVerdictRule =
-    FeatureTaskRuntimeStepVerdictRule { wireVerdict, _ -> findingVerificationVerdict(wireVerdict) }
+    FeatureTaskRuntimeStepVerdictRule { wireVerdict, outputObject ->
+      findingVerificationVerdict(wireVerdict, outputObject)
+    }
 
   internal fun verdictFor(
     outputObject: FeatureTaskRuntimeWorkflowArtifactMap?,
@@ -58,10 +60,21 @@ object FeatureTaskRuntimeOutputVerification {
   ): List<FeatureTaskRuntimeReviewFinding> = reviewVerdictFrom(outputObject)?.unresolvedFindings.orEmpty()
 }
 
-private fun findingVerificationVerdict(wireVerdict: FeatureTaskRuntimeVerdict?): FeatureTaskRuntimeVerdict =
-  requireNotNull(wireVerdict) {
-    "verify_findings phase output is missing verdict."
+private fun findingVerificationVerdict(
+  wireVerdict: FeatureTaskRuntimeVerdict?,
+  outputObject: FeatureTaskRuntimeWorkflowArtifactMap?,
+): FeatureTaskRuntimeVerdict {
+  if (wireVerdict != null) return wireVerdict
+  val verdict =
+    requireNotNull(findingVerificationVerdictFrom(outputObject)) {
+      "verify_findings phase output carries neither a verdict nor finding dispositions."
+    }
+  return if (verdict.verifiedDispositions.isEmpty()) {
+    FeatureTaskRuntimeVerdict.NO_FINDINGS_VERIFIED
+  } else {
+    FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED
   }
+}
 
 private fun findingVerificationVerdictFrom(
   outputObject: FeatureTaskRuntimeWorkflowArtifactMap?,

@@ -2,15 +2,15 @@ package skillbill.engine.goalrunner.persist
 
 import skillbill.engine.goalrunner.execution.support.authoritativeOutcomesBySubtask
 import skillbill.engine.goalrunner.execution.support.staleRunningReason
+import skillbill.engine.goalrunner.model.GoalContinuationCandidate
+import skillbill.engine.goalrunner.model.GoalRunnerBlockWrite
+import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
+import skillbill.engine.goalrunner.model.StaleRunningCandidatesBlockRequest
 import skillbill.goalrunner.STALENESS_EVIDENCE_WINDOW
-import skillbill.goalrunner.declaredProgressEventFrom
+import skillbill.goalrunner.ledger.declaredProgressEventFrom
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
 import skillbill.goalrunner.terminalOutcomeFor
-import skillbill.ports.goalrunner.persistence.model.GoalContinuationCandidate
-import skillbill.ports.goalrunner.persistence.model.GoalRunnerBlockWrite
-import skillbill.ports.goalrunner.persistence.model.StaleRunningCandidatesBlockRequest
-import skillbill.ports.goalrunner.runner.model.GoalRunnerReconcileGate
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -18,8 +18,8 @@ import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.model.WorkflowStatus
-import skillbill.workflow.model.goalreview.goalObservabilityLatestEventFromArtifacts
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuation
+import skillbill.workflow.model.goalobservability.goalObservabilityLatestEventFromArtifacts
+import skillbill.workflow.taskruntime.model.persistence.goalContinuation
 import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration

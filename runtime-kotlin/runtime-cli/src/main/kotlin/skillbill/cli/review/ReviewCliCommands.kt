@@ -22,10 +22,10 @@ import skillbill.cli.model.CliRunInputs
 
 @Inject
 class FeatureStatsCommands(
-  val featureVerifyStatsCommand: FeatureVerifyStatsCommand,
-  val featureTaskStatsCommand: FeatureTaskStatsCommand,
-  val featureTaskRuntimeStatsCommand: FeatureTaskRuntimeStatsCommand,
-  val goalStatsCommand: GoalStatsCommand,
+  featureVerifyStatsCommand: FeatureVerifyStatsCommand,
+  featureTaskStatsCommand: FeatureTaskStatsCommand,
+  featureTaskRuntimeStatsCommand: FeatureTaskRuntimeStatsCommand,
+  goalStatsCommand: GoalStatsCommand,
 ) {
   val commands =
     listOf(
@@ -38,12 +38,12 @@ class FeatureStatsCommands(
 
 @Inject
 class ReviewTopLevelCommands(
-  val importReviewCommand: ImportReviewCommand,
-  val recordFeedbackCommand: RecordFeedbackCommand,
-  val triageCommand: TriageCommand,
-  val statsCommand: ReviewStatsCommand,
-  val pruneSnapshotsCommand: PruneReviewSnapshotsCommand,
-  val featureStatsCommands: FeatureStatsCommands,
+  importReviewCommand: ImportReviewCommand,
+  recordFeedbackCommand: RecordFeedbackCommand,
+  triageCommand: TriageCommand,
+  statsCommand: ReviewStatsCommand,
+  pruneSnapshotsCommand: PruneReviewSnapshotsCommand,
+  featureStatsCommands: FeatureStatsCommands,
 ) {
   val commands =
     listOf(

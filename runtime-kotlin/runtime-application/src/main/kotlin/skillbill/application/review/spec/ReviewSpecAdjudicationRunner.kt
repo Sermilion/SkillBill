@@ -12,14 +12,15 @@ import skillbill.application.review.verification.parseCitationsWithDiagnostics
 import skillbill.application.review.verification.parseJsonObject
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.ReviewFindingPayloadKeys
+import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.SkillRunRequest
 import skillbill.ports.agentrun.model.UnsupportedAgentRunLaunch
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
 import skillbill.ports.review.ReviewContextEnvelopeValidator
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.execution.SpecIntentProjection
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.context.model.hunk.ReviewDependencyAllowlist
 import skillbill.review.context.model.launch.GovernedReviewAdjudicationLaunch
 import skillbill.review.context.model.launch.ReviewSpecAdjudicationAdmission
@@ -228,6 +229,7 @@ class ReviewSpecAdjudicationRunner(
             rejectionReason = "unsupported agent: ${outcome.reason}",
           ),
         )
+      is AgentRunLaunchDenied -> error("Review adjudication never launches with a spawn authorization.")
       is AgentRunLaunchFacts -> fromLaunchFacts(job, outcome, recordedAt)
     }
   }

@@ -182,3 +182,13 @@ ledger expects must be regenerated in the subtask that the ledger names.
   into directive resources. Goal-child plan and preplan prompts do not load the
   feature-spec directive and carry only the name replacements. Telemetry, lifecycle,
   ledger and workflow JSON files are unchanged.
+- SKILL-385 subtask 1 (project authoring discipline) changes only prompt-policy text: the
+  authoring discipline section in implement, simplify, audit_implement_fix, implement_fix and
+  inline review prompts; the removed audit compile exception; the reconciled
+  compile/build/test ownership lines; and the validate independent-discovery sentence.
+  Telemetry, lifecycle, ledger, phase-record, handoff and workflow JSON files are unchanged.
+- SKILL-387 (prose phase output and spec handoff): every phase prompt ends with the plain-prose
+  final-output section in place of the JSON envelope contract, preplan asks for prose instead of a
+  stuffed digest, and plan authors its bundle on disk. Phase records, handoff projections and
+  workflow snapshots carry the prose value and summary. The `phase/plan/` capture runs in a repo
+  without the seeded SKILL-380 spec, because plan blocks rather than overwrite an existing parent spec.

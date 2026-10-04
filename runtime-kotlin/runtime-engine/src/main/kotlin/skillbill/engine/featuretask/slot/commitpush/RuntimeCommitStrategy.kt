@@ -5,24 +5,22 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStrategy
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.policyOf
-import skillbill.engine.featuretask.slot.state.PhaseStepState
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseCommitStepBinding
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
-class RuntimeCommitStrategy(override val runner: PhaseRunner) : PhaseStrategy() {
+class RuntimeCommitStrategy : PhaseStrategy() {
   private val policies =
     mapOf(
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_COMMIT_PUSH to
         PhaseStepPolicy(
           mutating = false,
-          relaunchOnInvalidOutput = false,
           singleAgentSession = false,
           readOnlyIdle = false,
           fileMutating = true,
@@ -59,8 +57,14 @@ class RuntimeCommitStrategy(override val runner: PhaseRunner) : PhaseStrategy() 
 
   override fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
-  ): PhaseOutcome = with(RuntimeCommitCycle) { PhaseAttemptScope(run.request, state).runDeclaredCommitPushCycle(run) }
+    state: PhaseAcceptedStepExecution,
+  ): PhaseOutcome {
+    state.requireAcceptedStep(run, strategyId)
+    return (
+      state as? PhaseCommitStepBinding
+        ?: error("Commit requires its accepted execution binding.")
+    ).runCommitPush(run)
+  }
 
   override fun stepHooks(stepId: String): PhaseStepHooks {
     policies.policyOf(stepId)

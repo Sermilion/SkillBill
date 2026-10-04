@@ -8,14 +8,14 @@ import skillbill.engine.goalrunner.execution.core.lease
 import skillbill.engine.goalrunner.execution.core.testGoalRunnerStatusService
 import skillbill.engine.goalrunner.goalTestPhaseRecorder
 import skillbill.engine.goalrunner.manifest
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStoreDefaults
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerStopStatus
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_REQUEST
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_STOP
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStoreDefaults
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.taskruntime.FeatureTaskRuntimeHeartbeat
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeHeartbeat

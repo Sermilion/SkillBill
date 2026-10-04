@@ -1,6 +1,5 @@
 package skillbill.infrastructure.host.process
 
-import skillbill.ports.process.INSTALLER_OUTPUT_TRUNCATION_SENTINEL
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -178,7 +177,6 @@ private class BoundedExternalProcessSession(
     }
     if (!timedOut && !active.isAlive) {
       exitCode = active.exitValue()
-      settleOwnedDescendants()
     }
     if (timedOut) {
       attemptCleanup { destroyProcessTree(active) }
@@ -187,6 +185,7 @@ private class BoundedExternalProcessSession(
 
   private fun settleOutput() {
     val active = process ?: return
+    attemptCleanup { destroyProcessTree(active) }
     val outputDeadlineNanos =
       if (timedOut) {
         System.nanoTime() + TimeUnit.SECONDS.toNanos(PROCESS_CLEANUP_BUDGET_SECONDS)
@@ -271,20 +270,6 @@ private class BoundedExternalProcessSession(
     runCatching {
       ownedDescendants += process.toHandle().descendants().toList()
     }.onFailure(::recordCleanupFailure)
-  }
-
-  private fun settleOwnedDescendants() {
-    val deadlineNanos =
-      minOf(
-        operationDeadlineNanos,
-        System.nanoTime() + TimeUnit.SECONDS.toNanos(PROCESS_CLEANUP_BUDGET_SECONDS),
-      )
-    while (ownedDescendants.any { it.isAlive } && System.nanoTime() < deadlineNanos) {
-      Thread.sleep(PROCESS_POLL_MILLIS)
-    }
-    if (ownedDescendants.any { it.isAlive }) {
-      readFailure.compareAndSet(null, IOException("process exited with an owned descendant still running"))
-    }
   }
 
   private fun destroyProcessTree(process: Process) {

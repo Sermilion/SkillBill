@@ -4,8 +4,6 @@ import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestRepositoryEnclosingRoot
 import skillbill.application.decomposition.DecompositionManifestWriter
-import skillbill.application.realFeatureTaskRuntimePhaseOutputValidator
-import skillbill.application.realPlanningProjectionValidator
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testHarnessClock
@@ -16,7 +14,10 @@ import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWi
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runner.FeatureTaskRuntimeStatusService
-import skillbill.engine.featuretask.validation.ValidationGateResolver
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
+import skillbill.engine.goalrunner.persist.GoalRunnerAttemptLedgerStore
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
+import skillbill.engine.goalrunner.persist.NoopGoalRunnerAttemptLedgerStore
 import skillbill.engine.goalrunner.persist.OutcomeStoreTestArtifactPorts
 import skillbill.engine.goalrunner.persist.engineWorkflowGoalRunnerChildRepairStore
 import skillbill.engine.goalrunner.persist.engineWorkflowGoalRunnerManifestStore
@@ -24,12 +25,13 @@ import skillbill.engine.goalrunner.persist.engineWorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPortAdapter
 import skillbill.engine.goalrunner.planning.recovery.NO_GOAL_PLANNING_STATUS_REASON_COHERENCE
 import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairOperations
+import skillbill.engine.goalrunner.repair.GoalRunnerChildRepairStore
+import skillbill.engine.goalrunner.repair.GoalRunnerRepairCoordinator
 import skillbill.engine.goalrunner.repair.NoopGoalRunnerChildRepairStore
 import skillbill.engine.goalrunner.reset.GoalRunnerPurgeCoordinator
 import skillbill.engine.goalrunner.reset.GoalRunnerResetReplanCoordinator
+import skillbill.engine.goalrunner.status.GoalRunnerStatusControlVerbs
 import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
-import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionDataSources
-import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionValidationDependencies
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
@@ -37,12 +39,6 @@ import skillbill.ports.config.model.ReadRepoLocalConfigResult
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.goalrunner.persistence.GoalRunnerChildRepairStore
-import skillbill.ports.goalrunner.runner.GoalRunnerAttemptLedgerStore
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
-import skillbill.ports.goalrunner.runner.NoopGoalRunnerAttemptLedgerStore
-import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.NoopFeatureTaskRuntimeWorkerSupervisor
@@ -87,39 +83,34 @@ fun testGoalRunnerStatusService(
 ): GoalRunnerStatusService {
   val projectionAssembler =
     GoalRunnerStatusProjectionAssembler(
-      dataSources =
-        GoalRunnerStatusProjectionDataSources(
-          manifestStore = manifestStore,
-          outcomeStore = outcomeStore,
-          phaseQuery = phaseRecorder.phaseQuery,
-          attemptLedgerStore = ports.attemptLedgerStore,
-          database = database,
-        ),
+      manifestStore = manifestStore,
+      outcomeStore = outcomeStore,
+      phaseQuery = phaseRecorder.phaseQuery,
+      attemptLedgerStore = ports.attemptLedgerStore,
+      database = database,
       gitOperations = ports.gitOperations,
-      clock = clock,
       workerSupervisor = ports.workerSupervisor,
       planningStatusReasonCoherence = NO_GOAL_PLANNING_STATUS_REASON_COHERENCE,
       diagnostics = ports.diagnostics,
       runtimeStatusService = ports.runtimeStatusService,
       repositoryRoot = testRepositoryRoot,
-      validationDependencies =
-        GoalRunnerStatusProjectionValidationDependencies(
-          validationGateResolver =
-            ValidationGateResolver(
-              InstalledPlatformPackCatalogPort { ports.validationGatePlatformManifests },
-            ),
-          repoLocalConfig = ports.repoLocalConfig,
-        ),
     )
   return GoalRunnerStatusService(
     manifestStore = manifestStore,
-    outcomeStore = outcomeStore,
-    phaseQuery = phaseRecorder.phaseQuery,
-    gitOperations = ports.gitOperations,
-    clock = clock,
-    workerSupervisor = ports.workerSupervisor,
-    childRepairStore = ports.childRepairStore,
-    repositoryEnclosingRootPort = TestRepositoryEnclosingRoot,
+    controlVerbs =
+      GoalRunnerStatusControlVerbs(
+        manifestStore,
+        clock,
+        ports.workerSupervisor,
+        TestRepositoryEnclosingRoot,
+      ),
+    repairCoordinator =
+      GoalRunnerRepairCoordinator(
+        manifestStore, phaseRecorder.phaseQuery, ports.workerSupervisor,
+        ports.childRepairStore, outcomeStore, testRepositoryRoot, TestRepositoryEnclosingRoot, clock, ports.diagnostics,
+      ),
+    acceptanceCoordinator = GoalRunnerAcceptanceCoordinator(manifestStore, outcomeStore, ports.gitOperations, clock),
+    repositoryRoot = testRepositoryRoot,
     projectionAssembler = projectionAssembler,
     resetReplanCoordinator =
       GoalRunnerResetReplanCoordinator(
@@ -144,12 +135,7 @@ fun testGoalRunnerStatusService(
   )
 }
 
-private val testGoalChildPlanningHydratorPort =
-  GoalChildPlanningHydratorPortAdapter(
-    realFeatureTaskRuntimePhaseOutputValidator,
-    realPlanningProjectionValidator,
-    testHarnessClock,
-  )
+private val testGoalChildPlanningHydratorPort = GoalChildPlanningHydratorPortAdapter(testHarnessClock)
 
 fun testGoalRunnerChildRepairExecutor(
   database: DatabaseSessionFactory = FakeDatabaseSessionFactory(InMemoryWorkflowStates()),

@@ -1,9 +1,20 @@
 package skillbill.engine.goalrunner.manifest
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.decomposition.DecompositionManifestWriter
+import skillbill.engine.featuretask.lifecycle.execution.FeatureTaskRuntimeExecutionAdmission
+import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
+import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
+import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
+import skillbill.engine.goalrunner.model.GoalRunnerLaunchAuthorization
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
+import skillbill.engine.goalrunner.model.GoalRunnerPausePersistenceResult
+import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
+import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
+import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydratorPort
+import skillbill.engine.goalrunner.reset.GoalChildWorkflowSaveResult
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerChildWorkflowPersistence
 import skillbill.engine.goalrunner.reset.WorkflowGoalRunnerScopedReplanPersistence
-import skillbill.engine.goalrunner.reset.afterIncompatibleChildDeletion
 import skillbill.engine.goalrunner.status.GoalRunnerControlCoordinator
 import skillbill.engine.goalrunner.status.acquireExecutionLease
 import skillbill.engine.goalrunner.status.bindRepositoryIdentity
@@ -22,30 +33,16 @@ import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.decomposition.DecompositionManifestProjectionWriter
-import skillbill.ports.goalrunner.GoalParentProjectionWriter
-import skillbill.ports.goalrunner.persistence.GoalChildPlanningHydratorPort
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
-import skillbill.ports.goalrunner.runner.model.GoalRunnerChildWorkflowSetup
-import skillbill.ports.goalrunner.runner.model.GoalRunnerCompletionPersistenceResult
-import skillbill.ports.goalrunner.runner.model.GoalRunnerLaunchAuthorization
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
-import skillbill.ports.goalrunner.runner.model.GoalRunnerPausePersistenceResult
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
-import skillbill.ports.goalrunner.runner.model.GoalRunnerScopedReplanOptions
-import skillbill.ports.goalrunner.runner.model.GoalRunnerScopedReplanWriteResult
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.WorkflowSnapshotValidator
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.clearDecompositionManifestProjectionFailure
-import skillbill.ports.workflow.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.ports.workflow.model.WorkflowFamily
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.decomposition.afterIncompatibleChildDeletion
 import skillbill.workflow.engine.WorkflowEngine
-import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import java.nio.file.Path
 import java.time.Clock
 import kotlin.random.Random
@@ -59,10 +56,11 @@ class WorkflowGoalRunnerManifestStore
     private val decompositionManifestStore: DecompositionManifestStore,
     private val clock: Clock,
     private val random: Random,
-    private val decompositionManifestWriter: DecompositionManifestProjectionWriter,
+    private val decompositionManifestWriter: DecompositionManifestWriter,
     private val repositoryRoot: RepositoryRoot,
     private val planningHydrator: GoalChildPlanningHydratorPort,
     private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
+    private val executionAdmission: FeatureTaskRuntimeExecutionAdmission,
   ) : GoalRunnerManifestStore {
     private val engine: WorkflowEngine = WorkflowEngine()
     private val parentProjection = GoalParentProjectionWriter(engine, decompositionManifestValidator)
@@ -82,12 +80,18 @@ class WorkflowGoalRunnerManifestStore
         engine,
         parentProjection,
         workflowSnapshotValidator,
+        decompositionManifestWriter,
+        repositoryRoot,
+        decompositionManifestValidator,
+        decompositionManifestStore,
       )
     private val childWorkflowPersistence =
       WorkflowGoalRunnerChildWorkflowPersistence(
         engine,
         planningHydrator,
         parentProjection,
+        executionAdmission,
+        clock,
       )
     private val scopedReplanPersistence = WorkflowGoalRunnerScopedReplanPersistence(projectionPersistence)
     private val controls =
@@ -105,14 +109,15 @@ class WorkflowGoalRunnerManifestStore
       repoRoot: Path?,
     ): GoalRunnerManifestState? {
       val projected = repoRoot?.let { root -> manifestLoader.findProjectedManifest(root, issueKey) }
-      val stored = manifestLoader.loadFromWorkflowStore(issueKey, projected)
+      val identity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity)
+      val stored = manifestLoader.loadFromWorkflowStore(issueKey, projected, identity)
       if (manifestLoader.shouldRefreshFromCompleteProjection(stored, projected)) {
         return save(
           requireNotNull(stored).copy(manifest = requireNotNull(projected), repoRoot = repoRoot),
         )
       }
       return stored?.copy(repoRoot = repoRoot) ?: projected?.let { manifest ->
-        manifestLoader.importFromManifestProjection(manifest)?.copy(repoRoot = repoRoot)
+        manifestLoader.importFromManifestProjection(manifest, identity)?.copy(repoRoot = repoRoot)
       }
     }
 
@@ -121,7 +126,8 @@ class WorkflowGoalRunnerManifestStore
       repoRoot: Path?,
     ): GoalRunnerManifestState? {
       val projected = repoRoot?.let { root -> manifestLoader.findProjectedManifest(root, issueKey) }
-      val stored = manifestLoader.loadFromWorkflowStore(issueKey, projected)
+      val identity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity)
+      val stored = manifestLoader.loadFromWorkflowStore(issueKey, projected, identity)
       return manifestLoader.readProjection(stored, projected, repoRoot)
     }
 
@@ -133,12 +139,19 @@ class WorkflowGoalRunnerManifestStore
         repoRoot?.let { root ->
           manifestLoader.findProjectedManifest(root, issueKey, recoverPending = false)
         }
-      val stored = manifestLoader.loadFromWorkflowStoreIfPresent(issueKey, projected)
+      val identity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity)
+      val stored = manifestLoader.loadFromWorkflowStoreIfPresent(issueKey, projected, identity)
       return manifestLoader.readProjection(stored, projected, repoRoot)
     }
 
-    override fun loadDurableByIssueKey(issueKey: String): GoalRunnerManifestState? =
-      manifestLoader.loadFromWorkflowStore(issueKey, currentProjectedManifest = null)
+    override fun loadDurableByIssueKey(
+      issueKey: String,
+      repoRoot: Path?,
+    ): GoalRunnerManifestState? =
+      manifestLoader.loadFromWorkflowStore(
+        issueKey,
+        repositoryIdentity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity),
+      )
 
     override fun requestPause(parentWorkflowId: String): GoalRunnerControlState? =
       controls.requestPause(
@@ -169,7 +182,20 @@ class WorkflowGoalRunnerManifestStore
       parentWorkflowId: String,
       lease: GoalRunnerExecutionLease,
       expectedOwnerToken: String?,
-    ): Boolean = controls.acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken)
+    ): Boolean =
+      controls.acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken) { unitOfWork ->
+        requireCompatibleChildPlan(unitOfWork, parentWorkflowId, null, executionAdmission)
+      }
+
+    override fun acquireExecutionLeaseWithChildAdmission(
+      parentWorkflowId: String,
+      lease: GoalRunnerExecutionLease,
+      expectedOwnerToken: String?,
+      childAdmission: GoalRunnerChildExecutionPlanAdmission,
+    ): Boolean =
+      controls.acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken) { unitOfWork ->
+        requireCompatibleChildPlan(unitOfWork, parentWorkflowId, childAdmission, executionAdmission)
+      }
 
     override fun heartbeatExecutionLease(
       parentWorkflowId: String,
@@ -243,7 +269,7 @@ class WorkflowGoalRunnerManifestStore
 
     override fun save(state: GoalRunnerManifestState): GoalRunnerManifestState {
       val saved = projectionPersistence.save(state)
-      writeProjectionFile(state, saved.projectionArtifacts)
+      projectionPersistence.writeProjectionFile(state, saved.projectionArtifacts)
       return saved.state
     }
 
@@ -284,7 +310,7 @@ class WorkflowGoalRunnerManifestStore
               ),
           )
         }
-      writeProjectionFile(state, saved.projectionArtifacts)
+      projectionPersistence.writeProjectionFile(state, saved.projectionArtifacts)
       return saved.state
     }
 
@@ -313,7 +339,7 @@ class WorkflowGoalRunnerManifestStore
           val recoveredManifest = state.manifest.afterIncompatibleChildDeletion(subtaskId)
           projectionPersistence.saveInTransaction(unitOfWork, state.copy(manifest = recoveredManifest))
         }
-      writeProjectionFile(state, saved.projectionArtifacts)
+      projectionPersistence.writeProjectionFile(state, saved.projectionArtifacts)
       return saved.state
     }
 
@@ -326,7 +352,7 @@ class WorkflowGoalRunnerManifestStore
         database.transaction { unitOfWork ->
           scopedReplanPersistence.executeScopedReplan(unitOfWork, state, subtaskId, options)
         }
-      writeProjectionFile(state, saved.second)
+      projectionPersistence.writeProjectionFile(state, saved.second)
       return saved.first
     }
 
@@ -338,13 +364,19 @@ class WorkflowGoalRunnerManifestStore
     override fun saveNewChildWorkflow(
       state: GoalRunnerManifestState,
       setup: GoalRunnerChildWorkflowSetup,
-    ): GoalRunnerManifestState {
-      val saved =
-        database.transaction { unitOfWork ->
-          childWorkflowPersistence.saveInTransaction(unitOfWork, state, setup)
+    ): GoalRunnerChildWorkflowSaveResult {
+      return when (
+        val saved =
+          database.transaction { unitOfWork ->
+            childWorkflowPersistence.saveInTransaction(unitOfWork, state, setup)
+          }
+      ) {
+        is GoalChildWorkflowSaveResult.Conflicted -> GoalRunnerChildWorkflowSaveResult.Conflicted(saved.conflict)
+        is GoalChildWorkflowSaveResult.Saved -> {
+          projectionPersistence.writeProjectionFile(state, saved.saved.projectionArtifacts)
+          GoalRunnerChildWorkflowSaveResult.Saved(saved.saved.state)
         }
-      writeProjectionFile(state, saved.projectionArtifacts)
-      return saved.state
+      }
     }
 
     override fun listOwnedGoalChildWorkflowIds(parentWorkflowId: String): List<String> =
@@ -422,34 +454,4 @@ class WorkflowGoalRunnerManifestStore
         parentProjection.rewrite(unitOfWork, record)
         acceptance
       }
-
-    private fun writeProjectionFile(
-      state: GoalRunnerManifestState,
-      projectionArtifacts: DurableWorkflowArtifacts,
-    ): DecompositionManifestProjectionOutcome {
-      val outcome =
-        decompositionManifestWriter.writeProjectionFromWorkflowState(
-          state.repoRoot ?: repositoryRoot.path,
-          projectionArtifacts,
-          decompositionManifestValidator,
-          decompositionManifestStore,
-        )
-      when (outcome) {
-        is DecompositionManifestProjectionOutcome.Failed ->
-          database.transaction { unitOfWork ->
-            persistDecompositionManifestProjectionFailure(
-              engine,
-              unitOfWork,
-              state.parentWorkflowId,
-              outcome,
-            )
-          }
-        is DecompositionManifestProjectionOutcome.Written ->
-          database.transaction { unitOfWork ->
-            clearDecompositionManifestProjectionFailure(engine, unitOfWork, state.parentWorkflowId)
-          }
-        DecompositionManifestProjectionOutcome.Absent -> Unit
-      }
-      return outcome
-    }
   }

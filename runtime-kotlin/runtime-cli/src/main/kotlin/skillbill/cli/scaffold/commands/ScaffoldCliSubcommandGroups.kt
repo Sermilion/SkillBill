@@ -1,27 +1,34 @@
 package skillbill.cli.scaffold.commands
 
+import com.github.ajalt.clikt.core.CliktCommand
 import me.tatarka.inject.annotations.Inject
 
 @Inject
 class ScaffoldAuthoringReadCliSubcommands(
-  val list: ListSkillsCommand,
-  val show: ShowSkillCommand,
-  val explain: ExplainSkillCommand,
-  val validate: ValidateSkillCommand,
-)
+  list: ListSkillsCommand,
+  show: ShowSkillCommand,
+  explain: ExplainSkillCommand,
+  validate: ValidateSkillCommand,
+) {
+  val commands: List<CliktCommand> = listOf(list, show, explain, validate)
+}
 
 @Inject
 class ScaffoldAuthoringWriteCliSubcommands(
-  val upgrade: UpgradeSkillsCommand,
-  val render: RenderSkillsCommand,
-  val edit: EditSkillCommand,
-  val fill: FillSkillCommand,
-)
+  upgrade: UpgradeSkillsCommand,
+  render: RenderSkillsCommand,
+  edit: EditSkillCommand,
+  fill: FillSkillCommand,
+) {
+  val commands: List<CliktCommand> = listOf(upgrade, render, edit, fill)
+}
 
 @Inject
 class ScaffoldNewCliSubcommands(
-  val newSkill: NewSkillCommand,
-  val newAlias: NewCommand,
-  val createAndFill: CreateAndFillCommand,
-  val newAddon: NewAddonCommand,
-)
+  newSkill: NewSkillCommand,
+  newAlias: NewCommand,
+  createAndFill: CreateAndFillCommand,
+  newAddon: NewAddonCommand,
+) {
+  val commands: List<CliktCommand> = listOf(newSkill, newAlias, createAndFill, newAddon)
+}

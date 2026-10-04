@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.phase.core
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.agent.model.PhaseOutput
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
@@ -12,10 +13,11 @@ import skillbill.ports.featuretask.FeatureTaskPhaseSettlementRepository
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlement
 import skillbill.ports.featuretask.model.FeatureTaskPhaseSettlementKind
 import skillbill.workflow.taskruntime.artifact.decodeValidationEvidenceFromArtifact
+import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.handoff.envelope.SettlementEnvelopeRequest
-import skillbill.workflow.taskruntime.phase.ProsePhaseOutputSynthesizer
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 import java.time.Clock
 
 @Inject
@@ -24,18 +26,15 @@ class FeatureTaskPhaseSettlementService(
   private val clock: Clock,
 ) {
   fun complete(request: FeatureTaskPhaseSettlementCompleteRequest): FeatureTaskPhaseSettlementAcknowledgment {
-    require(ProsePhaseOutputSynthesizer.isProsePhase(request.phaseId)) { PROSE_PHASE_REQUIREMENT }
+    require(isSettleablePhase(request.phaseId)) { SETTLEABLE_PHASE_REQUIREMENT }
     val envelope =
-      ProsePhaseOutputSynthesizer.envelopeFromSettlement(
-        SettlementEnvelopeRequest(
-          phaseId = request.phaseId,
-          status = "completed",
-          value = request.value,
-          summary = request.summary?.takeIf { it.any { ch -> !ch.isWhitespace() } } ?: truncateSummary(request.value),
-          prompt = request.prompt,
-          verdict = request.verdict?.takeIf(String::isNotBlank),
-        ),
-      ).toWorkflowArtifactMap()
+      NormalizedFeatureTaskRuntimePhaseOutput(
+        phaseId = request.phaseId,
+        status = "completed",
+        summary = request.summary?.takeIf { it.any { ch -> !ch.isWhitespace() } } ?: truncateSummary(request.value),
+        output = PhaseOutput(value = request.value, prompt = request.prompt),
+        verdict = request.verdict?.takeIf(String::isNotBlank),
+      ).envelopeWireMap()
     return persist(
       PersistRequest(
         workflowId = request.workflowId,
@@ -48,21 +47,19 @@ class FeatureTaskPhaseSettlementService(
   }
 
   fun block(request: FeatureTaskPhaseSettlementBlockRequest): FeatureTaskPhaseSettlementAcknowledgment {
-    require(ProsePhaseOutputSynthesizer.isProsePhase(request.phaseId)) { PROSE_PHASE_REQUIREMENT }
+    require(isSettleablePhase(request.phaseId)) { SETTLEABLE_PHASE_REQUIREMENT }
     require(request.failureDisposition.any { !it.isWhitespace() }) {
       "feature_task_phase_block requires a non-blank failure_disposition."
     }
     val envelope =
-      ProsePhaseOutputSynthesizer.envelopeFromSettlement(
-        SettlementEnvelopeRequest(
-          phaseId = request.phaseId,
-          status = "blocked",
-          value = request.reason,
-          summary = truncateSummary(request.reason),
-          verdict = request.verdict?.takeIf(String::isNotBlank),
-          failureDisposition = request.failureDisposition,
-        ),
-      ).toWorkflowArtifactMap()
+      NormalizedFeatureTaskRuntimePhaseOutput(
+        phaseId = request.phaseId,
+        status = "blocked",
+        summary = truncateSummary(request.reason),
+        output = PhaseOutput(value = request.reason),
+        verdict = request.verdict?.takeIf(String::isNotBlank),
+        failureDisposition = request.failureDisposition,
+      ).envelopeWireMap()
     return persist(
       PersistRequest(
         workflowId = request.workflowId,
@@ -148,10 +145,12 @@ class FeatureTaskPhaseSettlementService(
   companion object {
     val KIND_COMPLETE: FeatureTaskPhaseSettlementKind = FeatureTaskPhaseSettlementKind.Complete
     val KIND_BLOCK: FeatureTaskPhaseSettlementKind = FeatureTaskPhaseSettlementKind.Block
-    private const val PROSE_PHASE_REQUIREMENT: String =
-      "phase_id must be a step that settles with the uniform output " +
-        "(preplan|plan|implement|simplify|audit|validate|write_history|pr)."
+    private const val SETTLEABLE_PHASE_REQUIREMENT: String =
+      "phase_id must be an agent-run feature-task phase step (every workflow step except commit_push)."
     private const val SUMMARY_MAX_CHARS: Int = 240
     private const val SUMMARY_ELLIPSIS_PREFIX: Int = 237
+
+    fun isSettleablePhase(phaseId: String): Boolean =
+      phaseId in FeatureTaskRuntimePhaseWorkflowDefinition.agentSettledPhaseIds
   }
 }

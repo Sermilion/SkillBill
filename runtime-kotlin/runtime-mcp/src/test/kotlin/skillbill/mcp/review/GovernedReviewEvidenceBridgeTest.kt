@@ -2,7 +2,8 @@ package skillbill.mcp.review
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.review.GovernedReviewEvidenceContracts
-import skillbill.error.shellcontent.GovernedReviewEvidenceTransportError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import java.net.StandardProtocolFamily
 import java.net.UnixDomainSocketAddress
 import java.nio.channels.Channels
@@ -159,11 +160,13 @@ class GovernedReviewEvidenceBridgeTest {
       }
     thread.isDaemon = true
     thread.start()
-    assertFailsWith<GovernedReviewEvidenceTransportError> {
-      GovernedReviewEvidenceConnection.connect(socketPath, "token").use { connection ->
-        connection.forward("{}")
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        GovernedReviewEvidenceConnection.connect(socketPath, "token").use { connection ->
+          connection.forward("{}")
+        }
       }
-    }
+    assertEquals(GovernedReviewFailureCode.EVIDENCE_TRANSPORT, error.code)
     thread.join(5_000)
   }
 
@@ -182,9 +185,11 @@ class GovernedReviewEvidenceBridgeTest {
         }
       }
     thread.start()
-    assertFailsWith<GovernedReviewEvidenceTransportError> {
-      GovernedReviewEvidenceConnection.connect(socketPath, "token")
-    }
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        GovernedReviewEvidenceConnection.connect(socketPath, "token")
+      }
+    assertEquals(GovernedReviewFailureCode.EVIDENCE_TRANSPORT, error.code)
     thread.join()
   }
 }

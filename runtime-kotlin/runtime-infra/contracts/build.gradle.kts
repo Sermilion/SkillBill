@@ -15,7 +15,6 @@ dependencies {
   implementation(libs.jackson.dataformat.yaml)
   testImplementation(testFixtures(project(":runtime-ports")))
   testImplementation(testFixtures(project(":runtime-infra:host")))
-  testImplementation(project(":runtime-application"))
   testImplementation(libs.junit.jupiter)
   testImplementation(libs.kotlin.test)
 }
@@ -112,11 +111,6 @@ governedResources {
     "SKILL-120: canonical feature-task execution-identity schema",
   )
   copy(
-    "copyFeatureTaskRuntimePhaseOutputSchema",
-    "feature-task-runtime-phase-output-schema.yaml",
-    "SKILL-65: canonical feature-task-runtime phase output schema",
-  )
-  copy(
     "copyFeatureTaskRuntimeHandoffEnvelopeSchema",
     "feature-task-runtime-handoff-envelope-schema.yaml",
     "SKILL-137: canonical handoff-envelope schema",
@@ -167,9 +161,9 @@ governedResources {
     "SKILL-128: canonical goal planning preparation schema",
   )
   copy(
-    "copyFeatureTaskRuntimePlanningProjectionsSchema",
-    "feature-task-runtime-planning-projections-schema.yaml",
-    "SKILL-137: canonical planning-projections schema",
+    "copyGoalPlanningPreparationHistoricalPhaseOutput06Schema",
+    "goal-planning-preparation-schema-0.2-phase-output-0.6.yaml",
+    "LOCAL-274870733146662: historical goal planning preparation schema for phase output 0.6",
   )
   copy(
     "copyFeatureTaskRuntimeImplementationAttemptSchema",
@@ -180,6 +174,21 @@ governedResources {
     "copyFeatureTaskRuntimeCheckpointIdentitySchema",
     "feature-task-runtime-checkpoint-identity-schema.yaml",
     "SKILL-150: canonical checkpoint-identity schema",
+  )
+  copy(
+    "copyFeatureTaskRuntimeExecutionPlanSchema",
+    "feature-task-runtime-execution-plan.yaml",
+    "SKILL-384: canonical execution-plan schema",
+  )
+  copy(
+    "copyFeatureTaskRuntimePhaseOutputSchema",
+    "feature-task-runtime-phase-output-schema.yaml",
+    "SKILL-380: canonical current phase-output schema",
+  )
+  copy(
+    "copyFeatureTaskRuntimePhaseOutputSchemaV06",
+    "feature-task-runtime-phase-output-schema-0.6.yaml",
+    "LOCAL-274870733146662: historical phase-output migration source schema",
   )
   copy(
     "copyFeatureTaskRuntimeQuarantineSchema",

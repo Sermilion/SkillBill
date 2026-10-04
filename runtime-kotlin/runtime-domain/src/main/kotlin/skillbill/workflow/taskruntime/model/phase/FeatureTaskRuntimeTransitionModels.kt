@@ -40,6 +40,12 @@ sealed interface FeatureTaskRuntimeNextPhase {
   }
 }
 
+sealed interface FeatureTaskRuntimeTransitionResult {
+  data class Resolved(val next: FeatureTaskRuntimeNextPhase) : FeatureTaskRuntimeTransitionResult
+
+  data class PhaseOrderViolation(val phaseId: String, val message: String) : FeatureTaskRuntimeTransitionResult
+}
+
 enum class FeatureTaskRuntimeCapExhaustionBehavior {
   BLOCK,
   ADVANCE,

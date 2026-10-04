@@ -22,6 +22,7 @@ class SkeletonDefinitionTest {
       "plan",
       "implement",
       "simplify",
+      "audit_plan_fix",
       "audit_implement_fix",
       "audit",
       "review",
@@ -50,7 +51,7 @@ class SkeletonDefinitionTest {
           FeatureTaskRuntimeBackwardEdge(
             "audit",
             FeatureTaskRuntimeVerdict.ADVANCE,
-            "audit_implement_fix",
+            "audit_plan_fix",
             "audit_repair",
             perEdgeCap = null,
             warnAfterIterations = 3,
@@ -64,9 +65,21 @@ class SkeletonDefinitionTest {
             capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.ADVANCE,
             capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
           ),
-        ),
-      loopOnlyPhaseIds = setOf("audit_implement_fix", "implement_fix", "build"),
-      loopOnlySuccessors = emptyMap(),
+        ) +
+          listOf("build" to "regenerate_build_receipt", "validate" to "regenerate_validation_receipt").map {
+              (step, loop) ->
+            FeatureTaskRuntimeBackwardEdge(
+              fromPhaseId = "write_history",
+              triggeringVerdict = FeatureTaskRuntimeVerdict.RECORD_REJECTED,
+              destinationPhaseId = step,
+              loopId = loop,
+              perEdgeCap = 2,
+              capExhaustionBehavior = FeatureTaskRuntimeCapExhaustionBehavior.BLOCK,
+              capScope = FeatureTaskRuntimeBackwardEdgeCapScope.PER_SUBTASK,
+            )
+          },
+      loopOnlyPhaseIds = setOf("audit_plan_fix", "audit_implement_fix", "implement_fix", "build"),
+      loopOnlySuccessors = mapOf("audit_plan_fix" to "audit_implement_fix"),
     )
 
   @Test
@@ -103,26 +116,12 @@ class SkeletonDefinitionTest {
   }
 
   @Test
-  fun `review keeps the capped review_fix loop and no gate from implementation or audit`() {
+  fun `standalone review has one report step and no repair loop`() {
     val declaration = SkeletonDefinition.REVIEW.declaration()
 
-    assertEquals(listOf("review", "verify_findings", "implement_fix"), declaration.forwardPhaseIds)
-    assertEquals(
-      todaysDeclaration(goalChildForward).backwardEdges.filter {
-        it.loopId == "review_fix"
-      },
-      declaration.backwardEdges,
-    )
-    assertEquals(
-      listOf(
-        FeatureTaskRuntimePhaseEntryGate(
-          "implement_fix",
-          "verify_findings",
-          FeatureTaskRuntimeVerdict.FINDINGS_VERIFIED,
-        ),
-      ),
-      declaration.entryGates,
-    )
+    assertEquals(listOf("present_findings"), declaration.forwardPhaseIds)
+    assertEquals(emptyList(), declaration.backwardEdges)
+    assertEquals(emptyList(), declaration.entryGates)
     assertEquals(SkeletonRunStateKind.IN_MEMORY, SkeletonDefinition.REVIEW.runStateKind)
     assertEquals(SkeletonRunStateKind.DURABLE, SkeletonDefinition.STANDALONE.runStateKind)
   }
@@ -156,6 +155,7 @@ class SkeletonDefinitionTest {
 
     assertEquals(
       setOf(
+        FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX,
         FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
       ),

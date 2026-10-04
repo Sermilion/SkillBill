@@ -1,6 +1,5 @@
 package skillbill.engine.goalrunner.reset
 
-import skillbill.engine.DeadProcessSupervisor
 import skillbill.engine.goalrunner.InMemoryGoalManifestStore
 import skillbill.engine.goalrunner.RecordingOutcomeStore
 import skillbill.engine.goalrunner.execution.core.GoalRunnerStatusTestPorts
@@ -9,17 +8,18 @@ import skillbill.engine.goalrunner.goalTestPhaseRecorder
 import skillbill.engine.goalrunner.manifest
 import skillbill.engine.goalrunner.model.GoalRunnerReplanRequest
 import skillbill.engine.goalrunner.model.GoalRunnerStatusRequest
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
+import skillbill.engine.goalrunner.persist.DeadProcessSupervisor
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.goalrunner.model.GoalPlanningStatusState.NOT_STARTED
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.decomposition.model.CurrentSubtaskIntent
 import skillbill.workflow.decomposition.model.DecompositionManifest
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FEATURE_TASK_RUNTIME_CHECKPOINT_REF_NAMESPACE
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.featureTaskRuntimeCheckpointRefName
+import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_CHECKPOINT_REF_NAMESPACE
+import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeCheckpointRefName
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -394,7 +394,7 @@ class GoalRunnerReplanTest {
         seedIdleLease()
       }
     val failure =
-      assertFailsWith<IncompatibleGoalPlanningPreparationRecoveryError> {
+      assertFailsWith<SkillBillRuntimeException> {
         idleReplanService(store)
           .replan(GoalRunnerReplanRequest("SKILL-56", 3, includeSharedPreplan = true))
       }

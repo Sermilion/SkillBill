@@ -1,27 +1,26 @@
 package skillbill.engine.goalrunner.status
 
-import skillbill.engine.goalrunner.execution.support.pauseAtOperatorBoundary
+import skillbill.application.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.engine.goalrunner.manifest.SavedManifestProjection
 import skillbill.engine.goalrunner.manifest.mergeConcurrentGoalProgress
-import skillbill.error.goalrunner.GoalRunnerLaunchAuthorizationDeniedException
+import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
+import skillbill.engine.goalrunner.model.GoalRunnerLaunchAuthorization
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
+import skillbill.engine.goalrunner.model.GoalRunnerPausePersistenceResult
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_OPERATOR_REQUEST
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
+import skillbill.goalrunner.model.pauseAtOperatorBoundary
+import skillbill.goalrunner.model.targetReached
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
+import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.db.DatabaseSessionFactory
-import skillbill.ports.goalrunner.runner.model.GoalRunnerCompletionPersistenceResult
-import skillbill.ports.goalrunner.runner.model.GoalRunnerLaunchAuthorization
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
-import skillbill.ports.goalrunner.runner.model.GoalRunnerPausePersistenceResult
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.findDecomposedParentWorkflow
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.runtime.decompositionRuntime
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
-import skillbill.workflow.model.DecompositionStatus
-import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
 import java.time.Clock
 
@@ -55,8 +54,16 @@ internal class GoalRunnerControlCoordinator(
     parentWorkflowId: String,
     lease: GoalRunnerExecutionLease,
     expectedOwnerToken: String?,
+    beforeMutation: (UnitOfWork) -> Unit = {},
   ): Boolean =
     database.transaction { unitOfWork ->
+      if (unitOfWork.goalRunnerControls.controlState(
+          parentWorkflowId,
+        ).executionLease?.ownerToken != expectedOwnerToken
+      ) {
+        return@transaction false
+      }
+      beforeMutation(unitOfWork)
       reconcileControlStateForManifest(unitOfWork, parentWorkflowId)
       unitOfWork.goalRunnerControls.acquireExecutionLease(parentWorkflowId, lease, expectedOwnerToken)
     }
@@ -141,7 +148,7 @@ internal class GoalRunnerControlCoordinator(
       val controls = unitOfWork.goalRunnerControls.controlState(parent.workflowId)
       val authoritativeManifest = parent.decompositionRuntime() ?: state.manifest
       val authoritativeState = state.copy(manifest = authoritativeManifest)
-      val targetReached = controls.targetReached(authoritativeState)
+      val targetReached = controls.targetReached(authoritativeManifest)
       val pausedControls =
         if (controls.requiresPauseBoundary(authoritativeManifest)) {
           controls.pauseAtOperatorBoundary(clock.instant().toString(), targetReached)
@@ -205,24 +212,18 @@ internal fun GoalRunnerControlCoordinator.spawnAuthorization(
   state: GoalRunnerManifestState,
 ): AgentRunSpawnAuthorization =
   object : AgentRunSpawnAuthorization {
-    override fun <T> withAuthorization(spawn: () -> T): T =
+    override fun <T> withAuthorization(spawn: () -> T): AgentRunSpawnAuthorizationResult<T> =
       database.transaction { unitOfWork ->
         val parent = requireParent(unitOfWork, state.parentWorkflowId)
         val controls = unitOfWork.goalRunnerControls.controlState(parent.workflowId)
         val manifest = parent.decompositionRuntime() ?: state.manifest
         if (controls.requiresPauseBoundary(manifest)) {
-          throw GoalRunnerLaunchAuthorizationDeniedException(controls.pauseReason)
+          AgentRunSpawnAuthorizationResult.Denied(controls.pauseReason)
+        } else {
+          AgentRunSpawnAuthorizationResult.Authorized(spawn())
         }
-        spawn()
       }
   }
-
-internal fun GoalRunnerControlState.targetReached(state: GoalRunnerManifestState): Boolean =
-  stopAfterSubtaskId?.let { targetId ->
-    state.manifest.subtasks.any {
-      it.id == targetId && it.status.decompositionStatus() == DecompositionStatus.COMPLETE
-    }
-  } == true && !stopAfterConsumed
 
 internal fun GoalRunnerControlCoordinator.bindRepositoryIdentity(
   parentWorkflowId: String,
@@ -246,7 +247,7 @@ internal fun GoalRunnerControlCoordinator.planningSpawnAuthorization(
   parentWorkflowId: String,
 ): AgentRunSpawnAuthorization =
   object : AgentRunSpawnAuthorization {
-    override fun <T> withAuthorization(spawn: () -> T): T =
+    override fun <T> withAuthorization(spawn: () -> T): AgentRunSpawnAuthorizationResult<T> =
       database.transaction { unitOfWork ->
         val parent = requireParent(unitOfWork, parentWorkflowId)
         val controls = unitOfWork.goalRunnerControls.controlState(parent.workflowId)
@@ -254,9 +255,10 @@ internal fun GoalRunnerControlCoordinator.planningSpawnAuthorization(
           parent.decompositionRuntime()
             ?: error("Goal parent '$parentWorkflowId' has no decomposition manifest.")
         if (controls.requiresPauseBoundary(manifest)) {
-          throw GoalRunnerLaunchAuthorizationDeniedException(controls.pauseReason)
+          AgentRunSpawnAuthorizationResult.Denied(controls.pauseReason)
+        } else {
+          AgentRunSpawnAuthorizationResult.Authorized(spawn())
         }
-        spawn()
       }
   }
 
@@ -352,6 +354,7 @@ internal fun GoalRunnerControlCoordinator.requestPauseByIssueKey(
     val parent =
       unitOfWork.workflowStates.findDecomposedParentWorkflow(
         issueKey,
+        repositoryIdentity = repoRoot?.let(repositoryEnclosingRootPort::repositoryIdentity),
       ) ?: return@transaction null
     val existing = unitOfWork.goalRunnerControls.controlState(parent.workflowId)
     if (repoRoot != null) {

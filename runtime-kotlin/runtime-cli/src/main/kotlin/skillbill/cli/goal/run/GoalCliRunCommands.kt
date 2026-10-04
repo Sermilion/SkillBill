@@ -8,7 +8,6 @@ import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.types.int
 import me.tatarka.inject.annotations.Inject
-import skillbill.application.continuation.model.GoalContinuationCandidate
 import skillbill.application.review.service.RuntimeOwnedReviewMode
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireSupportedOptionalAgentId
@@ -16,12 +15,13 @@ import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
 import skillbill.cli.kernel.cli.formatOption
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
+import skillbill.cli.kernel.payload.toFeatureTaskContinuationCliMap
+import skillbill.cli.kernel.payload.toGoalContinuationCliMap
 import skillbill.cli.model.CliRunInputs
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.review.ReviewFindingPayloadKeys
 import skillbill.contracts.review.ReviewVerificationSignalKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
-import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationCandidate
 import skillbill.engine.goalrunner.findings.UnaddressedFindingsLedgerService
 import skillbill.engine.goalrunner.model.GoalPreflightGateBlock
 import skillbill.engine.goalrunner.model.GoalPreflightRequest
@@ -31,6 +31,8 @@ import skillbill.engine.goalrunner.planning.model.GoalPlanningLog
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLogAttempt
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLogRequest
 import skillbill.engine.goalrunner.preflight.GoalPreflightService
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.GovernedReviewFailureCode
 import skillbill.goalrunner.model.UnaddressedFindingsLedger
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedger
 import skillbill.workflow.taskruntime.artifact.projectionWireMap
@@ -89,22 +91,16 @@ class GoalPreflightCommand(
 
 internal fun parseCodeReviewMode(raw: String?) =
   raw?.let { value ->
-    try {
-      RuntimeOwnedReviewMode.parse(value)
-    } catch (error: IllegalArgumentException) {
-      throw UsageError(error.message ?: "Unknown code-review execution mode.").also { usage ->
-        runCatching { usage.initCause(error) }
-      }
-    }
+    RuntimeOwnedReviewMode.parse(value) ?: throw UsageError(RuntimeOwnedReviewMode.unknownModeMessage(value))
   }
 
 internal fun GoalPreflightResult.toGoalPreflightCliMap(): Map<String, Any?> =
   linkedMapOf(
     SharedPayloadKeys.VERDICT to verdict,
     SharedPayloadKeys.ISSUE_KEY to issueKey,
-    "candidate" to candidate?.toGoalPreflightCandidateMap(),
-    "candidates" to candidates.map { it.toGoalPreflightCandidateMap() },
-    "goal" to goal?.toGoalPreflightGoalMap(),
+    "candidate" to candidate?.toFeatureTaskContinuationCliMap(),
+    "candidates" to candidates.map { it.toFeatureTaskContinuationCliMap() },
+    "goal" to goal?.toGoalContinuationCliMap(),
     "gate_block" to gateBlock?.toGoalPreflightGateBlockMap(),
     "rehydrate_targets" to
       rehydrateTargets.map {
@@ -115,20 +111,6 @@ internal fun GoalPreflightResult.toGoalPreflightCliMap(): Map<String, Any?> =
         )
       },
     "manifest_missing" to manifestMissing,
-  )
-
-private fun GoalContinuationCandidate.toGoalPreflightGoalMap(): Map<String, Any?> =
-  linkedMapOf(
-    "parent_workflow_id" to parentWorkflowId,
-    SharedPayloadKeys.ISSUE_KEY to issueKey,
-    SharedPayloadKeys.STATUS to status,
-    "current_subtask_id" to currentSubtaskId,
-    "current_action" to currentAction,
-    "complete_count" to completeCount,
-    "pending_count" to pendingCount,
-    "blocked_count" to blockedCount,
-    "updated_at" to updatedAt,
-    SharedPayloadKeys.SUMMARY to summary,
   )
 
 private fun GoalPreflightGateBlock.toGoalPreflightGateBlockMap(): Map<String, Any?> =
@@ -160,25 +142,6 @@ private fun GoalPreflightGateBlock.toGoalPreflightGateBlockMap(): Map<String, An
       agentAddons.map { addon ->
         linkedMapOf("slug" to addon.slug, "description" to addon.description)
       },
-  )
-
-internal fun FeatureTaskContinuationCandidate.toGoalPreflightCandidateMap(): Map<String, Any?> =
-  linkedMapOf(
-    SharedPayloadKeys.WORKFLOW_ID to workflowId,
-    "mode" to mode.wireValue,
-    SharedPayloadKeys.STATUS to status,
-    "current_step" to currentStep,
-    "governed_spec_path" to governedSpecPath,
-    "updated_at" to updatedAt,
-    "liveness" to
-      liveness?.let {
-        linkedMapOf(
-          "classification" to it.classification,
-          "last_evidence_at" to it.lastEvidenceAt,
-          "evidence" to it.evidence,
-        )
-      },
-    SharedPayloadKeys.SUMMARY to summary,
   )
 
 @Inject
@@ -290,14 +253,20 @@ class GoalFindingsCommand(
   private val issueKey by option("--issue-key", help = "Parent issue key.").required()
 
   override fun run() {
-    val ledger = ledgerService.ledger(issueKey)
-    val repairLedgers = ledgerService.repairLedgersByWorkflow(issueKey)
-    val verificationDispositions = ledgerService.verificationDispositions(issueKey)
+    val ledger = ledgerService.ledger(issueKey) ?: throw ledgerAbsent()
+    val repairLedgers = ledgerService.repairLedgersByWorkflow(issueKey) ?: throw ledgerAbsent()
+    val verificationDispositions = ledgerService.verificationDispositions(issueKey) ?: throw ledgerAbsent()
     state.completeText(
       findingsText(ledger, repairLedgers, verificationDispositions),
       findingsPayload(ledger, repairLedgers, verificationDispositions),
     )
   }
+
+  private fun ledgerAbsent(): SkillBillRuntimeException =
+    SkillBillRuntimeException(
+      GovernedReviewFailureCode.UNADDRESSED_FINDINGS_LEDGER_ABSENT,
+      "No goal exists for issue key '$issueKey'.",
+    )
 
   private fun findingsPayload(
     ledger: UnaddressedFindingsLedger,

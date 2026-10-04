@@ -1,9 +1,21 @@
 package skillbill.infrastructure.sqlite
 
+import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
+import skillbill.infrastructure.sqlite.core.ops.inNestedWriteTransaction
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
+import skillbill.infrastructure.sqlite.telemetry.STALE_SESSION_THRESHOLD_SECONDS
+import skillbill.infrastructure.sqlite.telemetry.StaleSessionReconciliationPolicy
+import skillbill.infrastructure.sqlite.telemetry.reconcileStaleFeatureTaskRuntimeSessions
+import skillbill.infrastructure.sqlite.telemetry.reconcileStaleTelemetrySessions
+import skillbill.infrastructure.sqlite.workflow.WorkflowStateStore
+import skillbill.infrastructure.sqlite.workflow.goalrunner.planning.GoalPlanningPreparationStore
+import skillbill.ports.telemetry.model.TelemetryReconciliationRequest
+import skillbill.ports.telemetry.model.TelemetryReconciliationResult
+import skillbill.ports.workflow.WorkflowSnapshotValidator
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.Connection
+import java.time.Clock
 
 const val SAMPLE_REVIEW: String =
   """
@@ -42,3 +54,68 @@ fun tempDbConnection(prefix: String): Pair<Path, Connection> {
   val dbPath = tempDir.resolve("metrics.db")
   return dbPath to DatabaseRuntime.ensureDatabase(dbPath)
 }
+
+internal fun DatabaseRuntime.ensureDatabase(path: Path): Connection = ensureDatabase(path, SqliteTestDiagnostics)
+
+internal fun DatabaseRuntime.establishSchemaReadiness(path: Path) =
+  establishSchemaReadiness(path, SqliteTestDiagnostics)
+
+internal fun DatabaseRuntime.openDb(
+  cliValue: String?,
+  environment: Map<String, String>,
+  userHome: Path,
+) = openDb(cliValue, environment, userHome, SqliteTestDiagnostics)
+
+internal fun DatabaseRuntime.openReadDb(
+  cliValue: String?,
+  environment: Map<String, String>,
+  userHome: Path,
+) = openReadDb(cliValue, environment, userHome, SqliteTestDiagnostics)
+
+internal fun DatabaseMigrations.apply(connection: Connection) = apply(connection, SqliteTestDiagnostics)
+
+internal fun <T> Connection.inNestedWriteTransaction(block: Connection.() -> T): T =
+  inNestedWriteTransaction(SqliteTestDiagnostics, block)
+
+internal fun reconcileStaleTelemetrySessions(
+  connection: Connection,
+  request: TelemetryReconciliationRequest,
+  runtimeVersion: String = "test-runtime-version",
+): TelemetryReconciliationResult =
+  reconcileStaleTelemetrySessions(connection, request, SqliteTestDiagnostics, runtimeVersion)
+
+internal fun reconcileStaleTelemetrySessions(
+  connection: Connection,
+  clock: Clock,
+  level: String,
+  runtimeVersion: String = "test-runtime-version",
+  policy: StaleSessionReconciliationPolicy = StaleSessionReconciliationPolicy(),
+): TelemetryReconciliationResult =
+  reconcileStaleTelemetrySessions(
+    connection = connection,
+    request =
+      TelemetryReconciliationRequest(
+        level = level,
+        cadenceSeconds = 0L,
+        maximumBatchSize = Int.MAX_VALUE,
+        sessionThresholdSeconds = policy.sessionThresholdSeconds,
+        goalIssueAbandonmentDays = policy.goalIssueAbandonmentDays,
+        now = clock.instant(),
+      ),
+    runtimeVersion = runtimeVersion,
+  )
+
+internal fun reconcileStaleFeatureTaskRuntimeSessions(
+  connection: Connection,
+  runtimeVersion: String = "test-runtime-version",
+  thresholdSeconds: Long = STALE_SESSION_THRESHOLD_SECONDS,
+): Int = reconcileStaleFeatureTaskRuntimeSessions(connection, SqliteTestDiagnostics, runtimeVersion, thresholdSeconds)
+
+internal fun WorkflowStateStore(
+  connection: Connection,
+  clock: Clock,
+  workflowSnapshotValidator: WorkflowSnapshotValidator,
+): WorkflowStateStore = WorkflowStateStore(connection, clock, workflowSnapshotValidator, SqliteTestDiagnostics)
+
+internal fun GoalPlanningPreparationStore(connection: Connection): GoalPlanningPreparationStore =
+  GoalPlanningPreparationStore(connection, SqliteTestDiagnostics)

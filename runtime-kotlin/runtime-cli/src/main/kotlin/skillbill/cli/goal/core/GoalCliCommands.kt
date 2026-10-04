@@ -1,8 +1,9 @@
 package skillbill.cli.goal.core
 
+import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.arguments.optional
+import com.github.ajalt.clikt.parameters.arguments.multiple
 import com.github.ajalt.clikt.parameters.options.default
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.multiple
@@ -26,17 +27,17 @@ import skillbill.cli.goal.run.GoalFindingsCommand
 import skillbill.cli.goal.run.GoalPlanningLogCommand
 import skillbill.cli.goal.run.GoalPreflightCommand
 import skillbill.cli.goal.run.GoalRunAgentAddonHydrationArgs
+import skillbill.cli.goal.run.GoalRunInputPreparation
 import skillbill.cli.goal.run.GoalRunInputValidationArgs
 import skillbill.cli.goal.run.GoalRunPresenter
 import skillbill.cli.goal.run.RUNTIME_CLASSPATH_ENV
 import skillbill.cli.goal.run.RUNTIME_EXECUTABLE_ENV
 import skillbill.cli.goal.run.RUNTIME_PATH_SEPARATOR_ENV
+import skillbill.cli.goal.run.goalIntakeRequestText
 import skillbill.cli.goal.run.goalRunText
-import skillbill.cli.goal.run.hydrateGoalRunAgentAddonSelection
 import skillbill.cli.goal.run.parseCodeReviewMode
 import skillbill.cli.goal.run.resolveInvokedAgentId
 import skillbill.cli.goal.run.toGoalRunCliMap
-import skillbill.cli.goal.run.validateGoalRunInputs
 import skillbill.cli.goal.status.GoalStatusCommand
 import skillbill.cli.goal.status.GoalWatchCommand
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
@@ -49,10 +50,8 @@ import skillbill.cli.model.DEFAULT_GOAL_MAX_WALL_CLOCK_MINUTES
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
 import skillbill.engine.goalrunner.GoalRunner
 import skillbill.engine.goalrunner.model.DEFAULT_GOAL_PLANNING_BUDGET
+import skillbill.engine.goalrunner.model.GoalIntakeAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
-import skillbill.ports.agentaddon.AgentAddonSelectionPort
-import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
-import skillbill.ports.agentrun.ExecutableLookup
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.system.HostPlatformPort
 import java.nio.file.Path
@@ -60,51 +59,51 @@ import kotlin.time.Duration.Companion.minutes
 
 @Inject
 class GoalControlFlowCommands(
-  val pause: GoalPauseCommand,
-  val stop: GoalStopCommand,
-  val resume: GoalResumeCommand,
-  val reset: GoalResetCommand,
-  val purge: GoalPurgeCommand,
-)
+  pause: GoalPauseCommand,
+  stop: GoalStopCommand,
+  resume: GoalResumeCommand,
+  reset: GoalResetCommand,
+  purge: GoalPurgeCommand,
+) {
+  val commands: List<CliktCommand> = listOf(pause, stop, resume, reset, purge)
+}
 
 @Inject
 class GoalControlOperatorCommands(
-  val replan: GoalReplanCommand,
-  val accept: GoalAcceptCommand,
-  val repair: GoalRepairCommand,
-  val operatorDecision: GoalOperatorDecisionCommand,
-)
+  replan: GoalReplanCommand,
+  accept: GoalAcceptCommand,
+  repair: GoalRepairCommand,
+  operatorDecision: GoalOperatorDecisionCommand,
+) {
+  val commands: List<CliktCommand> = listOf(replan, accept, repair, operatorDecision)
+}
 
 @Inject
 class GoalControlSubcommands(
-  val flow: GoalControlFlowCommands,
-  val operator: GoalControlOperatorCommands,
-)
+  flow: GoalControlFlowCommands,
+  operator: GoalControlOperatorCommands,
+) {
+  val commands: List<CliktCommand> = flow.commands + operator.commands
+}
 
 @Inject
 class GoalRunSubcommands(
-  val preflight: GoalPreflightCommand,
-  val status: GoalStatusCommand,
-  val watch: GoalWatchCommand,
-  val controls: GoalControlSubcommands,
-  val findings: GoalFindingsCommand,
-  val planningLog: GoalPlanningLogCommand,
-)
-
-@Inject
-class GoalRunExecution(
-  private val goalRunner: GoalRunner,
+  preflight: GoalPreflightCommand,
+  status: GoalStatusCommand,
+  watch: GoalWatchCommand,
+  controls: GoalControlSubcommands,
+  findings: GoalFindingsCommand,
+  planningLog: GoalPlanningLogCommand,
 ) {
-  fun run(request: GoalRunnerRunRequest) = goalRunner.run(request)
+  val commands: List<CliktCommand> =
+    listOf(preflight, status, watch) + controls.commands + listOf(findings, planningLog)
 }
 
 @Inject
 class GoalRunCommand(
-  private val execution: GoalRunExecution,
+  private val goalRunner: GoalRunner,
   private val runtimeProvenanceService: RuntimeProvenanceService,
-  private val agentAddonSelectionPort: AgentAddonSelectionPort,
-  private val externalAgentAddonSourceConfigPort: ExternalAgentAddonSourceConfigPort,
-  private val executableLookup: ExecutableLookup,
+  private val inputPreparation: GoalRunInputPreparation,
   private val telemetryService: TelemetryService,
   private val diagnostics: RuntimeDiagnostics,
   private val state: CliRunState,
@@ -115,7 +114,9 @@ class GoalRunCommand(
     "goal",
     "Run a decomposed goal in the foreground. Exit codes: complete=0, failed=1, paused=2, blocked=3.",
   ) {
-  private val issueKey by argument(help = "Parent issue key for the decomposed goal.").optional()
+  private val intakeTokens by argument(
+    help = "Tracker link or issue key, or an existing spec key or path.",
+  ).multiple()
   private val agent by option(
     "--agent",
     help = invokingAgentResolutionHelp("--agent"),
@@ -177,22 +178,7 @@ class GoalRunCommand(
   override val invokeWithoutSubcommand: Boolean = true
 
   init {
-    subcommands(
-      goalRunSubcommands.preflight,
-      goalRunSubcommands.status,
-      goalRunSubcommands.watch,
-      goalRunSubcommands.controls.flow.pause,
-      goalRunSubcommands.controls.flow.stop,
-      goalRunSubcommands.controls.flow.resume,
-      goalRunSubcommands.controls.flow.reset,
-      goalRunSubcommands.controls.flow.purge,
-      goalRunSubcommands.controls.operator.replan,
-      goalRunSubcommands.controls.operator.accept,
-      goalRunSubcommands.controls.operator.repair,
-      goalRunSubcommands.controls.operator.operatorDecision,
-      goalRunSubcommands.findings,
-      goalRunSubcommands.planningLog,
-    )
+    subcommands(goalRunSubcommands.commands)
   }
 
   override fun run() {
@@ -200,35 +186,39 @@ class GoalRunCommand(
       return
     }
     val effectiveRepoRoot = resolveCliRepositoryRoot(repoRoot, inputs)
+    val intake = intakeTokens.joinToString(" ").trim()
+    val runIssueKey =
+      when (val admission = goalRunner.admitIntake(intake, effectiveRepoRoot)) {
+        is GoalIntakeAdmission.Admitted -> admission.issueKey
+        is GoalIntakeAdmission.NeedsInput -> {
+          state.appendStderr(goalIntakeRequestText(admission))
+          state.completeEmpty(exitCode = 1)
+          return
+        }
+      }
     val invokedAgentId = resolveInvokedAgentId(agent, inputs.environment)
-    validateGoalRunInputs(
+    inputPreparation.validate(
       GoalRunInputValidationArgs(
-        issueKey = issueKey,
+        issueKey = intakeTokens.joinToString(" ").takeIf(String::isNotBlank),
         stopAfterSubtask = stopAfterSubtask,
         agentAddonSlugs = agentAddonSlugs,
         agentAddonSelectionJson = agentAddonSelectionJson,
         agent = agent,
         agentOverride = agentOverride,
-        inputs = inputs,
-        executableLookup = executableLookup,
       ),
     )
-    val runIssueKey = issueKey!!
     val receivingAgents =
       listOfNotNull(
         invokedAgentId,
         agentOverride?.takeIf(String::isNotBlank),
       ).distinct()
     val hydratedSelection =
-      hydrateGoalRunAgentAddonSelection(
+      inputPreparation.hydrateAgentAddonSelection(
         GoalRunAgentAddonHydrationArgs(
           agentAddonSlugs = agentAddonSlugs,
           agentAddonSelectionJson = agentAddonSelectionJson,
           receivingAgents = receivingAgents,
           effectiveRepoRoot = effectiveRepoRoot,
-          inputs = inputs,
-          agentAddonSelectionPort = agentAddonSelectionPort,
-          externalAgentAddonSourceConfigPort = externalAgentAddonSourceConfigPort,
         ),
       )
     val presenter =
@@ -242,13 +232,15 @@ class GoalRunCommand(
           runtimeProvenanceService.current(
             executablePathHint = inputs.environment[RUNTIME_EXECUTABLE_ENV],
             classPath = inputs.environment[RUNTIME_CLASSPATH_ENV] ?: hostPlatform.jvmClassPath,
-            javaCommand = ProcessHandle.current().info().command().orElse(null),
+            javaCommand = hostPlatform.javaCommand,
             pathSeparator = inputs.environment[RUNTIME_PATH_SEPARATOR_ENV] ?: hostPlatform.pathSeparator,
           ),
       )
     presenter.emitStartupProvenance()
-    val request = runRequest(runIssueKey, invokedAgentId, hydratedSelection, presenter, effectiveRepoRoot)
-    val report = execution.run(request)
+    val request =
+      runRequest(runIssueKey, invokedAgentId, hydratedSelection, presenter, effectiveRepoRoot)
+        .copy(intake = intake)
+    val report = goalRunner.run(request)
     val payload = report.toGoalRunCliMap()
     state.completeText(goalRunText(report), payload, exitCode = report.goalRunExitCode())
     drainTelemetryOnCompletion(telemetryService, diagnostics)

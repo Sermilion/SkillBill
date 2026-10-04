@@ -1,9 +1,10 @@
 package skillbill.infrastructure.contracts.phaseoutput
 
-import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
@@ -12,11 +13,11 @@ import kotlin.coroutines.cancellation.CancellationException
 
 internal object StrictPhaseOutputParser {
   private val strictJsonMapper: ObjectMapper by lazy {
-    ObjectMapper().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
+    ObjectMapper().enable(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY)
   }
 
   private val strictYamlMapper: YAMLMapper by lazy {
-    YAMLMapper(YAMLFactory().apply { enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION) })
+    YAMLMapper(YAMLFactory()).apply { enable(DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY) }
   }
 
   fun parseDocument(text: String): StrictParse =
@@ -61,27 +62,17 @@ internal object StrictPhaseOutputParser {
       }
     } catch (cancellation: CancellationException) {
       throw cancellation
+    } catch (error: MismatchedInputException) {
+      StrictParse.Failure(
+        FeatureTaskRuntimePhaseOutputFailureCode.DUPLICATE_KEY,
+        "Phase output contains a duplicate key: ${error.originalMessage}",
+      )
     } catch (error: JsonProcessingException) {
-      strictParseFailure(error)
+      StrictParse.Failure(
+        FeatureTaskRuntimePhaseOutputFailureCode.MALFORMED,
+        "Phase output is malformed and cannot be parsed as one document: ${error.originalMessage}",
+      )
     }
-
-  private val DUPLICATE_FIELD_OR_KEY = Regex("(?i)duplicate (field|key)\\b")
-
-  private fun strictParseFailure(error: JsonProcessingException): StrictParse.Failure {
-    val duplicate = DUPLICATE_FIELD_OR_KEY.containsMatchIn(error.message.orEmpty())
-    return StrictParse.Failure(
-      if (duplicate) {
-        FeatureTaskRuntimePhaseOutputFailureCode.DUPLICATE_KEY
-      } else {
-        FeatureTaskRuntimePhaseOutputFailureCode.MALFORMED
-      },
-      if (duplicate) {
-        "Phase output contains a duplicate key."
-      } else {
-        "Phase output is malformed and cannot be parsed as one document."
-      },
-    )
-  }
 
   fun formatsFor(text: String): List<FeatureTaskRuntimePhaseOutputFormat> {
     val first = text.firstOrNull { !it.isWhitespace() }

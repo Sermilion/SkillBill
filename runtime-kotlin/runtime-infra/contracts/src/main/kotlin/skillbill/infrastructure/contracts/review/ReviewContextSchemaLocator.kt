@@ -1,6 +1,6 @@
 package skillbill.infrastructure.contracts.review
 
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 
 internal fun readReviewContextSchemaText(): String =
@@ -8,7 +8,7 @@ internal fun readReviewContextSchemaText(): String =
     classLoader = ReviewContextSchemaValidator::class.java.classLoader,
     resource = REVIEW_CONTEXT_SCHEMA_CLASSPATH_RESOURCE,
     missingError = {
-      InvalidReviewContextSchemaError(
+      invalidReviewContextSchemaError(
         sourceLabel = REVIEW_CONTEXT_SCHEMA_CLASSPATH_RESOURCE,
         reason =
           "Canonical review context schema is missing. Expected to find it on the JVM classpath at " +

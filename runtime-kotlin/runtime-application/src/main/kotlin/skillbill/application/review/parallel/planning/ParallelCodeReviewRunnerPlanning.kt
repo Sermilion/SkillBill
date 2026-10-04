@@ -3,6 +3,8 @@ package skillbill.application.review.parallel.planning
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.branchName
 import skillbill.application.review.learnings.ReviewLearningsResolver
+import skillbill.application.review.model.ParallelCodeReviewPlanned
+import skillbill.application.review.model.ParallelCodeReviewReportContract
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelReviewLaneStatus
@@ -15,27 +17,36 @@ import skillbill.application.review.spec.SpecIntentProjectionResolver
 import skillbill.application.reviewevidence.ReviewCommitRange
 import skillbill.application.reviewevidence.SharedReviewEvidenceProjection
 import skillbill.application.reviewevidence.SharedReviewEvidenceQuery
+import skillbill.application.reviewevidence.SharedReviewEvidenceRecord
 import skillbill.application.reviewevidence.SharedReviewEvidenceResolution
+import skillbill.application.reviewevidence.model.DiffResolution
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
-import skillbill.error.shellcontent.ReviewHunkEvidenceLocatorMissingError
+import skillbill.error.shellcontent.reviewHunkEvidenceLocatorMissingError
+import skillbill.install.model.SupportedAgent
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.diff.model.ReviewDiffQuery
+import skillbill.ports.diff.model.ReviewIndexEntry
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.repository.toFileLocation
 import skillbill.ports.review.ReviewContextEnvelopeValidator
 import skillbill.ports.review.model.ReviewCheckpointFileIdentity
+import skillbill.ports.review.model.ReviewIntegrationPassOutcome
 import skillbill.ports.review.repository.ReviewSpecialistContractProvider
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceLocatorReadPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.review.context.ReviewExecutionModePolicy
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
+import skillbill.review.context.model.accounting.ReviewIntegrationTerminalOutcome
 import skillbill.review.context.model.execution.SpecIntentProjectionResolveRequest
 import skillbill.review.context.model.execution.SpecIntentResolution
 import skillbill.review.context.model.execution.toCodeReviewExecutionMode
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.model.ParallelReviewMergeResult
+import skillbill.review.model.ReviewCoverageReport
 import skillbill.review.model.ReviewLaneReviewDisposition
 import skillbill.scaffold.model.PlatformManifest
+import skillbill.text.sha256HexUtf8
 import java.nio.file.Path
 
 @Inject
@@ -52,22 +63,51 @@ class ParallelCodeReviewRunnerPlanning(
   private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val reviewLearningsResolver: ReviewLearningsResolver,
 ) {
-  internal fun prepareInitialRun(originalRequest: ParallelCodeReviewRequest): ParallelCodeReviewInitialRun {
-    val agent1 = resolveAgent(originalRequest.agent1Id, "--agent1")
-    val revisions = resolveReviewRevisions(originalRequest)
+  internal fun prepareInitialRun(
+    originalRequest: ParallelCodeReviewRequest,
+  ): ParallelCodeReviewPlanned<ParallelCodeReviewInitialRun> {
+    val agent1 =
+      when (val resolved = resolveAgent(originalRequest.agent1Id, "--agent1")) {
+        is ParallelCodeReviewPlanned.Failed -> return resolved
+        is ParallelCodeReviewPlanned.Ready -> resolved.value
+      }
+    val revisions =
+      when (val resolved = resolveReviewRevisions(originalRequest)) {
+        is DiffResolution.Unresolved -> return resolved.toPlanningFailed()
+        is DiffResolution.Resolved -> resolved.value
+      }
     val sharedEvidence =
-      SharedReviewEvidenceResolution(sharedEvidenceResolver, diffResolver).resolve(
-        SharedReviewEvidenceQuery(
-          repoRoot = originalRequest.repoRoot,
-          workflowId = originalRequest.reviewRunId ?: PARALLEL_REVIEW_SHARED_EVIDENCE_WORKFLOW_ID,
-          scope = originalRequest.scope,
-          range = ReviewCommitRange(revisions.first, revisions.second),
-          suppliedDiff = hasSuppliedDiff(originalRequest),
-        ),
-      ) { resolveDiff(originalRequest, revisions) }
+      when (
+        val resolved =
+          SharedReviewEvidenceResolution(sharedEvidenceResolver, diffResolver).resolve(
+            SharedReviewEvidenceQuery(
+              repoRoot = originalRequest.repoRoot,
+              workflowId = originalRequest.reviewRunId ?: PARALLEL_REVIEW_SHARED_EVIDENCE_WORKFLOW_ID,
+              scope = originalRequest.scope,
+              range = ReviewCommitRange(revisions.first, revisions.second),
+              suppliedDiff = hasSuppliedDiff(originalRequest),
+            ),
+          ) { resolveDiff(originalRequest, revisions) }
+      ) {
+        is DiffResolution.Unresolved -> return resolved.toPlanningFailed()
+        is DiffResolution.Resolved -> resolved.value
+      }
+    return prepareWithEvidence(originalRequest, agent1, revisions, sharedEvidence)
+  }
+
+  private fun prepareWithEvidence(
+    originalRequest: ParallelCodeReviewRequest,
+    agent1: SupportedAgent,
+    revisions: Pair<String, String>,
+    sharedEvidence: SharedReviewEvidenceRecord,
+  ): ParallelCodeReviewPlanned<ParallelCodeReviewInitialRun> {
     val diffText = sharedEvidence.aggregateDiff
     val evidence = ReviewDiffEvidence.parse(diffText)
-    val detection = detectStack(evidence)
+    val detection =
+      when (val detected = detectStack(evidence)) {
+        is ParallelCodeReviewPlanned.Failed -> return detected
+        is ParallelCodeReviewPlanned.Ready -> detected.value
+      }
     val budget =
       repoLocalConfig.readRepoLocalConfig(ReadRepoLocalConfigRequest(originalRequest.repoRoot))
         .config.reviewContextBudget
@@ -81,34 +121,39 @@ class ParallelCodeReviewRunnerPlanning(
         routedSkill = routedReviewSkillName(detection.routed),
         reviewSessionId = reviewSessionId,
       )
-    val compiled =
-      prepare(
-        PlanningPrepareArgs(
-          request = request,
-          revisions = revisions,
-          diffText = diffText,
-          evidence = evidence,
-          sharedSequence = sharedEvidence.sequence,
-          routedManifests = detection.routed,
-          manifests = detection.manifests,
-          ownedPathsBySlug = detection.ownedPathsBySlug,
-          agentIds = listOf(agent1.id),
-          budget = budget,
-          evidenceStorePath = sharedEvidence.storePath,
-          learningsReferences = learnings.references,
-        ),
+    val prepareArgs =
+      PlanningPrepareArgs(
+        request = request,
+        revisions = revisions,
+        diffText = diffText,
+        evidence = evidence,
+        sharedSequence = sharedEvidence.sequence,
+        routedManifests = detection.routed,
+        manifests = detection.manifests,
+        ownedPathsBySlug = detection.ownedPathsBySlug,
+        agentIds = listOf(agent1.id),
+        budget = budget,
+        evidenceStorePath = sharedEvidence.storePath,
+        learningsReferences = learnings.references,
       )
-    return ParallelCodeReviewInitialRun(
-      request = request,
-      detection = detection,
-      resolvedMode = resolvedMode,
-      agent1Id = agent1.id,
-      preparedLaunchRequests = compiled.toRun,
-      compiledLaunchRequests = compiled.all,
-      budget = budget,
-      specIntentResolution = compiled.specIntentResolution,
-      reviewSessionId = reviewSessionId,
-      appliedLearnings = learnings.appliedSummary,
+    val compiled =
+      when (val prepared = prepare(prepareArgs)) {
+        is ParallelCodeReviewPlanned.Failed -> return prepared
+        is ParallelCodeReviewPlanned.Ready -> prepared.value
+      }
+    return ParallelCodeReviewPlanned.Ready(
+      ParallelCodeReviewInitialRun(
+        request = request,
+        detection = detection,
+        resolvedMode = resolvedMode,
+        agent1Id = agent1.id,
+        preparedLaunchRequests = compiled.toRun,
+        compiledLaunchRequests = compiled.all,
+        budget = budget,
+        specIntentResolution = compiled.specIntentResolution,
+        reviewSessionId = reviewSessionId,
+        appliedLearnings = learnings.appliedSummary,
+      ),
     )
   }
 
@@ -135,14 +180,41 @@ class ParallelCodeReviewRunnerPlanning(
         recordAdjudicationBoundary(runId)
       }
     }
+    val reportOnly = request.reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY
+    val output = if (reportOnly) "NO_FINDINGS\nverdict: approved" else "NO_FINDINGS"
     return ParallelCodeReviewResult(
-      mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = "NO_FINDINGS"),
+      mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = output),
       lane1 =
         ParallelReviewLaneStatus(
           agentId = request.agent1Id,
           success = true,
           reviewDisposition = ReviewLaneReviewDisposition.COMPLETE,
         ),
+      integration =
+        if (reportOnly) {
+          val skipReason = "The resolved review input is empty, so no specialist or integration assignment exists."
+          ReviewIntegrationPassOutcome(
+            commitSequenceDigest = sha256HexUtf8("resolved-empty-review-input"),
+            terminalOutcome = ReviewIntegrationTerminalOutcome.SKIPPED_NOT_APPLICABLE,
+            summarizedLaneCount = 0,
+            skipReason = skipReason,
+          )
+        } else {
+          null
+        },
+      coverage =
+        if (reportOnly) {
+          ReviewCoverageReport(
+            emptyList(),
+            emptyList(),
+            false,
+            "The resolved review input is empty, so no specialist or integration assignment exists.",
+          )
+        } else {
+          null
+        },
+      reviewSessionId = request.reviewSessionId.takeIf { reportOnly },
+      rawOutput = if (reportOnly) output else "",
     )
   }
 
@@ -151,12 +223,12 @@ class ParallelCodeReviewRunnerPlanning(
       requested = request.resolvedTier ?: request.codeReviewMode,
     ).resolvedMode
 
-  private fun prepare(args: PlanningPrepareArgs): ParallelCodeReviewCompiledLaunches {
+  private fun prepare(args: PlanningPrepareArgs): ParallelCodeReviewPlanned<ParallelCodeReviewCompiledLaunches> {
     if (
       sharedEvidenceLocatorReader != null &&
       args.evidenceStorePath.isNullOrBlank()
     ) {
-      throw ReviewHunkEvidenceLocatorMissingError(args.evidenceStorePath.orEmpty())
+      throw reviewHunkEvidenceLocatorMissingError(args.evidenceStorePath.orEmpty())
     }
     val plannedRubrics =
       rubricPlanning.resolvePlannedRubrics(
@@ -166,7 +238,11 @@ class ParallelCodeReviewRunnerPlanning(
         args.ownedPathsBySlug,
       )
     val (baseRevision, headRevision) = args.revisions
-    val commitSequence = SharedReviewEvidenceProjection.project(args.sharedSequence, args.evidence)
+    val commitSequence =
+      when (val projected = SharedReviewEvidenceProjection.project(args.sharedSequence, args.evidence)) {
+        is DiffResolution.Unresolved -> return projected.toPlanningFailed()
+        is DiffResolution.Resolved -> projected.value
+      }
     val specIntentResolution = resolveSpecIntent(args.request, args.evidence, args.budget)
     val compiled =
       ParallelReviewPreparationCompiler.compile(
@@ -198,10 +274,12 @@ class ParallelCodeReviewRunnerPlanning(
     val selected = lanePlanRecording.selectLaunchesForResume(args.request.reviewRunId, compiled)
     lanePlanRecording.recordPlannedLanes(args.request.reviewRunId, plannedRubrics, selected)
     lanePlanRecording.recordSpecIntent(args.request.reviewRunId, specIntentResolution)
-    return ParallelCodeReviewCompiledLaunches(
-      all = compiled,
-      toRun = selected,
-      specIntentResolution = specIntentResolution,
+    return ParallelCodeReviewPlanned.Ready(
+      ParallelCodeReviewCompiledLaunches(
+        all = compiled,
+        toRun = selected,
+        specIntentResolution = specIntentResolution,
+      ),
     )
   }
 
@@ -220,16 +298,28 @@ class ParallelCodeReviewRunnerPlanning(
       ),
     )
 
-  fun currentHeadBranchName(repoRoot: Path): String =
-    diffResolver.runProcess(
-      listOf("git", "rev-parse", "--abbrev-ref", "HEAD"),
-      repoRoot,
-    )?.trim().orEmpty()
+  fun currentHeadBranchName(repoRoot: Path): String = diffResolver.currentBranchName(repoRoot).orEmpty()
 
-  internal fun runProcess(
-    args: List<String>,
-    workDir: Path,
-  ): String? = diffResolver.runProcess(args, workDir)
+  internal fun resolveCommit(
+    repoRoot: Path,
+    revision: String,
+  ): String? = diffResolver.resolveCommit(repoRoot, revision)
+
+  internal fun mergeBase(
+    repoRoot: Path,
+    revision: String,
+  ): String? = diffResolver.mergeBase(repoRoot, revision)
+
+  internal fun pullRequestBaseCommit(repoRoot: Path): String? = diffResolver.pullRequestBaseCommit(repoRoot)
+
+  internal fun indexEntries(repoRoot: Path): List<ReviewIndexEntry>? = diffResolver.indexEntries(repoRoot)
+
+  internal fun untrackedPaths(repoRoot: Path): List<String>? = diffResolver.untrackedPaths(repoRoot)
+
+  internal fun diff(
+    repoRoot: Path,
+    query: ReviewDiffQuery,
+  ): String? = diffResolver.diff(repoRoot, query)
 
   internal fun readDiff(
     path: Path,

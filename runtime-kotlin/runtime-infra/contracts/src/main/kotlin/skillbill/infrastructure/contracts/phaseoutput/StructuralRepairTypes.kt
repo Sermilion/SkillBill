@@ -3,7 +3,6 @@ package skillbill.infrastructure.contracts.phaseoutput
 import com.fasterxml.jackson.databind.JsonNode
 import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputFormat
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 
 internal data class CandidateGeneration(
   val candidates: List<Candidate>,
@@ -26,20 +25,6 @@ internal data class DelimiterScan(
 internal data class MismatchedClosing(
   val offset: Int,
   val missingCloser: Char?,
-)
-
-internal data class TextCandidate(
-  val text: String,
-  val sourceOffset: Int,
-  val sourceEnd: Int,
-)
-
-internal data class EmbeddedDocument(
-  val text: String,
-  val node: JsonNode,
-  val evidence: FeatureTaskRuntimePhaseOutputRepairEvidence?,
-  val sourceStart: Int,
-  val sourceEnd: Int,
 )
 
 internal sealed interface StrictParse {

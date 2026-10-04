@@ -2,13 +2,13 @@ package skillbill.engine.featuretask.review.finding
 
 import skillbill.application.testHarnessClock
 import skillbill.application.testWorkflowSnapshotValidator
-import skillbill.engine.InMemoryRuntimeWorkflowRepository
-import skillbill.engine.RuntimeFakeDatabaseSessionFactory
-import skillbill.engine.decodeWorkflowArtifactsForTest
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeFindingVerificationRecordError
+import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
+import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
+import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
@@ -53,11 +53,11 @@ class FeatureTaskRuntimeFindingVerificationDurableDecodeTest {
 
     val recorder = recorderFor(repository)
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeFindingVerificationRecordError> {
+      assertFailsWith<SkillBillRuntimeException> {
         recorder.loadFindingVerificationCheckpoint(workflowId)
       }
-    assertContains(error.reason, "finding_verification_checkpoint")
-    assertContains(error.reason, "array")
+    assertContains(error.message.orEmpty(), "finding_verification_checkpoint")
+    assertContains(error.message.orEmpty(), "array")
   }
 
   @Test
@@ -87,10 +87,10 @@ class FeatureTaskRuntimeFindingVerificationDurableDecodeTest {
 
     val recorder = recorderFor(repository)
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeFindingVerificationRecordError> {
+      assertFailsWith<SkillBillRuntimeException> {
         recorder.loadFindingVerificationCheckpoint(workflowId)
       }
-    assertContains(error.reason, "disposition")
+    assertContains(error.message.orEmpty(), "disposition")
   }
 }
 

@@ -3,7 +3,7 @@ package skillbill.cli.workflow
 import skillbill.application.workflow.persist.WorkflowWireProjections
 import skillbill.contracts.JsonCodec
 import skillbill.workflow.engine.model.WorkflowSnapshotView
-import skillbill.workflow.model.goalreview.GoalObservabilityEvent
+import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
 
 internal fun workflowSnapshotCliMap(
   snapshot: WorkflowSnapshotView,

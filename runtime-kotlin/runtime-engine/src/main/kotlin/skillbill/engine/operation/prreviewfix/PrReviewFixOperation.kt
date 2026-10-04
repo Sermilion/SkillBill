@@ -4,21 +4,18 @@ import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
 import skillbill.engine.operation.core.ConfirmableOperation
 import skillbill.engine.operation.core.ConfirmedOperationProposal
+import skillbill.engine.operation.core.CurrentOperationAnchors
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationContext
 import skillbill.engine.operation.core.OperationOutcome
+import skillbill.engine.operation.core.OperationRefusal
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepResult
-import skillbill.engine.operation.core.requireGitValue
-import skillbill.error.operation.InvalidOperationArgumentError
-import skillbill.error.operation.InvalidOperationSelectionError
-import skillbill.error.operation.MissingOperationSelectionError
-import skillbill.error.operation.OperationAnchorUnreadableError
-import skillbill.error.operation.OperationUsageError
-import skillbill.error.operation.ProtectedBranchPushError
-import skillbill.error.operation.PullRequestBranchNotCheckedOutError
-import skillbill.error.operation.PullRequestNotFoundError
-import skillbill.error.operation.PushWorktreeDirtyError
+import skillbill.engine.operation.core.anchorUnreadable
+import skillbill.engine.operation.core.gitValueOr
+import skillbill.engine.operation.core.invalidArgument
+import skillbill.engine.operation.core.invalidSelection
+import skillbill.engine.operation.core.pullRequestNotFound
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequest
 import skillbill.ports.review.pullrequest.model.ReviewPullRequestResolution
@@ -34,31 +31,39 @@ class PrReviewFixOperation(
 ) : ConfirmableOperation {
   override val id: String = "pr-review-fix"
 
-  override fun pre(context: OperationContext) {
-    usageError(context.arguments, context.confirming)?.let { error -> throw error }
-  }
+  override fun pre(context: OperationContext): OperationRefusal? = usageError(context.arguments, context.confirming)
 
   private fun usageError(
     arguments: OperationArguments,
     confirming: Boolean,
-  ): OperationUsageError? =
+  ): OperationOutcome.Usage? =
     with(arguments) {
       when {
-        scope != null && scope != ANALYZE_ONLY -> InvalidOperationArgumentError("scope", scope, "scope:$ANALYZE_ONLY")
-        push != null && push !in PUSH_VALUES -> InvalidOperationArgumentError("push", push, "on|off")
-        replies != null && replies !in REPLY_VALUES -> InvalidOperationArgumentError("replies", replies, "post|draft")
-        confirming && select.isNullOrBlank() -> MissingOperationSelectionError(id, SELECTION_FORMS)
+        scope != null && scope != ANALYZE_ONLY -> invalidArgument("scope", scope, "scope:$ANALYZE_ONLY")
+        push != null && push !in PUSH_VALUES -> invalidArgument("push", push, "on|off")
+        replies != null && replies !in REPLY_VALUES -> invalidArgument("replies", replies, "post|draft")
+        confirming && select.isNullOrBlank() ->
+          OperationOutcome.Usage("Operation '$id' needs a selection with confirm:; pass $SELECTION_FORMS.")
         !confirming && select != null ->
-          InvalidOperationSelectionError(select, "select: goes with the confirm:<token> an analysis printed.")
+          invalidSelection(select, "select: goes with the confirm:<token> an analysis printed.")
         else -> null
       }
     }
 
   override fun run(context: OperationContext): OperationRunResult {
     val target = prReviewFixTarget(context.instructions)
-    val pullRequest = pullRequest(context, target.reference)
-    if (context.arguments.scope != ANALYZE_ONLY) requirePullRequestBranch(context, pullRequest)
-    val listed = listThreads(context, pullRequest)
+    val pullRequest = pullRequest(context, target.reference) { return OperationRunResult.Finished(it) }
+    if (context.arguments.scope != ANALYZE_ONLY) {
+      requirePullRequestBranch(context, pullRequest) { return OperationRunResult.Finished(it) }
+    }
+    return analyzeThreads(context.copy(instructions = target.instructions), pullRequest)
+  }
+
+  private fun analyzeThreads(
+    context: OperationContext,
+    pullRequest: ReviewPullRequest,
+  ): OperationRunResult {
+    val listed = listThreads(context, pullRequest) { return OperationRunResult.Finished(it) }
     val anchors = PrReviewFixAnchors.of(pullRequest, PrReviewFixAnchors.actionable(listed))
     if (anchors.ordinals.isEmpty()) {
       val handled = listed.joinToString("") { thread -> "- ${thread.id} — ${thread.location()}\n" }
@@ -66,17 +71,29 @@ class PrReviewFixOperation(
         OperationOutcome.Completed("${pullRequest.describe()} has no unresolved review threads.\n$handled"),
       )
     }
-    val step =
-      context.steps.runReadOnly(
-        context.copy(instructions = target.instructions),
-        ANALYSIS_STEP,
-        analysisDirective(pullRequest, anchors, listed),
-      )
-    val matrix =
-      when (step) {
-        is OperationStepResult.Failed -> return OperationRunResult.Finished(OperationOutcome.Failed(step.reason))
-        is OperationStepResult.Settled -> step.value.trim() + "\n"
-      }
+    return analyze(context, pullRequest, anchors, listed)
+  }
+
+  private fun analyze(
+    context: OperationContext,
+    pullRequest: ReviewPullRequest,
+    anchors: PrReviewFixAnchors,
+    listed: List<ReviewThread>,
+  ): OperationRunResult =
+    when (
+      val step = context.steps.runReadOnly(context, ANALYSIS_STEP, analysisDirective(pullRequest, anchors, listed))
+    ) {
+      is OperationStepResult.Failed -> OperationRunResult.Finished(OperationOutcome.Failed(step.reason))
+      is OperationStepResult.Refused -> OperationRunResult.Finished(step.refusal)
+      is OperationStepResult.Settled -> analyzed(context, pullRequest, anchors, step.value.trim() + "\n")
+    }
+
+  private fun analyzed(
+    context: OperationContext,
+    pullRequest: ReviewPullRequest,
+    anchors: PrReviewFixAnchors,
+    matrix: String,
+  ): OperationRunResult {
     val summary = "PR review fix analysis for ${pullRequest.describe()}\n\n$matrix"
     if (context.arguments.scope == ANALYZE_ONLY) {
       return OperationRunResult.Finished(OperationOutcome.Completed(summary))
@@ -88,38 +105,56 @@ class PrReviewFixOperation(
     )
   }
 
-  override fun currentAnchors(context: OperationContext): Map<String, String> {
-    val pullRequest = pullRequest(context, prReviewFixTarget(context.instructions).reference)
-    return PrReviewFixAnchors.measured(
-      pullRequest,
-      PrReviewFixAnchors.actionable(listThreads(context, pullRequest)).map(ReviewThread::id),
+  override fun currentAnchors(context: OperationContext): CurrentOperationAnchors {
+    val reference = prReviewFixTarget(context.instructions).reference
+    val pullRequest = pullRequest(context, reference) { return CurrentOperationAnchors.Unreadable(it) }
+    val listed = listThreads(context, pullRequest) { return CurrentOperationAnchors.Unreadable(it) }
+    return CurrentOperationAnchors.Read(
+      PrReviewFixAnchors.measured(pullRequest, PrReviewFixAnchors.actionable(listed).map(ReviewThread::id)),
     )
   }
 
   override fun admit(
     context: OperationContext,
     proposal: ConfirmedOperationProposal,
-  ) {
-    val anchors = storedAnchors(proposal)
-    parsePrReviewFixSelection(requireNotNull(context.arguments.select), anchors.ordinals)
-    val branch = requirePullRequestBranch(context, anchors.pullRequest)
-    if (context.arguments.push != PUSH_ON) return
-    ProtectedBranches.protectedName(branch)?.let { protectedBranch -> throw ProtectedBranchPushError(protectedBranch) }
-    if (gitOperations.worktreeStatus(context.repoRoot).requireGitValue("worktree status").isNotBlank()) {
-      throw PushWorktreeDirtyError(context.repoRoot.toString())
+  ): OperationRefusal? {
+    val anchors = storedAnchors(proposal) { return it }
+    val selection = parsePrReviewFixSelection(requireNotNull(context.arguments.select), anchors.ordinals)
+    if (selection is PrReviewFixSelection.Invalid) return selection.usage
+    val branch = requirePullRequestBranch(context, anchors.pullRequest) { return it }
+    return if (context.arguments.push == PUSH_ON) pushRefusal(context, branch) else null
+  }
+
+  private fun pushRefusal(
+    context: OperationContext,
+    branch: String,
+  ): OperationRefusal? {
+    ProtectedBranches.protectedName(branch)?.let { protectedBranch ->
+      return OperationOutcome.Blocked("Refusing to push protected branch '$protectedBranch'; re-run with push:off.")
     }
+    val status = gitOperations.worktreeStatus(context.repoRoot).gitValueOr("worktree status") { return it }
+    if (status.isBlank()) return null
+    return OperationOutcome.Blocked(
+      "push:on commits every change in the worktree, and '${context.repoRoot}' already has uncommitted changes; " +
+        "commit or stash them, or re-run with push:off.",
+    )
   }
 
   override fun execute(
     context: OperationContext,
     proposal: ConfirmedOperationProposal,
   ): OperationOutcome {
-    val anchors = storedAnchors(proposal)
+    val anchors = storedAnchors(proposal) { return it }
+    val selected =
+      when (val selection = parsePrReviewFixSelection(requireNotNull(context.arguments.select), anchors.ordinals)) {
+        is PrReviewFixSelection.Selected -> selection.threads
+        is PrReviewFixSelection.Invalid -> return selection.usage
+      }
     return PrReviewFixExecution(
       context = context,
       pullRequest = anchors.pullRequest,
-      selected = parsePrReviewFixSelection(requireNotNull(context.arguments.select), anchors.ordinals),
-      threads = listThreads(context, anchors.pullRequest).associateBy(ReviewThread::id),
+      selected = selected,
+      threads = listThreads(context, anchors.pullRequest) { return it }.associateBy(ReviewThread::id),
       matrix = proposal.value,
       reviewThreads = reviewThreads,
       gitOperations = gitOperations,
@@ -127,40 +162,50 @@ class PrReviewFixOperation(
     ).run()
   }
 
-  private fun requirePullRequestBranch(
+  private inline fun requirePullRequestBranch(
     context: OperationContext,
     pullRequest: ReviewPullRequest,
+    refuse: (OperationOutcome.Blocked) -> Nothing,
   ): String {
-    val branch = gitOperations.currentBranch(context.repoRoot).requireGitValue("branch")
-    if (branch != pullRequest.headRefName) throw PullRequestBranchNotCheckedOutError(pullRequest.headRefName, branch)
+    val branch = gitOperations.currentBranch(context.repoRoot).gitValueOr("branch", refuse)
+    if (branch != pullRequest.headRefName) {
+      refuse(
+        OperationOutcome.Blocked(
+          "The pull request's branch '${pullRequest.headRefName}' is not checked out (current: '$branch'); check " +
+            "it out before confirming fixes.",
+        ),
+      )
+    }
     return branch
   }
 
-  private fun pullRequest(
+  private inline fun pullRequest(
     context: OperationContext,
     reference: String?,
+    refuse: (OperationOutcome.Blocked) -> Nothing,
   ): ReviewPullRequest =
     when (val resolved = reviewThreads.resolvePullRequest(context.repoRoot, reference)) {
       is ReviewPullRequestResolution.Found -> resolved.pullRequest
-      ReviewPullRequestResolution.Absent -> throw PullRequestNotFoundError(reference)
-      is ReviewPullRequestResolution.Unavailable -> throw OperationAnchorUnreadableError(
-        "pull request",
-        resolved.reason,
-      )
+      ReviewPullRequestResolution.Absent -> refuse(pullRequestNotFound(reference))
+      is ReviewPullRequestResolution.Unavailable -> refuse(anchorUnreadable("pull request", resolved.reason))
     }
 
-  private fun listThreads(
+  private inline fun listThreads(
     context: OperationContext,
     pullRequest: ReviewPullRequest,
+    refuse: (OperationOutcome.Blocked) -> Nothing,
   ): List<ReviewThread> =
     when (val listing = reviewThreads.reviewThreads(context.repoRoot, pullRequest)) {
       is ReviewThreadListing.Ok -> listing.threads
-      is ReviewThreadListing.Unavailable -> throw OperationAnchorUnreadableError("review threads", listing.reason)
+      is ReviewThreadListing.Unavailable -> refuse(anchorUnreadable("review threads", listing.reason))
     }
 
-  private fun storedAnchors(proposal: ConfirmedOperationProposal): PrReviewFixAnchors =
+  private inline fun storedAnchors(
+    proposal: ConfirmedOperationProposal,
+    refuse: (OperationOutcome.Blocked) -> Nothing,
+  ): PrReviewFixAnchors =
     PrReviewFixAnchors.from(proposal.operationValues)
-      ?: throw OperationAnchorUnreadableError("pr-review-fix proposal", "proposal '${proposal.token}' carries no PR.")
+      ?: refuse(anchorUnreadable("pr-review-fix proposal", "proposal '${proposal.token}' carries no PR."))
 }
 
 internal const val ANALYSIS_STEP: String = "operation.pr-review-fix.analysis"

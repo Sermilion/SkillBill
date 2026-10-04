@@ -7,11 +7,12 @@ import skillbill.application.review.snapshot.diffForPaths
 import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.reviewHarness
 import skillbill.application.review.snapshot.reviewPack
+import skillbill.application.review.snapshot.reviewed
 import skillbill.application.reviewevidence.model.ParallelReviewScope
 import skillbill.application.runner
 import skillbill.ports.agentrun.model.AgentRunTermination
 import skillbill.ports.goalrunner.runner.model.GoalRunnerSubtaskLaunchRequest
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.model.goalreview.toReviewAccountingBoundedJson
 import java.nio.file.Files
 import kotlin.test.Test
@@ -32,7 +33,7 @@ class ParallelCodeReviewRegressionTest {
     Files.writeString(repoRoot.resolve("parent-briefing.md"), parentBriefing)
     val runner = reviewHarness(config(), recorder)
 
-    val result = runner.run(harnessRequest(repoRoot = repoRoot))
+    val result = runner.reviewed(harnessRequest(repoRoot = repoRoot))
 
     recorder.parentPrompts.forEach { prompt ->
       assertFalse(prompt.contains("AGENTS_BODY_SENTINEL"), "A review lane saw a project-guidance body.")
@@ -57,7 +58,7 @@ class ParallelCodeReviewRegressionTest {
         recorder,
       )
 
-    val result = runner.run(harnessRequest())
+    val result = runner.reviewed(harnessRequest())
     val summary = assertNotNull(result.accountingSummary)
 
     val lanes = summary.lanes.filter { it.children.isEmpty() }
@@ -83,7 +84,7 @@ class ParallelCodeReviewRegressionTest {
         recorder,
       )
 
-    val result = runner.run(harnessRequest())
+    val result = runner.reviewed(harnessRequest())
 
     assertFalse(result.lane1.success)
     assertNotNull(result.lane1.failureReason)
@@ -93,7 +94,7 @@ class ParallelCodeReviewRegressionTest {
     val recorder = ReviewRecorder()
     val runner = reviewHarness(config { RecordedWorkerResponse() }, recorder)
 
-    val summary = assertNotNull(runner.run(harnessRequest()).accountingSummary)
+    val summary = assertNotNull(runner.reviewed(harnessRequest()).accountingSummary)
 
     val lanes = summary.lanes.filter { it.children.isEmpty() }
     assertEquals(1, lanes.size, "No lane is relabeled or duplicated in the accounting tree.")
@@ -105,7 +106,7 @@ class ParallelCodeReviewRegressionTest {
   }
 
   @Test fun `non-commit scopes keep their output and report commit-focused sequencing as not applicable`() {
-    val branchResult = reviewHarness(config(), ReviewRecorder()).run(harnessRequest())
+    val branchResult = reviewHarness(config(), ReviewRecorder()).reviewed(harnessRequest())
 
     listOf(
       ParallelReviewScope.STAGED,
@@ -115,7 +116,7 @@ class ParallelCodeReviewRegressionTest {
       val recorder = ReviewRecorder()
 
       val result =
-        reviewHarness(config(), recorder).run(
+        reviewHarness(config(), recorder).reviewed(
           harnessRequest(scope = scope, codeReviewMode = CodeReviewExecutionMode.DELEGATED),
         )
 

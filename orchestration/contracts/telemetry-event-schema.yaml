@@ -486,7 +486,7 @@ $defs:
         minLength: 1
       phase_id:
         type: string
-        enum: [preplan, plan, implement, simplify, audit, audit_implement_fix, validate, write_history, pr]
+        enum: [preplan, plan, implement, simplify, implement_fix, review, build, verify_findings, audit, audit_plan_fix, audit_implement_fix, validate, write_history, pr]
       attempt:
         type: integer
         minimum: 1
@@ -523,7 +523,7 @@ $defs:
         minLength: 1
       phase_id:
         type: string
-        enum: [preplan, plan, implement, simplify, audit, audit_implement_fix, validate, write_history, pr]
+        enum: [preplan, plan, implement, simplify, implement_fix, review, build, verify_findings, audit, audit_plan_fix, audit_implement_fix, validate, write_history, pr]
       attempt:
         type: integer
         minimum: 1

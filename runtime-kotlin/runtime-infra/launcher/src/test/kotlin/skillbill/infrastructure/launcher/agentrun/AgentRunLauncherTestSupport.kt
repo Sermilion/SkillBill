@@ -1,13 +1,15 @@
 package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.ports.agentrun.model.AgentRunDeclaredProgressSnapshot
+import skillbill.ports.agentrun.model.AgentRunLaunchFacts
 import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.agentrun.model.SkillRunGoalContinuationContext
 import skillbill.ports.agentrun.model.SkillRunRequest
-import skillbill.workflow.model.goalreview.GoalProgressEvent
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Collections
+import kotlin.test.assertIs
 import kotlin.time.Duration.Companion.seconds
 
 internal const val AGENT_RUN_LAUNCHER_PHASE_PROMPT =
@@ -44,6 +46,9 @@ internal class SharedDeclaredProgressStore {
       AgentRunDeclaredProgressSnapshot(latestEvent = event, processAlive = event.processAlive)
     }
 }
+
+internal fun ProcessAgentRunAdapter.launchFacts(request: SkillRunRequest): AgentRunLaunchFacts =
+  assertIs<AgentRunLaunchFacts>(launch(request))
 
 internal fun skillRunRequest(
   issueKey: String = "SKILL-56",

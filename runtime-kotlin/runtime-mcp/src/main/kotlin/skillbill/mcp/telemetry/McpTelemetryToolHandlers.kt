@@ -1,6 +1,6 @@
 package skillbill.mcp.telemetry
 
-import skillbill.contracts.mcp.McpToolPayloadKeys
+import skillbill.contracts.telemetry.TelemetryProxyPayloadKeys
 import skillbill.mcp.shared.McpComponent
 import skillbill.mcp.shared.McpToolArguments
 import skillbill.telemetry.model.RemoteStatsRequest
@@ -15,10 +15,10 @@ internal fun telemetryRemoteStats(
   component.telemetryService.remoteStats(
     RemoteStatsRequest(
       workflow = arguments.remoteStatsWorkflow(),
-      since = arguments.optionalString(McpToolPayloadKeys.SINCE).orEmpty(),
-      dateFrom = arguments.optionalString(McpToolPayloadKeys.DATE_FROM).orEmpty(),
-      dateTo = arguments.optionalString(McpToolPayloadKeys.DATE_TO).orEmpty(),
-      groupBy = arguments.optionalString(McpToolPayloadKeys.GROUP_BY).orEmpty(),
+      since = arguments.optionalString(TelemetryProxyPayloadKeys.SINCE).orEmpty(),
+      dateFrom = arguments.optionalString(TelemetryProxyPayloadKeys.DATE_FROM).orEmpty(),
+      dateTo = arguments.optionalString(TelemetryProxyPayloadKeys.DATE_TO).orEmpty(),
+      groupBy = arguments.optionalString(TelemetryProxyPayloadKeys.GROUP_BY).orEmpty(),
     ),
   ).toMcpMap()
 
@@ -26,7 +26,7 @@ internal fun telemetryProxyCapabilities(component: McpComponent): Map<String, An
   component.telemetryService.capabilities().toMcpMap()
 
 private fun McpToolArguments.remoteStatsWorkflow(): String {
-  val requested = string(McpToolPayloadKeys.WORKFLOW)
+  val requested = string(TelemetryProxyPayloadKeys.WORKFLOW)
   return if (requested == VERIFY_WORKFLOW_ALIAS) {
     FeatureVerifyWorkflowDefinition.definition.skillName
   } else {

@@ -1,9 +1,11 @@
 package skillbill.workflow.taskruntime.model.audit
 
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.WorkflowFailureCode
 import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 
@@ -12,14 +14,14 @@ class FeatureTaskRuntimeQuarantineModelsTest {
   fun `an unsupported field loud-fails rather than being dropped on decode`() {
     val valid = featureTaskRuntimeQuarantineRecordToWire(listOf(identityEntry()))
     val envelopeError =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         featureTaskRuntimeQuarantineEntriesFromWire(valid + ("unexpected" to true))
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     val leaked = listOf(identityEntry().toArtifactMap() + ("leaked_body" to "secret"))
     val entryError =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         featureTaskRuntimeQuarantineEntriesFromWire(valid + ("entries" to leaked))
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     listOf(envelopeError, entryError).forEach { error ->
       assertFalse(
         error.message.orEmpty().contains("secret"),
@@ -34,9 +36,9 @@ class FeatureTaskRuntimeQuarantineModelsTest {
   fun `an unsupported contract version loud-fails so the store is not rewritten`() {
     val valid = featureTaskRuntimeQuarantineRecordToWire(listOf(identityEntry()))
     val error =
-      assertFailsWith<InvalidWorkflowStateSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         featureTaskRuntimeQuarantineEntriesFromWire(valid + ("contract_version" to "0.2"))
-      }
+      }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
     assertContains(error.message.orEmpty(), "unsupported contract version")
     assertContains(error.message.orEmpty(), FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE)
   }
@@ -45,9 +47,9 @@ class FeatureTaskRuntimeQuarantineModelsTest {
   fun `diagnostic_degraded false is rejected rather than loaded as an unmarked identity entry`() {
     val wire = featureTaskRuntimeQuarantineRecordToWire(listOf(identityEntry()))
     val markedFalse = listOf(identityEntry().toArtifactMap() + ("diagnostic_degraded" to false))
-    assertFailsWith<InvalidWorkflowStateSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       featureTaskRuntimeQuarantineEntriesFromWire(wire + ("entries" to markedFalse))
-    }
+    }.also { assertEquals(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, it.code) }
   }
 
   private fun identityEntry() =

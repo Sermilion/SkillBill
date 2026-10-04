@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot
 
+import skillbill.engine.featuretask.model.execution.ValidationGateCommandFamily
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
@@ -7,24 +8,51 @@ import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.featuretask.slot.state.PhaseStepState
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 
 abstract class PhaseStrategy {
   abstract val slot: PhaseSlot
 
   abstract val strategyId: String
 
+  open val semanticRevision: Int = 1
+
+  internal open fun mapRecordedExecutionPlan(
+    recorded: ResolvedPhaseExecutionPlan,
+    current: ResolvedPhaseExecutionPlan,
+  ): PhaseExecutionPlanMapping? = null
+
+  open fun stepPolicyIdentity(stepId: String): String =
+    policyFor(stepId).semanticIdentity(strategyId, semanticRevision, stepId)
+
+  open fun resumeInterpretationIdentity(stepId: String): String = "$strategyId/$semanticRevision:$stepId"
+
+  internal open fun executionBindingKind(stepId: String): PhaseExecutionBindingKind {
+    policyFor(stepId)
+    return when (slot) {
+      PhaseSlot.PREPLAN, PhaseSlot.PLAN -> PhaseExecutionBindingKind.PLANNING
+      else -> PhaseExecutionBindingKind.AGENT
+    }
+  }
+
+  internal open val plansInFanOut: Boolean = false
+
+  internal open val qualityGateOperation: PhaseQualityGateOperation? = null
+
+  internal open fun acceptsAttemptStrategy(attemptStrategyId: String): Boolean = attemptStrategyId == strategyId
+
   abstract val steps: List<String>
 
-  abstract val entryStep: String
+  open val optionalSteps: Set<String> = emptySet()
 
-  abstract val runner: PhaseRunner
+  abstract val entryStep: String
 
   abstract fun policyFor(stepId: String): PhaseStepPolicy
 
@@ -40,7 +68,7 @@ abstract class PhaseStrategy {
 
   internal abstract fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome
 
   internal open fun stepHooks(stepId: String): PhaseStepHooks = PhaseStepHooks.None
@@ -67,13 +95,17 @@ abstract class PhaseStrategyStatusProjection : PhaseStrategy() {
 
 internal enum class PhaseReportedGate { BUILD, VALIDATION }
 
-internal fun jsonValueContent(
-  innerJsonExample: String,
-  notes: String,
-): String =
-  "Carry this JSON object as the value text; the runtime does not validate its shape and the next phase reads\n" +
-    "it as structured prose:\n" +
-    "```json\n" +
-    innerJsonExample +
-    "```\n" +
-    notes
+internal sealed interface PhaseQualityGateOperation {
+  data class PackGate(
+    val commandFamily: ValidationGateCommandFamily,
+  ) : PhaseQualityGateOperation
+
+  data object AgentValidation : PhaseQualityGateOperation
+}
+
+internal enum class PhaseExecutionBindingKind { AGENT, PLANNING, REVIEW, FINDING_VERIFICATION, REPAIR_RECEIPT }
+
+internal data class PhaseExecutionPlanMapping(
+  val previous: ResolvedPhaseExecutionPlan,
+  val supported: ResolvedPhaseExecutionPlan,
+)

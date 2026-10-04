@@ -1,12 +1,25 @@
 package skillbill.application.review.parallel.runner
 
+import skillbill.application.review.model.ParallelCodeReviewReportContract
 import skillbill.application.review.model.ReviewSpecialistLaunchRequest
 import skillbill.application.review.model.ReviewWorkerKind
-import skillbill.review.context.model.execution.structuredString
+import skillbill.review.context.model.hunk.structuredString
 import skillbill.scaffold.model.PlatformManifest
 
 internal object ParallelCodeReviewRunnerParentPrompt {
   fun build(
+    selected: List<ReviewSpecialistLaunchRequest>,
+    routedManifests: List<PlatformManifest>,
+    agentId: String,
+    reportContract: ParallelCodeReviewReportContract = ParallelCodeReviewReportContract.DEFAULT,
+  ): String =
+    if (reportContract == ParallelCodeReviewReportContract.STANDALONE_REPORT_ONLY) {
+      buildStandalone(selected, routedManifests, agentId)
+    } else {
+      buildDefault(selected, routedManifests, agentId)
+    }
+
+  private fun buildDefault(
     selected: List<ReviewSpecialistLaunchRequest>,
     routedManifests: List<PlatformManifest>,
     agentId: String,
@@ -61,6 +74,58 @@ internal object ParallelCodeReviewRunnerParentPrompt {
         appendLine("Owned paths: ${launch.assignment.assignedPaths.joinToString(",") { structuredString(it) }}")
         appendAssignedBundleEvidence(launch)
       }
+    }
+
+  private fun buildStandalone(
+    selected: List<ReviewSpecialistLaunchRequest>,
+    routedManifests: List<PlatformManifest>,
+    agentId: String,
+  ): String =
+    buildString {
+      appendLine(
+        "Review the already resolved assignment in report-only mode. " +
+          "Do not edit, stage, commit, amend, or reset files.",
+      )
+      appendLine("Do not launch skill-bill phase review or skill-bill code-review recursively.")
+      appendLine(
+        "Return a findings register using '[F-001] Severity | Confidence | path/File.kt:12 | defect description', " +
+          "or the exact line NO_FINDINGS when empty.",
+      )
+      appendLine("End with exactly one canonical verdict line: verdict: approved or verdict: changes_requested.")
+      appendCursorDelegatedFanOut(selected, agentId)
+      appendLine("Detected stack: ${routedManifests.joinToString("+") { it.slug }.ifBlank { "generic" }}")
+      appendLine(
+        "Authoritative routed rubric identities: " +
+          selected.joinToString { requireNotNull(it.assignment.laneDecision.specialistSkillName) },
+      )
+      appendLine(
+        "Apply the report-only restrictions above to every specialist assignment, including provider-native lanes.",
+      )
+      selected.forEach { launch ->
+        val decision = launch.assignment.laneDecision
+        appendLine()
+        appendLine("## Resolved rubric: ${decision.specialistSkillName}")
+        appendLine("Owned paths: ${launch.assignment.assignedPaths.joinToString(",") { structuredString(it) }}")
+        appendLine("This assignment is report-only. Do not edit, stage, commit, amend, or reset files.")
+        launch.rubrics.forEach { rubric -> appendLine(rubric.body) }
+        appendLine("Follow the report-only rule above even when a rubric describes a concrete fix.")
+      }
+      appendLine(
+        "Use the assigned bundle below as authoritative. Fetch every body through the bound broker " +
+          "by calling read_evidence with an owned repository-relative path exactly as spelled in " +
+          "'Owned paths'. The evidence_locator store_path and payload_file identify a hunk inside " +
+          "the broker's own store; they are not read_evidence arguments and passing one is refused.",
+      )
+      appendLine(PARALLEL_REVIEW_DELEGATED_DEPTH_DIRECTIVE)
+      appendReviewLearnings(selected)
+      selected.forEach { launch ->
+        appendLine()
+        appendLine("## Assigned bundle: ${launch.assignment.laneDecision.specialistSkillName}")
+        appendLine("Do not edit, stage, commit, amend, or reset files while reviewing this assignment.")
+        appendAssignedBundleEvidence(launch)
+      }
+      appendLine()
+      appendLine("Return recommendations only. Do not apply fixes or modify the repository.")
     }
 
   private fun StringBuilder.appendReviewLearnings(selected: List<ReviewSpecialistLaunchRequest>) {

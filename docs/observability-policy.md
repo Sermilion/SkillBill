@@ -54,15 +54,35 @@ these seams:
 - worktree edit journal cap: when `trimToCap` drops rows records
   `seam=worktree_edit_journal_cap value_expected=rows_within_cap value_used=dropped_oldest_ticks`
   with `dropped_rows`
+- review diff queries: `FileSystemDiffResolver` logs a WARNING with `seam=diff_resolver_query`,
+  the query, value used, value expected, and cause for every unavailable result (timeout, launch
+  failure, rejected exit, over-cap output, I/O failure, malformed index record, PR diff fallback
+  to `gh pr diff`) and for a temp-file cleanup failure. Unavailable is `null`; an empty string or
+  list is a successful empty result. Shared review evidence derivation records
+  `seam=shared_review_evidence_derive` when an unavailable diff yields no evidence, and
+  `seam=shared_review_evidence_parse` when a diff fails to parse
 
 Each record names the seam, the value actually used, the value that was expected,
 and why the substitution happened. A fallback that cannot be attributed to a
 specific cause is a loud-fail, not a log line.
 
-Absent platform-pack `validation_gate` declarations degrade validate to agent-run
-behavior at seam `ValidationGateResolver.resolve` / `feature-task.validate.validation_gate.absent`
-with a surfaced record; a malformed declaration loud-fails and never degrades to
-"no gate".
+Standalone validation requires a dominant platform pack with a declared
+`validation_gate` and both collect-all commands. Missing declarations or required
+commands block with a bounded diagnostic after dominant-pack resolution.
+The runtime never substitutes an agent-run gate or an empty successful receipt.
+
+Required start and briefing writes reject with their write kind, phase, and
+attempt. The attempt boundary records that rejection before returning a blocked
+outcome. A secondary terminal-write or diagnostic failure must not replace the
+original reason. Cancellation still propagates. Review and planning fan-out
+must acknowledge start persistence before preparation or child launch. Audit
+acknowledges its start but deliberately omits durable briefing storage.
+
+Gate receipt recovery preserves the original output, attempts, checkpoints, and
+finalization records. Unsupported or incoherent evidence blocks before the run
+can regenerate a producer or repeat commit and push. Preserve the run and inspect
+its diagnostics with a compatible runtime or a separately reviewed recovery
+mapping. Do not delete records to bypass evidence rejection.
 
 Prefer loud-fail over log-and-continue whenever the substituted value changes a
 contract the caller depends on — scope bounds, review deltas, staged path

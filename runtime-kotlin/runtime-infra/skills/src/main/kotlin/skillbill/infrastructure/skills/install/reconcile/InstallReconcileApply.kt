@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.install.reconcile
 
-import skillbill.error.shellcontent.ReconciliationConflictError
+import skillbill.error.shellcontent.reconciliationConflictError
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
 import skillbill.infrastructure.skills.install.plan.discoverPlatformManifests
 import skillbill.install.model.BaselineManifest
@@ -33,7 +33,7 @@ internal fun applyReconciliation(
     val skillPath = outcome.skillRelativePath
     val upstreamDir =
       upstreamSkills[skillPath]?.sourceDir
-        ?: throw ReconciliationConflictError(
+        ?: throw reconciliationConflictError(
           skillRelativePath = skillPath,
           reason = "apply requires the upstream skill dir but it was not enumerated.",
         )
@@ -62,7 +62,7 @@ private fun guardPruneAgainstEmptyUpstream(
   }
   val pruned = plan.prunedPaths
   if (pruned.isNotEmpty()) {
-    throw ReconciliationConflictError(
+    throw reconciliationConflictError(
       skillRelativePath = pruned.first(),
       reason =
         "refusing to prune ${pruned.size} installed path(s) because the upstream source " +
@@ -207,7 +207,7 @@ private fun liveSkillDir(
       local.platformPacksRoot.resolve(skillRelativePath.removePrefix(PLATFORM_PACKS_PREFIX))
     skillRelativePath.startsWith(AGENT_ADDONS_PREFIX) ->
       local.repoRoot.resolve(AGENT_ADDONS_PREFIX).resolve(skillRelativePath.removePrefix(AGENT_ADDONS_PREFIX))
-    else -> throw ReconciliationConflictError(
+    else -> throw reconciliationConflictError(
       skillRelativePath = skillRelativePath,
       reason = "unrecognized skill-relative category prefix.",
     )
@@ -219,7 +219,7 @@ private fun reconcileSkillDirectory(
 ) {
   val parent =
     liveDir.toAbsolutePath().normalize().parent
-      ?: throw ReconciliationConflictError(
+      ?: throw reconciliationConflictError(
         skillRelativePath = liveDir.toString(),
         reason = "live skill dir has no parent directory.",
       )

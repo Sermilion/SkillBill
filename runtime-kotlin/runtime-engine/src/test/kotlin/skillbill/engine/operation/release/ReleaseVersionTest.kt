@@ -1,10 +1,8 @@
 package skillbill.engine.operation.release
 
-import skillbill.error.operation.MissingReleaseBumpError
 import kotlin.test.Test
-import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class ReleaseVersionTest {
   @Test
@@ -16,11 +14,7 @@ class ReleaseVersionTest {
   }
 
   @Test
-  fun `a missing or unknown bump is refused naming patch minor and major`() {
-    listOf(null, "huge").forEach { raw ->
-      val error = assertFailsWith<MissingReleaseBumpError> { ReleaseBump.parse(raw) }
-
-      listOf("bump:patch", "bump:minor", "bump:major").forEach { assertContains(error.message.orEmpty(), it) }
-    }
+  fun `a missing or unknown bump does not parse`() {
+    listOf(null, "huge").forEach { raw -> assertNull(ReleaseBump.parse(raw), "bump=$raw") }
   }
 }

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
 import skillbill.contracts.workflow.goal.GOAL_PROGRESS_EVENT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidGoalProgressEventSchemaError
+import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.GoalProgressEventSchemaPaths
@@ -28,7 +28,7 @@ object GoalProgressEventSchemaValidator {
     if (errors.isEmpty()) return
     goalProgressLog.log(Level.WARNING, buildSchemaDriftLog(sourceLabel, errors, instance))
     val sortedErrors = errors.sortedWith(violationOrdering)
-    throw InvalidGoalProgressEventSchemaError(
+    throw invalidGoalProgressEventSchemaError(
       sourceLabel = sourceLabel,
       fieldPath =
         goalObservabilityDottedFieldPath(
@@ -94,7 +94,7 @@ private fun goalProgressEventSchema(): JsonSchema =
       classLoader = GoalProgressEventSchemaValidator::class.java.classLoader,
       classpathResource = GOAL_PROGRESS_EVENT_SCHEMA_CLASSPATH_RESOURCE,
       missingResource = {
-        InvalidGoalProgressEventSchemaError(
+        invalidGoalProgressEventSchemaError(
           sourceLabel = GOAL_PROGRESS_EVENT_SCHEMA_CLASSPATH_RESOURCE,
           fieldPath = "",
           reason =
@@ -103,7 +103,7 @@ private fun goalProgressEventSchema(): JsonSchema =
         )
       },
       processingFailure = { cause ->
-        InvalidGoalProgressEventSchemaError(
+        invalidGoalProgressEventSchemaError(
           sourceLabel = GOAL_PROGRESS_EVENT_SCHEMA_CLASSPATH_RESOURCE,
           fieldPath = "",
           reason = cause.message ?: cause::class.simpleName.orEmpty(),
@@ -122,7 +122,7 @@ private fun goalProgressEventSchema(): JsonSchema =
       expectedSchemaId = GoalProgressEventSchemaPaths.EXPECTED_SCHEMA_ID,
       expectedContractVersion = GOAL_PROGRESS_EVENT_CONTRACT_VERSION,
       identityFailure = { reason ->
-        InvalidGoalProgressEventSchemaError(
+        invalidGoalProgressEventSchemaError(
           sourceLabel = GOAL_PROGRESS_EVENT_SCHEMA_CLASSPATH_RESOURCE,
           fieldPath = "<schema>",
           reason = reason,

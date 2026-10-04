@@ -2,8 +2,10 @@ package skillbill.workflow.taskruntime.artifact
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeRepairReceiptError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeRepairReceipt
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairLedgerEntry
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceiptDecodeObservations
@@ -17,17 +19,17 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeResolvedBranc
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffProjection
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FeatureTaskRuntimeCheckpointIdentity
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.featureTaskRuntimeCheckpointIdentitiesFromArtifact
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.featureTaskRuntimeCheckpointIdentitiesToArtifact
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationFieldAdoption
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PREVIOUS_BLOCKED_REASON_KEY
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_KEY
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REOPENED_PHASE_IDS_KEY
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RETRIED_AT_KEY
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationFieldAdoption
+import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeCheckpointIdentitiesFromArtifact
+import skillbill.workflow.taskruntime.model.persistence.featureTaskRuntimeCheckpointIdentitiesToArtifact
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
-import skillbill.workflow.taskruntime.model.repair.task.FeatureTaskRuntimeOperatorBlockRetry
+import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PREVIOUS_BLOCKED_REASON_KEY
+import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_KEY
+import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REOPENED_PHASE_IDS_KEY
+import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RETRIED_AT_KEY
+import skillbill.workflow.taskruntime.model.repair.FeatureTaskRuntimeOperatorBlockRetry
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateExecutionEvidence
@@ -45,7 +47,7 @@ private fun artifactsMap(artifacts: Any?): Map<String, Any?> =
     artifacts == null -> emptyMap()
     else ->
       JsonCodec.anyToStringAnyMap(artifacts)
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime workflow artifacts must decode to an object.",
         )
   }
@@ -70,13 +72,15 @@ fun operatorBlockRetryFromWorkflowArtifacts(artifacts: Any?): FeatureTaskRuntime
 fun FeatureTaskRuntimeOperatorBlockRetry.asWorkflowArtifactEntry(
   previousBlockedReason: String,
   reopenedPhaseIds: List<String>,
-): Any =
-  mapOf(
-    SharedPayloadKeys.PHASE_ID to phaseId,
-    FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_KEY to reason,
-    FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RETRIED_AT_KEY to retriedAt,
-    FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PREVIOUS_BLOCKED_REASON_KEY to previousBlockedReason,
-    FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REOPENED_PHASE_IDS_KEY to reopenedPhaseIds,
+): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(
+    mapOf(
+      SharedPayloadKeys.PHASE_ID to phaseId,
+      FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_KEY to reason,
+      FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_RETRIED_AT_KEY to retriedAt,
+      FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_PREVIOUS_BLOCKED_REASON_KEY to previousBlockedReason,
+      FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REOPENED_PHASE_IDS_KEY to reopenedPhaseIds,
+    ),
   )
 
 fun goalContinuationFieldAdoptionFromWorkflowArtifacts(
@@ -89,12 +93,11 @@ fun decomposeTerminalFromWorkflowArtifacts(artifacts: Any?): FeatureTaskRuntimeD
 fun phaseLedgerFromWorkflowArtifacts(artifacts: Any?): List<FeatureTaskRuntimePhaseLedgerEntry> =
   phaseLedgerFrom(artifactsMap(artifacts))
 
-fun FeatureTaskRuntimeValidationGateProgress.asWorkflowArtifactEntry(): Any = toArtifactMap()
-
-fun FeatureTaskRuntimeValidationGateRunRecord.asWorkflowArtifactEntry(): Any = toArtifactMap()
+fun FeatureTaskRuntimeValidationGateProgress.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
 fun FeatureTaskRuntimeValidationGateRunRecord.presentationWireMap(): FeatureTaskRuntimeWorkflowArtifactMap =
-  FeatureTaskRuntimeWorkflowArtifactMap.from(asWorkflowArtifactEntry())
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
 fun FeatureTaskRuntimeRepairLedgerEntry.projectionWireMap(): FeatureTaskRuntimeWorkflowArtifactMap =
   FeatureTaskRuntimeWorkflowArtifactMap.from(toProjectionMap())
@@ -106,15 +109,18 @@ internal fun decodeValidationGateProgressFromArtifact(
   raw: Map<String, Any?>,
 ): FeatureTaskRuntimeValidationGateProgress = FeatureTaskRuntimeValidationGateProgress.fromArtifactMap(raw)
 
-fun FeatureTaskRuntimeValidationGateExecutionEvidence.asWorkflowArtifactEntry(repositoryCheckpoint: String): Any =
-  toArtifactMap(repositoryCheckpoint)
+fun FeatureTaskRuntimeValidationGateExecutionEvidence.asWorkflowArtifactEntry(
+  repositoryCheckpoint: String,
+): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap(repositoryCheckpoint))
 
 fun decodeValidationGateExecutionEvidenceFromArtifact(
   raw: Any?,
   sourceLabel: String,
+  onInvalid: (String, SkillBillRuntimeException) -> SkillBillRuntimeException = { _, failure -> failure },
 ): FeatureTaskRuntimeValidationGateExecutionEvidence? =
   JsonCodec.anyToStringAnyMap(raw)?.let {
-    FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(it, sourceLabel)
+    FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(it, sourceLabel, onInvalid)
   }
 
 internal fun decodeValidationGateExecutionEvidenceFromArtifact(
@@ -123,9 +129,11 @@ internal fun decodeValidationGateExecutionEvidenceFromArtifact(
 ): FeatureTaskRuntimeValidationGateExecutionEvidence =
   FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(raw, sourceLabel)
 
-fun FeatureTaskRuntimeValidationEvidence.asWorkflowArtifactEntry(): Any = toArtifactMap()
+fun FeatureTaskRuntimeValidationEvidence.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
-fun FeatureTaskRuntimeReadinessEvidence.asWorkflowArtifactEntry(): Any = toArtifactMap()
+fun FeatureTaskRuntimeReadinessEvidence.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
 fun decodeReadinessEvidenceFromArtifact(
   raw: Any?,
@@ -141,15 +149,21 @@ internal fun decodeReadinessEvidenceFromArtifact(
 fun decodeValidationEvidenceFromArtifact(
   raw: Any?,
   sourceLabel: String,
+  onInvalid: (String) -> SkillBillRuntimeException = {
+    invalidFeatureTaskRuntimeValidationEvidenceSchema(sourceLabel, it)
+  },
 ): FeatureTaskRuntimeValidationEvidence? =
-  JsonCodec.anyToStringAnyMap(raw)?.let { FeatureTaskRuntimeValidationEvidence.fromArtifactMap(it, sourceLabel) }
+  JsonCodec.anyToStringAnyMap(raw)?.let {
+    FeatureTaskRuntimeValidationEvidence.fromArtifactMap(it, sourceLabel, onInvalid)
+  }
 
 internal fun decodeValidationEvidenceFromArtifact(
   raw: Map<String, Any?>,
   sourceLabel: String,
 ): FeatureTaskRuntimeValidationEvidence = FeatureTaskRuntimeValidationEvidence.fromArtifactMap(raw, sourceLabel)
 
-fun FeatureTaskRuntimeRepairReceipt.asWorkflowArtifactEntry(): Any = toArtifactMap()
+fun FeatureTaskRuntimeRepairReceipt.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
 internal fun decodeRepairReceiptFromArtifact(
   raw: Any?,
@@ -189,28 +203,29 @@ fun validateRepairReceiptWireEntries(
 ) {
   FeatureTaskRuntimeRepairReceipt.validateEntries(
     JsonCodec.anyToStringAnyMap(raw)
-      ?: throw InvalidFeatureTaskRuntimeRepairReceiptError(
+      ?: throw invalidFeatureTaskRuntimeRepairReceipt(
         fieldPath = path,
         reason = "must be an object.",
-        payloadFreeReason = "$path must be an object.",
       ),
     path,
   )
 }
 
-fun List<FeatureTaskRuntimeQuarantineEntry>.asQuarantineWorkflowArtifactEntry(): Any =
-  featureTaskRuntimeQuarantineRecordToWire(this)
+fun List<FeatureTaskRuntimeQuarantineEntry>.asQuarantineWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(featureTaskRuntimeQuarantineRecordToWire(this))
 
 fun decodeQuarantineEntriesFromArtifact(raw: Any?): List<FeatureTaskRuntimeQuarantineEntry> =
   featureTaskRuntimeQuarantineEntriesFromWire(raw)
 
-fun List<FeatureTaskRuntimeCheckpointIdentity>.asCheckpointIdentitiesArtifactEntry(): Any =
-  featureTaskRuntimeCheckpointIdentitiesToArtifact(this)
+fun List<FeatureTaskRuntimeCheckpointIdentity>.asCheckpointIdentitiesArtifactEntry():
+  FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(featureTaskRuntimeCheckpointIdentitiesToArtifact(this))
 
 fun decodeCheckpointIdentitiesFromArtifact(raw: Any?): List<FeatureTaskRuntimeCheckpointIdentity> =
   featureTaskRuntimeCheckpointIdentitiesFromArtifact(raw)
 
-fun FeatureTaskRuntimeHandoffEnvelope.asWorkflowArtifactEntry(): Any = toEnvelopeMap()
+fun FeatureTaskRuntimeHandoffEnvelope.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toEnvelopeMap())
 
 fun decodeHandoffEnvelopeFromArtifact(raw: Any?): FeatureTaskRuntimeHandoffEnvelope? =
   JsonCodec.anyToStringAnyMap(raw)?.let(FeatureTaskRuntimeHandoffEnvelope::fromEnvelopeMap)
@@ -218,11 +233,14 @@ fun decodeHandoffEnvelopeFromArtifact(raw: Any?): FeatureTaskRuntimeHandoffEnvel
 internal fun decodeHandoffEnvelopeFromArtifact(raw: Map<String, Any?>): FeatureTaskRuntimeHandoffEnvelope =
   FeatureTaskRuntimeHandoffEnvelope.fromEnvelopeMap(raw)
 
-fun FeatureTaskRuntimeHandoffProjection.asWorkflowArtifactEntry(): Any = toEnvelopeMap()
+fun FeatureTaskRuntimeHandoffProjection.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toEnvelopeMap())
 
-fun FeatureTaskRuntimeRepositoryCheckpoint.asWorkflowArtifactEntry(): Any = toEnvelopeMap()
+fun FeatureTaskRuntimeRepositoryCheckpoint.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toEnvelopeMap())
 
-fun FeatureTaskRuntimePhaseRecord.asWorkflowArtifactEntry(): Any = toArtifactMap()
+fun FeatureTaskRuntimePhaseRecord.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
 fun decodePhaseRecordFromArtifact(raw: Any?): FeatureTaskRuntimePhaseRecord? =
   JsonCodec.anyToStringAnyMap(raw)?.let(FeatureTaskRuntimePhaseRecord::fromArtifactMap)
@@ -230,7 +248,8 @@ fun decodePhaseRecordFromArtifact(raw: Any?): FeatureTaskRuntimePhaseRecord? =
 internal fun decodePhaseRecordFromArtifact(raw: Map<String, Any?>): FeatureTaskRuntimePhaseRecord =
   FeatureTaskRuntimePhaseRecord.fromArtifactMap(raw)
 
-fun FeatureTaskRuntimePhaseLedgerEntry.asWorkflowArtifactEntry(): Any = toArtifactMap()
+fun FeatureTaskRuntimePhaseLedgerEntry.asWorkflowArtifactEntry(): FeatureTaskRuntimeWorkflowArtifactMap =
+  FeatureTaskRuntimeWorkflowArtifactMap.from(toArtifactMap())
 
 fun decodePhaseLedgerEntryFromArtifact(raw: Any?): FeatureTaskRuntimePhaseLedgerEntry? =
   JsonCodec.anyToStringAnyMap(raw)?.let(FeatureTaskRuntimePhaseLedgerEntry::fromArtifactMap)

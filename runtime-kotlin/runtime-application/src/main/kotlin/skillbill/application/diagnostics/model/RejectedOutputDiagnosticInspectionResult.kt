@@ -9,6 +9,16 @@ sealed interface RejectedOutputDiagnosticInspectionResult {
   ) : RejectedOutputDiagnosticInspectionResult
 
   data class RawBytes(val bytes: ByteArray) : RejectedOutputDiagnosticInspectionResult
+
+  data class Absent(val identity: String) : RejectedOutputDiagnosticInspectionResult
+
+  data class Expired(val identity: String) : RejectedOutputDiagnosticInspectionResult
+
+  data class Oversized(val identity: String) : RejectedOutputDiagnosticInspectionResult
+
+  data class AmbiguousSelector(val matchCount: Int) : RejectedOutputDiagnosticInspectionResult
+
+  data class InvalidRequest(val reason: String) : RejectedOutputDiagnosticInspectionResult
 }
 
 data class RejectedOutputDiagnosticMetadata(

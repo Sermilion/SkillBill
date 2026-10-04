@@ -1,6 +1,7 @@
 package skillbill.infrastructure.sqlite.core.ops
 
 import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.failureCodeLabel
 import skillbill.infrastructure.sqlite.core.schema.databaseAccessError
 import skillbill.infrastructure.sqlite.core.schema.databasePath
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -113,11 +114,12 @@ internal fun logTransactionRollbackFailure(
 
 private fun boundedTransactionFailureDetail(failure: Throwable): String {
   val message = failure.message?.takeIf { it.isNotBlank() }
-  return (message ?: failure::class.simpleName.orEmpty()).take(ROLLBACK_FAILURE_DETAIL_LIMIT)
+  return (message ?: failure.failureCodeLabel() ?: failure::class.simpleName.orEmpty())
+    .take(ROLLBACK_FAILURE_DETAIL_LIMIT)
 }
 
 internal inline fun <T> Connection.inNestedWriteTransaction(
-  diagnostics: RuntimeDiagnostics = InternalSqliteDiagnostics,
+  diagnostics: RuntimeDiagnostics,
   block: Connection.() -> T,
 ): T =
   inDatabaseTransaction(

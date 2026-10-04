@@ -3,7 +3,6 @@ package skillbill.install.model
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.install.INSTALL_PLAN_CONTRACT_VERSION
 import skillbill.contracts.install.InstallPlanContract
-import skillbill.install.policy.selectedPlatformSlugs
 
 class InstallPlanWireMap private constructor(
   private val delegate: Map<String, Any?>,
@@ -74,13 +73,6 @@ fun buildInstallPlanWireMap(plan: InstallPlan): InstallPlanWireMap =
   )
 
 fun InstallPlan.toInstallPlanContract(): InstallPlanContract = InstallPlanContract.wrap(buildInstallPlanWireMap(this))
-
-fun validateInstallPlanWireSnapshot(
-  plan: InstallPlan,
-  validate: (InstallPlanWireMap) -> Unit,
-) {
-  validate(buildInstallPlanWireMap(plan))
-}
 
 private fun agentTargetWireMap(target: InstallAgentTarget): Map<String, Any?> =
   linkedMapOf(

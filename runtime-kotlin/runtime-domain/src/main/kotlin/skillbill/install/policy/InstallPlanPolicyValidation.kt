@@ -1,6 +1,6 @@
 package skillbill.install.policy
 
-import skillbill.error.shellcontent.MissingBaselinePlatformSelectionError
+import skillbill.error.shellcontent.missingBaselinePlatformSelection
 import skillbill.install.model.InstallAgentSelectionMode
 import skillbill.install.model.InstallAgentTarget
 import skillbill.install.model.InstallPlanRequest
@@ -11,6 +11,7 @@ import skillbill.install.model.InstallPlatformPackSnapshot
 import skillbill.install.model.InstallPolicyInput
 import skillbill.install.model.PlatformPackSelectionMode
 import skillbill.install.model.SupportedAgent
+import skillbill.install.model.selectedPlatformSlugs
 
 internal fun validateAgentSelection(input: InstallPolicyInput) {
   val selection = input.request.agentSelection
@@ -70,7 +71,7 @@ internal fun validateBaselineCoPresence(
     }
     pack.baselineLayers.forEach { layer ->
       if (layer.required && layer.platform !in selected) {
-        throw MissingBaselinePlatformSelectionError(
+        throw missingBaselinePlatformSelection(
           selectingSlug = pack.slug,
           requiredBaselineSlug = layer.platform,
           declaringManifestPath = pack.packRoot.resolve("platform.yaml").toString(),

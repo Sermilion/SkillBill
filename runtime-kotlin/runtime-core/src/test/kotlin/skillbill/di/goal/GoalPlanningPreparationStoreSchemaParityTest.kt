@@ -1,20 +1,25 @@
 package skillbill.di.goal
 
-import skillbill.error.core.ShellContentContractException
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.infrastructure.contracts.workflow.goal.GoalPlanningPreparationSchemaValidator
 import skillbill.infrastructure.sqlite.withGoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
+import skillbill.ports.goalrunner.foundCheckpoint
+import skillbill.ports.goalrunner.foundPlan
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
+import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
+import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 
 class GoalPlanningPreparationStoreSchemaParityTest {
@@ -28,15 +33,24 @@ class GoalPlanningPreparationStoreSchemaParityTest {
     withStore { store ->
       store.checkpointSharedPreplan(shared)
       store.checkpointSubtaskPlan(plan)
-      assertEquals(shared.provenance, store.findSharedPreplan(identity())?.provenance)
-      assertEquals(plan.subSpecHash, store.findSubtaskPlan(identity(), 1, plan.governedSubSpecPath)?.subSpecHash)
+      assertEquals(shared.provenance, store.findSharedPreplan(identity()).foundCheckpoint()?.provenance)
+      assertEquals(
+        plan.subSpecHash,
+        store.findSubtaskPlan(identity(), 1, plan.governedSubSpecPath).foundPlan()?.subSpecHash,
+      )
     }
   }
 
   @Test
   fun `normalized contract version const is enforced by schema and store`() {
-    assertSharedRejected(sharedCheckpoint().copy(contractVersion = "0.1"))
-    assertPlanRejected(planCheckpoint().copy(contractVersion = "0.1"))
+    assertSharedRejected(
+      sharedCheckpoint().copy(contractVersion = "0.1"),
+      InstallFailureCode.GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE,
+    )
+    assertPlanRejected(
+      planCheckpoint().copy(contractVersion = "0.1"),
+      InstallFailureCode.GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE,
+    )
   }
 
   @Test
@@ -71,34 +85,62 @@ class GoalPlanningPreparationStoreSchemaParityTest {
 
   @Test
   fun `normalized planning contract provenance is enforced by schema and store`() {
-    assertSharedRejected(sharedCheckpoint().copy(provenance = provenance().copy(planningContractId = "wrong")))
-    assertSharedRejected(sharedCheckpoint().copy(provenance = provenance().copy(planningContractVersion = "9.9")))
+    assertSharedRejected(
+      sharedCheckpoint().copy(provenance = provenance().copy(planningContractId = "wrong")),
+      InstallFailureCode.GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE,
+    )
+    assertSharedRejected(
+      sharedCheckpoint().copy(provenance = provenance().copy(planningContractVersion = "9.9")),
+      InstallFailureCode.GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE,
+    )
   }
 
   @Test
   fun `normalized phase output provenance is enforced by schema and store`() {
-    assertPlanRejected(planCheckpoint().copy(provenance = provenance().copy(phaseOutputContractId = "wrong")))
-    assertPlanRejected(planCheckpoint().copy(provenance = provenance().copy(phaseOutputContractVersion = "9.9")))
+    assertPlanRejected(
+      planCheckpoint().copy(provenance = provenance().copy(phaseOutputContractId = "wrong")),
+      InstallFailureCode.GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE,
+    )
+    assertPlanRejected(
+      planCheckpoint().copy(provenance = provenance().copy(phaseOutputContractVersion = "9.9")),
+      InstallFailureCode.GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE,
+    )
   }
 
-  private fun assertSharedRejected(violating: SharedGoalPreplanCheckpoint) {
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+  private fun assertSharedRejected(
+    violating: SharedGoalPreplanCheckpoint,
+    storeCode: InstallFailureCode = InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA,
+  ) {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalPlanningPreparationSchemaValidator.validate(sharedEnvelope(violating), "shared")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, it.code) }
     withStore { store ->
-      assertFailsWith<ShellContentContractException> { store.checkpointSharedPreplan(violating) }
-      assertNull(store.findSharedPreplan(identity()))
+      assertEquals(
+        storeCode,
+        assertFailsWith<SkillBillRuntimeException> { store.checkpointSharedPreplan(violating) }.code,
+      )
+      assertNull(assertIs<SharedGoalPreplanLookupResult.Found>(store.findSharedPreplan(identity())).checkpoint)
     }
   }
 
-  private fun assertPlanRejected(violating: GoalSubtaskPlanCheckpoint) {
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+  private fun assertPlanRejected(
+    violating: GoalSubtaskPlanCheckpoint,
+    storeCode: InstallFailureCode = InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA,
+  ) {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalPlanningPreparationSchemaValidator.validate(planEnvelope(violating), "plan")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, it.code) }
     withStore { store ->
       store.checkpointSharedPreplan(sharedCheckpoint())
-      assertFailsWith<ShellContentContractException> { store.checkpointSubtaskPlan(violating) }
-      assertNull(store.findSubtaskPlan(identity(), violating.subtaskId, violating.governedSubSpecPath))
+      assertEquals(
+        storeCode,
+        assertFailsWith<SkillBillRuntimeException> { store.checkpointSubtaskPlan(violating) }.code,
+      )
+      assertNull(
+        assertIs<GoalSubtaskPlanLookupResult.Found>(
+          store.findSubtaskPlan(identity(), violating.subtaskId, violating.governedSubSpecPath),
+        ).plan,
+      )
     }
   }
 
@@ -165,7 +207,7 @@ class GoalPlanningPreparationStoreSchemaParityTest {
       identity = identity(),
       provenance = provenance(),
       payloadSha256 = "c".repeat(64),
-      preplanPayload = "preplan-payload",
+      preplanPayload = payload("preplan"),
     )
 
   private fun planCheckpoint(): GoalSubtaskPlanCheckpoint =
@@ -177,8 +219,12 @@ class GoalPlanningPreparationStoreSchemaParityTest {
       subSpecHash = "d".repeat(64),
       provenance = provenance(),
       payloadSha256 = "e".repeat(64),
-      planPayload = "plan-payload",
+      planPayload = payload("plan"),
     )
+
+  private fun payload(phase: String): String =
+    """{"contract_version":"0.7","phase_id":"$phase","status":"completed",
+    "summary":"planning", "produced_outputs":{"value":"planning prose"}}"""
 
   private fun tempDb(): Path =
     Files.createTempDirectory("runtime-kotlin-goal-planning-preparation-parity").resolve("metrics.db")

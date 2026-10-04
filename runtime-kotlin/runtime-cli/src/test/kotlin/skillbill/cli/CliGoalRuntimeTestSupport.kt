@@ -35,9 +35,9 @@ import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksRequest
 import skillbill.ports.workflow.gitops.model.WorkflowSelectedDiffHunksResult
 import skillbill.ports.workflow.gitops.model.WorkflowWorktreeActivityResult
 import skillbill.workflow.model.WorkflowStatus
-import skillbill.workflow.model.goalreview.GoalObservabilityDiffStat
-import skillbill.workflow.model.goalreview.GoalObservabilitySelectedDiffHunk
-import skillbill.workflow.model.goalreview.GoalObservabilitySelectedDiffHunks
+import skillbill.workflow.model.goalobservability.GoalObservabilityDiffStat
+import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffHunk
+import skillbill.workflow.model.goalobservability.GoalObservabilitySelectedDiffHunks
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
@@ -356,6 +356,7 @@ internal data class GoalCliFixture(
   ): CliRuntimeContext =
     CliRuntimeContext(
       userHome = tempDir.also { installFakeRuntimeMcpBin(it) },
+      repositoryRoot = tempDir,
       environment = isolatedCliEnvironment(tempDir),
       requester = requester,
       workflowGitOperations = workflowGitOperations,
@@ -588,6 +589,7 @@ internal fun goalFixture(
   seedWorkflow: Boolean = true,
 ): GoalCliFixture {
   val tempDir = Files.createTempDirectory("skillbill-cli-goal")
+  installGoalBuildPack(tempDir)
   val parentSpec = tempDir.resolve(".feature-specs/SKILL-901-goal/spec.md")
   Files.createDirectories(parentSpec.parent)
   Files.writeString(
@@ -707,7 +709,8 @@ internal fun planningProjectionOutputs(phaseId: String): String? =
   }
 
 internal fun subtaskSpecText(id: Int): String =
-  "---\nstatus: Pending\n---\n\n# Subtask $id\n\n## Acceptance Criteria\n\n1. Subtask $id delivers its part.\n"
+  "---\nstatus: Pending\n---\n\n# Subtask $id\n\n## Acceptance Criteria\n\n1. Subtask $id delivers its part.\n\n" +
+    "## Implementation Details\n\nPlanned implementation details for subtask $id.\n"
 
 internal object NoopGoalTestAgentRunLauncher : AgentRunLauncher {
   override fun launch(request: AgentRunLaunchRequest): AgentRunLaunchOutcome = error("Unexpected launch")
@@ -715,7 +718,7 @@ internal object NoopGoalTestAgentRunLauncher : AgentRunLauncher {
 
 internal object GoalTestWorkflowGitOperations : WorkflowGitOperationsTestBase() {
   override fun repositoryOwnedPaths(repoRoot: Path): WorkflowGitNameListResult =
-    WorkflowGitNameListResult.Listed(emptyList())
+    WorkflowGitNameListResult.Listed(listOf("Main.kt"))
 
   override fun repositoryFingerprint(repoRoot: Path): WorkflowGitOperationResult =
     WorkflowGitOperationResult.Ok(value = "test-repository-fingerprint")

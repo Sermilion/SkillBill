@@ -5,17 +5,16 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
-import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.model.phase.ValidationFindingSetProjection
 import skillbill.engine.featuretask.persist.workflowArtifactEntryMap
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLauncher
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleTerminalOutcome
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationCommandResult
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
@@ -46,8 +45,10 @@ class FeatureTaskRuntimeValidationGateCoordinator {
     }
 
   companion object {
-    const val ABSENT_VALIDATION_GATE_REASON: String =
-      "No installed platform pack declares validation_gate."
+    private fun invalidValidationEvidence(
+      phaseId: String,
+      reason: String,
+    ): Nothing = throw invalidFeatureTaskRuntimeValidationEvidenceSchema(phaseId, reason)
 
     fun runtimeOwnedValidationOutput(
       phaseId: String,
@@ -62,12 +63,29 @@ class FeatureTaskRuntimeValidationGateCoordinator {
           FeatureTaskRuntimeValidationCommandResult(command, exitCode)
         }
       if (evidence.isEmpty()) {
-        throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(
+        invalidValidationEvidence(
           phaseId,
           "runtime-owned validation evidence has no command results.",
         )
       }
-      FeatureTaskRuntimeValidationEvidence(evidence).requireSuccessfulCommand(requiredCommand, phaseId)
+      val commandEvidence = FeatureTaskRuntimeValidationEvidence(evidence)
+      val terminalResult = commandEvidence.requireSuccessfulResult(phaseId)
+      if (terminalResult.command != requiredCommand) {
+        invalidValidationEvidence(
+          phaseId,
+          "terminal validation command does not match the required verification command.",
+        )
+      }
+      if (measurements.size != evidence.size ||
+        measurements.zip(evidence).any { (measurement, result) ->
+          measurement.command != result.command || measurement.exitCode != result.exitCode
+        }
+      ) {
+        invalidValidationEvidence(
+          phaseId,
+          "validation command results must match the ordered gate run records.",
+        )
+      }
       val gateExecutionEvidence = FeatureTaskRuntimeValidationGateExecutionEvidence.fromGateMeasurements(measurements)
       val validationResult =
         linkedMapOf<String, Any?>().apply {

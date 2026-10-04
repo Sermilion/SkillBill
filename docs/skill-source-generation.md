@@ -260,8 +260,17 @@ standalone `skills_dir` path.
 ### Worked example: the single listed skill
 
 The catalog has one listed skill, `skill-bill`. Its full-run form calls the goal
-runtime directly after its preflight gate, and a missing spec runs
-`skill-bill phase plan`. Its `phase:<name>` forms run `skill-bill phase <name>`
+runtime with requirements prefixed by a supplied key or the next local key
+from `.feature-specs/`, an existing spec key or path, or a tracker reference.
+Local key allocation is the default for requirements without a key and needs
+no tracker connection. The dispatcher searches local specs including ignored files
+and checks repository-matched persisted workflows before fetching a new tracker
+reference through its connected tracker. Existing work resumes without replacing
+its requirements. The runtime prepares a missing
+spec and parent workflow before durable planning; the dispatcher never invokes
+`skill-bill phase plan` on its own.
+Standalone phases and operations are operator tools and require an explicit
+operator request. Its `phase:<name>` forms run `skill-bill phase <name>`
 and its `operation:<name>` forms run `skill-bill operation <name>`; there is no
 feature goal sidecar and no other listed entry. `skill-bill goal status` stays
 CLI-only. An install over an old home removes the retired skills' links and

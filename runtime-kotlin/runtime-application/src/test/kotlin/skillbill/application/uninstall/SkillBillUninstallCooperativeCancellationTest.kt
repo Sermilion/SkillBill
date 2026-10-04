@@ -3,8 +3,8 @@ package skillbill.application.uninstall
 import skillbill.application.scaffold.InstallAgentService
 import skillbill.application.uninstall.model.DesktopRemoval
 import skillbill.application.uninstall.model.UninstallPlan
-import skillbill.install.model.ClaudeMcpProfileFailure
 import skillbill.install.model.McpProfileOutcome
+import skillbill.install.model.McpRegistrationOutcome
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.install.agent.InstallAgentTargetPort
 import skillbill.ports.install.agent.model.ClaudeConfigRootsRequest
@@ -86,9 +86,11 @@ class SkillBillUninstallCooperativeCancellationTest {
           throw UnsupportedOperationException()
 
         override fun unregisterMcp(request: InstallMcpUnregistrationRequest): InstallMcpRegistrationResult =
-          throw ClaudeMcpProfileFailure(
-            "one profile was malformed",
-            listOf(McpProfileOutcome(removedProfile.toFileLocation(), changed = true)),
+          InstallMcpRegistrationResult(
+            McpRegistrationOutcome.ProfilesFailed(
+              "one profile was malformed",
+              listOf(McpProfileOutcome(removedProfile.toFileLocation(), changed = true)),
+            ),
           )
       }
 
@@ -154,6 +156,7 @@ private object StubHostPlatformPort : HostPlatformPort {
 
   override val osName: String = "Linux"
   override val jvmClassPath: String = ""
+  override val javaCommand: String? = null
   override val pathSeparator: String = ":"
 }
 

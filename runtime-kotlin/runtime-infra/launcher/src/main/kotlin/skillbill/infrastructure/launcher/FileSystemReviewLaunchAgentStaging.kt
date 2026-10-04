@@ -1,7 +1,8 @@
 package skillbill.infrastructure.launcher
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.shellcontent.MissingInstalledNativeAgentError
+import skillbill.error.shellcontent.MissingInstalledNativeAgentContext
+import skillbill.error.shellcontent.missingInstalledNativeAgent
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventory
 import skillbill.infrastructure.skills.install.nativeagent.inventory.NativeAgentLinkInventoryEntry
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
@@ -22,12 +23,14 @@ class FileSystemReviewLaunchAgentStaging(
     if (request.logicalWorkerNames.isEmpty()) return
     val provider =
       provider(request.agentId)
-        ?: throw MissingInstalledNativeAgentError(
-          request.logicalWorkerNames.first(),
-          request.agentId,
-          environment.userHome.toString(),
-          "provider does not support native-agent staging",
-          REPAIR_COMMAND,
+        ?: throw missingInstalledNativeAgent(
+          MissingInstalledNativeAgentContext(
+            request.logicalWorkerNames.first(),
+            request.agentId,
+            environment.userHome.toString(),
+            "provider does not support native-agent staging",
+            REPAIR_COMMAND,
+          ),
         )
     val inventory = NativeAgentLinkInventory.read(environment.userHome, emptyList())
     request.logicalWorkerNames.distinct().forEach { logicalName ->
@@ -92,12 +95,14 @@ class FileSystemReviewLaunchAgentStaging(
     reason: String,
     cause: Throwable? = null,
   ): Nothing =
-    throw MissingInstalledNativeAgentError(
-      logicalName,
-      provider.name.lowercase(),
-      path.toString(),
-      reason,
-      REPAIR_COMMAND,
+    throw missingInstalledNativeAgent(
+      MissingInstalledNativeAgentContext(
+        logicalName,
+        provider.name.lowercase(),
+        path.toString(),
+        reason,
+        REPAIR_COMMAND,
+      ),
       cause,
     )
 

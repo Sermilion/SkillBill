@@ -5,13 +5,16 @@ import skillbill.application.diagnostics.RejectedOutputDiagnosticService
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
-import skillbill.engine.InMemoryRuntimeWorkflowRepository
-import skillbill.engine.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimeProducerOutputRead
 import skillbill.engine.featuretask.model.phase.ProducerOutputQueryArgs
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeRejectedOutputWrite
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
-import skillbill.error.core.RejectedOutputDiagnosticError
+import skillbill.engine.featuretask.phase.record.openTestWorkflow
+import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
+import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
+import skillbill.error.core.RejectedOutputDiagnosticFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rejectedOutputDiagnosticPersistenceMessage
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.WorkflowSnapshotValidator
@@ -32,7 +35,7 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
   fun `three repair turns of one attempt each retain their own evidence row`() {
     val database = database()
     val recorder = recorder(database)
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, "session-1")
+    recorder.openTestWorkflow(WORKFLOW_ID, "session-1")
 
     (1..3).forEach { turn ->
       recorder.retainProducerOutput(evidence("turn-$turn".encodeToByteArray(), repairTurn = turn))
@@ -60,7 +63,7 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
   fun `two consecutively rejected repair turns each record a diagnostic`() {
     val database = database()
     val recorder = recorder(database)
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, "session-1")
+    recorder.openTestWorkflow(WORKFLOW_ID, "session-1")
 
     recorder.recordRejectedOutput(rejection("turn-1".encodeToByteArray(), repairTurn = 1))
     recorder.recordRejectedOutput(rejection("turn-2".encodeToByteArray(), repairTurn = 2))
@@ -75,7 +78,7 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
     val lifecycle = RecordingLifecycleTelemetryRepository()
     val database = database(lifecycle)
     val recorder = recorder(database)
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, "session-1")
+    recorder.openTestWorkflow(WORKFLOW_ID, "session-1")
     val retained = "first-bytes".encodeToByteArray()
     recorder.retainProducerOutput(evidence(retained, repairTurn = 1))
 
@@ -113,7 +116,7 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
     val lifecycle = RecordingLifecycleTelemetryRepository(throwOnDiagnosticDegradation = true)
     val database = database(lifecycle)
     val recorder = recorder(database)
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, "session-1")
+    recorder.openTestWorkflow(WORKFLOW_ID, "session-1")
     recorder.retainProducerOutput(evidence("first-bytes".encodeToByteArray(), repairTurn = 1))
 
     recorder.retainProducerOutput(evidence("divergent-bytes".encodeToByteArray(), repairTurn = 1))
@@ -127,9 +130,13 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
   fun `a failing producer-output read is Unreadable persistence rather than Absent`() {
     val lifecycle = RecordingLifecycleTelemetryRepository()
     val database = database(lifecycle)
-    database.producerOutputReadError = RejectedOutputDiagnosticError.Persistence("read-producer-output")
+    database.producerOutputReadError =
+      SkillBillRuntimeException(
+        RejectedOutputDiagnosticFailureCode.PERSISTENCE,
+        rejectedOutputDiagnosticPersistenceMessage("read-producer-output"),
+      )
     val recorder = recorder(database)
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, "session-1")
+    recorder.openTestWorkflow(WORKFLOW_ID, "session-1")
 
     val read =
       recorder.producerOutput(
@@ -147,7 +154,7 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
   fun `a same-identity divergent recordRejectedOutput returns Degraded and no rod token`() {
     val database = database()
     val recorder = recorder(database)
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, "session-1")
+    recorder.openTestWorkflow(WORKFLOW_ID, "session-1")
     val first = recorder.recordRejectedOutput(rejection("first-bytes".encodeToByteArray(), repairTurn = 1))
     val written = assertIs<FeatureTaskRuntimeRejectedOutputWrite.Written>(first)
     assertTrue(written.identity.startsWith("rod_"))
@@ -158,17 +165,32 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
     assertEquals(FeatureTaskRuntimeDiagnosticFailureClass.CONFLICT, degraded.failureClass)
     assertEquals(1, database.rejectedDiagnostics().size)
     assertEquals(committedIdentity, database.rejectedDiagnostics().single().metadata.identity)
+
+    val newGeneration =
+      recorder.recordRejectedOutput(
+        rejection("divergent-bytes".encodeToByteArray(), repairTurn = 1),
+        producerGeneration = 1,
+      )
+    val degradedAtNewGeneration = assertIs<FeatureTaskRuntimeRejectedOutputWrite.Degraded>(newGeneration)
+    assertEquals(FeatureTaskRuntimeDiagnosticFailureClass.CONFLICT, degradedAtNewGeneration.failureClass)
+    assertEquals(1, database.rejectedDiagnostics().size)
+    assertTrue(
+      database.retainedProducerEvidence().none { it.generation == 1 },
+      "producer evidence retained before the diagnostic conflict must roll back with the transaction",
+    )
   }
 
   @Test
   fun `a caller-construction defect still fails loudly instead of degrading`() {
     val database = database()
     val recorder = recorder(database)
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, "session-1")
+    recorder.openTestWorkflow(WORKFLOW_ID, "session-1")
 
-    assertFailsWith<RejectedOutputDiagnosticError.InvalidRequest> {
-      recorder.recordRejectedOutput(rejection(byteArrayOf(1), repairTurn = 1).copy(agentId = ""))
-    }
+    val failure =
+      assertFailsWith<SkillBillRuntimeException> {
+        recorder.recordRejectedOutput(rejection(byteArrayOf(1), repairTurn = 1).copy(agentId = ""))
+      }
+    assertEquals(RejectedOutputDiagnosticFailureCode.INVALID_REQUEST, failure.code)
     assertTrue(recorder.loadDiagnosticSignals(WORKFLOW_ID).isEmpty())
   }
 
@@ -176,7 +198,7 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
   fun `a degraded signal never carries agent bytes`() {
     val database = database()
     val recorder = recorder(database)
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, "session-1")
+    recorder.openTestWorkflow(WORKFLOW_ID, "session-1")
     recorder.retainProducerOutput(evidence("secret-agent-output".encodeToByteArray(), repairTurn = 1))
 
     recorder.retainProducerOutput(evidence("other-secret-output".encodeToByteArray(), repairTurn = 1))
@@ -193,7 +215,7 @@ class FeatureTaskRuntimeDiagnosticDegradationTest {
     val lifecycle = RecordingLifecycleTelemetryRepository()
     val database = database(lifecycle)
     val recorder = recorder(database)
-    recorder.ensureWorkflowOpen(WORKFLOW_ID, "session-1")
+    recorder.openTestWorkflow(WORKFLOW_ID, "session-1")
     val sentinel = "SKILL187-DEGRADE-SENTINEL".encodeToByteArray()
     recorder.recordRejectedOutput(
       rejection(sentinel, repairTurn = 1).copy(

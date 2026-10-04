@@ -9,12 +9,12 @@ import skillbill.application.workflow.model.WorkflowResumeResult
 import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.application.workflow.persist.WorkflowWireProjections
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.mcp.McpToolPayloadKeys
+import skillbill.contracts.telemetry.LifecycleTelemetryPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 
 internal fun WorkflowContinueResult.toMcpMap(): Map<String, Any?> =
   when (this) {
-    is WorkflowContinueResult.Standard -> toStandardMcpMap()
+    is WorkflowContinueResult.Standard -> standardMcpContinueMap(view, dbPath)
     is WorkflowContinueResult.UnknownWorkflow -> toUnknownWorkflowMcpMap()
     is WorkflowContinueResult.Error -> toErrorMcpMap()
     is WorkflowContinueResult.DecompositionStandard,
@@ -47,7 +47,7 @@ internal fun WorkflowOpenResult.toMcpMap(): Map<String, Any?> =
       linkedMapOf(
         SharedPayloadKeys.STATUS to "error",
         SharedPayloadKeys.WORKFLOW_ID to workflowId,
-        McpToolPayloadKeys.ERROR to error,
+        LifecycleTelemetryPayloadKeys.ERROR to error,
       )
   }
 
@@ -73,7 +73,7 @@ internal fun WorkflowUpdateResult.toMcpMap(): Map<String, Any?> =
       linkedMapOf<String, Any?>(
         SharedPayloadKeys.STATUS to "error",
         SharedPayloadKeys.WORKFLOW_ID to workflowId,
-        McpToolPayloadKeys.ERROR to error,
+        LifecycleTelemetryPayloadKeys.ERROR to error,
       ).apply { dbPath?.let { put(WorkflowWirePayloadKeys.DB_PATH, it) } }
   }
 
@@ -88,7 +88,7 @@ internal fun WorkflowGetResult.toMcpMap(): Map<String, Any?> =
       linkedMapOf(
         SharedPayloadKeys.STATUS to "error",
         SharedPayloadKeys.WORKFLOW_ID to workflowId,
-        McpToolPayloadKeys.ERROR to error,
+        LifecycleTelemetryPayloadKeys.ERROR to error,
         WorkflowWirePayloadKeys.DB_PATH to dbPath,
       )
   }
@@ -111,7 +111,7 @@ internal fun WorkflowLatestResult.toMcpMap(): Map<String, Any?> =
     is WorkflowLatestResult.Error ->
       linkedMapOf(
         SharedPayloadKeys.STATUS to "error",
-        McpToolPayloadKeys.ERROR to error,
+        LifecycleTelemetryPayloadKeys.ERROR to error,
         WorkflowWirePayloadKeys.DB_PATH to dbPath,
       )
   }
@@ -127,7 +127,7 @@ internal fun WorkflowResumeResult.toMcpMap(): Map<String, Any?> =
       linkedMapOf(
         SharedPayloadKeys.STATUS to "error",
         SharedPayloadKeys.WORKFLOW_ID to workflowId,
-        McpToolPayloadKeys.ERROR to error,
+        LifecycleTelemetryPayloadKeys.ERROR to error,
         WorkflowWirePayloadKeys.DB_PATH to dbPath,
       )
   }

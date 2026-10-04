@@ -23,7 +23,7 @@ fun learningEntry(record: LearningRecord): LearningEntry =
     sourceFindingId = record.sourceFindingId,
   )
 
-fun learningEntryDto(entry: LearningEntry): LearningEntryDto =
+private fun learningEntryDto(entry: LearningEntry): LearningEntryDto =
   LearningEntryDto(
     reference = entry.reference,
     scope = entry.scope.wireName,
@@ -36,9 +36,9 @@ fun learningEntryDto(entry: LearningEntry): LearningEntryDto =
     sourceFindingId = entry.sourceFindingId,
   )
 
-fun learningEntryDto(record: LearningRecord): LearningEntryDto = learningEntryDto(learningEntry(record))
+internal fun learningEntryDto(record: LearningRecord): LearningEntryDto = learningEntryDto(learningEntry(record))
 
-fun learningAppliedSessionWire(
+private fun learningAppliedSessionWire(
   skillName: String?,
   payloadEntries: List<LearningEntryDto>,
 ): LearningAppliedSessionWire =

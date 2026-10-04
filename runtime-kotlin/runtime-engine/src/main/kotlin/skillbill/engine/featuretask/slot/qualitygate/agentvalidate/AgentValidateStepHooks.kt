@@ -6,7 +6,7 @@ import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 
 internal object AgentValidateStepHooks : PhaseStepHooks {
@@ -14,6 +14,8 @@ internal object AgentValidateStepHooks : PhaseStepHooks {
 }
 
 internal object AgentValidateResumeRules : PhaseResumeRules {
+  override val requiresValidCompletedOutput = true
+
   override fun invalidatesResumedCompletion(
     record: FeatureTaskRuntimePhaseRecord,
     output: () -> FeatureTaskRuntimePhaseOutput?,

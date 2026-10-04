@@ -4,39 +4,40 @@ import me.tatarka.inject.annotations.Inject
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.checkpoint.pruneResetSubtaskCheckpointRefs
 import skillbill.engine.goalrunner.goalRepositoryIdentity
-import skillbill.engine.goalrunner.manifest.replanIntent
-import skillbill.engine.goalrunner.manifest.resetManifest
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.manifest.toAcceptedSubtasks
 import skillbill.engine.goalrunner.manifest.toResetSnapshot
 import skillbill.engine.goalrunner.model.GoalRunnerChildRecoveryDiagnostic
+import skillbill.engine.goalrunner.model.GoalRunnerManifestState
+import skillbill.engine.goalrunner.model.GoalRunnerReconcileGate
 import skillbill.engine.goalrunner.model.GoalRunnerReplanRequest
 import skillbill.engine.goalrunner.model.GoalRunnerReplanResult
 import skillbill.engine.goalrunner.model.GoalRunnerReplanSnapshot
 import skillbill.engine.goalrunner.model.GoalRunnerResetRequest
 import skillbill.engine.goalrunner.model.GoalRunnerResetResult
 import skillbill.engine.goalrunner.model.GoalRunnerResetSnapshot
-import skillbill.engine.goalrunner.persist.DurableChildRecoveryClass
-import skillbill.engine.goalrunner.persist.classifyDurableChild
-import skillbill.engine.goalrunner.persist.recommendedDurableChildRecoveryCommand
+import skillbill.engine.goalrunner.model.GoalRunnerResetSubtaskSnapshot
+import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
+import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanWriteResult
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.status.GoalRunnerStatusDurableReadTracker
 import skillbill.engine.goalrunner.status.GoalRunnerStatusProjectionAssembler
+import skillbill.engine.recovery.DurableChildRecoveryClass
+import skillbill.engine.recovery.classifyDurableChild
+import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerAcceptedSubtask
 import skillbill.model.RepositoryRoot
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
-import skillbill.ports.goalrunner.model.GoalRunnerResetSubtaskSnapshot
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
-import skillbill.ports.goalrunner.runner.model.GoalRunnerManifestState
-import skillbill.ports.goalrunner.runner.model.GoalRunnerReconcileGate
-import skillbill.ports.goalrunner.runner.model.GoalRunnerScopedReplanOptions
-import skillbill.ports.goalrunner.runner.model.GoalRunnerScopedReplanWriteResult
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
+import skillbill.workflow.decomposition.replanIntent
+import skillbill.workflow.decomposition.resetManifest
 import skillbill.workflow.model.DecompositionStatus
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
 
@@ -84,7 +85,7 @@ class GoalRunnerResetReplanCoordinator(
 
   private fun loadResetState(request: GoalRunnerResetRequest): GoalRunnerManifestState? =
     if (request.deleteChildWorkflow) {
-      manifestStore.loadDurableByIssueKey(request.issueKey)?.copy(repoRoot = request.repoRoot)
+      manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)?.copy(repoRoot = request.repoRoot)
     } else {
       manifestStore.loadByIssueKey(request.issueKey, request.repoRoot)
     }
@@ -160,7 +161,7 @@ class GoalRunnerResetReplanCoordinator(
 
   fun replan(request: GoalRunnerReplanRequest): GoalRunnerReplanResult? {
     val loaded =
-      manifestStore.loadDurableByIssueKey(request.issueKey)
+      manifestStore.loadDurableByIssueKey(request.issueKey, request.repoRoot)
         ?: return null
     val selected = requireReplanTarget(loaded.manifest, request)
     requireIdleForScopedReplan(loaded, request)
@@ -175,7 +176,7 @@ class GoalRunnerResetReplanCoordinator(
       if (request.includeSharedPreplan && expectedSharedDigest != null) {
         GoalPlanningIdentity(
           parentGoalWorkflowId = loaded.parentWorkflowId,
-          normalizedIssueKey = loaded.manifest.issueKey.trim().uppercase(),
+          normalizedIssueKey = FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(loaded.manifest.issueKey),
           repositoryIdentity =
             goalRepositoryIdentity(
               request.repoRoot ?: repositoryRoot.path,

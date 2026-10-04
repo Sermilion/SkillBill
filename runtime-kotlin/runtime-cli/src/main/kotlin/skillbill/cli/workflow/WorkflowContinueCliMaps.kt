@@ -1,6 +1,7 @@
 package skillbill.cli.workflow
 
 import skillbill.application.workflow.persist.WorkflowWireProjections
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.payload.WorkflowWirePayloadKeys
 import skillbill.workflow.engine.model.WorkflowContinueView
@@ -26,7 +27,7 @@ internal fun standardContinueMap(
       "Cannot continue workflow until the missing artifacts are restored: " +
       missingArtifacts.joinToString()
   } else {
-    map[SharedPayloadKeys.STATUS] = "ok"
+    map[SharedPayloadKeys.STATUS] = CliPayloadStatus.OK
   }
   return map
 }

@@ -1,8 +1,9 @@
 package skillbill.goalrunner.model
 
-import skillbill.workflow.model.goalreview.GoalObservabilityChangedFileSummary
-import skillbill.workflow.model.goalreview.GoalObservabilityDiffStat
-import skillbill.workflow.model.goalreview.GoalObservabilityEvent
+import skillbill.workflow.model.goalobservability.GoalObservabilityChangedFileSummary
+import skillbill.workflow.model.goalobservability.GoalObservabilityDiffStat
+import skillbill.workflow.model.goalobservability.GoalObservabilityEvent
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 data class GoalRunnerObservabilityRecordRequest(
   val workflowId: String,
@@ -80,7 +81,7 @@ data class GoalObservabilityWorktreeActivity(
 )
 
 data class GoalObservabilityProgressInput(
-  val artifacts: Any,
+  val artifacts: FeatureTaskRuntimeWorkflowArtifactMap,
   val workflowId: String,
   val workflowStatus: String,
   val currentStepId: String,
@@ -88,6 +89,6 @@ data class GoalObservabilityProgressInput(
 )
 
 data class GoalObservabilityRuntimeEventInput(
-  val artifacts: Any,
+  val artifacts: FeatureTaskRuntimeWorkflowArtifactMap,
   val request: GoalRunnerObservabilityRecordRequest,
 )

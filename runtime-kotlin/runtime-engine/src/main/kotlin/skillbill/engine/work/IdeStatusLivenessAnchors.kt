@@ -1,9 +1,10 @@
 package skillbill.engine.work
 
-import skillbill.engine.work.model.IdeStatusWorkflowFamily
+import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.work.model.WorkItem
 import skillbill.ports.workflow.model.WorkflowFamily
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import java.time.Instant
 
 class IdeStatusLivenessAnchors(
@@ -42,7 +43,11 @@ class IdeStatusLivenessAnchors(
     family: IdeStatusWorkflowFamily,
   ): Instant? {
     if (family != IdeStatusWorkflowFamily.FEATURE_GOAL) return null
-    val issueKey = item.issueKey?.trim()?.uppercase()?.takeIf { it.isNotEmpty() } ?: return null
+    val issueKey =
+      item.issueKey
+        ?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey)
+        ?.takeIf { it.isNotEmpty() }
+        ?: return null
     return unitOfWork.workflowStates
       .findGoalChildFeatureTaskCandidates(issueKey, repositoryIdentity)
       .mapNotNull { parseInstantOrNull(it.workflow.updatedAt) }

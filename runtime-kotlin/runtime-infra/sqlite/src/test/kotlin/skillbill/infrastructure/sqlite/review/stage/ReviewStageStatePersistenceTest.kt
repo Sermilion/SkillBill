@@ -1,8 +1,10 @@
 package skillbill.infrastructure.sqlite.review.stage
 
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.infrastructure.sqlite.SQLiteReviewRunCompletenessRepository
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
+import skillbill.infrastructure.sqlite.ensureDatabase
 import skillbill.infrastructure.sqlite.tempDbConnection
 import skillbill.review.model.ParallelReviewMergedFinding
 import skillbill.review.model.ParallelReviewSeverity
@@ -55,12 +57,12 @@ class ReviewStageStatePersistenceTest {
             "WHERE review_run_id = 'rvw-malformed'",
         )
       }
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         repository.fetchStageBoundaries("rvw-malformed")
-      }
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
+      assertFailsWith<SkillBillRuntimeException> {
         repository.fetchFindingVerdicts("rvw-malformed")
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
     }
   }
 

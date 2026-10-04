@@ -73,27 +73,28 @@ internal class SQLiteUnitOfWork(
   private val diagnostics: RuntimeDiagnostics,
   private val workflowSnapshotValidator: WorkflowSnapshotValidator,
   private val runtimeVersion: String,
+  transactionActive: Boolean = false,
 ) : UnitOfWork {
   private val phaseSettlementStore = SqliteFeatureTaskPhaseSettlementStore(connection)
 
-  internal val sessionClock: Clock get() = clock
-  internal val sessionDiagnostics: RuntimeDiagnostics get() = diagnostics
   override val featureTaskPhaseSettlements: FeatureTaskPhaseSettlementRepository = phaseSettlementStore
   override val operationProposals: OperationProposalRepository = SqliteOperationProposalStore(connection)
-  override val reviews: ReviewRepository = SQLiteReviewRepository(connection, clock, runtimeVersion)
+  override val reviews: ReviewRepository = SQLiteReviewRepository(connection, clock, runtimeVersion, diagnostics)
   override val learnings: LearningRepository = SQLiteLearningRepository(connection)
-  override val lifecycleTelemetry: LifecycleTelemetryRepository = LifecycleTelemetryStore(connection, runtimeVersion)
+  override val lifecycleTelemetry: LifecycleTelemetryRepository =
+    LifecycleTelemetryStore(connection, runtimeVersion, diagnostics)
   override val telemetryReconciliation: TelemetryReconciliationRepository =
     SQLiteTelemetryReconciliationRepository(
       connection,
       runtimeVersion,
+      diagnostics,
     )
   override val telemetryOutbox: TelemetryOutboxRepository = TelemetryOutboxStore(connection, runtimeVersion)
   override val workflowStates: WorkflowStateRepository =
-    WorkflowStateStore(connection, clock, workflowSnapshotValidator)
+    WorkflowStateStore(connection, clock, workflowSnapshotValidator, diagnostics, transactionActive)
   override val workList: WorkListRepository = SQLiteWorkListRepository(connection)
   override val goalPlanningPreparations: GoalPlanningPreparationRepository =
-    GoalPlanningPreparationStore(connection)
+    GoalPlanningPreparationStore(connection, diagnostics, transactionActive)
   override val goalRunnerControls: GoalRunnerControlRepository =
     GoalRunnerControlStore(connection)
   override val unaddressedFindings: UnaddressedFindingsRepository = SQLiteUnaddressedFindingsRepository(connection)
@@ -181,18 +182,21 @@ internal class SQLiteUnaddressedFindingsRepository(connection: Connection) : Una
 internal class SQLiteTelemetryReconciliationRepository(
   private val connection: Connection,
   private val runtimeVersion: String,
+  private val diagnostics: RuntimeDiagnostics,
 ) : TelemetryReconciliationRepository {
   override fun reconcileStaleSessions(request: TelemetryReconciliationRequest): TelemetryReconciliationResult =
-    reconcileStaleTelemetrySessions(connection, request, runtimeVersion)
+    reconcileStaleTelemetrySessions(connection, request, diagnostics, runtimeVersion)
 }
 
 internal class SQLiteWorkflowStatsRepository(
   private val connection: Connection,
+  private val diagnostics: RuntimeDiagnostics,
 ) : WorkflowStatsRepository {
-  override fun featureVerifyStats(): FeatureVerifyWorkflowStats = ReviewStatsRuntime.featureVerifyStats(connection)
+  override fun featureVerifyStats(): FeatureVerifyWorkflowStats =
+    ReviewStatsRuntime.featureVerifyStats(connection, diagnostics)
 
   override fun featureTaskRuntimeStats(): FeatureTaskRuntimeWorkflowStats =
-    ReviewStatsRuntime.featureTaskRuntimeStats(connection)
+    ReviewStatsRuntime.featureTaskRuntimeStats(connection, diagnostics)
 
   override fun goalStats(): GoalWorkflowStats = ReviewStatsRuntime.goalStats(connection)
 }
@@ -201,13 +205,14 @@ internal class SQLiteReviewRepository(
   private val connection: Connection,
   clock: Clock,
   private val runtimeVersion: String,
+  private val diagnostics: RuntimeDiagnostics,
 ) : ReviewRepository,
-  WorkflowStatsRepository by SQLiteWorkflowStatsRepository(connection),
+  WorkflowStatsRepository by SQLiteWorkflowStatsRepository(connection, diagnostics),
   ReviewRunCompletenessRepository by SQLiteReviewRunCompletenessRepository(connection, clock) {
   override fun saveAccounting(record: ReviewAccountingRecord) = upsertReviewAccounting(connection, record)
 
   override fun loadAccounting(reviewId: String): ReviewAccountingRecord? =
-    loadReviewAccounting(connection, reviewId, runtimeVersion)
+    loadReviewAccounting(connection, reviewId, runtimeVersion, diagnostics)
 
   override fun saveImportedReview(
     review: ImportedReview,

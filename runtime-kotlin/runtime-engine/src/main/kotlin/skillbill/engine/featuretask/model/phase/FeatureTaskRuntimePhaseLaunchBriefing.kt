@@ -3,7 +3,7 @@ package skillbill.engine.featuretask.model.phase
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_LAUNCH_BRIEFING_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.decodeHandoffEnvelopeFromArtifact
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffEnvelope
@@ -91,7 +91,7 @@ data class FeatureTaskRuntimePhaseLaunchBriefing(
       )
     }
 
-    private fun schemaError(detail: String): Nothing = throw InvalidWorkflowStateSchemaError(detail)
+    private fun schemaError(detail: String): Nothing = throw invalidWorkflowStateSchemaError(detail)
 
     private fun Map<String, Any?>.requireEnvelopeField(key: String): FeatureTaskRuntimeHandoffEnvelope {
       val rawValue = if (containsKey(key)) this[key] else schemaError(missingMessage(key, "object"))

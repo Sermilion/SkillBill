@@ -1,11 +1,11 @@
 package skillbill.application.decomposition
 
-import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
+import skillbill.application.decomposition.model.LoadedDecompositionManifest
+import skillbill.application.decomposition.model.ValidatedDecompositionManifestYaml
+import skillbill.error.shellcontent.invalidDecompositionManifestSchema
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
-import skillbill.ports.workflow.decomposition.runtime.model.LoadedDecompositionManifest
-import skillbill.ports.workflow.decomposition.runtime.model.ValidatedDecompositionManifestYaml
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationFailureCode
 import skillbill.workflow.decomposition.model.DecompositionManifestValidationResult
@@ -38,10 +38,10 @@ fun loadValidatedDecompositionManifestPersistingRepair(
   fileStore.writeTextAtomically(path, loaded.yamlText)
   val persisted = loadValidatedDecompositionManifest(path, fileStore, validator)
   if (persisted.repairEvidence != null) {
-    throw InvalidDecompositionManifestSchemaError(
+    throw invalidDecompositionManifestSchema(
       sourceLabel = path.toString(),
       reason = "repaired YAML did not validate unchanged after persistence.",
-      failureCode = DecompositionManifestValidationFailureCode.REPAIR_LIMIT_EXCEEDED.wireValue,
+      code = DecompositionManifestValidationFailureCode.REPAIR_LIMIT_EXCEEDED,
     )
   }
   return persisted.copy(repairEvidence = repairEvidence)
@@ -58,7 +58,7 @@ internal fun loadValidatedDecompositionManifestOrNull(
     null
   }
 
-fun validateDecompositionManifestYaml(
+private fun validateDecompositionManifestYaml(
   path: Path,
   fileStore: DecompositionManifestStore,
   validator: DecompositionManifestValidator,

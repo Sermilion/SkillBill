@@ -1,12 +1,11 @@
 package skillbill.workflow.taskruntime.phase.task
 
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
+import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY
 import skillbill.workflow.engine.model.WorkflowDefinition
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.taskruntime.artifact.FeatureTaskRuntimeRequiredArtifactPresenceResolver
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimePhaseIds
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_RECORDS_ARTIFACT_KEY
+import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 
 internal object FeatureTaskRuntimePhaseWorkflowGraph {
   val definition: WorkflowDefinition =
@@ -51,7 +50,7 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           WorkflowStatus.ABANDONED,
         ),
       defaultInitialStepId = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN,
-      stepIds = FeatureTaskRuntimePhaseIds.all,
+      stepIds = SkeletonDefinition.FEATURE_RUN_SLOTS.flatMap { it.steps },
       stepLabels =
         mapOf(
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PREPLAN to "Phase 1: Pre-plan",
@@ -59,7 +58,8 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT to "Phase 3: Implement",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_SIMPLIFY to "Phase 3b: Simplify",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to "Phase 4a: Completeness Audit",
-          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to "Phase 4b: Implement Fix",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX to "Phase 4b: Plan Fix",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to "Phase 4c: Implement Fix",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW to "Phase 5: Code Review",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS to "Phase 5a: Verify Findings",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX to "Phase 5b: Implement Fix",
@@ -80,8 +80,14 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
             listOf(
               FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT,
             ),
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX to
+            listOf(
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
+            ),
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to
             listOf(
+              FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX,
               FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT,
               FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_PLAN,
             ),
@@ -138,8 +144,10 @@ internal object FeatureTaskRuntimePhaseWorkflowGraph {
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX to
             "Resume the implement-fix phase from the latest verified findings, reconciling the " +
             "current tree, then persist the validated output.",
+          FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_PLAN_FIX to
+            "Plan each latest audit gap against the current tree without editing, then persist the repair plan.",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT_IMPLEMENT_FIX to
-            "Repair the latest audit findings against the current tree, then return to audit.",
+            "Execute the saved audit repair plan against the current tree, then return to audit.",
           FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_AUDIT to
             "Inspect every planned criterion against current code and tests without editing files. " +
             "Report remaining criteria for the implementation repair step.",

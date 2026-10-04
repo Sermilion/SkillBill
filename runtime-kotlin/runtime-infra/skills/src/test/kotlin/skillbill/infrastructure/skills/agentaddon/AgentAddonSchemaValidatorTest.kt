@@ -1,7 +1,9 @@
 package skillbill.infrastructure.skills.agentaddon
 
-import skillbill.error.shellcontent.InvalidAgentAddonSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class AgentAddonSchemaValidatorTest {
@@ -21,14 +23,16 @@ class AgentAddonSchemaValidatorTest {
       validManifest() + ("description" to ""),
       validManifest() + ("description" to "x".repeat(201)),
     ).forEach { manifest ->
-      assertFailsWith<InvalidAgentAddonSchemaError> { validator.validate(manifest, "fixture") }
+      val error = assertFailsWith<SkillBillRuntimeException> { validator.validate(manifest, "fixture") }
+      assertEquals(AgentAddonFailureCode.INVALID_SCHEMA, error.code)
     }
   }
 
   @Test
   fun `missing canonical schema resource is a typed failure`() {
     val validator = AgentAddonSchemaValidator(AgentAddonSchemaResourceLoader { error("missing") })
-    assertFailsWith<InvalidAgentAddonSchemaError> { validator.validate(validManifest(), "fixture") }
+    val error = assertFailsWith<SkillBillRuntimeException> { validator.validate(validManifest(), "fixture") }
+    assertEquals(AgentAddonFailureCode.INVALID_SCHEMA, error.code)
   }
 
   private fun validManifest(): Map<String, Any?> =

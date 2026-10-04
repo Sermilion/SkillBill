@@ -1,37 +1,43 @@
 package skillbill.engine.goalrunner.planning.recovery
 
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-import skillbill.engine.goalrunner.persist.staleChildPlanningRecoveryCommand
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.engine.recovery.staleChildPlanningRecoveryCommand
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseOutputSchema
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 
 class GoalPlanningRecoveryClassificationTest {
   @Test
-  fun `phase output contract version mismatch classifies as hard reset`() {
+  fun `typed unsupported phase output blocks without destructive reset`() {
     val error =
-      IncompatibleGoalPlanningPreparationRecoveryError(
+      GoalPlanningPreparationConflict(
         workflowId = "wftr-parent",
         subtaskId = 2,
         reason =
           "stored import provenance differs from the hydration request at " +
             "phase_output_contract_version",
+        cause =
+          SkillBillRuntimeException(
+            FeatureTaskRuntimeMigrationFailureCode.SOURCE_UNSUPPORTED,
+            "unsupported version",
+          ),
       )
 
-    assertEquals(GoalPlanningRecoveryKind.HARD_RESET, classifyGoalPlanningRecovery(error))
+    assertEquals(GoalPlanningRecoveryKind.BLOCKED, classifyGoalPlanningRecovery(error))
     val blocked = goalPlanningChildImportConflictBlockedReason("SKILL-200", 2, error)
-    assertContains(blocked, goalPlanningHardResetRemedy("SKILL-200"))
-    assertContains(blocked, FEATURE_TASK_RUNTIME_CONTRACT_VERSION)
+    assertContains(blocked, "Keep the workflow")
+    assertEquals(false, blocked.contains("--hard"))
     assertEquals(false, blocked.contains("goal replan"))
   }
 
   @Test
   fun `regenerated after hydration classifies as scoped replan`() {
     val error =
-      IncompatibleGoalPlanningPreparationRecoveryError(
+      GoalPlanningPreparationConflict(
         workflowId = "wftr-parent",
         subtaskId = 2,
         reason =
@@ -39,6 +45,7 @@ class GoalPlanningRecoveryClassificationTest {
             "and the stored version now fails its projection contract. This occurs when the shared " +
             "preplan or subtask plan was regenerated after the child was hydrated, making the " +
             "previously-imported bytes stale. Projection failure: produced_outputs missing",
+        cause = null,
       )
 
     assertEquals(GoalPlanningRecoveryKind.SCOPED_REPLAN, classifyGoalPlanningRecovery(error))
@@ -48,30 +55,36 @@ class GoalPlanningRecoveryClassificationTest {
   }
 
   @Test
-  fun `phase output schema contract const failure classifies as hard reset via cause`() {
+  fun `phase output schema contract const failure blocks with original state preserved`() {
     val cause =
-      InvalidFeatureTaskRuntimePhaseOutputSchemaError(
+      invalidFeatureTaskRuntimePhaseOutputSchema(
         sourceLabel = "plan",
         reason = "contract_version: must be the constant value '0.4'",
-        payloadFreeReason = "contract_version: must be the constant value '0.4'",
       )
     assertEquals(
-      GoalPlanningRecoveryKind.HARD_RESET,
-      classifyGoalPlanningRecovery("projection failure", cause),
+      GoalPlanningRecoveryKind.BLOCKED,
+      classifyGoalPlanningRecovery(cause),
     )
   }
 
   @Test
-  fun `preparation schema phase output provenance failure classifies as hard reset via cause`() {
+  fun `an untyped cause echoing hard reset remedy text classifies as scoped replan`() {
+    val cause = IllegalStateException("Disk write failed; an earlier note said to hard reset the goal.")
+
+    assertEquals(GoalPlanningRecoveryKind.SCOPED_REPLAN, classifyGoalPlanningRecovery(cause))
+  }
+
+  @Test
+  fun `preparation schema phase output provenance failure blocks with original state preserved`() {
     val cause =
-      InvalidGoalPlanningPreparationSchemaError(
+      invalidGoalPlanningPreparationSchemaError(
         sourceLabel = "wftr-parent",
         fieldPath = "provenance.phase_output_contract_version",
         reason = "must be the constant value '0.4'. Existing workflow state is incompatible; hard-reset it.",
       )
     assertEquals(
-      GoalPlanningRecoveryKind.HARD_RESET,
-      classifyGoalPlanningRecovery("stored preparation failed", cause),
+      GoalPlanningRecoveryKind.BLOCKED,
+      classifyGoalPlanningRecovery(cause),
     )
   }
 }

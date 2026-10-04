@@ -8,6 +8,7 @@ import skillbill.engine.featuretask.slot.reviewStepOutput
 import skillbill.engine.featuretask.slot.state.PhaseLaunchState
 import skillbill.engine.operation.core.ConfirmableOperation
 import skillbill.engine.operation.core.ConfirmedOperationProposal
+import skillbill.engine.operation.core.CurrentOperationAnchors
 import skillbill.engine.operation.core.OperationArguments
 import skillbill.engine.operation.core.OperationConfirmationGate
 import skillbill.engine.operation.core.OperationContext
@@ -17,16 +18,16 @@ import skillbill.engine.operation.core.OperationRegistry
 import skillbill.engine.operation.core.OperationRequest
 import skillbill.engine.operation.core.OperationRunResult
 import skillbill.engine.operation.core.OperationStepRunner
-import skillbill.error.operation.ConsumedOperationTokenError
-import skillbill.error.operation.ForeignOperationTokenError
-import skillbill.error.operation.MovedOperationAnchorsError
-import skillbill.error.operation.ReleaseBranchBehindRemoteError
-import skillbill.error.operation.ReleaseWorktreeDirtyError
-import skillbill.error.operation.SupersededOperationTokenError
-import skillbill.error.operation.UnknownOperationTokenError
+import skillbill.engine.operation.core.anchorsMoved
+import skillbill.engine.operation.core.consumedToken
+import skillbill.engine.operation.core.foreignToken
+import skillbill.engine.operation.core.releaseBranchBehind
+import skillbill.engine.operation.core.releaseWorktreeDirty
+import skillbill.engine.operation.core.supersededToken
+import skillbill.engine.operation.core.unknownToken
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
 import skillbill.infrastructure.sqlite.sqliteSessionFactoryForTests
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.DriverManager
@@ -99,10 +100,7 @@ class ReleaseOperationTest {
     assertEquals(1, runner.directives.size, "confirm must not run the changelog step again")
     assertEquals(CHANGELOG, tagMessage("v1.3.0"))
     assertContains(run(repo, "git", "ls-remote", "--tags", "origin", "v1.3.0"), "refs/tags/v1.3.0")
-    assertEquals(
-      OperationOutcome.Blocked(ConsumedOperationTokenError(proposal.token).message.orEmpty()),
-      release(confirm = proposal.token).outcome,
-    )
+    assertEquals(consumedToken(proposal.token), release(confirm = proposal.token).outcome)
   }
 
   @Test
@@ -122,10 +120,7 @@ class ReleaseOperationTest {
   fun `a dirty worktree stops in pre with no proposal and no tag`() {
     repo.resolve("a.txt").writeText("edited")
 
-    assertEquals(
-      OperationOutcome.Blocked(ReleaseWorktreeDirtyError(repo.toString()).message.orEmpty()),
-      release(bump = "patch").outcome,
-    )
+    assertEquals(releaseWorktreeDirty(repo.toString()), release(bump = "patch").outcome)
     assertTrue(runner.directives.isEmpty())
     assertEquals(0, proposalRowCount())
     assertEquals("", run(repo, "git", "tag", "--list", "v1.2.4"))
@@ -139,10 +134,7 @@ class ReleaseOperationTest {
     commit(other, "c.txt", "fix: remote only")
     run(other, "git", "push", "--quiet", "origin", "main")
 
-    assertEquals(
-      OperationOutcome.Blocked(ReleaseBranchBehindRemoteError("main").message.orEmpty()),
-      release(bump = "patch").outcome,
-    )
+    assertEquals(releaseBranchBehind("main"), release(bump = "patch").outcome)
     assertTrue(runner.directives.isEmpty())
     assertEquals(0, proposalRowCount())
     assertEquals("", run(repo, "git", "tag", "--list", "v1.2.4"))
@@ -153,19 +145,11 @@ class ReleaseOperationTest {
     val superseded = assertIs<OperationOutcome.AwaitingConfirmation>(release(bump = "patch").outcome)
     val current = assertIs<OperationOutcome.AwaitingConfirmation>(release(bump = "patch").outcome)
 
-    assertEquals(
-      OperationOutcome.Blocked(SupersededOperationTokenError(superseded.token).message.orEmpty()),
-      release(confirm = superseded.token).outcome,
-    )
-    assertEquals(
-      OperationOutcome.Blocked(UnknownOperationTokenError("opt-missing").message.orEmpty()),
-      release(confirm = "opt-missing").outcome,
-    )
+    assertEquals(supersededToken(superseded.token), release(confirm = superseded.token).outcome)
+    assertEquals(unknownToken("opt-missing"), release(confirm = "opt-missing").outcome)
 
     assertEquals(
-      OperationOutcome.Blocked(
-        ForeignOperationTokenError(current.token, OtherConfirmableOperation.id, repo.toString()).message.orEmpty(),
-      ),
+      foreignToken(current.token, OtherConfirmableOperation.id, repo.toString()),
       executorWithOtherOperation.execute(
         OperationRequest(
           operationId = OtherConfirmableOperation.id,
@@ -181,18 +165,14 @@ class ReleaseOperationTest {
     run(root, "git", "clone", origin.toString(), otherRepo.toString())
     configure(otherRepo)
     assertEquals(
-      OperationOutcome.Blocked(
-        ForeignOperationTokenError(current.token, "release", otherRepo.toString()).message.orEmpty(),
-      ),
+      foreignToken(current.token, "release", otherRepo.toString()),
       release(confirm = current.token, repoRoot = otherRepo).outcome,
     )
 
     commit(repo, "c.txt", "feat: after the proposal")
     run(repo, "git", "push", "--quiet", "origin", "main")
     assertEquals(
-      OperationOutcome.Blocked(
-        MovedOperationAnchorsError(current.token, listOf("HEAD", "remote_head")).message.orEmpty(),
-      ),
+      anchorsMoved(current.token, listOf("HEAD", "remote_head")),
       release(confirm = current.token).outcome,
     )
     assertEquals("", run(repo, "git", "tag", "--list", "v1.2.4"))
@@ -268,7 +248,8 @@ class ReleaseOperationTest {
     override fun run(context: OperationContext): OperationRunResult =
       OperationRunResult.Finished(OperationOutcome.Completed(id))
 
-    override fun currentAnchors(context: OperationContext): Map<String, String> = emptyMap()
+    override fun currentAnchors(context: OperationContext): CurrentOperationAnchors =
+      CurrentOperationAnchors.Read(emptyMap())
 
     override fun execute(
       context: OperationContext,

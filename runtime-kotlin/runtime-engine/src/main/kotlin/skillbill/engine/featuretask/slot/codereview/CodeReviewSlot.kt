@@ -1,40 +1,36 @@
 package skillbill.engine.featuretask.slot.codereview
 
-import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimeRunInvariantPromptAllowlist
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeCurrentPhaseExecutionContext
-import skillbill.engine.featuretask.phase.core.attemptPhaseExecution
-import skillbill.engine.featuretask.phase.core.defaultPhaseExecution
 import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhasePromptComposeInputs
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeOutputVerification
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeStepVerdictRule
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
+import skillbill.engine.featuretask.slot.PhaseExecutionBindingKind
 import skillbill.engine.featuretask.slot.PhaseLoopRules
 import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStepHooks
 import skillbill.engine.featuretask.slot.PhaseStepInput
 import skillbill.engine.featuretask.slot.PhaseStrategy
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptScope
 import skillbill.engine.featuretask.slot.attempt.policyOf
 import skillbill.engine.featuretask.slot.attempt.promptSource
 import skillbill.engine.featuretask.slot.attempt.runAgentStep
+import skillbill.engine.featuretask.slot.codereview.history.CodeReviewHistory
 import skillbill.engine.featuretask.slot.codereview.verify.VerifyFindingsStep
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
+import skillbill.engine.featuretask.slot.state.PhaseVerifyFindingsStepBinding
 import skillbill.engine.featuretask.slot.stepFacts
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecution
-import skillbill.engine.work.model.IdeStatusCurrentPhaseExecutionKind
 import skillbill.error.featuretask.UnknownPhaseStepError
+import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInput
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
-import skillbill.workflow.model.WorkflowStepStatus
-import skillbill.workflow.model.workflowStepStatus
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
@@ -58,8 +54,8 @@ internal interface CodeReviewPass {
     input: GoalSubtaskReviewInput,
     reviewRunId: String,
     runner: PhaseRunner,
-    state: PhaseStepState,
-  ): ParallelCodeReviewResult
+    state: PhaseReviewStepBinding,
+  ): ParallelCodeReviewRunOutcome
 }
 
 internal class CodeReviewSlot(
@@ -80,6 +76,14 @@ internal class CodeReviewSlot(
   val entryStep: String = FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW
   val loopRules: PhaseLoopRules = InlineReviewLoopRules
 
+  fun executionBindingKind(stepId: String): PhaseExecutionBindingKind =
+    when (stepId) {
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> PhaseExecutionBindingKind.REVIEW
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> PhaseExecutionBindingKind.FINDING_VERIFICATION
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> PhaseExecutionBindingKind.REPAIR_RECEIPT
+      else -> throw UnknownPhaseStepError(stepId)
+    }
+
   fun policyFor(stepId: String): PhaseStepPolicy = policies.policyOf(stepId)
 
   fun directiveFor(stepId: String): String =
@@ -98,10 +102,9 @@ internal class CodeReviewSlot(
   ): PhaseStepPromptSections =
     when (stepId) {
       FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW ->
-        InlineReviewPromptSections.review(stepId, inputs, pass.directive)
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS ->
-        InlineReviewPromptSections.verifyFindings(stepId)
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> InlineReviewPromptSections.implementFix(stepId)
+        InlineReviewPromptSections.review(inputs, pass.directive)
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> InlineReviewPromptSections.verifyFindings()
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> InlineReviewPromptSections.implementFix()
       else -> throw UnknownPhaseStepError(stepId)
     }
 
@@ -120,19 +123,32 @@ internal class CodeReviewSlot(
   fun runStep(
     strategy: PhaseStrategy,
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome =
     when (run.phaseId) {
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW ->
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW -> {
+        val reviewBinding =
+          state as? PhaseReviewStepBinding
+            ?: error("Review step requires a review execution binding.")
         review.run(
           run,
-          PhaseAttemptScope(run.request, state),
-          state,
+          reviewBinding.reviewExecutionContext(),
+          reviewBinding,
           strategy.promptSource(run.phaseId),
         )
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS,
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
-      -> strategy.runAgentStep(run, state)
+      }
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> {
+        check(state is PhaseVerifyFindingsStepBinding) {
+          "Verify findings step requires a finding-verification binding."
+        }
+        strategy.runAgentStep(run, state)
+      }
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX -> {
+        check(state is PhaseImplementFixStepBinding) {
+          "Implement fix step requires an implement-fix binding."
+        }
+        strategy.runAgentStep(run, state)
+      }
       else -> throw UnknownPhaseStepError(run.phaseId)
     }
 
@@ -162,43 +178,7 @@ internal class CodeReviewSlot(
   fun currentExecution(
     stepId: String,
     context: FeatureTaskRuntimeCurrentPhaseExecutionContext,
-  ): IdeStatusCurrentPhaseExecution? =
-    when (stepId) {
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_REVIEW ->
-        activeReviewPassNumber(context.records[stepId], context.ledger)?.let { pass ->
-          IdeStatusCurrentPhaseExecution(
-            phaseId = stepId,
-            kind = IdeStatusCurrentPhaseExecutionKind.PASS,
-            count = pass,
-          )
-        } ?: attemptPhaseExecution(stepId, context)
-      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VERIFY_FINDINGS -> attemptPhaseExecution(stepId, context)
-      else -> defaultPhaseExecution(stepId, context)
-    }
-
-  private fun activeReviewPassNumber(
-    record: FeatureTaskRuntimePhaseRecord?,
-    ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
-  ): Int? {
-    val pass = record?.reviewPassNumber ?: return null
-    if (record.status.workflowStepStatus() != WorkflowStepStatus.COMPLETED) return pass
-    val latestReviewFixEdge =
-      ledger
-        .filter {
-          it.action == FeatureTaskRuntimePhaseLedgerAction.LOOP_EDGE &&
-            it.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID &&
-            it.edgeIteration != null
-        }
-        .maxByOrNull { it.sequenceNumber }
-    val ledgerEdge = latestReviewFixEdge?.edgeIteration
-    val reenteredReview =
-      record.takeIf {
-        it.loopId == FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID
-      }?.edgeIteration
-    return ledgerEdge?.let { edge ->
-      reenteredReview?.takeIf { it >= edge }
-    }?.let { pass }
-  }
+  ): IdeStatusCurrentPhaseExecution? = CodeReviewHistory.currentExecution(stepId, context)
 }
 
 internal fun reviewStepInput(

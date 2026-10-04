@@ -102,7 +102,7 @@ class CliGoalSharedPreplanReplanTest {
       }
     launcher.childLaunches.clear()
     val relaunch = CliRuntime.run(fixture.goalCommand(), fixture.context(launcher = launcher))
-    assertEquals(0, relaunch.exitCode, relaunch.stdout)
+    assertEquals(0, relaunch.exitCode, relaunch.stdout + relaunch.stderr)
     assertEquals(listOf(3), launcher.childLaunches.map { it.skillRunRequest.subtaskId })
     val planningAfter =
       launcher.requests.count {

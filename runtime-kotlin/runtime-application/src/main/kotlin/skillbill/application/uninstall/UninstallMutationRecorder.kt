@@ -15,6 +15,14 @@ internal class UninstallMutationRecorder(
     failures += "$description: ${error.message.orEmpty()}"
   }
 
+  fun recordFailure(
+    description: String,
+    detail: String,
+  ) {
+    diagnostics.error("uninstall mutation failed: $description")
+    failures += "$description: $detail"
+  }
+
   fun failed(): Boolean = failures.isNotEmpty()
 
   fun failureMessages(): List<String> = failures.toList()

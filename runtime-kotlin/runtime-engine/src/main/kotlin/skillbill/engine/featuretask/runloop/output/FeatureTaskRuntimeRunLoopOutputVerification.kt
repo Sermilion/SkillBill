@@ -5,15 +5,14 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.checkpoint.goalScopedBaselinePaths
 import skillbill.engine.featuretask.lifecycle.continuation.matches
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeImplementationContinuation
-import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssembler
+import skillbill.engine.featuretask.phase.briefing.FeatureTaskRuntimePhaseBriefingAssemblyResult
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimeImplementationObligations
-import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseGates
 import skillbill.engine.featuretask.phase.core.FeatureTaskRuntimePhaseSafetyPolicy
 import skillbill.engine.featuretask.phase.core.featureTaskRuntimeImplementationContinuationFrom
-import skillbill.engine.featuretask.phase.planning.producerProjectionGateReason
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeSharedReviewEvidenceResolver
+import skillbill.engine.featuretask.runloop.attempt.settlementCoupling
 import skillbill.engine.featuretask.runloop.checkpoint.goalStartBaselinePaths
 import skillbill.engine.featuretask.runloop.core.AttemptResult
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
@@ -33,33 +32,31 @@ import skillbill.engine.featuretask.runloop.core.isFeatureSpecPathForIssue
 import skillbill.engine.featuretask.runloop.core.reconcileCheckpointPathInventory
 import skillbill.engine.featuretask.runloop.observability.completedEvent
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
+import skillbill.engine.featuretask.runloop.state.coupledRunTransitions
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.runner.boundedSchemaGateDetail
-import skillbill.engine.featuretask.runner.mutatingReconciliationGateReason
 import skillbill.engine.featuretask.runner.phaseDeclaration
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
-import skillbill.engine.featuretask.slot.attempt.stepHooks
+import skillbill.engine.featuretask.slot.attempt.PhaseAttemptPlanAuthorization
+import skillbill.engine.featuretask.slot.attempt.PhaseOutputSettlementContext
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
-import skillbill.engine.goalrunner.status.completed
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
+import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
+import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpoint
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffAssemblyRequest
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimeHandoffAssemblyRequest
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeHandoffSourceRef
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputFormat
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairOperation
-import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputSourceLocation
 
 object FeatureTaskRuntimeRunLoopOutputVerification {
   internal fun implementationObligations(run: PhaseRun): FeatureTaskRuntimeImplementationObligations =
@@ -83,66 +80,50 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
   }
 
   internal fun completionProjectionRejection(
-    context: PhaseAttemptEnvironment,
+    context: PhaseOutputSettlementContext,
     args: CompletionProjectionRejectionArgs,
   ): Pair<String, String>? =
-    with(context) {
-      producerProjectionGateReason(
-        args.run.phaseId,
-        args.normalizedOutput.envelopeWireMap(),
-        phaseGates.planningProjectionValidator,
-      )?.let { "producer-projection" to it }
-        ?: FeatureTaskRuntimeRunLoopOutputVerification
+    (context as? PhaseAttemptPlanAuthorization)
+      ?.let { planAuthorization ->
+        FeatureTaskRuntimeRunLoopOutputVerification
           .immediateConsumerProjectionGateReason(
             context = context,
+            planAuthorization = planAuthorization,
             args = args,
           )?.let { "consumer-projection" to it }
-    }
-
-  internal fun firstValidatedOutputRejection(
-    phaseId: String,
-    mutating: Boolean,
-    outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
-  ): Pair<String, String>? =
-    mutatingReconciliationGateReason(
-      phaseId,
-      mutating,
-      outputMap,
-    )?.let { "mutating-reconciliation" to it }
+      }
 
   internal fun immediateConsumerProjectionGateReason(
-    context: PhaseAttemptEnvironment,
+    context: PhaseOutputSettlementContext,
+    planAuthorization: PhaseAttemptPlanAuthorization,
     args: CompletionProjectionRejectionArgs,
   ): String? {
     with(context) {
       val run = args.run
-      val iteration = args.iteration
-      val normalizedOutput = args.normalizedOutput
-      val repairEvidence = args.repairEvidence
-      val repositoryFingerprint = args.repositoryFingerprint
-      if (!stepHooks(run).checksImmediateConsumerProjection) return null
+      if (!args.checksImmediateConsumerProjection) return null
       if (run.validationGateFindings != null) return null
-      val producerIndex = transitions.forwardPhaseIds.indexOf(run.phaseId)
-      if (producerIndex < 0 || producerIndex == transitions.forwardPhaseIds.lastIndex) return null
-      val consumerPhaseId = transitions.forwardPhaseIds[producerIndex + 1]
+      val producerIndex = transitionDeclaration.forwardPhaseIds.indexOf(run.phaseId)
+      if (producerIndex < 0 || producerIndex == transitionDeclaration.forwardPhaseIds.lastIndex) return null
+      val consumerPhaseId = transitionDeclaration.forwardPhaseIds[producerIndex + 1]
       val declaration =
         phaseDeclaration(
           consumerPhaseId,
           run.request.runInvariants.featureSize,
-          unselectedStepIds(),
+          planAuthorization.unselectedStepIds(),
         )
       val currentOutput =
         FeatureTaskRuntimePhaseOutput(
           phaseId = run.phaseId,
-          iteration = iteration,
-          payload = normalizedOutput.canonicalJson,
-          normalizedOutput = normalizedOutput,
-          repairEvidence = repairEvidence,
+          iteration = args.iteration,
+          payload = args.normalizedOutput.canonicalJson,
+          normalizedOutput = args.normalizedOutput,
+          repairEvidence = args.repairEvidence,
         )
-      val outputs = state.outputs().filterNot { it.phaseId == run.phaseId } + currentOutput
+      val outputs = progress.outputs().filterNot { it.phaseId == run.phaseId } + currentOutput
+      val sessionObservations = settlementCoupling().sessionObservations
       val resolvedFingerprint =
-        repositoryFingerprint?.takeIf(String::isNotBlank)
-          ?: phaseGates.gitOperations
+        args.repositoryFingerprint?.takeIf(String::isNotBlank)
+          ?: gitOperations
             .repositoryFingerprint(run.request.repoRoot)
             .value
             .takeIf(String::isNotBlank)
@@ -157,7 +138,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
             recordedOutputs = outputs,
             repositoryCheckpoint = checkpoint,
             expectedRepositoryCheckpoint = checkpoint,
-            branchIdentity = session.resolvedBranch,
+            branchIdentity = sessionObservations.resolvedBranch,
             baseBranch =
               recorder
                 .loadResolvedBranch(run.request.workflowId)
@@ -165,23 +146,27 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
                 ?: "main",
           ),
         )
-      return try {
-        FeatureTaskRuntimePhaseBriefingAssembler.assemble(
-          handoff,
-          run.request.workflowId,
-          phaseGates.planningProjectionValidator,
-          run.request.agentAddonSelection,
-        )
-        null
-      } catch (error: InvalidFeatureTaskRuntimeHandoffProjectionError) {
-        "Phase '${run.phaseId}' reported 'completed' but its output cannot satisfy immediate consumer " +
-          "'$consumerPhaseId': ${boundedSchemaGateDetail(error.message.orEmpty())}"
+      return when (
+        val assembly =
+          FeatureTaskRuntimePhaseBriefingAssembler.assemble(
+            handoff,
+            run.request.workflowId,
+            run.request.agentAddonSelection,
+          )
+      ) {
+        is FeatureTaskRuntimePhaseBriefingAssemblyResult.Accepted -> null
+        is FeatureTaskRuntimePhaseBriefingAssemblyResult.Rejected ->
+          "Phase '${run.phaseId}' reported 'completed' but its output cannot satisfy immediate consumer " +
+            "'$consumerPhaseId': ${boundedSchemaGateDetail(
+              invalidFeatureTaskRuntimeHandoffProjection(assembly.context).message.orEmpty(),
+            )}"
       }
     }
   }
 
   internal fun resolveSharedReviewEvidence(
-    phaseGates: FeatureTaskRuntimePhaseGates,
+    sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
+    diffResolver: DiffResolverPort,
     run: PhaseRun,
     checkpoint: FeatureTaskRuntimeRepositoryCheckpoint?,
   ): FeatureTaskRuntimeSharedReviewEvidenceResolved? {
@@ -191,8 +176,8 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       }
     if (!declared) return null
     return FeatureTaskRuntimeSharedReviewEvidenceResolver(
-      phaseGates.sharedEvidenceResolver,
-      phaseGates.diffResolver,
+      sharedEvidenceResolver,
+      diffResolver,
     ).resolve(run.request.repoRoot, run.request.workflowId, checkpoint, run.phaseId)
   }
 
@@ -209,8 +194,8 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     }
 
   internal fun terminalOutputAttempt(
-    request: FeatureTaskRuntimeRunFacts,
-    state: FeatureTaskRuntimeRunState,
+    progress: FeatureTaskRuntimeProgressSnapshotAccess,
+    loopTransitions: FeatureTaskRuntimeRunTransitionOwner,
     recorder: PhaseRunRecords,
     args: TerminalOutputAttemptArgs,
     blockedDisposition: FeatureTaskRuntimeFailureDisposition,
@@ -228,82 +213,31 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         outputMap,
         blockedDisposition,
       )
-    return if (
-      disposition.retryOnResume &&
-      run.policy.relaunchOnInvalidOutput
-    ) {
-      val producedOutputs = outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS] as? Map<*, *>
-      val value = producedOutputs?.get(SharedPayloadKeys.VALUE) as? String
-      val continuationOutput = normalizedOutput.takeIf { run.policy.mutating && !value.isNullOrBlank() }
-      AttemptResult.retryableTerminal(reason, fileManifest, disposition, continuationOutput)
-    } else {
-      AttemptResult.settled(
-        FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-          request,
-          state,
-          recorder,
-          observability,
-          PhaseBlockRequest(
-            run = run,
-            attemptCount = iteration,
-            reason = reason,
-            observability = observability,
-            payload = BlockAndPersistPayload(fileManifest = fileManifest, normalizedOutput = normalizedOutput),
-            failureDisposition = disposition,
-          ),
-        ),
-      )
+    if (disposition.retryOnResume && !run.policy.singleAgentSession) {
+      val value = (outputMap[SharedPayloadKeys.PRODUCED_OUTPUTS] as? Map<*, *>)?.get(SharedPayloadKeys.VALUE)
+      val continuationOutput =
+        normalizedOutput.takeIf { run.policy.mutating && !(value as? String).isNullOrBlank() }
+      return AttemptResult.RetryableTerminal(reason, fileManifest, disposition, normalizedOutput, continuationOutput)
     }
-  }
-
-  internal fun structuralRepairEvidenceFromSchemaError(
-    error: InvalidFeatureTaskRuntimePhaseOutputSchemaError,
-  ): FeatureTaskRuntimePhaseOutputRepairEvidence? {
-    val originalDigest = error.structuralRepairOriginalDigest
-    val repairedDigest = error.structuralRepairRepairedDigest
-    val format = error.structuralRepairFormat
-    val operation = error.structuralRepairOperation
-    val sourceLabel = error.structuralRepairSourceLabel
-    val sourceOffset = error.structuralRepairSourceOffset
-    val sourceLine = error.structuralRepairSourceLine
-    val sourceColumn = error.structuralRepairSourceColumn
-    if (
-      listOf(
-        originalDigest,
-        repairedDigest,
-        format,
-        operation,
-        sourceLabel,
-        sourceOffset,
-        sourceLine,
-        sourceColumn,
-      ).any { it == null }
-    ) {
-      return null
-    }
-    return FeatureTaskRuntimePhaseOutputRepairEvidence(
-      format =
-        FeatureTaskRuntimePhaseOutputFormat.fromWire(
-          requireNotNull(format),
+    return AttemptResult.settled(
+      FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
+        progress,
+        loopTransitions,
+        recorder,
+        PhaseBlockRequest(
+          run = run,
+          attemptCount = iteration,
+          reason = reason,
+          observability = observability,
+          payload = BlockAndPersistPayload(fileManifest = fileManifest, normalizedOutput = normalizedOutput),
+          failureDisposition = disposition,
         ),
-      originalDigest = requireNotNull(originalDigest),
-      repairedDigest = requireNotNull(repairedDigest),
-      operation =
-        FeatureTaskRuntimePhaseOutputRepairOperation.fromWire(
-          requireNotNull(operation),
-        ),
-      sourceLocation =
-        FeatureTaskRuntimePhaseOutputSourceLocation(
-          sourceLabel = requireNotNull(sourceLabel),
-          offset = requireNotNull(sourceOffset),
-          line = requireNotNull(sourceLine),
-          column = requireNotNull(sourceColumn),
-        ),
+      ),
     )
   }
 
   internal fun persistAcceptedOutput(
-    context: PhaseAttemptEnvironment,
+    context: PhaseOutputSettlementContext,
     args: PersistAcceptedOutputArgs,
   ): AttemptResult {
     with(context) {
@@ -351,11 +285,11 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
   ): FeatureTaskRuntimeRepositoryCheckpoint? {
     val run = args.run
     val resolvedBranchRecord = args.recorder.loadResolvedBranch(run.request.workflowId)
-    args.session.transitionResolvedBranch(resolvedBranchRecord?.branch)
+    args.coupledRunTransitions.observeResolvedBranchForCheckpoint(resolvedBranchRecord?.branch)
     val goalReviewState = args.goalContinuationRecorder.reviewState(run.request.workflowId)
     val revisions =
       FeatureTaskRuntimeRunLoopOutputVerification.resolveCheckpointRevisions(
-        args.phaseGates,
+        args.gitOperations,
         run = run,
         headRevision = resolvedBranchRecord?.branch?.takeIf(String::isNotBlank) ?: "HEAD",
         baseRevision = goalReviewState?.reviewBaseSha ?: resolvedBranchRecord?.reviewBaseSha,
@@ -374,7 +308,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         revisions = revisions,
       ) ?: return null
     val fingerprint =
-      args.phaseGates.gitOperations
+      args.gitOperations
         .repositoryCheckpointFingerprint(
           run.request.repoRoot,
           revisions.base,
@@ -400,7 +334,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     val run = args.run
     val workingTreePaths =
       FeatureTaskRuntimeRunLoopOutputVerification.checkpointOwnedPaths(
-        args.phaseGates,
+        args.gitOperations,
         run,
         baselineOwnedPaths,
       ) ?: return null
@@ -408,7 +342,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       revisions.base
         ?.let { base ->
           (
-            args.phaseGates.gitOperations
+            args.gitOperations
               .runtimePhaseChangedPathsBetweenCommits(run.request.repoRoot, base, revisions.head)
               as? WorkflowGitNameListResult.Listed
           )?.names
@@ -440,18 +374,18 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
   }
 
   internal fun resolveCheckpointRevisions(
-    phaseGates: FeatureTaskRuntimePhaseGates,
+    gitOperations: WorkflowGitOperations,
     run: PhaseRun,
     headRevision: String,
     baseRevision: String?,
   ): CheckpointRevisions? {
     val immutableHead =
-      phaseGates.gitOperations
+      gitOperations
         .resolveCommit(run.request.repoRoot, headRevision)
         .takeIf { it is WorkflowGitOperationResult.Ok }
         ?.value
         ?.takeIf(String::isNotBlank)
-        ?: phaseGates.gitOperations
+        ?: gitOperations
           .headCommitSha(run.request.repoRoot)
           .takeIf { it is WorkflowGitOperationResult.Ok }
           ?.value
@@ -459,7 +393,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
         ?: return null
     val immutableBase =
       baseRevision?.let { revision ->
-        phaseGates.gitOperations
+        gitOperations
           .resolveCommit(run.request.repoRoot, revision)
           .takeIf { it is WorkflowGitOperationResult.Ok }
           ?.value
@@ -471,11 +405,11 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
   }
 
   internal fun checkpointOwnedPaths(
-    phaseGates: FeatureTaskRuntimePhaseGates,
+    gitOperations: WorkflowGitOperations,
     run: PhaseRun,
     baselineOwnedPaths: List<String>,
   ): List<String>? {
-    val owned = phaseGates.gitOperations.repositoryOwnedPaths(run.request.repoRoot)
+    val owned = gitOperations.repositoryOwnedPaths(run.request.repoRoot)
     if (owned !is WorkflowGitNameListResult.Listed) return null
     val baseline = baselineOwnedPaths.toSet()
     val paths =
@@ -509,7 +443,7 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
     )
 
   internal fun persistStandardAcceptedOutput(
-    context: PhaseAttemptEnvironment,
+    context: PhaseOutputSettlementContext,
     args: PersistStandardAcceptedOutputArgs,
   ): AttemptResult? {
     with(context) {
@@ -522,38 +456,50 @@ object FeatureTaskRuntimeRunLoopOutputVerification {
       val fileManifest = accepted.fileManifest
       val repositoryFingerprint = accepted.repositoryFingerprint
       val outputText = args.outputText
-      val persisted =
-        recorder.recordCompletedPhase(
-          FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
-            request,
-            state,
-            goalContinuationRecorder,
-            PhaseStateRequestArgs(
-              write =
-                PhaseStateWriteArgs(
-                  run = run,
-                  iteration = iteration,
-                  status = STATUS_COMPLETED,
-                  finished = true,
-                  outputArtifact = outputText,
-                ),
-              extras =
-                PhaseStateRequestAttachments(
-                  fileManifest = fileManifest,
-                  normalizedOutput = normalizedOutput,
-                  repairEvidence = repairEvidence,
-                  repositoryFingerprint = repositoryFingerprint,
-                ),
-            ),
+      val phaseState =
+        FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
+          request,
+          context.settlementCoupling().progress,
+          goalContinuationRecorder,
+          PhaseStateRequestArgs(
+            write =
+              PhaseStateWriteArgs(
+                run = run,
+                iteration = iteration,
+                status = STATUS_COMPLETED,
+                finished = true,
+                outputArtifact = outputText,
+              ),
+            extras =
+              PhaseStateRequestAttachments(
+                fileManifest = fileManifest,
+                normalizedOutput = normalizedOutput,
+                repairEvidence = repairEvidence,
+                repositoryFingerprint = repositoryFingerprint,
+              ),
           ),
         )
+      val inMemoryOutput =
+        FeatureTaskRuntimePhaseOutput(
+          run.phaseId,
+          iteration,
+          outputText,
+          normalizedOutput,
+          repairEvidence,
+        )
+      val persisted =
+        coupledRunTransitions.persistAuthoritativePhaseCompletion(
+          recorder = recorder,
+          phaseState = phaseState,
+          inMemoryOutput = inMemoryOutput,
+        )
       if (!persisted) {
+        val blockCoupling = context.settlementCoupling()
         return AttemptResult.settled(
           FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-            request,
-            state,
+            blockCoupling.progress,
+            blockCoupling.transitions,
             recorder,
-            observability,
             PhaseBlockRequest(
               run = run,
               attemptCount = iteration,

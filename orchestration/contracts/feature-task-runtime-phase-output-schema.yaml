@@ -1,51 +1,14 @@
-# Feature-task-runtime per-phase output schema (canonical source of truth).
-#
-# This file describes the structured output every phase of the experimental
-# `feature-task-runtime` pipeline must emit before the runtime advances to the
-# next phase. It is authored in YAML for human readability and consumed as a
-# JSON Schema (Draft 2020-12) by the Kotlin runtime
-# (`FeatureTaskRuntimePhaseOutputSchemaValidator` in `runtime-infra-fs`).
-#
-# Why this exists:
-#
-# - The runtime raises the per-phase progression gate from PRESENCE to
-#   VALIDITY: a phase cannot complete or advance unless its output validates
-#   against this schema. Empty (`{}`), malformed, or partially-filled output
-#   blocks the run loudly with the offending phase id.
-#
-# What lives here vs. in Kotlin:
-#
-# - This file defines the REQUIRED-VS-OPTIONAL fields and VALUE-LEVEL
-#   constraints of a single phase's output envelope — anything expressible in
-#   pure JSON Schema (non-empty strings, enums, the pinned contract version).
-# - The phase DAG, the three handoff layers, and latest-iteration selection
-#   are pure-domain concerns and live in
-#   `skillbill.workflow.taskruntime` (`runtime-domain`), not here.
-#
-# Versioning rule:
-#
-# - `contract_version` is pinned by `FEATURE_TASK_RUNTIME_CONTRACT_VERSION`
-#   in
-#   `runtime-kotlin/runtime-contracts/src/main/kotlin/skillbill/contracts/workflow/featuretask/FeatureTaskRuntimeContractVersions.kt`.
-# - The repo test `PhaseOutputContractVersionPinParityTest` fails the build
-#   when any pin diverges: this const, the goal-planning preparation
-#   `phase_output_contract_version` const, both goal-planning SQL checks, and
-#   the latest goal-planning phase-output migration. A bump moves every pin in
-#   the same change.
-# - Envelopes stored at the immediately previous version
-#   (`FEATURE_TASK_RUNTIME_PREVIOUS_CONTRACT_VERSION`) keep decoding: the
-#   runtime reads them against this schema with `contract_version` pinned to
-#   that version and without `$defs.uniformSettlement`. Older versions stay
-#   rejected.
+# Persisted phase-output 0.7 contract for bounded durable migration.
+# Historical source and converted target records validate against their pinned schemas.
+# Fresh runtime phase outputs retain their existing prose and projection gates.
+
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://skill-bill.dev/contracts/feature-task-runtime-phase-output-schema.yaml"
 title: "Feature-task-runtime phase output"
 description: >
-  Schema for the structured output a single feature-task-runtime phase emits
-  at its completion seam. The runtime validates this output before recording
-  the phase as complete and assembling the next phase's handoff. Run-invariant,
-  upstream-output, and derived-context handoff layers are modeled in the
-  domain; this schema governs only the per-phase output artifact itself.
+  Version-pinned persisted phase-output envelope used for durable migration.
+  Historical source records and converted target records validate here.
+  Fresh phase outputs use the existing runtime prose and projection gates.
 type: object
 additionalProperties: false
 $defs:
@@ -243,7 +206,7 @@ $defs:
     if:
       properties:
         phase_id:
-          enum: [preplan, plan, implement, simplify, audit, audit_implement_fix, validate, write_history, pr]
+          enum: [preplan, plan, implement, simplify, audit, validate, write_history, pr]
       required: [phase_id]
     then:
       properties:
@@ -325,9 +288,8 @@ properties:
       `review` the values are `approved` (no unresolved advance-blocking findings)
       or `changes_requested` (one or more unresolved Blocker or Major findings
       present). A uniform step may settle with a verdict too, for example a
-      completed `audit` with `satisfied`. Historical blocked `validate` outputs
-      may carry `progress` or `no_progress`; those words do not start another
-      validation session. The schema does not interpret the word for uniform steps.
+      blocked `validate` with `progress` or `no_progress`, or a completed `audit`
+      with `satisfied`. The schema does not interpret the word for uniform steps.
       Either absent (not set) or a non-empty string; `null` is not a valid value.
     type: string
     minLength: 1

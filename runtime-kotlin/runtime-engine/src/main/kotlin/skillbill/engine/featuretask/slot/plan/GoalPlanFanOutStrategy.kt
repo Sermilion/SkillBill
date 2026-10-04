@@ -4,31 +4,32 @@ import skillbill.engine.featuretask.phase.prompt.compose.FeatureTaskRuntimePhase
 import skillbill.engine.featuretask.phase.prompt.compose.PhaseStepPromptSections
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseRun
-import skillbill.engine.featuretask.slot.PhaseRunner
 import skillbill.engine.featuretask.slot.PhaseStrategy
+import skillbill.engine.featuretask.slot.attempt.runAgentStep
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
 import skillbill.engine.featuretask.slot.state.PhaseFanOutUnits
+import skillbill.engine.featuretask.slot.state.PhasePlanningStepBinding
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
 import skillbill.engine.featuretask.slot.state.PhaseRunFanOut
-import skillbill.engine.featuretask.slot.state.PhaseStepState
 import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.concurrency.BoundedWorkFanOutPort
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.run.FeatureTaskRuntimeRunInvariantPromptField
+import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariantPromptField
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.PhaseStepPolicy
 
 class GoalPlanFanOutStrategy(
-  private val runnerFactory: () -> PhaseRunner,
   private val fanOutPort: BoundedWorkFanOutPort,
   private val planFanOutCap: Int,
 ) : PhaseStrategy() {
-  private val plan = AgentPlanStrategy(runnerFactory())
+  private val plan = AgentPlanStrategy()
+
+  override val plansInFanOut: Boolean = true
 
   override val slot: PhaseSlot = PhaseSlot.PLAN
   override val strategyId: String = ID
   override val steps: List<String> = plan.steps
   override val entryStep: String = plan.entryStep
-  override val runner: PhaseRunner = plan.runner
 
   override fun policyFor(stepId: String): PhaseStepPolicy = plan.policyFor(stepId)
 
@@ -37,7 +38,7 @@ class GoalPlanFanOutStrategy(
   override fun promptSections(
     stepId: String,
     inputs: FeatureTaskRuntimePhasePromptComposeInputs,
-  ): PhaseStepPromptSections = plan.promptSections(stepId, inputs)
+  ): PhaseStepPromptSections = plan.promptSections(stepId, inputs).copy(taskDirective = PLAN_SPEC_DIRECTIVE)
 
   override fun briefingInvariantFields(stepId: String): Set<FeatureTaskRuntimeRunInvariantPromptField> =
     plan.briefingInvariantFields(stepId)
@@ -46,9 +47,22 @@ class GoalPlanFanOutStrategy(
 
   override fun runStep(
     run: PhaseRun,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): PhaseOutcome {
-    val fanOut = state.fanOut(run.phaseId)
+    val planning = state as PhasePlanningStepBinding
+    val fanOut = planning.fanOut(run.phaseId)
+    planning.authorizeFanOutWave(run)
+    return try {
+      runFanOutStep(run, fanOut)
+    } finally {
+      planning.releaseFanOutWave(run)
+    }
+  }
+
+  private fun runFanOutStep(
+    run: PhaseRun,
+    fanOut: PhaseRunFanOut,
+  ): PhaseOutcome {
     val pending =
       when (val units = fanOut.pendingUnits()) {
         is PhaseFanOutUnits.Stopped -> return units.outcome
@@ -82,9 +96,11 @@ class GoalPlanFanOutStrategy(
     unitId: Int,
   ): PhaseOutcome {
     val sink = UnitAttributedOutputSink(fanOutPort, fanOut.outputSink, unitId)
+    val state = fanOut.unitState(unitId, sink)
     return try {
-      AgentPlanStrategy(runnerFactory()).runStep(run, fanOut.unitState(run, unitId, sink))
+      runAgentStep(run, state)
     } finally {
+      state.finishStepExecution()
       sink.flushTrailingLines()
     }
   }
@@ -124,5 +140,16 @@ class GoalPlanFanOutStrategy(
 
   companion object {
     const val ID = "goal-plan-fan-out"
+
+    private const val PLAN_SPEC_DIRECTIVE: String =
+      "Plan the current governed sub-spec and write the plan into that same file. Edit only the assigned " +
+        "sub-spec named in the goal planning session context: keep its title, scope, acceptance criteria, " +
+        "dependencies, validation strategy, and next path unchanged, and add a non-blank " +
+        "\"## Implementation Details\" section holding the ordered tasks, the acceptance criteria each one " +
+        "serves, the paths or symbols it touches, the tests to add or run, and constraints, all from the " +
+        "upstream preplan digest. Never modify the parent spec, a sibling sub-spec, or any other " +
+        "repository file; this directive supersedes any earlier instruction not to modify files. " +
+        "Finish with a short prose summary of the plan. " + PREPLAN_DIGEST_AUTHORITY +
+        " The assigned sub-spec is the only file this session reads."
   }
 }

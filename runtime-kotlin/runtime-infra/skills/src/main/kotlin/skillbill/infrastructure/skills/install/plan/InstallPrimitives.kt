@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.install.plan
 
-import skillbill.error.shellcontent.InvalidInternalSkillClassificationError
+import skillbill.error.shellcontent.invalidInternalSkillClassification
 import skillbill.infrastructure.host.jvm.rollbackDeleteIfExists
 import skillbill.infrastructure.skills.install.staging.StagedSymlinkTargetInput
 import skillbill.infrastructure.skills.install.staging.resolveStagedSymlinkTarget
@@ -117,7 +117,7 @@ internal fun installSkill(
     throw FileNotFoundException("Skill directory '$resolvedSkill' does not exist.")
   }
   parseInternalForFrontmatter(resolvedSkill.resolve("content.md"))?.let { declaredParent ->
-    throw InvalidInternalSkillClassificationError(
+    throw invalidInternalSkillClassification(
       "Skill '${resolvedSkill.fileName}' declares 'internal-for: $declaredParent' and cannot be " +
         "installed or linked directly: internal skills install as '<skill-name>.md' sidecars inside " +
         "their parent's installed directory. Install the parent skill instead.",

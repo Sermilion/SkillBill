@@ -2,9 +2,10 @@ package skillbill.infrastructure.launcher.agentrun
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.agentaddon.AGENT_ADDON_SELECTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys
 import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeGoalContinuationLaunchTokens
-import skillbill.error.shellcontent.GovernedReviewLaunchCapabilityError
+import skillbill.error.shellcontent.governedReviewLaunchCapability
 import skillbill.install.model.SupportedAgent
 import skillbill.ports.agentrun.model.SkillRunGoalContinuationContext
 import skillbill.ports.agentrun.model.SkillRunRequest
@@ -27,10 +28,10 @@ internal fun requireGovernedReviewLaunch(
 ) {
   if (request.reviewEvidenceEndpoint == null) return
   if (!capability.governedOnlyTooling) {
-    throw GovernedReviewLaunchCapabilityError(agent.id, "governed-only tooling")
+    throw governedReviewLaunchCapability(agent.id, "governed-only tooling")
   }
   if (!capability.mcpIsolation) {
-    throw GovernedReviewLaunchCapabilityError(agent.id, "MCP isolation")
+    throw governedReviewLaunchCapability(agent.id, "MCP isolation")
   }
 }
 
@@ -136,7 +137,7 @@ internal fun MutableList<String>.addGoalContinuationArguments(context: SkillRunG
     add(
       JsonCodec.mapToJsonString(
         linkedMapOf(
-          SharedPayloadKeys.CONTRACT_VERSION to "0.1",
+          SharedPayloadKeys.CONTRACT_VERSION to AGENT_ADDON_SELECTION_CONTRACT_VERSION,
           FeatureTaskRuntimeGoalContinuationArtifactPayloadKeys.ENTRIES to
             context.agentAddonSelection.entries.map { entry ->
               linkedMapOf(

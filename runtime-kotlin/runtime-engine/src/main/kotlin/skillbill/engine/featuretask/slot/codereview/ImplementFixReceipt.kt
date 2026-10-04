@@ -1,77 +1,84 @@
 package skillbill.engine.featuretask.slot.codereview
 
-import skillbill.contracts.JsonCodec
-import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
-import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeRepairReceiptMissing
-import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeRepairReceiptRejected
-import skillbill.engine.featuretask.lifecycle.remediation.FeatureTaskRuntimeRepairReceiptValid
-import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeParseRepairReceipt
+import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeCarriedFindings
+import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeOmittedFindingsRetryReason
 import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRemediationRoundNumberOrNull
-import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptSettleRejection
-import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptShapeRejection
+import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptFromProse
+import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepairReceiptOmittedFindings
+import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeRepeatedUnresolvedBlockReason
+import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeUnresolvedFindings
+import skillbill.engine.featuretask.phase.core.auditProseValue
 import skillbill.engine.featuretask.slot.PhaseStepOutputCheck
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.attempt.PhaseStepOutputContext
+import skillbill.engine.featuretask.slot.state.PhaseImplementFixStepBinding
 import skillbill.goalrunner.model.UNADDRESSED_FINDING_REJECTED_DISPOSITION
-import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
+import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
+import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal object ImplementFixReceipt {
-  private const val REPAIR_RECEIPT_RULE = "repair-receipt"
   private const val WRITE_FAILURE_REASON =
     "the review persistence.state could not be updated with the repair receipt."
 
   fun settle(
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseImplementFixStepBinding,
     outputMap: FeatureTaskRuntimeWorkflowArtifactMap,
   ): PhaseStepOutputCheck {
-    val produced = completedProducedOutputs(outputMap) ?: return PhaseStepOutputCheck.Accept
-    val reviewState = state.goalReviewState() ?: return shapeCheck(produced)
-    val anchor = anchor(context, reviewState) ?: return shapeCheck(produced)
-    return when (
-      val parsed =
-        featureTaskRuntimeParseRepairReceipt(
-          produced,
-          anchor.baseSha,
-          anchor.roundNumber,
-          recordTruncation = { record -> RuntimeDiagnosticsBestEffortWarning.record(context.diagnostics, record) },
-        )
-    ) {
-      FeatureTaskRuntimeRepairReceiptMissing -> PhaseStepOutputCheck.Accept
-      is FeatureTaskRuntimeRepairReceiptRejected -> rejected(parsed.rejectionDetail)
-      is FeatureTaskRuntimeRepairReceiptValid -> settleValid(context, state, parsed.receipt, reviewState)
-    }
+    val prose = auditProseValue(outputMap) ?: return PhaseStepOutputCheck.Accept
+    val reviewState = state.goalReviewState() ?: return PhaseStepOutputCheck.Accept
+    val anchor = anchor(context, reviewState) ?: return PhaseStepOutputCheck.Accept
+    val refuted = refutedCarriedFindingIds(context, state, reviewState)
+    val receipt =
+      featureTaskRuntimeRepairReceiptFromProse(
+        prose,
+        featureTaskRuntimeCarriedFindings(reviewState, refuted),
+        anchor.baseSha,
+        anchor.roundNumber,
+      )
+    return settleReceipt(context, state, reviewState, receipt, refuted)
   }
 
-  private fun completedProducedOutputs(outputMap: FeatureTaskRuntimeWorkflowArtifactMap): Map<String, Any?>? =
-    outputMap
-      .takeIf {
-        (it[SharedPayloadKeys.STATUS] as? String)?.let(WorkflowStepStatus::fromWire) == WorkflowStepStatus.COMPLETED
-      }
-      ?.let { JsonCodec.anyToStringAnyMap(it[SharedPayloadKeys.PRODUCED_OUTPUTS]).orEmpty() }
+  private fun settleReceipt(
+    context: PhaseStepOutputContext,
+    state: PhaseImplementFixStepBinding,
+    reviewState: GoalSubtaskReviewState,
+    receipt: FeatureTaskRuntimeRepairReceipt,
+    refuted: Set<String>,
+  ): PhaseStepOutputCheck {
+    val omitted = featureTaskRuntimeRepairReceiptOmittedFindings(receipt, reviewState, refuted)
+    if (omitted.isNotEmpty()) return PhaseStepOutputCheck.Reject(featureTaskRuntimeOmittedFindingsRetryReason(omitted))
+    return persist(context, state, receipt)?.let { reason -> PhaseStepOutputCheck.Block(reason) }
+      ?: repeatedUnresolvedBlock(receipt, reviewState)
+      ?: PhaseStepOutputCheck.Accept
+  }
 
-  private fun settleValid(
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+  private fun repeatedUnresolvedBlock(
     receipt: FeatureTaskRuntimeRepairReceipt,
     reviewState: GoalSubtaskReviewState,
-  ): PhaseStepOutputCheck =
-    featureTaskRuntimeRepairReceiptSettleRejection(
-      receipt,
-      reviewState,
-      refutedCarriedFindingIds(context, state, reviewState),
-    )
-      ?.let { detail -> rejected(detail) }
-      ?: persist(context, state, receipt)?.let { reason -> PhaseStepOutputCheck.Block(reason) }
-      ?: PhaseStepOutputCheck.Accept
+  ): PhaseStepOutputCheck? {
+    val unresolved = featureTaskRuntimeUnresolvedFindings(receipt) ?: return null
+    val prior =
+      reviewState.repairReceipts
+        .filter { it.roundNumber < receipt.roundNumber }
+        .maxByOrNull(FeatureTaskRuntimeRepairReceipt::roundNumber)
+        ?.let(::featureTaskRuntimeUnresolvedFindings)
+        ?.refs
+        .orEmpty()
+    return featureTaskRuntimeRepeatedUnresolvedBlockReason(
+      FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_IMPLEMENT_FIX,
+      unresolved.refs,
+      prior,
+      unresolved.detail,
+    )?.let { reason -> PhaseStepOutputCheck.Block(reason, FeatureTaskRuntimeFailureDisposition.NEEDS_USER_ACTION) }
+  }
 
   private fun persist(
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseImplementFixStepBinding,
     receipt: FeatureTaskRuntimeRepairReceipt,
   ): String? =
     runCatching { state.recordRepairReceipt(receipt) }.fold(
@@ -88,13 +95,14 @@ internal object ImplementFixReceipt {
     )
 
   private fun refutedCarriedFindingIds(
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseStepOutputContext,
+    state: PhaseImplementFixStepBinding,
     reviewState: GoalSubtaskReviewState,
   ): Set<String> {
     val passNumber = reviewState.passResults.lastOrNull()?.passNumber ?: return emptySet()
     return runCatching {
-      state.unaddressedReviewFindings()
+      state
+        .unaddressedReviewFindings()
         .asSequence()
         .filter { finding -> finding.reviewPassNumber == passNumber }
         .filter { finding -> finding.verificationDisposition == UNADDRESSED_FINDING_REJECTED_DISPOSITION }
@@ -113,7 +121,7 @@ internal object ImplementFixReceipt {
   }
 
   private fun anchor(
-    context: PhaseAttemptEnvironment,
+    context: PhaseStepOutputContext,
     reviewState: GoalSubtaskReviewState,
   ): ReceiptAnchor? {
     val baseSha = reviewState.remediationBaseSha
@@ -134,11 +142,8 @@ internal object ImplementFixReceipt {
     return null
   }
 
-  private fun shapeCheck(produced: Map<String, Any?>): PhaseStepOutputCheck =
-    featureTaskRuntimeRepairReceiptShapeRejection(produced)?.let { detail -> rejected(detail) }
-      ?: PhaseStepOutputCheck.Accept
-
-  private fun rejected(detail: String): PhaseStepOutputCheck = PhaseStepOutputCheck.Reject(detail, REPAIR_RECEIPT_RULE)
-
-  private data class ReceiptAnchor(val baseSha: String, val roundNumber: Int)
+  private data class ReceiptAnchor(
+    val baseSha: String,
+    val roundNumber: Int,
+  )
 }

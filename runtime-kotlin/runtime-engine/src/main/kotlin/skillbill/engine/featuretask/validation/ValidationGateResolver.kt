@@ -2,23 +2,49 @@ package skillbill.engine.featuretask.validation
 
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.ports.scaffold.install.InstalledPlatformPackCatalogPort
 import skillbill.review.plan.ReviewFallbackResolver
 import skillbill.review.plan.ReviewStackRouting
 import skillbill.review.plan.model.ReviewRoutingChangedFile
-import skillbill.review.plan.model.ReviewStackRoutingResult
 import skillbill.scaffold.model.PlatformManifest
 
 @Inject
 class ValidationGateResolver(
   private val installedCatalog: InstalledPlatformPackCatalogPort,
 ) {
-  fun resolve(changedPaths: List<String>): ValidationGateResolution {
+  fun resolve(changedPaths: List<String>): ValidationGateResolution =
+    withManifests { manifests -> resolution(dominantPacks(manifests, changedPaths)) }
+
+  fun resolveWithRepositoryFallback(
+    changedPaths: List<String>,
+    trackedPaths: () -> List<String>,
+  ): ValidationGateResolution =
+    withManifests { manifests ->
+      val changed = dominantPacks(manifests, changedPaths)
+      val candidates =
+        if (hasConcreteOwner(manifests, changed)) {
+          changed
+        } else {
+          dominantPacks(manifests, trackedPaths()).takeIf { hasConcreteOwner(manifests, it) } ?: changed
+        }
+      resolution(candidates)
+    }
+
+  fun declaredCandidates(): List<ValidationGateResolution> =
+    installedCatalog.manifests().map { manifest ->
+      manifest.validationGate?.let { ValidationGateResolution.Declared(manifest.slug, it) }
+        ?: ValidationGateResolution.Absent(manifest.slug)
+    } + ValidationGateResolution.Absent(null)
+
+  private fun withManifests(resolve: (List<PlatformManifest>) -> ValidationGateResolution): ValidationGateResolution {
     val manifests =
       try {
         installedCatalog.manifests()
-      } catch (e: ShellContentContractException) {
+      } catch (e: SkillBillRuntimeException) {
+        e.rethrowUnless(e.isShellContentContractFailure())
         return ValidationGateResolution.Incompatible(
           "Installed platform pack discovery failed: ${e.message ?: e.javaClass.simpleName}. " +
             "Repair the installed platform packs before running validation.",
@@ -27,12 +53,10 @@ class ValidationGateResolver(
     if (manifests.isEmpty()) {
       return ValidationGateResolution.Absent(null)
     }
-    val routing =
-      ReviewStackRouting.route(
-        manifests,
-        changedPaths.map { ReviewRoutingChangedFile(it, "") },
-      )
-    val candidates = dominantPacks(manifests, routing)
+    return resolve(manifests)
+  }
+
+  private fun resolution(candidates: List<PlatformManifest>): ValidationGateResolution {
     val dominant =
       candidates.singleOrNull()
         ?: return ValidationGateResolution.Incompatible(
@@ -51,10 +75,19 @@ class ValidationGateResolver(
     }
   }
 
+  private fun hasConcreteOwner(
+    manifests: List<PlatformManifest>,
+    candidates: List<PlatformManifest>,
+  ): Boolean {
+    val fallbackSlug = ReviewFallbackResolver.resolveOptional(manifests)?.slug
+    return candidates.any { it.slug != fallbackSlug }
+  }
+
   private fun dominantPacks(
     manifests: List<PlatformManifest>,
-    routing: ReviewStackRoutingResult,
+    paths: List<String>,
   ): List<PlatformManifest> {
+    val routing = ReviewStackRouting.route(manifests, paths.map { ReviewRoutingChangedFile(it, "") })
     val bySlug = manifests.associateBy { it.slug }
     val routed = routing.routedSlugs.mapNotNull(bySlug::get)
     val fallback = ReviewFallbackResolver.resolveOptional(manifests)

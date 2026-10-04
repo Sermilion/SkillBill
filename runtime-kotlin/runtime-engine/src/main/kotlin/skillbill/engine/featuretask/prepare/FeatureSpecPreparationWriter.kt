@@ -8,6 +8,7 @@ import skillbill.application.decomposition.decompositionPlanningResult
 import skillbill.application.decomposition.decompositionPlanningSubtask
 import skillbill.application.decomposition.defaultFeatureBranch
 import skillbill.application.decomposition.loadValidatedDecompositionManifestPersistingRepair
+import skillbill.application.decomposition.model.DecompositionManifestWriteRequest
 import skillbill.application.decomposition.model.DecompositionPlanningResultOptions
 import skillbill.application.decomposition.model.DecompositionPlanningSubtaskOptions
 import skillbill.application.decomposition.parentSpecPath
@@ -23,8 +24,9 @@ import skillbill.featurespec.model.FeatureSpecWriteRequest
 import skillbill.featurespec.model.FeatureSpecWriteResult
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.runtime.model.DecompositionManifestWriteRequest
+import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
+import java.io.IOException
 import java.nio.file.Path
 
 @Inject
@@ -36,6 +38,7 @@ class FeatureSpecPreparationWriter(
   fun write(
     repoRoot: Path,
     request: FeatureSpecWriteRequest,
+    existingParentSpecPath: Path? = null,
   ): FeatureSpecWriteResult {
     val issueKey = request.decision.issueKey.trim()
     val featureName = normalizeFeatureName(request.featureName)
@@ -43,14 +46,92 @@ class FeatureSpecPreparationWriter(
       invalidRequest(DecompositionManifestPayloadKeys.FEATURE_NAME, "feature name is required.")
     }
     val specDirectory = repoRoot.resolve(".feature-specs/$issueKey-$featureName")
-    val parentSpecPath = specDirectory.resolve("spec.md")
+    val parentSpecPath = existingParentSpecPath ?: specDirectory.resolve("spec.md")
+    if (existingParentSpecPath != null) {
+      requireAcceptanceList("parent_spec.acceptance_criteria", authoredLines("parent_spec", parentSpecPath))
+    }
     val parentSpecRelativePath = repoRelativePath(repoRoot, parentSpecPath)
     return writePreparedFeature(
       repoRoot = repoRoot,
       request = request,
       parentSpecPath = parentSpecPath,
       parentSpecRelativePath = parentSpecRelativePath,
+      preserveParentSpec = existingParentSpecPath != null,
     )
+  }
+
+  fun verifyAuthored(
+    repoRoot: Path,
+    parentSpecPath: Path,
+  ): FeatureSpecWriteResult {
+    val parentRelativePath = repoRelativePath(repoRoot, parentSpecPath)
+    requireAcceptanceList("parent_spec.acceptance_criteria", authoredLines("parent_spec", parentSpecPath))
+    val manifestPath = parentSpecPath.resolveSibling(AUTHORED_MANIFEST_FILE)
+    authoredLines("decomposition_manifest", manifestPath)
+    val loaded = loadPreparedManifest(manifestPath)
+    if (loaded.manifest.parentSpecPath != parentRelativePath) {
+      invalidRequest("parent_spec_path", "manifest parent_spec_path must name the authored parent spec.")
+    }
+    val subtasks = loaded.manifest.subtasks
+    validateAuthoredOrder(subtasks)
+    subtasks.forEachIndexed { index, subtask ->
+      val subtaskPath = repoRoot.resolve(subtask.specPath).normalize()
+      if (!subtaskPath.startsWith(parentSpecPath.parent)) {
+        invalidRequest("subtasks[$index].spec_path", "subtask spec must live in the authored bundle.")
+      }
+      requireAcceptanceList("subtasks[$index].acceptance_criteria", authoredLines("subtasks[$index]", subtaskPath))
+    }
+    return FeatureSpecWriteResult(
+      mode = FeatureSpecPreparationMode.DECOMPOSED,
+      parentSpecPath = parentRelativePath,
+      featureImplementPath = parentRelativePath,
+      decompositionManifestPath = repoRelativePath(repoRoot, manifestPath),
+      subtaskSpecPaths = subtasks.map { repoRelativePath(repoRoot, repoRoot.resolve(it.specPath).normalize()) },
+      repairEvidence = listOfNotNull(loaded.repairEvidence),
+    )
+  }
+
+  fun listTree(directory: Path): List<Path> = fileStore.listTree(directory)
+
+  private fun authoredLines(
+    fieldPath: String,
+    path: Path,
+  ): List<String> {
+    if (!fileStore.isRegularFile(path)) invalidRequest(fieldPath, "authored file '${path.fileName}' is missing.")
+    return try {
+      fileStore.readText(path).lines()
+    } catch (error: IOException) {
+      invalidRequest(fieldPath, "authored file '${path.fileName}' is unreadable: ${error.message}")
+    }
+  }
+
+  private fun validateAuthoredOrder(subtasks: List<DecompositionSubtask>) {
+    if (subtasks.isEmpty()) {
+      invalidRequest(
+        DecompositionPlanningPayloadKeys.SUBTASKS,
+        "prepared features require at least one ordered subtask.",
+      )
+    }
+    val earlierIds = mutableSetOf<Int>()
+    var previousId = Int.MIN_VALUE
+    subtasks.forEachIndexed { index, subtask ->
+      if (subtask.id <= 0) {
+        invalidRequest("subtasks[$index].id", "id must be a positive integer.")
+      }
+      if (subtask.id <= previousId) {
+        invalidRequest("subtasks[$index].id", "subtask ids must be unique and in ascending dependency order.")
+      }
+      subtask.dependencies.forEachIndexed { dependencyIndex, dependency ->
+        if (dependency.subtaskId !in earlierIds) {
+          invalidRequest(
+            "subtasks[$index].depends_on[$dependencyIndex]",
+            "depends_on must reference an existing earlier subtask id.",
+          )
+        }
+      }
+      earlierIds += subtask.id
+      previousId = subtask.id
+    }
   }
 
   private fun writePreparedFeature(
@@ -58,6 +139,7 @@ class FeatureSpecPreparationWriter(
     request: FeatureSpecWriteRequest,
     parentSpecPath: Path,
     parentSpecRelativePath: String,
+    preserveParentSpec: Boolean,
   ): FeatureSpecWriteResult {
     validateSubtasks(request.subtasks, request.specSource)
     val parentSpecText =
@@ -94,7 +176,7 @@ class FeatureSpecPreparationWriter(
       fileStore.writeBundleAtomically(
         writes =
           buildList {
-            add(parentSpecPath to parentSpecText)
+            if (!preserveParentSpec) add(parentSpecPath to parentSpecText)
             subtaskRecords.forEach { add(it.path to it.text) }
             add(preparedManifest.manifestPath to preparedManifest.yaml)
           },
@@ -211,6 +293,24 @@ class FeatureSpecPreparationWriter(
       }
     }
   }
+}
+
+private const val AUTHORED_MANIFEST_FILE = "decomposition-manifest.yaml"
+
+private val ACCEPTANCE_ITEM = Regex("""^\s*(?:\d+[.)]|[-*])\s+\S.*""")
+
+private fun requireAcceptanceList(
+  fieldPath: String,
+  lines: List<String>,
+) {
+  val heading = lines.indexOfFirst { it.trim().startsWith("## Acceptance Criteria", ignoreCase = true) }
+  val criteria =
+    if (heading < 0) {
+      0
+    } else {
+      lines.drop(heading + 1).takeWhile { !it.startsWith("#") }.count(ACCEPTANCE_ITEM::matches)
+    }
+  if (criteria == 0) invalidRequest(fieldPath, "at least one acceptance criterion is required.")
 }
 
 private data class PreparedSubtask(

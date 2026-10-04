@@ -1,12 +1,12 @@
 package skillbill.infrastructure.workflow.review.broker
 
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.shellcontent.invalidReviewContextSchemaError
 import skillbill.infrastructure.contracts.sha256Hex
 import skillbill.infrastructure.host.jvm.pathContainedIn
 import skillbill.infrastructure.host.jvm.requirePathContainedIn
 import skillbill.ports.review.model.ReviewEvidenceResult
+import skillbill.review.context.model.accounting.ReviewBudgetOutcome
 import skillbill.review.context.model.execution.ForbiddenReviewOperation
-import skillbill.review.context.model.hunk.ReviewBudgetOutcome
 import skillbill.review.model.requireRepositoryRelativePath
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
@@ -99,7 +99,7 @@ internal fun rejectCheckpointDrift(
   state: FileSystemReviewEvidenceBrokerReadState,
   path: String,
 ): Nothing =
-  throw InvalidReviewContextSchemaError(
+  throw invalidReviewContextSchemaError(
     sourceLabel = "review-evidence:${state.assignment.reviewId}:${state.assignment.lane}",
     reason = "Complete-file evidence '$path' changed after the immutable launch checkpoint was bound.",
   )

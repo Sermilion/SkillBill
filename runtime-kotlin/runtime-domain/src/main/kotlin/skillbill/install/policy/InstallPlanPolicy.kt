@@ -1,9 +1,7 @@
 package skillbill.install.policy
 
 import skillbill.install.model.InstallAgentTarget
-import skillbill.install.model.InstallPlan
 import skillbill.install.model.InstallPlanDraft
-import skillbill.install.model.InstallPlanWireMap
 import skillbill.install.model.InstallPlatformPackDiscoverySnapshot
 import skillbill.install.model.InstallPlatformPackSnapshot
 import skillbill.install.model.InstallPlatformSkillMaterializationPlan
@@ -13,7 +11,7 @@ import skillbill.install.model.InstallPolicyValidationResult
 import skillbill.install.model.InstallPolicyValidationStatus
 import skillbill.install.model.McpRegistrationIntent
 import skillbill.install.model.PlannedPlatformPack
-import skillbill.install.model.validateInstallPlanWireSnapshot
+import skillbill.install.model.selectedPlatformSlugs
 
 object InstallPlanPolicy {
   fun validateRequest(input: InstallPolicyInput): InstallPolicyValidationResult {
@@ -67,14 +65,6 @@ object InstallPlanPolicy {
       installationTargetPaths = input.request.targetPaths.copy(agentTargets = agents),
       windowsSymlinkPreflight = input.request.windowsSymlinkPreflight,
     )
-  }
-
-  fun validateInstallPlanSnapshot(
-    plan: InstallPlan,
-    validate: (InstallPlanWireMap) -> Unit,
-  ): InstallPolicyValidationResult {
-    validateInstallPlanWireSnapshot(plan, validate)
-    return InstallPolicyValidationResult(InstallPolicyValidationStatus.VALID)
   }
 
   fun planPlatformSkillMaterialization(

@@ -14,5 +14,5 @@ interface ReviewAttributionPort {
    * launch plan instead of agent narration. A slug with no installed or in-repo pack yields an empty
    * plan rather than a failure: an unattributable run must still import.
    */
-  fun composedLaunchPlan(routedPackSlug: String): ReviewLaunchPlan = ReviewLaunchPlan(routedPackSlug, emptyList())
+  fun composedLaunchPlan(routedPackSlug: String): ReviewLaunchPlan
 }

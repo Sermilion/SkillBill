@@ -1,11 +1,16 @@
 package skillbill.engine.goalrunner.persist
 
+import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
+import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.engine.goalrunner.execution.support.workflowFamilyFor
+import skillbill.engine.goalrunner.model.GoalRunnerBlockWrite
+import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
+import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.goalrunner.model.GoalRunnerSupervisionEvent
 import skillbill.goalrunner.toPersistenceWire
-import skillbill.ports.goalrunner.persistence.model.GoalRunnerBlockWrite
 import skillbill.ports.persistence.UnitOfWork
+import skillbill.ports.taskruntime.model.ValidatedFeatureTaskRuntimeExecutionPlan
 import skillbill.ports.workflow.WorkflowStateRepository
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.engine.WorkflowEngine
@@ -15,12 +20,16 @@ import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.engine.model.isTerminalStatus
+import skillbill.workflow.model.FeatureTaskExecutionIdentity
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
+import skillbill.workflow.model.FeatureTaskRouteScope
+import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.phaseLedgerFromWorkflowArtifacts
 import skillbill.workflow.taskruntime.artifact.phaseRecordsFromWorkflowArtifacts
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
+import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
@@ -97,12 +106,32 @@ internal class WorkflowGoalRunnerBlockWrites(
 
   fun reopenBlockedPhaseForOperatorResume(
     unitOfWork: UnitOfWork,
-    workflowId: String,
     preferredPhaseId: String,
     reason: String,
+    expectedIdentity: FeatureTaskExecutionIdentity,
+    expectedExecutionPlan: ValidatedFeatureTaskRuntimeExecutionPlan,
   ): Boolean {
+    val workflowId = expectedIdentity.workflowId
     val family = WorkflowFamily.TASK_RUNTIME
     val existing = unitOfWork.workflowStates.get(family, workflowId) ?: return false
+    val identity =
+      unitOfWork.workflowStates.getFeatureTaskExecutionIdentity(workflowId)
+        ?: missingPlan()
+    FeatureTaskExecutionIdentityPolicy.validate(identity)
+    if (identity != expectedIdentity || identity.mode != FeatureTaskWorkflowMode.RUNTIME ||
+      identity.routeScope != FeatureTaskRouteScope.GOAL_CHILD
+    ) {
+      incompatiblePlan()
+    }
+    val storedPlan =
+      DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_EXECUTION_PLAN.value(existing.artifacts)
+        ?: missingPlan()
+    if (storedPlan != JsonCodec.parseValue(expectedExecutionPlan.encoded().toString(Charsets.UTF_8))) {
+      incompatiblePlan()
+    }
+    if (unitOfWork.workflowStates.getFeatureTaskRuntimeWorkerOwnership(workflowId) != null) {
+      incompatiblePlan()
+    }
     if (family.definition.isTerminalStatus(existing.workflowStatus)) {
       return false
     }
@@ -124,6 +153,7 @@ internal class WorkflowGoalRunnerBlockWrites(
           phaseRecords,
           phaseLedgerFromWorkflowArtifacts(artifacts),
           reason,
+          artifacts[DecompositionManifestPayloadKeys.BLOCKED_REASON]?.toString(),
         ),
       ),
     )
@@ -148,6 +178,7 @@ internal class WorkflowGoalRunnerBlockWrites(
     phaseRecords: Map<String, FeatureTaskRuntimePhaseRecord>,
     ledger: List<FeatureTaskRuntimePhaseLedgerEntry>,
     reason: String,
+    previousBlockedReason: String?,
   ): WorkflowUpdateInput {
     val reopened =
       LinkedHashMap(phaseRecords).apply {
@@ -178,6 +209,7 @@ internal class WorkflowGoalRunnerBlockWrites(
       artifactsPatch =
         WorkflowArtifactPatch.from(
           mapOf(
+            DecompositionManifestPayloadKeys.BLOCKED_REASON to null,
             DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_PHASE_RECORDS.entry(
               reopened.mapValues { (_, record) -> record.asWorkflowArtifactEntry() },
             ),
@@ -191,7 +223,7 @@ internal class WorkflowGoalRunnerBlockWrites(
                 SharedPayloadKeys.PHASE_ID to blockedRecord.phaseId,
                 "reason" to reason,
                 "retried_at" to clock.instant().atOffset(ZoneOffset.UTC).toString(),
-                "previous_blocked_reason" to blockedRecord.blockedReason,
+                "previous_blocked_reason" to (blockedRecord.blockedReason ?: previousBlockedReason),
                 "previous_blocked_record" to blockedRecord.asWorkflowArtifactEntry(),
               ),
             ),
@@ -200,4 +232,8 @@ internal class WorkflowGoalRunnerBlockWrites(
       sessionId = "",
     )
   }
+
+  private fun missingPlan(): Nothing = throw MissingFeatureTaskRuntimeExecutionPlanError()
+
+  private fun incompatiblePlan(): Nothing = throw IncompatibleFeatureTaskRuntimeExecutionPlanError()
 }

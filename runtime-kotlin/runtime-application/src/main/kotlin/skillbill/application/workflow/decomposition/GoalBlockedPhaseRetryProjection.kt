@@ -1,7 +1,7 @@
 package skillbill.application.workflow.decomposition
 
 import skillbill.application.workflow.service.migrateLegacyGoalRunnerControls
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
@@ -14,7 +14,7 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.DurableWorkflowArtifacts
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowUpdateInput
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.goalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
 
 fun WorkflowEngine.updateGoalParentForBlockedPhaseRetry(
   unitOfWork: GoalRunnerPersistenceSession,
@@ -75,4 +75,4 @@ fun WorkflowEngine.updateGoalParentForBlockedPhaseRetry(
   return updatedParent.artifacts
 }
 
-private fun invalidGoalRetryProjection(reason: String): Nothing = throw InvalidWorkflowStateSchemaError(reason)
+private fun invalidGoalRetryProjection(reason: String): Nothing = throw invalidWorkflowStateSchemaError(reason)

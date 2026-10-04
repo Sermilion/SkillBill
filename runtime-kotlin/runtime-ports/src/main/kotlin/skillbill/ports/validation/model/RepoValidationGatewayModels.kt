@@ -39,6 +39,12 @@ enum class RepoValidationIssueSeverity {
   INFO,
 }
 
+sealed interface ReleaseRefValidation {
+  data class Valid(val metadata: ReleaseRefMetadata) : ReleaseRefValidation
+
+  data class Rejected(val message: String) : ReleaseRefValidation
+}
+
 data class ReleaseRefMetadata(
   val tag: String,
   val version: String,

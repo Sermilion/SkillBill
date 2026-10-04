@@ -2,11 +2,13 @@ package skillbill.infrastructure.contracts.workflow.goal
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.goal.GOAL_PROGRESS_EVENT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidGoalProgressEventSchemaError
-import skillbill.workflow.model.goalreview.GoalProgressEvent
-import skillbill.workflow.model.goalreview.GoalProgressEventKind
-import skillbill.workflow.model.goalreview.GoalProgressOutcome
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class GoalProgressEventSchemaValidatorTest {
@@ -60,9 +62,9 @@ class GoalProgressEventSchemaValidatorTest {
         "sequence_number" to 1,
         "timestamp" to "2026-06-02T10:00:00Z",
       )
-    assertFailsWith<InvalidGoalProgressEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalProgressEventSchemaValidator.validate(malformed, "test-malformed")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA, it.code) }
   }
 
   @Test
@@ -76,9 +78,9 @@ class GoalProgressEventSchemaValidatorTest {
         "sequence_number" to 1,
         "timestamp" to "2026-06-02T10:00:00Z",
       )
-    assertFailsWith<InvalidGoalProgressEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalProgressEventSchemaValidator.validate(malformed, "test-missing")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA, it.code) }
   }
 
   @Test
@@ -93,9 +95,9 @@ class GoalProgressEventSchemaValidatorTest {
         "sequence_number" to 2,
         "timestamp" to "2026-06-02T10:01:00Z",
       )
-    assertFailsWith<InvalidGoalProgressEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalProgressEventSchemaValidator.validate(malformed, "test-missing-operation-name")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA, it.code) }
   }
 
   @Test
@@ -111,9 +113,9 @@ class GoalProgressEventSchemaValidatorTest {
         "timestamp" to "2026-06-02T10:00:00Z",
         "unexpected_field" to "nope",
       )
-    assertFailsWith<InvalidGoalProgressEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalProgressEventSchemaValidator.validate(malformed, "test-additional-property")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA, it.code) }
   }
 
   @Test
@@ -128,9 +130,9 @@ class GoalProgressEventSchemaValidatorTest {
         "sequence_number" to -1,
         "timestamp" to "2026-06-02T10:00:00Z",
       )
-    assertFailsWith<InvalidGoalProgressEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalProgressEventSchemaValidator.validate(malformed, "test-negative-sequence")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA, it.code) }
   }
 
   @Test
@@ -145,9 +147,9 @@ class GoalProgressEventSchemaValidatorTest {
         "sequence_number" to "not-a-number",
         "timestamp" to "2026-06-02T10:00:00Z",
       )
-    assertFailsWith<InvalidGoalProgressEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalProgressEventSchemaValidator.validate(malformed, "test-non-integer-sequence")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA, it.code) }
   }
 
   @Test
@@ -163,8 +165,8 @@ class GoalProgressEventSchemaValidatorTest {
         "timestamp" to "2026-06-02T10:02:00Z",
         "outcome" to "exploded",
       )
-    assertFailsWith<InvalidGoalProgressEventSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       GoalProgressEventSchemaValidator.validate(malformed, "test-bad-outcome")
-    }
+    }.also { assertEquals(InstallFailureCode.INVALID_GOAL_PROGRESS_EVENT_SCHEMA, it.code) }
   }
 }

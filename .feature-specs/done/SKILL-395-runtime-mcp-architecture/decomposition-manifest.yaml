@@ -1,0 +1,27 @@
+---
+contract_version: "0.5"
+issue_key: "SKILL-395"
+feature_name: "runtime-mcp-architecture"
+parent_spec_path: ".feature-specs/SKILL-395-runtime-mcp-architecture/spec.md"
+status: "complete"
+execution_model: "same_branch_commit_per_subtask"
+base_branch: "base/SKILL-380-phase-slot-strategies"
+feature_branch: "feat/SKILL-395-runtime-mcp-architecture"
+stack_branches: []
+current_subtask_intent:
+  subtask_id: 0
+  action: "complete"
+subtasks:
+- id: 1
+  name: "mcp-vocabulary-ownership-and-adapter-hygiene"
+  spec_path: ".feature-specs/SKILL-395-runtime-mcp-architecture/spec_subtask_1_mcp-vocabulary-ownership-and-adapter-hygiene.md"
+  status: "complete"
+  branch: null
+  commit_sha: null
+  workflow_id: "wftr-20261001-150228-ti9x"
+  blocked_reason: null
+  last_resumable_step: "commit_push"
+  linear_issue_id: null
+  finalizing_agent_id: null
+  participating_agent_ids: []
+  dependencies: []

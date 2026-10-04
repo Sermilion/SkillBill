@@ -3,7 +3,7 @@ package skillbill.cli
 import skillbill.cli.core.CliRuntime
 import skillbill.cli.model.CliRuntimeContext
 import skillbill.infrastructure.host.CanonicalRepositoryRoot
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.telemetry.CONFIG_ENVIRONMENT_KEY
 import skillbill.telemetry.INSTALL_ID_ENVIRONMENT_KEY
 import skillbill.telemetry.RESERVED_TEST_INSTALL_ID
@@ -119,13 +119,14 @@ class CliRuntimeShellCommandsTest {
       "root help must not list the removed workflow command",
     )
     val workflowHelp = CliRuntime.run(listOf("workflow", "--help"))
-    val workflowContinue = CliRuntime.run(listOf("workflow", "continue"))
+    val workflowContinue =
+      CliRuntime.run(listOf("workflow", "continue"), CliRuntimeContext(environment = emptyMap()))
     val verifyWorkflowHelp = CliRuntime.run(listOf("verify-workflow", "--help"))
 
     assertEquals(0, workflowHelp.exitCode)
     assertContains(workflowHelp.stdout, "Usage: skill-bill")
     assertEquals(1, workflowContinue.exitCode)
-    assertContains(workflowContinue.stderr, "Error:")
+    assertContains(workflowContinue.stderr, "tracker issue key")
     assertEquals(0, verifyWorkflowHelp.exitCode)
     assertContains(verifyWorkflowHelp.stdout, "show")
     assertFalse(verifyWorkflowHelp.stdout.contains("--subtask-id"))
@@ -419,7 +420,7 @@ class CliRuntimeShellCommandsTest {
     assertEquals(1, invalidFormat.exitCode)
     assertContains(invalidFormat.stderr, "invalid choice")
 
-    val unknownCommand = CliRuntime.run(listOf("unknown"))
+    val unknownCommand = CliRuntime.run(listOf("install", "unknown"))
     assertEquals(1, unknownCommand.exitCode)
     assertContains(unknownCommand.stderr, "no such subcommand")
   }

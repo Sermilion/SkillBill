@@ -1,50 +1,23 @@
 package skillbill.engine.work.model
 
+import skillbill.ports.idestatus.model.IdeStatusLifecycleState
+import skillbill.ports.idestatus.model.IdeStatusSnapshot
+import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily
 import skillbill.workflow.model.FeatureTaskRouteScope
+import java.nio.file.Path
 import java.time.Instant
-import skillbill.ports.idestatus.model.IDE_STATUS_PAUSE_REASON_LABEL_MAX_LENGTH as PORT_IDE_STATUS_PAUSE_REASON_LABEL_MAX_LENGTH
-import skillbill.ports.idestatus.model.IdeStatusCurrentModel as PortIdeStatusCurrentModel
-import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecution as PortIdeStatusCurrentPhaseExecution
-import skillbill.ports.idestatus.model.IdeStatusCurrentPhaseExecutionKind as PortIdeStatusCurrentPhaseExecutionKind
-import skillbill.ports.idestatus.model.IdeStatusCurrentSubtask as PortIdeStatusCurrentSubtask
-import skillbill.ports.idestatus.model.IdeStatusFreshness as PortIdeStatusFreshness
-import skillbill.ports.idestatus.model.IdeStatusLifecycleState as PortIdeStatusLifecycleState
-import skillbill.ports.idestatus.model.IdeStatusPauseReason as PortIdeStatusPauseReason
-import skillbill.ports.idestatus.model.IdeStatusPauseReasonCode as PortIdeStatusPauseReasonCode
-import skillbill.ports.idestatus.model.IdeStatusPlanning as PortIdeStatusPlanning
-import skillbill.ports.idestatus.model.IdeStatusProblem as PortIdeStatusProblem
-import skillbill.ports.idestatus.model.IdeStatusProblemCode as PortIdeStatusProblemCode
-import skillbill.ports.idestatus.model.IdeStatusProgress as PortIdeStatusProgress
-import skillbill.ports.idestatus.model.IdeStatusRepositoryResolution as PortIdeStatusRepositoryResolution
-import skillbill.ports.idestatus.model.IdeStatusRequest as PortIdeStatusRequest
-import skillbill.ports.idestatus.model.IdeStatusResult as PortIdeStatusResult
-import skillbill.ports.idestatus.model.IdeStatusSelectionTier as PortIdeStatusSelectionTier
-import skillbill.ports.idestatus.model.IdeStatusSnapshot as PortIdeStatusSnapshot
-import skillbill.ports.idestatus.model.IdeStatusStep as PortIdeStatusStep
-import skillbill.ports.idestatus.model.IdeStatusWorkflowFamily as PortIdeStatusWorkflowFamily
 
-typealias IdeStatusWorkflowFamily = PortIdeStatusWorkflowFamily
-typealias IdeStatusLifecycleState = PortIdeStatusLifecycleState
-typealias IdeStatusFreshness = PortIdeStatusFreshness
-typealias IdeStatusPauseReasonCode = PortIdeStatusPauseReasonCode
-typealias IdeStatusPauseReason = PortIdeStatusPauseReason
-typealias IdeStatusProblemCode = PortIdeStatusProblemCode
-typealias IdeStatusSelectionTier = PortIdeStatusSelectionTier
-typealias IdeStatusStep = PortIdeStatusStep
-typealias IdeStatusProgress = PortIdeStatusProgress
-typealias IdeStatusCurrentSubtask = PortIdeStatusCurrentSubtask
-typealias IdeStatusCurrentModel = PortIdeStatusCurrentModel
-typealias IdeStatusPlanning = PortIdeStatusPlanning
-typealias IdeStatusCurrentPhaseExecutionKind = PortIdeStatusCurrentPhaseExecutionKind
-typealias IdeStatusCurrentPhaseExecution = PortIdeStatusCurrentPhaseExecution
-typealias IdeStatusProblem = PortIdeStatusProblem
-typealias IdeStatusRepositoryResolution = PortIdeStatusRepositoryResolution
-typealias IdeStatusSnapshot = PortIdeStatusSnapshot
-typealias IdeStatusRequest = PortIdeStatusRequest
-typealias IdeStatusResult = PortIdeStatusResult
+enum class IdeStatusSelectionTier {
+  ACTIVE,
+  PAUSED,
+  BLOCKED,
+  FAILED,
+  RECENTLY_TERMINAL,
+  IDLE,
+  ;
 
-const val IDE_STATUS_PAUSE_REASON_LABEL_MAX_LENGTH: Int =
-  PORT_IDE_STATUS_PAUSE_REASON_LABEL_MAX_LENGTH
+  val rank: Int get() = ordinal
+}
 
 data class IdeStatusCandidate(
   val workflowId: String,
@@ -57,4 +30,26 @@ data class IdeStatusCandidate(
   val startedAt: Instant?,
   val routeScope: FeatureTaskRouteScope? = null,
   val isGoalAuthoritative: Boolean = workflowFamily == IdeStatusWorkflowFamily.FEATURE_GOAL,
+)
+
+sealed class IdeStatusRepositoryResolution {
+  data class Ok(val identity: String, val repoRoot: Path) : IdeStatusRepositoryResolution()
+
+  data class Invalid(val message: String) : IdeStatusRepositoryResolution()
+
+  data class Missing(val message: String) : IdeStatusRepositoryResolution()
+}
+
+data class IdeStatusRequest(
+  val repoRoot: String,
+  val observedAt: Instant? = null,
+) {
+  init {
+    require(repoRoot.isNotBlank()) { "repoRoot is required." }
+  }
+}
+
+data class IdeStatusResult(
+  val snapshot: IdeStatusSnapshot,
+  val exitCode: Int,
 )

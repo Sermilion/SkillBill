@@ -12,9 +12,9 @@ import skillbill.ports.agentrun.model.AgentRunDeclaredProgressSnapshot
 import skillbill.ports.agentrun.model.AgentRunProgressEmission
 import skillbill.ports.agentrun.model.AgentRunProgressEmitter
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
-import skillbill.workflow.model.goalreview.GoalProgressEvent
-import skillbill.workflow.model.goalreview.GoalProgressEventKind
-import skillbill.workflow.model.goalreview.GoalProgressOutcome
+import skillbill.workflow.model.goalobservability.GoalProgressEvent
+import skillbill.workflow.model.goalobservability.GoalProgressEventKind
+import skillbill.workflow.model.goalobservability.GoalProgressOutcome
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Collections
@@ -257,7 +257,7 @@ class AgentRunLauncherActivityTest {
     val runner = RecordingAgentRunProcessRunner()
     val adapters = headlessAgentRunAdapters(runner, ALL_EXECUTABLES_AVAILABLE)
     listOf(SupportedAgent.CODEX, SupportedAgent.CLAUDE, SupportedAgent.JUNIE, SupportedAgent.CURSOR).forEach { agent ->
-      val facts = requireNotNull(adapters[agent]).launch(skillRunRequest())
+      val facts = requireNotNull(adapters[agent]).launchFacts(skillRunRequest())
       assertEquals("/tmp/skillbill-agent-run", facts.childSessionPath, "session path for $agent")
       val sessionId = requireNotNull(facts.childSessionId) { "session id for $agent" }
       assertContains(sessionId, agent.id)

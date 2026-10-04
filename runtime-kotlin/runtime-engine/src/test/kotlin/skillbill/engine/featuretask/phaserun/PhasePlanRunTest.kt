@@ -1,17 +1,14 @@
 package skillbill.engine.featuretask.phaserun
 
-import skillbill.contracts.JsonCodec
-import skillbill.contracts.SharedPayloadKeys
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-import skillbill.engine.DECOMPOSE_PLAN_OUTPUT
-import skillbill.engine.RuntimeHarnessConfig
-import skillbill.engine.RuntimeRecordingLauncher
-import skillbill.engine.committedRepoBranchSetup
-import skillbill.engine.facts
-import skillbill.engine.phaseIdFromPrompt
-import skillbill.engine.telemetryRunnerHarness
-import skillbill.engine.validJsonOutput
-import skillbill.infrastructure.contracts.FeatureTaskRuntimePhaseOutputSchemaValidator
+import skillbill.engine.featuretask.runner.PLAN_BUNDLE_PROSE
+import skillbill.engine.featuretask.runner.RuntimeHarnessConfig
+import skillbill.engine.featuretask.runner.RuntimeRecordingLauncher
+import skillbill.engine.featuretask.runner.committedRepoBranchSetup
+import skillbill.engine.featuretask.runner.facts
+import skillbill.engine.featuretask.runner.phaseIdFromPrompt
+import skillbill.engine.featuretask.runner.telemetryRunnerHarness
+import skillbill.engine.featuretask.runner.writePlanBundle
+import skillbill.engine.featuretask.slot.validJsonOutput
 import skillbill.infrastructure.contracts.workflow.decomposition.DecompositionManifestSchemaValidator
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Files
@@ -36,8 +33,8 @@ class PhasePlanRunTest {
   }
 
   @Test
-  fun `a blocked preplan launches no plan agent and writes no spec files or workflow state`() {
-    val launcher = launcher { phaseId -> if (phaseId == PREPLAN) BLOCKED_PREPLAN_OUTPUT else DECOMPOSE_PLAN_OUTPUT }
+  fun `a preplan that produces nothing blocks, launches no plan agent and writes no spec files or workflow state`() {
+    val launcher = launcher { phaseId -> if (phaseId == PREPLAN) "" else PLAN_BUNDLE_PROSE }
 
     val result = entry(launcher).run(planRequest())
 
@@ -49,8 +46,8 @@ class PhasePlanRunTest {
   }
 
   @Test
-  fun `a decompose plan writes a governed spec bundle and completes with its paths`() {
-    val launcher = launcher { phaseId -> if (phaseId == PLAN) bundleOutput() else validJsonOutput(phaseId) }
+  fun `a plan session that authors a complete bundle completes with its paths`() {
+    val launcher = launcher { phaseId -> if (phaseId == PLAN) authoredBundleOutput() else validJsonOutput(phaseId) }
 
     val result = entry(launcher).run(planRequest())
 
@@ -69,46 +66,44 @@ class PhasePlanRunTest {
   }
 
   @Test
-  fun `a direct plan blocks at plan and writes no spec bundle`() {
-    val launcher = launcher(::validJsonOutput)
+  fun `a plan session that authors no bundle blocks at plan`() {
+    val launcher = launcher { phaseId -> if (phaseId == PLAN) PLAN_BUNDLE_PROSE else validJsonOutput(phaseId) }
 
     val result = entry(launcher).run(planRequest())
 
     assertIs<PhaseRunResult.Blocked>(result, result.toString())
     assertEquals(PLAN, result.stepId)
-    assertEquals(listOf(PREPLAN), result.completedStepIds, "a plan without a package must not complete")
-    assertEquals(emptyList(), planBundleDirectories(), "a direct plan must write no spec files")
+    assertEquals(listOf(PREPLAN), result.completedStepIds, "a plan without a bundle must not complete")
+    assertEquals(emptyList(), planBundleDirectories(), "a plan without a bundle must leave no spec files")
     database.assertNoDurableWorkflowState()
   }
 
   @Test
-  fun `an empty decomposition is rejected before plan completion instead of crashing the writer`() {
-    val output = bundleOutput().replace(Regex("\"subtasks\":\\[.*]"), "\"subtasks\":[]")
-    val launcher = launcher { phaseId -> if (phaseId == PLAN) output else validJsonOutput(phaseId) }
+  fun `a plan session whose subtask has no acceptance list blocks with the readiness reason`() {
+    val launcher =
+      launcher { phaseId ->
+        if (phaseId == PLAN) {
+          val bundle = writePlanBundle(repoRoot, ISSUE_KEY)
+          val subtask = repoRoot.resolve(bundle.subtaskSpecPaths.first())
+          Files.writeString(subtask, Files.readString(subtask).substringBefore("## Acceptance Criteria"))
+          PLAN_BUNDLE_PROSE
+        } else {
+          validJsonOutput(phaseId)
+        }
+      }
 
     val result = entry(launcher).run(planRequest())
 
     assertIs<PhaseRunResult.Blocked>(result, result.toString())
     assertEquals(PLAN, result.stepId)
     assertEquals(listOf(PREPLAN), result.completedStepIds)
-    assertTrue(result.reason.contains("output-verification"), result.reason)
-    assertEquals(emptyList(), planBundleDirectories())
+    assertTrue(result.reason.contains("ready spec bundle"), result.reason)
     database.assertNoDurableWorkflowState()
   }
 
-  private fun bundleOutput(): String {
-    val envelope =
-      requireNotNull(
-        JsonCodec.anyToStringAnyMap(JsonCodec.parseValue(DECOMPOSE_PLAN_OUTPUT)),
-      ).toMutableMap()
-    envelope[SharedPayloadKeys.CONTRACT_VERSION] = FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-    val produced =
-      requireNotNull(
-        JsonCodec.anyToStringAnyMap(envelope[SharedPayloadKeys.PRODUCED_OUTPUTS]),
-      ).toMutableMap()
-    produced[SharedPayloadKeys.VALUE] = "Split the runtime work into ordered subtasks."
-    envelope[SharedPayloadKeys.PRODUCED_OUTPUTS] = produced
-    return JsonCodec.mapToJsonString(envelope)
+  private fun authoredBundleOutput(): String {
+    writePlanBundle(repoRoot, ISSUE_KEY)
+    return PLAN_BUNDLE_PROSE
   }
 
   private fun planRequest(): PhaseRunRequest =
@@ -131,18 +126,19 @@ class PhasePlanRunTest {
     launcher.requests.map { request -> phaseIdFromPrompt(requireNotNull(request.skillRunRequest.promptOverride)) }
 
   private fun entry(launcher: RuntimeRecordingLauncher): PhaseRunEntry {
-    val runner =
+    val config =
+      RuntimeHarnessConfig(
+        seedDurableWorkflow = false,
+        branchSetup = committedRepoBranchSetup(),
+        repoRoot = repoRoot,
+        launcher = launcher,
+      )
+    val harness =
       telemetryRunnerHarness(
-        runtimeConfig =
-          RuntimeHarnessConfig(
-            branchSetup = committedRepoBranchSetup(),
-            repoRoot = repoRoot,
-            launcher = launcher,
-            validator = FeatureTaskRuntimePhaseOutputSchemaValidator(),
-          ),
+        runtimeConfig = config,
         databaseFactory = { database },
-      ).runner
-    return phaseRunEntry(runner, database, clock)
+      )
+    return phaseRunEntry(harness.strategies, config.harnessGitOperations, database, clock, harness.runLoopEntry)
   }
 
   private companion object {
@@ -150,9 +146,5 @@ class PhasePlanRunTest {
     const val PREPLAN = "preplan"
     const val PLAN = "plan"
     const val FEATURE_SPECS = ".feature-specs"
-    const val BLOCKED_PREPLAN_OUTPUT =
-      """{"contract_version":"$FEATURE_TASK_RUNTIME_CONTRACT_VERSION","phase_id":"preplan","status":"blocked",""" +
-        """"failure_disposition":"needs_user_action","summary":"The intake names no reachable scope.",""" +
-        """"produced_outputs":{"value":"The intake names no reachable scope."}}"""
   }
 }

@@ -9,7 +9,8 @@ import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairLa
 import skillbill.engine.featuretask.validation.model.ValidationGateAgentRepairResult
 import skillbill.engine.featuretask.validation.model.ValidationGateCycleRequest
 import skillbill.engine.featuretask.validation.model.ValidationGateProgressStore
-import skillbill.error.shellcontent.ContractVersionMismatchError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.config.model.ReadRepoLocalConfigResult
@@ -29,8 +30,8 @@ import skillbill.scaffold.model.ValidationGateExecutedWorkSignal
 import skillbill.scaffold.model.ValidationGateFindingsFormat
 import skillbill.scaffold.model.ValidationGateFindingsLocator
 import skillbill.workflow.model.ValidationDepth
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeRunInvariants
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateProgress
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
@@ -59,7 +60,8 @@ internal val validationGateTestDeclaration: ValidationGateDeclaration =
 
 internal fun outOfContractResolver(): ValidationGateResolver =
   ValidationGateResolver {
-    throw ContractVersionMismatchError(
+    throw SkillBillRuntimeException(
+      InstallFailureCode.CONTRACT_VERSION_MISMATCH,
       "Platform pack 'fallback': declares contract_version '0.1' but the shell expects '1.8'.",
     )
   }
@@ -150,6 +152,7 @@ internal fun passed(forced: Boolean = false): ValidationGateRunResult =
     executedWorkUnits = 1,
     executedCheckIdentities = emptyList(),
     findings = emptyList(),
+    command = "./gradlew check",
   )
 
 internal fun failedEmptyFindings(stdout: String = ""): ValidationGateRunResult =
@@ -162,6 +165,7 @@ internal fun failedEmptyFindings(stdout: String = ""): ValidationGateRunResult =
     executedCheckIdentities = emptyList(),
     findings = emptyList(),
     stdout = stdout,
+    command = "./gradlew check",
   )
 
 internal fun failedWith(vararg findings: ValidationGateFinding): ValidationGateRunResult =
@@ -173,6 +177,7 @@ internal fun failedWith(vararg findings: ValidationGateFinding): ValidationGateR
     executedWorkUnits = 1,
     executedCheckIdentities = emptyList(),
     findings = findings.toList(),
+    command = "./gradlew check",
   )
 
 internal fun completedRepair(): ValidationGateAgentRepairResult {
@@ -240,6 +245,6 @@ internal class ScriptedGateRunner(
     requests += request
     return results.getOrElse(index) {
       error("ScriptedGateRunner exhausted after ${results.size} results; call=$index")
-    }
+    }.copy(command = request.argv.joinToString(" "))
   }
 }

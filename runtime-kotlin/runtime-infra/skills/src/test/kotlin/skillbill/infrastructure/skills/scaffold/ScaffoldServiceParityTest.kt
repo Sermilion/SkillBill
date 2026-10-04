@@ -1,9 +1,9 @@
 package skillbill.infrastructure.skills.scaffold
 
-import skillbill.error.shellcontent.InvalidAgentAddonSchemaError
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
-import skillbill.error.shellcontent.MissingRequiredSectionError
-import skillbill.error.shellcontent.RetiredScaffoldKindError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.AgentAddonFailureCode
+import skillbill.error.shellcontent.ScaffoldFailureCode
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentInstallRenderRequest
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentOperations
 import skillbill.infrastructure.skills.nativeagent.rendering.NativeAgentProvider
@@ -26,7 +26,7 @@ import skillbill.infrastructure.skills.scaffold.runtime.service.planCodeReviewAr
 import skillbill.infrastructure.skills.scaffold.runtime.service.renderDeclaredPackContentSheet
 import skillbill.infrastructure.skills.scaffold.runtime.service.scaffold
 import skillbill.infrastructure.skills.scaffold.runtime.service.support.requiredSupportingFilesForSkill
-import skillbill.install.policy.PACK_SIDECAR_PARENT_SKILL
+import skillbill.install.model.PACK_SIDECAR_PARENT_SKILL
 import skillbill.model.toPath
 import skillbill.scaffold.policy.APPROVED_CODE_REVIEW_AREAS
 import skillbill.scaffold.policy.platformpack.model.PlatformPackManifestRenderRequest
@@ -140,7 +140,7 @@ class ScaffoldServiceParityTest {
       val before = snapshotTree(repo)
 
       val error =
-        assertFailsWith<MissingRequiredSectionError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(
               repo,
@@ -149,6 +149,8 @@ class ScaffoldServiceParityTest {
               "content_body" to "## Descriptor\n\nGenerated wrapper content must not be authored here.",
             ),
           )
+        }.also { failure ->
+          assertEquals(SkillStagingFailureCode.MISSING_REQUIRED_SECTION, failure.code)
         }
 
       assertContains(error.message.orEmpty(), "generated wrapper boilerplate heading '## Descriptor'")
@@ -164,7 +166,7 @@ class ScaffoldServiceParityTest {
       val before = snapshotTree(repo)
 
       val error =
-        assertFailsWith<MissingRequiredSectionError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(
               repo,
@@ -173,6 +175,8 @@ class ScaffoldServiceParityTest {
               "content_body" to "## Descriptor\n\nGenerated wrapper content must not be authored here.",
             ),
           )
+        }.also { failure ->
+          assertEquals(SkillStagingFailureCode.MISSING_REQUIRED_SECTION, failure.code)
         }
 
       assertContains(error.message.orEmpty(), "generated wrapper boilerplate heading '## Descriptor'")
@@ -189,12 +193,12 @@ class PlatformPackScaffoldParityTest {
       val before = snapshotTree(repo)
 
       val error =
-        assertFailsWith<InvalidScaffoldPayloadError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(repo, "platform-pack", "platform" to "java") +
               mapOf("subagent_specialists" to listOf("arch", "perf")),
           )
-        }
+        }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
 
       assertContains(error.message.orEmpty(), "exactly one manifest-derived native agent")
       assertEquals(before, snapshotTree(repo))
@@ -282,11 +286,11 @@ class PlatformPackScaffoldParityTest {
       val before = snapshotTree(repo)
 
       val error =
-        assertFailsWith<InvalidScaffoldPayloadError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(repo, "platform-pack", "platform" to "java") + mapOf("no_subagents" to true),
           )
-        }
+        }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
 
       assertContains(error.message.orEmpty(), "exactly one manifest-derived native agent")
       assertEquals(before, snapshotTree(repo))
@@ -300,7 +304,7 @@ class ScaffoldAuthoringParityTest {
       val repo = seedRepo()
       val before = snapshotTree(repo)
       val error =
-        assertFailsWith<RetiredScaffoldKindError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(
               repo,
@@ -310,7 +314,7 @@ class ScaffoldAuthoringParityTest {
               "name" to "bill-kotlin-code-review-performance",
             ),
           )
-        }
+        }.also { assertEquals(ScaffoldFailureCode.RETIRED_KIND, it.code) }
 
       assertContains(error.message.orEmpty(), "retired for new partial scaffold creation")
       assertEquals(before, snapshotTree(repo))
@@ -322,7 +326,7 @@ class ScaffoldAuthoringParityTest {
       val repo = seedRepo()
       val before = snapshotTree(repo)
       val error =
-        assertFailsWith<RetiredScaffoldKindError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(
               repo,
@@ -342,7 +346,7 @@ class ScaffoldAuthoringParityTest {
                 """.trimMargin(),
             ),
           )
-        }
+        }.also { assertEquals(ScaffoldFailureCode.RETIRED_KIND, it.code) }
 
       assertContains(error.message.orEmpty(), "platform-pack")
       assertEquals(before, snapshotTree(repo))
@@ -356,7 +360,7 @@ class ScaffoldAuthoringParityTest {
       val before = snapshotTree(repo)
 
       val error =
-        assertFailsWith<RetiredScaffoldKindError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(
               repo,
@@ -367,7 +371,7 @@ class ScaffoldAuthoringParityTest {
               "content_body" to "## Descriptor\n\nGenerated wrapper content must not be authored here.",
             ),
           )
-        }
+        }.also { assertEquals(ScaffoldFailureCode.RETIRED_KIND, it.code) }
 
       assertContains(error.message.orEmpty(), "retired for new partial scaffold creation")
       assertEquals(before, snapshotTree(repo))
@@ -387,31 +391,31 @@ class ScaffoldAuthoringParityTest {
         mapOf("subagent_specialists" to listOf("foo"), "no_subagents" to true) to "no_subagents=true",
       ).forEach { (extraPayload, expected) ->
         assertContains(
-          assertFailsWith<InvalidScaffoldPayloadError> {
+          assertFailsWith<SkillBillRuntimeException> {
             scaffold(payload(repo, "horizontal", "name" to "bill-mixed-orchestrator") + extraPayload)
-          }.message.orEmpty(),
+          }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }.message.orEmpty(),
           expected,
         )
       }
-      assertFailsWith<RetiredScaffoldKindError> {
+      assertFailsWith<SkillBillRuntimeException> {
         scaffold(
           payload(repo, "code-review-area", "platform" to "kotlin", "area" to "performance") +
             mapOf("name" to "bill-kotlin-code-review-performance", "subagent_specialists" to listOf("x")),
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.RETIRED_KIND, it.code) }
       assertContains(
-        assertFailsWith<InvalidScaffoldPayloadError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(repo, "add-on", "platform" to "kotlin", "name" to "review-helper") +
               mapOf("subagent_specialists" to listOf("x")),
           )
-        }.message.orEmpty(),
+        }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }.message.orEmpty(),
         "subagent_specialists is only valid for orchestrator kinds",
       )
       assertContains(
-        assertFailsWith<InvalidScaffoldPayloadError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(payload(repo, "platform-pack", "platform" to "java") + mapOf("specialist_areas" to listOf("mobile")))
-        }.message.orEmpty(),
+        }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }.message.orEmpty(),
         "no longer supported",
       )
     }
@@ -605,7 +609,7 @@ class ScaffoldAuthoringParityTest {
       val repo = seedRepo()
       val before = snapshotTree(repo)
       val error =
-        assertFailsWith<RetiredScaffoldKindError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(
               repo,
@@ -615,7 +619,7 @@ class ScaffoldAuthoringParityTest {
               "name" to "bill-kmp-feature-verify",
             ),
           )
-        }
+        }.also { assertEquals(ScaffoldFailureCode.RETIRED_KIND, it.code) }
 
       assertContains(error.message.orEmpty(), "retired for new partial scaffold creation")
       assertEquals(before, snapshotTree(repo))
@@ -641,7 +645,7 @@ class ScaffoldAuthoringParityTest {
       val repo = seedRepo()
       val before = snapshotTree(repo)
       val error =
-        assertFailsWith<RetiredScaffoldKindError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(
               repo,
@@ -651,7 +655,7 @@ class ScaffoldAuthoringParityTest {
               "name" to "bill-kotlin-code-check",
             ),
           )
-        }
+        }.also { assertEquals(ScaffoldFailureCode.RETIRED_KIND, it.code) }
 
       assertContains(error.message.orEmpty(), "platform-pack")
       assertEquals(before, snapshotTree(repo))
@@ -663,7 +667,7 @@ class ScaffoldAuthoringParityTest {
       val repo = seedRepo()
       val before = snapshotTree(repo)
       val error =
-        assertFailsWith<RetiredScaffoldKindError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(
               repo,
@@ -683,7 +687,7 @@ class ScaffoldAuthoringParityTest {
                 """.trimMargin(),
             ),
           )
-        }
+        }.also { assertEquals(ScaffoldFailureCode.RETIRED_KIND, it.code) }
 
       assertContains(error.message.orEmpty(), "retired for new partial scaffold creation")
       assertEquals(before, snapshotTree(repo))
@@ -699,7 +703,7 @@ class ScaffoldAuthoringParityTest {
       val beforeManifest = Files.readAllBytes(manifestPath)
 
       val error =
-        assertFailsWith<RetiredScaffoldKindError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(
               repo,
@@ -710,7 +714,7 @@ class ScaffoldAuthoringParityTest {
               "content_body" to "## Descriptor\n\nGenerated wrapper content must not be authored here.",
             ),
           )
-        }
+        }.also { assertEquals(ScaffoldFailureCode.RETIRED_KIND, it.code) }
 
       assertContains(error.message.orEmpty(), "retired for new partial scaffold creation")
       assertEquals(before, snapshotTree(repo))
@@ -731,7 +735,7 @@ class ScaffoldAuthoringParityTest {
       Files.delete(repo.resolve("platform-packs/kotlin/code-review/bill-kotlin-code-review/content.md"))
       val before = snapshotTree(repo)
 
-      assertFailsWith<RetiredScaffoldKindError> {
+      assertFailsWith<SkillBillRuntimeException> {
         scaffold(
           payload(
             repo,
@@ -741,7 +745,7 @@ class ScaffoldAuthoringParityTest {
             "name" to "bill-kotlin-code-review-performance",
           ),
         )
-      }
+      }.also { assertEquals(ScaffoldFailureCode.RETIRED_KIND, it.code) }
 
       assertEquals(before, snapshotTree(repo))
       assertEquals("keep me", Files.readString(unrelated))
@@ -786,19 +790,21 @@ class ScaffoldAuthoringParityTest {
       seedBaseSkill(repo, "skill-bill")
       val before = snapshotTree(repo)
 
-      assertFailsWith<InvalidAgentAddonSchemaError> {
-        scaffold(
-          payload(
-            repo,
-            "agent-addon",
-            "slug" to "../escaped",
-            "description" to "Review helper",
-            "agent_ids" to listOf("codex"),
-            "consumers" to listOf("skill-bill"),
-          ),
-        )
-      }
+      val error =
+        assertFailsWith<SkillBillRuntimeException> {
+          scaffold(
+            payload(
+              repo,
+              "agent-addon",
+              "slug" to "../escaped",
+              "description" to "Review helper",
+              "agent_ids" to listOf("codex"),
+              "consumers" to listOf("skill-bill"),
+            ),
+          )
+        }
 
+      assertEquals(AgentAddonFailureCode.INVALID_SCHEMA, error.code)
       assertEquals(before, snapshotTree(repo))
       assertFalse(Files.exists(repo.parent.resolve("escaped")))
     }
@@ -812,12 +818,12 @@ class PlatformPackNativeAgentScaffoldTest {
       val before = snapshotTree(repo)
 
       val error =
-        assertFailsWith<InvalidScaffoldPayloadError> {
+        assertFailsWith<SkillBillRuntimeException> {
           scaffold(
             payload(repo, "platform-pack", "platform" to "java") +
               mapOf("subagent_specialists" to listOf("bill-java-code-review")),
           )
-        }
+        }.also { assertEquals(ScaffoldFailureCode.INVALID_PAYLOAD, it.code) }
 
       assertContains(error.message.orEmpty(), "exactly one manifest-derived native agent")
       assertEquals(before, snapshotTree(repo))

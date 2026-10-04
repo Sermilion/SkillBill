@@ -1,6 +1,7 @@
 package skillbill.infrastructure.launcher.process.launch
 
 import me.tatarka.inject.annotations.Inject
+import skillbill.error.core.failureCodeLabel
 import skillbill.goalrunner.model.GoalRunnerProcessState
 import skillbill.infrastructure.host.jvm.GateJvmResolver
 import skillbill.infrastructure.launcher.process.waitloop.ProcessLifecycleEmitter
@@ -10,6 +11,7 @@ import skillbill.infrastructure.launcher.process.waitloop.readStartupObserved
 import skillbill.infrastructure.launcher.process.waitloop.writeAndCloseStdin
 import skillbill.ports.agentrun.model.AgentRunLivenessSnapshot
 import skillbill.ports.agentrun.model.AgentRunOutputStream
+import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
 import java.io.IOException
 import java.io.InputStream
@@ -34,16 +36,37 @@ class JvmAgentRunProcessRunner(
 
   private fun runGoverned(request: AgentRunProcessRequest): AgentRunProcessResult {
     var startedProcess: ProcessStart? = null
-    val processStart =
+    val authorized =
       runCatching {
         request.review.spawnAuthorization?.withAuthorization {
           startProcess(request).also { startedProcess = it }
-        } ?: startProcess(request).also { startedProcess = it }
+        } ?: AgentRunSpawnAuthorizationResult.Authorized(startProcess(request).also { startedProcess = it })
       }.getOrElse { failure ->
         cleanupProcessStart(startedProcess)
         throw failure
       }
-    return when (processStart) {
+    return when (authorized) {
+      is AgentRunSpawnAuthorizationResult.Denied -> spawnDenied(authorized)
+      is AgentRunSpawnAuthorizationResult.Authorized -> settleProcessStart(authorized.value, request)
+    }
+  }
+
+  private fun spawnDenied(denied: AgentRunSpawnAuthorizationResult.Denied): AgentRunProcessResult =
+    AgentRunProcessResult(
+      exitStatus = null,
+      stdout = "",
+      stderr = "",
+      timedOut = false,
+      interrupted = false,
+      spawnFailed = false,
+      spawnDenied = denied,
+    )
+
+  private fun settleProcessStart(
+    processStart: ProcessStart,
+    request: AgentRunProcessRequest,
+  ): AgentRunProcessResult =
+    when (processStart) {
       is ProcessStart.Failed -> spawnFailure(processStart.error)
       is ProcessStart.Started ->
         runStartedProcess(
@@ -53,7 +76,6 @@ class JvmAgentRunProcessRunner(
           request = request,
         )
     }
-  }
 
   companion object {
     private val liveProcesses = ConcurrentHashMap.newKeySet<Process>()
@@ -101,7 +123,8 @@ class JvmAgentRunProcessRunner(
 
     private fun boundedTeardownFailureDetail(failure: Throwable): String {
       val message = failure.message?.takeIf { it.isNotBlank() }
-      return (message ?: failure::class.simpleName.orEmpty()).take(TEARDOWN_FAILURE_DETAIL_LIMIT)
+      return (message ?: failure.failureCodeLabel() ?: failure::class.simpleName.orEmpty())
+        .take(TEARDOWN_FAILURE_DETAIL_LIMIT)
     }
 
     private const val TEARDOWN_FAILURE_DETAIL_LIMIT = 240

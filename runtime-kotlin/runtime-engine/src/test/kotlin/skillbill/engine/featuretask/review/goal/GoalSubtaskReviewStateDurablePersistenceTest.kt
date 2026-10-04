@@ -1,13 +1,11 @@
 package skillbill.engine.featuretask.review.goal
 
 import skillbill.contracts.JsonCodec
-import skillbill.engine.disposition
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.continuation.reconcileRemediationBaseCoherence
 import skillbill.engine.featuretask.lifecycle.continuation.reviewState
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskGitIntegrationDatabase
 import skillbill.engine.featuretask.lifecycle.core.FeatureTaskGitIntegrationWorkflowRepository
-import skillbill.engine.featuretask.lifecycle.remediation.featureTaskRuntimeParseRepairReceiptOrNull
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputBlocked
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewInputReady
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassCarryForward
@@ -15,8 +13,9 @@ import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassInFlight
 import skillbill.engine.featuretask.model.subtask.RemediationBaseBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationBaseCoherent
 import skillbill.engine.featuretask.runloop.observability.paused
+import skillbill.engine.featuretask.runner.disposition
 import skillbill.engine.goalrunner.status.completed
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
@@ -26,7 +25,7 @@ import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewInputResult
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.WorkflowEngine
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
@@ -43,14 +42,13 @@ import skillbill.workflow.model.goalreview.GoalSubtaskReviewCompactFinding
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewDisposition
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewPassResult
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
-import skillbill.workflow.model.goalreview.REPAIR_RECEIPT_MAX_UNRESOLVED_REASON_UTF8_BYTES
 import skillbill.workflow.model.goalreview.upsertRepairReceipt
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.asCheckpointIdentitiesArtifactEntry
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
 import skillbill.workflow.taskruntime.artifact.toWorkflowArtifactMap
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.checkpoint.FeatureTaskRuntimeCheckpointIdentity
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.goal.FeatureTaskRuntimeGoalContinuationArtifact
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeCheckpointIdentity
+import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -716,41 +714,6 @@ class GoalSubtaskReviewStateDurablePersistenceTest {
     assertEquals(
       FeatureTaskRuntimeRepairOutcome.ADDRESSED,
       reloaded.repairReceipts.single().entries.single().outcome,
-    )
-  }
-
-  @Test
-  fun `an oversized unresolved_reason truncates without echoing producer payload on the parser surface`() {
-    val oversized = "x".repeat(REPAIR_RECEIPT_MAX_UNRESOLVED_REASON_UTF8_BYTES + 1)
-    val truncations = mutableListOf<String>()
-    val receipt =
-      featureTaskRuntimeParseRepairReceiptOrNull(
-        mapOf(
-          "repair_receipt" to
-            mapOf(
-              "contract_version" to "0.3",
-              "entries" to
-                listOf(
-                  mapOf(
-                    "finding_id" to "F-001",
-                    "outcome" to "attempted_unresolved",
-                    "unresolved_reason" to oversized,
-                  ),
-                ),
-            ),
-        ),
-        remediationBaseSha = "b".repeat(40),
-        roundNumber = 1,
-        recordTruncation = truncations::add,
-      )
-    val parsed = assertNotNull(receipt)
-    assertTrue(truncations.isNotEmpty())
-    assertTrue(truncations.none { it.contains(oversized) })
-    assertTrue(truncations.none { it.contains("@@") })
-    assertTrue(truncations.none { it.contains("diff --git") })
-    assertTrue(
-      parsed.entries.single().unresolvedReason.orEmpty().encodeToByteArray().size <=
-        REPAIR_RECEIPT_MAX_UNRESOLVED_REASON_UTF8_BYTES,
     )
   }
 

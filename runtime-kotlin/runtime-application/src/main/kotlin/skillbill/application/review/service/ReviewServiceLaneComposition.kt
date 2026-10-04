@@ -1,6 +1,9 @@
 package skillbill.application.review.service
 
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.preparation.ReviewAttributionPort
 import skillbill.review.attribution.canonicalPackSkillNames
@@ -30,10 +33,12 @@ internal fun composedRunLanes(
   val plan =
     try {
       reviewAttributionPort.composedLaunchPlan(routedPackSlug)
-    } catch (error: ShellContentContractException) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isShellContentContractFailure())
       diagnostics.warning(
         "review lane composition: pack '$routedPackSlug' failed to compose " +
-          "(${error::class.simpleName}); run ${review.reviewRunId} imports with unresolved lanes " +
+          "(${error.failureCodeLabel() ?: error::class.simpleName}); " +
+          "run ${review.reviewRunId} imports with unresolved lanes " +
           "instead of the composed launch plan.",
         error,
       )

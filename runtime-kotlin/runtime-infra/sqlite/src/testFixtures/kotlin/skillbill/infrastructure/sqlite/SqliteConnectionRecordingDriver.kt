@@ -99,7 +99,11 @@ class SqliteConnectionRecordingDriver(
   private fun isRepairScan(sql: String): Boolean =
     sql.contains("SQLITE_MASTER") ||
       sql.contains("PRAGMA_TABLE_INFO") ||
-      (sql.contains("STATE_ENTERED_AT_ESTIMATED") && !sql.contains("EXCLUDED"))
+      (
+        sql.contains(
+          "STATE_ENTERED_AT_ESTIMATED",
+        ) && !sql.contains("EXCLUDED") && !sql.contains("WHERE WORKFLOW_ID = ?")
+      )
 
   override fun acceptsURL(url: String?): Boolean = delegate.acceptsURL(url)
 

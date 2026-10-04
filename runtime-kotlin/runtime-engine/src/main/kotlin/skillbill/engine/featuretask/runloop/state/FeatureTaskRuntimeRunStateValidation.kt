@@ -4,11 +4,13 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.engine.featuretask.slot.state.PhaseResumeRules
-import skillbill.engine.goalrunner.status.completed
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
+import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.decodeValidationEvidenceFromArtifact
-import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimePhaseOutput
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationEvidence
@@ -71,13 +73,26 @@ internal fun invalidateUnsettledResumedCompletions(
   state: ValidationSettlementState,
   validation: ValidationSettlementValidation,
 ) {
+  val gateOutputs =
+    state.initialRecords.values
+      .filter {
+        validation.resumeRules(
+          it.phaseId,
+        ).requiresValidCompletedOutput && it.status == WorkflowStepStatus.COMPLETED
+      }
+      .associate { it.phaseId to validation.validatedRecordToOutput(it) }
   state.completed.sortedBy(state.transitions.forwardPhaseIds::indexOf).forEach { stepId ->
     if (stepId !in state.completed) return@forEach
     val record = state.initialRecords[stepId] ?: return@forEach
     val output = {
       try {
-        validation.validatedRecordToOutput(record)
-      } catch (_: InvalidFeatureTaskRuntimePhaseOutputSchemaError) {
+        if (stepId in gateOutputs) gateOutputs[stepId] else validation.validatedRecordToOutput(record)
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code is FeatureTaskRuntimePhaseOutputFailureCode)
+        if (validation.resumeRules(stepId).requiresValidCompletedOutput
+        ) {
+          throw error
+        }
         null
       }
     }

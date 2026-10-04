@@ -3,8 +3,9 @@ package skillbill.engine.featuretask.runloop.output
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunFacts
 import skillbill.engine.featuretask.model.phase.GoalReviewPhaseCompletionRequest
-import skillbill.engine.featuretask.persist.RuntimeOwnedFactUnavailable
+import skillbill.engine.featuretask.runloop.core.BlockAndPersistArgs
 import skillbill.engine.featuretask.runloop.core.BlockAndPersistPayload
+import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunSessionObservations
 import skillbill.engine.featuretask.runloop.core.PhaseBlockRequest
 import skillbill.engine.featuretask.runloop.core.PhaseOutcome
 import skillbill.engine.featuretask.runloop.core.PhaseReviewPersistenceArgs
@@ -15,20 +16,26 @@ import skillbill.engine.featuretask.runloop.core.PhaseStateWriteArgs
 import skillbill.engine.featuretask.runloop.core.phaseBlockArgs
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.phase.FeatureTaskRuntimeRunLoopPhaseBlocking
-import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeProgressSnapshotAccess
+import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunTransitionOwner
 import skillbill.engine.featuretask.runner.STATUS_COMPLETED
 import skillbill.engine.featuretask.slot.state.PhaseRunGoal
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
+import skillbill.workflow.taskruntime.model.handoff.assembly.FeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
-import skillbill.workflow.taskruntime.model.phase.AcceptedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseOutputRepairEvidence
 
 internal data class ReviewOutputPersistenceContext(
   val request: FeatureTaskRuntimeRunFacts,
-  val state: FeatureTaskRuntimeRunState,
+  val state: FeatureTaskRuntimeProgressSnapshotAccess,
+  val transitions: FeatureTaskRuntimeRunTransitionOwner,
+  val session: FeatureTaskRuntimeRunSessionObservations,
   val recorder: PhaseRunRecords,
   val observability: FeatureTaskRuntimeRunObservability,
   val goalContinuationRecorder: PhaseRunGoal,
@@ -36,14 +43,14 @@ internal data class ReviewOutputPersistenceContext(
 
 internal fun isGoalReviewRun(
   run: PhaseRun,
-  state: FeatureTaskRuntimeRunState,
+  state: FeatureTaskRuntimeProgressSnapshotAccess,
 ): Boolean = state.resumeRules(run.phaseId).tracksReviewPasses && isGoalContinuationRun(run.request)
 
 object FeatureTaskRuntimeRunLoopReviewCompletion {
   internal fun ReviewOutputPersistenceContext.persistStandaloneReviewCompletion(
     args: PhaseReviewPersistenceArgs,
     outputText: String,
-    acceptedOutput: AcceptedFeatureTaskRuntimePhaseOutput,
+    acceptedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
   ): PhaseOutcome? {
     val run = args.run
     val iteration = args.iteration
@@ -51,12 +58,12 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
     val persisted =
       try {
         recordStandaloneReviewCompletion(args, outputText, acceptedOutput)
-      } catch (error: RuntimeOwnedFactUnavailable) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code == RuntimeOwnedPersistenceFailureCode.FACT_UNAVAILABLE)
         return FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-          request,
           state,
+          transitions,
           recorder,
-          observability,
           PhaseBlockRequest(
             run = run,
             attemptCount = iteration,
@@ -72,10 +79,9 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
       null
     } else {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-        request,
         state,
+        transitions,
         recorder,
-        observability,
         PhaseBlockRequest(
           run = run,
           attemptCount = iteration,
@@ -90,9 +96,9 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
   private fun ReviewOutputPersistenceContext.recordStandaloneReviewCompletion(
     args: PhaseReviewPersistenceArgs,
     outputText: String,
-    acceptedOutput: AcceptedFeatureTaskRuntimePhaseOutput,
-  ): Boolean =
-    recorder.recordCompletedPhase(
+    acceptedOutput: NormalizedFeatureTaskRuntimePhaseOutput,
+  ): Boolean {
+    val phaseState =
       FeatureTaskRuntimeRunLoopPhaseBlocking.phaseStateRequest(
         request,
         state,
@@ -109,13 +115,25 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
           extras =
             PhaseStateRequestAttachments(
               fileManifest = args.fileManifest,
-              normalizedOutput = acceptedOutput.normalizedOutput,
-              repairEvidence = acceptedOutput.repairEvidence,
-              reviewRunId = state.recordFor(args.run.phaseId)?.reviewRunId,
+              normalizedOutput = acceptedOutput,
+              repairEvidence = null,
+              reviewRunId = state.phase(args.run.phaseId).record?.reviewRunId,
             ),
         ),
-      ),
+      )
+    return transitions.persistAuthoritativePhaseCompletion(
+      recorder = recorder,
+      phaseState = phaseState,
+      inMemoryOutput =
+        FeatureTaskRuntimePhaseOutput(
+          args.run.phaseId,
+          args.iteration,
+          outputText,
+          acceptedOutput,
+          null,
+        ),
     )
+  }
 
   internal fun ReviewOutputPersistenceContext.persistGoalReviewCompletion(
     args: PhaseReviewPersistenceArgs,
@@ -129,15 +147,12 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
     val completion = goalReviewPhaseCompletionRequest(args, normalizedOutput, repairEvidence)
     val completed =
       runCatching {
-        recorder.completeGoalReviewPhase(
+        transitions.persistGoalReviewPhaseCompletion(
+          recorder = recorder,
           completion = completion,
         )
       }.getOrElse { error ->
-        return FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersistInPhase(
-          request,
-          state,
-          recorder,
-          goalContinuationRecorder,
+        val inPhase =
           phaseBlockArgs(
             run,
             iteration,
@@ -145,6 +160,21 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
               error.message.orEmpty(),
             observability,
             payload = BlockAndPersistPayload(fileManifest = fileManifest),
+          )
+        return FeatureTaskRuntimeRunLoopPhaseBlocking.blockAndPersist(
+          state,
+          transitions,
+          recorder,
+          goalContinuationRecorder,
+          BlockAndPersistArgs(
+            run = inPhase.run,
+            attemptCount = inPhase.attemptCount,
+            reason = inPhase.reason,
+            observability = inPhase.observability,
+            loopId = inPhase.run.reentry?.loopId,
+            edgeIteration = inPhase.run.reentry?.edgeIteration,
+            failureDisposition = inPhase.failureDisposition,
+            payload = inPhase.payload,
           ),
         )
       }
@@ -152,10 +182,9 @@ object FeatureTaskRuntimeRunLoopReviewCompletion {
       null
     } else {
       FeatureTaskRuntimeRunLoopPhaseBlocking.blockInPhase(
-        request,
         state,
+        transitions,
         recorder,
-        observability,
         PhaseBlockRequest(
           run = run,
           attemptCount = iteration,

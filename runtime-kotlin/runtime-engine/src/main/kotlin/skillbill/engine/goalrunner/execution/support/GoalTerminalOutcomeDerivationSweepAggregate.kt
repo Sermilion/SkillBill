@@ -2,9 +2,9 @@ package skillbill.engine.goalrunner.execution.support
 
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.goalrunner.model.GoalContinuationCandidate
-import skillbill.goalrunner.asGoalRunnerIntOrNull
 import skillbill.goalrunner.model.GoalRunnerStoredOutcome
 import skillbill.goalrunner.model.GoalRunnerTerminalStatus
+import skillbill.goalrunner.model.asGoalRunnerIntOrNull
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 
 fun List<GoalContinuationCandidate>.authoritativeOutcomesBySubtask(): Map<Int, GoalRunnerStoredOutcome> =

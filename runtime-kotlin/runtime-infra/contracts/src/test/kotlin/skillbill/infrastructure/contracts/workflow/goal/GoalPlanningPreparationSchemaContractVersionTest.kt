@@ -3,7 +3,7 @@ package skillbill.infrastructure.contracts.workflow.goal
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.SchemaIdentityRequest
 import skillbill.infrastructure.contracts.locator.GoalPlanningPreparationSchemaPaths
@@ -53,7 +53,7 @@ class GoalPlanningPreparationSchemaContractVersionTest {
         expectedSchemaId = GoalPlanningPreparationSchemaPaths.EXPECTED_SCHEMA_ID,
         expectedContractVersion = GOAL_PLANNING_PREPARATION_CONTRACT_VERSION,
         identityFailure = { reason ->
-          InvalidGoalPlanningPreparationSchemaError(
+          invalidGoalPlanningPreparationSchemaError(
             sourceLabel = GoalPlanningPreparationSchemaPaths.CLASSPATH_RESOURCE,
             fieldPath = "<schema>",
             reason = reason,

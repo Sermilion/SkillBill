@@ -1,6 +1,6 @@
 package skillbill.goalrunner.model
 
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
@@ -61,7 +61,7 @@ fun parseExecutionLeaseInstant(
     try {
       OffsetDateTime.parse(value).toInstant()
     } catch (error: DateTimeParseException) {
-      throw InvalidWorkflowStateSchemaError(
+      throw invalidWorkflowStateSchemaError(
         "Goal runner execution lease field '$field' must be an RFC 3339 instant.",
         error,
       )
@@ -140,3 +140,34 @@ data class GoalRunnerControlState(
         }
     )
 }
+
+fun GoalRunnerControlState.pauseAtOperatorBoundary(
+  pausedAtNow: String,
+  targetReached: Boolean = false,
+): GoalRunnerControlState =
+  when {
+    paused -> copy(stopAfterConsumed = stopAfterConsumed || targetReached)
+    pauseRequested ->
+      copy(
+        pauseConsumed = true,
+        paused = true,
+        pauseReason = pauseReason ?: GOAL_PAUSE_REASON_OPERATOR_REQUEST,
+        pausedAt = pausedAtNow,
+        stopAfterConsumed = stopAfterConsumed || targetReached,
+      )
+    targetReached ->
+      copy(
+        paused = true,
+        pauseReason = GOAL_PAUSE_REASON_STOP_AFTER_SUBTASK,
+        pausedAt = pausedAtNow,
+        stopAfterConsumed = true,
+      )
+    else -> this
+  }
+
+fun GoalRunnerControlState.targetReached(manifest: DecompositionManifest): Boolean =
+  stopAfterSubtaskId?.let { targetId ->
+    manifest.subtasks.any {
+      it.id == targetId && it.status.decompositionStatus() == DecompositionStatus.COMPLETE
+    }
+  } == true && !stopAfterConsumed

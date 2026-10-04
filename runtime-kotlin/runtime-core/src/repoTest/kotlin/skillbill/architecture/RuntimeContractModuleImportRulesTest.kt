@@ -3,6 +3,7 @@ package skillbill.architecture
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class RuntimeContractModuleImportRulesTest {
   @Test
@@ -27,9 +28,26 @@ class RuntimeContractModuleImportRulesTest {
   fun `scanner rejects the imports each module bans and accepts the neighbours it allows`() {
     val source =
       """
+      package skillbill.model
+      import java.time.Instant
+      import kotlin.text.Regex
       import java.nio.file.Files
       import java.nio.file.Path
       """.trimIndent()
+
+    assertEquals(
+      emptyList(),
+      forbiddenImportsIn(
+        "Domain.kt",
+        """
+        package skillbill.model
+        import java.time.Instant
+        import kotlin.text.Regex
+        """.trimIndent(),
+        DOMAIN_FORBIDDEN_IMPORT_PREFIXES,
+      ),
+      "Domain must accept imports from allowed neighbour packages.",
+    )
 
     assertEquals(
       listOf("Domain.kt: import java.nio.file.Files", "Domain.kt: import java.nio.file.Path"),
@@ -41,6 +59,22 @@ class RuntimeContractModuleImportRulesTest {
       forbiddenImportsIn("Ports.kt", source, PORTS_FORBIDDEN_IMPORT_PREFIXES),
       "runtime-ports may still name a Path in a DTO; only filesystem access is banned there.",
     )
+  }
+
+  @Test
+  fun `shared scanner ignores indented package and import text`() {
+    val source =
+      """
+      package fixture.real
+      import java.time.Instant
+        package fixture.indented
+        import java.nio.file.Files
+      """.trimIndent()
+
+    assertEquals("fixture.real", ArchitectureScanSupport.declaredPackage(source))
+    assertEquals(listOf("java.time.Instant"), ArchitectureScanSupport.declaredImports(source))
+    assertNull(ArchitectureScanSupport.declaredPackage("  package fixture.indented"))
+    assertEquals(emptyList(), ArchitectureScanSupport.declaredImports("  import java.nio.file.Files"))
   }
 
   private fun forbiddenImportViolations(

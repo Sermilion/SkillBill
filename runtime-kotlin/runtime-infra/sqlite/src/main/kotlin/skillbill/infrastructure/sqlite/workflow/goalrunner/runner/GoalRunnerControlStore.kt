@@ -1,7 +1,7 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.runner
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.goalrunner.model.GoalRunnerControlState
 import skillbill.infrastructure.sqlite.core.ops.bindAll
@@ -10,8 +10,10 @@ import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import java.sql.Connection
 
-internal fun goalRunnerControlSchemaError(reason: String): Nothing =
-  throw InvalidWorkflowStateSchemaError("Goal runner control state: $reason")
+internal fun goalRunnerControlSchemaError(
+  reason: String,
+  cause: Throwable? = null,
+): Nothing = throw invalidWorkflowStateSchemaError("Goal runner control state: $reason", cause)
 
 internal class GoalRunnerControlStore(
   private val connection: Connection,

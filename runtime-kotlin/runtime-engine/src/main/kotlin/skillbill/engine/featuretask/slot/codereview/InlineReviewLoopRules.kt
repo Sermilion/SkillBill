@@ -3,14 +3,15 @@ package skillbill.engine.featuretask.slot.codereview
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
 import skillbill.engine.featuretask.review.core.FeatureTaskRuntimeScopedReviewBaseline
 import skillbill.engine.featuretask.slot.PhaseEntrySettlement
+import skillbill.engine.featuretask.slot.PhaseLoopContext
 import skillbill.engine.featuretask.slot.PhaseLoopRules
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
-import skillbill.engine.featuretask.slot.state.PhaseStepState
+import skillbill.engine.featuretask.slot.state.PhaseAcceptedStepExecution
+import skillbill.engine.featuretask.slot.state.PhaseReviewStepBinding
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
 import skillbill.workflow.model.goalreview.GoalSubtaskReviewState
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
-import skillbill.workflow.taskruntime.model.phase.requireAcceptedOutput
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
 
 internal object InlineReviewLoopRules : PhaseLoopRules {
@@ -18,61 +19,59 @@ internal object InlineReviewLoopRules : PhaseLoopRules {
   private const val REVIEW_FIX_LOOP = FeatureTaskRuntimePhaseWorkflowDefinition.REVIEW_FIX_LOOP_ID
 
   override fun reopenStaleSettledSteps(
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseLoopContext,
+    state: PhaseAcceptedStepExecution,
   ) {
     if (!cappedReviewIsStale(context, state)) return
-    checkNotNull(state.persistReviewGenerationInvalidation(REVIEW)) {
+    checkNotNull(state.asReviewBinding().invalidateReviewGeneration(REVIEW, REVIEW_FIX_LOOP)) {
       "Could not durably reopen the stale capped review for workflow '${context.request.workflowId}'."
     }
   }
 
   override fun invalidateStaleEvidence(
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseLoopContext,
+    state: PhaseAcceptedStepExecution,
   ) {
     if (!state.isEvidenceInvalidated(REVIEW)) return
-    val generation =
-      checkNotNull(state.persistReviewGenerationInvalidation(REVIEW)) {
-        "Could not durably invalidate legacy review evidence for workflow '${context.request.workflowId}'."
-      }
-    state.advanceReviewGeneration(generation, REVIEW_FIX_LOOP, REVIEW)
+    checkNotNull(state.asReviewBinding().invalidateReviewGeneration(REVIEW, REVIEW_FIX_LOOP)) {
+      "Could not durably invalidate legacy review evidence for workflow '${context.request.workflowId}'."
+    }
   }
 
   override fun discardsResumedReentry(
     loopId: String,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): Boolean = loopId == REVIEW_FIX_LOOP && !state.isStepCompleted(REVIEW)
 
   override fun resumesInFlightReentry(loopId: String): Boolean = loopId == REVIEW_FIX_LOOP
 
   override fun reentryCheckpoint(
     loopId: String,
-    state: PhaseStepState,
-  ): String? = if (loopId == REVIEW_FIX_LOOP) state.reviewedCheckpointFingerprint(REVIEW) else null
+    state: PhaseAcceptedStepExecution,
+  ): String? = if (loopId == REVIEW_FIX_LOOP) state.asReviewBinding().reviewedCheckpointFingerprint(REVIEW) else null
 
   override fun entryBlockReason(
     stepId: String,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseLoopContext,
+    state: PhaseAcceptedStepExecution,
   ): String? =
     if (stepId == REVIEW && isGoalContinuationRun(context.request) && state.isStepCompleted(stepId)) {
-      reconcileReservedReviewPass(stepId, context, state)
+      reconcileReservedReviewPass(stepId, state)
     } else {
       null
     }
 
   override fun settleWithoutLaunch(
     stepId: String,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseLoopContext,
+    state: PhaseAcceptedStepExecution,
   ): PhaseEntrySettlement? {
     if (stepId != REVIEW || !isGoalContinuationRun(context.request)) return null
-    return runCatching { state.goalReviewState() }.fold(
+    return runCatching { state.asReviewBinding().goalReviewState() }.fold(
       onSuccess = { reviewState ->
         reviewState
           ?.takeIf { it.reviewCapReached || it.reviewSkippedByUser }
-          ?.let { settleCarriedForward(stepId, context, state, it) }
+          ?.let { settleCarriedForward(stepId, state, it) }
       },
       onFailure = { error -> carriedForwardBlock(error.message.orEmpty()) },
     )
@@ -81,9 +80,9 @@ internal object InlineReviewLoopRules : PhaseLoopRules {
   override fun routedVerdict(
     stepId: String,
     verdict: FeatureTaskRuntimeVerdict,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): FeatureTaskRuntimeVerdict =
-    if (stepId == REVIEW && state.goalReviewState()?.reviewCapReached == true) {
+    if (stepId == REVIEW && state.asReviewBinding().goalReviewState()?.reviewCapReached == true) {
       FeatureTaskRuntimeVerdict.REVIEW_CAP_REACHED
     } else {
       verdict
@@ -91,15 +90,16 @@ internal object InlineReviewLoopRules : PhaseLoopRules {
 
   private fun reconcileReservedReviewPass(
     stepId: String,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): String? =
-    runCatching { state.goalReviewState() }.fold(
+    runCatching { state.asReviewBinding().goalReviewState() }.fold(
       onSuccess = { reviewState ->
         when {
           reviewState == null ->
             "Goal-subtask review persistence.state is missing while reconciling a completed review pass."
-          reviewState.reservedPassNumber != null -> reconcileReservedReviewOutput(stepId, context, state)
+          reviewState.reservedPassNumber != null -> {
+            reconcileReservedReviewOutput(stepId, state)
+          }
           else -> null
         }
       },
@@ -111,15 +111,14 @@ internal object InlineReviewLoopRules : PhaseLoopRules {
 
   private fun reconcileReservedReviewOutput(
     stepId: String,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
   ): String? =
     state.completedStepPayload(stepId)?.let { output ->
       runCatching {
-        context.outputValidator.validatePhaseOutput(output, sourceLabel = stepId).requireAcceptedOutput(stepId)
+        NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(output, stepId)
       }.fold(
         onSuccess = { accepted ->
-          if (state.completeReservedReviewPass(output, accepted.normalizedOutput.envelopeWireMap())) {
+          if (state.asReviewBinding().completeReservedReviewPass(output, accepted.envelopeWireMap())) {
             null
           } else {
             "Completed goal-subtask review could not persist its reserved pass."
@@ -133,13 +132,12 @@ internal object InlineReviewLoopRules : PhaseLoopRules {
 
   private fun settleCarriedForward(
     stepId: String,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
     reviewState: GoalSubtaskReviewState,
   ): PhaseEntrySettlement =
-    runCatching { state.carriedForwardReviewResult() }.fold(
+    runCatching { state.asReviewBinding().carriedForwardReviewResult() }.fold(
       onSuccess = { rawResult ->
-        rawResult?.let { recordCarriedForward(stepId, context, state, it, reviewState) }
+        rawResult?.let { recordCarriedForward(stepId, state, it, reviewState) }
           ?: carriedForwardBlock(null)
       },
       onFailure = { error -> carriedForwardBlock(error.message.orEmpty()) },
@@ -147,15 +145,13 @@ internal object InlineReviewLoopRules : PhaseLoopRules {
 
   private fun recordCarriedForward(
     stepId: String,
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    state: PhaseAcceptedStepExecution,
     rawResult: String,
     reviewState: GoalSubtaskReviewState,
   ): PhaseEntrySettlement =
     runCatching {
-      val accepted =
-        context.outputValidator.validatePhaseOutput(rawResult, stepId).requireAcceptedOutput(stepId)
-      state.settleCarriedForwardReview(accepted)
+      val accepted = NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(rawResult, stepId)
+      state.asReviewBinding().settleCarriedForwardReview(accepted)
     }.fold(
       onSuccess = { PhaseEntrySettlement.Completed(requireNotNull(reviewState.passResults.lastOrNull()).verdict) },
       onFailure = { error -> carriedForwardBlock(error.message.orEmpty()) },
@@ -171,17 +167,19 @@ internal object InlineReviewLoopRules : PhaseLoopRules {
     )
 
   private fun cappedReviewIsStale(
-    context: PhaseAttemptEnvironment,
-    state: PhaseStepState,
+    context: PhaseLoopContext,
+    state: PhaseAcceptedStepExecution,
   ): Boolean {
     val request = context.request
     val goalBranch = request.goalContinuation?.goalBranch ?: return false
     val reviewState =
-      state.goalReviewState()
+      state
+        .asReviewBinding()
+        .goalReviewState()
         ?.takeIf { it.reviewCapReached || it.pausedForOperatorDecision }
         ?: return false
     val judgedDigest = reviewState.reviewedDeltaDigest ?: return true
-    val gitOperations = context.phaseGates.gitOperations
+    val gitOperations = context.gitOperations
     val resolved = state.resolvedBranch()
     val digests =
       listOfNotNull(reviewState.remediationBaseSha, reviewState.reviewBaseSha).distinct().mapNotNull { base ->
@@ -192,4 +190,6 @@ internal object InlineReviewLoopRules : PhaseLoopRules {
       }
     return digests.isNotEmpty() && judgedDigest !in digests
   }
+
+  private fun PhaseAcceptedStepExecution.asReviewBinding(): PhaseReviewStepBinding = this as PhaseReviewStepBinding
 }

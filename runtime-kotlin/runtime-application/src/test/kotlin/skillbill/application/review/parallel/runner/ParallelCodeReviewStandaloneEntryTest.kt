@@ -6,6 +6,7 @@ import skillbill.application.review.snapshot.ReviewRecorder
 import skillbill.application.review.snapshot.diffForPaths
 import skillbill.application.review.snapshot.harnessRequest
 import skillbill.application.review.snapshot.reviewHarness
+import skillbill.application.review.snapshot.reviewed
 import skillbill.application.review.snapshot.sparseReviewPack
 import skillbill.application.runner
 import kotlin.test.Test
@@ -36,7 +37,7 @@ class ParallelCodeReviewStandaloneEntryTest {
           },
         ),
         recorder,
-      ).run(harnessRequest(reviewRunId = "standalone-single-lane"))
+      ).reviewed(harnessRequest(reviewRunId = "standalone-single-lane"))
 
     assertEquals(
       1,

@@ -7,13 +7,13 @@ import skillbill.engine.featuretask.runloop.observability.loopEdge
 import skillbill.engine.featuretask.runner.skeletonDefinitionFor
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
 import skillbill.engine.featuretask.slot.PhaseStrategySelectionFacts
-import skillbill.engine.featuretask.slot.attempt.PhaseAttemptEnvironment
+import skillbill.engine.featuretask.slot.attempt.PhaseRunLoopAttemptCollaborators
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeBackwardEdge
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeNextPhase
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
-import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
+import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
 
 internal fun strategySelectionFacts(request: FeatureTaskRuntimeRunFacts): PhaseStrategySelectionFacts =
   PhaseStrategySelectionFacts(
@@ -23,13 +23,9 @@ internal fun strategySelectionFacts(request: FeatureTaskRuntimeRunFacts): PhaseS
 
 internal fun slotStepVerdictRule(
   strategies: PhaseStrategyLookup,
-  facts: PhaseStrategySelectionFacts,
+  plan: ResolvedPhaseExecutionPlan,
   diagnostics: RuntimeDiagnostics,
-): (String) -> FeatureTaskRuntimeStepVerdictRule? =
-  { stepId ->
-    stepId.takeIf { id -> PhaseSlot.entries.any { slot -> id in slot.steps } }
-      ?.let { id -> strategies.strategyOrNull(id, facts)?.verdictRule(id, diagnostics) }
-  }
+): (String) -> FeatureTaskRuntimeStepVerdictRule? = { stepId -> strategies.verdictRule(stepId, plan, diagnostics) }
 
 internal fun spanBetween(
   transitions: FeatureTaskRuntimeTransitionDeclaration,
@@ -89,7 +85,6 @@ object FeatureTaskRuntimeRunLoopTransitions {
           with(FeatureTaskRuntimeRunLoopBackwardEdge) {
             FeatureTaskRuntimeRunLoopBackwardEdge.recordBackwardEdge(
               context,
-              session,
               edge = requireNotNull(edge),
               edgeIteration = requireNotNull(transition.edgeIteration),
               verdict = effectiveVerdict,
@@ -113,7 +108,7 @@ object FeatureTaskRuntimeRunLoopTransitions {
     }
 
   internal fun reentersMutatingPhase(
-    context: PhaseAttemptEnvironment,
+    context: PhaseRunLoopAttemptCollaborators,
     edge: FeatureTaskRuntimeBackwardEdge,
     destinationPhaseId: String,
   ): Boolean =
@@ -121,10 +116,10 @@ object FeatureTaskRuntimeRunLoopTransitions {
       context.transitions,
       destinationPhaseId,
       edge.fromPhaseId,
-    ).any { context.stepPolicy(it).mutating }
+    ).any { context.acceptedStepPolicy(it).mutating }
 
   internal fun establishForwardCheckpoint(
-    context: PhaseAttemptEnvironment,
+    context: PhaseRunLoopAttemptCollaborators,
     precedingPhaseId: String,
     destinationPhaseId: String,
   ): Boolean {

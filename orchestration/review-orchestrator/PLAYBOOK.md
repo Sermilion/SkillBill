@@ -53,6 +53,7 @@ Do not reference this repo-relative path directly from installable skills — us
 - Confidence: `High | Medium | Low`
 - Keep each specialist review pass to at most 7 findings
 - Include a minimal concrete fix for each finding
+- In standalone phase review, concrete fixes are recommendations. Do not apply them, stage, commit, amend, or reset files.
 
 ## Shared Scope Contract
 
@@ -99,6 +100,7 @@ Accounting preserves direct and inclusive ownership. Direct usage belongs to one
 - `auto_mode_by_pass_number` is authoritative wherever a review pass number exists and resolves every pass, first included, to `inline`.
 - `auto_mode_default` is the named standalone fallback rule and resolves every scope with no pass number to `inline`.
 - Inline mode must walk every area declared by the routed manifest and required baseline composition deliberately, using each area's governed rubric as a checklist in the current context; do not collapse the review into a generic skim or omit an area because its specialist would not have been selected.
+- In standalone phase review, concrete fixes are recommendations. Specialists and the parent must not apply fixes, stage, commit, amend, reset, or launch another review command.
 
 ## Shared Learnings Context
 
@@ -122,7 +124,7 @@ Accounting preserves direct and inclusive ownership. Direct usage belongs to one
 ## Shared Caller Integration Notes
 
 - If a review is invoked from a feature workflow, `operation:verify`, or another orchestration skill, do not pause for user selection. Return prioritized findings so the caller can auto-fix P0/P1 items and decide whether to carry Minor items forward.
-- After all P0 and P1 items are resolved, run `skill-bill phase validation` as final verification when the project uses a routed quality-check path and the review is being run standalone.
+- A standalone `skill-bill phase review` returns findings without applying fixes or launching another command. A valid register with either verdict exits 0; invalid, incomplete, or failed output exits 1 with available findings.
 
 ## Shared Report Structure
 

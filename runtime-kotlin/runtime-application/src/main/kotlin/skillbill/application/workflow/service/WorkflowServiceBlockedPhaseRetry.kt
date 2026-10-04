@@ -1,6 +1,9 @@
 package skillbill.application.workflow.service
 
 import skillbill.application.decomposition.DecompositionManifestWriter
+import skillbill.application.decomposition.clearDecompositionManifestProjectionFailure
+import skillbill.application.decomposition.model.DecompositionManifestProjectionFailurePersistence
+import skillbill.application.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.application.workflow.decomposition.PendingDecompositionProjection
 import skillbill.application.workflow.decomposition.goalContinuationParentWorkflowIdForSettlement
 import skillbill.application.workflow.decomposition.updateGoalParentForBlockedPhaseRetry
@@ -14,11 +17,8 @@ import skillbill.model.RepositoryRoot
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
-import skillbill.ports.workflow.decomposition.DecompositionManifestProjectionFailurePersistence
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.ports.workflow.decomposition.DecompositionManifestValidator
-import skillbill.ports.workflow.decomposition.clearDecompositionManifestProjectionFailure
-import skillbill.ports.workflow.decomposition.persistDecompositionManifestProjectionFailure
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.workflow.decomposition.runtime.model.DecompositionManifestProjectionOutcome
 import skillbill.workflow.engine.WorkflowEngine
@@ -33,11 +33,11 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.artifact.asWorkflowArtifactEntry
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_MAX_LENGTH
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
+import skillbill.workflow.taskruntime.model.persistence.FEATURE_TASK_RUNTIME_PHASE_LEDGER_LIMIT
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerAction
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseRecord
+import skillbill.workflow.taskruntime.model.repair.FEATURE_TASK_RUNTIME_OPERATOR_BLOCK_RETRY_REASON_MAX_LENGTH
 import java.time.Clock
 import java.time.ZoneOffset
 
@@ -253,7 +253,7 @@ private fun blockedPhaseRetryInput(
         listOf(
           mapOf(
             SharedPayloadKeys.STEP_ID to request.phaseId,
-            SharedPayloadKeys.STATUS to "pending",
+            SharedPayloadKeys.STATUS to WorkflowStepStatus.PENDING.wireValue,
             "attempt_count" to 0,
           ),
         ),

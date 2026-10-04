@@ -4,11 +4,15 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VE
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_CONTRACT_VERSION
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_SCHEMA_ID
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
+import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationContractError
+import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationRecoveryError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import java.sql.Connection
 import java.sql.SQLException
@@ -23,7 +27,7 @@ internal inline fun <T> translateSqlFailure(
   try {
     block()
   } catch (failure: SQLException) {
-    throw IncompatibleGoalPlanningPreparationRecoveryError(
+    throw incompatibleGoalPlanningPreparationRecoveryError(
       workflowId,
       subtaskId,
       "SQLite rejected the immutable planning checkpoint: ${failure.message.orEmpty()}",
@@ -31,26 +35,46 @@ internal inline fun <T> translateSqlFailure(
     )
   }
 
-internal fun Connection.rejectLegacy(workflowId: String) {
+internal inline fun <T> translateSqlFailureResult(
+  workflowId: String,
+  subtaskId: Int,
+  conflicted: (GoalPlanningPreparationConflict) -> T,
+  block: () -> T,
+): T =
+  try {
+    block()
+  } catch (failure: SQLException) {
+    conflicted(
+      GoalPlanningPreparationConflict(
+        workflowId,
+        subtaskId,
+        "SQLite rejected the immutable planning checkpoint: ${failure.message.orEmpty()}",
+        failure,
+      ),
+    )
+  }
+
+internal fun Connection.rejectLegacy(workflowId: String): GoalPlanningPreparationConflict? {
   prepareStatement(
     "SELECT 1 FROM goal_planning_preparations WHERE parent_goal_workflow_id = ? LIMIT 1",
   ).use { s ->
     s.bindAll(workflowId)
     s.executeQuery().use {
       if (it.next()) {
-        throw IncompatibleGoalPlanningPreparationRecoveryError(
-          workflowId,
-          0,
-          "legacy 0.1 pair requires hard reset or operator migration",
+        throw SkillBillRuntimeException(
+          FeatureTaskRuntimeMigrationFailureCode.SOURCE_UNSUPPORTED,
+          "Legacy 0.1 paired planning has no supported automatic conversion. Preserve the original records and " +
+            "use a compatible runtime or an explicitly reviewed migration.",
         )
       }
     }
   }
+  return null
 }
 
 internal fun requireParentGoalWorkflowId(parentGoalWorkflowId: String) {
   if (parentGoalWorkflowId.isBlank()) {
-    throw InvalidGoalPlanningPreparationSchemaError(
+    throw invalidGoalPlanningPreparationSchemaError(
       parentGoalWorkflowId,
       "parent_goal_workflow_id",
       "parent_goal_workflow_id is required",
@@ -63,13 +87,42 @@ internal fun requirePositiveSubtaskId(
   subtaskId: Int,
 ) {
   if (subtaskId < 1) {
-    throw InvalidGoalPlanningPreparationSchemaError(
+    throw invalidGoalPlanningPreparationSchemaError(
       "$parentGoalWorkflowId#$subtaskId",
       "subtask_id",
       "subtask_id must be a positive integer",
     )
   }
 }
+
+internal fun throwNormalizedIdentityFailure(
+  sourceLabel: String,
+  failure: Pair<String, String>,
+): Nothing = throw invalidGoalPlanningPreparationSchemaError(sourceLabel, failure.first, failure.second)
+
+internal fun throwNormalizedProvenanceFailure(
+  sourceLabel: String,
+  failure: Pair<String, String>,
+): Nothing =
+  throw when (failure.first) {
+    "provenance.planning_contract_id",
+    "provenance.planning_contract_version",
+    "provenance.phase_output_contract_id",
+    "provenance.phase_output_contract_version",
+    ->
+      incompatibleGoalPlanningPreparationContractError(sourceLabel, failure.first, failure.second)
+    else -> invalidGoalPlanningPreparationSchemaError(sourceLabel, failure.first, failure.second)
+  }
+
+internal fun throwNormalizedEnvelopeFailure(
+  sourceLabel: String,
+  failure: Pair<String, String>,
+): Nothing =
+  throw if (failure.first == "contract_version") {
+    incompatibleGoalPlanningPreparationContractError(sourceLabel, failure.first, failure.second)
+  } else {
+    invalidGoalPlanningPreparationSchemaError(sourceLabel, failure.first, failure.second)
+  }
 
 internal fun normalizedIdentityFailure(identity: GoalPlanningIdentity): Pair<String, String>? =
   when {
@@ -94,8 +147,7 @@ internal fun normalizedProvenanceFailure(provenance: GoalPlanningContractProvena
       "provenance.phase_output_contract_id" to "phase_output_contract_id is incompatible"
     provenance.phaseOutputContractVersion != FEATURE_TASK_RUNTIME_CONTRACT_VERSION ->
       "provenance.phase_output_contract_version" to
-        "phase_output_contract_version is incompatible; hard-reset the workflow with " +
-        "'skill-bill goal reset <issue-key> --hard --yes'"
+        "phase_output_contract_version requires supported migration before checkpointing; preserve durable state"
     else -> null
   }
 

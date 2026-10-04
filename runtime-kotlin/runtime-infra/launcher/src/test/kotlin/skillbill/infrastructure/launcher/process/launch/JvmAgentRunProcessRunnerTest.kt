@@ -20,6 +20,7 @@ import skillbill.ports.agentrun.model.AgentRunOutputSink
 import skillbill.ports.agentrun.model.AgentRunOutputStream
 import skillbill.ports.agentrun.model.AgentRunProgressProbe
 import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
+import skillbill.ports.agentrun.model.AgentRunSpawnAuthorizationResult
 import skillbill.ports.review.evidence.GovernedReviewEvidenceEndpointHandle
 import skillbill.ports.review.evidence.ReviewEvidenceBroker
 import skillbill.ports.review.model.GovernedReviewEvidenceEndpointDescriptor
@@ -27,8 +28,8 @@ import skillbill.ports.review.model.ReviewEvidenceBatchRequest
 import skillbill.ports.review.model.ReviewExpansionAuthorizationRequest
 import skillbill.ports.review.model.ReviewLaneAccounting
 import skillbill.ports.review.model.ReviewToolCall
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import skillbill.review.context.model.launch.ReviewConversationIsolation
-import skillbill.review.context.model.packet.ReviewExpansionRecord
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -496,9 +497,9 @@ class JvmAgentRunProcessRunnerTest {
         ) {
           spawnAuthorization =
             object : AgentRunSpawnAuthorization {
-              override fun <T> withAuthorization(spawn: () -> T): T {
+              override fun <T> withAuthorization(spawn: () -> T): AgentRunSpawnAuthorizationResult<T> {
                 authorizationEntered = true
-                return spawn().also { authorizationExited = true }
+                return AgentRunSpawnAuthorizationResult.Authorized(spawn().also { authorizationExited = true })
               }
             }
         },
@@ -508,6 +509,29 @@ class JvmAgentRunProcessRunnerTest {
     assertEquals("terminal-result", result.stdout)
     assertEquals(true, authorizationEntered)
     assertEquals(true, authorizationExited)
+    assertNull(result.spawnDenied)
+  }
+
+  @Test
+  fun `a denied spawn authorization starts no process and reports the pause reason`() {
+    val marker = Files.createTempFile("skillbill-denied-spawn", ".marker")
+    Files.delete(marker)
+    val denied = AgentRunSpawnAuthorizationResult.Denied("operator_request")
+    val result =
+      JvmAgentRunProcessRunner(JvmSystemClock, testGateJvmResolver()).run(
+        testAgentRunProcessRequest(
+          listOf("sh", "-c", "touch '$marker'"),
+          Path.of("."),
+        ) {
+          spawnAuthorization =
+            object : AgentRunSpawnAuthorization {
+              override fun <T> withAuthorization(spawn: () -> T): AgentRunSpawnAuthorizationResult<T> = denied
+            }
+        },
+      )
+
+    assertEquals(denied, result.spawnDenied)
+    assertFalse(Files.exists(marker))
   }
 
   @Test

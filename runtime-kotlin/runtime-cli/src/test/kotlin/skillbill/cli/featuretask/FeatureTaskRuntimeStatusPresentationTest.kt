@@ -24,6 +24,9 @@ class FeatureTaskRuntimeStatusPresentationTest {
               cacheMode = ValidationGateCacheMode.FORCED_FULL,
               executedWorkUnits = 2,
               executedChecks = listOf("runtime-engine|compileKotlin", "runtime-engine|test"),
+              command = "./gradlew check --rerun-tasks",
+              exitCode = 0,
+              repositoryCheckpoint = "checkpoint",
             ),
           ),
       )

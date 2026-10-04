@@ -1,8 +1,8 @@
 package skillbill.infrastructure.workflow.review.broker
 
 import skillbill.ports.review.model.ReviewEvidenceResult
+import skillbill.review.context.model.accounting.ReviewBudgetEvaluator
 import skillbill.review.context.model.accounting.ReviewBudgetKind
-import skillbill.review.context.model.hunk.ReviewBudgetEvaluator
 import skillbill.review.context.model.hunk.ReviewChangedHunk
 
 internal fun exceededEvidence(

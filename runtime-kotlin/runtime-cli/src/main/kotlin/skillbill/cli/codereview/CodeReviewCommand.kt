@@ -13,23 +13,26 @@ import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
 import skillbill.application.review.model.ParallelReviewLaneStatus
 import skillbill.application.review.model.ReviewPrelaunchExpansion
-import skillbill.application.review.model.StackDetectionException
-import skillbill.application.review.model.UsageValidationException
 import skillbill.application.review.service.RequestedReviewMode
-import skillbill.application.reviewevidence.model.DiffResolutionException
 import skillbill.cli.kernel.agent.invokingAgentResolutionHelp
 import skillbill.cli.kernel.agent.requireInvokingAgentId
 import skillbill.cli.kernel.cli.CliRunState
 import skillbill.cli.kernel.cli.DocumentedCliCommand
+import skillbill.cli.kernel.cli.StandaloneCodeReviewTarget
 import skillbill.cli.kernel.cli.resolveCliRepositoryRoot
+import skillbill.cli.kernel.cli.resolveStandaloneCodeReviewTarget
+import skillbill.cli.kernel.cli.standaloneReportText
+import skillbill.cli.kernel.cli.usageError
 import skillbill.cli.model.CliRunInputs
 import skillbill.engine.featuretask.model.review.ReviewInvocation
 import skillbill.engine.featuretask.model.review.ReviewTarget
 import skillbill.engine.featuretask.phaserun.PhaseRunEntry
 import skillbill.engine.featuretask.phaserun.PhaseRunRequest
 import skillbill.engine.featuretask.phaserun.PhaseRunResult
-import skillbill.error.core.ShellContentContractException
-import skillbill.error.shellcontent.ReviewAggregationIntegrityError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.ReviewContextFailureCode
+import skillbill.error.shellcontent.isShellContentContractFailure
 import skillbill.workflow.model.goalreview.toReviewAccountingBoundedJson
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import java.nio.file.Path
@@ -42,9 +45,8 @@ class CodeReviewCommand(
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand(
     "code-review",
-    "Run the in-memory review phase: both modes run the whole code_review slot and fix findings in the working " +
-      "tree. Inline reviews through InlineReviewStrategy; delegated runs the multi-agent review, then " +
-      "verify_findings and implement_fix.",
+    "Run the in-memory report-only review phase. A valid findings report exits 0 for either verdict; " +
+      "invalid, incomplete, or failed output exits 1 with available findings.",
   ) {
   private val commitArgument by argument(
     name = "commit",
@@ -56,8 +58,8 @@ class CodeReviewCommand(
   )
   private val scope by option(
     "--scope",
-    help = "Diff scope: staged, unstaged, uncommitted, branch (default), or pr.",
-  ).choice("staged", "unstaged", "uncommitted", "branch", "pr").default(DEFAULT_CODE_REVIEW_SCOPE)
+    help = "Diff scope: staged, unstaged, uncommitted, branch, or pr. Omit to resolve dirty changes or clean HEAD.",
+  ).choice("staged", "unstaged", "uncommitted", "branch", "pr")
   private val repoRoot by option(
     "--repo-root",
     help = "Repository root for diff and agent runs. Defaults to the invocation repository root.",
@@ -85,8 +87,8 @@ class CodeReviewCommand(
   private val codeReviewMode by option(
     "--execution-mode",
     help =
-      "Execution mode: inline (default, one review prompt), auto (resolves inline), " +
-        "or delegated (parent launches specialists; parent authors the final prose result).",
+      "Execution mode: inline (default, one report session), auto (resolves inline), " +
+        "or delegated (parallel specialist report; no repair session).",
   ).default(RequestedReviewMode.defaultWireValue)
   private val baselineUntrackedIncludes by option(
     "--baseline-untracked-include",
@@ -196,7 +198,12 @@ internal fun codeReviewPhaseRequest(flags: CodeReviewFlags): PhaseRunRequest {
     codeReviewMode = mode,
     reviewInvocation =
       ReviewInvocation(
-        target = ReviewTarget.Scoped(flags.target.scope, resolvedBase, resolvedHead, suppliedDiffPath),
+        target =
+          if (flags.target.omitted && suppliedDiffPath == null && resolvedBase == null) {
+            null
+          } else {
+            ReviewTarget.Scoped(flags.target.scope, resolvedBase, resolvedHead, suppliedDiffPath)
+          },
         reviewRunId = flags.reviewRunId?.takeIf(String::isNotBlank),
         reviewSessionId = flags.reviewSessionId?.takeIf(String::isNotBlank),
         prelaunchExpansions = flags.expandFiles.map(::parseExpansion),
@@ -256,24 +263,15 @@ private fun runPhaseReview(
 ): PhaseRunResult? =
   try {
     entry.run(request)
-  } catch (error: UsageValidationException) {
-    usageError(error)
-  } catch (error: DiffResolutionException) {
-    usageError(error)
-  } catch (error: StackDetectionException) {
-    usageError(error)
-  } catch (error: ShellContentContractException) {
-    usageError(error)
-  } catch (error: ReviewAggregationIntegrityError) {
-    state.completeText(error.message.orEmpty(), emptyMap(), exitCode = 1)
-    null
+  } catch (error: SkillBillRuntimeException) {
+    if (error.code == ReviewContextFailureCode.REVIEW_AGGREGATION_INTEGRITY) {
+      state.completeText(error.message.orEmpty(), emptyMap(), exitCode = 1)
+      null
+    } else {
+      error.rethrowUnless(error.isShellContentContractFailure())
+      usageError(error)
+    }
   }
-
-internal fun usageError(error: Throwable): Nothing {
-  throw UsageError(error.message.orEmpty()).also { usage ->
-    runCatching { usage.initCause(error) }
-  }
-}
 
 private fun writePhaseReviewResult(
   state: CliRunState,
@@ -285,22 +283,38 @@ private fun writePhaseReviewResult(
     state.completeText(blocked ?: "The review phase produced no review result.", emptyMap(), exitCode = 1)
     return
   }
-  writeParallelReviewResult(state, result, blocked)
+  writeParallelReviewResult(
+    state,
+    result,
+    blocked,
+    (phase as? PhaseRunResult.Completed)?.let { result.standaloneReportText() },
+  )
 }
 
 private fun writeParallelReviewResult(
   state: CliRunState,
   result: ParallelCodeReviewResult,
   blocked: String?,
+  completedReport: String? = null,
 ) {
   val parent = result.lane1
   val exitCode = if (parent.success && blocked == null) 0 else 1
+  val reportText = completedReport?.takeIf(String::isNotBlank) ?: result.rawOutput.ifBlank { result.output }
   val output =
     buildString {
-      append(laneStatusOutput(listOf(parent), result.output))
+      append(laneStatusOutput(listOf(parent), reportText))
       blocked?.let { reason ->
         appendLine()
         append("# Review phase blocked — $reason")
+      }
+      if (blocked != null && result.output.isNotBlank() && result.output != reportText) {
+        appendLine()
+        appendLine("Retained findings:")
+        append(result.output)
+      }
+      if (blocked != null && reportText.lineSequence().any { it.trim().startsWith("verdict:") }) {
+        appendLine()
+        appendLine("The verdict in the report output was not accepted.")
       }
       result.reviewSessionId?.let { sessionId ->
         appendLine()
@@ -315,6 +329,7 @@ private fun writeParallelReviewResult(
         appendLine()
         append(coverage.render())
       }
+      appendReviewDiagnostics(result, blocked)
       result.accountingSummary?.let { summary ->
         appendLine()
         append("# Review accounting — ")
@@ -341,3 +356,32 @@ private fun laneDiagnosticsOutput(lanes: List<ParallelReviewLaneStatus>): String
     .mapNotNull { lane -> lane.droppedCandidateDiagnostic?.let { "${lane.agentId}: $it" } }
     .takeIf { it.isNotEmpty() }
     ?.joinToString(" | ", prefix = "# Lane diagnostics — ")
+
+private fun StringBuilder.appendReviewDiagnostics(
+  result: ParallelCodeReviewResult,
+  blocked: String?,
+) {
+  result.integration?.failureReason?.let { reason ->
+    appendLine()
+    append("Integration stage failed: $reason")
+  }
+  result.integration?.takeIf { blocked != null && it.rawOutput.isNotBlank() }?.let { integration ->
+    appendLine()
+    appendLine("Unaccepted integration output:")
+    append(integration.rawOutput)
+    if (integration.outputTruncated) {
+      appendLine()
+      append("Integration output was truncated.")
+    }
+  }
+  if (result.rejectedCandidateCount > 0) {
+    appendLine()
+    append("Rejected finding candidates: ${result.rejectedCandidateCount}.")
+  }
+  result.citationDiagnostics.takeIf { it.isNotEmpty() }?.take(MAX_CITATION_DIAGNOSTICS)?.let { diagnostics ->
+    appendLine()
+    append(diagnostics.joinToString("\n") { it.toString() })
+  }
+}
+
+private const val MAX_CITATION_DIAGNOSTICS = 5

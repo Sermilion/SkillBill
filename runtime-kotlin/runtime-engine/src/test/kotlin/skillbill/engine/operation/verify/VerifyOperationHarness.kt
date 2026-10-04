@@ -3,6 +3,7 @@ package skillbill.engine.operation.verify
 import skillbill.application.realPlanningProjectionValidator
 import skillbill.application.review.model.ParallelCodeReviewRequest
 import skillbill.application.review.model.ParallelCodeReviewResult
+import skillbill.application.review.model.ParallelCodeReviewRunOutcome
 import skillbill.application.review.model.ParallelReviewLaneStatus
 import skillbill.application.telemetry.model.FeatureVerifyFinishedRequest
 import skillbill.application.telemetry.model.FeatureVerifyStartedRequest
@@ -33,7 +34,7 @@ import skillbill.engine.operation.unittestvalue.UnitTestValueCheckPromptRules
 import skillbill.infrastructure.contracts.workflow.WorkflowStateSchemaValidator
 import skillbill.infrastructure.sqlite.SQLiteDatabaseSessionFactory
 import skillbill.infrastructure.sqlite.operation.SqliteOperationProposalRepository
-import skillbill.infrastructure.workflow.git.workflow.GitWorkflowGitOperations
+import skillbill.infrastructure.workflow.git.GitWorkflowGitOperations
 import skillbill.model.EnvironmentContext
 import skillbill.model.RepositoryRoot
 import skillbill.ports.agentrun.model.AgentRunLaunchFacts
@@ -116,9 +117,11 @@ internal class VerifyOperationHarness : AutoCloseable {
         telemetry,
         { request ->
           delegatedReviews += request
-          ParallelCodeReviewResult(
-            mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = REVIEW_REGISTER),
-            lane1 = ParallelReviewLaneStatus(agentId = AGENT, success = true),
+          ParallelCodeReviewRunOutcome.Reviewed(
+            ParallelCodeReviewResult(
+              mergeResult = ParallelReviewMergeResult(findings = emptyList(), formattedOutput = REVIEW_REGISTER),
+              lane1 = ParallelReviewLaneStatus(agentId = AGENT, success = true),
+            ),
           )
         },
         NoopRuntimeDiagnostics,

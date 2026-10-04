@@ -1,10 +1,10 @@
 package skillbill.workflow.taskruntime.phaseartifacts
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
-import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL_ARTIFACT_KEY
+import skillbill.error.shellcontent.invalidWorkflowStateSchemaError
+import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_DECOMPOSE_TERMINAL_ARTIFACT_KEY
+import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_PHASE_LEDGER_ARTIFACT_KEY
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeDecomposeTerminal
-import skillbill.workflow.taskruntime.model.persistence.task.runtime.store.FEATURE_TASK_RUNTIME_PHASE_LEDGER_ARTIFACT_KEY
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseLedgerEntry
 
 internal fun decomposeTerminalFrom(artifacts: Map<String, Any?>): FeatureTaskRuntimeDecomposeTerminal? {
@@ -23,13 +23,13 @@ internal fun phaseLedgerFrom(artifacts: Map<String, Any?>): List<FeatureTaskRunt
   val raw = artifacts[FEATURE_TASK_RUNTIME_PHASE_LEDGER_ARTIFACT_KEY]
   val rawList =
     raw as? List<*>
-      ?: throw InvalidWorkflowStateSchemaError(
+      ?: throw invalidWorkflowStateSchemaError(
         "Feature-task-runtime artifact '$FEATURE_TASK_RUNTIME_PHASE_LEDGER_ARTIFACT_KEY' must decode to a list.",
       )
   return rawList.map { item ->
     val entryMap =
       JsonCodec.anyToStringAnyMap(item)
-        ?: throw InvalidWorkflowStateSchemaError(
+        ?: throw invalidWorkflowStateSchemaError(
           "Feature-task-runtime phase ledger entry must decode to a string-keyed map.",
         )
     FeatureTaskRuntimePhaseLedgerEntry.fromArtifactMap(entryMap)

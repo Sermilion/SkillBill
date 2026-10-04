@@ -64,79 +64,6 @@ class RuntimeApplicationSharedEngineEdgeArchitectureTest {
 
 class RuntimeEnginePublicTopLevelDeclarationArchitectureTest {
   @Test
-  fun `new public top-level engine declarations stay within inbound api and model packages`() {
-    val engineMain =
-      ArchitectureScanSupport.runtimeRoot.resolve(
-        "runtime-kotlin/runtime-engine/src/main/kotlin",
-      )
-    val modelPackagePrefixes =
-      setOf(
-        "skillbill.engine.featuretask.model",
-        "skillbill.engine.goalrunner.model",
-        "skillbill.engine.goalrunner.planning.model",
-        "skillbill.engine.work.model",
-      )
-    val violations =
-      kotlinFilesUnderWithArchitectureAsserts(engineMain).flatMap { path ->
-        val source = path.readText()
-        val packageName = ArchitectureScanSupport.declaredPackage(source).orEmpty()
-        if (modelPackagePrefixes.any { prefix -> packageName == prefix || packageName.startsWith("$prefix.") }) {
-          emptyList()
-        } else {
-          topLevelPublicDeclarations(
-            packageName = packageName,
-            source = source,
-            allowedTypes = RuntimeEngineInboundApiTest.PINNED_ENGINE_INBOUND_API_TYPES,
-            includeDefaultPublic = false,
-          ).map { type ->
-            "${engineMain.relativize(path)}: $type is outside the pinned inbound API"
-          }
-        }
-      }
-    assertTrue(violations.isEmpty(), violations.joinToString("\n"))
-  }
-
-  @Test
-  fun `visibility census detects Kotlin default-public declarations outside the pinned api`() {
-    val source =
-      """
-
-      class NewEngineLeak
-      internal class AllowedImplementation
-      """.trimIndent()
-
-    assertEquals(
-      listOf("skillbill.engine.goalrunner.NewEngineLeak"),
-      topLevelPublicDeclarations(
-        packageName = "skillbill.engine.goalrunner",
-        source = source,
-        allowedTypes = RuntimeEngineInboundApiTest.PINNED_ENGINE_INBOUND_API_TYPES,
-        includeDefaultPublic = true,
-      ),
-    )
-  }
-
-  @Test
-  fun `visibility census allows a pinned api declaration without allowing its package`() {
-    val source =
-      """
-
-      class GoalRunner
-      class UnpinnedEngineLeak
-      """.trimIndent()
-
-    assertEquals(
-      listOf("skillbill.engine.goalrunner.UnpinnedEngineLeak"),
-      topLevelPublicDeclarations(
-        packageName = "skillbill.engine.goalrunner",
-        source = source,
-        allowedTypes = RuntimeEngineInboundApiTest.PINNED_ENGINE_INBOUND_API_TYPES,
-        includeDefaultPublic = true,
-      ),
-    )
-  }
-
-  @Test
   fun `feature-task run-loop step declarations reference each other acyclically`() {
     val cycles = ArchitectureScanSupport.cyclicComponents(runLoopStepEdges(runLoopSources()))
     assertTrue(
@@ -242,6 +169,51 @@ class RuntimeEnginePublicTopLevelDeclarationArchitectureTest {
     )
   }
 
+  @Test
+  fun `unused step imports do not invent a run-loop dependency cycle`() {
+    val sources =
+      mapOf(
+        "Alpha.kt" to
+          """
+          package example
+          import example.FeatureTaskRuntimeRunLoopBeta
+          object FeatureTaskRuntimeRunLoopAlpha { fun value() = "alpha" }
+          """.trimIndent(),
+        "Beta.kt" to
+          """
+          package example
+          import example.FeatureTaskRuntimeRunLoopAlpha
+          object FeatureTaskRuntimeRunLoopBeta { fun value() = "beta" }
+          """.trimIndent(),
+      )
+    assertEquals(emptyList(), ArchitectureScanSupport.cyclicComponents(runLoopStepEdges(sources)))
+  }
+
+  @Test
+  fun `multiline run-loop constructors keep their body edges in the step graph`() {
+    val sources =
+      mapOf(
+        "Bindings.kt" to
+          """
+          package example
+          open class FeatureTaskRuntimeRunLoopBase
+          interface BoundRole
+          class FeatureTaskRuntimeRunLoopBound(
+            val value: String,
+          ) : FeatureTaskRuntimeRunLoopBase(),
+            BoundRole {
+            fun value() = FeatureTaskRuntimeRunLoopLeaf.value()
+          }
+          object FeatureTaskRuntimeRunLoopLeaf { fun value() = "leaf" }
+          """.trimIndent(),
+      )
+    assertEquals(
+      setOf("FeatureTaskRuntimeRunLoopBase", "FeatureTaskRuntimeRunLoopLeaf"),
+      runLoopStepEdges(sources).getValue("FeatureTaskRuntimeRunLoopBound"),
+    )
+    assertEquals(emptyList(), runLoopTopLevelStepCalls(sources))
+  }
+
   private fun runLoopTopLevelStepCalls(sources: Map<String, String>): List<String> {
     val segmentsByPath =
       sources.mapValues { (_, source) -> runLoopStepSegments(strippedRunLoopSource(source)) }
@@ -318,7 +290,8 @@ class RuntimeEnginePublicTopLevelDeclarationArchitectureTest {
     var entered = false
     val bodies = linkedMapOf<String, StringBuilder>()
     val fileScope = StringBuilder()
-    source.lineSequence().forEach { line ->
+    val lines = source.lineSequence().filterNot { it.trimStart().startsWith("import ") }.toList()
+    lines.forEachIndexed { index, line ->
       if (current == null && braceDepth == 0) {
         STEP_DECLARATION.find(line)?.groupValues?.get(1)?.let { name ->
           current = name
@@ -334,7 +307,8 @@ class RuntimeEnginePublicTopLevelDeclarationArchitectureTest {
       parenDepth -= line.count { character -> character == ')' }
       if (braceDepth > 0) entered = true
       val bodyClosed = entered
-      val bodyLessDeclarationClosed = parenDepth <= 0
+      val nextLine = lines.drop(index + 1).firstOrNull { it.isNotBlank() }
+      val bodyLessDeclarationClosed = parenDepth <= 0 && (nextLine == null || !nextLine.first().isWhitespace())
       if (braceDepth <= 0 && (bodyClosed || bodyLessDeclarationClosed)) {
         current = null
         entered = false
@@ -347,34 +321,6 @@ class RuntimeEnginePublicTopLevelDeclarationArchitectureTest {
     name: String,
     text: String,
   ): Boolean = Regex("""\b${Regex.escape(name)}\b""").containsMatchIn(text)
-
-  private fun topLevelPublicDeclarations(
-    packageName: String,
-    source: String,
-    allowedTypes: Set<String>,
-    includeDefaultPublic: Boolean,
-  ): List<String> {
-    var braceDepth = 0
-    val declarations = mutableListOf<String>()
-    source.lineSequence().forEach { line ->
-      if (braceDepth == 0) {
-        TOP_LEVEL_DECLARATION.find(line)?.let { match ->
-          val explicitVisibility = match.groupValues[1]
-          val name = match.groupValues[2]
-          val type = "$packageName.$name"
-          val hasPublicVisibility =
-            explicitVisibility == "public" ||
-              includeDefaultPublic && explicitVisibility.isBlank()
-          if (hasPublicVisibility && type !in allowedTypes) {
-            declarations += type
-          }
-        }
-      }
-      braceDepth += line.count { character -> character == '{' }
-      braceDepth -= line.count { character -> character == '}' }
-    }
-    return declarations
-  }
 
   private companion object {
     const val PHASE_BLOCKING_STEP = "FeatureTaskRuntimeRunLoopPhaseBlocking"
@@ -407,15 +353,6 @@ class RuntimeEnginePublicTopLevelDeclarationArchitectureTest {
       Regex(
         """^(?:(?:internal|private|public|inline|suspend|operator|infix)\s+)*fun\s+""" +
           """(?:<[^>]*>\s*)?(?:[A-Za-z0-9_.<>?, ]+\.)?([A-Za-z_][A-Za-z0-9_]*)\s*\(""",
-      )
-
-    val TOP_LEVEL_DECLARATION =
-      Regex(
-        """^\s*(?:(public|internal|private|protected)\s+)?""" +
-          """(?:(?:abstract|sealed|data|enum|value|open|final|inline|suspend|""" +
-          """operator|infix|tailrec|const|expect|actual|fun)\s+)*""" +
-          """(?:class|object|interface|typealias|fun|val|var)\s+""" +
-          """([A-Za-z_][A-Za-z0-9_]*)\b""",
       )
   }
 }

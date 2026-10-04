@@ -1,16 +1,17 @@
 package skillbill.engine.featuretask.persist
 
+import skillbill.application.runtimepersistence.runtimeOwnedFactUnavailable
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.featuretask.RuntimeOwnedPersistenceFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.persistence.UnitOfWork
 import kotlin.coroutines.cancellation.CancellationException
 
-class RuntimeOwnedFactUnavailable(
-  message: String,
-  cause: Throwable? = null,
-) : SkillBillRuntimeException(message, cause)
+private fun Throwable.isOwnedFactUnavailable(): Boolean =
+  (this as? SkillBillRuntimeException)?.code == RuntimeOwnedPersistenceFailureCode.FACT_UNAVAILABLE
 
 class RuntimeOwnedPersistenceBoundary(
   private val database: DatabaseSessionFactory,
@@ -70,7 +71,7 @@ class RuntimeOwnedPersistenceBoundary(
   ): T {
     val outcome = runCatching(block)
     val error = outcome.exceptionOrNull() ?: return outcome.getOrThrow()
-    if (error is Exception && error !is CancellationException && error !is RuntimeOwnedFactUnavailable) {
+    if (error is Exception && error !is CancellationException && !error.isOwnedFactUnavailable()) {
       return onFailure(error)
     }
     throw error
@@ -82,12 +83,8 @@ class RuntimeOwnedPersistenceBoundary(
     used: String,
     error: Exception,
   ): Nothing {
-    val cause = causeOf(error)
     recordFailure(seam, expected, used, error)
-    throw RuntimeOwnedFactUnavailable(
-      "Runtime-owned persistence fact '$expected' could not be established at $seam: $cause",
-      error,
-    )
+    throw runtimeOwnedFactUnavailable(RuntimeOwnedPersistenceFailureCode.FACT_UNAVAILABLE, seam, expected, error)
   }
 
   private fun recordFailure(
@@ -104,5 +101,5 @@ class RuntimeOwnedPersistenceBoundary(
   }
 
   private fun causeOf(error: Exception): String =
-    error.message?.takeIf(String::isNotBlank) ?: error::class.simpleName.orEmpty()
+    error.message?.takeIf(String::isNotBlank) ?: error.failureCodeLabel() ?: error::class.simpleName.orEmpty()
 }

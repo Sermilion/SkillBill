@@ -3,7 +3,7 @@ package skillbill.infrastructure.contracts.workflow.featuretask
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_BUILD_RECEIPT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeBuildReceiptSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeBuildReceiptSchemaPaths
 import skillbill.testing.repoRootFromTest
 import java.nio.file.Files
@@ -75,7 +75,7 @@ class FeatureTaskRuntimeBuildReceiptSchemaValidatorTest {
   @Test
   fun `a missing gate_run_count fails validation`() {
     val payload = representativeReceipt().toMutableMap().apply { remove("gate_run_count") }
-    assertFailsWith<InvalidFeatureTaskRuntimeBuildReceiptSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeBuildReceiptSchemaValidator.validate(payload, sourceLabel = "build#missing-count")
     }
   }
@@ -83,9 +83,42 @@ class FeatureTaskRuntimeBuildReceiptSchemaValidatorTest {
   @Test
   fun `a wrong contract_version fails validation`() {
     val payload = representativeReceipt().toMutableMap().apply { put("contract_version", "9.9") }
-    assertFailsWith<InvalidFeatureTaskRuntimeBuildReceiptSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeBuildReceiptSchemaValidator.validate(payload, sourceLabel = "build#bad-version")
     }
+  }
+
+  @Test
+  fun coherenceRejectsZeroRunsUnknownOrMissingFactsAndMismatchedAggregates() {
+    val receipt = representativeReceipt()
+    val run = (receipt.getValue("gate_runs") as List<*>).single() as Map<*, *>
+    val missing =
+      listOf("command", "exit_code", "repository_checkpoint", "executed_checks").map { key ->
+        receipt + ("gate_runs" to listOf(run - key))
+      }
+    val invalid =
+      missing +
+        listOf(
+          receipt + mapOf("gate_run_count" to 0, "gate_runs" to emptyList<Any>()),
+          receipt + ("gate_run_count" to 2),
+          receipt + ("checks" to listOf("invented")),
+          receipt + ("gate_runs" to listOf(run + ("outcome" to "unknown"))),
+          receipt +
+            mapOf(
+              "gate_run_count" to 2,
+              "gate_runs" to
+                listOf(run, run + mapOf("outcome" to "failed", "exit_code" to 1)),
+            ),
+        )
+    invalid.forEach { payload ->
+      assertFailsWith<SkillBillRuntimeException> {
+        FeatureTaskRuntimeBuildReceiptSchemaValidator.validate(payload, "coherence")
+      }
+    }
+    FeatureTaskRuntimeBuildReceiptSchemaValidator.validate(
+      receipt + ("gate_runs" to listOf(run + ("executed_work_units" to 0))),
+      "cached",
+    )
   }
 
   private fun representativeReceipt(): Map<String, Any?> =
@@ -102,6 +135,10 @@ class FeatureTaskRuntimeBuildReceiptSchemaValidatorTest {
             "outcome" to "passed",
             "cache_mode" to "cache_eligible",
             "executed_work_units" to 1,
+            "executed_checks" to emptyList<String>(),
+            "command" to "./gradlew compileKotlin",
+            "exit_code" to 0,
+            "repository_checkpoint" to "fp-abc",
           ),
         ),
     )

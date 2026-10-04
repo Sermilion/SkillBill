@@ -1,21 +1,22 @@
 package skillbill.infrastructure.workflow.review.broker
 
-import skillbill.error.shellcontent.InvalidReviewContextSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.ReviewContextFailureCode
 import skillbill.ports.review.model.ReviewEvidenceBatchRequest
 import skillbill.ports.review.model.ReviewEvidenceBrokerBinding
 import skillbill.ports.review.model.ReviewEvidenceRequest
 import skillbill.ports.review.model.ReviewExpansionAuthorizationRequest
 import skillbill.ports.review.model.ReviewRefusedOperationRecord
 import skillbill.ports.review.model.ReviewToolCall
+import skillbill.review.context.model.accounting.REVIEW_CONTEXT_BUDGET_EXCEEDED
+import skillbill.review.context.model.accounting.ReviewContextBudgetPolicy
 import skillbill.review.context.model.commit.ReviewAssignment
-import skillbill.review.context.model.execution.ReviewLaneDecision
+import skillbill.review.context.model.commit.ReviewLaneDecision
 import skillbill.review.context.model.execution.ReviewOperationKind
-import skillbill.review.context.model.hunk.REVIEW_CONTEXT_BUDGET_EXCEEDED
 import skillbill.review.context.model.hunk.ReviewChangedHunk
-import skillbill.review.context.model.hunk.ReviewContextBudgetPolicy
 import skillbill.review.context.model.hunk.ReviewDependencyAllowlist
+import skillbill.review.context.model.hunk.ReviewExpansionRecord
 import skillbill.review.context.model.hunk.ReviewRevision
-import skillbill.review.context.model.packet.ReviewExpansionRecord
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -294,15 +295,15 @@ class FileSystemReviewEvidenceBrokerTest {
     Files.writeString(root.resolve("A.kt"), "newer working-tree content")
 
     val failure =
-      assertFailsWith<InvalidReviewContextSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         broker.readBatch(
           ReviewEvidenceBatchRequest.of(
             ReviewEvidenceRequest("security", "A.kt", expansion.reachabilityReason, expansion),
           ),
         )
-      }
+      }.also { assertEquals(ReviewContextFailureCode.REVIEW_CONTEXT_SCHEMA, it.code) }
 
-    assertTrue(failure.reason.contains("changed after the immutable launch checkpoint"))
+    assertTrue("changed after the immutable launch checkpoint" in failure.message.orEmpty())
     assertEquals(0, broker.accounting().evidenceBytes)
   }
 

@@ -8,13 +8,6 @@ import com.github.ajalt.clikt.parameters.options.multiple
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.int
 import me.tatarka.inject.annotations.Inject
-import skillbill.cli.goal.core.GoalWatchPresentation
-import skillbill.cli.goal.core.GoalWatchRefreshPresentation
-import skillbill.cli.goal.core.goalStatusExitCode
-import skillbill.cli.goal.core.goalWatchRefreshText
-import skillbill.cli.goal.core.goalWatchStopReason
-import skillbill.cli.goal.core.goalWatchText
-import skillbill.cli.goal.core.withWatchRefresh
 import skillbill.cli.goal.run.DEFAULT_GOAL_WATCH_INTERVAL_SECONDS
 import skillbill.cli.goal.run.DEFAULT_GOAL_WATCH_REFRESHES
 import skillbill.cli.goal.run.IDLE_STOP_CONSECUTIVE_REFRESHES
@@ -26,9 +19,13 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.issuekey.MAX_ISSUE_KEY_LENGTH
 import skillbill.contracts.issuekey.isWellFormedIssueKey
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
-import skillbill.error.core.DatabaseAccessError
+import skillbill.error.core.DatabaseFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.databaseAccessCondition
+import skillbill.error.core.rethrowUnless
 import skillbill.goalrunner.model.ExecutionLiveness
 import skillbill.goalrunner.model.GoalRunnerStatusProjection
+import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.gitops.model.DEFAULT_SELECTED_DIFF_MAX_BYTES
 import skillbill.ports.workflow.gitops.model.DEFAULT_SELECTED_DIFF_MAX_HUNKS
 import skillbill.ports.workflow.gitops.model.DEFAULT_SELECTED_DIFF_MAX_LINES
@@ -36,6 +33,7 @@ import skillbill.ports.workflow.gitops.model.DEFAULT_SELECTED_DIFF_MAX_LINES
 @Inject
 class GoalStatusCommand(
   private val goalRunnerStatusService: GoalRunnerStatusService,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand("status", "Show read-only decomposed goal status.") {
@@ -90,12 +88,14 @@ class GoalStatusCommand(
     }
     val projection =
       try {
-        goalRunnerStatusService.status(inputs.goalStatusRequest(options))
-      } catch (error: DatabaseAccessError) {
+        goalRunnerStatusService.status(inputs.goalStatusRequest(options, repositoryEnclosingRootPort))
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.code == DatabaseFailureCode.ACCESS)
         if (!options.monitorOnly) throw error
-        val payload = databaseUnavailableGoalStatusCliMap(issueKey, error)
+        val reason = databaseAccessCondition(error)
+        val payload = databaseUnavailableGoalStatusCliMap(issueKey, reason)
         state.completeText(
-          goalMonitorStatusText(issueKey, projection = null, databaseUnavailableReason = error.condition),
+          goalMonitorStatusText(issueKey, projection = null, databaseUnavailableReason = reason),
           payload,
           exitCode = goalStatusExitCode(projection = null, databaseUnavailable = true),
         )
@@ -137,6 +137,7 @@ class GoalStatusCommand(
 @Inject
 class GoalWatchCommand(
   private val goalRunnerStatusService: GoalRunnerStatusService,
+  private val repositoryEnclosingRootPort: RepositoryEnclosingRootPort,
   private val state: CliRunState,
   private val inputs: CliRunInputs,
 ) : DocumentedCliCommand("watch", "Refresh decomposed goal status without starting child runs.") {
@@ -207,7 +208,7 @@ class GoalWatchCommand(
       refreshCount += 1
       val projection =
         goalRunnerStatusService.statusRefresh(
-          inputs.goalStatusRequest(statusCliRequestOptions()),
+          inputs.goalStatusRequest(statusCliRequestOptions(), repositoryEnclosingRootPort),
         )
       val refresh = projection.toGoalStatusCliMap(issueKey).withWatchRefresh(refreshCount)
       latestRefresh = refresh

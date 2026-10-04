@@ -1,5 +1,0 @@
-skillbill.goalrunner|skillbill.workflow.decomposition.runtime|skillbill.workflow.engine|skillbill.workflow.engine.model|skillbill.workflow.taskruntime.model.persistence.task.runtime.goal
-skillbill.install.model|skillbill.install.policy
-skillbill.review.context|skillbill.review.context.model.accounting|skillbill.review.context.model.bundle|skillbill.review.context.model.commit|skillbill.review.context.model.execution|skillbill.review.context.model.hunk|skillbill.review.context.model.launch|skillbill.review.context.model.packet|skillbill.workflow.decomposition.model|skillbill.workflow.model.goalreview|skillbill.workflow.taskruntime.model.handoff|skillbill.workflow.taskruntime.model.handoff.task|skillbill.workflow.taskruntime.model.persistence.task.runtime.run|skillbill.workflow.taskruntime.model.phase|skillbill.workflow.taskruntime.model.repair|skillbill.workflow.taskruntime.model.repair.task|skillbill.workflow.taskruntime.model.review
-skillbill.workflow.taskruntime.artifact|skillbill.workflow.taskruntime.phase.planning|skillbill.workflow.taskruntime.phase.task
-

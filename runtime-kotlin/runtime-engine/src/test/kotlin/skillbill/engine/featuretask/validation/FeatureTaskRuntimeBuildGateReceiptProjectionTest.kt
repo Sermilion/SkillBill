@@ -1,7 +1,6 @@
 package skillbill.engine.featuretask.validation
 
 import skillbill.contracts.JsonCodec
-import skillbill.engine.envelope
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeBuildReceiptSchemaValidator
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
 import kotlin.test.Test
@@ -21,6 +20,9 @@ class FeatureTaskRuntimeBuildGateReceiptProjectionTest {
               cacheMode = "cache_eligible",
               executedWorkUnits = 1,
               executedChecks = listOf("runtime-engine|compileKotlin"),
+              command = "./gradlew compileKotlin",
+              exitCode = 0,
+              repositoryCheckpoint = "checkpoint-fp",
             ),
           ),
       )

@@ -1,10 +1,8 @@
 package skillbill.infrastructure.skills.install
 
-import skillbill.error.shellcontent.ContractVersionMismatchError
-import skillbill.error.shellcontent.InvalidFallbackCapabilityError
-import skillbill.error.shellcontent.InvalidInstallPlanSchemaError
-import skillbill.error.shellcontent.InvalidReviewSkillStructureError
-import skillbill.error.shellcontent.MissingContentFileError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.error.shellcontent.SkillStagingFailureCode
 import skillbill.infrastructure.skills.install.staging.applicablePointers
 import skillbill.infrastructure.skills.install.staging.authoredFilesFor
 import skillbill.infrastructure.skills.install.staging.content.computeInstallContentHash
@@ -67,8 +65,10 @@ class InstallPlanBuilderTest : InstallPlanBuilderTestSupport() {
       declareCodeReviewFallback(fixture.repoRoot, slug)
     }
 
-    assertFailsWith<InvalidFallbackCapabilityError> {
+    assertFailsWith<SkillBillRuntimeException> {
       planInstallForTest(fixture.request())
+    }.also { failure ->
+      assertEquals(SkillStagingFailureCode.INVALID_FALLBACK_CAPABILITY, failure.code)
     }
   }
 
@@ -159,7 +159,7 @@ class InstallPlanBuilderTest : InstallPlanBuilderTestSupport() {
     )
 
     val error =
-      assertFailsWith<InvalidReviewSkillStructureError> {
+      assertFailsWith<SkillBillRuntimeException> {
         planInstallForTest(
           fixture.request(
             platformPackSelection =
@@ -169,6 +169,8 @@ class InstallPlanBuilderTest : InstallPlanBuilderTestSupport() {
               ),
           ),
         )
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.INVALID_REVIEW_SKILL_STRUCTURE, failure.code)
       }
 
     assertContains(error.message.orEmpty(), "specialist H2 sequence")
@@ -321,7 +323,7 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
     )
 
     val versionError =
-      assertFailsWith<ContractVersionMismatchError> {
+      assertFailsWith<SkillBillRuntimeException> {
         planInstallForTest(
           badVersion.request(
             platformPackSelection =
@@ -331,7 +333,7 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
               ),
           ),
         )
-      }
+      }.also { assertEquals(InstallFailureCode.CONTRACT_VERSION_MISMATCH, it.code) }
     assertContains(versionError.message.orEmpty(), "contract_version '9.9'")
 
     val missingContent = setupPlanFixture()
@@ -341,7 +343,7 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
     )
 
     val contentError =
-      assertFailsWith<MissingContentFileError> {
+      assertFailsWith<SkillBillRuntimeException> {
         planInstallForTest(
           missingContent.request(
             platformPackSelection =
@@ -351,6 +353,8 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
               ),
           ),
         )
+      }.also { failure ->
+        assertEquals(SkillStagingFailureCode.MISSING_CONTENT_FILE, failure.code)
       }
     assertContains(contentError.message.orEmpty(), "bill-kotlin-code-review-architecture/content.md")
   }
@@ -653,7 +657,7 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
     val fixture = setupPlanFixture()
 
     val error =
-      assertFailsWith<InvalidInstallPlanSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         planInstallForTest(
           fixture.request().copy(
             mcpRegistrationChoice =
@@ -663,7 +667,7 @@ class InstallPlanBuilderPlatformSelectionTest : InstallPlanBuilderTestSupport() 
               ),
           ),
         )
-      }
+      }.also { assertEquals(InstallFailureCode.INVALID_INSTALL_PLAN_SCHEMA, it.code) }
 
     assertContains(error.message.orEmpty(), "mcp_registration.runtime_mcp_bin")
   }

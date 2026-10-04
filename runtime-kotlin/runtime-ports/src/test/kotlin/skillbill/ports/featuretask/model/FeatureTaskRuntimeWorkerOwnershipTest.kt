@@ -1,13 +1,13 @@
 package skillbill.ports.featuretask.model
 
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 class FeatureTaskRuntimeWorkerOwnershipTest {
   @Test
   fun `malformed lease timestamp fails with the ownership schema error`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeWorkerOwnership(
         workflowId = "workflow",
         generation = 1,

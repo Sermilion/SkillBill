@@ -1,69 +1,81 @@
 package skillbill.error.shellcontent
 
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.RuntimeFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 
-open class InvalidWorkflowStateSchemaError(
+fun invalidWorkflowStateSchemaError(
   message: String,
   cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(WorkflowFailureCode.INVALID_WORKFLOW_STATE_SCHEMA, message, cause)
 
-class ProseFeatureTaskWorkflowWriteRefusedError(
-  val workflowId: String,
+fun proseFeatureTaskWorkflowWriteRefusedError(
+  workflowId: String,
   cause: Throwable? = null,
-) : ShellContentContractException(
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    WorkflowFailureCode.PROSE_FEATURE_TASK_WORKFLOW_WRITE_REFUSED,
     "Feature-task workflow '$workflowId' write refused: mode=prose is retired. The prose engine " +
       "is deleted; re-run this feature on the runtime engine (mode=runtime) instead. Legacy " +
       "prose rows remain readable for history but no new prose writes are accepted.",
     cause,
   )
 
-class InvalidWorkListRowError(
+fun invalidWorkListRowError(
   message: String,
   cause: Throwable? = null,
-) : ShellContentContractException(message, cause)
+): SkillBillRuntimeException = SkillBillRuntimeException(WorkflowFailureCode.INVALID_WORK_LIST_ROW, message, cause)
 
-class WorkflowIssueKeyConflictError(
-  val workflowId: String,
-  val persistedIssueKey: String,
-  val requestedIssueKey: String,
-) : ShellContentContractException(
+fun workflowIssueKeyConflictError(
+  workflowId: String,
+  persistedIssueKey: String,
+  requestedIssueKey: String,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    WorkflowFailureCode.WORKFLOW_ISSUE_KEY_CONFLICT,
     "Workflow '$workflowId' is already associated with issue key '$persistedIssueKey', not '$requestedIssueKey'.",
   )
 
-class LegacyProseWorkflowError(
-  val workflowId: String,
-  val issueKey: String?,
-) : ShellContentContractException(
+fun legacyProseWorkflowError(
+  workflowId: String,
+  issueKey: String?,
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    WorkflowFailureCode.LEGACY_PROSE_WORKFLOW,
     "Workflow '$workflowId' is a legacy prose-mode row; the prose engine is retired and this row " +
       "cannot be resumed, continued, or updated. Re-run this work through the runtime engine instead: " +
       "`skill-bill goal ${issueKey?.trim()?.ifEmpty { null } ?: "<ISSUE_KEY>"}`.",
   )
 
-class InvalidRejectedOutputDiagnosticSchemaError(message: String) :
-  ShellContentContractException(message)
+fun invalidRejectedOutputDiagnosticSchemaError(message: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(WorkflowFailureCode.INVALID_REJECTED_OUTPUT_DIAGNOSTIC_SCHEMA, message)
 
-class InvalidProducerOutputEvidenceSchemaError(message: String) :
-  ShellContentContractException(message)
+fun invalidProducerOutputEvidenceSchemaError(message: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(WorkflowFailureCode.INVALID_PRODUCER_OUTPUT_EVIDENCE_SCHEMA, message)
 
-class GoalVerificationBoundaryCapExceededError(message: String) :
-  ShellContentContractException(message)
+fun goalVerificationBoundaryCapExceededError(message: String): SkillBillRuntimeException =
+  SkillBillRuntimeException(WorkflowFailureCode.GOAL_VERIFICATION_BOUNDARY_CAP_EXCEEDED, message)
 
-class InvalidDecompositionManifestSchemaError(
-  val sourceLabel: String,
-  val reason: String,
-  val failureCode: String? = null,
+fun invalidDecompositionManifestSchema(
+  sourceLabel: String,
+  reason: String,
+  code: RuntimeFailureCode,
   cause: Throwable? = null,
-) : ShellContentContractException(
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    code,
     "Decomposition manifest '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation: $reason",
     cause,
   )
 
-class InvalidDecompositionManifestBundleJournalError(
-  val sourceLabel: String,
-  val reason: String,
-  val failureCode: String? = null,
+fun invalidDecompositionManifestBundleJournal(
+  sourceLabel: String,
+  reason: String,
+  code: RuntimeFailureCode,
   cause: Throwable? = null,
-) : ShellContentContractException(
+): SkillBillRuntimeException =
+  SkillBillRuntimeException(
+    code,
     "Decomposition manifest bundle journal '${sourceLabel.ifBlank { "<unknown>" }}' is invalid: $reason",
     cause,
   )

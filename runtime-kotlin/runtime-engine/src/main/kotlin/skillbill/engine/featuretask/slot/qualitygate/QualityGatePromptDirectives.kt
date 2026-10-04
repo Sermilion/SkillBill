@@ -23,24 +23,30 @@ internal fun runtimeOwnedValidateAgentPhaseTask(): String {
     "repository checks. Compilation alone is insufficient. Project commands remain allowed when a pack " +
     "also declares them. Do not recursively invoke `skill-bill phase validation`. " +
     "Keep repairing in this same session until every required project check passes. Do not spawn delegated " +
-    "subagents. Settle completed only when every required check passes, with the checks run as the value. " +
-    "Test failures, static-analysis findings, formatting failures, and outdated fixtures are repair work. " +
+    "subagents. Settle completed only when every required check passes, naming the checks you ran and how " +
+    "each ended. Test failures, static-analysis findings, formatting failures, and outdated fixtures are " +
+    "repair work in this session: fix a formatting failure with the project's formatter, then rerun the " +
+    "required checks. No failure, formatting included, hands the work to another validation session. " +
     "Do not stop after reducing the failure count or return a partial progress report. Keep fixing and " +
     "rerunning the required checks in this session until they all pass. " +
     "Settle blocked only for a concrete external obstacle you cannot resolve, and describe the obstacle, " +
-    "the required operator action, and any remaining failures in the value. Wall-clock timeout still stops " +
-    "the subtask. The runtime does not rerun the checks itself. Never silence findings with annotations, " +
-    "baselines, disabled rules, weakened configuration, or skipped tests; fix root causes instead."
+    "the required operator action, and any remaining failures. Wall-clock timeout still stops " +
+    "the subtask. The runtime does not rerun the checks itself, and your report never replaces the " +
+    "runtime's own command, exit-status, and checkpoint evidence. Never silence findings with annotations, " +
+    "baselines, disabled rules, weakened configuration, or skipped tests; fix root causes instead. " +
+    "Discover the applicable checks independently from your existing plan and current repository-scope inputs. " +
+    "Authoring phases may have run or deferred scoped formatter and analysis commands, but their reports are " +
+    "not delivered here in full and never clear a build or validation gate; deferred authoring checks are " +
+    "still discovered and run here."
 }
 
 internal fun validateGateTriagePhaseTask(): String =
   "You are triaging an unparseable validation gate failure blob before the first repair turn — do not spawn " +
     "delegated subagents. Read the gate stdout blob and repository files as needed to understand failures; " +
     "prefer read-only inspection. $VALIDATE_PHASE_FORBIDDEN_EXTRAS$VALIDATE_TRIAGE_FORBIDDEN_PACK_GATE" +
-    "Do not mutate the tree unless strictly needed to understand failures. Emit a recommended " +
-    "validation_repair_plan as prose inside produced_outputs.value (JSON string) with suggested fields per " +
-    "item: item_id, module, rule_or_task, location, failure_summary, fix_intent. Extra keys are allowed. " +
-    "Return prose guidance only; do not fix code or emit validation_result, gate_run_count, or gate evidence."
+    "Do not mutate the tree unless strictly needed to understand failures. Reply with a short prose " +
+    "repair plan naming where each failure lives and how you would fix it. Return prose guidance only; " +
+    "do not fix code or report validation results or gate evidence."
 
 internal fun runtimeOwnedBuildPhaseTask(packBuildCommand: String?): String {
   val gateLine =
@@ -58,9 +64,28 @@ internal fun runtimeOwnedBuildPhaseTask(packBuildCommand: String?): String {
     "part of that same pack gate. When the set looks clean, you may run that same build command once to " +
     "sanity-check. Never silence findings with @Suppress, @file:Suppress, baselines, disabled rules, " +
     "weakened configuration, or skipped tests — fix root causes instead. After you stop, the runtime " +
-    "re-runs the pack build command and mints the receipt — do not emit build_receipt, gate_run_count, " +
-    "or any phase-output JSON."
+    "re-runs the pack build command and mints the receipt; report nothing but prose."
 }
+
+internal fun runtimeOwnedPackValidationPhaseTask(packCommand: String?): String {
+  val gateLine =
+    if (packCommand.isNullOrBlank()) {
+      "The runtime runs the dominant pack's collect_all_full_gate_command and reads its output."
+    } else {
+      "The runtime runs the dominant pack's collect_all_full_gate_command: `$packCommand`."
+    }
+  return "Repair every finding from the runtime-owned full validation gate in this session. $gateLine " +
+    "Do not run another project-wide validation command and do not report gate evidence. " +
+    "Do not spawn delegated subagents. After repair, the runtime runs the cache-bypassing full validation command " +
+    "once to verify the repository. Never silence findings with suppressions, baselines, disabled rules, " +
+    "or skipped tests."
+}
+
+internal fun packValidationGateTriagePhaseTask(packCommand: String?): String =
+  "Triage the unparseable runtime-owned validation gate failure before repair. Read the captured output and " +
+    "repository files as needed, but do not run the pack gate or mutate files. The dominant pack's discovery " +
+    "command is ${packCommand?.let { "`$it`" } ?: "collect_all_full_gate_command"}. Reply with a concise " +
+    "prose repair plan. Do not report validation evidence or spawn subagents."
 
 internal fun buildGateTriagePhaseTask(packBuildCommand: String?): String {
   val gateLine =
@@ -72,10 +97,9 @@ internal fun buildGateTriagePhaseTask(packBuildCommand: String?): String {
   return "You are triaging an unparseable build gate failure blob before the first repair turn — do not spawn " +
     "delegated subagents. Read the gate stdout blob and repository files as needed; prefer read-only " +
     "inspection. $gateLine $BUILD_PHASE_FORBIDDEN_EXTRAS" +
-    "Do not mutate the tree unless strictly needed to understand failures. Emit a recommended " +
-    "validation_repair_plan as prose inside produced_outputs.value (JSON string) with suggested fields per " +
-    "item: item_id, module, rule_or_task, location, failure_summary, fix_intent. Extra keys are allowed. " +
-    "Return prose guidance only; do not fix code or emit build_receipt, gate_run_count, or gate evidence."
+    "Do not mutate the tree unless strictly needed to understand failures. Reply with a short prose " +
+    "repair plan naming where each failure lives and how you would fix it. Return prose guidance only; " +
+    "do not fix code or report build receipts or gate evidence."
 }
 
 internal fun gateRepairNoOutputSchemaDirective(
@@ -84,20 +108,17 @@ internal fun gateRepairNoOutputSchemaDirective(
 ): String {
   if (triage) {
     return """
-      ## Gate triage — optional capture surface, no phase-output schema
+      ## Gate triage — prose only
       This launch triages an unparseable gate blob before the first repair turn for the runtime-owned `$stepName` gate.
-      Do not emit a Required final output JSON object, build_receipt, validation_receipt, gate_run_count, or any other
-      phase receipt or gate evidence. Do not spawn delegated subagents. Read the blob and cited paths.
-      When you can recommend a repair shape, you may emit produced_outputs.value (a JSON string) carrying
-      validation_repair_plan prose with suggested fields per item: item_id, module, rule_or_task, location,
-      failure_summary, fix_intent. Malformed or missing capture is fine; repair still runs without it.
+      Report no receipt, status object, or gate evidence. Do not spawn delegated subagents. Read the blob and
+      cited paths. When you can recommend a repair shape, say so in plain prose. A missing or short answer is
+      fine; repair still runs without it.
       """.trimIndent()
   }
   return """
-    ## Gate repair — prose only, no phase-output schema
-    This launch is a repair turn for the runtime-owned `$stepName` gate. Do not emit a Required final
-    output JSON object, build_receipt, validation_receipt, gate_run_count, or any other phase envelope.
-    Do not spawn delegated subagents. Work in this single agent session in ordinary prose.
+    ## Gate repair — prose only
+    This launch is a repair turn for the runtime-owned `$stepName` gate. Report no receipt, status object,
+    or gate evidence. Do not spawn delegated subagents. Work in this single agent session in ordinary prose.
 
     The runtime already ran the pack command and parsed the failures listed in this briefing. It will
     re-run that command after you stop, and it may give you up to three repair turns against whatever
@@ -120,15 +141,21 @@ internal fun gateRepairNoOutputSchemaDirective(
 internal fun buildGateFindingsDirective(
   findings: ValidationFindingSetProjection?,
   triagePlan: String?,
+  gateLabel: String = "build",
+  commandLabel: String? = "build",
 ): String {
   if (findings == null) return ""
+  val commandGuidance =
+    commandLabel?.let {
+      "Run only the pack-declared $it command when you need console detail. "
+    }.orEmpty()
   val lines =
     buildList {
-      add("## Runtime build gate findings")
+      add("## Runtime $gateLabel gate findings")
       add(
         "A prior gate run parsed these items. They are the full open set for this repair turn — fix every one in " +
-          "this session (shared root causes may collapse several into one change). Run only the pack-declared " +
-          "build command when you need console detail. Do not run `skill-bill validate`, " +
+          "this session (shared root causes may collapse several into one change). " +
+          commandGuidance + "Do not run `skill-bill validate`, " +
           "`skill-bill phase validation`, or the pack collect_all_full_gate_command. Do not spawn delegated " +
           "subagents.",
       )
@@ -147,13 +174,12 @@ internal fun buildGateFindingsDirective(
 }
 
 internal const val VALIDATE_VALUE_CONTENT: String =
-  "Settle completed only when every required project check passed, with a non-blank value of checks run.\n" +
-    "Fix every check failure in this session before returning a final result.\n" +
-    "Do not return a partial progress report. " +
-    "Settle blocked only for an external obstacle requiring operator action.\n" +
-    "Do not emit validation_evidence, validation_result, gate_run_count, or gate_runs.\n" +
+  "Say in prose which required project checks you ran and how each ended.\n" +
+    "Fix every check failure in this session before finishing, and block only for an external obstacle " +
+    "requiring operator action.\n" +
+    "Gate runs and their evidence are runtime-measured.\n" +
     "Never introduce suppressions, baselines, disabled rules, or skipped tests to silence findings."
 
 internal const val BUILD_VALUE_CONTENT: String =
   "Run only the pack build_command. Do not run collect_all_full_gate_command, check " + "--" + "continue,\n" +
-    "skill-bill validate, or skill-bill phase validation. gate_run_count and gate_runs are runtime-measured."
+    "skill-bill validate, or skill-bill phase validation. Gate runs and their evidence are runtime-measured."

@@ -10,7 +10,6 @@ import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassInFlight
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReservation
 import skillbill.engine.featuretask.model.review.GoalSubtaskReviewPassReserved
 import skillbill.engine.featuretask.persist.RuntimeOwnedPersistenceBoundary
-import skillbill.engine.goalrunner.status.completed
 import skillbill.goalrunner.model.UnaddressedFinding
 import skillbill.goalrunner.subtaskreview.GoalSubtaskReviewSummaryReducer
 import skillbill.goalrunner.subtaskreview.model.UnaddressedFindingLedgerScope

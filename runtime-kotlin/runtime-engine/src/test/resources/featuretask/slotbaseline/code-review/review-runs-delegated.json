@@ -5,9 +5,9 @@
                 "aggregate_counters": {
                     "evidence_bytes": 0,
                     "expansions": 0,
-                    "launch_bytes": 2696,
+                    "launch_bytes": 2247,
                     "model_turns": 1,
-                    "result_bytes": 166,
+                    "result_bytes": 193,
                     "tool_calls": 0
                 },
                 "commit_routing_accounting": {
@@ -47,9 +47,9 @@
                         "inclusive_counters": {
                             "evidence_bytes": 0,
                             "expansions": 0,
-                            "launch_bytes": 2696,
+                            "launch_bytes": 2247,
                             "model_turns": 1,
-                            "result_bytes": 166,
+                            "result_bytes": 193,
                             "tool_calls": 0
                         },
                         "lane": "parallel-agent-1",
@@ -60,7 +60,7 @@
                             {
                                 "composition_digest": "__NORMALIZED_SHA64__",
                                 "entry_count": 1,
-                                "measured_bytes": 9897,
+                                "measured_bytes": 10022,
                                 "segment_id": "seg-000"
                             }
                         ],
@@ -75,20 +75,20 @@
                         "inclusive_counters": {
                             "evidence_bytes": 0,
                             "expansions": 0,
-                            "launch_bytes": 2696,
+                            "launch_bytes": 2247,
                             "model_turns": 1,
-                            "result_bytes": 166,
+                            "result_bytes": 193,
                             "tool_calls": 0
                         },
                         "lane": "claude",
-                        "launch_bytes": 2696,
+                        "launch_bytes": 2247,
                         "model_turns": 1,
-                        "result_bytes": 166,
+                        "result_bytes": 193,
                         "segment_accounting": [
                             {
                                 "composition_digest": "__NORMALIZED_SHA64__",
                                 "entry_count": 1,
-                                "measured_bytes": 9897,
+                                "measured_bytes": 10022,
                                 "segment_id": "seg-000"
                             }
                         ],
@@ -104,9 +104,9 @@
                     "inclusive_counters": {
                         "evidence_bytes": 0,
                         "expansions": 0,
-                        "launch_bytes": 2696,
+                        "launch_bytes": 2247,
                         "model_turns": 1,
-                        "result_bytes": 166,
+                        "result_bytes": 193,
                         "tool_calls": 0
                     },
                     "lane": "parallel-review",
@@ -172,7 +172,7 @@
                 {
                     "composition_digest": "__NORMALIZED_SHA64__",
                     "entry_count": 1,
-                    "measured_bytes": 9897,
+                    "measured_bytes": 10022,
                     "segment_id": "seg-000"
                 }
             ],

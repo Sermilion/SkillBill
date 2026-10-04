@@ -1,8 +1,10 @@
 package skillbill.engine.goalrunner.repair
 
+import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimePhaseQuery
 import skillbill.engine.goalrunner.execution.core.asWorkerOwnership
 import skillbill.engine.goalrunner.goalRepositoryIdentity
+import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerAppliedRepair
 import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosis
 import skillbill.engine.goalrunner.model.GoalRunnerChildWedgeDiagnosisRequest
@@ -12,16 +14,13 @@ import skillbill.engine.goalrunner.model.GoalRunnerRepairResult
 import skillbill.engine.goalrunner.model.GoalRunnerRepairStatus
 import skillbill.engine.goalrunner.model.GoalRunnerWedgeClass
 import skillbill.engine.goalrunner.model.GoalRunnerWedgeFinding
-import skillbill.engine.goalrunner.persist.recommendedDurableChildRecoveryCommand
-import skillbill.engine.goalrunner.planning.recovery.goalPlanningHardResetRemedy
+import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.status.GoalRunnerStatusDurableReadTracker
+import skillbill.engine.recovery.recommendedDurableChildRecoveryCommand
 import skillbill.goalrunner.model.GOAL_PAUSE_REASON_RUNNER_INTERRUPTED
 import skillbill.model.RepositoryRoot
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
-import skillbill.ports.goalrunner.persistence.GoalRunnerChildRepairStore
-import skillbill.ports.goalrunner.runner.GoalRunnerManifestStore
-import skillbill.ports.goalrunner.runner.GoalRunnerWorkflowOutcomeStore
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWorkerSupervisor
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeProcessInspection
@@ -30,7 +29,8 @@ import skillbill.workflow.model.decompositionStatus
 import java.nio.file.Path
 import java.time.Clock
 
-internal class GoalRunnerRepairCoordinator(
+@Inject
+class GoalRunnerRepairCoordinator(
   private val manifestStore: GoalRunnerManifestStore,
   private val phaseQuery: FeatureTaskRuntimePhaseQuery,
   private val workerSupervisor: FeatureTaskRuntimeWorkerSupervisor,
@@ -164,8 +164,8 @@ internal class GoalRunnerRepairCoordinator(
       parentPassedChecks = parentDiagnosis.passedChecks,
       diagnoses = diagnoses,
       refusalReason =
-        "Phase-output contract version is incompatible with the installed runtime. " +
-          "Recover with: '${goalPlanningHardResetRemedy(request.issueKey)}'.",
+        "Saved phase-output evidence is incompatible with the installed runtime. " +
+          "Keep the workflow and checkpoints intact, then retry after migration support is available.",
     )
 
   private fun inspectedResult(

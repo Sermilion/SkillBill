@@ -1,5 +1,16 @@
 # Boundary History — runtime-domain
 
+## [2026-10-01] SKILL-397 subtask 2 — Domain-owned aggregate transitions
+Areas: runtime-domain/workflow/decomposition, runtime-domain/workflow/model, runtime-domain/goalrunner, runtime-engine/goalrunner, runtime-application/decomposition
+- Decomposition manifest subtask transitions (attempt, complete, stop, resume, branch setup, branch selection, runtime-state preservation) now live in the domain as pure functions on the manifest aggregate.
+- Added domain restart and replan transitions (unlaunched-boundary check, hard and soft reset, restart and replan intent, post-child-deletion states); every reset path shares one internal reset-to-pending step.
+- Added a closed subtask-action type with wire parsing; goal-runner model now owns operator-boundary pausing, target-reached, and stop-reason ledger/diagnostic/next-action mapping.
+- Removed engine and application duplicates plus the subtask-ordering helper and string-token constants; callers import the domain functions. No typealias, baseline row, or exemption added.
+- Pattern: aggregate state rules belong in the domain; engine and application only orchestrate and persist. reusable
+- Known limitation: build, tests, and cycle/package-SCC checks are left to validate; a flagged cycle in workflow.decomposition or goalrunner.model must be fixed, not baselined.
+Feature flag: N/A
+Acceptance criteria: implemented per spec (audit counts settle in later phases)
+
 ## [2026-09-24] SKILL-372 subtask 2 — Domain-owned artifacts and shared rules
 Areas: runtime-domain, runtime-ports, runtime-engine, runtime-application, runtime-infra-sqlite, runtime-mcp, runtime-cli, runtime-core
 - Added typed artifact-family reads and writes, moved shared workflow rules and validator contracts to their owning boundaries, and preserved wire-compatible encoding.

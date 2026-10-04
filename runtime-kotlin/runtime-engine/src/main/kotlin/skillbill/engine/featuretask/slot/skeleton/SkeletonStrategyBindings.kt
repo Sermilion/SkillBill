@@ -2,7 +2,6 @@ package skillbill.engine.featuretask.slot.skeleton
 
 import skillbill.engine.featuretask.slot.PhaseStrategyBinding
 import skillbill.engine.featuretask.slot.audit.AcceptanceAuditStrategy
-import skillbill.engine.featuretask.slot.codereview.DelegatedReviewStrategy
 import skillbill.engine.featuretask.slot.codereview.InlineReviewStrategy
 import skillbill.engine.featuretask.slot.commitpush.RuntimeCommitStrategy
 import skillbill.engine.featuretask.slot.implementation.ImplementThenSimplifyStrategy
@@ -12,8 +11,11 @@ import skillbill.engine.featuretask.slot.preplan.AgentPreplanStrategy
 import skillbill.engine.featuretask.slot.pullrequest.PrDescriptionStrategy
 import skillbill.engine.featuretask.slot.qualitygate.agentvalidate.AgentValidateStrategy
 import skillbill.engine.featuretask.slot.qualitygate.packbuild.PackBuildStrategy
+import skillbill.engine.featuretask.slot.qualitygate.packvalidation.PackValidationStrategy
+import skillbill.engine.featuretask.slot.standalonereview.DelegatedStandaloneReviewStrategy
+import skillbill.engine.featuretask.slot.standalonereview.InlineStandaloneReviewStrategy
 import skillbill.engine.featuretask.slot.writehistory.BoundaryHistoryStrategy
-import skillbill.review.context.model.launch.CodeReviewExecutionMode
+import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
@@ -40,18 +42,18 @@ object SkeletonStrategyBindings {
         ),
       SkeletonDefinition.REVIEW to
         mapOf(
-          PhaseSlot.CODE_REVIEW to
+          PhaseSlot.STANDALONE_REVIEW to
             PhaseStrategyBinding.ByFact(
               CodeReviewExecutionMode.entries.associateWith { mode ->
                 when (mode) {
-                  CodeReviewExecutionMode.DELEGATED -> DelegatedReviewStrategy.ID
-                  CodeReviewExecutionMode.AUTO, CodeReviewExecutionMode.INLINE -> InlineReviewStrategy.ID
+                  CodeReviewExecutionMode.DELEGATED -> DelegatedStandaloneReviewStrategy.ID
+                  CodeReviewExecutionMode.AUTO, CodeReviewExecutionMode.INLINE -> InlineStandaloneReviewStrategy.ID
                 }
               },
             ),
         ),
       SkeletonDefinition.VALIDATION to
-        mapOf(PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(AgentValidateStrategy.ID)),
+        mapOf(PhaseSlot.QUALITY_GATE to PhaseStrategyBinding.Fixed(PackValidationStrategy.ID)),
       SkeletonDefinition.PLAN to
         mapOf(
           PhaseSlot.PREPLAN to PhaseStrategyBinding.Fixed(AgentPreplanStrategy.ID),

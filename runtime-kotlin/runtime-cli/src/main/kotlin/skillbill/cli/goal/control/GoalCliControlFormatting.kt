@@ -1,6 +1,6 @@
 package skillbill.cli.goal.control
 
-import skillbill.cli.goal.core.appendGoalResetSubtaskLines
+import skillbill.cli.kernel.payload.CliPayloadStatus
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.goalrunner.model.GoalRunnerAcceptResult
 import skillbill.engine.goalrunner.model.GoalRunnerReplanResult
@@ -18,7 +18,7 @@ internal fun GoalRunnerResetResult?.toGoalResetCliMap(
       when {
         it.refusalReason != null -> "refused"
         it.recovery?.recoveryCommand != null -> "recovery_required"
-        else -> "ok"
+        else -> CliPayloadStatus.OK
       }
     linkedMapOf(
       SharedPayloadKeys.STATUS to status,
@@ -41,7 +41,7 @@ internal fun GoalRunnerResetResult?.toGoalResetCliMap(
         },
     )
   } ?: linkedMapOf(
-    SharedPayloadKeys.STATUS to "not_found",
+    SharedPayloadKeys.STATUS to CliPayloadStatus.NOT_FOUND,
     SharedPayloadKeys.ISSUE_KEY to issueKey,
     "mode" to if (hard) "hard" else "soft",
   )
@@ -49,7 +49,7 @@ internal fun GoalRunnerResetResult?.toGoalResetCliMap(
 internal fun GoalRunnerReplanResult?.toGoalReplanCliMap(issueKey: String): Map<String, Any?> =
   this?.let {
     linkedMapOf(
-      SharedPayloadKeys.STATUS to "ok",
+      SharedPayloadKeys.STATUS to CliPayloadStatus.OK,
       SharedPayloadKeys.ISSUE_KEY to it.issueKey,
       "mode" to "scoped_replan",
       "parent_workflow_id" to it.parentWorkflowId,
@@ -62,7 +62,7 @@ internal fun GoalRunnerReplanResult?.toGoalReplanCliMap(issueKey: String): Map<S
       "after" to replanSnapshotMap(it.after),
     )
   } ?: linkedMapOf(
-    SharedPayloadKeys.STATUS to "not_found",
+    SharedPayloadKeys.STATUS to CliPayloadStatus.NOT_FOUND,
     SharedPayloadKeys.ISSUE_KEY to issueKey,
     "mode" to "scoped_replan",
   )
@@ -111,7 +111,7 @@ internal fun GoalRunnerAcceptResult.toGoalAcceptCliMap(): Map<String, Any?> =
   when (this) {
     is GoalRunnerAcceptResult.Accepted ->
       linkedMapOf(
-        SharedPayloadKeys.STATUS to "ok",
+        SharedPayloadKeys.STATUS to CliPayloadStatus.OK,
         SharedPayloadKeys.ISSUE_KEY to issueKey,
         "parent_workflow_id" to parentWorkflowId,
         SharedPayloadKeys.SUBTASK_ID to subtaskId,
@@ -209,10 +209,10 @@ internal fun goalResetText(
 
 private fun GoalRunnerResetResult?.goalResetStatus(): String =
   when {
-    this == null -> "not_found"
+    this == null -> CliPayloadStatus.NOT_FOUND
     this.refusalReason != null -> "refused"
     this.recovery?.recoveryCommand != null -> "recovery_required"
-    else -> "ok"
+    else -> CliPayloadStatus.OK
   }
 
 private fun StringBuilder.appendGoalResetSnapshots(result: GoalRunnerResetResult) {
@@ -247,7 +247,7 @@ internal fun goalReplanText(
 ): String =
   buildString {
     appendLine("goal: ${result?.issueKey ?: issueKey}")
-    appendLine("status: ${if (result == null) "not_found" else "ok"}")
+    appendLine("status: ${if (result == null) CliPayloadStatus.NOT_FOUND else CliPayloadStatus.OK}")
     appendLine("mode: scoped_replan")
     result?.parentWorkflowId?.let { appendLine("parent_workflow_id: $it") }
     result?.let {

@@ -1,6 +1,6 @@
 package skillbill.application.scaffold
 
-import skillbill.error.shellcontent.InvalidScaffoldPayloadError
+import skillbill.error.shellcontent.invalidScaffoldPayloadError
 
 internal fun parseStringList(
   payload: Map<String, Any?>,
@@ -8,11 +8,11 @@ internal fun parseStringList(
 ): List<String> {
   val raw =
     payload[key]
-      ?: throw InvalidScaffoldPayloadError(
+      ?: throw invalidScaffoldPayloadError(
         "Scaffold payload field '$key' must be a list of strings.",
       )
   if (raw !is List<*>) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field '$key' must be a list of strings.",
     )
   }
@@ -25,7 +25,7 @@ internal fun parseStringListOrEmpty(
 ): List<String> {
   val raw = payload[key] ?: return emptyList()
   if (raw !is List<*>) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field '$key' must be a list of strings.",
     )
   }
@@ -40,11 +40,11 @@ internal fun parseRoutingSignalList(
   if (!routing.containsKey(key)) return null
   val raw =
     routing[key]
-      ?: throw InvalidScaffoldPayloadError(
+      ?: throw invalidScaffoldPayloadError(
         "Scaffold payload field '$fieldName' must be a list of strings.",
       )
   if (raw !is List<*>) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field '$fieldName' must be a list of strings.",
     )
   }
@@ -58,12 +58,12 @@ internal fun parseStringListValue(
   val mapped =
     raw.map { value ->
       value as? String
-        ?: throw InvalidScaffoldPayloadError(
+        ?: throw invalidScaffoldPayloadError(
           "Scaffold payload field '$fieldName' must contain only non-empty strings.",
         )
     }
   if (mapped.any(String::isBlank)) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field '$fieldName' must contain only non-empty strings.",
     )
   }
@@ -76,7 +76,7 @@ internal fun parseBooleanOrFalse(
 ): Boolean {
   if (!payload.containsKey(key)) return false
   return payload[key] as? Boolean
-    ?: throw InvalidScaffoldPayloadError(
+    ?: throw invalidScaffoldPayloadError(
       "Scaffold payload field '$key' must be a boolean when provided.",
     )
 }
@@ -88,11 +88,11 @@ internal fun requireOptionalNonBlank(
   if (!payload.containsKey(key)) return null
   val value =
     payload[key] as? String
-      ?: throw InvalidScaffoldPayloadError(
+      ?: throw invalidScaffoldPayloadError(
         "Scaffold payload field '$key' must be a non-empty string when provided.",
       )
   if (value.isBlank()) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field '$key' must be a non-empty string when provided.",
     )
   }
@@ -106,11 +106,11 @@ internal fun requireStringInMap(
 ): String {
   val value =
     layer[key] as? String
-      ?: throw InvalidScaffoldPayloadError(
+      ?: throw invalidScaffoldPayloadError(
         "Scaffold payload field '$fieldLabel' must be a non-empty string.",
       )
   if (value.isBlank()) {
-    throw InvalidScaffoldPayloadError(
+    throw invalidScaffoldPayloadError(
       "Scaffold payload field '$fieldLabel' must be a non-empty string.",
     )
   }

@@ -3,6 +3,7 @@ package skillbill.engine.featuretask.review.core
 import skillbill.application.reviewevidence.model.ReviewDiffEvidence
 import skillbill.engine.featuretask.model.review.FeatureTaskRuntimeSharedReviewEvidenceResolved
 import skillbill.ports.diff.DiffResolverPort
+import skillbill.ports.diff.model.ReviewDiffQuery
 import skillbill.ports.taskruntime.FeatureTaskRuntimeSharedEvidenceResolverPort
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceDerivation
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceRequest
@@ -14,6 +15,10 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReview
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvidenceFileEntry
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvidenceHunkEntry
 import java.nio.file.Path
+import java.util.logging.Level
+import java.util.logging.Logger
+
+private val log: Logger = Logger.getLogger(FeatureTaskRuntimeSharedReviewEvidenceResolver::class.java.name)
 
 class FeatureTaskRuntimeSharedReviewEvidenceResolver(
   private val sharedEvidenceResolver: FeatureTaskRuntimeSharedEvidenceResolverPort,
@@ -29,7 +34,8 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolver(
     val resolution =
       sharedEvidenceResolver.resolve(
         FeatureTaskRuntimeSharedEvidenceRequest(repoRoot, workflowId, checkpoint),
-      ) { requested -> derive(repoRoot, requested) }
+      ) { requested -> derive(repoRoot, requested, workflowId, consumerPhaseId) }
+        ?: return null
     val storePath = resolution.storePath?.takeIf(String::isNotBlank) ?: return null
     val reference = FeatureTaskRuntimeSharedReviewEvidenceReference.of(storePath, resolution.artifact)
     return FeatureTaskRuntimeSharedReviewEvidenceResolved(
@@ -49,19 +55,28 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolver(
   private fun derive(
     repoRoot: Path,
     checkpoint: FeatureTaskRuntimeRepositoryCheckpoint,
-  ): FeatureTaskRuntimeSharedEvidenceDerivation {
+    workflowId: String,
+    consumerPhaseId: String,
+  ): FeatureTaskRuntimeSharedEvidenceDerivation? {
     val base = checkpoint.baseRef?.takeIf(String::isNotBlank)
     val head = checkpoint.headRef?.takeIf(String::isNotBlank) ?: "HEAD"
     val ownedPaths = checkpoint.workingTreeOwnedPaths.filter(String::isNotBlank)
-    val committedArgs =
+    val query =
       when {
-        base == null -> listOf("git", "diff", head)
-        ownedPaths.isEmpty() -> listOf("git", "diff", base, head)
-        else -> listOf("git", "diff", base)
+        base == null -> ReviewDiffQuery.WorkingTree(head, ownedPaths, includeBinary = false)
+        ownedPaths.isEmpty() -> ReviewDiffQuery.CommitRange(base, head)
+        else -> ReviewDiffQuery.WorkingTree(base, ownedPaths, includeBinary = false)
       }
-    val pathArgs = ownedPaths.flatMap { listOf("--", it) }
-    val diff = diffResolver.runProcess(committedArgs + pathArgs, repoRoot).orEmpty()
-    val evidence = runCatching { ReviewDiffEvidence.parse(diff) }.getOrNull()
+    val diff =
+      diffResolver.diff(repoRoot, query)
+        ?: return recordUnreadableDiff(workflowId, consumerPhaseId, query)
+    val evidence =
+      try {
+        ReviewDiffEvidence.parse(diff)
+      } catch (error: IllegalArgumentException) {
+        recordParseDegradation(error)
+        null
+      }
     return FeatureTaskRuntimeSharedEvidenceDerivation(
       baseRef = base,
       headRef = head,
@@ -74,6 +89,29 @@ class FeatureTaskRuntimeSharedReviewEvidenceResolver(
           FeatureTaskRuntimeSharedEvidenceHunkEntry(it.path, it.content.lineSequence().first().ifBlank { "@@" })
         },
       diffPayload = diff,
+    )
+  }
+
+  private fun recordUnreadableDiff(
+    workflowId: String,
+    consumerPhaseId: String,
+    query: ReviewDiffQuery,
+  ): Nothing? {
+    log.log(
+      Level.WARNING,
+      "seam=shared_review_evidence_derive value_used=no_evidence value_expected=derived_evidence " +
+        "workflow_id=$workflowId consumer_phase_id=$consumerPhaseId " +
+        "cause=Could not read the shared review evidence diff for $query.",
+    )
+    return null
+  }
+
+  private fun recordParseDegradation(error: IllegalArgumentException) {
+    log.log(
+      Level.WARNING,
+      "seam=shared_review_evidence_parse value_used=empty_file_and_hunk_index " +
+        "value_expected=parsed_diff_evidence cause=${error.message ?: error.javaClass.simpleName}",
+      error,
     )
   }
 
