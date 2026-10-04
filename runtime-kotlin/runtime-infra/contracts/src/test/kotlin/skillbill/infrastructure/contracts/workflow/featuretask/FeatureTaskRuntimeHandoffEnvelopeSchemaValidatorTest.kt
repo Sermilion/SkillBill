@@ -1,5 +1,9 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION
 import skillbill.error.core.failureCodeLabel
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
@@ -7,10 +11,6 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeHandoffProjectionEr
 import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
   private val validator = FeatureTaskRuntimeWireArtifactValidator()
@@ -40,7 +40,7 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
         FeatureTaskRuntimeWireArtifactKind.GOAL_OBSERVABILITY_EVENT to
           "InstallFailureCode.INVALID_GOAL_OBSERVABILITY_EVENT_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE to
-          "InvalidGoalPlanningPreparationSchemaError",
+          "InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA",
       )
 
     FeatureTaskRuntimeWireArtifactKind.entries.forEach { kind ->

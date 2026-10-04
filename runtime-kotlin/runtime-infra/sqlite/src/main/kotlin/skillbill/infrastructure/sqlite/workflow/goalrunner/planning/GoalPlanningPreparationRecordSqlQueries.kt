@@ -1,13 +1,13 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
+import java.sql.Connection
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.workflow.featuretask.encodeWorkflowArtifact
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationStatus
-import java.sql.Connection
 
 internal object GoalPlanningPreparationRecordSqlQueries
 
@@ -164,7 +164,7 @@ internal fun Connection.selectStatus(
       val label = statusLabel(rows)
       val contractVersion = requireColumn(rows, label, "contract_version")
       if (contractVersion != "0.1") {
-        throw InvalidGoalPlanningPreparationSchemaError(
+        throw invalidGoalPlanningPreparationSchemaError(
           sourceLabel = label,
           fieldPath = "contract_version",
           reason = incompatibleLoadedVersionReason(contractVersion),

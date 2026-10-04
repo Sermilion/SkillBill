@@ -1,5 +1,8 @@
 package skillbill.engine.featuretask.runner
 
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.assertIs
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.goalplanning.GoalPlanningPreparationCheckpoint
@@ -13,6 +16,7 @@ import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.persist.GoalRunnerWorkflowOutcomeStore
 import skillbill.engine.goalrunner.planning.GoalPlanningLogService
 import skillbill.engine.goalrunner.planning.attempt.DurableGoalPlanningAttemptRecorder
+import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrationOutcome
 import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrator
 import skillbill.engine.goalrunner.planning.model.GoalChildPlanningHydration
 import skillbill.engine.goalrunner.planning.model.GoalPlanningLog
@@ -28,6 +32,8 @@ import skillbill.infrastructure.workflow.decomposition.FileSystemDecompositionMa
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RejectedOutputDiagnosticMetadataValidator
 import skillbill.ports.diagnostics.model.RejectedOutputDiagnostic
+import skillbill.ports.goalrunner.foundCheckpoint
+import skillbill.ports.goalrunner.foundPlan
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.workflow.decomposition.encodeManifestWireMap
 import skillbill.ports.workflow.gitops.model.GoalSubtaskReviewBaseline
@@ -38,9 +44,6 @@ import skillbill.workflow.decomposition.model.DecompositionDependency
 import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.goalobservability.GoalProgressEvent
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.assertIs
 
 internal object SlotBaselineGoalPlanningCapture {
   private const val ISSUE_KEY = "SKILL-380"
@@ -131,11 +134,14 @@ internal object SlotBaselineGoalPlanningCapture {
     return prepared.database.read { unitOfWork ->
       val preparations = unitOfWork.goalPlanningPreparations
       HydratedGoalChild(
-        hydration = hydrator.hydrate(unitOfWork, setup, request),
-        preplanPayload = requireNotNull(preparations.findSharedPreplan(request.identity)).preplanPayload,
+        hydration =
+          assertIs<GoalChildPlanningHydrationOutcome.Hydrated>(
+            hydrator.hydrate(unitOfWork, setup, request),
+          ).hydration,
+        preplanPayload = requireNotNull(preparations.findSharedPreplan(request.identity).foundCheckpoint()).preplanPayload,
         planPayload =
           requireNotNull(
-            preparations.findSubtaskPlan(request.identity, subtaskId, request.descriptor.governedSubSpecPath),
+            preparations.findSubtaskPlan(request.identity, subtaskId, request.descriptor.governedSubSpecPath).foundPlan(),
           ).planPayload,
       )
     }

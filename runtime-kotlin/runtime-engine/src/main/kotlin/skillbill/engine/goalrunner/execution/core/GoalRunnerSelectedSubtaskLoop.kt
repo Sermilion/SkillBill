@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.execution.core
 
+import java.time.Clock
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.goalrunner.execution.support.CompletedIterationArgs
 import skillbill.engine.goalrunner.execution.support.GoalRunnerIterationPendingState
@@ -12,6 +13,7 @@ import skillbill.engine.goalrunner.execution.support.StoppedIterationArgs
 import skillbill.engine.goalrunner.execution.support.recordLaunchObservabilityAndLedger
 import skillbill.engine.goalrunner.launch.GoalRunnerLaunchReconciler
 import skillbill.engine.goalrunner.launch.GoalRunnerSubtaskLaunchPrepare
+import skillbill.engine.goalrunner.launch.GoalSubtaskLaunchPrepareResult
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalRunnerLaunchReconciliation
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
@@ -25,7 +27,6 @@ import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.ports.agentrun.model.AgentRunLaunchDenied
 import skillbill.ports.goalrunner.runner.GoalRunnerSubtaskLauncher
 import skillbill.ports.workflow.gitops.model.WorkflowGitOperationStatus
-import java.time.Clock
 
 private sealed interface SubtaskLaunchResult {
   data class Launched(
@@ -144,23 +145,19 @@ class GoalRunnerSelectedSubtaskLoop(
       )
     }
     val reviewBaseline = requireNotNull(baselineCapture.baseline)
-    return runCatching {
-      launchPrepare.prepareAttemptedLaunch(state, subtaskId, request, reviewBaseline, planning)
-    }.fold(
-      onSuccess = { prepared ->
+    return when (val prepared = launchPrepare.prepareAttemptedLaunch(state, subtaskId, request, reviewBaseline, planning)) {
+      is GoalSubtaskLaunchPrepareResult.Prepared ->
         SelectedSubtaskPreparation.Ready(
           subtaskId = subtaskId,
-          attemptedState = prepared.state,
-          openWithAssignedId = prepared.openWithAssignedId,
+          attemptedState = prepared.launch.state,
+          openWithAssignedId = prepared.launch.openWithAssignedId,
           reviewBaseline = reviewBaseline,
         )
-      },
-      onFailure = { error ->
+      is GoalSubtaskLaunchPrepareResult.Conflicted ->
         SelectedSubtaskPreparation.Stopped(
-          launchPrepare.blockedOnRecoveryError(state, subtaskId, error, request),
+          launchPrepare.blockedOnPreparationConflict(state, prepared.conflict, request),
         )
-      },
-    )
+    }
   }
 
   private fun authorizeAndLaunchSelectedSubtask(

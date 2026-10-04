@@ -1,5 +1,15 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import skillbill.application.testDecompositionManifestValidator
 import skillbill.application.testDecompositionManifestWriter
 import skillbill.application.testHarnessClock
@@ -13,6 +23,7 @@ import skillbill.application.workflow.service.WorkflowService
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.model.execution.FeatureTaskRuntimeExecutionPlanCreationRequest
 import skillbill.engine.featuretask.persist.FeatureTaskRuntimeWorkflowPersistence
@@ -39,6 +50,8 @@ import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerOwnership
+import skillbill.ports.goalrunner.foundCheckpoint
+import skillbill.ports.goalrunner.foundPlan
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
@@ -72,17 +85,6 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimePhaseExecutionOrigin
 import skillbill.workflow.taskruntime.model.skeleton.FeatureTaskRuntimeQualityGateSelection
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 class FeatureTaskExecutionPlanCreationTest {
   @Test
@@ -188,10 +190,10 @@ class FeatureTaskExecutionPlanCreationTest {
         assertNull(unit.workflowStates.getFeatureTaskWorkflow(CHILD))
         assertNull(unit.workflowStates.getFeatureTaskExecutionIdentity(CHILD))
         assertEquals(listOf(PARENT), unit.workflowStates.list(WorkflowFamily.TASK_RUNTIME, 100).map { it.workflowId })
-        assertEquals(fixture.preplan, unit.goalPlanningPreparations.findSharedPreplan(fixture.identity)?.preplanPayload)
+        assertEquals(fixture.preplan, unit.goalPlanningPreparations.findSharedPreplan(fixture.identity).foundCheckpoint()?.preplanPayload)
         assertEquals(
           fixture.plan,
-          unit.goalPlanningPreparations.findSubtaskPlan(fixture.identity, 1, SPEC)?.planPayload,
+          unit.goalPlanningPreparations.findSubtaskPlan(fixture.identity, 1, SPEC).foundPlan()?.planPayload,
         )
       }
 

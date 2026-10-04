@@ -1,9 +1,10 @@
 package skillbill.engine.goalrunner.planning.hydration
 
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
-import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationResult
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
+import skillbill.engine.goalrunner.planning.hydration.GoalChildPlanningHydrateResult
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.workflow.engine.model.WorkflowStateSnapshot
 
 interface GoalChildPlanningHydratorPort {
@@ -11,11 +12,11 @@ interface GoalChildPlanningHydratorPort {
     unitOfWork: GoalRunnerPersistenceSession,
     setup: GoalRunnerChildWorkflowSetup,
     request: GoalChildPlanningHydrationRequest,
-  ): GoalChildPlanningHydrationResult
+  ): GoalChildPlanningHydrateResult
 
   fun requireMatchingImport(
     unitOfWork: GoalRunnerPersistenceSession,
     existing: WorkflowStateSnapshot,
     setup: GoalRunnerChildWorkflowSetup,
-  )
+  ): GoalPlanningPreparationConflict?
 }

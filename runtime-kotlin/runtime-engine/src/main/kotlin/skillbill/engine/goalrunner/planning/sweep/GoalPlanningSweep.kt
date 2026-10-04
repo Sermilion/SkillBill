@@ -1,6 +1,8 @@
 package skillbill.engine.goalrunner.planning.sweep
 
+import java.time.Clock
 import me.tatarka.inject.annotations.Inject
+import skillbill.application.rethrowIfCooperativeCancellationOrInterruption
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunReport
 import skillbill.engine.featuretask.runloop.core.FeatureTaskRuntimeRunLoopEntry
 import skillbill.engine.featuretask.runloop.core.slotStepVerdictRule
@@ -29,10 +31,10 @@ import skillbill.engine.goalrunner.planning.state.GoalPlanningRunScope
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
+import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
-import java.time.Clock
 
 fun interface GoalPlanningSweep {
   fun prepare(
@@ -65,13 +67,23 @@ class DefaultGoalPlanningSweep(
         FeatureTaskExecutionIdentityPolicy.canonicalIssueKey(state.manifest.issueKey),
         repositoryEnclosingRootPort.repositoryIdentity(request.repoRoot),
       )
-    val existingShared =
-      runCatching {
+    val sharedRead =
+      try {
         sharedPreplanProduction.findAdmittedSharedPreplan(identity)
+      } catch (error: Throwable) {
+        error.rethrowIfCooperativeCancellationOrInterruption()
+        return preSweepStopped(request, preparationStateReadReason(error, request.issueKey, 0))
       }
-        .getOrElse { error ->
-          return preSweepStopped(request, preparationStateReadReason(error, request.issueKey, 0))
-        }
+    val existingShared =
+      when (val result = sharedRead) {
+        is SharedGoalPreplanLookupResult.Found -> result.checkpoint
+        is SharedGoalPreplanLookupResult.Conflicted ->
+          return preSweepStopped(
+            request,
+            preparationStateReadReason(result.conflict, request.issueKey, result.conflict.subtaskId),
+            result.conflict.subtaskId,
+          )
+      }
     val recoveredPacket = existingShared?.let(sharedPreplanProduction::planningPacketFrom)
     if (existingShared != null && recoveredPacket == null) {
       return preSweepStopped(

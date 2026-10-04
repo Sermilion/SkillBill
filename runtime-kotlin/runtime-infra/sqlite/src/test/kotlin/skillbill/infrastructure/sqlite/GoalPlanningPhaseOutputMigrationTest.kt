@@ -1,10 +1,5 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
-import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
-import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion6
-import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 import java.nio.file.Files
 import java.sql.Connection
 import java.sql.SQLException
@@ -12,6 +7,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.infrastructure.sqlite.core.migration.DatabaseMigrations
+import skillbill.infrastructure.sqlite.core.migration.area.rebuildGoalPlanningPlansForPhaseOutputVersion6
+import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
 
 class GoalPlanningPhaseOutputMigrationTest {
   @Test
@@ -78,7 +78,7 @@ class GoalPlanningPhaseOutputMigrationTest {
       val sharedSchema = tableSql(connection, "goal_shared_preplans")
       val subtaskSchema = tableSql(connection, "goal_subtask_plans")
 
-      assertFailsWith<InvalidGoalPlanningPreparationSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         DatabaseMigrations.apply(connection)
       }
 

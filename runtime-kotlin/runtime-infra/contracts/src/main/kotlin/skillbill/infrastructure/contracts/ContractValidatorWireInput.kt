@@ -2,7 +2,6 @@ package skillbill.infrastructure.contracts
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION
-import skillbill.error.core.ShellContentContractException
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
@@ -15,7 +14,7 @@ import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeProjectionMeasureme
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeQuarantineSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeSharedEvidenceProjectionSchemaError
 import skillbill.error.shellcontent.invalidGoalObservabilityEventSchemaError
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeHandoffEnvelopeSchemaPaths
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
@@ -24,7 +23,7 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 internal fun requireValidatorWireMap(
   payload: Any,
   sourceLabel: String,
-  nonObjectError: (sourceLabel: String, reason: String) -> ShellContentContractException,
+  nonObjectError: (sourceLabel: String, reason: String) -> SkillBillRuntimeException,
 ): Map<String, Any?> =
   JsonCodec.anyToStringAnyMap(payload)
     ?: throw nonObjectError(sourceLabel, "<root> must be an object.")
@@ -90,7 +89,7 @@ internal fun featureTaskRuntimeWireArtifactNonObjectError(
         reason = reason,
       )
     FeatureTaskRuntimeWireArtifactKind.GOAL_PLANNING_PREPARATION_ENVELOPE ->
-      InvalidGoalPlanningPreparationSchemaError(
+      invalidGoalPlanningPreparationSchemaError(
         sourceLabel = sourceLabel,
         fieldPath = "<root>",
         reason = reason,

@@ -1,9 +1,9 @@
 package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import java.sql.ResultSet
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
-import java.sql.ResultSet
 
 internal fun ResultSet.toPreparedRecord(): GoalPlanningPreparationRecord {
   val parentGoalWorkflowId = getString("parent_goal_workflow_id")
@@ -11,7 +11,7 @@ internal fun ResultSet.toPreparedRecord(): GoalPlanningPreparationRecord {
   val label = "$parentGoalWorkflowId#$subtaskId"
   val contractVersion = requireColumn(this, label, "contract_version")
   if (contractVersion != "0.1") {
-    throw InvalidGoalPlanningPreparationSchemaError(
+    throw invalidGoalPlanningPreparationSchemaError(
       sourceLabel = label,
       fieldPath = "contract_version",
       reason = incompatibleLoadedVersionReason(contractVersion),

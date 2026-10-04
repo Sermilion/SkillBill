@@ -4,7 +4,8 @@ import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationContractError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import skillbill.workflow.model.WorkflowStepStatus
@@ -25,8 +26,19 @@ class GoalPlanningPreparationValidator {
     val plan =
       NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(record.planPayload, PLAN_PHASE_ID)
         .envelopeWireMap()
-    val failure = envelopeFailure(record) ?: provenanceFailure(record)
-    failure?.let { throw InvalidGoalPlanningPreparationSchemaError(sourceLabel = label, fieldPath = "", reason = it) }
+    envelopeFailure(record)?.let {
+      throw invalidGoalPlanningPreparationSchemaError(sourceLabel = label, fieldPath = "", reason = it)
+    }
+    provenanceFailure(record)?.let { reason ->
+      throw if (
+        reason.startsWith("provenance.phase_output_contract_id must be") ||
+        reason.startsWith("provenance.phase_output_contract_version must be")
+      ) {
+        incompatibleGoalPlanningPreparationContractError(sourceLabel = label, fieldPath = "", reason = reason)
+      } else {
+        invalidGoalPlanningPreparationSchemaError(sourceLabel = label, fieldPath = "", reason = reason)
+      }
+    }
     requireCompleted(preplan, PREPLAN_PHASE_ID, label)
     requireCompleted(plan, PLAN_PHASE_ID, label)
     return record.copy(
@@ -42,7 +54,7 @@ class GoalPlanningPreparationValidator {
   ) {
     val status = payload[SharedPayloadKeys.STATUS]?.toString()
     if (status.workflowStepStatus() != WorkflowStepStatus.COMPLETED) {
-      throw InvalidGoalPlanningPreparationSchemaError(
+      throw invalidGoalPlanningPreparationSchemaError(
         sourceLabel = label,
         fieldPath = "${phaseId}_payload.status",
         reason = "status must be 'completed' for a prepared pair",

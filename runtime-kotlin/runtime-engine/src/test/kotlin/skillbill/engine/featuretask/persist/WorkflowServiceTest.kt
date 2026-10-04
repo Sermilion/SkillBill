@@ -53,6 +53,7 @@ import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerManifestStore
 import skillbill.engine.goalrunner.execution.core.testWorkflowGoalRunnerOutcomeStore
 import skillbill.engine.goalrunner.manifest
+import skillbill.engine.goalrunner.manifest.GoalRunnerChildWorkflowSaveResult
 import skillbill.engine.goalrunner.manifest.GoalRunnerManifestStore
 import skillbill.engine.goalrunner.model.GoalAttemptLedgerEntryDraft
 import skillbill.engine.goalrunner.model.GoalChildPlanningHydrationRequest
@@ -68,7 +69,6 @@ import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
 import skillbill.engine.goalrunner.status.GoalRunnerStatusService
 import skillbill.engine.goalrunner.status.completed
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
@@ -87,12 +87,17 @@ import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.goalrunner.EmptyGoalRunnerControlRepository
 import skillbill.ports.goalrunner.GoalPlanningPreparationRepositoryDefaults
 import skillbill.ports.goalrunner.GoalRunnerControlRepository
+import skillbill.ports.goalrunner.foundPlan
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationWriteResult
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
+import skillbill.ports.goalrunner.model.GoalSubtaskPlanListResult
+import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.GovernedGoalSubtaskDescriptor
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
+import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.ports.taskruntime.FeatureTaskRuntimeWireArtifactValidator
@@ -3693,8 +3698,15 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
   fun `missing corrupt and conflicting preparation fail before a child is durable`() {
     listOf("missing", "corrupt", "conflict").forEach { variant ->
       val harness = hydrationHarness(variant = variant)
-      assertFailsWith<RuntimeException>(variant) {
-        harness.store.saveNewChildWorkflow(harness.state, harness.setup)
+      if (variant == "conflict") {
+        assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+          harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+          variant,
+        )
+      } else {
+        assertFailsWith<RuntimeException>(variant) {
+          harness.store.saveNewChildWorkflow(harness.state, harness.setup)
+        }
       }
       assertNull(harness.workflows.getFeatureTaskWorkflowAsMode(CHILD_ID, RUNTIME), variant)
       assertNull(harness.workflows.executionIdentity(CHILD_ID), variant)
@@ -3799,12 +3811,12 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
       RUNTIME,
     )
 
-    val error =
-      assertFailsWith<IncompatibleGoalPlanningPreparationRecoveryError> {
-        harness.store.saveNewChildWorkflow(harness.state, harness.setup)
-      }
+    val conflict =
+      assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+        harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+      ).conflict
 
-    assertContains(error.message.orEmpty(), "stored import provenance differs from the hydration request")
+    assertContains(conflict.reason, "stored import provenance differs from the hydration request")
   }
 
   @Test
@@ -3819,12 +3831,12 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
       RUNTIME,
     )
 
-    val error =
-      assertFailsWith<IncompatibleGoalPlanningPreparationRecoveryError> {
-        harness.store.saveNewChildWorkflow(harness.state, harness.setup)
-      }
+    val conflict =
+      assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+        harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+      ).conflict
 
-    assertContains(error.message.orEmpty(), "child carries no goal planning import artifact")
+    assertContains(conflict.reason, "child carries no goal planning import artifact")
   }
 
   @Test
@@ -3834,13 +3846,13 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
 
     harness.preparations.shared = null
 
-    val error =
-      assertFailsWith<IncompatibleGoalPlanningPreparationRecoveryError> {
-        harness.store.saveNewChildWorkflow(harness.state, harness.setup)
-      }
+    val conflict =
+      assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+        harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+      ).conflict
 
     assertContains(
-      error.message.orEmpty(),
+      conflict.reason,
       "parent planning checkpoints are missing or have incompatible provenance",
     )
   }
@@ -3861,12 +3873,12 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
       RUNTIME,
     )
 
-    val error =
-      assertFailsWith<IncompatibleGoalPlanningPreparationRecoveryError> {
-        harness.store.saveNewChildWorkflow(harness.state, harness.setup)
-      }
+    val conflict =
+      assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+        harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+      ).conflict
 
-    assertContains(error.message.orEmpty(), "phase ledger no longer opens with the goal planning import prefix")
+    assertContains(conflict.reason, "phase ledger no longer opens with the goal planning import prefix")
   }
 
   @Test
@@ -3880,12 +3892,12 @@ class GoalChildPlanningHydrationTransactionIntegrationTest {
       RUNTIME,
     )
 
-    val error =
-      assertFailsWith<IncompatibleGoalPlanningPreparationRecoveryError> {
-        harness.store.saveNewChildWorkflow(harness.state, harness.setup)
-      }
+    val conflict =
+      assertIs<GoalRunnerChildWorkflowSaveResult.Conflicted>(
+        harness.store.saveNewChildWorkflow(harness.state, harness.setup),
+      ).conflict
 
-    assertContains(error.message.orEmpty(), "child planning phases are not settled as completed")
+    assertContains(conflict.reason, "child planning phases are not settled as completed")
   }
 
   @Test
@@ -4298,32 +4310,42 @@ private class RecordingPlanningPreparations(
   val plans = mutableMapOf<Int, GoalSubtaskPlanCheckpoint>()
   var readCount = 0
 
-  override fun checkpointSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint) {
+  override fun checkpointSharedPreplan(checkpoint: SharedGoalPreplanCheckpoint): GoalPlanningPreparationWriteResult {
     shared = checkpoint
+    return GoalPlanningPreparationWriteResult.Applied
   }
 
-  override fun findSharedPreplan(expectedIdentity: GoalPlanningIdentity): SharedGoalPreplanCheckpoint? {
+  override fun findSharedPreplan(expectedIdentity: GoalPlanningIdentity): SharedGoalPreplanLookupResult {
     readCount++
     check(!errorOnRead) { "standalone path read goal preparation" }
-    return shared?.takeIf { it.identity == expectedIdentity }
+    return SharedGoalPreplanLookupResult.Found(shared?.takeIf { it.identity == expectedIdentity })
   }
 
-  override fun checkpointSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint) {
+  override fun checkpointSubtaskPlan(checkpoint: GoalSubtaskPlanCheckpoint): GoalPlanningPreparationWriteResult {
     plans[checkpoint.subtaskId] = checkpoint
+    return GoalPlanningPreparationWriteResult.Applied
   }
 
   override fun findSubtaskPlan(
     expectedIdentity: GoalPlanningIdentity,
     subtaskId: Int,
     governedSubSpecPath: String,
-  ) = plans[subtaskId]?.takeIf { it.identity == expectedIdentity && it.governedSubSpecPath == governedSubSpecPath }
+  ): GoalSubtaskPlanLookupResult =
+    GoalSubtaskPlanLookupResult.Found(
+      plans[subtaskId]?.takeIf { it.identity == expectedIdentity && it.governedSubSpecPath == governedSubSpecPath },
+    )
 
   override fun listSubtaskPlansOrdered(
     expectedIdentity: GoalPlanningIdentity,
     orderedDescriptors: List<GovernedGoalSubtaskDescriptor>,
-  ) = orderedDescriptors.mapNotNull { findSubtaskPlan(expectedIdentity, it.subtaskId, it.governedSubSpecPath) }
+  ): GoalSubtaskPlanListResult =
+    GoalSubtaskPlanListResult.Found(
+      orderedDescriptors.mapNotNull {
+        findSubtaskPlan(expectedIdentity, it.subtaskId, it.governedSubSpecPath).foundPlan()
+      },
+    )
 
-  override fun markPrepared(record: GoalPlanningPreparationRecord) = Unit
+  override fun markPrepared(record: GoalPlanningPreparationRecord) = GoalPlanningPreparationWriteResult.Applied
 
   override fun deleteByGoal(parentGoalWorkflowId: String) = 0
 

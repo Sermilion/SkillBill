@@ -1,17 +1,19 @@
 package skillbill.di.goal
 
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_OUTPUT_SCHEMA_ID
 import skillbill.contracts.workflow.goal.GOAL_PLANNING_PREPARATION_CONTRACT_VERSION
 import skillbill.engine.goalplanning.GoalPlanningPreparationValidator
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationState
 import skillbill.text.sha256HexUtf8
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 class GoalPlanningPreparationValidatorTest {
   private val validator = GoalPlanningPreparationValidator()
@@ -33,15 +35,16 @@ class GoalPlanningPreparationValidatorTest {
         planPayload = payloadJson(phaseId = "plan", status = "queued"),
       )
 
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> { validator.validate(record) }
+    assertFailsWith<SkillBillRuntimeException> { validator.validate(record) }
   }
 
   @Test
   fun `an envelope with an incompatible envelope contract version is rejected`() {
     val record = validRecord(parentGoalWorkflowId = "goal-1", subtaskId = 1).copy(contractVersion = "0.2")
 
-    val error = assertFailsWith<InvalidGoalPlanningPreparationSchemaError> { validator.validate(record) }
-    assertEquals("goal-1#1", error.sourceLabel)
+    val error = assertFailsWith<SkillBillRuntimeException> { validator.validate(record) }
+    assertEquals(InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA, error.code)
+    assertContains(error.message.orEmpty(), "goal-1#1")
   }
 
   @Test
@@ -51,7 +54,7 @@ class GoalPlanningPreparationValidatorTest {
         preparationStatus = GoalPlanningPreparationState.PENDING,
       )
 
-    assertFailsWith<InvalidGoalPlanningPreparationSchemaError> { validator.validate(record) }
+    assertFailsWith<SkillBillRuntimeException> { validator.validate(record) }
   }
 
   @Test

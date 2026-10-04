@@ -3,22 +3,23 @@ package skillbill.engine.goalrunner.planning.recovery
 import skillbill.engine.recovery.staleChildPlanningRecoveryCommand
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 
 class GoalPlanningRecoveryClassificationTest {
   @Test
   fun `typed unsupported phase output blocks without destructive reset`() {
     val error =
-      IncompatibleGoalPlanningPreparationRecoveryError(
+      GoalPlanningPreparationConflict(
         workflowId = "wftr-parent",
         subtaskId = 2,
         reason =
-          "stored import provenance differs from the hydration request at " +
+            "stored import provenance differs from the hydration request at " +
             "phase_output_contract_version",
         cause =
           SkillBillRuntimeException(
@@ -37,7 +38,7 @@ class GoalPlanningRecoveryClassificationTest {
   @Test
   fun `regenerated after hydration classifies as scoped replan`() {
     val error =
-      IncompatibleGoalPlanningPreparationRecoveryError(
+      GoalPlanningPreparationConflict(
         workflowId = "wftr-parent",
         subtaskId = 2,
         reason =
@@ -45,6 +46,7 @@ class GoalPlanningRecoveryClassificationTest {
             "and the stored version now fails its projection contract. This occurs when the shared " +
             "preplan or subtask plan was regenerated after the child was hydrated, making the " +
             "previously-imported bytes stale. Projection failure: produced_outputs missing",
+        cause = null,
       )
 
     assertEquals(GoalPlanningRecoveryKind.SCOPED_REPLAN, classifyGoalPlanningRecovery(error))
@@ -77,7 +79,7 @@ class GoalPlanningRecoveryClassificationTest {
   @Test
   fun `preparation schema phase output provenance failure blocks with original state preserved`() {
     val cause =
-      InvalidGoalPlanningPreparationSchemaError(
+      invalidGoalPlanningPreparationSchemaError(
         sourceLabel = "wftr-parent",
         fieldPath = "provenance.phase_output_contract_version",
         reason = "must be the constant value '0.4'. Existing workflow state is incompatible; hard-reset it.",

@@ -1,14 +1,15 @@
 package skillbill.engine.goalrunner.planning.outcome
 
+import java.nio.file.Path
 import skillbill.engine.goalrunner.model.GoalRunnerRunRequest
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSharedContext
 import skillbill.engine.goalrunner.planning.model.GoalPlanningSweepOutcome
 import skillbill.engine.goalrunner.planning.remedies.goalPlanningPreparationStateReadStopReason
 import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
 import skillbill.goalrunner.model.GoalRunnerStopReason
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.workflow.decomposition.model.DecompositionSubtask
-import java.nio.file.Path
 
 fun preSweepStopped(
   request: GoalRunnerRunRequest,
@@ -57,6 +58,12 @@ fun preparationStateReadReason(
   issueKey: String,
   subtaskId: Int,
 ): String = goalPlanningPreparationStateReadStopReason(error, issueKey, subtaskId)
+
+fun preparationStateReadReason(
+  conflict: GoalPlanningPreparationConflict,
+  issueKey: String,
+  subtaskId: Int,
+): String = goalPlanningPreparationStateReadStopReason(conflict, issueKey, subtaskId)
 
 internal fun stopped(
   shared: GoalPlanningSharedContext,

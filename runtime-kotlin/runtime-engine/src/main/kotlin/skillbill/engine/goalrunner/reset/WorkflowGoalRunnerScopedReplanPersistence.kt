@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.reset
 
+import skillbill.engine.goalplanning.countOrThrow
 import skillbill.engine.goalrunner.manifest.WorkflowGoalRunnerManifestProjectionPersistence
 import skillbill.engine.goalrunner.model.GoalRunnerManifestState
 import skillbill.engine.goalrunner.model.GoalRunnerScopedReplanOptions
@@ -85,10 +86,10 @@ internal class WorkflowGoalRunnerScopedReplanPersistence(
             "planningIdentity is required when discarding a shared preplan by digest."
           }
         if (retainedIds.isEmpty()) {
-          preparations.deleteSharedPreplan(identity, expectedDigest)
+          preparations.deleteSharedPreplan(identity, expectedDigest).countOrThrow()
           if (subtaskId in plannedBefore) 1 else 0
         } else {
-          preparations.invalidateSharedPreplan(identity, expectedDigest)
+          preparations.invalidateSharedPreplan(identity, expectedDigest).countOrThrow()
           cascadedIds.forEach { id -> preparations.deleteSubtaskPlan(state.parentWorkflowId, id) }
           preparations.deleteSubtaskPlan(state.parentWorkflowId, subtaskId)
         }

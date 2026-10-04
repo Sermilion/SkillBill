@@ -1,7 +1,6 @@
 package skillbill.error.shellcontent
 
 import skillbill.error.core.RuntimeFailureCode
-import skillbill.error.core.ShellContentContractException
 import skillbill.error.core.SkillBillRuntimeException
 
 enum class InstallFailureCode : RuntimeFailureCode {
@@ -20,6 +19,9 @@ enum class InstallFailureCode : RuntimeFailureCode {
   MALFORMED_REPO_LOCAL_CONFIG,
   REPO_LOCAL_CONFIG_FAILURE,
   CONTRACT_VERSION_MISMATCH,
+  INVALID_GOAL_PLANNING_PREPARATION_SCHEMA,
+  GOAL_PLANNING_PREPARATION_CONFLICT,
+  GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE,
 }
 
 fun invalidInstallPlanSchemaError(
@@ -180,23 +182,37 @@ fun malformedMachineConfigError(
   cause,
 )
 
-class InvalidGoalPlanningPreparationSchemaError(
-  val sourceLabel: String,
-  val fieldPath: String,
-  val reason: String,
+fun invalidGoalPlanningPreparationSchemaError(
+  sourceLabel: String,
+  fieldPath: String,
+  reason: String,
   cause: Throwable? = null,
-) : ShellContentContractException(
-    "Goal planning preparation '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation at " +
-      "'${fieldPath.ifBlank { "<root>" }}': $reason",
-    cause,
-  )
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.INVALID_GOAL_PLANNING_PREPARATION_SCHEMA,
+  "Goal planning preparation '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation at " +
+    "'${fieldPath.ifBlank { "<root>" }}': $reason",
+  cause,
+)
 
-class IncompatibleGoalPlanningPreparationRecoveryError(
-  val workflowId: String,
-  val subtaskId: Int,
-  val reason: String,
+fun incompatibleGoalPlanningPreparationContractError(
+  sourceLabel: String,
+  fieldPath: String,
+  reason: String,
   cause: Throwable? = null,
-) : ShellContentContractException(
-    "Goal planning preparation '$workflowId' subtask $subtaskId cannot be recovered: $reason",
-    cause,
-  )
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.GOAL_PLANNING_PREPARATION_CONTRACT_INCOMPATIBLE,
+  "Goal planning preparation '${sourceLabel.ifBlank { "<unknown>" }}' fails schema validation at " +
+    "'${fieldPath.ifBlank { "<root>" }}': $reason",
+  cause,
+)
+
+fun incompatibleGoalPlanningPreparationRecoveryError(
+  workflowId: String,
+  subtaskId: Int,
+  reason: String,
+  cause: Throwable? = null,
+): SkillBillRuntimeException = SkillBillRuntimeException(
+  InstallFailureCode.GOAL_PLANNING_PREPARATION_CONFLICT,
+  "Goal planning preparation '$workflowId' subtask $subtaskId cannot be recovered: $reason",
+  cause,
+)

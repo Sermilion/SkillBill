@@ -1,5 +1,7 @@
 package skillbill.engine.goalrunner.planning.model
 
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
+
 data class GoalPlanningPreparationProgress(
   val sharedPreplanPrepared: Boolean,
   val preparedPlanCount: Int,
@@ -16,5 +18,9 @@ sealed interface GoalPlanningRecoveryProgress {
     val parentGoalWorkflowId: String,
     val subtaskId: Int,
     val reason: String,
+  ) : GoalPlanningRecoveryProgress
+
+  data class Conflicted(
+    val conflict: GoalPlanningPreparationConflict,
   ) : GoalPlanningRecoveryProgress
 }

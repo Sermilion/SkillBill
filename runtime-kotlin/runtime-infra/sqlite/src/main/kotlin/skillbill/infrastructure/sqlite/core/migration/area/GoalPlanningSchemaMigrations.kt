@@ -1,8 +1,8 @@
 package skillbill.infrastructure.sqlite.core.migration.area
 
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
-import skillbill.infrastructure.sqlite.core.ops.bindAll
 import java.sql.Connection
+import skillbill.error.shellcontent.incompatibleGoalPlanningPreparationContractError
+import skillbill.infrastructure.sqlite.core.ops.bindAll
 
 internal fun rebuildGoalPlanningPlansForPhaseOutputVersion2(connection: Connection) {
   connection.createStatement().use { statement ->
@@ -33,7 +33,7 @@ internal fun requireGoalPlanningPhaseOutputVersion2(connection: Connection) {
         ).use { rows -> rows.next() }
       }
     if (incompatibleTable != null) {
-      throw InvalidGoalPlanningPreparationSchemaError(
+      throw incompatibleGoalPlanningPreparationContractError(
         sourceLabel = incompatibleTable,
         fieldPath = "phase_output_contract_version",
         reason = "migration requires compatible phase-output provenance '0.2'",

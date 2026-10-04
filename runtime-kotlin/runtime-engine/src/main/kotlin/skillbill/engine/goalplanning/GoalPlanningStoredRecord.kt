@@ -2,7 +2,7 @@ package skillbill.engine.goalplanning
 
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -17,7 +17,7 @@ internal fun readStoredPlanningRecord(
     JsonCodec.parseObjectOrNull(payload)
       ?.let(JsonCodec::jsonElementToValue)
       ?.let(JsonCodec::anyToStringAnyMap)
-      ?: throw InvalidGoalPlanningPreparationSchemaError(
+      ?: throw invalidGoalPlanningPreparationSchemaError(
         label,
         "$phaseId.payload",
         "stored payload is not a JSON object",
@@ -29,7 +29,7 @@ internal fun readStoredPlanningRecord(
     normalized.status.workflowStepStatus() != WorkflowStepStatus.COMPLETED ||
     produced?.isEmpty() != false
   ) {
-    throw InvalidGoalPlanningPreparationSchemaError(
+    throw invalidGoalPlanningPreparationSchemaError(
       label,
       "$phaseId.payload",
       "phase output must match its phase and be completed with non-empty produced_outputs",

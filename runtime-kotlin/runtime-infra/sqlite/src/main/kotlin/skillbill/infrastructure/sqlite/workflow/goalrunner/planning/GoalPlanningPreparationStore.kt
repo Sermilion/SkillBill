@@ -3,6 +3,7 @@ package skillbill.infrastructure.sqlite.workflow.goalrunner.planning
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
 import skillbill.infrastructure.sqlite.core.ops.bindAll
+import java.sql.Connection
 import skillbill.infrastructure.sqlite.workflow.goalrunner.shared.GoalSharedPreplanSql
 import skillbill.infrastructure.sqlite.workflow.goalrunner.subtask.GoalSubtaskPlanSql
 import skillbill.infrastructure.sqlite.workflow.goalrunner.subtask.GoalSubtaskPlanStore
@@ -12,10 +13,12 @@ import skillbill.ports.goalrunner.GoalPlanningPreparationRepository
 import skillbill.ports.goalrunner.GoalSubtaskPlanRepository
 import skillbill.ports.goalrunner.SharedGoalPreplanRepository
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationWriteResult
+import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
+import skillbill.ports.goalrunner.model.GoalSubtaskPlanLookupResult
 import skillbill.ports.goalrunner.model.GoalPlanningPreparationRecord
 import skillbill.ports.goalrunner.model.GoalSubtaskPlanCheckpoint
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
-import java.sql.Connection
 import java.sql.SQLException
 
 internal class GoalPlanningPreparationStore(
@@ -44,7 +47,7 @@ internal class GoalPlanningPreparationStore(
   ) {
     requireMigrationTransaction()
     if (target.provenance.copy(phaseOutputContractVersion = source.provenance.phaseOutputContractVersion) !=
-      source.provenance || sharedPreplan.findSharedPreplan(source.identity) != source ||
+      source.provenance || sharedPreplan.findSharedPreplan(source.identity) != SharedGoalPreplanLookupResult.Found(source) ||
       target.copy(
         provenance = source.provenance,
         payloadSha256 = source.payloadSha256,
@@ -100,7 +103,7 @@ internal class GoalPlanningPreparationStore(
         source.identity,
         source.subtaskId,
         source.governedSubSpecPath,
-      ) != source ||
+      ) != GoalSubtaskPlanLookupResult.Found(source) ||
       target.copy(
         provenance = source.provenance,
         payloadSha256 = source.payloadSha256,
@@ -173,9 +176,8 @@ internal class GoalPlanningPreparationStore(
       cause,
     )
 
-  override fun markPrepared(record: GoalPlanningPreparationRecord) {
+  override fun markPrepared(record: GoalPlanningPreparationRecord): GoalPlanningPreparationWriteResult =
     preparationRecord.markPrepared(record)
-  }
 
   override fun deleteByGoal(parentGoalWorkflowId: String): Int {
     val plans = subtaskPlan.deleteAllByGoal(parentGoalWorkflowId)

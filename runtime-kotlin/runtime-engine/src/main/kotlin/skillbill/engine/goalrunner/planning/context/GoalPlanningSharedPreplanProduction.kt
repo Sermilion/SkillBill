@@ -26,6 +26,7 @@ import skillbill.engine.goalrunner.planning.sweep.GoalPlanningSweepConstants
 import skillbill.ports.goalrunner.model.GoalPlanningContractProvenance
 import skillbill.ports.goalrunner.model.GoalPlanningIdentity
 import skillbill.ports.goalrunner.model.SharedGoalPreplanCheckpoint
+import skillbill.ports.goalrunner.model.SharedGoalPreplanLookupResult
 import skillbill.ports.goalrunner.planning.GoalPlanningContextDiscovery
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.ports.taskruntime.FeatureTaskRuntimeRunInvariantsSource
@@ -43,9 +44,9 @@ class GoalPlanningSharedPreplanProduction(
   private val attemptGate: GoalPlanningPhaseAttemptGate,
   private val migrationAdmission: GoalPlanningMigrationAdmission,
 ) {
-  internal fun findAdmittedSharedPreplan(identity: GoalPlanningIdentity): SharedGoalPreplanCheckpoint? {
+  internal fun findAdmittedSharedPreplan(identity: GoalPlanningIdentity): SharedGoalPreplanLookupResult {
     migrationAdmission.admit(identity)
-    return checkpoint.findSharedPreplan(identity)
+    return checkpoint.findSharedPreplanResult(identity)
   }
 
   internal fun produceSharedPreplan(

@@ -5,10 +5,10 @@ import skillbill.engine.goalrunner.planning.recovery.GoalPlanningProvenanceRecov
 import skillbill.engine.goalrunner.planning.recovery.GoalPlanningRecoveryKind
 import skillbill.engine.goalrunner.planning.recovery.classifyGoalPlanningRecovery
 import skillbill.engine.goalrunner.planning.recovery.goalPlanningHardResetRemedy
-import skillbill.error.shellcontent.IncompatibleGoalPlanningPreparationRecoveryError
 import skillbill.goalrunner.model.GoalPlanningStatusReasons
 import skillbill.goalrunner.model.GoalPlanningStatusSnapshot
 import skillbill.goalrunner.model.GoalPlanningStatusState
+import skillbill.ports.goalrunner.model.GoalPlanningPreparationConflict
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
@@ -68,16 +68,25 @@ fun goalPlanningPreparationStateReadStopReason(
   error: Throwable,
   issueKey: String,
   subtaskId: Int?,
+): String = goalPlanningPreparationStateReadStopReason(
+  error.message.orEmpty(),
+  subtaskId ?: 0,
+  issueKey,
+  subtaskId,
+  classifyGoalPlanningRecovery(error),
+)
+
+fun goalPlanningPreparationStateReadStopReason(
+  conflict: GoalPlanningPreparationConflict,
+  issueKey: String,
+  subtaskId: Int?,
 ): String {
-  val recovery =
-    error as? IncompatibleGoalPlanningPreparationRecoveryError
-      ?: return "Goal planning preparation state could not be read: ${error.message.orEmpty()}"
   return goalPlanningPreparationStateReadStopReason(
-    recovery.reason,
-    recovery.subtaskId,
+    conflict.reason,
+    conflict.subtaskId,
     issueKey,
     subtaskId,
-    classifyGoalPlanningRecovery(recovery),
+    classifyGoalPlanningRecovery(conflict),
   )
 }
 
@@ -107,8 +116,7 @@ internal fun statusRecoverabilityOrRefuse(
   runCatching(classify).getOrElse { error ->
     error.rethrowIfCooperativeCancellationOrInterruption()
     GoalPlanningProvenanceRecoverability.Irrecoverable(
-      (error as? IncompatibleGoalPlanningPreparationRecoveryError)?.let(::classifyGoalPlanningRecovery)
-        ?: classifyGoalPlanningRecovery(error),
+      classifyGoalPlanningRecovery(error),
     )
   }
 

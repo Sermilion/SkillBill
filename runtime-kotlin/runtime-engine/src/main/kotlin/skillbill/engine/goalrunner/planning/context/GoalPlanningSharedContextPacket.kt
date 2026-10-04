@@ -4,7 +4,7 @@ import skillbill.application.decomposition.parentSpecPath
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
-import skillbill.error.shellcontent.InvalidGoalPlanningPreparationSchemaError
+import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.goalrunner.planning.GoalPlanningExcludedPaths
 import skillbill.ports.goalrunner.planning.model.GoalPlanningContext
 import skillbill.workflow.decomposition.model.DecompositionSubtask
@@ -50,7 +50,7 @@ object GoalPlanningSharedContextPacket {
             GoalPlanningSharedContextPacketLegacy.migrateFromPacketVersion1(packet),
           ),
         )
-      else -> throw InvalidGoalPlanningPreparationSchemaError(
+      else -> throw invalidGoalPlanningPreparationSchemaError(
         sourceLabel = "_goal_planning_shared_context",
         fieldPath = GoalPlanningSharedContextPacketPayloadKeys.PACKET_VERSION,
         reason =
@@ -364,7 +364,7 @@ internal fun invalidGoalPlanningSharedContextPacket(
   reason: String,
   cause: Throwable? = null,
 ): Nothing =
-  throw InvalidGoalPlanningPreparationSchemaError(
+  throw invalidGoalPlanningPreparationSchemaError(
     sourceLabel = "_goal_planning_shared_context",
     fieldPath = fieldPath,
     reason = reason,

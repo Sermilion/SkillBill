@@ -1,5 +1,7 @@
 package skillbill.engine.goalrunner.manifest
 
+import java.nio.file.Path
+import java.time.Instant
 import skillbill.engine.goalrunner.model.GoalRunnerChildExecutionPlanAdmission
 import skillbill.engine.goalrunner.model.GoalRunnerChildWorkflowSetup
 import skillbill.engine.goalrunner.model.GoalRunnerCompletionPersistenceResult
@@ -16,8 +18,6 @@ import skillbill.ports.agentrun.model.AgentRunSpawnAuthorization
 import skillbill.ports.goalrunner.runner.model.GoalRunnerOutOfBandAcceptance
 import skillbill.ports.goalrunner.runner.model.GoalRunnerReviewPolicy
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
-import java.nio.file.Path
-import java.time.Instant
 
 abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
   override fun readByIssueKey(
@@ -162,7 +162,8 @@ abstract class GoalRunnerManifestStoreDefaults : GoalRunnerManifestStore {
   override fun saveNewChildWorkflow(
     state: GoalRunnerManifestState,
     setup: GoalRunnerChildWorkflowSetup,
-  ): GoalRunnerManifestState = error("Goal runner manifest store must atomically persist new child workflow state.")
+  ): GoalRunnerChildWorkflowSaveResult =
+    error("Goal runner manifest store must atomically persist new child workflow state.")
 
   override fun listOwnedGoalChildWorkflowIds(parentWorkflowId: String): List<String> = emptyList()
 

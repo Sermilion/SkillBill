@@ -11,7 +11,7 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PROJECTION_
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_READINESS_EVIDENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_SHARED_EVIDENCE_PROJECTION_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION
-import skillbill.error.core.ShellContentContractException
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeBuildReceiptSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePersistenceSchemaError
 import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
@@ -39,7 +39,7 @@ private data class FeatureTaskRuntimeSchemaValidationRequest(
   val expectedId: String,
   val expectedContractVersion: String,
   val contractVersionMatches: ((JsonNode, String) -> Boolean)? = null,
-  val error: (String) -> ShellContentContractException,
+  val error: (String) -> SkillBillRuntimeException,
 )
 
 object FeatureTaskRuntimePhaseHandoffSchemaValidator {
