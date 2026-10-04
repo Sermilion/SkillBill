@@ -247,7 +247,7 @@ run_install() {
   while [[ $# -gt 0 && "$1" == *=* ]]; do
     extra_env+=("$1"); shift
   done
-  env \
+  env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     HOME="$fake_home" \
     SKILL_BILL_RELEASE_DIR="$RELEASE_DIR" \
     SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1 \
@@ -259,7 +259,7 @@ run_install() {
 
 run_interactive_install_with_blank_defaults() {
   local fake_home="$1"
-  env \
+  env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     HOME="$fake_home" \
     SKILL_BILL_RELEASE_DIR="$RELEASE_DIR" \
     SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1 \
@@ -272,7 +272,7 @@ run_piped_install_with_eof_defaults() {
   local fake_home="$1"
   (
     cd "$REPO_ROOT"
-    env \
+    env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
       HOME="$fake_home" \
       SKILL_BILL_RELEASE_DIR="$RELEASE_DIR" \
       SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1 \
@@ -337,7 +337,7 @@ CURL
   chmod +x "$work/curl"
   (
     cd "$REPO_ROOT"
-    env \
+    env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
       HOME="$fake_home" \
       PATH="$work:$PATH" \
       bash -c 'cat install.sh | bash -s --' \
@@ -562,7 +562,7 @@ ORIGINAL_CONTENT="$(cat "$CONTENT_FILE")"
 printf '\n# smoke local edit\n' >>"$CONTENT_FILE"
 pass "local edit seeded in $(basename "$CONTENT_FILE") under $(basename "$TARGET_SKILL")"
 
-env \
+env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
   HOME="$FAKE_HOME" \
   SKILL_BILL_RELEASE_DIR="$RELEASE_DIR" \
   SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1 \
@@ -588,7 +588,7 @@ printf 'stray local skill\n' >"$FOREIGN_DIR/skills/__stray__/content.md"
 
 FOREIGN_OUTPUT="$(
   cd "$FOREIGN_DIR"
-  env \
+  env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     HOME="$FAKE_HOME" \
     SKILL_BILL_RELEASE_DIR="$RELEASE_DIR" \
     SKILL_BILL_SKIP_PREINSTALL_UNINSTALL=1 \
@@ -616,7 +616,7 @@ echo "--- scenario 8: fresh machine footprint gate skips pre-install cleanup (AC
 FAKE_HOME="$(mktemp -d)"
 
 GATE_OUTPUT="$(
-  env \
+  env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     HOME="$FAKE_HOME" \
     SKILL_BILL_RELEASE_DIR="$RELEASE_DIR" \
     SKILL_BILL_BIN_DIR="$FAKE_HOME/.local/bin" \
@@ -646,7 +646,7 @@ PLUGIN_CURL_LOG="$PLUGIN_SHIM_DIR/curl.log"
 FAKE_HOME="$(mktemp -d)"
 PLUGIN_TAG_OUTPUT="$(
   cd "$REPO_ROOT"
-  env \
+  env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     HOME="$FAKE_HOME" \
     PATH="$PLUGIN_SHIM_DIR:$PATH" \
     SMOKE_CURL_LOG="$PLUGIN_CURL_LOG" \
@@ -670,7 +670,7 @@ WORK_TMPDIRS+=("$PLUGIN_ASSET_DIR")
 : >"$PLUGIN_CURL_LOG"
 (
   cd "$PLUGIN_ASSET_DIR"
-  env \
+  env -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     HOME="$FAKE_HOME" \
     PATH="$PLUGIN_SHIM_DIR:$PATH" \
     SMOKE_CURL_LOG="$PLUGIN_CURL_LOG" \

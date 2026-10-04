@@ -183,7 +183,7 @@ for agent in "${AGENTS[@]}"; do
   rc=0
   # Throwaway-home apply never touches the active goal workflow store; clear the
   # goal-continuation guard so this smoke can run inside a parent goal validate.
-  env -u SKILL_BILL_GOAL_CONTINUATION \
+  env -u SKILL_BILL_GOAL_CONTINUATION -u CODEX_HOME -u CLAUDE_CONFIG_DIR \
     "$BIN" --home "$FAKE" install apply \
     --repo-root "$REPO_ROOT" \
     --agent-mode manual --agent "$agent" \

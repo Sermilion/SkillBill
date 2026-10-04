@@ -53,6 +53,7 @@ private fun Project.configureKotlinJvmTestDefaults() {
       (Runtime.getRuntime().availableProcessors() / TEST_FORK_CPU_DIVISOR).coerceIn(1, MAX_TEST_FORKS)
     maxHeapSize = TEST_MAX_HEAP
     environment.remove("CLAUDE_CONFIG_DIR")
+    environment.remove("CODEX_HOME")
     HARNESS_ENVIRONMENT_GATES.forEach { gate ->
       val value = providers.environmentVariable(gate)
       inputs.property(gate, value).optional(true)
