@@ -1,5 +1,7 @@
 package skillbill.error.shellcontent
 
+import skillbill.error.core.ExternalAddonFailureCode
+import skillbill.error.core.ExternalPlatformPackFailureCode
 import skillbill.error.core.FailureWireCode
 import skillbill.error.core.FailureWireDecodeCode
 import skillbill.error.core.GoalTelemetryRowFailureCode
@@ -19,6 +21,8 @@ fun Throwable.isShellContentContractFailure(): Boolean {
     failureCode is AgentAddonFailureCode ||
     failureCode is GovernedReviewFailureCode ||
     failureCode is GoalTelemetryRowFailureCode ||
+    failureCode is ExternalPlatformPackFailureCode ||
+    failureCode is ExternalAddonFailureCode ||
     failureCode is InstallFailureCode ||
     failureCode is FeatureTaskRuntimeFailureCode ||
     failureCode is WorkflowFailureCode

@@ -2,10 +2,7 @@ package skillbill.infrastructure.skills.externalplatformpack
 
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
-import skillbill.contracts.config.ExternalPlatformPackTelemetryPayloadKeys
-import skillbill.error.core.AmbiguousExternalPlatformPackError
-import skillbill.error.core.ExternalPlatformPackConfigError
-import skillbill.error.core.ExternalPlatformPackPublishError
+import skillbill.error.core.ExternalPlatformPackFailureCode
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.error.shellcontent.ManifestFailureCode
@@ -185,9 +182,9 @@ class ExternalPlatformPackCatalogIntegrationTest {
     writePack(second, "kotlin", "SECOND_MARKER", listOf(".kt"), "second-gate")
     writeSources(config, first, second)
 
-    assertFailsWith<AmbiguousExternalPlatformPackError> {
+    assertFailsWith<SkillBillRuntimeException> {
       loader().loadEffectiveCatalog(context(repo, home, config))
-    }
+    }.also { assertEquals(ExternalPlatformPackFailureCode.AMBIGUOUS, it.code) }
   }
 
   @Test
@@ -199,9 +196,9 @@ class ExternalPlatformPackCatalogIntegrationTest {
     val config = home.resolve("config.json")
     writePack(repo.resolve("platform-packs/kotlin"), "kotlin", "BUNDLED_BASELINE_MARKER", listOf(".kt"), "bundled-gate")
     writeSources(config, root.resolve("missing/kotlin"))
-    assertFailsWith<ExternalPlatformPackConfigError> {
+    assertFailsWith<SkillBillRuntimeException> {
       loader().loadEffectiveCatalog(context(repo, home, config))
-    }
+    }.also { assertEquals(ExternalPlatformPackFailureCode.CONFIG, it.code) }
 
     val mismatched = root.resolve("external/kotlin")
     writePack(mismatched, "kotlin", "MISMATCH_MARKER", listOf(".kt"), "mismatch-gate")
@@ -410,14 +407,9 @@ class ExternalPlatformPackCatalogIntegrationTest {
     val content = pack.resolve("code-review/bill-kotlin-code-review/content.md")
     Files.delete(content)
     Files.createSymbolicLink(content, outside)
-    val error =
-      assertFailsWith<ExternalPlatformPackPublishError> {
-        publishInstalledReviewCatalog(bundledRoot, null, cache, ProviderMutationJournal(), listOf(pack))
-      }
-    assertEquals("previous_catalog_retained", error.remotePayload[ExternalPlatformPackTelemetryPayloadKeys.RECOVERY])
-    assertEquals("kotlin", error.remotePayload[ExternalPlatformPackTelemetryPayloadKeys.PLATFORM_SLUG])
-    assertEquals("external", error.remotePayload[ExternalPlatformPackTelemetryPayloadKeys.SOURCE_KIND])
-    assertFalse(error.remotePayload.values.joinToString(" ").contains(outside.toString()))
+    assertFailsWith<SkillBillRuntimeException> {
+      publishInstalledReviewCatalog(bundledRoot, null, cache, ProviderMutationJournal(), listOf(pack))
+    }.also { assertEquals(ExternalPlatformPackFailureCode.PUBLISH, it.code) }
     assertEquals("SECRET_USER_BYTES", Files.readString(outside))
     assertEquals("KEEP_AUTHOR_BYTES", Files.readString(authorFile))
     assertTrue(Files.readString(published).contains("OLD_CATALOG_MARKER"))
@@ -438,9 +430,9 @@ class ExternalPlatformPackCatalogIntegrationTest {
     writeSources(config, pack)
     val outsideBytes = Files.readString(outside.resolve("bill-kotlin-code-review/content.md"))
 
-    assertFailsWith<ExternalPlatformPackConfigError> {
+    assertFailsWith<SkillBillRuntimeException> {
       loader().loadEffectiveCatalog(context(repo, home, config))
-    }
+    }.also { assertEquals(ExternalPlatformPackFailureCode.CONFIG, it.code) }
     assertEquals(outsideBytes, Files.readString(outside.resolve("bill-kotlin-code-review/content.md")))
   }
 

@@ -1,7 +1,8 @@
 package skillbill.infrastructure.skills.externaladdon
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.ExternalAddonConfigError
+import skillbill.error.core.ExternalAddonFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.model.toPath
 import skillbill.ports.agentaddon.model.ExternalAgentAddonSourceConfigRequest
 import skillbill.telemetry.CONFIG_ENVIRONMENT_KEY
@@ -72,11 +73,11 @@ class FileExternalAgentAddonSourceConfigStoreTest {
       ),
     )
 
-    assertFailsWith<ExternalAddonConfigError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FileExternalAgentAddonSourceConfigStore().readExternalAgentAddonSources(
         ExternalAgentAddonSourceConfigRequest(home, mapOf(CONFIG_ENVIRONMENT_KEY to configPath(home).toString())),
       )
-    }
+    }.also { assertEquals(ExternalAddonFailureCode.CONFIG, it.code) }
   }
 
   private fun configPath(home: Path): Path = home.resolve("config.json")

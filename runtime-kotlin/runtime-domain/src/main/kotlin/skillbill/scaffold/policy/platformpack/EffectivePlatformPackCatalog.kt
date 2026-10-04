@@ -1,6 +1,6 @@
 package skillbill.scaffold.policy.platformpack
 
-import skillbill.error.core.AmbiguousExternalPlatformPackError
+import skillbill.error.core.ambiguousExternalPlatformPack
 import skillbill.scaffold.policy.platformpack.model.EffectivePlatformPackCatalog
 import skillbill.scaffold.policy.platformpack.model.EffectivePlatformPackEntry
 import skillbill.scaffold.policy.platformpack.model.LoadedPlatformPack
@@ -16,7 +16,7 @@ fun buildEffectivePlatformPackCatalog(
     val slug = pack.manifest.slug
     val existing = externalBySlug[slug]
     if (existing != null && existing.canonicalRoot != pack.canonicalRoot) {
-      throw AmbiguousExternalPlatformPackError(
+      throw ambiguousExternalPlatformPack(
         "External platform pack slug '$slug' is declared by multiple roots: " +
           "'${existing.canonicalRoot}' and '${pack.canonicalRoot}'.",
       )

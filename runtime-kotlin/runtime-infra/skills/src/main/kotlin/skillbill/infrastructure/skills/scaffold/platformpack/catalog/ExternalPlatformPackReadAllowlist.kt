@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.catalog
 
-import skillbill.error.core.ExternalPlatformPackConfigError
+import skillbill.error.core.externalPlatformPackConfig
 import skillbill.error.shellcontent.missingContentFile
 import skillbill.model.toPath
 import skillbill.scaffold.model.PlatformManifest
@@ -68,7 +68,7 @@ internal fun assertAllowedExternalPackRead(
   val realShared = normalizedShared.takeIf { Files.exists(it) }?.let(::realExternalPackPath)
   val allowed = real.startsWith(realPack) || (realShared != null && real.startsWith(realShared))
   if (!allowed) {
-    throw ExternalPlatformPackConfigError(
+    throw externalPlatformPackConfig(
       "External platform pack read escapes the registered pack root and checkout .bill-shared directory.",
     )
   }
@@ -78,7 +78,7 @@ private fun realExternalPackPath(path: Path): Path =
   try {
     path.toRealPath()
   } catch (error: IOException) {
-    throw ExternalPlatformPackConfigError(
+    throw externalPlatformPackConfig(
       "External platform pack '${path.fileName}' references missing content.",
       error,
     )

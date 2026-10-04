@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.scaffold.runtime.service.externalpack
 
-import skillbill.error.core.ExternalPlatformPackConfigError
+import skillbill.error.core.externalPlatformPackConfig
 import skillbill.infrastructure.skills.scaffold.runtime.service.PACK_REGISTRATION_CREATE
 import skillbill.infrastructure.skills.scaffold.runtime.service.PACK_REGISTRATION_REGISTER
 import skillbill.infrastructure.skills.scaffold.runtime.service.ScaffoldPlan
@@ -29,11 +29,11 @@ internal fun registerPlannedExternalPlatformPack(
     return
   }
   val loader =
-    runtime.catalogLoader ?: throw ExternalPlatformPackConfigError(
+    runtime.catalogLoader ?: throw externalPlatformPackConfig(
       "External platform pack registration requires a catalog loader.",
     )
   val store =
-    runtime.packSourceConfig ?: throw ExternalPlatformPackConfigError(
+    runtime.packSourceConfig ?: throw externalPlatformPackConfig(
       "External platform pack registration requires a source config store.",
     )
   val normalizedRoot = root.toAbsolutePath().normalize()

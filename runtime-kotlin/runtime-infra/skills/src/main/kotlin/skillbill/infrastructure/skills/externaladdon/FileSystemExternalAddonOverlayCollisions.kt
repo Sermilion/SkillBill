@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.externaladdon
 
-import skillbill.error.core.ExternalAddonOverlayError
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.externalAddonOverlay
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.ManifestFailureCode
 import skillbill.error.shellcontent.isShellContentContractFailure
@@ -20,7 +20,7 @@ internal fun <T> wrapParserErrors(
     error.rethrowUnless(
       error.isShellContentContractFailure() && error.code == ManifestFailureCode.INVALID_MANIFEST_SCHEMA,
     )
-    throw ExternalAddonOverlayError(
+    throw externalAddonOverlay(
       "External addon source for platform '$slug': fragment validation failed: ${error.message}",
       error,
     )
@@ -33,7 +33,7 @@ internal fun verifySourceFile(
 ) {
   val file = sourcePath.resolve(filename)
   if (!Files.isRegularFile(file)) {
-    throw ExternalAddonOverlayError(
+    throw externalAddonOverlay(
       "External addon source for platform '$slug': referenced addon file '$file' is missing.",
     )
   }

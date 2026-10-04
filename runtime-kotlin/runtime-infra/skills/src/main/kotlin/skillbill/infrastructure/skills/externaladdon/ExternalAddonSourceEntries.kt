@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.externaladdon
 
-import skillbill.error.core.ExternalAddonConfigError
+import skillbill.error.core.externalAddonConfig
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.readTelemetryConfigFile
 import skillbill.infrastructure.host.resolveTelemetryConfigPath
@@ -24,11 +24,11 @@ internal fun readExternalAddonSourceEntries(
     try {
       readTelemetryConfigFile(configPath)?.payload
     } catch (error: IllegalArgumentException) {
-      throw ExternalAddonConfigError(error.message.orEmpty(), error)
+      throw externalAddonConfig(error.message.orEmpty(), error)
     } ?: return null
   val raw = payload["external_addon_sources"] ?: return null
   if (raw !is List<*>) {
-    throw ExternalAddonConfigError(
+    throw externalAddonConfig(
       "External addon config at '$configPath': 'external_addon_sources' $listShapeMessage",
     )
   }
@@ -58,7 +58,7 @@ internal fun requireExternalAddonEntryMap(
   index: Int,
   entry: Any?,
 ): Map<*, *> =
-  entry as? Map<*, *> ?: throw ExternalAddonConfigError(
+  entry as? Map<*, *> ?: throw externalAddonConfig(
     "External addon config at '$configPath': 'external_addon_sources[$index]' must be a mapping.",
   )
 
@@ -68,7 +68,7 @@ internal fun validateExternalAddonEntryKind(
   kind: String?,
 ) {
   if (kind != null && kind != SkillKind.PLATFORM_PACK.wireValue) {
-    throw ExternalAddonConfigError(
+    throw externalAddonConfig(
       "External addon config at '$configPath': 'external_addon_sources[$index].kind' " +
         "must be 'platform-pack' or 'agent-addon'.",
     )
@@ -81,7 +81,7 @@ internal fun requireExternalAddonEntryPath(
   map: Map<*, *>,
 ): String =
   (map["path"] as? String)?.takeIf(String::isNotBlank)
-    ?: throw ExternalAddonConfigError(
+    ?: throw externalAddonConfig(
       "External addon config at '$configPath': 'external_addon_sources[$index].path' must be a non-empty string.",
     )
 
@@ -91,7 +91,7 @@ internal fun requireExternalAddonEntryPlatform(
   map: Map<*, *>,
 ): String =
   (map["platform"] as? String)?.takeIf(String::isNotBlank)
-    ?: throw ExternalAddonConfigError(
+    ?: throw externalAddonConfig(
       "External addon config at '$configPath': 'external_addon_sources[$index].platform' must be a non-empty string.",
     )
 
@@ -102,7 +102,7 @@ internal fun validateExternalAddonEntryDirectory(
   resolvedPath: Path,
 ) {
   if (!Files.isDirectory(resolvedPath)) {
-    throw ExternalAddonConfigError(
+    throw externalAddonConfig(
       "External addon config at '$configPath': 'external_addon_sources[$index].path' '$rawPath' " +
         "does not exist or is not a directory.",
     )

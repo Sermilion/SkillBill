@@ -1,7 +1,8 @@
 package skillbill.infrastructure.skills.externaladdon
 
 import org.yaml.snakeyaml.Yaml
-import skillbill.error.core.ExternalAddonOverlayError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.externalAddonOverlay
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -9,9 +10,9 @@ internal fun manifestStructureError(
   slug: String,
   field: String,
   error: ClassCastException,
-): ExternalAddonOverlayError {
+): SkillBillRuntimeException {
   val message = "Installed platform.yaml for '$slug' has unexpected structure in '$field': ${error.message}"
-  return ExternalAddonOverlayError(message, error)
+  return externalAddonOverlay(message, error)
 }
 
 internal fun manifestStructureError(
@@ -19,18 +20,18 @@ internal fun manifestStructureError(
   field: String,
   expected: String,
   actual: Any?,
-): ExternalAddonOverlayError {
+): SkillBillRuntimeException {
   val found = actual?.javaClass?.simpleName ?: "null"
   val message =
     "Installed platform.yaml for '$slug' has unexpected structure in '$field': " +
       "expected $expected but found $found."
-  return ExternalAddonOverlayError(message)
+  return externalAddonOverlay(message)
 }
 
 internal fun readRawManifest(manifestPath: Path): MutableMap<String, Any?> {
   val raw =
     Yaml().load<Any?>(Files.readString(manifestPath)) as? Map<*, *>
-      ?: throw ExternalAddonOverlayError("Installed platform manifest '$manifestPath' must be a YAML mapping.")
+      ?: throw externalAddonOverlay("Installed platform manifest '$manifestPath' must be a YAML mapping.")
   val root = linkedMapOf<String, Any?>()
   raw.forEach { (k, v) ->
     root[k as String] =

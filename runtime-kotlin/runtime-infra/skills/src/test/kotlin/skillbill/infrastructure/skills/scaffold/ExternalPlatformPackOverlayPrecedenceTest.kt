@@ -2,7 +2,8 @@ package skillbill.infrastructure.skills.scaffold
 
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.ExternalPlatformPackOverlayError
+import skillbill.error.core.ExternalPlatformPackFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.infrastructure.skills.externalplatformpack.ExternalPlatformPackConfigKeys
 import skillbill.infrastructure.skills.scaffold.rendering.renderContentBody
 import skillbill.infrastructure.skills.scaffold.runtime.service.contract.SHELL_CONTRACT_VERSION
@@ -71,7 +72,7 @@ class ExternalPlatformPackOverlayPrecedenceTest {
     register(home, author)
     val source = addonSource("kotlin", "code-review/bill-kotlin-code-review-architecture")
 
-    assertFailsWith<ExternalPlatformPackOverlayError> {
+    assertFailsWith<SkillBillRuntimeException> {
       overlayPort().applyOverlay(
         ExternalAddonOverlayRequest(
           platformPacksRoot = installedRoot,
@@ -81,7 +82,7 @@ class ExternalPlatformPackOverlayPrecedenceTest {
           repoRoot = repo,
         ),
       )
-    }
+    }.also { assertEquals(ExternalPlatformPackFailureCode.OVERLAY, it.code) }
 
     assertEquals(bundledBefore.toList(), Files.readAllBytes(bundledArea).toList())
     assertFalse(Files.exists(installedRoot.resolve("kotlin/addons/acme-review.md")))

@@ -1,8 +1,8 @@
 package skillbill.infrastructure.skills.scaffold.platformpack.catalog
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.core.AmbiguousExternalPlatformPackError
-import skillbill.error.core.ExternalPlatformPackConfigError
+import skillbill.error.core.ambiguousExternalPlatformPack
+import skillbill.error.core.externalPlatformPackConfig
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.childDirectories
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformPack
@@ -100,7 +100,7 @@ class PlatformPackCatalogLoader(
   ): ExternalPlatformPackRootResult {
     val normalized = request.packRoot.toAbsolutePath().normalize()
     if (!Files.isDirectory(normalized)) {
-      throw ExternalPlatformPackConfigError(
+      throw externalPlatformPackConfig(
         "Pack path '$normalized' does not resolve to an existing directory.",
       )
     }
@@ -125,7 +125,7 @@ class PlatformPackCatalogLoader(
           entry.loaded.canonicalRoot != normalized.toString()
       }
     if (conflict) {
-      throw AmbiguousExternalPlatformPackError(
+      throw ambiguousExternalPlatformPack(
         "External platform pack slug '${incoming.slug}' is already registered at a different root.",
       )
     }
@@ -182,7 +182,7 @@ class PlatformPackCatalogLoader(
         pack.manifest.slug == pending.manifest.slug && pack.canonicalRoot != pending.canonicalRoot
       }
     if (conflict) {
-      throw AmbiguousExternalPlatformPackError(
+      throw ambiguousExternalPlatformPack(
         "External platform pack slug '${pending.manifest.slug}' is already registered at a different root.",
       )
     }
@@ -212,7 +212,7 @@ class PlatformPackCatalogLoader(
         )
         null
       } else if (!Files.isDirectory(canonicalRoot)) {
-        throw ExternalPlatformPackConfigError(
+        throw externalPlatformPackConfig(
           "External platform pack source '$canonicalRoot' does not resolve to an existing directory.",
         )
       } else {

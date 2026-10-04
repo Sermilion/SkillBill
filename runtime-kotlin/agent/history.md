@@ -1,3 +1,14 @@
+## [2026-10-04] SKILL-400 subtask 2: external platform pack and add-on failure codes
+Areas: runtime-contracts error/core and error/shellcontent; runtime-infra/skills externalplatformpack, externaladdon, scaffold and install/nativeagent/link; runtime-domain scaffold/policy/platformpack; runtime-core architecture baseline
+- Replaced six external platform pack and add-on throwable classes with ExternalPlatformPackFailureCode, ExternalAddonFailureCode and message factories returning SkillBillRuntimeException.
+- Followed the existing owner-code pattern and shell-content classification. Exact code checks preserve publish classification and telemetry families; CLI guarded handling keeps the existing messages and exit behavior.
+- reusable: the two shared failure-code enums and their factories retain messages and optional causes for infrastructure and command-boundary consumers.
+- Removed publish remotePayload construction and its four test-only property assertions. Catalog failures retain their messages, causes and previous-catalog recovery behavior; existing tests now assert exact codes.
+- Removed only the six deleted classes from the custom-throwable baseline. No schema version or persisted wire-format change.
+- Limits: the removed classes and publish payload are no longer available to Kotlin callers. Other shell-content subclasses and codeless callers keep the legacy transition open.
+Feature flag: N/A
+Acceptance criteria: 4/4 implemented
+
 ## [2026-10-04] SKILL-402 standalone review slot
 Areas: runtime-domain workflow/taskruntime; runtime-engine featuretask slots and bindings; runtime-application review; runtime-ports review; runtime-core composition and architecture guards; runtime-cli review; orchestration review guidance; docs; skills/skill-bill
 - Both standalone review commands now run only `standalone_review` with `present_findings`. Inline, auto, and omitted mode use one session; delegated mode uses the existing parallel review runner with report-only parent and lane instructions.

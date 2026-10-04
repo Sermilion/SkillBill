@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.externaladdon
 
-import skillbill.error.core.ExternalAddonOverlayError
+import skillbill.error.core.externalAddonOverlay
 
 internal fun validateAddonUsageEntries(
   fragment: Map<String, Any?>,
@@ -10,12 +10,12 @@ internal fun validateAddonUsageEntries(
   addonUsage.forEach { (dirKey, entriesRaw) ->
     val dir =
       dirKey as? String
-        ?: throw ExternalAddonOverlayError(
+        ?: throw externalAddonOverlay(
           "External addon source for platform '$slug': addon_usage keys must be strings.",
         )
     val entries =
       (entriesRaw as? List<*>)
-        ?: throw ExternalAddonOverlayError(
+        ?: throw externalAddonOverlay(
           "External addon source for platform '$slug': addon_usage[$dir] must be a list.",
         )
     entries.forEachIndexed { index, entry ->
@@ -41,7 +41,7 @@ private fun requireAddonUsageEntryMap(
   index: Int,
   entry: Any?,
 ): Map<*, *> =
-  entry as? Map<*, *> ?: throw ExternalAddonOverlayError(
+  entry as? Map<*, *> ?: throw externalAddonOverlay(
     "External addon source for platform '$slug': addon_usage[$dir][$index] must be a mapping.",
   )
 
@@ -54,7 +54,7 @@ private fun validateAddonUsageEntryKeys(
   val keys = entryMap.keys.mapNotNull { it as? String }.toSet()
   val extra = keys - ADDON_ENTRY_KEYS
   if (extra.isNotEmpty()) {
-    throw ExternalAddonOverlayError(
+    throw externalAddonOverlay(
       fragmentFieldMessage(
         slug,
         "addon_usage[$dir][$index]",
@@ -73,7 +73,7 @@ private fun validateAddonUsageEntrySlug(
 ) {
   val addonSlug = entryMap["slug"] as? String
   if (addonSlug != null && !ADDON_SLUG_PATTERN.matches(addonSlug)) {
-    throw ExternalAddonOverlayError(
+    throw externalAddonOverlay(
       "External addon source for platform '$slug': addon_usage[$dir][$index].slug '$addonSlug' " +
         "must match '${ADDON_SLUG_PATTERN.pattern}'.",
     )

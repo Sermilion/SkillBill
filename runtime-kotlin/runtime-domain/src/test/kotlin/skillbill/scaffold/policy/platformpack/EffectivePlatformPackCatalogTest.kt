@@ -1,7 +1,8 @@
 package skillbill.scaffold.policy.platformpack
 
 import org.junit.jupiter.api.io.TempDir
-import skillbill.error.core.AmbiguousExternalPlatformPackError
+import skillbill.error.core.ExternalPlatformPackFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.model.FileLocation
 import skillbill.scaffold.model.DeclaredFiles
 import skillbill.scaffold.model.PlatformManifest
@@ -55,9 +56,9 @@ class EffectivePlatformPackCatalogTest {
   ) {
     val first = loaded("kotlin", PlatformPackSourceKind.EXTERNAL, tmp.resolve("a"))
     val second = loaded("kotlin", PlatformPackSourceKind.EXTERNAL, tmp.resolve("b"))
-    assertFailsWith<AmbiguousExternalPlatformPackError> {
+    assertFailsWith<SkillBillRuntimeException> {
       buildEffectivePlatformPackCatalog(emptyList(), listOf(first, second))
-    }
+    }.also { assertEquals(ExternalPlatformPackFailureCode.AMBIGUOUS, it.code) }
   }
 
   private fun loaded(

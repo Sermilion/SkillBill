@@ -2,7 +2,8 @@ package skillbill.infrastructure.skills.externaladdon
 
 import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.error.YAMLException
-import skillbill.error.core.ExternalAddonOverlayError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.externalAddonOverlay
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.AddonUsageManifestContext
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.parseAddonUsage
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.parsePointers
@@ -74,10 +75,10 @@ internal fun collectPointersToAppend(
     val targetKey = pointer.skillRelativeDir to basename(pointer.target)
     when (val outcome = collisions.classifyPointer(slug, pointer, nameKey, targetKey)) {
       PointerCollisionOutcome.AlreadyPresent -> Unit
-      is PointerCollisionOutcome.NameCollision -> throw ExternalAddonOverlayError(
+      is PointerCollisionOutcome.NameCollision -> throw externalAddonOverlay(
         collisionMessage(slug, pointer.skillRelativeDir, pointer.name, outcome.existingTarget, pointer.target),
       )
-      is PointerCollisionOutcome.TargetCollision -> throw ExternalAddonOverlayError(
+      is PointerCollisionOutcome.TargetCollision -> throw externalAddonOverlay(
         targetCollisionMessage(slug, pointer, outcome),
       )
       PointerCollisionOutcome.New -> {
@@ -100,7 +101,7 @@ internal fun collectAddonsToAppend(
     for (selection in usage.addons) {
       when (val outcome = collisions.classifyAddon(slug, dir, selection)) {
         AddonCollisionOutcome.AlreadyPresent -> Unit
-        is AddonCollisionOutcome.Collision -> throw ExternalAddonOverlayError(
+        is AddonCollisionOutcome.Collision -> throw externalAddonOverlay(
           addonCollisionMessage(slug, dir, selection.slug, outcome.existing, selection),
         )
         AddonCollisionOutcome.New -> {
@@ -128,8 +129,8 @@ internal fun readSourceManifest(
 private fun missingSourceManifestError(
   slug: String,
   manifestPath: Path,
-): ExternalAddonOverlayError =
-  ExternalAddonOverlayError(
+): SkillBillRuntimeException =
+  externalAddonOverlay(
     "External addon source for platform '$slug': expected '$manifestPath' but it is missing.",
   )
 
@@ -141,13 +142,13 @@ private fun loadSourceManifestYamlMap(
     try {
       Yaml().load<Any?>(Files.readString(manifestPath))
     } catch (error: YAMLException) {
-      throw ExternalAddonOverlayError(
+      throw externalAddonOverlay(
         "External addon source for platform '$slug': manifest '$manifestPath' is not valid YAML: ${error.message}",
         error,
       )
     }
   return raw as? Map<*, *>
-    ?: throw ExternalAddonOverlayError(
+    ?: throw externalAddonOverlay(
       "External addon source for platform '$slug': manifest '$manifestPath' must be a YAML mapping.",
     )
 }
@@ -160,7 +161,7 @@ private fun typedSourceManifestMap(
   rawMap.forEach { (k, v) ->
     val key =
       k as? String
-        ?: throw ExternalAddonOverlayError(
+        ?: throw externalAddonOverlay(
           "External addon source for platform '$slug': manifest keys must be strings.",
         )
     typed[key] = v
@@ -180,12 +181,12 @@ internal fun rewriteFragmentTargets(
   pointers.forEach { (dirKey, entriesRaw) ->
     val dir =
       dirKey as? String
-        ?: throw ExternalAddonOverlayError(
+        ?: throw externalAddonOverlay(
           "External addon source for platform '$slug': pointers keys must be strings.",
         )
     val entries =
       (entriesRaw as? List<*>)
-        ?: throw ExternalAddonOverlayError(
+        ?: throw externalAddonOverlay(
           "External addon source for platform '$slug': pointers[$dir] must be a list.",
         )
     val rewrittenEntries = entries.map { entry -> rewritePointerEntry(slug, dir, entry, canonicalPrefix) }
@@ -203,14 +204,14 @@ internal fun rewritePointerEntry(
 ): MutableMap<String, Any?> {
   val rawMap =
     entry as? Map<*, *>
-      ?: throw ExternalAddonOverlayError(
+      ?: throw externalAddonOverlay(
         "External addon source for platform '$slug': pointers[$dir] entries must be mappings.",
       )
   val map = linkedMapOf<String, Any?>()
   rawMap.forEach { (k, v) -> map[k as String] = v }
   val target =
     map["target"] as? String
-      ?: throw ExternalAddonOverlayError(
+      ?: throw externalAddonOverlay(
         "External addon source for platform '$slug': pointers[$dir] entry is missing string field 'target'.",
       )
   if (!target.startsWith(canonicalPrefix)) {

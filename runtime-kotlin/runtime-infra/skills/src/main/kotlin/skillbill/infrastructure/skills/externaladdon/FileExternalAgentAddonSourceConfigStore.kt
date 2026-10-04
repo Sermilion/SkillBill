@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.externaladdon
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.core.ExternalAddonConfigError
+import skillbill.error.core.externalAddonConfig
 import skillbill.install.model.ExternalAgentAddonSource
 import skillbill.ports.agentaddon.ExternalAgentAddonSourceConfigPort
 import skillbill.ports.agentaddon.model.ExternalAgentAddonSourceConfigRequest
@@ -66,5 +66,5 @@ private fun invalidConfig(
   field: String,
   reason: String,
 ): Nothing {
-  throw ExternalAddonConfigError("External agent add-on config at '$configPath': '$field' $reason.")
+  throw externalAddonConfig("External agent add-on config at '$configPath': '$field' $reason.")
 }

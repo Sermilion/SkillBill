@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.externaladdon
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.core.ExternalPlatformPackOverlayError
+import skillbill.error.core.externalPlatformPackOverlay
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackCatalogLoader
 import skillbill.infrastructure.skills.scaffold.platformpack.catalog.PlatformPackDiscoveryContext
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
@@ -143,7 +143,7 @@ private fun skipUninstalledExternalPack(
   if (effective?.sourceKind != PlatformPackSourceKind.EXTERNAL) return null
   val installedRoot = context.platformPacksRoot.resolve(source.platform).toAbsolutePath().normalize()
   if (installedRoot == Path.of(effective.canonicalRoot)) {
-    throw ExternalPlatformPackOverlayError(
+    throw externalPlatformPackOverlay(
       "External addon overlay for '${source.platform}' refuses to modify the authored pack root.",
     )
   }
@@ -165,7 +165,7 @@ private fun requireEffectiveDeclaredDirs(
   if (effective?.sourceKind != PlatformPackSourceKind.EXTERNAL) return
   val allowed = effective.manifest.declaredSkillRelativeDirs()
   if (allowed.containsAll(installed.declaredSkillRelativeDirs())) return
-  throw ExternalPlatformPackOverlayError(
+  throw externalPlatformPackOverlay(
     "External addon overlay for '$platform' found installed consumer paths that are absent " +
       "from the effective pack.",
   )
@@ -180,7 +180,7 @@ private fun requirePlannedConsumerDirs(
   val allowed = effective.manifest.declaredSkillRelativeDirs()
   val referenced = plan.pointersToAppend.keys + plan.addonsToAppend.keys
   if (referenced.all { dir -> dir in allowed }) return
-  throw ExternalPlatformPackOverlayError(
+  throw externalPlatformPackOverlay(
     "External addon overlay for '$platform' references a consumer path that exists only on " +
       "the shadowed bundled pack.",
   )

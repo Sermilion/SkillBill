@@ -1,7 +1,7 @@
 package skillbill.scaffold.policy.platformpack
 
 import skillbill.contracts.config.ExternalPlatformPackTelemetryPayloadKeys
-import skillbill.error.core.AmbiguousExternalPlatformPackError
+import skillbill.error.core.ambiguousExternalPlatformPack
 import skillbill.scaffold.policy.platformpack.model.PlatformPackSourceKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,7 +13,7 @@ class ExternalPlatformPackTelemetryPolicyTest {
     val secretPath = "/home/author/private/company-packs/kotlin"
     val guidance = "Open the author README at $secretPath before retrying."
     val error =
-      AmbiguousExternalPlatformPackError(
+      ambiguousExternalPlatformPack(
         "External platform pack slug 'kotlin' is declared by '$secretPath'. $guidance",
       )
 
@@ -24,7 +24,10 @@ class ExternalPlatformPackTelemetryPolicyTest {
         sourceKind = PlatformPackSourceKind.EXTERNAL,
       )
 
-    assertEquals("AmbiguousExternalPlatformPackError", payload[ExternalPlatformPackTelemetryPayloadKeys.ERROR_TYPE])
+    assertEquals(
+      "ExternalPlatformPackFailureCode.AMBIGUOUS",
+      payload[ExternalPlatformPackTelemetryPayloadKeys.ERROR_TYPE],
+    )
     assertEquals("kotlin", payload[ExternalPlatformPackTelemetryPayloadKeys.PLATFORM_SLUG])
     assertEquals("external", payload[ExternalPlatformPackTelemetryPayloadKeys.SOURCE_KIND])
     assertEquals(

@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.externalplatformpack
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.core.ExternalPlatformPackConfigError
+import skillbill.error.core.externalPlatformPackConfig
 import skillbill.infrastructure.host.jvm.JdkHostPlatformPort
 import skillbill.infrastructure.host.readTelemetryConfigFile
 import skillbill.infrastructure.host.resolveTelemetryConfigPath
@@ -34,14 +34,14 @@ class FileExternalPlatformPackSourceConfigStore : ExternalPlatformPackSourceConf
       try {
         readTelemetryConfigFile(configPath)?.payload
       } catch (error: IllegalArgumentException) {
-        throw ExternalPlatformPackConfigError(error.message.orEmpty(), error)
+        throw externalPlatformPackConfig(error.message.orEmpty(), error)
       } ?: return ExternalPlatformPackSourceConfigResult()
 
     val raw =
       payload[ExternalPlatformPackConfigKeys.EXTERNAL_PLATFORM_PACK_SOURCES]
         ?: return ExternalPlatformPackSourceConfigResult()
     if (raw !is List<*>) {
-      throw ExternalPlatformPackConfigError(
+      throw externalPlatformPackConfig(
         "External platform pack config at '$configPath': " +
           "'${ExternalPlatformPackConfigKeys.EXTERNAL_PLATFORM_PACK_SOURCES}' must be a list of {path} entries.",
       )
@@ -61,7 +61,7 @@ class FileExternalPlatformPackSourceConfigStore : ExternalPlatformPackSourceConf
       try {
         readTelemetryConfigFile(configPath)
       } catch (error: IllegalArgumentException) {
-        throw ExternalPlatformPackConfigError(error.message.orEmpty(), error)
+        throw externalPlatformPackConfig(error.message.orEmpty(), error)
       }
     val payload = LinkedHashMap<String, Any?>(existing?.payload.orEmpty())
     val rawSources = rawExternalPlatformPackSources(configPath, payload)
@@ -98,7 +98,7 @@ class FileExternalPlatformPackSourceConfigStore : ExternalPlatformPackSourceConf
       try {
         readTelemetryConfigFile(configPath)
       } catch (error: IllegalArgumentException) {
-        throw ExternalPlatformPackConfigError(error.message.orEmpty(), error)
+        throw externalPlatformPackConfig(error.message.orEmpty(), error)
       } ?: return ExternalPlatformPackSourceConfigResult()
     val payload = LinkedHashMap<String, Any?>(existing.payload)
     val rawSources = rawExternalPlatformPackSources(configPath, payload)
@@ -128,7 +128,7 @@ class FileExternalPlatformPackSourceConfigStore : ExternalPlatformPackSourceConf
   ): List<Any?> {
     val raw = payload[ExternalPlatformPackConfigKeys.EXTERNAL_PLATFORM_PACK_SOURCES] ?: return emptyList()
     if (raw !is List<*>) {
-      throw ExternalPlatformPackConfigError(
+      throw externalPlatformPackConfig(
         "External platform pack config at '$configPath': " +
           "'${ExternalPlatformPackConfigKeys.EXTERNAL_PLATFORM_PACK_SOURCES}' must be a list of {path} entries.",
       )
@@ -146,10 +146,8 @@ class FileExternalPlatformPackSourceConfigStore : ExternalPlatformPackSourceConf
       val map = requireExternalPlatformPackEntryMap(configPath, index, entry)
       val rawPath = requireExternalPlatformPackEntryPath(configPath, index, map)
       resolveExternalPlatformPackSourcePath(userHome, rawPath)
-    } catch (error: ExternalPlatformPackConfigError) {
-      throw error
     } catch (error: IllegalArgumentException) {
-      throw ExternalPlatformPackConfigError(
+      throw externalPlatformPackConfig(
         "External platform pack config at '$configPath': " +
           "external_platform_pack_sources[$index].path is not a valid path.",
         error,

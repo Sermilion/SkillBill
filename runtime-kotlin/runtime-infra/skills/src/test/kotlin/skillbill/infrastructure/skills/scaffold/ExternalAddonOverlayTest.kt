@@ -2,7 +2,8 @@
 package skillbill.infrastructure.skills.scaffold
 
 import org.junit.jupiter.api.io.TempDir
-import skillbill.error.core.ExternalAddonOverlayError
+import skillbill.error.core.ExternalAddonFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.install.model.ExternalAddonSource
 import skillbill.ports.install.addon.ExternalAddonOverlayPort
 import skillbill.ports.install.addon.model.ExternalAddonOverlayRequest
@@ -101,9 +102,9 @@ class ExternalAddonOverlayTest {
     seedIosPack(packOwnedAddon = "shared")
     val source = seedExternalSource("ios", "shared", listOf("shared.md"))
 
-    assertFailsWith<ExternalAddonOverlayError> {
+    assertFailsWith<SkillBillRuntimeException> {
       overlay.applyOverlay(request(listOf(source)))
-    }
+    }.also { assertEquals(ExternalAddonFailureCode.OVERLAY, it.code) }
   }
 
   @Test
@@ -127,9 +128,9 @@ class ExternalAddonOverlayTest {
     val source = ExternalAddonSource(sourceDir.toFileLocation(), "ios")
 
     val error =
-      assertFailsWith<ExternalAddonOverlayError> {
+      assertFailsWith<SkillBillRuntimeException> {
         overlay.applyOverlay(request(listOf(source)))
-      }
+      }.also { assertEquals(ExternalAddonFailureCode.OVERLAY, it.code) }
     assertTrue(error.message.orEmpty().contains("collides"))
     val manifest = Files.readString(platformPacksRoot.resolve("ios/platform.yaml"))
     assertFalse(manifest.contains("acme"), "Atomicity: failing overlay must not mutate the installed manifest.")
@@ -156,9 +157,9 @@ class ExternalAddonOverlayTest {
     val source = ExternalAddonSource(sourceDir.toFileLocation(), "ios")
 
     val error =
-      assertFailsWith<ExternalAddonOverlayError> {
+      assertFailsWith<SkillBillRuntimeException> {
         overlay.applyOverlay(request(listOf(source)))
-      }
+      }.also { assertEquals(ExternalAddonFailureCode.OVERLAY, it.code) }
     assertTrue(
       error.message.orEmpty().contains("silent overwrite refused"),
       "Expected target-basename collision message, got: ${error.message}",
@@ -188,9 +189,9 @@ class ExternalAddonOverlayTest {
     )
     val second = ExternalAddonSource(secondDir.toFileLocation(), "ios")
 
-    assertFailsWith<ExternalAddonOverlayError> {
+    assertFailsWith<SkillBillRuntimeException> {
       overlay.applyOverlay(request(listOf(first, second)))
-    }
+    }.also { assertEquals(ExternalAddonFailureCode.OVERLAY, it.code) }
   }
 
   @Test
@@ -226,9 +227,9 @@ class ExternalAddonOverlayTest {
       """.trimIndent() + "\n",
     )
 
-    assertFailsWith<ExternalAddonOverlayError> {
+    assertFailsWith<SkillBillRuntimeException> {
       overlay.applyOverlay(request(listOf(ExternalAddonSource(sourceDir.toFileLocation(), "ios"))))
-    }
+    }.also { assertEquals(ExternalAddonFailureCode.OVERLAY, it.code) }
   }
 
   @Test
@@ -309,9 +310,9 @@ class ExternalAddonOverlayTest {
     )
     val bad = ExternalAddonSource(badDir.toFileLocation(), "ios")
 
-    assertFailsWith<ExternalAddonOverlayError> {
+    assertFailsWith<SkillBillRuntimeException> {
       overlay.applyOverlay(request(listOf(good, bad)))
-    }
+    }.also { assertEquals(ExternalAddonFailureCode.OVERLAY, it.code) }
 
     assertFalse(Files.exists(platformPacksRoot.resolve("ios/addons/acme-review.md")))
     val manifest = Files.readString(platformPacksRoot.resolve("ios/platform.yaml"))
@@ -349,9 +350,9 @@ class ExternalAddonOverlayTest {
     )
 
     val error =
-      assertFailsWith<ExternalAddonOverlayError> {
+      assertFailsWith<SkillBillRuntimeException> {
         overlay.applyOverlay(request(listOf(ExternalAddonSource(sourceDir.toFileLocation(), "ios"))))
-      }
+      }.also { assertEquals(ExternalAddonFailureCode.OVERLAY, it.code) }
     assertTrue(
       error.message.orEmpty().contains("flat file"),
       "Expected nested-target rejection, got: ${error.message}",
@@ -378,9 +379,9 @@ class ExternalAddonOverlayTest {
       """.trimIndent() + "\n",
     )
 
-    assertFailsWith<ExternalAddonOverlayError> {
+    assertFailsWith<SkillBillRuntimeException> {
       overlay.applyOverlay(request(listOf(ExternalAddonSource(sourceDir.toFileLocation(), "ios"))))
-    }
+    }.also { assertEquals(ExternalAddonFailureCode.OVERLAY, it.code) }
   }
 
   @Test
@@ -402,9 +403,9 @@ class ExternalAddonOverlayTest {
       """.trimIndent() + "\n",
     )
 
-    assertFailsWith<ExternalAddonOverlayError> {
+    assertFailsWith<SkillBillRuntimeException> {
       overlay.applyOverlay(request(listOf(ExternalAddonSource(sourceDir.toFileLocation(), "ios"))))
-    }
+    }.also { assertEquals(ExternalAddonFailureCode.OVERLAY, it.code) }
   }
 
   private fun seedPackWithSharedDir(

@@ -1,7 +1,7 @@
 package skillbill.infrastructure.skills.externaladdon
 
 import me.tatarka.inject.annotations.Inject
-import skillbill.error.core.ExternalAddonConfigError
+import skillbill.error.core.externalAddonConfig
 import skillbill.infrastructure.host.readTelemetryConfigFile
 import skillbill.infrastructure.host.resolveTelemetryConfigPath
 import skillbill.infrastructure.host.writeTelemetryConfigFile
@@ -35,7 +35,7 @@ class FileExternalAddonSourceConfigStore : ExternalAddonSourceConfigPort {
       try {
         readTelemetryConfigFile(configPath)
       } catch (error: IllegalArgumentException) {
-        throw ExternalAddonConfigError(error.message.orEmpty(), error)
+        throw externalAddonConfig(error.message.orEmpty(), error)
       }
     val payload = LinkedHashMap<String, Any?>(existing?.payload.orEmpty())
     val rawSources = rawExternalAddonSources(configPath, payload)
@@ -71,7 +71,7 @@ class FileExternalAddonSourceConfigStore : ExternalAddonSourceConfigPort {
   ): List<Any?> {
     val raw = payload["external_addon_sources"] ?: return emptyList()
     if (raw !is List<*>) {
-      throw ExternalAddonConfigError(
+      throw externalAddonConfig(
         "External addon config at '$configPath': 'external_addon_sources' $PLATFORM_LIST_SHAPE_MESSAGE",
       )
     }

@@ -2,7 +2,8 @@ package skillbill.infrastructure.skills.externalplatformpack
 
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.ExternalPlatformPackConfigError
+import skillbill.error.core.ExternalPlatformPackFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.install.model.ExternalPlatformPackSource
 import skillbill.model.toPath
 import skillbill.ports.install.platformpack.model.ExternalPlatformPackSourceConfigRequest
@@ -232,9 +233,9 @@ class FileExternalPlatformPackSourceConfigStoreTest {
     @TempDir home: Path,
   ) {
     writeConfig(home, mapOf(ExternalPlatformPackConfigKeys.EXTERNAL_PLATFORM_PACK_SOURCES to "nope"))
-    assertFailsWith<ExternalPlatformPackConfigError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.readExternalPlatformPackSources(request(home, configPath(home)))
-    }
+    }.also { assertEquals(ExternalPlatformPackFailureCode.CONFIG, it.code) }
   }
 
   @Test
@@ -248,9 +249,9 @@ class FileExternalPlatformPackSourceConfigStoreTest {
           listOf(mapOf("path" to "   ")),
       ),
     )
-    assertFailsWith<ExternalPlatformPackConfigError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.readExternalPlatformPackSources(request(home, configPath(home)))
-    }
+    }.also { assertEquals(ExternalPlatformPackFailureCode.CONFIG, it.code) }
   }
 
   private fun configPath(home: Path): Path = home.resolve(".skill-bill").resolve("config.json")

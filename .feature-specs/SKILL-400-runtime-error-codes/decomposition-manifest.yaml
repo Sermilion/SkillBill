@@ -9,18 +9,18 @@ base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feat/SKILL-400-runtime-error-codes"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 1
+  subtask_id: 2
   action: "resume"
 subtasks:
 - id: 1
   name: "json-and-failure-wire-codes"
   spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec_subtask_1_json-and-failure-wire-codes.md"
-  status: "in_progress"
+  status: "complete"
   branch: null
   commit_sha: null
   workflow_id: "wftr-20261004-142726-n6gy"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
@@ -28,12 +28,12 @@ subtasks:
 - id: 2
   name: "external-platform-pack-and-addon-codes"
   spec_path: ".feature-specs/SKILL-400-runtime-error-codes/spec_subtask_2_external-platform-pack-and-addon-codes.md"
-  status: "pending"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261004-144546-q2xc"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "audit"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []

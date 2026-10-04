@@ -106,7 +106,7 @@ internal fun publishInstalledReviewCatalog(
       swapReviewCatalogIntoPlace(catalogRoot, staging, superseded)
     }.exceptionOrNull()
   publishFailure?.let { failure ->
-    throw retainedCatalogFailure(failure, platformPacksRoot, effectivePackRoots)
+    throw retainedCatalogFailure(failure)
   }
 }
 

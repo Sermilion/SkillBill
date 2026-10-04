@@ -2,7 +2,8 @@ package skillbill.infrastructure.skills.externaladdon
 
 import org.junit.jupiter.api.io.TempDir
 import skillbill.contracts.JsonCodec
-import skillbill.error.core.ExternalAddonConfigError
+import skillbill.error.core.ExternalAddonFailureCode
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.install.model.ExternalAddonSource
 import skillbill.model.toPath
 import skillbill.ports.install.addon.model.ExternalAddonSourceConfigRequest
@@ -134,9 +135,9 @@ class FileExternalAddonSourceConfigStoreTest {
     Files.createDirectories(home.resolve(".skill-bill"))
     Files.writeString(configPath(home), "{ not valid json")
 
-    assertFailsWith<ExternalAddonConfigError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.readExternalAddonSources(request(home, configPath(home)))
-    }
+    }.also { assertEquals(ExternalAddonFailureCode.CONFIG, it.code) }
   }
 
   @Test
@@ -145,9 +146,9 @@ class FileExternalAddonSourceConfigStoreTest {
   ) {
     writeConfig(home, mapOf("external_addon_sources" to "nope"))
 
-    assertFailsWith<ExternalAddonConfigError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.readExternalAddonSources(request(home, configPath(home)))
-    }
+    }.also { assertEquals(ExternalAddonFailureCode.CONFIG, it.code) }
   }
 
   @Test
@@ -159,9 +160,9 @@ class FileExternalAddonSourceConfigStoreTest {
       mapOf("external_addon_sources" to listOf(mapOf("platform" to "ios"))),
     )
 
-    assertFailsWith<ExternalAddonConfigError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.readExternalAddonSources(request(home, configPath(home)))
-    }
+    }.also { assertEquals(ExternalAddonFailureCode.CONFIG, it.code) }
   }
 
   @Test
@@ -176,9 +177,9 @@ class FileExternalAddonSourceConfigStoreTest {
       ),
     )
 
-    assertFailsWith<ExternalAddonConfigError> {
+    assertFailsWith<SkillBillRuntimeException> {
       store.readExternalAddonSources(request(home, configPath(home)))
-    }
+    }.also { assertEquals(ExternalAddonFailureCode.CONFIG, it.code) }
   }
 
   private fun configPath(home: Path): Path = home.resolve(".skill-bill").resolve("config.json")

@@ -1,5 +1,12 @@
 # runtime-kotlin/ boundary decisions
 
+## [2026-10-04] SKILL-400 subtask 2: external pack codes and the dropped publish payload
+Context: Six external platform pack and add-on failures cross infrastructure, domain policy and guarded CLI boundaries. The publish failure's remotePayload had no production reader; only a catalog integration test read it.
+Decision: Keep both owner-code enums and message factories in runtime-contracts error/core. Register them as shell-content failures, preserve handled sets and telemetry family values, and drop the publish payload without a replacement carrier.
+Reason: Shared consumers need the codes in the kernel. Shell-content classification and exact code checks retain the existing boundary behavior; preserving a test-only payload would keep unused production state after deleting its throwable class.
+Alternatives considered: Replacing remotePayload with another exception property, message parsing or a result object would preserve data no production caller needs.
+Revisit when: The remaining shell-content subclasses and codeless callers are gone, allowing retirement of the shared legacy transition.
+
 ## [2026-10-04] Separate standalone reporting from full-run repair, SKILL-402
 Context: A dirty standalone review reached the full repair slot, staged operator changes, then failed because its in-memory state cannot commit a checkpoint.
 Decision: Keep the shared run loop and give standalone review its own read-only `standalone_review` slot with only `present_findings`. Full runs retain `code_review` and its repair steps.

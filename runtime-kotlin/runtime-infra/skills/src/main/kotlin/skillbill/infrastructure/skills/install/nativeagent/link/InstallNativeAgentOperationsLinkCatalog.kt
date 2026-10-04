@@ -1,12 +1,11 @@
 package skillbill.infrastructure.skills.install.nativeagent.link
 
-import skillbill.contracts.config.ExternalPlatformPackTelemetryPayloadKeys
-import skillbill.error.core.ExternalPlatformPackPublishError
+import skillbill.error.core.ExternalPlatformPackFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.externalPlatformPackPublish
 import skillbill.infrastructure.host.jvm.atomicMoveReplacing
 import skillbill.infrastructure.skills.scaffold.platformpack.loader.loadPlatformManifest
-import skillbill.infrastructure.skills.scaffold.platformpack.sourceKind
 import skillbill.model.toPath
-import skillbill.scaffold.policy.platformpack.externalPlatformPackTelemetryPayload
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -34,52 +33,30 @@ internal fun stageReviewCatalogPacks(
     }
   desiredPacks.forEach { source ->
     val failure = runCatching { stageReviewCatalogPack(source, staging) }.exceptionOrNull() ?: return@forEach
-    throw reviewCatalogStageFailure(platformPacksRoot, source, failure)
+    throw reviewCatalogStageFailure(source, failure)
   }
 }
 
-internal fun retainedCatalogFailure(
-  error: Throwable,
-  platformPacksRoot: Path? = null,
-  effectivePackRoots: List<Path> = emptyList(),
-): ExternalPlatformPackPublishError {
-  if (error is ExternalPlatformPackPublishError) return error
-  val source = effectivePackRoots.singleOrNull()
-  val sourceKind =
-    source?.let { packRoot ->
-      platformPacksRoot?.let { bundledRoot -> sourceKind(bundledRoot, packRoot) }
-    }
-  val payload =
-    externalPlatformPackTelemetryPayload(
-      error,
-      slug = source?.fileName?.toString(),
-      sourceKind = sourceKind,
-    ).toMutableMap()
-  payload[ExternalPlatformPackTelemetryPayloadKeys.RECOVERY] = "previous_catalog_retained"
-  return ExternalPlatformPackPublishError(
+internal fun retainedCatalogFailure(error: Throwable): SkillBillRuntimeException {
+  if (error is SkillBillRuntimeException && error.code == ExternalPlatformPackFailureCode.PUBLISH) return error
+  return externalPlatformPackPublish(
     "Installed review catalog was not promoted; the previous catalog remains.",
-    payload,
     error,
   )
 }
 
 private fun reviewCatalogStageFailure(
-  platformPacksRoot: Path,
   source: Path,
   error: Throwable,
 ): Throwable {
-  if (error is CancellationException || error is ExternalPlatformPackPublishError) return error
-  val payload =
-    externalPlatformPackTelemetryPayload(
-      error,
-      slug = source.fileName.toString(),
-      sourceKind = sourceKind(platformPacksRoot, source),
-    ).toMutableMap()
-  payload[ExternalPlatformPackTelemetryPayloadKeys.RECOVERY] = "previous_catalog_retained"
-  return ExternalPlatformPackPublishError(
+  if (error is CancellationException ||
+    (error as? SkillBillRuntimeException)?.code == ExternalPlatformPackFailureCode.PUBLISH
+  ) {
+    return error
+  }
+  return externalPlatformPackPublish(
     "Installed review catalog for platform pack '${source.fileName}' was not promoted; " +
       "the previous catalog remains.",
-    payload,
     error,
   )
 }

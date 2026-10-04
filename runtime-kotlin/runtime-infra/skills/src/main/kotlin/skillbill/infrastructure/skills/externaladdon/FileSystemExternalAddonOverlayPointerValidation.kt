@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.externaladdon
 
-import skillbill.error.core.ExternalAddonOverlayError
+import skillbill.error.core.externalAddonOverlay
 
 internal fun validatePointerEntries(
   fragment: Map<String, Any?>,
@@ -10,12 +10,12 @@ internal fun validatePointerEntries(
   pointers.forEach { (dirKey, entriesRaw) ->
     val dir =
       dirKey as? String
-        ?: throw ExternalAddonOverlayError(
+        ?: throw externalAddonOverlay(
           "External addon source for platform '$slug': pointers keys must be strings.",
         )
     val entries =
       (entriesRaw as? List<*>)
-        ?: throw ExternalAddonOverlayError(
+        ?: throw externalAddonOverlay(
           "External addon source for platform '$slug': pointers[$dir] must be a list.",
         )
     entries.forEachIndexed { index, entry ->
@@ -41,7 +41,7 @@ private fun requirePointerEntryMap(
   index: Int,
   entry: Any?,
 ): Map<*, *> =
-  entry as? Map<*, *> ?: throw ExternalAddonOverlayError(
+  entry as? Map<*, *> ?: throw externalAddonOverlay(
     "External addon source for platform '$slug': pointers[$dir][$index] must be a mapping.",
   )
 
@@ -54,7 +54,7 @@ private fun validatePointerEntryKeys(
   val keys = entryMap.keys.mapNotNull { it as? String }.toSet()
   val extra = keys - POINTER_ENTRY_KEYS
   if (extra.isNotEmpty()) {
-    throw ExternalAddonOverlayError(
+    throw externalAddonOverlay(
       fragmentFieldMessage(slug, "pointers[$dir][$index]", extra, "name and target"),
     )
   }
@@ -68,7 +68,7 @@ private fun validatePointerEntryName(
 ) {
   val name = entryMap["name"] as? String
   if (name != null && !isValidPointerName(name)) {
-    throw ExternalAddonOverlayError(
+    throw externalAddonOverlay(
       "External addon source for platform '$slug': pointers[$dir][$index].name '$name' " +
         "must be a bare markdown filename (no separators, no '..' segments, ending in '.md').",
     )

@@ -1,6 +1,6 @@
 package skillbill.infrastructure.skills.externaladdon
 
-import skillbill.error.core.ExternalAddonOverlayError
+import skillbill.error.core.externalAddonOverlay
 
 internal fun fragmentFieldMessage(
   slug: String,
@@ -19,13 +19,13 @@ internal fun requireFlatAddonTarget(
 ) {
   val expectedPrefix = "platform-packs/$slug/$ADDONS_DIR/"
   if (!target.startsWith(expectedPrefix)) {
-    throw ExternalAddonOverlayError(
+    throw externalAddonOverlay(
       "External addon source for platform '$slug': pointer target '$target' must start with '$expectedPrefix'.",
     )
   }
   val remainder = target.removePrefix(expectedPrefix)
   if (remainder.contains('/') || remainder.contains('\\') || remainder.isEmpty()) {
-    throw ExternalAddonOverlayError(
+    throw externalAddonOverlay(
       "External addon source for platform '$slug': pointer target '$target' must be a flat file directly " +
         "under '$expectedPrefix' (no subdirectories).",
     )
