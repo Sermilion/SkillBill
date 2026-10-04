@@ -1,5 +1,8 @@
 package skillbill.engine.featuretask.lifecycle.core
 
+import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
 import me.tatarka.inject.annotations.Inject
 import skillbill.contracts.JsonCodec
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
@@ -9,7 +12,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCrashReconcilia
 import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeCrashReconciliationResult
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeCrashReconciliationCandidate
@@ -27,9 +30,6 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.workflowStatus
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
-import java.nio.file.Path
-import java.time.Clock
-import java.time.Instant
 
 @Inject
 class FeatureTaskRuntimeCrashReconciler(
@@ -117,7 +117,7 @@ class FeatureTaskRuntimeCrashReconciler(
         ) ?: return@read null
       val identity =
         unit.workflowStates.getFeatureTaskExecutionIdentity(candidate.ownership.workflowId)
-          ?: throw InvalidFeatureTaskExecutionIdentitySchemaError(
+          ?: throw invalidFeatureTaskExecutionIdentitySchema(
             candidate.ownership.workflowId,
             "crash candidate has no execution identity",
           )
@@ -126,7 +126,7 @@ class FeatureTaskRuntimeCrashReconciler(
         identity.workflowId != row.workflowId || identity.mode != FeatureTaskWorkflowMode.RUNTIME ||
         identity.normalizedIssueKey != row.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey)
       ) {
-        throw InvalidFeatureTaskExecutionIdentitySchemaError(
+        throw invalidFeatureTaskExecutionIdentitySchema(
           candidate.ownership.workflowId,
           "crash candidate route identity is incompatible",
         )
@@ -175,7 +175,7 @@ class FeatureTaskRuntimeCrashReconciler(
       }
       val identity =
         states.getFeatureTaskExecutionIdentity(candidate.ownership.workflowId)
-          ?: throw InvalidFeatureTaskExecutionIdentitySchemaError(
+          ?: throw invalidFeatureTaskExecutionIdentitySchema(
             candidate.ownership.workflowId,
             "crash candidate has no execution identity",
           )

@@ -4,11 +4,10 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.scaffold.wire.optionalList
 import skillbill.contracts.scaffold.wire.optionalString
 import skillbill.contracts.workflow.identity.subtask.GOAL_SUBTASK_REVIEW_STATE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeRepairReceiptError
-import skillbill.error.shellcontent.invalidGoalSubtaskReviewStateSchemaError
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.InstallFailureCode
+import skillbill.error.shellcontent.invalidGoalSubtaskReviewStateSchemaError
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.GOAL_SUBTASK_REVIEW_STATE_ARTIFACT_KEY
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
@@ -350,14 +349,12 @@ data class GoalSubtaskReviewState(
     ): List<FeatureTaskRuntimeRepairReceipt> =
       reviewStateReader(raw, sourceLabel).optionalList("repair_receipts")
         ?.mapIndexed { index, value ->
-          try {
-            FeatureTaskRuntimeRepairReceipt.fromArtifactMap(
-              value.toReviewStateMap("$sourceLabel.repair_receipts[$index]"),
-              "$sourceLabel.repair_receipts[$index]",
-            )
-          } catch (error: InvalidFeatureTaskRuntimeRepairReceiptError) {
-            reviewStateError("$sourceLabel.repair_receipts[$index]", error.payloadFreeReason, error)
-          }
+          val path = "$sourceLabel.repair_receipts[$index]"
+          FeatureTaskRuntimeRepairReceipt.fromArtifactMap(
+            value.toReviewStateMap(path),
+            path,
+            onInvalid = { reason, failure -> reviewStateError(path, reason, failure) },
+          )
         }.orEmpty()
   }
 }

@@ -1,12 +1,15 @@
 package skillbill.engine.featuretask.validation
 
+import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.baseBranch
 import skillbill.engine.diagnostics.RuntimeDiagnosticsBestEffortWarning
 import skillbill.engine.featuretask.lifecycle.branch.Blocked
 import skillbill.engine.featuretask.phase.record.FeatureTaskRuntimeReadinessEvidencePort
 import skillbill.engine.featuretask.runloop.observability.emitFeatureTaskRuntimeEventSafely
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.validation.PrCheckProcessRunner
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -16,7 +19,6 @@ import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDispo
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessCheckResult
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessCheckStatus
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
-import java.nio.file.Path
 
 private fun WorkflowGitOperations.readinessTreeIdentityOrNull(
   repoRoot: Path,
@@ -318,7 +320,8 @@ class FeatureTaskRuntimeReadinessGateCoordinator(
       } else {
         blocked("Readiness evidence could not be persisted before commit_push.")
       }
-    } catch (error: InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == FeatureTaskRuntimeFailureCode.INVALID_READINESS_EVIDENCE_SCHEMA)
       persistEvidence(request.workflowId, evidence, "readiness-commit-push-persistence")
       blocked(error.message.orEmpty())
     }

@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.lifecycle.execution
 
+import java.nio.file.Path
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.workflow.model.FeatureTaskGovernedSpecPathResult
 import skillbill.application.workflow.resolveFeatureTaskGovernedSpecPath
@@ -7,7 +8,7 @@ import skillbill.engine.featuretask.model.core.FeatureTaskRuntimeRunRequest
 import skillbill.engine.featuretask.model.execution.AdmittedFeatureTaskRuntimeExecution
 import skillbill.engine.migration.RuntimeMigrationReceipt
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.repository.RepositoryEnclosingRootPort
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
@@ -17,7 +18,6 @@ import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.model.skeleton.RuntimeReviewSelection
-import java.nio.file.Path
 
 @Inject
 class FeatureTaskRuntimeExecutionEntry(
@@ -85,9 +85,9 @@ internal fun RepositoryEnclosingRootPort.governedFeatureTaskSpecPath(
   when (val result = resolveFeatureTaskGovernedSpecPath(this, repoRoot, specPath)) {
     is FeatureTaskGovernedSpecPathResult.Ok -> result.relativePath
     is FeatureTaskGovernedSpecPathResult.OutsideRepository ->
-      throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "spec escapes admitted repository")
+      throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "spec escapes admitted repository")
     FeatureTaskGovernedSpecPathResult.InvalidGovernedPath ->
-      throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "spec is not Markdown beneath .feature-specs/")
+      throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "spec is not Markdown beneath .feature-specs/")
   }
 
 internal fun RepositoryEnclosingRootPort.expectedFeatureTaskExecutionIdentity(

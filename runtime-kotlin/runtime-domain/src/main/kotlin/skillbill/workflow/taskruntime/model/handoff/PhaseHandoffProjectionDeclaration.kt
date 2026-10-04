@@ -3,7 +3,7 @@ package skillbill.workflow.taskruntime.model.handoff
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_PHASE_HANDOFF_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseHandoffSchema
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeRepositoryCheckpointPolicy
 import skillbill.workflow.taskruntime.model.handoff.task.FEATURE_TASK_RUNTIME_FORBIDDEN_PROJECTION_FIELD_NAMES
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeCompactReferenceKind
@@ -195,7 +195,7 @@ data class PhaseHandoffProjectionDeclaration(
     }
 
     private fun invalid(): Nothing =
-      throw InvalidFeatureTaskRuntimePhaseHandoffSchemaError(
+      throw invalidFeatureTaskRuntimePhaseHandoffSchema(
         sourceLabel = "phase-handoff-declaration",
         reason = "unsupported version, unknown field, or malformed closed-world value",
       )

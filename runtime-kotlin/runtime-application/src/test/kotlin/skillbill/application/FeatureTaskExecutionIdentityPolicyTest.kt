@@ -1,12 +1,12 @@
 package skillbill.application
 
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
-import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 
 class FeatureTaskExecutionIdentityPolicyTest {
   @Test
@@ -45,36 +45,36 @@ class FeatureTaskExecutionIdentityPolicyTest {
   @Test
   fun `bare absolute path is rejected with the required prefix and the received value`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskExecutionIdentityPolicy.validateLookupRequest("SKILL-129", "/srv/repo")
       }
 
-    assertContains(error.reason, FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX)
-    assertContains(error.reason, "'/srv/repo'")
+    assertContains(error.message.orEmpty(), FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX)
+    assertContains(error.message.orEmpty(), "'/srv/repo'")
   }
 
   @Test
   fun `control-bearing issue key names the bound and the received value`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskExecutionIdentityPolicy.validateLookupRequest(
           issueKey = "SKILL-129\nspoofed",
           repositoryIdentity = "${FeatureTaskExecutionIdentityPolicy.REPOSITORY_IDENTITY_PREFIX}/srv/repo",
         )
       }
 
-    assertContains(error.reason, "no control characters")
-    assertContains(error.reason, "SKILL-129")
+    assertContains(error.message.orEmpty(), "no control characters")
+    assertContains(error.message.orEmpty(), "SKILL-129")
   }
 
   @Test
   fun `echoed value keeps newline injection out of the failure message`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskExecutionIdentityPolicy.validateLookupRequest("SKILL-129", "/srv/repo\nrepository_identity is fine")
       }
 
-    assertFalse(error.reason.contains('\n'), error.reason)
-    assertContains(error.reason, "\\n")
+    assertFalse(error.message.orEmpty().contains('\n'), error.message.orEmpty())
+    assertContains(error.message.orEmpty(), "\\n")
   }
 }

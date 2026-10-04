@@ -1,5 +1,7 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
+import java.nio.file.Path
+import java.time.Clock
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationArtifactPatcher
 import skillbill.engine.featuretask.lifecycle.continuation.continuationFromArtifacts
 import skillbill.engine.featuretask.lifecycle.continuation.reviewStateFromArtifacts
@@ -13,9 +15,8 @@ import skillbill.engine.featuretask.model.subtask.RemediationReconciliationApply
 import skillbill.engine.featuretask.model.subtask.RemediationReconciliationBlocked
 import skillbill.engine.featuretask.model.subtask.RemediationReconciliationCoherent
 import skillbill.engine.featuretask.model.subtask.RemediationReconciliationHeal
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeCheckpointIdentityVersionError
 import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -25,8 +26,6 @@ import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.artifact.decodeCheckpointIdentitiesFromArtifact
 import skillbill.workflow.taskruntime.model.persistence.FeatureTaskRuntimeGoalContinuationArtifact
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import java.nio.file.Path
-import java.time.Clock
 
 private sealed interface RemediationSnapshotRead {
   data class Available(val snapshot: RemediationReconcileSnapshot) : RemediationSnapshotRead
@@ -77,14 +76,16 @@ class FeatureTaskRuntimeRemediationBaseReconciler(
             DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_CHECKPOINT_IDENTITIES.value(artifacts),
           )
         RemediationSnapshotRead.Available(RemediationReconcileSnapshot(state, continuation, checkpoints))
-      } catch (_: InvalidFeatureTaskRuntimeCheckpointIdentityVersionError) {
-        RemediationSnapshotRead.Refused(
-          "Checkpoint identity semantics are unsupported. Retain the workflow and its checkpoint evidence; " +
-            "inspect status with a compatible runtime or a separately reviewed semantic mapping before recovery.",
-        )
       } catch (error: SkillBillRuntimeException) {
-        error.rethrowUnless(error.code == InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA)
-        RemediationSnapshotRead.Absent
+        when (error.code) {
+          FeatureTaskRuntimeFailureCode.INVALID_CHECKPOINT_IDENTITY_VERSION ->
+            RemediationSnapshotRead.Refused(
+              "Checkpoint identity semantics are unsupported. Retain the workflow and its checkpoint evidence; " +
+                "inspect status with a compatible runtime or a separately reviewed semantic mapping before recovery.",
+            )
+          InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA -> RemediationSnapshotRead.Absent
+          else -> throw error
+        }
       }
     }
 

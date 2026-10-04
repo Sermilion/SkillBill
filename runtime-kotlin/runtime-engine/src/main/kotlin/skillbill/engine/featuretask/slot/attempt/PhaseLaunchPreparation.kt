@@ -39,9 +39,11 @@ import skillbill.engine.featuretask.slot.state.PhaseReviewPassState
 import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
 import skillbill.engine.featuretask.slot.state.RequiredPhaseWrite
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.workflow.model.ValidationDepth
 import skillbill.workflow.taskruntime.artifact.envelopeWireMap
 import skillbill.workflow.taskruntime.handoff.FeatureTaskRuntimeHandoffContract
@@ -186,7 +188,8 @@ object PhaseLaunchPreparation {
       val measurementContext = args.context
       return try {
         PhaseLaunchPreparation.prepareLaunch(context, args)
-      } catch (error: InvalidWorkflowStateSchemaError) {
+      } catch (error: SkillBillRuntimeException) {
+        error.rethrowUnless(error.isInvalidWorkflowStateFailure())
         rejectedDurableBriefingLaunch(recorder, run, state, error, measurementContext)
       }
     }
@@ -217,7 +220,7 @@ object PhaseLaunchPreparation {
     recorder: PhaseRunRecords,
     run: PhaseRun,
     state: FeatureTaskRuntimeProgressSnapshotAccess,
-    error: InvalidWorkflowStateSchemaError,
+    error: SkillBillRuntimeException,
     context: LaunchRejectionMeasurementContext,
   ): LaunchPreparationRejected =
     launchPreparationRejected(

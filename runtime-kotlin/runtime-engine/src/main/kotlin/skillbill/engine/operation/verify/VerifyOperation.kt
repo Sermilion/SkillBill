@@ -1,5 +1,6 @@
 package skillbill.engine.operation.verify
 
+import java.time.Clock
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.telemetry.model.FeatureVerifyStartedRequest
 import skillbill.application.workflow.model.WorkflowContinueResult
@@ -23,7 +24,9 @@ import skillbill.engine.operation.core.missingIntake
 import skillbill.engine.operation.core.pullRequestNotFound
 import skillbill.engine.operation.core.unknownVerifyWorkflow
 import skillbill.engine.operation.core.unresolvableVerifyTarget
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.review.pullrequest.PullRequestReviewThreadOperations
 import skillbill.ports.review.pullrequest.model.ReviewPullRequestResolution
@@ -34,7 +37,6 @@ import skillbill.workflow.engine.model.WorkflowSnapshotView
 import skillbill.workflow.model.WorkflowContinueStatus
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import java.time.Clock
 
 @Inject
 class VerifyOperation(
@@ -343,7 +345,8 @@ class VerifyOperation(
   ): T? =
     try {
       read()
-    } catch (error: InvalidWorkflowStateSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isInvalidWorkflowStateFailure())
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         "seam=verify_supersede value_expected=readable_verify_rows value_used=skipped workflow_id=$workflowId " +

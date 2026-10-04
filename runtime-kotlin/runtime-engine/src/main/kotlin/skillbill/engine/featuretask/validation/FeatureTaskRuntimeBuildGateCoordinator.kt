@@ -21,7 +21,7 @@ import skillbill.engine.featuretask.validation.model.ValidationGateProgressWrite
 import skillbill.engine.featuretask.validation.model.ValidationGateResolution
 import skillbill.engine.featuretask.validation.model.ValidationGateTriageResult
 import skillbill.engine.featuretask.validation.model.requiresUnparseableGateTriage
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeValidationEvidenceSchema
 import skillbill.ports.config.RepoLocalConfigPort
 import skillbill.ports.config.model.ReadRepoLocalConfigRequest
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -432,7 +432,7 @@ class FeatureTaskRuntimeBuildGateCoordinator(
     ): FeatureTaskRuntimePhaseOutput {
       val gateExecutionEvidence = FeatureTaskRuntimeValidationGateExecutionEvidence.fromGateMeasurements(measurements)
       if (measurements.lastOrNull()?.repositoryCheckpoint != repositoryCheckpoint) {
-        throw InvalidFeatureTaskRuntimeValidationEvidenceSchemaError(
+        throw invalidFeatureTaskRuntimeValidationEvidenceSchema(
           phaseId,
           "Build gate terminal checkpoint mismatch.",
         )

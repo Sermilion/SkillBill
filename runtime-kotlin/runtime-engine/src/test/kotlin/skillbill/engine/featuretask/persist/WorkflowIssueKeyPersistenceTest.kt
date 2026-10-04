@@ -1,5 +1,11 @@
 package skillbill.engine.featuretask.persist
 
+import java.time.Clock
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.testDecompositionManifestValidator
@@ -16,18 +22,12 @@ import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWi
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.engine.goalrunner.execution.core.testPhaseRecorder
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.WorkflowIssueKeyConflictError
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.decomposition.UnavailableDecompositionManifestStore
 import skillbill.ports.workflow.gitops.NoopWorkflowGitOperations
 import skillbill.workflow.model.FeatureTaskWorkflowMode
-import java.time.Clock
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
 
 class WorkflowIssueKeyPersistenceTest {
   @Test
@@ -98,7 +98,7 @@ class WorkflowIssueKeyPersistenceTest {
         clock = Clock.systemUTC(),
       )
 
-    assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       service.openFeatureTask(
         WorkflowServiceOpenFeatureTaskArgs(
           executionPlan = testExecutionPlan(),
@@ -109,7 +109,7 @@ class WorkflowIssueKeyPersistenceTest {
         ),
       )
     }
-    assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       service.openFeatureTask(
         WorkflowServiceOpenFeatureTaskArgs(
           executionPlan = testExecutionPlan(),

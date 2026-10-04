@@ -1,7 +1,7 @@
 package skillbill.workflow.taskruntime.model.core
 
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseHandoffSchema
 
 const val MAX_REPOSITORY_FINGERPRINT_LENGTH: Int = 256
 
@@ -14,7 +14,7 @@ internal fun unrecognizedHandoffWireValue(
   field: String,
   value: String,
 ): Nothing =
-  throw InvalidFeatureTaskRuntimePhaseHandoffSchemaError(
+  throw invalidFeatureTaskRuntimePhaseHandoffSchema(
     sourceLabel = "<wire>",
     reason = "Unrecognized feature-task-runtime handoff $field wire value '$value'.",
   )

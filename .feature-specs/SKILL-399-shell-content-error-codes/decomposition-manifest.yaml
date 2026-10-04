@@ -9,7 +9,7 @@ base_branch: "base/SKILL-380-phase-slot-strategies"
 feature_branch: "feat/SKILL-399-shell-content-error-codes"
 stack_branches: []
 current_subtask_intent:
-  subtask_id: 5
+  subtask_id: 6
   action: "resume"
 subtasks:
 - id: 1
@@ -67,12 +67,12 @@ subtasks:
 - id: 5
   name: "feature-task-runtime-phase-output"
   spec_path: ".feature-specs/SKILL-399-shell-content-error-codes/spec_subtask_5_feature-task-runtime-phase-output.md"
-  status: "in_progress"
+  status: "complete"
   branch: null
   commit_sha: null
   workflow_id: "wftr-20261004-072858-6sfg"
   blocked_reason: null
-  last_resumable_step: null
+  last_resumable_step: "commit_push"
   linear_issue_id: null
   finalizing_agent_id: null
   participating_agent_ids: []
@@ -80,10 +80,10 @@ subtasks:
 - id: 6
   name: "feature-task-runtime-evidence-records"
   spec_path: ".feature-specs/SKILL-399-shell-content-error-codes/spec_subtask_6_feature-task-runtime-evidence-records.md"
-  status: "pending"
+  status: "in_progress"
   branch: null
   commit_sha: null
-  workflow_id: null
+  workflow_id: "wftr-20261004-081332-2f2n"
   blocked_reason: null
   last_resumable_step: null
   linear_issue_id: null

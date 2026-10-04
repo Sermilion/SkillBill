@@ -1,5 +1,12 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
+import java.nio.file.Files
+import java.time.Clock
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
@@ -10,19 +17,12 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phase.record.openTestWorkflow
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.runner.NoopWorkflowSnapshotValidator
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeCheckpointIdentityVersionError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
-import java.nio.file.Files
-import java.time.Clock
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 
 class CheckpointHistoryRefusalTest {
   @Test
@@ -59,7 +59,7 @@ class CheckpointHistoryRefusalTest {
           seedUnsupportedCheckpointHistory(database, workflowId, status)
           val before = database.read { assertNotNull(it.workflowStates.getFeatureTaskWorkflow(workflowId)) }
 
-          assertFailsWith<InvalidFeatureTaskRuntimeCheckpointIdentityVersionError> {
+          assertFailsWith<SkillBillRuntimeException> {
             recorder.appendCheckpointIdentity(
               AppendCheckpointIdentityArgs(
                 workflowId = workflowId,

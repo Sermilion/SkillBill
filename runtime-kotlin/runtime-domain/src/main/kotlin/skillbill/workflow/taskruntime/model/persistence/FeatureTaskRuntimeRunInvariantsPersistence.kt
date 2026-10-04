@@ -4,7 +4,9 @@ import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.PersistedAgentAddonSelectionEntry
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_RUN_INVARIANTS_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.taskruntime.model.handoff.task.FeatureTaskRuntimeFeatureSize
@@ -134,7 +136,8 @@ private fun Map<String, Any?>.requireFeatureSizeField(key: String): FeatureTaskR
   val rawValue = requireInvariantStringField(key)
   return try {
     FeatureTaskRuntimeFeatureSize.fromWire(rawValue)
-  } catch (_: InvalidFeatureTaskRuntimePhaseHandoffSchemaError) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.code == FeatureTaskRuntimeFailureCode.INVALID_PHASE_HANDOFF_SCHEMA)
     runInvariantSchemaError("Feature-task-runtime artifact field '$key' must be one of SMALL, MEDIUM, LARGE.")
   }
 }

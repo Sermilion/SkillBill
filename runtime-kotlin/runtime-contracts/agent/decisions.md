@@ -1,3 +1,15 @@
+## [2026-10-04] Preserve checkpoint-version workflow-state handling
+Context: SKILL-399 subtask 6 removes a checkpoint-version exception that inherited InvalidWorkflowStateSchemaError, while Workflow-class conversion belongs to subtask 7.
+Decision: Keep a distinct checkpoint-version code and classify it through isInvalidWorkflowStateFailure alongside the legacy workflow-state type. Retarget former catches to the predicate and rethrow unrelated failures.
+Reason: Inheritance previously routed unsupported checkpoint versions through workflow-state recovery. Remediation must still refuse unsupported semantics instead of treating the checkpoint as absent, and transaction failures must still roll back.
+Revisit when: Subtask 7 converts the workflow-state class. Extend the predicate with its state code while retaining checkpoint-version membership.
+
+## [2026-10-04] Pass failure context and violation reasons explicitly
+Context: SKILL-399 subtask 6 removes reason, fieldPath and payloadFreeReason properties used by five receipt, review-state, gate-integrity, persistence and shared-evidence re-wrap sites.
+Decision: Pass anchors and failure factories into decoders, and return nullable violation reasons where consumers choose contextual rejection or recorded degradation. Keep violation abstract on the wire-validator port.
+Reason: Explicit values preserve receipt indexes, cause chains, guidance and degradation reasons without recovering context from caught exception properties or parsing message text. Each consumer can apply its existing boundary policy.
+Alternatives considered: Retain typed exception properties or catch the shared exception to reconstruct context. The plan removes these reads and keeps ports free of default implementations.
+
 ## [2026-10-03] Keep input-driven install, schema and configuration failures coded
 Context: SKILL-399 subtask 3 removes sixteen Install exception classes while preserving their messages, causes and handling boundaries.
 Decision: Use InstallFailureCode with SkillBillRuntimeException for all sixteen conditions. Shared message factories retain producer context without typed exception properties.

@@ -8,6 +8,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.InstallFailureCode
 import skillbill.review.context.model.execution.CodeReviewExecutionMode
 import skillbill.workflow.engine.model.FEATURE_TASK_RUNTIME_GOAL_CONTINUATION_ARTIFACT_KEY
@@ -497,6 +498,33 @@ class GoalSubtaskReviewStateTest {
     val withoutKey = encoded.toMutableMap().apply { remove("repair_receipts") }
     val decoded = GoalSubtaskReviewState.fromArtifactMap(withoutKey)
     assertEquals(emptyList(), decoded.repairReceipts)
+  }
+
+  @Test
+  fun `invalid durable receipt reports its reason once and retains the anchored cause`() {
+    val initial =
+      GoalSubtaskReviewState.initial(
+        reviewBaseSha = "e".repeat(40),
+        baselineUntrackedPaths = emptyList(),
+        codeReviewMode = CodeReviewExecutionMode.INLINE,
+      )
+    val receipt =
+      FeatureTaskRuntimeRepairReceipt(
+        roundNumber = 1,
+        preFixCheckpointSha = "e".repeat(40),
+        entries = emptyList(),
+      ).toArtifactMap() + ("round_number" to 0)
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        GoalSubtaskReviewState.fromArtifactMap(initial.toArtifactMap() + ("repair_receipts" to listOf(receipt)))
+      }
+    assertEquals(InstallFailureCode.INVALID_GOAL_SUBTASK_REVIEW_STATE_SCHEMA, error.code)
+    assertTrue(error.message.orEmpty().endsWith("must be a positive integer."))
+    assertFalse(error.message.orEmpty().contains("repair receipt fails at"))
+    val cause = assertNotNull(error.cause) as SkillBillRuntimeException
+    assertEquals(FeatureTaskRuntimeFailureCode.INVALID_REPAIR_RECEIPT, cause.code)
+    assertTrue(cause.message.orEmpty().contains("repair_receipts[0].round_number"))
+    assertTrue(assertNotNull(cause.cause).message.orEmpty().contains("fails at 'round_number'"))
   }
 
   @Test

@@ -1,3 +1,16 @@
+## [2026-10-04] SKILL-399 feature-task runtime evidence and record failure codes
+Areas: runtime-contracts/error/shellcontent, runtime-domain/workflow/taskruntime/goalreview, runtime-engine/featuretask/goalrunner/verify/work, runtime-application/workflow, runtime-ports/taskruntime/featuretask, runtime-infra/contracts/sqlite/workflow, runtime-core architecture baseline
+- Replaced sixteen evidence, record, execution-identity, worker-ownership and operator-rejection exception classes with FeatureTaskRuntimeFailureCode and coded SkillBillRuntimeException factories.
+- Moved receipt anchoring, review-state wrapping and gate-integrity failure context into decode callbacks. Handoff persistence and shared-evidence validators return violation reasons for contextual failure or recorded degradation.
+- Followed exact code checks and guarded rethrows. isInvalidWorkflowStateFailure preserves checkpoint-version handling at former workflow-state catches, including checkpoint remediation refusal.
+- Reusable: FeatureTaskRuntimeFailureCode, message factories, the workflow-state predicate and the wire-validator violation API provide shared failure handling across domain, engine and infrastructure consumers.
+- Converted exception assertions and pinned handoff validator labels to codes, and removed only the sixteen owned custom-throwable baseline rows.
+- Compatibility: removed exception types have no aliases. Message templates, receipt anchors, repair guidance and degradation reasons retain their existing meaning; persisted contract versions and payload shapes do not change.
+- Breaking interface change: FeatureTaskRuntimeWireArtifactValidator implementations must supply the abstract violation operation. Build-receipt factories no longer carry unread failureCode or payloadFreeReason properties.
+- Limit: this entry covers subtask 6 only. Workflow-class conversion belongs to subtask 7; legacy bases and codeless support remain while other subclasses or callers exist.
+Feature flag: N/A
+Acceptance criteria: 3/3 implemented
+
 ## [2026-10-03] SKILL-399 install, schema and configuration failure codes
 Areas: runtime-contracts/error/shellcontent, runtime-infra/skills/contracts/host, runtime-application/config, runtime-domain/goalrunner/workflow, runtime-engine/featuretask, runtime-cli, runtime-mcp, runtime-core architecture baseline and install tests
 - Replaced sixteen Install exception classes with InstallFailureCode and SkillBillRuntimeException construction. Producers retain message text and causes across schema validation, configuration, install persistence and reconciliation.

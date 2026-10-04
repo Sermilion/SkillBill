@@ -18,8 +18,8 @@ import skillbill.error.featuretask.FeatureTaskRuntimeMigrationFailureCode
 import skillbill.error.featuretask.FeatureTaskRuntimeRegenerationRefusal
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseOutputSchemaError
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.goalrunner.GoalRunnerPersistenceSession
 import skillbill.ports.taskruntime.FeatureTaskRuntimePhaseOutputMigration
@@ -88,12 +88,15 @@ class FeatureTaskRuntimeExecutionAdmission(
       val requestedReviewSelection = request.requestedReviewSelection
       val identity =
         states.getFeatureTaskExecutionIdentity(workflowId)
-          ?: throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "missing immutable execution identity")
+          ?: throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "missing immutable execution identity")
       FeatureTaskExecutionIdentityPolicy.validate(identity)
       val goalMigration = migrateGoalImport(states, session, identity)
       val row =
         states.getFeatureTaskWorkflowAsMode(workflowId, FeatureTaskWorkflowMode.RUNTIME)
-          ?: throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "missing workflow")
+          ?: throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "missing workflow")
+      if (WorkflowStatus.fromWire(row.workflowStatus)?.let { it in WorkflowStatus.terminalStatuses } == true) {
+        throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "terminal workflow cannot be admitted")
+      }
       requireMatchingIdentity(identity, row, workflowId, expectedIdentity)
       val checkedInputs = inputs.frozen()
       val initialSnapshot = row.toSnapshot()
@@ -129,24 +132,25 @@ class FeatureTaskRuntimeExecutionAdmission(
     } catch (error: FeatureTaskRuntimeExecutionPlanAdmissionError) {
       warn(request.workflowId, error.reasonCode)
       throw error
-    } catch (error: InvalidFeatureTaskExecutionIdentitySchemaError) {
-      warn(request.workflowId, "invalid_route_identity")
-      throw error
     } catch (error: UnsafeFeatureTaskRuntimeRegenerationError) {
       warn(request.workflowId, error.refusal.wireValue)
       throw error
-    } catch (error: InvalidFeatureTaskRuntimePhaseOutputSchemaError) {
-      val refusal =
-        SkillBillRuntimeException(
-          FeatureTaskRuntimeMigrationFailureCode.SOURCE_CORRUPT,
-          "Persisted phase output failed its declared contract. Restore or repair the identified record and retry.",
-          error,
-        )
-      recordMigrationFailure(refusal, null)
-      throw refusal
     } catch (error: SkillBillRuntimeException) {
-      recordMigrationFailure(error, request.failureFacts)
-      throw error
+      if (error.code == FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_IDENTITY_SCHEMA) {
+        warn(request.workflowId, "invalid_route_identity")
+      }
+      val reported =
+        if (error.code is FeatureTaskRuntimePhaseOutputFailureCode) {
+          SkillBillRuntimeException(
+            FeatureTaskRuntimeMigrationFailureCode.SOURCE_CORRUPT,
+            "Persisted phase output failed its declared contract. Restore or repair the identified record and retry.",
+            error,
+          )
+        } else {
+          error
+        }
+      recordMigrationFailure(reported, request.failureFacts)
+      throw reported
     }
 
   private fun requireStoppedMigrationOwner(
@@ -267,7 +271,7 @@ class FeatureTaskRuntimeExecutionAdmission(
         identity.normalizedIssueKey == row.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey)
     val matchingExpected = expected == null || identity == expected
     if (!matchingRow || !matchingExpected) {
-      throw InvalidFeatureTaskExecutionIdentitySchemaError(workflowId, "execution identity changed")
+      throw invalidFeatureTaskExecutionIdentitySchema(workflowId, "execution identity changed")
     }
   }
 

@@ -1,19 +1,19 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_READINESS_EVIDENCE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError
-import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvidenceSchemaPaths
-import skillbill.testing.repoRootFromTest
-import skillbill.workflow.taskruntime.artifact.decodeReadinessEvidenceFromArtifact
-import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessCheckStatus
-import skillbill.workflow.taskruntime.model.validation.ReadinessEvidencePayloadKeys
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_READINESS_EVIDENCE_CONTRACT_VERSION
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeReadinessEvidenceSchemaPaths
+import skillbill.testing.repoRootFromTest
+import skillbill.workflow.taskruntime.artifact.decodeReadinessEvidenceFromArtifact
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessCheckStatus
+import skillbill.workflow.taskruntime.model.validation.ReadinessEvidencePayloadKeys
 
 class FeatureTaskRuntimeReadinessEvidenceSchemaTest {
   @Test
@@ -50,7 +50,7 @@ class FeatureTaskRuntimeReadinessEvidenceSchemaTest {
           ),
       )
     FeatureTaskRuntimeReadinessEvidenceSchemaValidator.validate(payload, "missing-selected")
-    assertFailsWith<InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       requireNotNull(decodeReadinessEvidenceFromArtifact(payload, "missing-selected")).requireReady(
         "missing-selected",
         "tree1",
@@ -70,7 +70,7 @@ class FeatureTaskRuntimeReadinessEvidenceSchemaTest {
           ),
       )
     FeatureTaskRuntimeReadinessEvidenceSchemaValidator.validate(payload, "unpersisted")
-    assertFailsWith<InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       requireNotNull(decodeReadinessEvidenceFromArtifact(payload, "unpersisted")).requireReady(
         "unpersisted",
         "tree1",
@@ -90,7 +90,7 @@ class FeatureTaskRuntimeReadinessEvidenceSchemaTest {
           ),
       )
     FeatureTaskRuntimeReadinessEvidenceSchemaValidator.validate(payload, "nonzero-exit")
-    assertFailsWith<InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       requireNotNull(decodeReadinessEvidenceFromArtifact(payload, "nonzero-exit")).requireReady(
         "nonzero-exit",
         "tree1",
@@ -118,7 +118,7 @@ class FeatureTaskRuntimeReadinessEvidenceSchemaTest {
           ),
       )
     FeatureTaskRuntimeReadinessEvidenceSchemaValidator.validate(payload, "plugin-failure")
-    assertFailsWith<InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       requireNotNull(decodeReadinessEvidenceFromArtifact(payload, "plugin-failure")).requireReady(
         "plugin-failure",
         "tree1",

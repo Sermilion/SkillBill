@@ -1,5 +1,20 @@
 package skillbill.engine.featuretask.persist
 
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset.UTC
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.TestDecompositionManifestStore
@@ -129,21 +144,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactK
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import skillbill.workflow.taskruntime.model.skeleton.SkeletonDefinition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import java.nio.file.Files
-import java.nio.file.Path
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneOffset.UTC
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertNotEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 private fun WorkflowService.openTestRuntime(
   sessionId: String = "",
@@ -2937,6 +2937,12 @@ class WorkflowGoalRunnerProgressStoreTest {
                 ) {
                   throw invalidGoalObservabilityEventSchemaError(sourceLabel, "subtask_id", "subtask_id is required.")
                 }
+
+                override fun violation(
+                  kind: FeatureTaskRuntimeWireArtifactKind,
+                  payload: FeatureTaskRuntimeWorkflowArtifactMap,
+                  sourceLabel: String,
+                ): String? = null
               },
           ),
       )
@@ -3144,6 +3150,12 @@ class WorkflowGoalRunnerProgressStoreTest {
                     "operation_name is required.",
                   )
                 }
+
+                override fun violation(
+                  kind: FeatureTaskRuntimeWireArtifactKind,
+                  payload: FeatureTaskRuntimeWorkflowArtifactMap,
+                  sourceLabel: String,
+                ): String? = null
               },
           ),
       )
@@ -3494,6 +3506,12 @@ private val testFeatureTaskRuntimeWireArtifactValidator: FeatureTaskRuntimeWireA
       payload: FeatureTaskRuntimeWorkflowArtifactMap,
       sourceLabel: String,
     ) = Unit
+
+    override fun violation(
+      kind: FeatureTaskRuntimeWireArtifactKind,
+      payload: FeatureTaskRuntimeWorkflowArtifactMap,
+      sourceLabel: String,
+    ): String? = null
   }
 
 private fun workflowRecord(

@@ -1,10 +1,10 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeImplementationAttemptSchemaError
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPT_CONTRACT_VERSION
+import skillbill.error.core.SkillBillRuntimeException
 
 class FeatureTaskRuntimeImplementationAttemptSchemaValidatorTest {
   @Test
@@ -27,7 +27,7 @@ class FeatureTaskRuntimeImplementationAttemptSchemaValidatorTest {
 
   @Test
   fun `rejects an unknown top-level property`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeImplementationAttemptSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeImplementationAttemptSchemaValidator.validate(
         record(attempt()) + mapOf("attempt_count" to 1),
         SOURCE,
@@ -37,7 +37,7 @@ class FeatureTaskRuntimeImplementationAttemptSchemaValidatorTest {
 
   @Test
   fun `rejects a wrong contract version`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeImplementationAttemptSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeImplementationAttemptSchemaValidator.validate(
         record(attempt()) + mapOf("contract_version" to "0.1"),
         SOURCE,
@@ -47,7 +47,7 @@ class FeatureTaskRuntimeImplementationAttemptSchemaValidatorTest {
 
   @Test
   fun `rejects legacy receipt fields on an attempt entry`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeImplementationAttemptSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeImplementationAttemptSchemaValidator.validate(
         record(
           attempt() +
@@ -63,7 +63,7 @@ class FeatureTaskRuntimeImplementationAttemptSchemaValidatorTest {
 
   @Test
   fun `rejects an unknown attempt status`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeImplementationAttemptSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeImplementationAttemptSchemaValidator.validate(
         record(attempt(status = "partially_completed")),
         SOURCE,
@@ -73,7 +73,7 @@ class FeatureTaskRuntimeImplementationAttemptSchemaValidatorTest {
 
   @Test
   fun `rejects a blank stuffed value`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeImplementationAttemptSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeImplementationAttemptSchemaValidator.validate(
         record(attempt() + mapOf("value" to "   ")),
         SOURCE,
@@ -91,7 +91,7 @@ class FeatureTaskRuntimeImplementationAttemptSchemaValidatorTest {
 
   @Test
   fun `rejects a missing required attempt field`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeImplementationAttemptSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeImplementationAttemptSchemaValidator.validate(
         record(attempt() - "sequence_number"),
         SOURCE,
@@ -102,7 +102,7 @@ class FeatureTaskRuntimeImplementationAttemptSchemaValidatorTest {
   @Test
   fun `failure names the source label so the offending record is identifiable`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeImplementationAttemptSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeImplementationAttemptSchemaValidator.validate(record(attempt(status = "nope")), SOURCE)
       }
 

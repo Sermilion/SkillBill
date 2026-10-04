@@ -5,7 +5,9 @@ import skillbill.application.workflow.model.WorkflowGetResult
 import skillbill.application.workflow.model.WorkflowUpdateRequest
 import skillbill.application.workflow.model.WorkflowUpdateResult
 import skillbill.application.workflow.service.WorkflowService
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowStepUpdates
 import skillbill.workflow.model.WorkflowStatus
@@ -56,7 +58,8 @@ internal class VerifyWorkflowStore(
   fun artifacts(workflowId: String): Map<String, Any?> =
     try {
       (workflows.get(WorkflowFamilyKind.VERIFY, workflowId) as? WorkflowGetResult.Ok)?.snapshot?.artifacts.orEmpty()
-    } catch (_: InvalidWorkflowStateSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isInvalidWorkflowStateFailure())
       emptyMap()
     }
 }

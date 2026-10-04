@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.runloop.durable
 
+import java.time.Clock
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.idestatus.AgentActivityStampWriter
 import skillbill.engine.featuretask.lifecycle.branch.FeatureTaskRuntimeBranchSetupOutcome
@@ -24,11 +25,12 @@ import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseRunState
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.engine.worktreeedit.WorktreeEditJournalWriter
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeTransitionDeclaration
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
-import java.time.Clock
 
 internal class FeatureTaskRuntimeRunLoopDurableState(
   override val progress: FeatureTaskRuntimeRunState,
@@ -87,7 +89,8 @@ internal class FeatureTaskRuntimeRunLoopDurableState(
         .findEnvelope(target.workflowId, stepName, target.attempt)
         ?.let { PhaseSettledEnvelopeRead.Found(it.envelope) }
         ?: PhaseSettledEnvelopeRead.None
-    } catch (error: InvalidFeatureTaskRuntimeValidationEvidenceSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA)
       PhaseSettledEnvelopeRead.Failed(error)
     }
 }

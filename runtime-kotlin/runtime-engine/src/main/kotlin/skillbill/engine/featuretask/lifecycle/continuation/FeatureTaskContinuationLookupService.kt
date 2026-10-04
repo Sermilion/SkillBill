@@ -10,11 +10,14 @@ import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLi
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupQuery
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.model.execution.EffectiveGatePolicyInputs
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.UnsafeFeatureTaskRuntimeRegenerationError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.error.shellcontent.LegacyProseWorkflowError
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
@@ -63,7 +66,7 @@ class FeatureTaskContinuationLookupService(
         }
         val identity =
           states.getFeatureTaskExecutionIdentity(candidate.workflowId)
-            ?: throw InvalidFeatureTaskExecutionIdentitySchemaError(
+            ?: throw invalidFeatureTaskExecutionIdentitySchema(
               candidate.workflowId,
               "missing immutable execution identity",
             )
@@ -102,7 +105,8 @@ class FeatureTaskContinuationLookupService(
           " reason=${error.reasonCode}",
       )
       throw error
-    } catch (error: InvalidFeatureTaskExecutionIdentitySchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.code == FeatureTaskRuntimeFailureCode.INVALID_EXECUTION_IDENTITY_SCHEMA)
       RuntimeDiagnosticsBestEffortWarning.record(
         diagnostics,
         "Execution admission refused workflow=${candidate.workflowId.take(ADMISSION_WORKFLOW_LABEL_LIMIT)}" +
@@ -133,7 +137,7 @@ class FeatureTaskContinuationLookupService(
       identity.workflowId == row.workflowId && identity.mode == candidate.mode &&
         identity.normalizedIssueKey == row.issueKey?.let(FeatureTaskExecutionIdentityPolicy::canonicalIssueKey)
     if (!unchangedRoute || !matchingRow) {
-      throw InvalidFeatureTaskExecutionIdentitySchemaError(candidate.workflowId, "identity changed before claim")
+      throw invalidFeatureTaskExecutionIdentitySchema(candidate.workflowId, "identity changed before claim")
     }
   }
 
@@ -272,7 +276,7 @@ class FeatureTaskContinuationLookupService(
   private fun invalidIdentity(
     candidate: FeatureTaskWorkflowCandidate,
     reason: String,
-  ): Nothing = throw InvalidFeatureTaskExecutionIdentitySchemaError(candidate.workflow.workflowId, reason)
+  ): Nothing = throw invalidFeatureTaskExecutionIdentitySchema(candidate.workflow.workflowId, reason)
 
   private fun classify(candidates: List<FeatureTaskContinuationCandidate>): FeatureTaskContinuationLookupResult {
     if (candidates.isEmpty()) return FeatureTaskContinuationLookupResult.NoMatch

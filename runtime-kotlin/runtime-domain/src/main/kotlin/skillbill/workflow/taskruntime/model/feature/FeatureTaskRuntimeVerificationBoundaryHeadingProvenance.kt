@@ -1,7 +1,7 @@
 package skillbill.workflow.taskruntime.model.feature
 
 import skillbill.contracts.JsonCodec
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeFindingVerificationRecordError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeFindingVerificationRecord
 
 data class FeatureTaskRuntimeVerificationBoundaryHeadingProvenance(
   val headingId: String,
@@ -49,6 +49,6 @@ data class FeatureTaskRuntimeVerificationBoundaryHeadingProvenance(
       path: String,
       field: String,
     ): Nothing =
-      throw InvalidFeatureTaskRuntimeFindingVerificationRecordError("$path.$field must be a non-blank string.")
+      throw invalidFeatureTaskRuntimeFindingVerificationRecord("$path.$field must be a non-blank string.")
   }
 }

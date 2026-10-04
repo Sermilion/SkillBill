@@ -1,5 +1,8 @@
 package skillbill.application.workflow.decomposition
 
+import java.nio.file.Path
+import java.time.Clock
+import kotlin.random.Random
 import skillbill.application.decomposition.DecompositionManifestWriter
 import skillbill.application.decomposition.resolveDecompositionManifest
 import skillbill.application.workflow.model.AdvanceCompletedSubtasksRequest
@@ -18,7 +21,9 @@ import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.decomposition.DecompositionManifestPayloadKeys
 import skillbill.contracts.decomposition.DecompositionPlanningPayloadKeys
 import skillbill.contracts.issuekey.normalizeRequiredIssueKey
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.commitPushResultArtifact
 import skillbill.ports.persistence.UnitOfWork
 import skillbill.ports.workflow.decomposition.DecompositionManifestStore
@@ -46,9 +51,6 @@ import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.model.WorkflowStepStatus
-import java.nio.file.Path
-import java.time.Clock
-import kotlin.random.Random
 
 class DecompositionWorkflowContinuation(
   private val engine: WorkflowEngine,
@@ -435,6 +437,7 @@ class DecompositionWorkflowContinuation(
 private fun WorkflowStateSnapshot.decompositionRuntimeOrNull(): DecompositionManifest? =
   try {
     decompositionRuntime()
-  } catch (_: InvalidWorkflowStateSchemaError) {
+  } catch (error: SkillBillRuntimeException) {
+    error.rethrowUnless(error.isInvalidWorkflowStateFailure())
     null
   }

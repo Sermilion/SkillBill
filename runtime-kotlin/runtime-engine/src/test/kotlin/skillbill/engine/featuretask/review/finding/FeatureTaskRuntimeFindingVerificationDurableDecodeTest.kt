@@ -1,5 +1,11 @@
 package skillbill.engine.featuretask.review.finding
 
+import java.time.Instant
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
 import skillbill.application.testHarnessClock
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
@@ -8,7 +14,7 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.runner.InMemoryRuntimeWorkflowRepository
 import skillbill.engine.featuretask.runner.RuntimeFakeDatabaseSessionFactory
 import skillbill.engine.goalrunner.persist.decodeWorkflowArtifactsForTest
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeFindingVerificationRecordError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.workflow.model.WorkflowFamily
 import skillbill.ports.workflow.toRecord
@@ -18,12 +24,6 @@ import skillbill.workflow.engine.model.WorkflowArtifactPatch
 import skillbill.workflow.engine.model.WorkflowUpdateInput
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
-import java.time.Instant
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNotNull
 
 private val FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_CHECKPOINT_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_FINDING_VERIFICATION_CHECKPOINT.label()
@@ -53,11 +53,11 @@ class FeatureTaskRuntimeFindingVerificationDurableDecodeTest {
 
     val recorder = recorderFor(repository)
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeFindingVerificationRecordError> {
+      assertFailsWith<SkillBillRuntimeException> {
         recorder.loadFindingVerificationCheckpoint(workflowId)
       }
-    assertContains(error.reason, "finding_verification_checkpoint")
-    assertContains(error.reason, "array")
+    assertContains(error.message.orEmpty(), "finding_verification_checkpoint")
+    assertContains(error.message.orEmpty(), "array")
   }
 
   @Test
@@ -87,10 +87,10 @@ class FeatureTaskRuntimeFindingVerificationDurableDecodeTest {
 
     val recorder = recorderFor(repository)
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeFindingVerificationRecordError> {
+      assertFailsWith<SkillBillRuntimeException> {
         recorder.loadFindingVerificationCheckpoint(workflowId)
       }
-    assertContains(error.reason, "disposition")
+    assertContains(error.message.orEmpty(), "disposition")
   }
 }
 

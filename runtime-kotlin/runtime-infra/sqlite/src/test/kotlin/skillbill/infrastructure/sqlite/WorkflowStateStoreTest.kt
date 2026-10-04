@@ -1,7 +1,20 @@
 package skillbill.infrastructure.sqlite
 
+import java.nio.file.Files
+import java.sql.DriverManager
+import java.time.Clock
+import java.time.Instant
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 import skillbill.contracts.workflow.WORKFLOW_STATE_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import skillbill.error.shellcontent.ProseFeatureTaskWorkflowWriteRefusedError
 import skillbill.infrastructure.sqlite.core.schema.DatabaseRuntime
@@ -19,19 +32,6 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.model.persistence.goalContinuationArtifact
-import java.nio.file.Files
-import java.sql.DriverManager
-import java.time.Clock
-import java.time.Instant
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
-import kotlin.test.Test
-import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 
 class WorkflowStateStoreTest {
   @Test
@@ -437,7 +437,7 @@ class WorkflowStateStoreTest {
         it.setString(2, row.workflowId)
         it.executeUpdate()
       }
-      assertFailsWith<InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.getFeatureTaskRuntimeWorkerOwnership(row.workflowId)
       }
 
@@ -449,7 +449,7 @@ class WorkflowStateStoreTest {
         it.setString(3, row.workflowId)
         it.executeUpdate()
       }
-      assertFailsWith<InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         store.getFeatureTaskRuntimeWorkerOwnership(row.workflowId)
       }
     }

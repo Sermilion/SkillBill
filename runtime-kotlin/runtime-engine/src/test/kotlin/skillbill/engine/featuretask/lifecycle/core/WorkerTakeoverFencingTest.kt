@@ -1,15 +1,27 @@
 package skillbill.engine.featuretask.lifecycle.core
 
+import java.nio.file.Files
+import java.sql.DriverManager
+import java.time.Duration
+import kotlin.test.Test
+import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import skillbill.application.testHarnessClock
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseStateRequest
 import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.runner.NoopWorkflowSnapshotValidator
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.featuretask.model.FeatureTaskRuntimeWorkerLeaseState
@@ -25,18 +37,6 @@ import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
-import java.nio.file.Files
-import java.sql.DriverManager
-import java.time.Duration
-import kotlin.test.Test
-import kotlin.test.assertContentEquals
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 class WorkerTakeoverFencingTest {
   @Test
@@ -241,7 +241,7 @@ class WorkerTakeoverFencingTest {
         identity.copy(normalizedIssueKey = "SKILL-999"),
         identity.copy(governedSpecPath = ".feature-specs/SKILL-384/other.md"),
       ).forEach { expected ->
-        assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+        assertFailsWith<SkillBillRuntimeException> {
           coordinator.runOwned(original.workflowId, execution.inputs, expected) { launches++ }
         }
       }

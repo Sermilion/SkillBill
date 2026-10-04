@@ -1,5 +1,7 @@
 package skillbill.engine.work
 
+import java.nio.file.Path
+import java.time.Clock
 import me.tatarka.inject.annotations.Inject
 import skillbill.application.decomposition.baseBranch
 import skillbill.engine.featuretask.lifecycle.branch.protectedBranchName
@@ -9,8 +11,10 @@ import skillbill.engine.work.model.IdeStatusCandidate
 import skillbill.engine.work.model.IdeStatusRepositoryResolution
 import skillbill.engine.work.model.IdeStatusRequest
 import skillbill.engine.work.model.IdeStatusResult
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.rethrowUnless
 import skillbill.error.shellcontent.InvalidWorkListRowError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.isInvalidWorkflowStateFailure
 import skillbill.goalrunner.model.GoalPlanningStatusState
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.idestatus.IdeStatusValidator
@@ -26,8 +30,6 @@ import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.FeatureTaskExecutionIdentityPolicy
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.decompositionStatus
-import java.nio.file.Path
-import java.time.Clock
 
 @Inject
 class IdeStatusService(
@@ -83,7 +85,8 @@ class IdeStatusService(
           message = error.message ?: "Incompatible work-list record.",
         ),
       )
-    } catch (error: InvalidWorkflowStateSchemaError) {
+    } catch (error: SkillBillRuntimeException) {
+      error.rethrowUnless(error.isInvalidWorkflowStateFailure())
       emit(
         IdeStatusProblemSnapshots.incompatibleRecord(
           repositoryIdentity = repositoryIdentity,

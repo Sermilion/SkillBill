@@ -1,18 +1,18 @@
 package skillbill.infrastructure.workflow.git
 
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError
-import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
-import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
-import skillbill.ports.workflow.gitops.model.WorkflowReadinessTreeIdentityResult
-import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessCheckResult
-import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessCheckStatus
-import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.ports.workflow.gitops.model.WorkflowGitNameListResult
+import skillbill.ports.workflow.gitops.model.WorkflowGitOperationResult
+import skillbill.ports.workflow.gitops.model.WorkflowReadinessTreeIdentityResult
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessCheckResult
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessCheckStatus
+import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeReadinessEvidence
 
 class GitReadinessTreeIdentityOperationsTest {
   @Test
@@ -86,7 +86,7 @@ class GitReadinessTreeIdentityOperationsTest {
           ),
       )
     val failure =
-      assertFailsWith<InvalidFeatureTaskRuntimeReadinessEvidenceSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         evidence.requireReady(
           "commit_push",
           expectedSourceTreeSha = "tree-current",

@@ -2,7 +2,7 @@ package skillbill.engine.featuretask.slot.state
 
 import skillbill.engine.featuretask.model.phase.FeatureTaskRuntimePhaseSettlementTarget
 import skillbill.engine.featuretask.slot.PhaseStepInput
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.agentrun.model.AgentRunActivityStampSink
 import skillbill.ports.agentrun.model.AgentRunWorktreeEditObserver
 import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
@@ -51,5 +51,5 @@ sealed interface PhaseSettledEnvelopeRead {
 
   data class Found(val envelope: FeatureTaskRuntimeWorkflowArtifactMap) : PhaseSettledEnvelopeRead
 
-  data class Failed(val error: InvalidFeatureTaskRuntimeValidationEvidenceSchemaError) : PhaseSettledEnvelopeRead
+  data class Failed(val error: SkillBillRuntimeException) : PhaseSettledEnvelopeRead
 }

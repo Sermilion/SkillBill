@@ -1,5 +1,14 @@
 package skillbill.engine.featuretask.lifecycle.continuation
 
+import java.time.Clock
+import java.time.Instant
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import skillbill.application.FakeDatabaseSessionFactory
 import skillbill.application.InMemoryWorkflowStates
 import skillbill.application.decomposition.baseBranch
@@ -21,7 +30,7 @@ import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFi
 import skillbill.engine.featuretask.model.continuation.FeatureTaskContinuationLookupResult
 import skillbill.engine.featuretask.slot.testExecutionPlan
 import skillbill.engine.goalrunner.manifest
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.LegacyProseWorkflowError
 import skillbill.goalrunner.model.GoalContinuation
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
@@ -42,15 +51,6 @@ import skillbill.workflow.model.FeatureTaskWorkflowMode.PROSE
 import skillbill.workflow.model.FeatureTaskWorkflowMode.RUNTIME
 import skillbill.workflow.model.WorkflowStatus
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import java.time.Clock
-import java.time.Instant
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 private val DECOMPOSITION_RUNTIME_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.DECOMPOSITION_RUNTIME.label()
@@ -162,7 +162,7 @@ class FeatureTaskContinuationLookupServiceTest {
   fun `feature-task creation rejects malformed identity before persistence`() {
     val fixture = fixture()
 
-    assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       fixture.service.openFeatureTask(
         WorkflowServiceOpenFeatureTaskArgs(
           executionPlan = testExecutionPlan(),
@@ -211,7 +211,7 @@ class FeatureTaskContinuationLookupServiceTest {
     val identity = requireNotNull(fixture.states.executionIdentity(opened.workflowId))
     fixture.states.overwriteExecutionIdentity(identity.copy(normalizedIssueKey = "SKILL-999"))
 
-    assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       fixture.lookup.lookup("SKILL-120", REPOSITORY_A)
     }
   }

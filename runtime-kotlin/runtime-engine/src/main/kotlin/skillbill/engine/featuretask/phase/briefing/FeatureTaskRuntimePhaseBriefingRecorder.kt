@@ -158,7 +158,7 @@ class FeatureTaskRuntimePhaseBriefingRecorder(
           )
         },
         validatePersistenceRecord = { persistence ->
-          wireArtifactValidator.validate(
+          wireArtifactValidator.violation(
             FeatureTaskRuntimeWireArtifactKind.HANDOFF_PERSISTENCE_RECORD,
             FeatureTaskRuntimeWorkflowArtifactMap.from(persistence),
             "delivered-projection:$workflowId",
@@ -289,7 +289,7 @@ internal fun FeatureTaskRuntimeWireArtifactValidator.validateEnvelopeWire(envelo
   )
 
 internal fun FeatureTaskRuntimeWireArtifactValidator.validatePersistenceWire(record: Map<String, Any?>) =
-  validate(
+  violation(
     FeatureTaskRuntimeWireArtifactKind.HANDOFF_PERSISTENCE_RECORD,
     FeatureTaskRuntimeWorkflowArtifactMap.from(record),
     "delivered-projection",

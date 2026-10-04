@@ -1,14 +1,14 @@
 package skillbill.infrastructure.sqlite.workflow.featuretask
 
+import java.sql.Connection
 import skillbill.contracts.SharedPayloadKeys
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.infrastructure.sqlite.core.ops.bindAll
 import skillbill.infrastructure.sqlite.workflow.getFeatureTaskWorkflowRow
 import skillbill.ports.workflow.FeatureTaskExecutionLookupRepository
 import skillbill.ports.workflow.model.FeatureTaskWorkflowCandidate
 import skillbill.workflow.model.FeatureTaskExecutionIdentity
-import java.sql.Connection
 
 internal class FeatureTaskExecutionLookupStore(
   private val connection: Connection,
@@ -53,9 +53,9 @@ internal class FeatureTaskExecutionLookupStore(
     }
     val persisted =
       connection.featureTaskIdentity(identity.workflowId)
-        ?: throw InvalidFeatureTaskExecutionIdentitySchemaError(identity.workflowId, "identity was not persisted")
+        ?: throw invalidFeatureTaskExecutionIdentitySchema(identity.workflowId, "identity was not persisted")
     if (persisted != identity) {
-      throw InvalidFeatureTaskExecutionIdentitySchemaError(
+      throw invalidFeatureTaskExecutionIdentitySchema(
         identity.workflowId,
         "immutable identity conflicts with the persisted record",
       )

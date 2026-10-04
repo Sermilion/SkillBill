@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.slot.attempt
 
+import java.time.Clock
 import skillbill.agent.model.PhaseOutput
 import skillbill.application.diagnostics.model.RejectedOutputDiagnosticRequest
 import skillbill.contracts.SharedPayloadKeys
@@ -75,7 +76,7 @@ import skillbill.engine.featuretask.slot.state.PhaseRunRecords
 import skillbill.engine.featuretask.slot.state.PhaseRunSettlements
 import skillbill.engine.featuretask.slot.state.PhaseSettledEnvelopeRead
 import skillbill.engine.featuretask.slot.state.PhaseStepBinding
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.diagnostics.model.ProducerOutputEvidence
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
@@ -87,7 +88,6 @@ import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtif
 import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeFailureDisposition
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import java.time.Clock
 
 internal data class SettleValidatedOutputCommitArgs(
   val request: FeatureTaskRuntimeRunFacts,
@@ -355,7 +355,7 @@ object PhaseOutputGate {
     recorder: PhaseRunRecords,
     phaseSettlementService: PhaseRunSettlements,
     args: GateOutput,
-    error: InvalidFeatureTaskRuntimeValidationEvidenceSchemaError,
+    error: SkillBillRuntimeException,
   ) {
     val run = args.run
     phaseSettlementService.clear(

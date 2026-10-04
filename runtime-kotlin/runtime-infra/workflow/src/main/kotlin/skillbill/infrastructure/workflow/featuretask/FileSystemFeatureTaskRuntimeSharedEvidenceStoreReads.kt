@@ -3,10 +3,12 @@ package skillbill.infrastructure.workflow.featuretask
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_SHARED_EVIDENCE_PROJECTION_CONTRACT_VERSION
 import skillbill.error.featuretask.FeatureTaskRuntimeSharedEvidenceFingerprintContradictionError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeSharedEvidenceProjectionSchemaError
 import skillbill.infrastructure.contracts.workflow.featuretask.FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator
 import skillbill.ports.taskruntime.model.FeatureTaskRuntimeSharedEvidenceResolution
 import skillbill.workflow.taskruntime.model.phase.FeatureTaskRuntimeSharedReviewEvidenceReference
@@ -14,9 +16,6 @@ import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvide
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvidenceDiffPayloadRef
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvidenceFileEntry
 import skillbill.workflow.taskruntime.model.review.FeatureTaskRuntimeSharedEvidenceHunkEntry
-import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.Path
 
 internal fun readStored(
   mapper: ObjectMapper,
@@ -117,16 +116,16 @@ private fun resolutionOf(
           put("diff_content", stored.envelope.path("diff_content").asText("present"))
         }
       }
-    try {
-      FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator.validate(projection, context.envelopeLabel)
-    } catch (error: InvalidFeatureTaskRuntimeSharedEvidenceProjectionSchemaError) {
-      return degraded(
-        seam = "stored_projection_schema",
-        used = "re-derive",
-        expected = "schema-valid shared evidence projection at ${context.envelopeLabel}",
-        cause = error.reason,
-      )
-    }
+    FeatureTaskRuntimeSharedEvidenceProjectionSchemaValidator
+      .violation(projection, context.envelopeLabel)
+      ?.let { reason ->
+        return degraded(
+          seam = "stored_projection_schema",
+          used = "re-derive",
+          expected = "schema-valid shared evidence projection at ${context.envelopeLabel}",
+          cause = reason,
+        )
+      }
     FeatureTaskRuntimeSharedEvidenceResolution(
       artifact = indexedArtifact,
       diffPayload = stored.payloadText,

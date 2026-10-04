@@ -1,5 +1,6 @@
 package skillbill.engine.goalrunner.preflight
 
+import java.nio.file.Path
 import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
 import skillbill.application.decomposition.parentSpecPath
@@ -16,7 +17,7 @@ import skillbill.engine.goalrunner.review.effectiveGoalRunnerReviewPolicy
 import skillbill.engine.goalrunner.review.goalRunnerReviewPolicyMismatch
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.AgentAddonFailureCode
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskExecutionIdentitySchema
 import skillbill.goalrunner.GoalRunnerPlanner
 import skillbill.goalrunner.model.GoalRunnerSelection
 import skillbill.model.toPath
@@ -30,7 +31,6 @@ import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource.LINEAR
 import skillbill.workflow.model.DecompositionStatus
 import skillbill.workflow.model.decompositionStatus
-import java.nio.file.Path
 
 class GoalPreflightGateBlockBuilder(
   private val manifestStore: GoalRunnerManifestStore,
@@ -97,7 +97,7 @@ class GoalPreflightGateBlockBuilder(
         )
       }
     if (mismatch != null) {
-      throw InvalidFeatureTaskExecutionIdentitySchemaError("goal preflight", mismatch)
+      throw invalidFeatureTaskExecutionIdentitySchema("goal preflight", mismatch)
     }
     val effectiveReviewPolicy =
       effectiveGoalRunnerReviewPolicy(

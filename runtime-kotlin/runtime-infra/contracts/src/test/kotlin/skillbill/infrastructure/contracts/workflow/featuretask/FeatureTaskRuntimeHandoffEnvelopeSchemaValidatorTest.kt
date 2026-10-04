@@ -1,16 +1,17 @@
 package skillbill.infrastructure.contracts.workflow.featuretask
 
-import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.core.failureCodeLabel
-import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
-import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
-import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_HANDOFF_ENVELOPE_CONTRACT_VERSION
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.failureCodeLabel
+import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
+import skillbill.infrastructure.contracts.FeatureTaskRuntimeWireArtifactValidator
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWireArtifactKind
+import skillbill.workflow.taskruntime.model.core.FeatureTaskRuntimeWorkflowArtifactMap
 
 class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
   private val validator = FeatureTaskRuntimeWireArtifactValidator()
@@ -20,19 +21,19 @@ class FeatureTaskRuntimeHandoffEnvelopeSchemaValidatorTest {
     val expectedErrors =
       mapOf(
         FeatureTaskRuntimeWireArtifactKind.QUARANTINE_RECORD to
-          "InvalidFeatureTaskRuntimeQuarantineSchemaError",
+          "FeatureTaskRuntimeFailureCode.INVALID_QUARANTINE_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_ATTEMPT to
-          "InvalidFeatureTaskRuntimeImplementationAttemptSchemaError",
+          "FeatureTaskRuntimeFailureCode.INVALID_IMPLEMENTATION_ATTEMPT_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.BUILD_RECEIPT to
-          "InvalidFeatureTaskRuntimeBuildReceiptSchemaError",
+          "FeatureTaskRuntimeFailureCode.INVALID_BUILD_RECEIPT_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.HANDOFF_DECLARATION to
-          "InvalidFeatureTaskRuntimePhaseHandoffSchemaError",
+          "FeatureTaskRuntimeFailureCode.INVALID_PHASE_HANDOFF_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.HANDOFF_PERSISTENCE_RECORD to
-          "InvalidFeatureTaskRuntimePersistenceSchemaError",
+          "FeatureTaskRuntimeFailureCode.INVALID_PERSISTENCE_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.HANDOFF_MEASUREMENT to
-          "InvalidFeatureTaskRuntimeProjectionMeasurementSchemaError",
+          "FeatureTaskRuntimeFailureCode.INVALID_PROJECTION_MEASUREMENT_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.HANDOFF_SHARED_EVIDENCE_PROJECTION to
-          "InvalidFeatureTaskRuntimeSharedEvidenceProjectionSchemaError",
+          "FeatureTaskRuntimeFailureCode.INVALID_SHARED_EVIDENCE_PROJECTION_SCHEMA",
         FeatureTaskRuntimeWireArtifactKind.HANDOFF_ENVELOPE to
           "FeatureTaskRuntimeHandoffProjectionFailureKind.SCHEMA_INVALID",
         FeatureTaskRuntimeWireArtifactKind.GOAL_PROGRESS_EVENT to

@@ -1,6 +1,7 @@
 package skillbill.engine.featuretask.lifecycle.remediation
 
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeRepairReceiptError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairOutcome
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceipt
 import skillbill.workflow.model.goalreview.FeatureTaskRuntimeRepairReceiptEntry
@@ -78,5 +79,9 @@ private fun repairEntry(
 fun featureTaskRuntimeRemediationRoundNumberOrNull(reviewState: GoalSubtaskReviewState): Int? =
   runCatching { featureTaskRuntimeRemediationRoundNumber(reviewState.completedPassCount) }
     .getOrElse { error ->
-      if (error is InvalidFeatureTaskRuntimeRepairReceiptError) null else throw error
+      if (error is SkillBillRuntimeException && error.code == FeatureTaskRuntimeFailureCode.INVALID_REPAIR_RECEIPT) {
+        null
+      } else {
+        throw error
+      }
     }

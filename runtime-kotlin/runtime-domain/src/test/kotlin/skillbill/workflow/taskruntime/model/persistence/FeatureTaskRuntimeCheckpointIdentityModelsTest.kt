@@ -1,12 +1,12 @@
 package skillbill.workflow.taskruntime.model.persistence
 
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeCheckpointIdentityVersionError
-import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.shellcontent.InvalidWorkflowStateSchemaError
 
 class FeatureTaskRuntimeCheckpointIdentityModelsTest {
   @Test
@@ -54,7 +54,7 @@ class FeatureTaskRuntimeCheckpointIdentityModelsTest {
   @Test
   fun `an unsupported contract version loud-fails with both versions so quarantine can be distinguished`() {
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimeCheckpointIdentityVersionError> {
+      assertFailsWith<SkillBillRuntimeException> {
         featureTaskRuntimeCheckpointIdentitiesFromArtifact(
           mapOf("contract_version" to "0.1", "checkpoints" to emptyList<Any?>()),
         )

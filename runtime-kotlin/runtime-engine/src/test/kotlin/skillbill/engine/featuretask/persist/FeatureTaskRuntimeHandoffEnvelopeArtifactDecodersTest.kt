@@ -1,11 +1,11 @@
 package skillbill.engine.featuretask.persist
 
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePersistenceSchemaError
-import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
-import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFailsWith
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.workflow.engine.model.DurableWorkflowArtifactFamily
+import skillbill.workflow.taskruntime.model.core.FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE
 
 private val FEATURE_TASK_RUNTIME_DELIVERED_PROJECTIONS_ARTIFACT_KEY =
   DurableWorkflowArtifactFamily.FEATURE_TASK_RUNTIME_DELIVERED_PROJECTIONS.label()
@@ -27,20 +27,15 @@ class FeatureTaskRuntimeHandoffEnvelopeArtifactDecodersTest {
       )
 
     val error =
-      assertFailsWith<InvalidFeatureTaskRuntimePersistenceSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         deliveredProjectionsFrom(
           artifacts = artifacts,
-          validatePersistenceRecord = {
-            throw InvalidFeatureTaskRuntimePersistenceSchemaError(
-              sourceLabel = "delivered-projection:wftr-1",
-              reason = "unsupported legacy contract",
-            )
-          },
+          validatePersistenceRecord = { "unsupported legacy contract" },
         )
       }
 
-    assertContains(error.sourceLabel, "consumer-phase:review")
-    assertContains(error.sourceLabel, "delivered-projection:$projectionKey")
+    assertContains(error.message.orEmpty(), "consumer-phase:review")
+    assertContains(error.message.orEmpty(), "delivered-projection:$projectionKey")
     assertContains(error.message.orEmpty(), FEATURE_TASK_RUNTIME_INCOMPATIBLE_RECORD_GUIDANCE)
   }
 }

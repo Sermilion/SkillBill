@@ -5,14 +5,14 @@ import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_HANDOFF_ENV
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.FeatureTaskRuntimeHandoffProjectionFailureKind
 import skillbill.error.featuretask.InvalidFeatureTaskRuntimeHandoffProjectionContext
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeBuildReceiptSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeBuildReceiptSchema
 import skillbill.error.shellcontent.invalidFeatureTaskRuntimeHandoffProjection
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeImplementationAttemptSchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePersistenceSchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimePhaseHandoffSchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeProjectionMeasurementSchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeQuarantineSchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeSharedEvidenceProjectionSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeImplementationAttemptSchema
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePersistenceSchema
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimePhaseHandoffSchema
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeProjectionMeasurementSchema
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeQuarantineSchema
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeSharedEvidenceProjectionSchema
 import skillbill.error.shellcontent.invalidGoalObservabilityEventSchemaError
 import skillbill.error.shellcontent.invalidGoalPlanningPreparationSchemaError
 import skillbill.error.shellcontent.invalidGoalProgressEventSchemaError
@@ -46,23 +46,22 @@ internal fun featureTaskRuntimeWireArtifactNonObjectError(
 ): SkillBillRuntimeException =
   when (kind) {
     FeatureTaskRuntimeWireArtifactKind.QUARANTINE_RECORD ->
-      InvalidFeatureTaskRuntimeQuarantineSchemaError(sourceLabel = sourceLabel, reason = reason)
+      invalidFeatureTaskRuntimeQuarantineSchema(sourceLabel = sourceLabel, reason = reason)
     FeatureTaskRuntimeWireArtifactKind.IMPLEMENTATION_ATTEMPT ->
-      InvalidFeatureTaskRuntimeImplementationAttemptSchemaError(sourceLabel = sourceLabel, reason = reason)
+      invalidFeatureTaskRuntimeImplementationAttemptSchema(sourceLabel = sourceLabel, reason = reason)
     FeatureTaskRuntimeWireArtifactKind.BUILD_RECEIPT ->
-      InvalidFeatureTaskRuntimeBuildReceiptSchemaError(
+      invalidFeatureTaskRuntimeBuildReceiptSchema(
         sourceLabel = sourceLabel,
         reason = reason,
-        payloadFreeReason = reason,
       )
     FeatureTaskRuntimeWireArtifactKind.HANDOFF_DECLARATION ->
-      InvalidFeatureTaskRuntimePhaseHandoffSchemaError(sourceLabel = sourceLabel, reason = reason)
+      invalidFeatureTaskRuntimePhaseHandoffSchema(sourceLabel = sourceLabel, reason = reason)
     FeatureTaskRuntimeWireArtifactKind.HANDOFF_PERSISTENCE_RECORD ->
-      InvalidFeatureTaskRuntimePersistenceSchemaError(sourceLabel = sourceLabel, reason = reason)
+      invalidFeatureTaskRuntimePersistenceSchema(sourceLabel = sourceLabel, reason = reason)
     FeatureTaskRuntimeWireArtifactKind.HANDOFF_MEASUREMENT ->
-      InvalidFeatureTaskRuntimeProjectionMeasurementSchemaError(sourceLabel = sourceLabel, reason = reason)
+      invalidFeatureTaskRuntimeProjectionMeasurementSchema(sourceLabel = sourceLabel, reason = reason)
     FeatureTaskRuntimeWireArtifactKind.HANDOFF_SHARED_EVIDENCE_PROJECTION ->
-      InvalidFeatureTaskRuntimeSharedEvidenceProjectionSchemaError(sourceLabel = sourceLabel, reason = reason)
+      invalidFeatureTaskRuntimeSharedEvidenceProjectionSchema(sourceLabel = sourceLabel, reason = reason)
     FeatureTaskRuntimeWireArtifactKind.HANDOFF_ENVELOPE ->
       invalidFeatureTaskRuntimeHandoffProjection(
         InvalidFeatureTaskRuntimeHandoffProjectionContext(

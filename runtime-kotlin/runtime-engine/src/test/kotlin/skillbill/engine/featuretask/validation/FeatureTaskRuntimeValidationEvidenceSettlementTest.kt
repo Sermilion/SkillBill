@@ -1,21 +1,25 @@
 package skillbill.engine.featuretask.validation
 
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import skillbill.contracts.JsonCodec
 import skillbill.contracts.SharedPayloadKeys
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_CONTRACT_VERSION
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_VALIDATION_EVIDENCE_CONTRACT_VERSION
 import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
 import skillbill.engine.featuretask.runloop.state.validationEvidenceFromEnvelope
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.featuretask.FeatureTaskRuntimePhaseOutputFailureCode
+import skillbill.error.shellcontent.FeatureTaskRuntimeFailureCode
 import skillbill.workflow.model.validation.FeatureTaskRuntimeVerdict
 import skillbill.workflow.taskruntime.artifact.decodeValidationGateExecutionEvidenceFromArtifact
+import skillbill.workflow.taskruntime.model.handoff.task.NormalizedFeatureTaskRuntimePhaseOutput
 import skillbill.workflow.taskruntime.model.validation.FeatureTaskRuntimeValidationGateRunRecord
 import skillbill.workflow.taskruntime.model.validation.ValidationGateCacheMode
 import skillbill.workflow.taskruntime.model.validation.ValidationGateRunOutcome
 import skillbill.workflow.taskruntime.phase.task.FeatureTaskRuntimePhaseWorkflowDefinition
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 class FeatureTaskRuntimeValidationEvidenceSettlementTest {
   @Test
@@ -31,7 +35,7 @@ class FeatureTaskRuntimeValidationEvidenceSettlementTest {
       requireNotNull(
         validationEvidenceFromEnvelope(envelope, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE),
       )
-    assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       evidence.requireSuccessfulCommand("./gradlew check", FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE)
     }
   }
@@ -49,7 +53,7 @@ class FeatureTaskRuntimeValidationEvidenceSettlementTest {
       requireNotNull(
         validationEvidenceFromEnvelope(envelope, FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE),
       )
-    assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       evidence.requireSuccessfulCommand("./gradlew check", FeatureTaskRuntimePhaseWorkflowDefinition.PHASE_VALIDATE)
     }
   }
@@ -135,6 +139,28 @@ class FeatureTaskRuntimeValidationEvidenceSettlementTest {
     assertEquals(2, gateEvidence.gateRunCount)
     assertEquals(ValidationGateCacheMode.CACHE_ELIGIBLE, gateEvidence.gateRuns.first().cacheMode)
     assertEquals(ValidationGateCacheMode.FORCED_FULL, gateEvidence.gateRuns.last().cacheMode)
+  }
+
+  @Test
+  fun `malformed nested gate evidence remains a phase output failure on durable resume`() {
+    val normalized =
+      NormalizedFeatureTaskRuntimePhaseOutput.fromEnvelopeText(
+        JsonCodec.valueToJsonString(topLevelValidateEnvelope(mapOf("validation_status" to "passed"))),
+        "validate",
+      )
+    val error =
+      assertFailsWith<SkillBillRuntimeException> {
+        RuntimeGateRecordIntegrity.requireIntact(normalized, "validate")
+      }
+    assertEquals(FeatureTaskRuntimePhaseOutputFailureCode.SCHEMA_INVALID, error.code)
+    assertEquals(
+      "Feature-task-runtime phase output 'validate' fails schema validation: checks is missing.",
+      error.message,
+    )
+    assertEquals(
+      FeatureTaskRuntimeFailureCode.INVALID_VALIDATION_EVIDENCE_SCHEMA,
+      assertIs<SkillBillRuntimeException>(error.cause).code,
+    )
   }
 
   private fun topLevelValidateEnvelope(validationResult: Map<String, Any?>): Map<String, Any?> =

@@ -1,5 +1,6 @@
 package skillbill.engine.featuretask.runner
 
+import java.time.Clock
 import me.tatarka.inject.annotations.Inject
 import skillbill.engine.featuretask.lifecycle.continuation.FeatureTaskRuntimeGoalContinuationRecorder
 import skillbill.engine.featuretask.lifecycle.continuation.isGoalContinuationRun
@@ -24,7 +25,7 @@ import skillbill.engine.featuretask.runloop.durable.FeatureTaskRuntimeRunLoopDur
 import skillbill.engine.featuretask.runloop.observability.FeatureTaskRuntimeRunObservability
 import skillbill.engine.featuretask.runloop.state.FeatureTaskRuntimeRunState
 import skillbill.engine.featuretask.slot.PhaseStrategyLookup
-import skillbill.error.shellcontent.FeatureTaskRuntimeOperatorDecisionRejectedError
+import skillbill.error.shellcontent.featureTaskRuntimeOperatorDecisionRejected
 import skillbill.ports.diagnostics.RuntimeDiagnostics
 import skillbill.ports.workflow.gitops.WorkflowGitOperations
 import skillbill.workflow.decomposition.model.SpecSource
@@ -32,7 +33,6 @@ import skillbill.workflow.model.WorkflowStepStatus
 import skillbill.workflow.model.workflowStepStatus
 import skillbill.workflow.taskruntime.model.skeleton.PhaseSlot
 import skillbill.workflow.taskruntime.model.skeleton.ResolvedPhaseExecutionPlan
-import java.time.Clock
 
 @Inject
 class FeatureTaskRuntimeRunnerExecutePrepared(
@@ -103,7 +103,7 @@ class FeatureTaskRuntimeRunnerExecutePrepared(
     return runLoopEntry.run(context) { loop ->
       runRequest.operatorDecision?.let { decision ->
         loop.applyOperatorDecision()?.let { rejection ->
-          throw FeatureTaskRuntimeOperatorDecisionRejectedError(runRequest.workflowId, decision.wireValue, rejection)
+          throw featureTaskRuntimeOperatorDecisionRejected(runRequest.workflowId, decision.wireValue, rejection)
         }
       }
     }

@@ -1,17 +1,5 @@
 package skillbill.infrastructure.sqlite
 
-import skillbill.error.core.DatabaseAccessOperation
-import skillbill.error.core.DatabaseFailureCode
-import skillbill.error.core.SkillBillRuntimeException
-import skillbill.error.core.UnresolvedEnvironmentContextFieldError
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError
-import skillbill.infrastructure.sqlite.core.schema.DatabaseIdentity
-import skillbill.infrastructure.sqlite.telemetry.lifecycle.parseDurationSeconds
-import skillbill.infrastructure.sqlite.workflow.featuretask.parseWorkerLeaseInstant
-import skillbill.model.EnvironmentContext
-import skillbill.ports.diagnostics.RuntimeDiagnostics
-import skillbill.ports.workflow.WorkflowSnapshotValidator
-import skillbill.workflow.engine.model.WorkflowStateSnapshot
 import java.nio.file.Files
 import java.time.Clock
 import java.util.concurrent.CopyOnWriteArrayList
@@ -19,6 +7,17 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import skillbill.error.core.DatabaseAccessOperation
+import skillbill.error.core.DatabaseFailureCode
+import skillbill.error.core.SkillBillRuntimeException
+import skillbill.error.core.UnresolvedEnvironmentContextFieldError
+import skillbill.infrastructure.sqlite.core.schema.DatabaseIdentity
+import skillbill.infrastructure.sqlite.telemetry.lifecycle.parseDurationSeconds
+import skillbill.infrastructure.sqlite.workflow.featuretask.parseWorkerLeaseInstant
+import skillbill.model.EnvironmentContext
+import skillbill.ports.diagnostics.RuntimeDiagnostics
+import skillbill.ports.workflow.WorkflowSnapshotValidator
+import skillbill.workflow.engine.model.WorkflowStateSnapshot
 
 class SqliteDegradationDiagnosticsTest {
   @Test
@@ -35,7 +34,7 @@ class SqliteDegradationDiagnosticsTest {
   @Test
   fun `unparsable worker lease expiry records one degradation before failing loud`() {
     val diagnostics = recordingDiagnostics()
-    assertFailsWith<InvalidFeatureTaskRuntimeWorkerOwnershipSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       parseWorkerLeaseInstant("wf-lease", "expires_at", "not-an-instant", diagnostics)
     }
     assertTrue(

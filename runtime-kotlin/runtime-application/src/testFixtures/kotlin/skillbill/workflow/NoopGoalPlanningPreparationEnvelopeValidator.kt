@@ -16,4 +16,10 @@ object NoopGoalPlanningPreparationEnvelopeValidator : FeatureTaskRuntimeWireArti
     payload: FeatureTaskRuntimeWorkflowArtifactMap,
     sourceLabel: String,
   ) = Unit
+
+  override fun violation(
+    kind: FeatureTaskRuntimeWireArtifactKind,
+    payload: FeatureTaskRuntimeWorkflowArtifactMap,
+    sourceLabel: String,
+  ): String? = null
 }

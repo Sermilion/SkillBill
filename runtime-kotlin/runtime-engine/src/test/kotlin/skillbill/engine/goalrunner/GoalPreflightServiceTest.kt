@@ -1,5 +1,11 @@
 package skillbill.engine.goalrunner
 
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import skillbill.agentaddon.model.AgentAddonConsumer
 import skillbill.agentaddon.model.AgentAddonSelection
 import skillbill.agentaddon.model.HydratedAgentAddonSelection
@@ -24,7 +30,6 @@ import skillbill.engine.goalrunner.preflight.GoalPreflightService
 import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.shellcontent.AgentAddonFailureCode
 import skillbill.error.shellcontent.InvalidDecompositionManifestSchemaError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.goalrunner.model.GoalRunnerExecutionLease
 import skillbill.install.model.ExternalAgentAddonSource
 import skillbill.ports.agentaddon.AgentAddonSelectionPort
@@ -42,12 +47,6 @@ import skillbill.workflow.decomposition.model.DecompositionManifest
 import skillbill.workflow.decomposition.model.DecompositionSubtask
 import skillbill.workflow.decomposition.model.SpecSource
 import skillbill.workflow.model.FeatureTaskWorkflowMode
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 
 class GoalPreflightServiceTest {
   @Test
@@ -133,7 +132,7 @@ class GoalPreflightServiceTest {
         manifestState = null,
       )
 
-    assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       service.preflight(
         request(Files.createTempDirectory("goal-preflight-invalid"), issueKey = "SKILL-901\nspoofed"),
       )
@@ -216,7 +215,7 @@ class GoalPreflightServiceTest {
         manifestState = null,
       )
 
-    assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       service.preflight(
         request(Files.createTempDirectory("goal-preflight-blank-agent"), agentOverride = " "),
       )

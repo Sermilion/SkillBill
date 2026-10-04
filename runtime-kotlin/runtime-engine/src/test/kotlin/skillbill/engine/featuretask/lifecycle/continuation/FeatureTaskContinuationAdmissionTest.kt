@@ -1,8 +1,21 @@
 package skillbill.engine.featuretask.lifecycle.continuation
 
+import java.nio.file.Files
+import java.sql.DriverManager
+import kotlin.error as failDiagnosticSink
+import kotlin.test.Test
+import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import skillbill.application.testHarnessClock
 import skillbill.application.testWorkflowSnapshotValidator
 import skillbill.contracts.JsonCodec
+import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 import skillbill.engine.featuretask.lifecycle.core.AcceptingFeatureTaskRuntimeWireArtifactValidator
 import skillbill.engine.featuretask.lifecycle.core.ownership
 import skillbill.engine.featuretask.lifecycle.execution.ExecutionPlanAdmissionFixture
@@ -13,12 +26,12 @@ import skillbill.engine.featuretask.phase.record.featureTaskRuntimePhaseRecorder
 import skillbill.engine.featuretask.phaserun.phaseRunDatabase
 import skillbill.engine.featuretask.runner.NoopWorkflowSnapshotValidator
 import skillbill.engine.featuretask.runner.WORKFLOW_ID
+import skillbill.error.core.SkillBillRuntimeException
 import skillbill.error.featuretask.CorruptFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.FeatureTaskRuntimeExecutionPlanAdmissionError
 import skillbill.error.featuretask.IncompatibleFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.MissingFeatureTaskRuntimeExecutionPlanError
 import skillbill.error.featuretask.UnsupportedFeatureTaskRuntimeExecutionPlanError
-import skillbill.error.shellcontent.InvalidFeatureTaskExecutionIdentitySchemaError
 import skillbill.ports.db.DatabaseSessionFactory
 import skillbill.ports.diagnostics.NoopRuntimeDiagnostics
 import skillbill.ports.diagnostics.RuntimeDiagnostics
@@ -31,19 +44,6 @@ import skillbill.workflow.model.FeatureTaskExecutionIdentity
 import skillbill.workflow.model.FeatureTaskRouteScope
 import skillbill.workflow.model.FeatureTaskWorkflowMode
 import skillbill.workflow.model.WorkflowStatus
-import java.nio.file.Files
-import java.sql.DriverManager
-import kotlin.test.Test
-import kotlin.test.assertContentEquals
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
-import kotlin.error as failDiagnosticSink
-import skillbill.contracts.workflow.identity.task.FeatureTaskRuntimeExecutionPlanKeys as Keys
 
 class FeatureTaskContinuationAdmissionTest {
   @Test
@@ -155,7 +155,7 @@ class FeatureTaskContinuationAdmissionTest {
       assertEquals(candidate.updatedAt, before.updatedAt)
       val identity = fixture.database.read { it.workflowStates.getFeatureTaskExecutionIdentity(WORKFLOW_ID) }
 
-      assertFailsWith<InvalidFeatureTaskExecutionIdentitySchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         fixture.lookup.claim(candidate, fixture.execution.inputs)
       }
 

@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.networknt.schema.JsonSchema
 import com.networknt.schema.ValidationMessage
 import skillbill.contracts.workflow.featuretask.FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPT_CONTRACT_VERSION
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeImplementationAttemptSchemaError
+import skillbill.error.shellcontent.invalidFeatureTaskRuntimeImplementationAttemptSchema
 import skillbill.infrastructure.contracts.ClasspathContractSchemaLoader
 import skillbill.infrastructure.contracts.CompiledSchemaRequest
 import skillbill.infrastructure.contracts.locator.FeatureTaskRuntimeImplementationAttemptSchemaPaths
@@ -18,7 +18,7 @@ object FeatureTaskRuntimeImplementationAttemptSchemaValidator {
     val instance: JsonNode = ClasspathContractSchemaLoader.valueToTree(payload)
     val errors: Set<ValidationMessage> = ClasspathContractSchemaLoader.validate(schema(), instance)
     if (errors.isNotEmpty()) {
-      throw InvalidFeatureTaskRuntimeImplementationAttemptSchemaError(
+      throw invalidFeatureTaskRuntimeImplementationAttemptSchema(
         sourceLabel = sourceLabel,
         reason = formatReason(errors),
       )
@@ -42,7 +42,7 @@ private fun schema(): JsonSchema =
       classLoader = FeatureTaskRuntimeImplementationAttemptSchemaValidator::class.java.classLoader,
       classpathResource = FeatureTaskRuntimeImplementationAttemptSchemaPaths.CLASSPATH_RESOURCE,
       missingResource = {
-        InvalidFeatureTaskRuntimeImplementationAttemptSchemaError(
+        invalidFeatureTaskRuntimeImplementationAttemptSchema(
           sourceLabel = FeatureTaskRuntimeImplementationAttemptSchemaPaths.CLASSPATH_RESOURCE,
           reason =
             "Canonical feature-task-runtime implementation-attempt schema is missing. Expected classpath " +
@@ -50,7 +50,7 @@ private fun schema(): JsonSchema =
         )
       },
       processingFailure = { cause ->
-        InvalidFeatureTaskRuntimeImplementationAttemptSchemaError(
+        invalidFeatureTaskRuntimeImplementationAttemptSchema(
           sourceLabel = FeatureTaskRuntimeImplementationAttemptSchemaPaths.CLASSPATH_RESOURCE,
           reason = cause.message ?: cause::class.simpleName.orEmpty(),
           cause = cause,
@@ -60,7 +60,7 @@ private fun schema(): JsonSchema =
       expectedSchemaId = FeatureTaskRuntimeImplementationAttemptSchemaPaths.EXPECTED_SCHEMA_ID,
       expectedContractVersion = FEATURE_TASK_RUNTIME_IMPLEMENTATION_ATTEMPT_CONTRACT_VERSION,
       identityFailure = { reason ->
-        InvalidFeatureTaskRuntimeImplementationAttemptSchemaError(
+        invalidFeatureTaskRuntimeImplementationAttemptSchema(
           sourceLabel = FeatureTaskRuntimeImplementationAttemptSchemaPaths.CLASSPATH_RESOURCE,
           reason = reason,
         )

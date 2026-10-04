@@ -1,23 +1,23 @@
 package skillbill.workflow.taskruntime.model.validation
 
-import skillbill.contracts.review.ReviewVerificationSignalKeys
-import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
-import skillbill.error.shellcontent.InvalidFeatureTaskRuntimeValidationEvidenceSchemaError
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import skillbill.contracts.review.ReviewVerificationSignalKeys
+import skillbill.contracts.workflow.identity.evidence.ValidationEvidencePayloadKeys
+import skillbill.error.core.SkillBillRuntimeException
 
 class FeatureTaskRuntimeValidationGateExecutionEvidenceTest {
   @Test
   fun `malformed gate execution evidence is rejected`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(
         mapOf(ValidationEvidencePayloadKeys.VALIDATION_STATUS to "passed"),
         "validate",
       )
     }
-    assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(
         evidenceArtifact(
           checks = emptyList(),
@@ -88,14 +88,14 @@ class FeatureTaskRuntimeValidationGateExecutionEvidenceTest {
             ),
           ),
       )
-    assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(legacy, "validate")
     }
   }
 
   @Test
   fun `inconsistent aggregate checks are rejected instead of becoming zero-work evidence`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(
         evidenceArtifact(
           checks = emptyList(),
@@ -114,13 +114,13 @@ class FeatureTaskRuntimeValidationGateExecutionEvidenceTest {
 
   @Test
   fun `zero gate runs and failed terminal verification cannot prove success`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(
         evidenceArtifact(checks = emptyList(), gateRuns = emptyList()),
         "empty-gate-success",
       )
     }
-    assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(
         evidenceArtifact(
           checks = listOf("runtime-engine|compileKotlin"),
@@ -150,7 +150,7 @@ class FeatureTaskRuntimeValidationGateExecutionEvidenceTest {
 
   @Test
   fun `missing repository checkpoint is rejected at the artifact boundary`() {
-    assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+    assertFailsWith<SkillBillRuntimeException> {
       FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(
         evidenceArtifact(
           checks = emptyList(),
@@ -182,7 +182,7 @@ class FeatureTaskRuntimeValidationGateExecutionEvidenceTest {
           original + (ValidationEvidencePayloadKeys.EXIT_CODE to 1),
         )
     invalidRuns.forEach { run ->
-      assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(
           evidenceArtifact(listOf("runtime-engine|compileKotlin"), listOf(run)),
           "validate",
@@ -197,7 +197,7 @@ class FeatureTaskRuntimeValidationGateExecutionEvidenceTest {
           mapOf(ReviewVerificationSignalKeys.REPOSITORY_CHECKPOINT_FINGERPRINT to "unrelated")
       ),
     ).forEach { invalid ->
-      assertFailsWith<InvalidFeatureTaskRuntimeValidationEvidenceSchemaError> {
+      assertFailsWith<SkillBillRuntimeException> {
         FeatureTaskRuntimeValidationGateExecutionEvidence.fromArtifactMap(invalid, "validate")
       }
     }

@@ -15,4 +15,10 @@ interface FeatureTaskRuntimeWireArtifactValidator {
     payload: FeatureTaskRuntimeWorkflowArtifactMap,
     sourceLabel: String,
   )
+
+  fun violation(
+    kind: FeatureTaskRuntimeWireArtifactKind,
+    payload: FeatureTaskRuntimeWorkflowArtifactMap,
+    sourceLabel: String,
+  ): String?
 }
